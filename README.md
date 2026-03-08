@@ -2,7 +2,6 @@
 
 <p align="center">
 
-<img width="1024" height="746" alt="ScriptVault" src="https://github.com/user-attachments/assets/4e2fb973-8a1e-468c-a96c-8c1902507356" />
 
 </p>
 
