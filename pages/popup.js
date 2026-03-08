@@ -133,6 +133,23 @@
     function renderScriptList() {
         if (!elements.scriptList) return;
 
+        // Filter: hide disabled scripts if setting enabled
+        if (settings.hideDisabledPopup) {
+            pageScripts = pageScripts.filter(s => s.enabled !== false);
+        }
+
+        // Sort scripts based on scriptOrder setting
+        const order = settings.scriptOrder || 'auto';
+        if (order === 'alpha') {
+            pageScripts.sort((a, b) => {
+                const na = (a.metadata || a.meta || {}).name || '';
+                const nb = (b.metadata || b.meta || {}).name || '';
+                return na.localeCompare(nb);
+            });
+        } else if (order === 'last-updated') {
+            pageScripts.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        }
+
         if (pageScripts.length === 0) {
             elements.scriptList.innerHTML = `
                 <div class="empty-state">
@@ -222,7 +239,10 @@
             if (m) {
                 const domain = m[1].replace(/^\*\./, '').replace(/^www\./, '').toLowerCase();
                 if (domain && domain !== '*' && !domain.includes('*')) {
-                    const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
+                    const service = settings.faviconService || 'google';
+                    const faviconUrl = service === 'duckduckgo'
+                        ? `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`
+                        : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
                     return `<img src="${escapeHtml(faviconUrl)}" onerror="this.style.display='none';this.parentElement.textContent='📜'">`;
                 }
             }
