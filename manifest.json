@@ -5,6 +5,7 @@
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "minimum_chrome_version": "120",
+  "homepage_url": "https://github.com/SysAdminDoc/ScriptVault",
   "icons": {
     "16": "images/icon16.png",
     "32": "images/icon32.png",
@@ -20,22 +21,17 @@
     "userScripts",
     "webNavigation",
     "unlimitedStorage",
+    "alarms",
+    "downloads"
+  ],
+  "optional_permissions": [
     "clipboardWrite",
     "clipboardRead",
-    "alarms",
-    "downloads",
     "identity"
   ],
-  "optional_permissions": [],
   "host_permissions": [
     "<all_urls>"
   ],
-  "oauth2": {
-    "client_id": "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
-    "scopes": [
-      "https://www.googleapis.com/auth/drive.appdata"
-    ]
-  },
   "background": {
     "service_worker": "background.js"
   },
