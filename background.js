@@ -4209,57 +4209,6 @@ function parseUserscript(code) {
 // URL Matching
 // ============================================================================
 
-function matchPattern(pattern, url) {
-  if (pattern === '<all_urls>') return true;
-  if (pattern === '*') return true;
-  
-  try {
-    // Handle glob patterns
-    if (pattern.includes('*') && !pattern.startsWith('*://')) {
-      // Convert glob to regex
-      const regexPattern = pattern
-        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\*/g, '.*')
-        .replace(/\?/g, '.');
-      return new RegExp(`^${regexPattern}$`).test(url);
-    }
-    
-    // Handle standard match patterns
-    const patternRegex = pattern
-      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-      .replace(/\*/g, '.*');
-    
-    return new RegExp(`^${patternRegex}$`).test(url);
-  } catch (e) {
-    return false;
-  }
-}
-
-function shouldRunScript(script, url, isFrame) {
-  const meta = script.meta;
-  
-  // Check noframes
-  if (isFrame && meta.noframes) return false;
-  
-  // Check blacklist
-  const settings = SettingsManager.cache || {};
-  if (settings.blacklist?.some(pattern => matchPattern(pattern, url))) {
-    return false;
-  }
-  
-  // Check exclude patterns
-  const excludes = [...(meta.exclude || []), ...(meta.excludeMatch || [])];
-  if (excludes.some(pattern => matchPattern(pattern, url))) {
-    return false;
-  }
-  
-  // Check include/match patterns
-  const includes = [...(meta.match || []), ...(meta.include || [])];
-  if (includes.length === 0) return false;
-  
-  return includes.some(pattern => matchPattern(pattern, url));
-}
-
 // ============================================================================
 // Update System
 // ============================================================================
@@ -4750,7 +4699,12 @@ function generateId() {
 
 // Regular message listener (content scripts, popup, dashboard)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  handleMessage(message, sender).then(sendResponse);
+  handleMessage(message, sender)
+    .then(sendResponse)
+    .catch(e => {
+      console.error('[EspressoMonkey] Unhandled message error:', e);
+      sendResponse({ error: e.message });
+    });
   return true;
 });
 
@@ -4758,7 +4712,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // This is SEPARATE from onMessage and required for messaging: true to work
 if (chrome.runtime.onUserScriptMessage) {
   chrome.runtime.onUserScriptMessage.addListener((message, sender, sendResponse) => {
-    handleMessage(message, sender).then(sendResponse);
+    handleMessage(message, sender)
+      .then(sendResponse)
+      .catch(e => {
+        console.error('[EspressoMonkey] Unhandled user script message error:', e);
+        sendResponse({ error: e.message });
+      });
     return true;
   });
   console.log('[EspressoMonkey] User script message listener registered');
@@ -4804,8 +4763,8 @@ async function handleMessage(message, sender) {
         };
         
         await ScriptStorage.set(id, script);
-        updateBadge();
-        
+        await updateBadge();
+
         // Re-register the script with userScripts API
         await unregisterScript(id);
         if (script.enabled) {
@@ -4843,8 +4802,8 @@ async function handleMessage(message, sender) {
         };
         
         await ScriptStorage.set(id, script);
-        updateBadge();
-        
+        await updateBadge();
+
         // Register the new script
         await registerScript(script);
         
@@ -4866,7 +4825,7 @@ async function handleMessage(message, sender) {
         const scriptId = data.id || data.scriptId;
         await unregisterScript(scriptId);
         await ScriptStorage.delete(scriptId);
-        updateBadge();
+        await updateBadge();
         return { success: true };
       }
         
@@ -4883,12 +4842,12 @@ async function handleMessage(message, sender) {
           if (script.enabled) {
             await registerScript(script);
           }
-          
-          updateBadge();
+
+          await updateBadge();
         }
         return { success: true };
       }
-      
+
       case 'importScript': {
         const parsed = parseUserscript(data.code);
         if (parsed.error) return { error: parsed.error };
@@ -4906,16 +4865,16 @@ async function handleMessage(message, sender) {
         
         await ScriptStorage.set(id, script);
         await registerScript(script);
-        updateBadge();
+        await updateBadge();
         // Return with metadata property for dashboard compatibility
         return { success: true, script: { ...script, metadata: script.meta } };
       }
-      
+
       case 'duplicateScript': {
         const newScript = await ScriptStorage.duplicate(data.id);
         if (newScript) {
           await registerScript(newScript);
-          updateBadge();
+          await updateBadge();
           // Return with metadata property for dashboard compatibility
           return { success: true, script: { ...newScript, metadata: newScript.meta } };
         }
@@ -5650,15 +5609,15 @@ function doesScriptMatchUrl(script, url) {
       effectiveExcludes.push(...settings.userExcludes);
     }
     
-    // Also check @exclude-match
-    const excludeMatches = Array.isArray(meta['exclude-match']) ? meta['exclude-match'] : 
-                          (meta['exclude-match'] ? [meta['exclude-match']] : []);
+    // Also check @exclude-match (stored as excludeMatch by parser)
+    const excludeMatchPatterns = Array.isArray(meta.excludeMatch) ? meta.excludeMatch :
+                          (meta.excludeMatch ? [meta.excludeMatch] : []);
     
     // First check if URL matches any exclude pattern
     for (const pattern of effectiveExcludes) {
       if (matchIncludePattern(pattern, url, urlObj)) return false;
     }
-    for (const pattern of excludeMatches) {
+    for (const pattern of excludeMatchPatterns) {
       if (matchPattern(pattern, url, urlObj)) return false;
     }
     
@@ -5779,7 +5738,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     case 'espressomonkey-toggle': {
       const settings = await SettingsManager.get();
       await SettingsManager.set('enabled', !settings.enabled);
-      updateBadge();
+      await updateBadge();
       break;
     }
   }
@@ -5797,7 +5756,7 @@ chrome.commands.onCommand.addListener(async (command) => {
     case 'toggle_scripts': {
       const settings = await SettingsManager.get();
       await SettingsManager.set('enabled', !settings.enabled);
-      updateBadge();
+      await updateBadge();
       
       chrome.notifications.create({
         type: 'basic',
@@ -5967,9 +5926,13 @@ async function installFromUrl(url) {
     }
     
     // Parse and save
-    const meta = parseMetadata(code);
+    const parsed = parseUserscript(code);
+    if (parsed.error) {
+      throw new Error(parsed.error);
+    }
+    const meta = parsed.meta;
     const id = generateId();
-    
+
     const script = {
       id,
       code,
@@ -5981,8 +5944,8 @@ async function installFromUrl(url) {
       storage: {},
       order: Date.now()
     };
-    
-    await ScriptStorage.save(script);
+
+    await ScriptStorage.set(id, script);
     await updateBadge();
     
     return { success: true, script };
@@ -6122,9 +6085,9 @@ async function registerScript(script) {
       }
     }
     
-    // Process @exclude-match
-    if (meta['exclude-match'] && Array.isArray(meta['exclude-match'])) {
-      for (const m of meta['exclude-match']) {
+    // Process @exclude-match (stored as excludeMatch by parser)
+    if (meta.excludeMatch && Array.isArray(meta.excludeMatch)) {
+      for (const m of meta.excludeMatch) {
         if (isValidMatchPattern(m)) {
           excludeMatches.push(m);
         }
@@ -6465,37 +6428,29 @@ ${req.code}
 (function() {
   'use strict';
   
-  // ============ Error Suppression for chrome://extensions ============
-  // Chrome shows console.error() calls on the extension error page
-  // Downgrade to console.warn() so userscript errors don't pollute extension errors
-  const __originalConsoleError = console.error.bind(console);
+  // ============ Error Labeling ============
   const __scriptLabel = '[Userscript: ' + ${JSON.stringify(meta.name || 'Unknown')} + ']';
-  
-  // Replace console.error with console.warn for this script's context
+
+  // Label console.error calls with script name for easier debugging
+  const __originalConsoleError = console.error.bind(console);
   console.error = function(...args) {
-    // Convert to warning so it doesn't appear on chrome://extensions error page
-    console.warn(__scriptLabel, ...args);
+    __originalConsoleError(__scriptLabel, ...args);
   };
-  
-  // Catch uncaught errors from this userscript
+
+  // Log uncaught errors from this userscript (don't suppress them)
   const __handleError = function(event) {
-    // Only suppress errors from userscript code (check if it's from our injected script)
     if (event.filename === '' || event.filename?.includes('user_script') || !event.filename) {
       console.warn(__scriptLabel, 'Uncaught error:', event.message);
-      event.preventDefault();
-      event.stopPropagation();
-      return true;
     }
   };
   window.addEventListener('error', __handleError, true);
-  
-  // Catch unhandled promise rejections
+
+  // Log unhandled promise rejections
   const __handleRejection = function(event) {
     console.warn(__scriptLabel, 'Unhandled rejection:', event.reason);
-    event.preventDefault();
   };
   window.addEventListener('unhandledrejection', __handleRejection, true);
-  // ============ End Error Suppression ============
+  // ============ End Error Labeling ============
   
   const scriptId = ${JSON.stringify(script.id)};
   const meta = ${JSON.stringify(meta)};
@@ -6690,32 +6645,45 @@ ${req.code}
     return _bridgeReadyPromise;
   }
   
-  // Send message to background via content script bridge
-  // USER_SCRIPT world cannot use chrome.runtime.sendMessage directly
+  // Send message to background script
+  // Prefers chrome.runtime.sendMessage (direct, no bridge needed) when available via messaging: true
+  // Falls back to postMessage bridge for older Chrome versions
   async function sendToBackground(action, data) {
-    // Wait for bridge to be ready before sending
+    // Try direct messaging first (available when userScripts world has messaging: true)
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      try {
+        return await chrome.runtime.sendMessage({ action, data });
+      } catch (e) {
+        // Extension context invalidated or messaging not available, fall through to bridge
+        if (!e.message?.includes('Extension context invalidated')) {
+          console.warn('[EspressoMonkey] Direct messaging failed, trying bridge:', e.message);
+        }
+      }
+    }
+
+    // Fallback: use content script bridge via postMessage
     await waitForBridge();
-    
+
     return new Promise((resolve, reject) => {
       const id = Math.random().toString(36).substring(2) + Date.now().toString(36);
-      
+
       // Set timeout for response
       const timeout = setTimeout(() => {
         window.removeEventListener('message', handler);
         console.warn('[EspressoMonkey] Message timeout (10s):', action);
-        resolve(undefined); // Don't reject, just return undefined
+        resolve(undefined);
       }, 10000);
-      
+
       // Listen for response
       function handler(event) {
         if (event.source !== window) return;
         const msg = event.data;
         if (!msg || msg.channel !== CHANNEL_ID || msg.direction !== 'to-userscript') return;
         if (msg.id !== id) return;
-        
+
         window.removeEventListener('message', handler);
         clearTimeout(timeout);
-        
+
         if (msg.success) {
           resolve(msg.result);
         } else {
@@ -6723,9 +6691,9 @@ ${req.code}
           resolve(undefined);
         }
       }
-      
+
       window.addEventListener('message', handler);
-      
+
       // Send to content script bridge
       window.postMessage({
         channel: CHANNEL_ID,
