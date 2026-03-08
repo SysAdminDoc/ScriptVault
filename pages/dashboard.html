@@ -1961,15 +1961,28 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Cloud</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <span class="label-text">Type:</span>
-                        <select class="select-field" id="cloudExportType">
+                        <span class="label-text">Provider:</span>
+                        <select class="select-field" id="cloudProvider">
+                            <option value="googledrive">Google Drive</option>
+                            <option value="dropbox">Dropbox</option>
                             <option value="webdav">WebDAV</option>
                         </select>
                     </div>
+                    <div class="setting-row" id="cloudStatusRow">
+                        <span class="label-text">Status:</span>
+                        <span id="cloudStatusText" style="color:var(--text-muted)">Not connected</span>
+                        <span id="cloudUserInfo" style="color:var(--text-muted);margin-left:8px"></span>
+                    </div>
                     <div class="setting-row">
                         <div class="btn-group">
-                            <button class="btn" id="btnCloudExport">Export</button>
-                            <button class="btn" id="btnCloudShowBackups">Show backups</button>
+                            <button class="btn" id="btnCloudConnect">Connect</button>
+                            <button class="btn" id="btnCloudDisconnect" style="display:none">Disconnect</button>
+                        </div>
+                    </div>
+                    <div class="setting-row" id="cloudActionsRow" style="display:none">
+                        <div class="btn-group">
+                            <button class="btn" id="btnCloudExport">Export to Cloud</button>
+                            <button class="btn" id="btnCloudImport">Import from Cloud</button>
                         </div>
                     </div>
                 </div>
@@ -1999,7 +2012,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">File</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button class="btn" id="btnExportAll">Export</button>
+                        <button class="btn" id="btnExportFile">Export</button>
                     </div>
                 </div>
             </div>
