@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-22c55e?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.1.0-22c55e?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/manifest-v3-60a5fa?style=flat-square" alt="Manifest V3">
   <img src="https://img.shields.io/badge/license-MIT-orange?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/chrome-120%2B-blue?style=flat-square" alt="Chrome 120+">
@@ -98,6 +98,7 @@ Available in 8 languages:
 1. Clone or download this repository:
    ```bash
    git clone https://github.com/SysAdminDoc/ScriptVault.git
+   cd ScriptVault
    ```
 
 2. Open Chrome and navigate to `chrome://extensions`
@@ -271,6 +272,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <p align="center">
-  <strong>ScriptVault v1.0.0</strong> 🔐<br>
-  <em>Fuel your browsing with powerful userscripts</em>
+  <strong>ScriptVault v1.1.0</strong><br>
+  <em>Your scripts, your rules — locked down and loaded</em>
 </p>
