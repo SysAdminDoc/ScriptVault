@@ -233,7 +233,7 @@
         elements.btnFactoryReset = document.getElementById('btnFactoryReset');
 
         // Utilities
-        elements.btnExportAll = document.getElementById('btnExportAll');
+        elements.btnExportFile = document.getElementById('btnExportFile');
         elements.btnExportZip = document.getElementById('btnExportZip');
         elements.btnChooseFile = document.getElementById('btnChooseFile');
         elements.importFileInput = document.getElementById('importFileInput');
@@ -243,6 +243,14 @@
         elements.textareaData = document.getElementById('textareaData');
         elements.btnTextareaExport = document.getElementById('btnTextareaExport');
         elements.btnTextareaImport = document.getElementById('btnTextareaImport');
+        elements.cloudProvider = document.getElementById('cloudProvider');
+        elements.cloudStatusText = document.getElementById('cloudStatusText');
+        elements.cloudUserInfo = document.getElementById('cloudUserInfo');
+        elements.btnCloudConnect = document.getElementById('btnCloudConnect');
+        elements.btnCloudDisconnect = document.getElementById('btnCloudDisconnect');
+        elements.btnCloudExport = document.getElementById('btnCloudExport');
+        elements.btnCloudImport = document.getElementById('btnCloudImport');
+        elements.cloudActionsRow = document.getElementById('cloudActionsRow');
 
         // Stats
         elements.statTotalScripts = document.getElementById('statTotalScripts');
@@ -503,16 +511,39 @@
         
         // Apply theme
         document.documentElement.setAttribute('data-theme', s.layout || 'dark');
+
+        // Apply custom CSS
+        let customStyle = document.getElementById('sv-custom-css');
+        if (s.customCss) {
+            if (!customStyle) {
+                customStyle = document.createElement('style');
+                customStyle.id = 'sv-custom-css';
+                document.head.appendChild(customStyle);
+            }
+            customStyle.textContent = s.customCss;
+        } else if (customStyle) {
+            customStyle.remove();
+        }
     }
 
     async function saveSetting(key, value) {
         try {
             state.settings[key] = value;
-            await chrome.runtime.sendMessage({ action: 'updateSettings', settings: { [key]: value } });
-            if (key === 'theme') applyTheme();
-            else if (key === 'editorTheme' && state.editor) state.editor.setOption('theme', value);
-            else if (key === 'editorFontSize' && state.editor) document.querySelector('.CodeMirror').style.fontSize = value + 'px';
-            else if (key === 'editorWordWrap' && state.editor) state.editor.setOption('lineWrapping', value);
+            await chrome.runtime.sendMessage({ action: 'setSettings', settings: { [key]: value } });
+            // Live-apply editor settings
+            if (state.editor) {
+                switch (key) {
+                    case 'editorTheme': state.editor.setOption('theme', value); break;
+                    case 'editorFontSize': document.querySelector('.CodeMirror').style.fontSize = value + 'px'; break;
+                    case 'wordWrap': state.editor.setOption('lineWrapping', value); break;
+                    case 'tabSize': state.editor.setOption('tabSize', parseInt(value) || 4); break;
+                    case 'indentWidth': state.editor.setOption('indentUnit', parseInt(value) || 4); break;
+                    case 'indentWith': state.editor.setOption('indentWithTabs', value !== 'spaces'); break;
+                    case 'lintOnType': state.editor.setOption('lint', value ? { getAnnotations: window.lintUserscript, delay: 300, tooltips: true, highlightLines: true } : false); break;
+                }
+            }
+            if (key === 'layout') document.documentElement.setAttribute('data-theme', value);
+            if (key === 'customCss') applySettingsToUI();
             showToast('Setting saved', 'success');
         } catch (e) {
             showToast('Failed to save', 'error');
@@ -1464,7 +1495,13 @@
     async function saveCurrentScript() {
         if (!state.currentScriptId || !state.editor) return;
         try {
-            await chrome.runtime.sendMessage({ action: 'saveScript', scriptId: state.currentScriptId, code: state.editor.getValue() });
+            let code = state.editor.getValue();
+            // Trim trailing whitespace if setting enabled
+            if (state.settings.trimWhitespace) {
+                code = code.split('\n').map(line => line.replace(/\s+$/, '')).join('\n');
+                state.editor.setValue(code);
+            }
+            await chrome.runtime.sendMessage({ action: 'saveScript', scriptId: state.currentScriptId, code });
             state.unsavedChanges = false;
             await loadScripts();
             const script = state.scripts.find(s => s.id === state.currentScriptId);
@@ -1551,34 +1588,50 @@
     // Editor init
     function initEditor() {
         if (!elements.editorTextarea) return;
+        const s = state.settings;
+        const tabSz = parseInt(s.tabSize) || parseInt(s.editorTabSize) || 4;
+        const indentSz = parseInt(s.indentWidth) || tabSz;
+        const useSpaces = (s.indentWith || 'spaces') === 'spaces';
+        const indentStr = useSpaces ? ' '.repeat(indentSz) : '\t';
+
         state.editor = CodeMirror.fromTextArea(elements.editorTextarea, {
             mode: 'javascript',
-            theme: state.settings.editorTheme || 'default',
+            theme: s.editorTheme || 'default',
             lineNumbers: true,
-            lineWrapping: state.settings.editorWordWrap !== false,
-            indentUnit: state.settings.editorTabSize || 4,
-            tabSize: state.settings.editorTabSize || 4,
+            lineWrapping: s.wordWrap !== undefined ? s.wordWrap : (s.editorWordWrap !== false),
+            indentUnit: indentSz,
+            tabSize: tabSz,
+            indentWithTabs: !useSpaces,
             matchBrackets: true,
             autoCloseBrackets: true,
             foldGutter: true,
             gutters: ['CodeMirror-lint-markers', 'CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
-            lint: {
+            lint: s.lintOnType !== false ? {
                 getAnnotations: window.lintUserscript,
                 delay: 300,
                 tooltips: true,
                 highlightLines: true
-            },
+            } : false,
             extraKeys: {
                 'Ctrl-S': saveCurrentScript,
                 'Cmd-S': saveCurrentScript,
                 'Ctrl-F': 'findPersistent',
                 'Esc': closeEditor,
-                'Tab': cm => cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection('    ', 'end')
+                'Tab': cm => cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection(indentStr, 'end')
             }
         });
 
-        document.querySelector('.CodeMirror').style.fontSize = (state.settings.editorFontSize || 14) + 'px';
-        state.editor.on('change', () => { state.unsavedChanges = true; });
+        document.querySelector('.CodeMirror').style.fontSize = (s.editorFontSize || 14) + 'px';
+
+        // Auto-save support
+        let autoSaveTimer = null;
+        state.editor.on('change', () => {
+            state.unsavedChanges = true;
+            if (s.autoSave) {
+                clearTimeout(autoSaveTimer);
+                autoSaveTimer = setTimeout(() => saveCurrentScript(), 2000);
+            }
+        });
     }
 
     // Import/Export
@@ -1675,8 +1728,14 @@
 
     function formatTime(ts) {
         const diff = Date.now() - new Date(ts).getTime();
-        const h = Math.floor(diff / 3600000), d = Math.floor(h / 24);
-        return d > 0 ? d + 'd' : h > 0 ? h + 'h' : 'now';
+        const m = Math.floor(diff / 60000);
+        const h = Math.floor(m / 60);
+        const d = Math.floor(h / 24);
+        if (d > 30) return new Date(ts).toLocaleDateString();
+        if (d > 0) return d + 'd';
+        if (h > 0) return h + 'h';
+        if (m > 0) return m + 'm';
+        return 'now';
     }
 
     function escapeHtml(str) {
@@ -2021,10 +2080,9 @@
             elements[id]?.addEventListener('change', e => saveSetting(key, fn ? fn(e.target[prop]) : e.target[prop]));
         });
         
-        // Layout/Theme setting (with theme application)
+        // Layout/Theme setting (saveSetting handles data-theme)
         elements.settingsLayout?.addEventListener('change', e => {
             saveSetting('layout', e.target.value);
-            document.documentElement.setAttribute('data-theme', e.target.value);
         });
         
         // Badge color with preview
@@ -2060,7 +2118,6 @@
         // Section Save buttons
         elements.btnSaveAppearance?.addEventListener('click', async () => {
             await saveSetting('customCss', elements.settingsCustomCss?.value || '');
-            showToast('Appearance saved', 'success');
         });
         
         elements.btnSaveActionMenu?.addEventListener('click', async () => {
@@ -2080,6 +2137,8 @@
         elements.btnSaveSecurity?.addEventListener('click', async () => {
             await saveSetting('whitelistedPages', elements.settingsWhitelistedPages?.value || '');
             await saveSetting('blacklistedPages', elements.settingsBlacklistedPages?.value || '');
+            const hostsText = elements.settingsDeniedHosts?.value || '';
+            await saveSetting('deniedHosts', hostsText.split('\n').map(s => s.trim()).filter(Boolean));
             showToast('Security settings saved', 'success');
         });
         
@@ -2151,9 +2210,99 @@
         });
 
         // Utilities
-        elements.btnExportAll?.addEventListener('click', exportAllScripts);
+        elements.btnExportFile?.addEventListener('click', exportAllScripts);
         elements.btnExportZip?.addEventListener('click', exportToZip);
         elements.btnChooseFile?.addEventListener('click', () => elements.importFileInput?.click());
+
+        // Cloud
+        async function updateCloudUI() {
+            const provider = elements.cloudProvider?.value || 'googledrive';
+            try {
+                const r = await chrome.runtime.sendMessage({ action: 'cloudStatus', provider });
+                if (r?.connected) {
+                    elements.cloudStatusText.textContent = 'Connected';
+                    elements.cloudStatusText.style.color = 'var(--accent)';
+                    elements.cloudUserInfo.textContent = r.user?.email || r.user?.name || '';
+                    elements.btnCloudConnect.style.display = 'none';
+                    elements.btnCloudDisconnect.style.display = '';
+                    elements.cloudActionsRow.style.display = '';
+                } else {
+                    elements.cloudStatusText.textContent = 'Not connected';
+                    elements.cloudStatusText.style.color = 'var(--text-muted)';
+                    elements.cloudUserInfo.textContent = '';
+                    elements.btnCloudConnect.style.display = '';
+                    elements.btnCloudDisconnect.style.display = 'none';
+                    elements.cloudActionsRow.style.display = 'none';
+                }
+            } catch (e) {
+                elements.cloudStatusText.textContent = 'Error';
+                elements.cloudStatusText.style.color = 'var(--danger)';
+            }
+        }
+
+        elements.cloudProvider?.addEventListener('change', updateCloudUI);
+        updateCloudUI();
+
+        elements.btnCloudConnect?.addEventListener('click', async () => {
+            const provider = elements.cloudProvider?.value || 'googledrive';
+            // Request identity permission if needed for OAuth providers
+            if (['googledrive', 'dropbox'].includes(provider)) {
+                try {
+                    const granted = await chrome.permissions.request({ permissions: ['identity'] });
+                    if (!granted) {
+                        showToast('Permission denied - identity access required', 'error');
+                        return;
+                    }
+                } catch (e) {
+                    showToast('Permission request failed: ' + e.message, 'error');
+                    return;
+                }
+            }
+            showToast('Connecting...', 'info');
+            try {
+                const r = await chrome.runtime.sendMessage({ action: 'connectSyncProvider', provider });
+                if (r?.success) {
+                    showToast('Connected to ' + provider, 'success');
+                    await updateCloudUI();
+                } else {
+                    showToast(r?.error || 'Connection failed', 'error');
+                }
+            } catch (e) { showToast('Failed: ' + e.message, 'error'); }
+        });
+
+        elements.btnCloudDisconnect?.addEventListener('click', async () => {
+            const provider = elements.cloudProvider?.value || 'googledrive';
+            try {
+                await chrome.runtime.sendMessage({ action: 'disconnectSyncProvider', provider });
+                showToast('Disconnected', 'success');
+                await updateCloudUI();
+            } catch (e) { showToast('Failed: ' + e.message, 'error'); }
+        });
+
+        elements.btnCloudExport?.addEventListener('click', async () => {
+            const provider = elements.cloudProvider?.value || 'googledrive';
+            showToast('Exporting to ' + provider + '...', 'info');
+            try {
+                const r = await chrome.runtime.sendMessage({ action: 'cloudExport', provider });
+                showToast(r?.success ? 'Exported to cloud' : (r?.error || 'Export failed'), r?.success ? 'success' : 'error');
+            } catch (e) { showToast('Export failed: ' + e.message, 'error'); }
+        });
+
+        elements.btnCloudImport?.addEventListener('click', async () => {
+            const provider = elements.cloudProvider?.value || 'googledrive';
+            showToast('Importing from ' + provider + '...', 'info');
+            try {
+                const r = await chrome.runtime.sendMessage({ action: 'cloudImport', provider });
+                if (r?.success) {
+                    await loadScripts();
+                    await loadSettings();
+                    updateStats();
+                    showToast('Imported ' + (r.imported || 0) + ' scripts from cloud', 'success');
+                } else {
+                    showToast(r?.error || 'Import failed', 'error');
+                }
+            } catch (e) { showToast('Import failed: ' + e.message, 'error'); }
+        });
         elements.importFileInput?.addEventListener('change', async e => {
             const file = e.target.files[0];
             if (!file) return;

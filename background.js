@@ -2765,46 +2765,128 @@ var CloudSyncProviders = {
     icon: '📁',
     requiresOAuth: true,
     fileName: 'scriptvault-backup.json',
-    
-    async getToken(interactive = false) {
-      return new Promise((resolve, reject) => {
-        chrome.identity.getAuthToken({ interactive }, (token) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve(token);
-          }
-        });
+    // Google OAuth client ID (public, installed-app type)
+    // Users can override via settings.googleClientId
+    clientId: '287129963438-mcc1mod1m5jm8vjr3icb7ensdtcfq44l.apps.googleusercontent.com',
+
+    async getToken() {
+      const settings = await SettingsManager.get();
+      return settings.googleDriveToken || null;
+    },
+
+    async refreshToken() {
+      const settings = await SettingsManager.get();
+      const refreshToken = settings.googleDriveRefreshToken;
+      if (!refreshToken) return null;
+
+      const clientId = settings.googleClientId || this.clientId;
+      const resp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken
+        })
       });
-    },
-    
-    async revokeToken() {
-      try {
-        const token = await this.getToken(false);
-        if (token) {
-          await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`);
-          return new Promise((resolve) => {
-            chrome.identity.removeCachedAuthToken({ token }, resolve);
-          });
-        }
-      } catch (e) {
-        console.warn('[CloudSync] Google revoke error:', e);
+
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      if (data.access_token) {
+        await SettingsManager.set({ googleDriveToken: data.access_token });
+        return data.access_token;
       }
+      return null;
     },
-    
+
+    async getValidToken() {
+      let token = await this.getToken();
+      if (!token) return null;
+
+      // Test if token is still valid
+      const test = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (test.ok) return token;
+
+      // Try refresh
+      token = await this.refreshToken();
+      return token;
+    },
+
     async connect() {
       try {
-        const token = await this.getToken(true);
-        if (!token) throw new Error('Failed to get authorization token');
-        
-        // Get user info
-        const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-          headers: { 'Authorization': `Bearer ${token}` }
+        const settings = await SettingsManager.get();
+        const clientId = settings.googleClientId || this.clientId;
+        const redirectUri = chrome.identity.getRedirectURL();
+        const scopes = [
+          'https://www.googleapis.com/auth/drive.file',
+          'https://www.googleapis.com/auth/userinfo.email',
+          'https://www.googleapis.com/auth/userinfo.profile'
+        ].join(' ');
+
+        // PKCE code verifier
+        const codeVerifier = Array.from(crypto.getRandomValues(new Uint8Array(32)),
+          b => b.toString(16).padStart(2, '0')).join('');
+        const encoder = new TextEncoder();
+        const digest = await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier));
+        const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+          .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+        const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+          client_id: clientId,
+          redirect_uri: redirectUri,
+          response_type: 'code',
+          scope: scopes,
+          access_type: 'offline',
+          prompt: 'consent',
+          code_challenge: codeChallenge,
+          code_challenge_method: 'S256'
+        }).toString();
+
+        const responseUrl = await chrome.identity.launchWebAuthFlow({
+          url: authUrl,
+          interactive: true
         });
-        
-        if (!userResponse.ok) throw new Error('Failed to get user info');
-        const user = await userResponse.json();
-        
+
+        const url = new URL(responseUrl);
+        const code = url.searchParams.get('code');
+        if (!code) throw new Error('No authorization code received');
+
+        // Exchange code for tokens
+        const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: clientId,
+            code: code,
+            code_verifier: codeVerifier,
+            grant_type: 'authorization_code',
+            redirect_uri: redirectUri
+          })
+        });
+
+        if (!tokenResp.ok) {
+          const err = await tokenResp.text();
+          throw new Error('Token exchange failed: ' + err);
+        }
+
+        const tokens = await tokenResp.json();
+
+        // Get user info
+        const userResp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: { 'Authorization': `Bearer ${tokens.access_token}` }
+        });
+        const user = userResp.ok ? await userResp.json() : {};
+
+        await SettingsManager.set({
+          googleDriveToken: tokens.access_token,
+          googleDriveRefreshToken: tokens.refresh_token || settings.googleDriveRefreshToken || '',
+          googleDriveConnected: true,
+          googleDriveUser: { email: user.email, name: user.name }
+        });
+
         return {
           success: true,
           user: { email: user.email, name: user.name, picture: user.picture }
@@ -2813,35 +2895,48 @@ var CloudSyncProviders = {
         return { success: false, error: e.message };
       }
     },
-    
+
     async disconnect() {
-      await this.revokeToken();
+      try {
+        const token = await this.getToken();
+        if (token) {
+          await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`).catch(() => {});
+        }
+        await SettingsManager.set({
+          googleDriveToken: '',
+          googleDriveRefreshToken: '',
+          googleDriveConnected: false,
+          googleDriveUser: null
+        });
+      } catch (e) {
+        console.warn('[CloudSync] Google disconnect error:', e);
+      }
       return { success: true };
     },
-    
+
     async findFile(token) {
-      const query = encodeURIComponent(`name='${this.fileName}' and 'appDataFolder' in parents and trashed=false`);
+      // Search in root and appDataFolder
+      const query = encodeURIComponent(`name='${this.fileName}' and trashed=false`);
       const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${query}&fields=files(id,name,modifiedTime)`,
+        `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime)&spaces=drive`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
-      
+
       if (!response.ok) throw new Error(`Failed to search files: ${response.status}`);
       const data = await response.json();
       return data.files?.[0] || null;
     },
-    
+
     async upload(data, settings) {
-      const token = await this.getToken(false);
+      const token = await this.getValidToken();
       if (!token) throw new Error('Not authenticated with Google Drive');
-      
+
       const existingFile = await this.findFile(token);
       const metadata = {
         name: this.fileName,
-        mimeType: 'application/json',
-        ...(existingFile ? {} : { parents: ['appDataFolder'] })
+        mimeType: 'application/json'
       };
-      
+
       const boundary = '-------ScriptVaultBoundary';
       const body = [
         `--${boundary}`,
@@ -2854,11 +2949,11 @@ var CloudSyncProviders = {
         JSON.stringify(data),
         `--${boundary}--`
       ].join('\r\n');
-      
+
       const url = existingFile
         ? `https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=multipart`
         : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-      
+
       const response = await fetch(url, {
         method: existingFile ? 'PATCH' : 'POST',
         headers: {
@@ -2867,57 +2962,62 @@ var CloudSyncProviders = {
         },
         body
       });
-      
+
       if (!response.ok) {
         const error = await response.text();
         throw new Error(`Upload failed: ${error}`);
       }
-      
+
       return { success: true, timestamp: Date.now() };
     },
-    
+
     async download(settings) {
-      const token = await this.getToken(false);
+      const token = await this.getValidToken();
       if (!token) throw new Error('Not authenticated with Google Drive');
-      
+
       const file = await this.findFile(token);
       if (!file) return null;
-      
+
       const response = await fetch(
         `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
-      
+
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
       return await response.json();
     },
-    
+
     async test(settings) {
       try {
-        const token = await this.getToken(false);
+        const token = await this.getValidToken();
         if (!token) return { success: false, error: 'Not authenticated' };
-        
+
         const response = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         return { success: response.ok };
       } catch (e) {
         return { success: false, error: e.message };
       }
     },
-    
+
     async getStatus() {
       try {
-        const token = await this.getToken(false);
+        const settings = await SettingsManager.get();
+        if (!settings.googleDriveConnected || !settings.googleDriveToken) {
+          return { connected: false };
+        }
+
+        const token = await this.getValidToken();
         if (!token) return { connected: false };
-        
+
         const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!response.ok) return { connected: false };
-        
+
         const user = await response.json();
         return { connected: true, user: { email: user.email, name: user.name } };
       } catch (e) {
@@ -3674,6 +3774,13 @@ const SettingsManager = {
     return this.cache;
   }
 };
+
+// Debug logging helper - only logs when debugMode is enabled
+function debugLog(...args) {
+  if (SettingsManager.cache?.debugMode) {
+    console.log('[ScriptVault]', ...args);
+  }
+}
 
 // ============================================================================
 // Script Storage
@@ -4764,6 +4871,7 @@ async function handleMessage(message, sender) {
         
         await ScriptStorage.set(id, script);
         await updateBadge();
+        await autoReloadMatchingTabs(script);
 
         // Re-register the script with userScripts API
         await unregisterScript(id);
@@ -4844,6 +4952,7 @@ async function handleMessage(message, sender) {
           }
 
           await updateBadge();
+          await autoReloadMatchingTabs(script);
         }
         return { success: true };
       }
@@ -4952,12 +5061,35 @@ async function handleMessage(message, sender) {
       case 'setSettings': {
         const oldSettings = await SettingsManager.get();
         const result = await SettingsManager.set(data.settings);
-        
+        const changed = data.settings;
+
         // If global enabled state changed, re-register all scripts
-        if ('enabled' in data.settings && data.settings.enabled !== oldSettings.enabled) {
+        if ('enabled' in changed && changed.enabled !== oldSettings.enabled) {
           await registerAllScripts();
         }
-        
+
+        // If update/sync intervals changed, reconfigure alarms
+        if ('checkInterval' in changed || 'autoUpdate' in changed ||
+            'syncEnabled' in changed || 'syncProvider' in changed || 'syncInterval' in changed) {
+          await setupAlarms();
+        }
+
+        // If badge settings changed, refresh badge
+        if ('badgeColor' in changed || 'badgeInfo' in changed || 'showBadge' in changed) {
+          await updateBadge();
+        }
+
+        // If context menu setting changed, rebuild menus
+        if ('enableContextMenu' in changed) {
+          await setupContextMenus();
+        }
+
+        // If page filter settings changed, re-register scripts
+        if ('pageFilterMode' in changed || 'whitelistedPages' in changed ||
+            'blacklistedPages' in changed || 'deniedHosts' in changed) {
+          await registerAllScripts();
+        }
+
         return result;
       }
         
@@ -5054,7 +5186,51 @@ async function handleMessage(message, sender) {
       case 'syncNow': {
         return await CloudSync.sync();
       }
-      
+
+      case 'cloudExport': {
+        const providerName = data.provider;
+        const provider = CloudSyncProviders[providerName];
+        if (!provider) return { success: false, error: 'Unknown provider: ' + providerName };
+
+        try {
+          const exportData = await exportAllScripts();
+          const settings = await SettingsManager.get();
+          await provider.upload(exportData, settings);
+          return { success: true };
+        } catch (e) {
+          return { success: false, error: e.message };
+        }
+      }
+
+      case 'cloudImport': {
+        const providerName = data.provider;
+        const provider = CloudSyncProviders[providerName];
+        if (!provider) return { success: false, error: 'Unknown provider: ' + providerName };
+
+        try {
+          const settings = await SettingsManager.get();
+          const remoteData = await provider.download(settings);
+          if (!remoteData) return { success: false, error: 'No backup found on ' + providerName };
+          const result = await importScripts(remoteData, { overwrite: true });
+          return { success: true, imported: result.imported };
+        } catch (e) {
+          return { success: false, error: e.message };
+        }
+      }
+
+      case 'cloudStatus': {
+        const providerName = data.provider;
+        const provider = CloudSyncProviders[providerName];
+        if (!provider) return { connected: false };
+
+        try {
+          if (provider.getStatus) return await provider.getStatus();
+          return { connected: false };
+        } catch (e) {
+          return { connected: false, error: e.message };
+        }
+      }
+
       // Values Editor - Get all scripts' values
       case 'getAllScriptsValues': {
         const scripts = await ScriptStorage.getAll();
@@ -5499,6 +5675,25 @@ async function handleMessage(message, sender) {
 }
 
 // ============================================================================
+// Auto-reload matching tabs
+// ============================================================================
+
+async function autoReloadMatchingTabs(script) {
+  const settings = await SettingsManager.get();
+  if (!settings.autoReload) return;
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.url && doesScriptMatchUrl(script, tab.url)) {
+        chrome.tabs.reload(tab.id);
+      }
+    }
+  } catch (e) {
+    console.error('[ScriptVault] Auto-reload failed:', e);
+  }
+}
+
+// ============================================================================
 // Badge Management
 // ============================================================================
 
@@ -5542,6 +5737,12 @@ async function updateBadgeForTab(tabId, url) {
   }
   
   try {
+    // Check global page filter
+    if (isUrlBlockedByGlobalSettings(url, settings)) {
+      chrome.action.setBadgeText({ text: '', tabId });
+      return;
+    }
+
     // Get scripts that match this URL
     const scripts = await ScriptStorage.getAll();
     const matchingScripts = scripts.filter(script => {
@@ -5549,10 +5750,18 @@ async function updateBadgeForTab(tabId, url) {
       return doesScriptMatchUrl(script, url);
     });
     
-    const count = matchingScripts.length;
-    chrome.action.setBadgeText({ 
-      text: count > 0 ? String(count) : '', 
-      tabId 
+    const badgeInfo = settings.badgeInfo || 'running';
+    let badgeText = '';
+    if (badgeInfo === 'running') {
+      badgeText = matchingScripts.length > 0 ? String(matchingScripts.length) : '';
+    } else if (badgeInfo === 'total') {
+      const allEnabled = scripts.filter(s => s.enabled).length;
+      badgeText = allEnabled > 0 ? String(allEnabled) : '';
+    }
+    // badgeInfo === 'none' leaves badgeText empty
+    chrome.action.setBadgeText({
+      text: badgeText,
+      tabId
     });
     chrome.action.setBadgeBackgroundColor({ 
       color: settings.badgeColor || '#22c55e',
@@ -5563,14 +5772,47 @@ async function updateBadgeForTab(tabId, url) {
   }
 }
 
+// Check if URL is blocked by global page filter or denied hosts
+function isUrlBlockedByGlobalSettings(url, globalSettings) {
+  if (!url) return false;
+  try {
+    const urlObj = new URL(url);
+    // Denied hosts
+    const denied = globalSettings.deniedHosts;
+    if (denied && Array.isArray(denied)) {
+      for (const host of denied) {
+        if (host && (urlObj.hostname === host || urlObj.hostname.endsWith('.' + host))) {
+          return true;
+        }
+      }
+    }
+    // Page filter mode
+    const mode = globalSettings.pageFilterMode || 'blacklist';
+    if (mode === 'whitelist') {
+      const whitelist = (globalSettings.whitelistedPages || '').split('\n').map(s => s.trim()).filter(Boolean);
+      if (whitelist.length > 0) {
+        const matched = whitelist.some(p => matchIncludePattern(p, url, urlObj));
+        if (!matched) return true;
+      }
+    } else if (mode === 'blacklist') {
+      const blacklist = (globalSettings.blacklistedPages || '').split('\n').map(s => s.trim()).filter(Boolean);
+      if (blacklist.length > 0) {
+        const matched = blacklist.some(p => matchIncludePattern(p, url, urlObj));
+        if (matched) return true;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
 // Check if a script matches a URL (with URL override support)
 function doesScriptMatchUrl(script, url) {
   const meta = script.meta || {};
   const settings = script.settings || {};
-  
+
   try {
     const urlObj = new URL(url);
-    
+
     // Build effective patterns based on settings
     let effectiveMatches = [];
     let effectiveIncludes = [];
@@ -5677,21 +5919,27 @@ function matchPattern(pattern, url, urlObj) {
   }
 }
 
-// Match an @include pattern (glob-style)
+// Match an @include pattern (glob-style or regex)
 function matchIncludePattern(pattern, url, urlObj) {
   if (!pattern) return false;
   if (pattern === '*') return true;
-  
+
   try {
+    // Handle regex patterns: /regex/ or /regex/flags
+    if (isRegexPattern(pattern)) {
+      const re = parseRegexPattern(pattern);
+      return re ? re.test(url) : false;
+    }
+
     // Convert glob to regex
     let regex = pattern
       .replace(/[.+^${}()|[\]\\]/g, '\\$&')  // Escape special chars
       .replace(/\*/g, '.*')                   // * -> .*
       .replace(/\?/g, '.');                   // ? -> .
-    
+
     // Handle scheme wildcards
     regex = regex.replace(/^(\\\*):\/\//, '(https?|file|ftp)://');
-    
+
     const re = new RegExp('^' + regex + '$', 'i');
     return re.test(url);
   } catch (e) {
@@ -5703,24 +5951,32 @@ function matchIncludePattern(pattern, url, urlObj) {
 // Context Menu
 // ============================================================================
 
-chrome.runtime.onInstalled.addListener(() => {
+async function setupContextMenus() {
+  await chrome.contextMenus.removeAll();
+  const settings = await SettingsManager.get();
+  if (settings.enableContextMenu === false) return;
+
   chrome.contextMenus.create({
     id: 'scriptvault-new',
     title: 'Create script for this site',
     contexts: ['page']
   });
-  
+
   chrome.contextMenus.create({
     id: 'scriptvault-dashboard',
     title: 'Open ScriptVault Dashboard',
     contexts: ['page']
   });
-  
+
   chrome.contextMenus.create({
     id: 'scriptvault-toggle',
     title: 'Toggle all scripts',
     contexts: ['page']
   });
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  setupContextMenus();
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -5788,9 +6044,13 @@ async function setupAlarms() {
   await chrome.alarms.clearAll();
   
   // Setup auto-update alarm
+  // checkInterval is hours from dashboard, updateInterval is ms legacy
   if (settings.autoUpdate) {
+    const intervalMs = settings.checkInterval
+      ? parseInt(settings.checkInterval) * 3600000
+      : (settings.updateInterval || 86400000);
     chrome.alarms.create('autoUpdate', {
-      periodInMinutes: settings.updateInterval / 60000
+      periodInMinutes: Math.max(1, intervalMs / 60000)
     });
   }
   
@@ -5961,16 +6221,25 @@ async function installFromUrl(url) {
 async function init() {
   await SettingsManager.init();
   await ScriptStorage.init();
-  
+
+  // Apply language setting to I18n
+  const settings = await SettingsManager.get();
+  if (settings.language && settings.language !== 'default' && settings.language !== 'auto') {
+    I18n.setLocale(settings.language);
+  }
+
   // Configure userScripts world
   await configureUserScriptsWorld();
-  
+
+  // Setup context menus
+  await setupContextMenus();
+
   // Register all enabled scripts
   await registerAllScripts();
-  
+
   await updateBadge();
   await setupAlarms();
-  
+
   console.log('[ScriptVault] Service worker ready');
 }
 
@@ -6061,14 +6330,27 @@ async function registerScript(script) {
       }
     }
     
+    // Collect regex @include/@exclude patterns for runtime filtering
+    const regexIncludes = [];
+    const regexExcludes = [];
+
     // Process @include (if enabled in settings)
     if (settings.useOriginalIncludes !== false && meta.include && Array.isArray(meta.include)) {
       for (const inc of meta.include) {
-        const converted = convertIncludeToMatch(inc);
-        if (converted && isValidMatchPattern(converted)) {
-          matches.push(converted);
-        } else if (inc === '*') {
-          matches.push('<all_urls>');
+        if (isRegexPattern(inc)) {
+          // Regex pattern - extract broad match patterns for registration, filter at runtime
+          regexIncludes.push(inc);
+          const broad = extractMatchPatternsFromRegex(inc);
+          if (broad.length > 0) {
+            matches.push(...broad);
+          }
+        } else {
+          const converted = convertIncludeToMatch(inc);
+          if (converted && isValidMatchPattern(converted)) {
+            matches.push(converted);
+          } else if (inc === '*') {
+            matches.push('<all_urls>');
+          }
         }
       }
     }
@@ -6097,6 +6379,10 @@ async function registerScript(script) {
     // Process @exclude (if enabled) - convert to exclude matches where possible
     if (settings.useOriginalExcludes !== false && meta.exclude && Array.isArray(meta.exclude)) {
       for (const exc of meta.exclude) {
+        if (isRegexPattern(exc)) {
+          regexExcludes.push(exc);
+          continue;
+        }
         const converted = convertIncludeToMatch(exc);
         if (converted && isValidMatchPattern(converted)) {
           excludeMatches.push(converted);
@@ -6114,6 +6400,25 @@ async function registerScript(script) {
       }
     }
     
+    // Add denied hosts as exclude patterns
+    const globalSettings = await SettingsManager.get();
+    const deniedHosts = globalSettings.deniedHosts;
+    if (deniedHosts && Array.isArray(deniedHosts)) {
+      for (const host of deniedHosts) {
+        if (host) excludeMatches.push(`*://${host}/*`, `*://*.${host}/*`);
+      }
+    }
+    // Add blacklisted pages as exclude patterns
+    if (globalSettings.pageFilterMode === 'blacklist' && globalSettings.blacklistedPages) {
+      const blacklist = globalSettings.blacklistedPages.split('\n').map(s => s.trim()).filter(Boolean);
+      for (const p of blacklist) {
+        const converted = convertIncludeToMatch(p);
+        if (converted && isValidMatchPattern(converted)) {
+          excludeMatches.push(converted);
+        }
+      }
+    }
+
     // If no matches, use <all_urls> (some scripts use @include *)
     if (matches.length === 0) {
       matches.push('<all_urls>');
@@ -6153,7 +6458,7 @@ async function registerScript(script) {
     const storedValues = await ScriptValues.getAll(script.id) || {};
     
     // Build the script code with GM API wrapper, @require scripts, and pre-loaded storage
-    const wrappedCode = buildWrappedScript(script, requireScripts, storedValues);
+    const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
     
     // Register the script
     await chrome.userScripts.register([{
@@ -6393,7 +6698,7 @@ async function unregisterScript(scriptId) {
 }
 
 // Build wrapped script code with GM API
-function buildWrappedScript(script, requireScripts = [], preloadedStorage = {}) {
+function buildWrappedScript(script, requireScripts = [], preloadedStorage = {}, regexIncludes = [], regexExcludes = []) {
   const meta = script.meta;
   const grants = meta.grant || ['none'];
   
@@ -6452,6 +6757,25 @@ ${req.code}
   window.addEventListener('unhandledrejection', __handleRejection, true);
   // ============ End Error Labeling ============
   
+  ${regexIncludes.length > 0 || regexExcludes.length > 0 ? `
+  // ============ Regex @include/@exclude URL Guard ============
+  {
+    const __url = location.href;
+    ${regexIncludes.length > 0 ? `const __regexIncludes = [${regexIncludes.map(p => {
+      const m = p.match(/^\/(.+)\/([gimsuy]*)$/);
+      return m ? `new RegExp(${JSON.stringify(m[1])}, ${JSON.stringify(m[2])})` : 'null';
+    }).filter(x => x !== 'null').join(', ')}];
+    const __includeMatch = __regexIncludes.some(re => re.test(__url));
+    if (!__includeMatch) return;` : ''}
+    ${regexExcludes.length > 0 ? `const __regexExcludes = [${regexExcludes.map(p => {
+      const m = p.match(/^\/(.+)\/([gimsuy]*)$/);
+      return m ? `new RegExp(${JSON.stringify(m[1])}, ${JSON.stringify(m[2])})` : 'null';
+    }).filter(x => x !== 'null').join(', ')}];
+    const __excludeMatch = __regexExcludes.some(re => re.test(__url));
+    if (__excludeMatch) return;` : ''}
+  }
+  // ============ End URL Guard ============
+` : ''}
   const scriptId = ${JSON.stringify(script.id)};
   const meta = ${JSON.stringify(meta)};
   const grants = ${JSON.stringify(grants)};
@@ -7319,6 +7643,62 @@ function isValidMatchPattern(pattern) {
   // Basic match pattern validation
   const matchRegex = /^(\*|https?|file|ftp):\/\/(\*|\*\.[^/*]+|[^/*]+)\/.*$/;
   return matchRegex.test(pattern);
+}
+
+// Check if a pattern is a regex @include (wrapped in /regex/)
+function isRegexPattern(pattern) {
+  return pattern && pattern.startsWith('/') && pattern.length > 2 &&
+    (pattern.endsWith('/') || /\/[gimsuy]*$/.test(pattern));
+}
+
+// Parse a regex @include pattern string into a RegExp object
+function parseRegexPattern(pattern) {
+  const match = pattern.match(/^\/(.+)\/([gimsuy]*)$/);
+  if (!match) return null;
+  try {
+    return new RegExp(match[1], match[2]);
+  } catch (e) {
+    return null;
+  }
+}
+
+// Extract broad match patterns from a regex to use for Chrome registration
+// The actual fine-grained filtering happens at runtime in the injected wrapper
+function extractMatchPatternsFromRegex(regexStr) {
+  // Remove the /.../ wrapper and flags
+  const inner = regexStr.replace(/^\//, '').replace(/\/[gimsuy]*$/, '');
+  const patterns = [];
+
+  // Strategy 1: Find domain patterns like "name\.(tld1|tld2|tld3)" or "name\.tld"
+  // Handles: 1337x\.(to|st|ws|eu|se|is|gd|unblocked\.dk)
+  const domainWithAlts = /([a-z0-9][-a-z0-9]*)\\\.\(([^)]+)\)/gi;
+  let match;
+  while ((match = domainWithAlts.exec(inner)) !== null) {
+    const base = match[1];
+    const altsRaw = match[2];
+    // Split alternatives, handling escaped dots within them (e.g. unblocked\.dk)
+    const alts = altsRaw.split('|').map(a => a.replace(/\\\./g, '.'));
+    for (const alt of alts) {
+      // Only use clean TLD/domain alternatives (no regex metacharacters)
+      if (/^[a-z0-9][-a-z0-9.]*$/i.test(alt) && alt.length >= 2 && alt.length <= 30) {
+        patterns.push(`*://*.${base}.${alt}/*`);
+        patterns.push(`*://${base}.${alt}/*`);
+      }
+    }
+  }
+
+  // Strategy 2: Find simple "domain\.tld" patterns not inside groups
+  const simpleDomain = /(?:^|\/\/)(?:\([^)]*\))?([a-z0-9][-a-z0-9]*(?:\\\.)[a-z]{2,10})(?:[\\\/\$\)]|$)/gi;
+  while ((match = simpleDomain.exec(inner)) !== null) {
+    const domain = match[1].replace(/\\\./g, '.');
+    if (/^[a-z0-9][-a-z0-9]*\.[a-z]{2,10}$/i.test(domain)) {
+      patterns.push(`*://*.${domain}/*`);
+      patterns.push(`*://${domain}/*`);
+    }
+  }
+
+  // Deduplicate
+  return [...new Set(patterns)];
 }
 
 // Helper: Convert @include glob to @match pattern
