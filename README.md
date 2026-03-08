@@ -1,8 +1,8 @@
-# EspressoMonkey ☕🐵
+# ScriptVault 🔐
 
 <p align="center">
 
-<img width="1024" height="746" alt="EspressoMonkey" src="https://github.com/user-attachments/assets/4e2fb973-8a1e-468c-a96c-8c1902507356" />
+<img width="1024" height="746" alt="ScriptVault" src="https://github.com/user-attachments/assets/4e2fb973-8a1e-468c-a96c-8c1902507356" />
 
 </p>
 
@@ -22,7 +22,7 @@
 ## ✨ Features
 
 ### Full GM API Support
-EspressoMonkey provides comprehensive Greasemonkey/Tampermonkey API compatibility:
+ScriptVault provides comprehensive Greasemonkey/Tampermonkey API compatibility:
 
 | Storage | Network | UI | Utilities |
 |---------|---------|-----|-----------|
@@ -97,7 +97,7 @@ Available in 8 languages:
 
 1. Clone or download this repository:
    ```bash
-   git clone https://github.com/SysAdminDoc/EspressoMonkey.git
+   git clone https://github.com/SysAdminDoc/ScriptVault.git
    ```
 
 2. Open Chrome and navigate to `chrome://extensions`
@@ -106,7 +106,7 @@ Available in 8 languages:
 
 4. Click **Load unpacked**
 
-5. Select the `espressomonkey` folder
+5. Select the `scriptvault` folder
 
 6. **For Chrome 138+**: Click the extension's "Details" and enable "Allow User Scripts"
 
@@ -120,10 +120,10 @@ Available in 8 languages:
 ### Installing Userscripts
 
 **Method 1: Direct URL**
-Navigate to any `.user.js` file URL - EspressoMonkey automatically detects and opens the installation page.
+Navigate to any `.user.js` file URL - ScriptVault automatically detects and opens the installation page.
 
 **Method 2: From Dashboard**
-1. Click the EspressoMonkey icon → **Open Dashboard**
+1. Click the ScriptVault icon → **Open Dashboard**
 2. Go to **Utilities** tab
 3. Paste a URL or script code
 4. Click **Import**
@@ -147,7 +147,7 @@ Navigate to any `.user.js` file URL - EspressoMonkey automatically detects and o
 
 | Shortcut | Action |
 |----------|--------|
-| `Alt+Shift+S` | Open EspressoMonkey popup |
+| `Alt+Shift+S` | Open ScriptVault popup |
 | `Alt+Shift+D` | Open Dashboard |
 | `Alt+Shift+E` | Toggle all scripts on/off |
 | `Ctrl+S` | Save script (in editor) |
@@ -159,7 +159,7 @@ Navigate to any `.user.js` file URL - EspressoMonkey automatically detects and o
 
 ## 🔧 Supported Metadata
 
-EspressoMonkey supports all standard userscript metadata:
+ScriptVault supports all standard userscript metadata:
 
 ```javascript
 // ==UserScript==
@@ -200,7 +200,7 @@ EspressoMonkey supports all standard userscript metadata:
 
 ## 🔐 Security Model
 
-EspressoMonkey takes security seriously:
+ScriptVault takes security seriously:
 
 1. **Script Isolation** - Scripts run in isolated `USER_SCRIPT` world via `chrome.userScripts` API
 2. **Permission Transparency** - Installation page shows all requested permissions
@@ -212,7 +212,7 @@ EspressoMonkey takes security seriously:
 
 ## 🆚 Comparison
 
-| Feature | EspressoMonkey | Tampermonkey | ViolentMonkey |
+| Feature | ScriptVault | Tampermonkey | ViolentMonkey |
 |---------|----------------|--------------|---------------|
 | Manifest V3 | ✅ | ✅ | ✅ |
 | Full GM API | ✅ 24+ functions | ✅ | ✅ |
@@ -225,7 +225,7 @@ EspressoMonkey takes security seriously:
 ## 📁 Project Structure
 
 ```
-espressomonkey/
+scriptvault/
 ├── manifest.json          # Extension manifest
 ├── background.js          # Service worker (API, sync, registration)
 ├── content.js             # Content script bridge
@@ -271,6 +271,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <p align="center">
-  <strong>EspressoMonkey v1.0.0</strong> ☕🐵<br>
+  <strong>ScriptVault v1.0.0</strong> 🔐<br>
   <em>Fuel your browsing with powerful userscripts</em>
 </p>

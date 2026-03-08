@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EspressoMonkey</title>
+    <title>ScriptVault</title>
     <style>
         * {
             margin: 0;
@@ -141,15 +141,17 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #333;
-            font-size: 14px;
+            background: #2a2a2a;
+            font-size: 12px;
             flex-shrink: 0;
+            overflow: hidden;
         }
 
         .script-icon img {
-            width: 18px;
-            height: 18px;
+            width: 20px;
+            height: 20px;
             border-radius: 2px;
+            object-fit: contain;
         }
 
         .script-name {
@@ -174,6 +176,28 @@
         .script-arrow svg {
             width: 16px;
             height: 16px;
+        }
+
+        .script-delete {
+            color: #666;
+            margin-left: 4px;
+            flex-shrink: 0;
+            padding: 4px;
+            border-radius: 4px;
+            transition: color 0.15s, background 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .script-delete:hover {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.15);
+        }
+
+        .script-delete svg {
+            width: 14px;
+            height: 14px;
         }
 
         /* Menu items */
