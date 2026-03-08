@@ -1,4 +1,4 @@
-// EspressoMonkey Popup v2.0.12
+// EspressoMonkey Popup v1.1.0
 // Tampermonkey-style popup interface
 
 (function() {
@@ -25,7 +25,8 @@
         btnCheckUpdates: document.getElementById('btnCheckUpdates'),
         btnDashboard: document.getElementById('btnDashboard'),
         setupWarning: document.getElementById('setupWarning'),
-        btnOpenExtSettings: document.getElementById('btnOpenExtSettings')
+        btnOpenExtSettings: document.getElementById('btnOpenExtSettings'),
+        headerCount: document.getElementById('headerCount')
     };
 
     // Initialize
@@ -101,22 +102,30 @@
                 url: currentUrl
             });
 
-            // Filter to only scripts that match this URL and are enabled (or all if showing disabled too)
-            pageScripts = (response || []).filter(s => s.enabled !== false || true);
+            pageScripts = response || [];
             renderScriptList();
+            updateEnabledState();
         } catch (error) {
             console.error('Failed to load scripts:', error);
             pageScripts = [];
             renderScriptList();
+            updateEnabledState();
         }
     }
 
     // Update enabled state UI
     function updateEnabledState() {
         const enabled = settings.enabled !== false;
-        
+
         if (elements.headerCheckIcon) {
             elements.headerCheckIcon.classList.toggle('disabled', !enabled);
+        }
+
+        // Update script count badge
+        if (elements.headerCount) {
+            const enabledCount = pageScripts.filter(s => s.enabled !== false).length;
+            elements.headerCount.textContent = enabledCount > 0 ? enabledCount : '';
+            elements.headerCount.classList.toggle('disabled', !enabled);
         }
     }
 
@@ -135,7 +144,9 @@
         }
 
         elements.scriptList.innerHTML = pageScripts.map(script => {
-            const name = script.metadata?.name || script.meta?.name || 'Unnamed Script';
+            const meta = script.metadata || script.meta || {};
+            const name = meta.name || 'Unnamed Script';
+            const version = meta.version || '';
             const enabled = script.enabled !== false;
             const icon = getScriptIcon(script);
 
@@ -146,7 +157,7 @@
                         <span class="slider"></span>
                     </label>
                     <div class="script-icon">${icon}</div>
-                    <span class="script-name">${escapeHtml(name)}</span>
+                    <span class="script-name">${escapeHtml(name)}${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}</span>
                     <div class="script-arrow">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="9 18 15 12 9 6"/>
@@ -224,7 +235,8 @@
                 script.enabled = enabled;
             }
 
-            // Update badge for current tab
+            // Update count badge and tab badge
+            updateEnabledState();
             updateBadgeForTab();
         } catch (error) {
             console.error('Failed to toggle script:', error);

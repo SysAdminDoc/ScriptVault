@@ -347,6 +347,26 @@
             border-bottom: 2px solid var(--border-section);
         }
 
+        .scripts-table th.sortable {
+            cursor: pointer;
+            -webkit-user-select: none;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .scripts-table th.sortable:hover {
+            color: var(--text-primary);
+            background: var(--bg-button);
+        }
+
+        .sort-indicator {
+            font-size: 10px;
+            opacity: 0.4;
+        }
+
+        .sort-indicator.asc::after { content: '▲'; opacity: 1; }
+        .sort-indicator.desc::after { content: '▼'; opacity: 1; }
+
         .scripts-table th.center,
         .scripts-table td.center { text-align: center; }
 
@@ -359,6 +379,18 @@
 
         .scripts-table tbody tr:nth-child(even) { background: var(--bg-row-alt); }
         .scripts-table tbody tr:hover { background: var(--bg-row-hover); }
+
+        .scripts-table tbody tr.drag-over {
+            border-top: 2px solid var(--accent-primary);
+        }
+
+        .scripts-table tbody tr.dragging {
+            opacity: 0.4;
+        }
+
+        .drag-handle:hover {
+            color: var(--text-primary) !important;
+        }
 
         .script-name { color: var(--text-primary); cursor: pointer; }
         .script-name:hover { color: var(--accent-secondary); }
@@ -1152,15 +1184,15 @@
                     <thead>
                         <tr>
                             <th class="center" style="width:30px"><input type="checkbox" id="selectAllScripts"></th>
-                            <th class="center" style="width:40px">#</th>
-                            <th class="center" style="width:50px">Enabled</th>
-                            <th style="min-width:200px">Name</th>
-                            <th class="center" style="width:70px">Version</th>
-                            <th class="center" style="width:60px">Size</th>
+                            <th class="center sortable" style="width:40px" data-sort="order"># <span class="sort-indicator"></span></th>
+                            <th class="center sortable" style="width:50px" data-sort="enabled">Enabled <span class="sort-indicator"></span></th>
+                            <th class="sortable" style="min-width:200px" data-sort="name">Name <span class="sort-indicator"></span></th>
+                            <th class="center sortable" style="width:70px" data-sort="version">Version <span class="sort-indicator"></span></th>
+                            <th class="center sortable" style="width:60px" data-sort="size">Size <span class="sort-indicator"></span></th>
                             <th class="center" style="width:80px">Sites</th>
                             <th class="center" style="width:80px">Features</th>
                             <th class="center" style="width:50px">🏠</th>
-                            <th class="center" style="width:80px">Updated</th>
+                            <th class="center sortable" style="width:80px" data-sort="updated">Updated <span class="sort-indicator"></span></th>
                             <th class="center" style="width:60px">Actions</th>
                         </tr>
                     </thead>
