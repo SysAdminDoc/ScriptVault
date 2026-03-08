@@ -1,6 +1,6 @@
-// ScriptVault v1.0.0 - Background Service Worker
+// ScriptVault v1.1.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
-// v1.0.0: Fixed @require global scope issues (GM_config), improved DOM timing helpers
+// v1.1.0: Renamed to ScriptVault, popup delete/favicons, editor nav, bug fixes
 
 // ============================================================================
 // INLINED: fflate v0.8.2 - Browser-only ZIP library
@@ -6883,15 +6883,16 @@ ${req.code}
     const localId = 'xhr_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
     let requestId = null;
     let aborted = false;
-    
+    let currentMapKey = localId;
+
     // Store request details for event handling
     _xhrRequests.set(localId, { details, aborted: false });
-    
+
     // Control object returned to the script
     const control = {
       abort: () => {
         aborted = true;
-        const request = _xhrRequests.get(localId);
+        const request = _xhrRequests.get(currentMapKey);
         if (request) {
           request.aborted = true;
         }
@@ -6905,7 +6906,7 @@ ${req.code}
             details.onabort({ error: 'Aborted', status: 0 });
           } catch (e) {}
         }
-        _xhrRequests.delete(localId);
+        _xhrRequests.delete(currentMapKey);
       }
     };
     
@@ -6946,23 +6947,25 @@ ${req.code}
       if (!response) {
         // No response (bridge failure)
         if (details.onerror) details.onerror({ error: 'Request failed - no response', status: 0 });
-        _xhrRequests.delete(localId);
+        _xhrRequests.delete(currentMapKey);
       } else if (response.error) {
         // Immediate error
         if (details.onerror) details.onerror({ error: response.error, status: 0 });
-        _xhrRequests.delete(localId);
+        _xhrRequests.delete(currentMapKey);
       } else if (response.requestId) {
-        // Request started, update our map with server's ID
+        // Re-key the map so XHR event lookups by server requestId will find this entry
         requestId = response.requestId;
-        const request = _xhrRequests.get(localId);
+        const request = _xhrRequests.get(currentMapKey);
         if (request) {
-          request.serverRequestId = requestId;
+          _xhrRequests.delete(currentMapKey);
+          currentMapKey = requestId;
+          _xhrRequests.set(currentMapKey, request);
         }
       }
     }).catch(err => {
       if (aborted) return;
       if (details.onerror) details.onerror({ error: err.message || 'Request failed', status: 0 });
-      _xhrRequests.delete(localId);
+      _xhrRequests.delete(currentMapKey);
     });
     
     return control;
