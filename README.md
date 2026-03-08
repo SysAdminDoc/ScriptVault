@@ -1,12 +1,11 @@
-# ScriptVault 🔐
-
 <p align="center">
-
-
+  <img src="images/ScriptVault-192x192.png" alt="ScriptVault" width="128" height="128">
 </p>
 
+<h1 align="center">ScriptVault</h1>
+
 <p align="center">
-  <strong>A powerful, modern userscript manager built with Chrome Manifest V3</strong>
+  <strong>A powerful, open-source userscript manager built on Chrome Manifest V3</strong>
 </p>
 
 <p align="center">
@@ -16,12 +15,21 @@
   <img src="https://img.shields.io/badge/chrome-120%2B-blue?style=flat-square" alt="Chrome 120+">
 </p>
 
+<p align="center">
+  <a href="#features">Features</a> &bull;
+  <a href="#installation">Installation</a> &bull;
+  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#security-model">Security</a> &bull;
+  <a href="#contributing">Contributing</a>
+</p>
+
 ---
 
-## ✨ Features
+## Features
 
-### Full GM API Support
-ScriptVault provides comprehensive Greasemonkey/Tampermonkey API compatibility:
+### GM API &mdash; 24+ Functions
+
+Full Greasemonkey/Tampermonkey API compatibility with promise-based `GM.*` async variants.
 
 | Storage | Network | UI | Utilities |
 |---------|---------|-----|-----------|
@@ -35,62 +43,70 @@ ScriptVault provides comprehensive Greasemonkey/Tampermonkey API compatibility:
 | `GM_addValueChangeListener` | | | |
 | `GM_removeValueChangeListener` | | | |
 
-Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for tab state management.
-
-**Promise-based GM.* API** - All functions available as async versions (e.g., `GM.getValue()`, `GM.setValue()`)
+Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state management.
 
 ### Script Management
-- **Automatic Installation** - Navigate to any `.user.js` URL for instant detection
-- **One-click Enable/Disable** - Toggle scripts individually or globally
-- **Auto-Updates** - Configurable update checking with notifications
-- **Version Tracking** - Track installed vs available versions
-- **Tags System** - Organize scripts with custom tags
-- **Search & Filter** - Find scripts by name, description, or metadata
+
+- **Auto-detect installation** &mdash; Navigate to any `.user.js` URL
+- **One-click toggle** &mdash; Enable/disable scripts individually or globally
+- **Auto-updates** &mdash; Configurable update intervals with notifications
+- **Version tracking** &mdash; Installed vs. available version comparison
+- **Tags & search** &mdash; Organize and filter scripts by name, description, or metadata
+- **Popup quick-edit** &mdash; Click any script in the toolbar popup to jump straight into the editor
 
 ### Advanced URL Matching
+
 - Full `@match`, `@include`, `@exclude`, `@exclude-match` support
-- **User Overrides** - Add custom patterns without editing script code
-- **Original Pattern Toggles** - Disable original patterns per-script
+- **User overrides** &mdash; Add custom match patterns without editing script code
+- **Per-pattern toggles** &mdash; Disable individual original patterns per-script
 - Glob and regex pattern support
 
 ### Cloud Sync
-Sync your scripts across devices with multiple providers:
-- **WebDAV** - Self-hosted or any WebDAV server
-- **Google Drive** - OAuth2 integration
-- **Dropbox** - App folder sync
-- **OneDrive** - Microsoft account integration
-- **Browser Sync** - Chrome's built-in sync
 
-### Editor Features
-- **CodeMirror Integration** - Syntax highlighting for JavaScript
-- **Multiple Themes** - Monokai, Dracula, Material Darker, Nord, Ayu Dark
-- **Code Folding** - Collapse functions and blocks
-- **Bracket Matching** - Auto-close and highlight matching brackets
-- **Search & Replace** - Ctrl+F find, Ctrl+H replace
-- **Linting** - Real-time userscript metadata validation
-- **External Editor Support** - Open scripts in vscode.dev
+Sync scripts across devices with 5 providers:
 
-### Security Features
-- **Blacklist System** - Block scripts from running on specific sites
-  - Remote blacklists (auto-updated)
-  - Manual blacklist entries
-- **Permission Analysis** - Visual breakdown of requested `@grant` permissions
-- **@connect Validation** - Restrict network access domains
-- **CSP Handling** - Works on sites with strict Content Security Policies
+| Provider | Method |
+|----------|--------|
+| WebDAV | Self-hosted or any WebDAV server |
+| Google Drive | OAuth2 integration |
+| Dropbox | App folder sync |
+| OneDrive | Microsoft account integration |
+| Browser Sync | Chrome's built-in sync |
 
-### Import/Export
-- **ZIP Format** - Full backup with all scripts and settings
-- **JSON Format** - Text-based backup
-- **URL Import** - Install directly from URL
-- **Clipboard Import** - Paste scripts from clipboard
+### Built-in Code Editor
+
+- **CodeMirror** with JavaScript syntax highlighting
+- **5 dark themes** &mdash; Monokai, Dracula, Material Darker, Nord, Ayu Dark
+- Code folding, bracket matching, auto-close
+- Search & replace (`Ctrl+F` / `Ctrl+H`)
+- Real-time userscript metadata linting
+- Open in vscode.dev for external editing
+
+### Security
+
+- **Script isolation** &mdash; `USER_SCRIPT` world via `chrome.userScripts` API
+- **Blacklist system** &mdash; Remote + manual blacklists
+- **Permission analysis** &mdash; Visual `@grant` permission breakdown on install
+- **`@connect` validation** &mdash; Restrict XHR domains
+- **CSP handling** &mdash; Works on sites with strict Content Security Policies
+- **Zero telemetry** &mdash; No phone home, all data stays local
+
+### Import & Export
+
+- **ZIP** &mdash; Full backup with scripts + settings
+- **JSON** &mdash; Text-based backup
+- **URL import** &mdash; Install directly from any URL
+- **Clipboard import** &mdash; Paste script code directly
 
 ### Internationalization
+
 Available in 8 languages:
-🇺🇸 English | 🇩🇪 German | 🇪🇸 Spanish | 🇫🇷 French | 🇯🇵 Japanese | 🇵🇹 Portuguese | 🇷🇺 Russian | 🇨🇳 Chinese
+
+English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portuguese &bull; Russian &bull; Chinese
 
 ---
 
-## 📦 Installation
+## Installation
 
 ### From Source (Developer Mode)
 
@@ -104,46 +120,36 @@ Available in 8 languages:
 
 3. Enable **Developer mode** (toggle in top right)
 
-4. Click **Load unpacked**
+4. Click **Load unpacked** and select the repository folder
 
-5. Select the `scriptvault` folder
-
-6. **For Chrome 138+**: Click the extension's "Details" and enable "Allow User Scripts"
+5. **Chrome 138+**: Click the extension's "Details" and enable **Allow User Scripts**
 
 ### Chrome Web Store
+
 *Coming soon*
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### Installing Userscripts
+### Installing Scripts
 
-**Method 1: Direct URL**
-Navigate to any `.user.js` file URL - ScriptVault automatically detects and opens the installation page.
-
-**Method 2: From Dashboard**
-1. Click the ScriptVault icon → **Open Dashboard**
-2. Go to **Utilities** tab
-3. Paste a URL or script code
-4. Click **Import**
-
-**Method 3: Create New**
-1. Open Dashboard
-2. Click the **+** button
-3. Write your script using the built-in editor
-4. Press **Ctrl+S** to save
+| Method | Steps |
+|--------|-------|
+| **Direct URL** | Navigate to any `.user.js` URL &mdash; ScriptVault auto-detects it |
+| **Dashboard import** | Dashboard &rarr; Utilities &rarr; paste URL or code &rarr; Import |
+| **Create new** | Dashboard &rarr; click **+** &rarr; write script &rarr; `Ctrl+S` |
 
 ### Managing Scripts
 
-- **Toggle scripts** - Click the checkbox next to any script
-- **Edit scripts** - Click the script name to open the editor
-- **Delete scripts** - Click the trash icon
-- **View storage** - Click the database icon to see/edit GM_getValue data
+| Action | How |
+|--------|-----|
+| Toggle | Click the switch next to any script |
+| Edit | Click the script name (dashboard or popup) |
+| Delete | Click the trash icon |
+| View storage | Click the database icon to inspect `GM_getValue` data |
 
----
-
-## ⌨️ Keyboard Shortcuts
+### Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
@@ -151,15 +157,13 @@ Navigate to any `.user.js` file URL - ScriptVault automatically detects and open
 | `Alt+Shift+D` | Open Dashboard |
 | `Alt+Shift+E` | Toggle all scripts on/off |
 | `Ctrl+S` | Save script (in editor) |
-| `Ctrl+F` | Find in script |
+| `Ctrl+F` | Find in editor |
 | `Ctrl+H` | Find and replace |
 | `Ctrl+G` | Go to line |
 
 ---
 
-## 🔧 Supported Metadata
-
-ScriptVault supports all standard userscript metadata:
+## Supported Metadata
 
 ```javascript
 // ==UserScript==
@@ -191,86 +195,88 @@ ScriptVault supports all standard userscript metadata:
 ```
 
 ### @run-at Options
-- `document-start` - Run before DOM loads
-- `document-body` - Run when body element exists
-- `document-end` - Run when DOM is complete (default)
-- `document-idle` - Run when page is fully loaded
+
+| Value | Timing |
+|-------|--------|
+| `document-start` | Before DOM loads |
+| `document-body` | When `<body>` exists |
+| `document-end` | When DOM is complete (default) |
+| `document-idle` | When page is fully loaded |
 
 ---
 
-## 🔐 Security Model
+## Security Model
 
-ScriptVault takes security seriously:
-
-1. **Script Isolation** - Scripts run in isolated `USER_SCRIPT` world via `chrome.userScripts` API
-2. **Permission Transparency** - Installation page shows all requested permissions
-3. **Network Restrictions** - `@connect` domains are validated
-4. **Blacklist Protection** - Block known malicious scripts
-5. **No Phone Home** - Zero telemetry, all data stays local (unless you enable cloud sync)
+| Layer | Protection |
+|-------|------------|
+| Script isolation | Scripts run in isolated `USER_SCRIPT` world via `chrome.userScripts` API |
+| Permission transparency | Installation page shows all requested `@grant` permissions |
+| Network restrictions | `@connect` domains are validated before XHR requests |
+| Blacklist protection | Remote + manual blacklists block known malicious scripts |
+| Zero telemetry | No data collection, no phone home &mdash; everything stays local |
 
 ---
 
-## 🆚 Comparison
+## Comparison
 
 | Feature | ScriptVault | Tampermonkey | ViolentMonkey |
-|---------|----------------|--------------|---------------|
-| Manifest V3 | ✅ | ✅ | ✅ |
-| Full GM API | ✅ 24+ functions | ✅ | ✅ |
-| Cloud Sync | ✅ 5 providers | ✅ | ✅ |
-| Open Source | ✅ MIT | ❌ | ✅ |
-| Free | ✅ | Freemium | ✅ |
+|---------|:-----------:|:------------:|:-------------:|
+| Manifest V3 | Yes | Yes | Yes |
+| Full GM API (24+) | Yes | Yes | Yes |
+| Cloud Sync (5 providers) | Yes | Yes | Yes |
+| Open Source | MIT | No | Yes |
+| Free | Yes | Freemium | Yes |
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
-scriptvault/
-├── manifest.json          # Extension manifest
-├── background.js          # Service worker (API, sync, registration)
-├── content.js             # Content script bridge
+ScriptVault/
+├── manifest.json              # Extension manifest (MV3)
+├── background.js              # Service worker — API, sync, script registration
+├── content.js                 # Content script bridge (USER_SCRIPT <-> background)
 ├── pages/
-│   ├── dashboard.html/js/css  # Main settings UI
+│   ├── dashboard.html/js/css  # Main settings & editor UI
 │   ├── popup.html/js          # Toolbar popup
 │   └── install.html/js        # Script installation page
-├── images/
-│   └── icon*.png          # Extension icons
+├── images/                    # Extension icons (16-512px, .ico)
 ├── lib/
-│   └── codemirror/        # CodeMirror editor
+│   └── codemirror/            # CodeMirror editor + addons
 └── _locales/
-    └── */messages.json    # Translations
+    └── */messages.json        # 8 language translations
 ```
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome. Feel free to open a Pull Request.
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
+2. Create your feature branch (`git checkout -b feature/my-feature`)
+3. Commit your changes
+4. Push to the branch (`git push origin feature/my-feature`)
 5. Open a Pull Request
 
 ---
 
-## 📝 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License &mdash; see [LICENSE](LICENSE) for details.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-- [Tampermonkey](https://www.tampermonkey.net/) - For setting the standard in userscript management
-- [ViolentMonkey](https://violentmonkey.github.io/) - For Manifest V3 inspiration
-- [CodeMirror](https://codemirror.net/) - Excellent code editor
-- [fflate](https://github.com/101arrowz/fflate) - Fast ZIP library
+- [Tampermonkey](https://www.tampermonkey.net/) &mdash; Setting the standard in userscript management
+- [ViolentMonkey](https://violentmonkey.github.io/) &mdash; Manifest V3 inspiration
+- [CodeMirror](https://codemirror.net/) &mdash; Code editor
+- [fflate](https://github.com/101arrowz/fflate) &mdash; Fast ZIP compression
 
 ---
 
 <p align="center">
   <strong>ScriptVault v1.1.0</strong><br>
-  <em>Your scripts, your rules — locked down and loaded</em>
+  <em>Your scripts, your rules &mdash; locked down and loaded</em>
 </p>
