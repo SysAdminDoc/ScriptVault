@@ -1,4 +1,4 @@
-// ScriptVault v1.1.0 - Background Service Worker
+// ScriptVault v1.3.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // v1.1.0: Renamed to ScriptVault, popup delete/favicons, editor nav, bug fixes
 
@@ -3165,20 +3165,209 @@ var CloudSyncProviders = {
     
     async getStatus(settings) {
       if (!settings.dropboxToken) return { connected: false };
-      
+
       try {
         const response = await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${settings.dropboxToken}` }
         });
-        
+
         if (!response.ok) return { connected: false };
-        
+
         const user = await response.json();
         return {
           connected: true,
           user: { email: user.email, name: user.name.display_name }
         };
+      } catch (e) {
+        return { connected: false };
+      }
+    }
+  },
+
+  // ============================================================================
+  // OneDrive Provider
+  // ============================================================================
+  onedrive: {
+    name: 'OneDrive',
+    icon: '📁',
+    requiresOAuth: true,
+    fileName: 'scriptvault-backup.json',
+    // Microsoft OAuth - users must provide their own client ID from Azure AD
+    // Create at: https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps
+
+    async connect(settings) {
+      const clientId = settings.onedriveClientId;
+      if (!clientId) {
+        throw new Error('OneDrive Client ID required. Create one at https://portal.azure.com → App registrations');
+      }
+      const redirectUri = chrome.identity.getRedirectURL('onedrive');
+      const scopes = 'Files.ReadWrite.AppFolder User.Read offline_access';
+
+      const codeVerifier = Array.from(crypto.getRandomValues(new Uint8Array(32)),
+        b => b.toString(16).padStart(2, '0')).join('');
+      const encoder = new TextEncoder();
+      const digest = await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier));
+      const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+      const authUrl = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?' + new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: scopes,
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256'
+      }).toString();
+
+      const responseUrl = await chrome.identity.launchWebAuthFlow({
+        url: authUrl, interactive: true
+      });
+
+      const url = new URL(responseUrl);
+      const code = url.searchParams.get('code');
+      if (!code) throw new Error('No authorization code received');
+
+      const tokenResp = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          code,
+          code_verifier: codeVerifier,
+          grant_type: 'authorization_code',
+          redirect_uri: redirectUri,
+          scope: scopes
+        })
+      });
+
+      if (!tokenResp.ok) throw new Error('Token exchange failed: ' + await tokenResp.text());
+      const tokens = await tokenResp.json();
+
+      const userResp = await fetch('https://graph.microsoft.com/v1.0/me', {
+        headers: { 'Authorization': `Bearer ${tokens.access_token}` }
+      });
+      const user = userResp.ok ? await userResp.json() : {};
+
+      await SettingsManager.set({
+        onedriveToken: tokens.access_token,
+        onedriveRefreshToken: tokens.refresh_token || '',
+        onedriveConnected: true,
+        onedriveUser: { email: user.mail || user.userPrincipalName || '', name: user.displayName || '' }
+      });
+
+      return { success: true, user: { email: user.mail || user.userPrincipalName, name: user.displayName } };
+    },
+
+    async refreshToken() {
+      const settings = await SettingsManager.get();
+      const refreshTok = settings.onedriveRefreshToken;
+      const clientId = settings.onedriveClientId;
+      if (!refreshTok || !clientId) return null;
+
+      const resp = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          grant_type: 'refresh_token',
+          refresh_token: refreshTok,
+          scope: 'Files.ReadWrite.AppFolder User.Read offline_access'
+        })
+      });
+
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      if (data.access_token) {
+        await SettingsManager.set({
+          onedriveToken: data.access_token,
+          onedriveRefreshToken: data.refresh_token || refreshTok
+        });
+        return data.access_token;
+      }
+      return null;
+    },
+
+    async getValidToken() {
+      const settings = await SettingsManager.get();
+      let token = settings.onedriveToken;
+      if (!token) return null;
+
+      const test = await fetch('https://graph.microsoft.com/v1.0/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (test.ok) return token;
+
+      return await this.refreshToken();
+    },
+
+    async disconnect() {
+      await SettingsManager.set({
+        onedriveToken: '', onedriveRefreshToken: '',
+        onedriveConnected: false, onedriveUser: null
+      });
+      return { success: true };
+    },
+
+    async upload(data) {
+      const token = await this.getValidToken();
+      if (!token) throw new Error('Not authenticated with OneDrive');
+
+      const response = await fetch(
+        `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        }
+      );
+
+      if (!response.ok) throw new Error('Upload failed: ' + await response.text());
+      return { success: true, timestamp: Date.now() };
+    },
+
+    async download() {
+      const token = await this.getValidToken();
+      if (!token) throw new Error('Not authenticated with OneDrive');
+
+      const response = await fetch(
+        `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+
+      if (response.status === 404) return null;
+      if (!response.ok) throw new Error('Download failed: ' + response.status);
+      return await response.json();
+    },
+
+    async test() {
+      try {
+        const token = await this.getValidToken();
+        if (!token) return { success: false, error: 'Not authenticated' };
+        const response = await fetch('https://graph.microsoft.com/v1.0/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        return { success: response.ok };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
+    },
+
+    async getStatus() {
+      try {
+        const settings = await SettingsManager.get();
+        if (!settings.onedriveConnected || !settings.onedriveToken) return { connected: false };
+        const token = await this.getValidToken();
+        if (!token) return { connected: false };
+        const response = await fetch('https://graph.microsoft.com/v1.0/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) return { connected: false };
+        const user = await response.json();
+        return { connected: true, user: { email: user.mail || user.userPrincipalName, name: user.displayName } };
       } catch (e) {
         return { connected: false };
       }
@@ -4075,6 +4264,51 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   TabStorage.delete(tabId);
   // Also abort any pending XHR requests for this tab
   XhrManager.abortByTab(tabId);
+  // Clean up notification callbacks for this tab
+  if (self._notifCallbacks) {
+    for (const [notifId, info] of self._notifCallbacks) {
+      if (info.tabId === tabId) self._notifCallbacks.delete(notifId);
+    }
+  }
+});
+
+// Notification click/close listeners for GM_notification callbacks
+chrome.notifications.onClicked.addListener((notifId) => {
+  if (!self._notifCallbacks) return;
+  const info = self._notifCallbacks.get(notifId);
+  if (!info) return;
+  if (info.hasOnclick) {
+    chrome.tabs.sendMessage(info.tabId, {
+      action: 'notificationEvent',
+      data: { notifId, scriptId: info.scriptId, type: 'click' }
+    }).catch(() => {});
+  }
+});
+
+chrome.notifications.onClosed.addListener((notifId, byUser) => {
+  if (!self._notifCallbacks) return;
+  const info = self._notifCallbacks.get(notifId);
+  if (!info) return;
+  if (info.hasOndone) {
+    chrome.tabs.sendMessage(info.tabId, {
+      action: 'notificationEvent',
+      data: { notifId, scriptId: info.scriptId, type: 'done' }
+    }).catch(() => {});
+  }
+  self._notifCallbacks.delete(notifId);
+});
+
+// Shared tracker for GM_openInTab close notifications (avoids per-call listener leak)
+const _openTabTrackers = new Map(); // openedTabId -> { callerTabId, scriptId }
+chrome.tabs.onRemoved.addListener((closedTabId) => {
+  const info = _openTabTrackers.get(closedTabId);
+  if (info) {
+    _openTabTrackers.delete(closedTabId);
+    chrome.tabs.sendMessage(info.callerTabId, {
+      action: 'openedTabClosed',
+      data: { tabId: closedTabId, scriptId: info.scriptId }
+    }).catch(() => {});
+  }
 });
 
 // ============================================================================
@@ -4163,35 +4397,86 @@ const XhrManager = {
 const ResourceCache = {
   cache: {},
   maxAge: 86400000, // 24 hours
-  
+  STORAGE_PREFIX: 'res_cache_',
+
   async get(url) {
     const cached = this.cache[url];
     if (cached && Date.now() - cached.timestamp < this.maxAge) {
-      return cached.data;
+      return cached;
     }
+    // Try persistent storage
+    try {
+      const key = this.STORAGE_PREFIX + url;
+      const stored = await chrome.storage.local.get(key);
+      if (stored[key] && Date.now() - stored[key].timestamp < this.maxAge) {
+        this.cache[url] = stored[key];
+        return stored[key];
+      }
+    } catch (e) {}
     return null;
   },
-  
-  set(url, data) {
-    this.cache[url] = { data, timestamp: Date.now() };
+
+  async set(url, text, dataUri) {
+    const entry = { text, dataUri, timestamp: Date.now() };
+    this.cache[url] = entry;
+    try {
+      const key = this.STORAGE_PREFIX + url;
+      await chrome.storage.local.set({ [key]: entry });
+    } catch (e) {}
   },
-  
+
   async fetch(url) {
     const cached = await this.get(url);
-    if (cached) return cached;
-    
+    if (cached) return cached.text;
+
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.text();
-      this.set(url, data);
-      return data;
+      const contentType = response.headers.get('content-type') || 'text/plain';
+      const buffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+
+      // Generate text representation
+      let text;
+      if (contentType.includes('text') || contentType.includes('json') || contentType.includes('xml') || contentType.includes('css') || contentType.includes('javascript')) {
+        text = new TextDecoder().decode(bytes);
+      } else {
+        text = '';
+      }
+
+      // Generate data URI for binary resources (images, fonts, etc.)
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = btoa(binary);
+      const dataUri = `data:${contentType};base64,${base64}`;
+
+      await this.set(url, text, dataUri);
+      return text;
     } catch (e) {
       console.error('[ScriptVault] Failed to fetch resource:', url, e);
       throw e;
     }
   },
-  
+
+  async getDataUri(url) {
+    const cached = await this.get(url);
+    if (cached && cached.dataUri) return cached.dataUri;
+    // Fetch it first
+    await this.fetch(url);
+    const entry = await this.get(url);
+    return entry ? entry.dataUri : null;
+  },
+
+  async prefetchResources(resources) {
+    if (!resources || typeof resources !== 'object') return;
+    const promises = Object.values(resources).map(url =>
+      this.fetch(url).catch(e => console.warn('[ScriptVault] Resource prefetch failed:', url, e.message))
+    );
+    await Promise.allSettled(promises);
+  },
+
   clear() {
     this.cache = {};
   }
@@ -4333,13 +4618,31 @@ const UpdateSystem = {
       
       try {
         const updateUrl = script.meta.updateURL || script.meta.downloadURL;
-        const response = await fetch(updateUrl);
+        const headers = {};
+
+        // Conditional request using stored etag/last-modified
+        if (script._httpEtag) headers['If-None-Match'] = script._httpEtag;
+        if (script._httpLastModified) headers['If-Modified-Since'] = script._httpLastModified;
+
+        const response = await fetch(updateUrl, { headers });
+
+        // 304 Not Modified - no update needed
+        if (response.status === 304) continue;
         if (!response.ok) continue;
-        
+
+        // Store HTTP cache headers for next check
+        const etag = response.headers.get('etag');
+        const lastModified = response.headers.get('last-modified');
+        if (etag || lastModified) {
+          script._httpEtag = etag || '';
+          script._httpLastModified = lastModified || '';
+          await ScriptStorage.set(script.id, script);
+        }
+
         const newCode = await response.text();
         const parsed = parseUserscript(newCode);
         if (parsed.error) continue;
-        
+
         if (this.compareVersions(parsed.meta.version, script.meta.version) > 0) {
           updates.push({
             id: script.id,
@@ -5308,7 +5611,31 @@ async function handleMessage(message, sender) {
       // Resources
       case 'fetchResource':
         return await ResourceCache.fetch(data.url);
-        
+
+      case 'GM_getResourceText': {
+        const script = await ScriptStorage.get(data.scriptId);
+        if (!script || !script.meta.resource) return null;
+        const url = script.meta.resource[data.name];
+        if (!url) return null;
+        try {
+          return await ResourceCache.fetch(url);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      case 'GM_getResourceURL': {
+        const script2 = await ScriptStorage.get(data.scriptId);
+        if (!script2 || !script2.meta.resource) return null;
+        const url2 = script2.meta.resource[data.name];
+        if (!url2) return null;
+        try {
+          return await ResourceCache.getDataUri(url2);
+        } catch (e) {
+          return null;
+        }
+      }
+
       // XHR - Using fetch() since XMLHttpRequest is not available in Service Workers
       // Provides abort support via AbortController and simulates events
       case 'GM_xmlhttpRequest': {
@@ -5316,7 +5643,37 @@ async function handleMessage(message, sender) {
           if (!data.url) {
             return { error: 'No URL provided', type: 'error' };
           }
-          
+
+          // @connect enforcement
+          if (data.scriptId) {
+            const xhrScript = await ScriptStorage.get(data.scriptId);
+            if (xhrScript && xhrScript.meta.connect && xhrScript.meta.connect.length > 0) {
+              const connectList = xhrScript.meta.connect;
+              const hasWildcard = connectList.includes('*');
+              if (!hasWildcard) {
+                try {
+                  const reqUrl = new URL(data.url);
+                  const hostname = reqUrl.hostname;
+                  const isAllowed = connectList.some(pattern => {
+                    if (pattern === 'self') {
+                      // @connect self - allow same origin as script match domains
+                      return true;
+                    }
+                    if (pattern === 'localhost') {
+                      return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+                    }
+                    // Check exact match or subdomain match
+                    return hostname === pattern || hostname.endsWith('.' + pattern);
+                  });
+                  if (!isAllowed) {
+                    console.warn(`[ScriptVault] @connect blocked: ${hostname} not in allowed list for ${xhrScript.meta.name}`);
+                    return { error: `Connection to ${hostname} blocked by @connect policy`, type: 'error' };
+                  }
+                } catch (e) {}
+              }
+            }
+          }
+
           const tabId = sender.tab?.id;
           const request = XhrManager.create(tabId, data.scriptId, data);
           const { id: requestId } = request;
@@ -5451,6 +5808,44 @@ async function handleMessage(message, sender) {
                   loaded: responseText.length,
                   total: contentLength || responseText.length
                 });
+              } else if (data.responseType === 'stream') {
+                // Stream response - send chunks as progress events
+                const reader = response.body?.getReader();
+                if (reader) {
+                  let loaded = 0;
+                  const chunks = [];
+                  const decoder = new TextDecoder();
+                  try {
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done || request.aborted) break;
+                      loaded += value.byteLength;
+                      const chunkText = decoder.decode(value, { stream: true });
+                      chunks.push(chunkText);
+                      sendEvent('progress', {
+                        readyState: 3,
+                        lengthComputable: contentLength > 0,
+                        loaded,
+                        total: contentLength || 0,
+                        responseText: chunkText,
+                        streamChunk: true
+                      });
+                    }
+                  } finally {
+                    reader.releaseLock();
+                  }
+                  responseText = chunks.join('');
+                  responseData = responseText;
+                } else {
+                  responseText = await response.text();
+                  responseData = responseText;
+                }
+                sendEvent('progress', {
+                  readyState: 3,
+                  lengthComputable: contentLength > 0,
+                  loaded: responseText.length,
+                  total: contentLength || responseText.length
+                });
               } else {
                 // Default: text
                 responseText = await response.text();
@@ -5539,37 +5934,118 @@ async function handleMessage(message, sender) {
         return { success: false };
       }
       
-      // Download
+      // Download (with callbacks: onload, onerror, onprogress, ontimeout)
       case 'GM_download': {
         try {
-          const downloadId = await chrome.downloads.download({
+          const downloadOpts = {
             url: data.url,
             filename: data.name,
-            saveAs: data.saveAs || false
-          });
+            saveAs: data.saveAs || false,
+            conflictAction: data.conflictAction || 'uniquify'
+          };
+          const downloadId = await chrome.downloads.download(downloadOpts);
+          const tabId = sender.tab?.id;
+          // Track download for event callbacks
+          if (tabId && data.hasCallbacks) {
+            const sendDlEvent = (type, eventData = {}) => {
+              chrome.tabs.sendMessage(tabId, {
+                action: 'downloadEvent',
+                data: { downloadId, scriptId: data.scriptId, type, ...eventData }
+              }).catch(() => {});
+            };
+            let dlTimeoutId = null;
+            // Monitor download state changes
+            const dlListener = (delta) => {
+              if (delta.id !== downloadId) return;
+              if (delta.state) {
+                if (delta.state.current === 'complete') {
+                  if (dlTimeoutId) clearTimeout(dlTimeoutId);
+                  sendDlEvent('load', { url: data.url });
+                  chrome.downloads.onChanged.removeListener(dlListener);
+                } else if (delta.state.current === 'interrupted') {
+                  if (dlTimeoutId) clearTimeout(dlTimeoutId);
+                  sendDlEvent('error', { error: delta.error?.current || 'Download interrupted' });
+                  chrome.downloads.onChanged.removeListener(dlListener);
+                }
+              }
+              if (delta.bytesReceived) {
+                sendDlEvent('progress', {
+                  loaded: delta.bytesReceived.current,
+                  total: delta.totalBytes?.current || 0
+                });
+              }
+            };
+            chrome.downloads.onChanged.addListener(dlListener);
+            // Timeout
+            if (data.timeout) {
+              dlTimeoutId = setTimeout(() => {
+                chrome.downloads.cancel(downloadId).catch(() => {});
+                sendDlEvent('timeout');
+                chrome.downloads.onChanged.removeListener(dlListener);
+              }, data.timeout);
+            }
+            // Safety: remove listener after 5 minutes max to prevent leaks
+            setTimeout(() => {
+              chrome.downloads.onChanged.removeListener(dlListener);
+            }, 300000);
+          }
           return { success: true, downloadId };
         } catch (e) {
           return { error: e.message };
         }
       }
       
-      // Notifications
+      // Notifications (with callbacks: onclick, ondone, timeout, tag)
       case 'GM_notification': {
-        const notifId = await chrome.notifications.create({
+        const notifOpts = {
           type: 'basic',
           iconUrl: data.image || 'images/icon128.png',
           title: data.title || 'ScriptVault',
-          message: data.text || ''
-        });
+          message: data.text || '',
+          silent: data.silent || false
+        };
+        // Use tag as notification ID for updates
+        const notifId = data.tag
+          ? await chrome.notifications.create(data.tag, notifOpts)
+          : await chrome.notifications.create(notifOpts);
+        const tabId = sender.tab?.id;
+        // Track notification for callbacks
+        if (tabId && (data.hasOnclick || data.hasOndone)) {
+          if (!self._notifCallbacks) self._notifCallbacks = new Map();
+          self._notifCallbacks.set(notifId, {
+            tabId, scriptId: data.scriptId,
+            hasOnclick: data.hasOnclick, hasOndone: data.hasOndone
+          });
+        }
+        // Auto-close after timeout
+        if (data.timeout && data.timeout > 0) {
+          setTimeout(() => {
+            chrome.notifications.clear(notifId).catch(() => {});
+          }, data.timeout);
+        }
         return { success: true, id: notifId };
       }
       
-      // Open tab
+      // Open tab (with close tracking for onclose callback)
       case 'GM_openInTab': {
-        const tab = await chrome.tabs.create({
+        const newTabOpts = {
           url: data.url,
-          active: !data.background
-        });
+          active: data.active !== undefined ? data.active : !data.background
+        };
+        // Insert next to current tab if requested
+        if (data.insert && sender.tab?.index !== undefined) {
+          newTabOpts.index = sender.tab.index + 1;
+        }
+        // Set opener tab
+        if (data.setParent && sender.tab?.id) {
+          newTabOpts.openerTabId = sender.tab.id;
+        }
+        const tab = await chrome.tabs.create(newTabOpts);
+        // Track tab for onclose notification via shared listener
+        const callerTabId = sender.tab?.id;
+        if (callerTabId && data.trackClose) {
+          _openTabTrackers.set(tab.id, { callerTabId, scriptId: data.scriptId });
+        }
         return { success: true, tabId: tab.id };
       }
       
@@ -5579,7 +6055,14 @@ async function handleMessage(message, sender) {
           await chrome.tabs.update(sender.tab.id, { active: true });
         }
         return { success: true };
-        
+
+      // Close opened tab (from GM_openInTab handle.close())
+      case 'GM_closeTab':
+        if (data.tabId) {
+          try { await chrome.tabs.remove(data.tabId); } catch (e) {}
+        }
+        return { success: true };
+
       // Get scripts for URL
       case 'getScriptsForUrl': {
         const allScripts = await ScriptStorage.getAll();
@@ -5612,19 +6095,28 @@ async function handleMessage(message, sender) {
           scriptMetaStr: null
         };
         
-      // Register menu command
-      case 'registerMenuCommand': {
-        // Store menu command for popup to show
+      // Register menu command (with extended options: id, accessKey, autoClose, title)
+      case 'registerMenuCommand':
+      case 'GM_registerMenuCommand': {
         const commands = await chrome.storage.session.get('menuCommands') || {};
         if (!commands.menuCommands) commands.menuCommands = {};
         if (!commands.menuCommands[data.scriptId]) commands.menuCommands[data.scriptId] = [];
-        
-        commands.menuCommands[data.scriptId].push({
+
+        // If command with same id exists, update it instead of adding duplicate
+        const existing = commands.menuCommands[data.scriptId].findIndex(c => c.id === data.commandId);
+        const cmdEntry = {
           id: data.commandId,
           caption: data.caption,
-          accessKey: data.accessKey
-        });
-        
+          accessKey: data.accessKey || '',
+          autoClose: data.autoClose !== false,
+          title: data.title || ''
+        };
+        if (existing >= 0) {
+          commands.menuCommands[data.scriptId][existing] = cmdEntry;
+        } else {
+          commands.menuCommands[data.scriptId].push(cmdEntry);
+        }
+
         await chrome.storage.session.set(commands);
         return { success: true };
       }
@@ -5665,6 +6157,52 @@ async function handleMessage(message, sender) {
         return { success: true };
       }
       
+      // GM_cookie API
+      case 'GM_cookie_list': {
+        try {
+          const details = {};
+          if (data.url) details.url = data.url;
+          if (data.domain) details.domain = data.domain;
+          if (data.name) details.name = data.name;
+          if (data.path) details.path = data.path;
+          const cookies = await chrome.cookies.getAll(details);
+          return { success: true, cookies };
+        } catch (e) {
+          return { error: e.message };
+        }
+      }
+
+      case 'GM_cookie_set': {
+        try {
+          const cookie = await chrome.cookies.set({
+            url: data.url,
+            name: data.name,
+            value: data.value || '',
+            domain: data.domain,
+            path: data.path || '/',
+            secure: data.secure || false,
+            httpOnly: data.httpOnly || false,
+            expirationDate: data.expirationDate,
+            sameSite: data.sameSite || 'unspecified'
+          });
+          return { success: true, cookie };
+        } catch (e) {
+          return { error: e.message };
+        }
+      }
+
+      case 'GM_cookie_delete': {
+        try {
+          await chrome.cookies.remove({
+            url: data.url,
+            name: data.name
+          });
+          return { success: true };
+        } catch (e) {
+          return { error: e.message };
+        }
+      }
+
       default:
         return { error: 'Unknown action: ' + action };
     }
@@ -5973,6 +6511,24 @@ async function setupContextMenus() {
     title: 'Toggle all scripts',
     contexts: ['page']
   });
+
+  // Add context menu entries for @run-at context-menu scripts
+  const scripts = await ScriptStorage.getAll();
+  const contextScripts = scripts.filter(s => s.enabled !== false && s.meta && s.meta['run-at'] === 'context-menu');
+  if (contextScripts.length > 0) {
+    chrome.contextMenus.create({
+      id: 'scriptvault-separator',
+      type: 'separator',
+      contexts: ['page', 'selection', 'link', 'image']
+    });
+    for (const script of contextScripts) {
+      chrome.contextMenus.create({
+        id: `scriptvault-ctx-${script.id}`,
+        title: script.meta.name || script.id,
+        contexts: ['page', 'selection', 'link', 'image']
+      });
+    }
+  }
 }
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -5995,6 +6551,39 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       const settings = await SettingsManager.get();
       await SettingsManager.set('enabled', !settings.enabled);
       await updateBadge();
+      break;
+    }
+    default: {
+      // Handle @run-at context-menu script execution
+      if (info.menuItemId && typeof info.menuItemId === 'string' && info.menuItemId.startsWith('scriptvault-ctx-')) {
+        const scriptId = info.menuItemId.replace('scriptvault-ctx-', '');
+        const script = await ScriptStorage.get(scriptId);
+        if (script && tab?.id) {
+          try {
+            // Build wrapped script with GM API support (same as auto-registered scripts)
+            const meta = script.meta;
+            const requires = Array.isArray(meta.require) ? meta.require : (meta.require ? [meta.require] : []);
+            const requireScripts = [];
+            for (const url of requires) {
+              try {
+                const code = await fetchRequireScript(url);
+                if (code) requireScripts.push({ url, code });
+              } catch (e) {}
+            }
+            const storedValues = await ScriptValues.getAll(script.id) || {};
+            const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, [], []);
+            // Execute in ISOLATED world (content script context) which has chrome.runtime access
+            // The wrapper's sendToBackground uses chrome.runtime.sendMessage directly
+            await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: (code) => { (0, eval)(code); },
+              args: [wrappedCode]
+            });
+          } catch (e) {
+            console.error(`[ScriptVault] Context-menu script execution failed:`, e);
+          }
+        }
+      }
       break;
     }
   }
@@ -6427,17 +7016,33 @@ async function registerScript(script) {
     // Map run-at values (with per-script setting override)
     const runAtMap = {
       'document-start': 'document_start',
-      'document-end': 'document_end', 
+      'document-end': 'document_end',
       'document-idle': 'document_idle',
-      'document-body': 'document_end'
+      'document-body': 'document_end',
+      'context-menu': 'document_idle' // context-menu scripts register idle, triggered via context menu
     };
-    
+
     // Check for per-script runAt override
     let effectiveRunAt = meta['run-at'];
     if (settings.runAt && settings.runAt !== 'default') {
       effectiveRunAt = settings.runAt;
     }
+    const isContextMenu = effectiveRunAt === 'context-menu';
+    if (isContextMenu) {
+      // Context-menu scripts are not auto-registered; they run on-demand via context menu click
+      console.log(`[ScriptVault] Skipping auto-register for context-menu script: ${meta.name}`);
+      return;
+    }
     const runAt = runAtMap[effectiveRunAt] || 'document_idle';
+
+    // Determine execution world based on @inject-into and @sandbox
+    // chrome.userScripts API only supports 'USER_SCRIPT' world, not 'MAIN'
+    // For @inject-into page / @sandbox raw, we still register in USER_SCRIPT world
+    // but pass a flag so the wrapper injects the user's code into the page context via <script>
+    const world = 'USER_SCRIPT';
+    const injectInto = meta['inject-into'] || 'auto';
+    const sandbox = meta.sandbox || '';
+    const injectIntoPage = (injectInto === 'page' || sandbox === 'raw');
     
     // Fetch @require dependencies
     const requireScripts = [];
@@ -6454,22 +7059,39 @@ async function registerScript(script) {
       }
     }
     
+    // Pre-fetch @resource dependencies
+    await ResourceCache.prefetchResources(meta.resource);
+
     // Pre-fetch storage values for this script
     const storedValues = await ScriptValues.getAll(script.id) || {};
     
     // Build the script code with GM API wrapper, @require scripts, and pre-loaded storage
+    if (injectIntoPage) {
+      console.log(`[ScriptVault] Note: @inject-into page / @sandbox raw not fully supported in MV3, running in USER_SCRIPT world: ${meta.name}`);
+    }
     const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
     
     // Register the script
-    await chrome.userScripts.register([{
+    const registration = {
       id: script.id,
       matches: matches,
       excludeMatches: excludeMatches.length > 0 ? excludeMatches : undefined,
       js: [{ code: wrappedCode }],
       runAt: runAt,
       allFrames: !meta.noframes,
-      world: 'USER_SCRIPT'
-    }]);
+      world: world
+    };
+    try {
+      // Chrome 131+ supports messaging in USER_SCRIPT world
+      await chrome.userScripts.register([{ ...registration, messaging: world === 'USER_SCRIPT' }]);
+    } catch (e) {
+      if (e.message?.includes('messaging')) {
+        // Fallback for older Chrome versions that don't support the messaging property
+        await chrome.userScripts.register([registration]);
+      } else {
+        throw e;
+      }
+    }
     
     console.log(`[ScriptVault] Registered: ${meta.name} (${requires.length} @require, ${Object.keys(storedValues).length} stored values)`);
   } catch (e) {
@@ -6757,25 +7379,30 @@ ${req.code}
   window.addEventListener('unhandledrejection', __handleRejection, true);
   // ============ End Error Labeling ============
   
-  ${regexIncludes.length > 0 || regexExcludes.length > 0 ? `
+  ${(() => {
+    const validIncludes = regexIncludes.map(p => {
+      const m = p.match(/^\/(.+)\/([gimsuy]*)$/);
+      return m ? `new RegExp(${JSON.stringify(m[1])}, ${JSON.stringify(m[2])})` : null;
+    }).filter(Boolean);
+    const validExcludes = regexExcludes.map(p => {
+      const m = p.match(/^\/(.+)\/([gimsuy]*)$/);
+      return m ? `new RegExp(${JSON.stringify(m[1])}, ${JSON.stringify(m[2])})` : null;
+    }).filter(Boolean);
+    if (validIncludes.length === 0 && validExcludes.length === 0) return '';
+    return `
   // ============ Regex @include/@exclude URL Guard ============
   {
     const __url = location.href;
-    ${regexIncludes.length > 0 ? `const __regexIncludes = [${regexIncludes.map(p => {
-      const m = p.match(/^\/(.+)\/([gimsuy]*)$/);
-      return m ? `new RegExp(${JSON.stringify(m[1])}, ${JSON.stringify(m[2])})` : 'null';
-    }).filter(x => x !== 'null').join(', ')}];
+    ${validIncludes.length > 0 ? `const __regexIncludes = [${validIncludes.join(', ')}];
     const __includeMatch = __regexIncludes.some(re => re.test(__url));
     if (!__includeMatch) return;` : ''}
-    ${regexExcludes.length > 0 ? `const __regexExcludes = [${regexExcludes.map(p => {
-      const m = p.match(/^\/(.+)\/([gimsuy]*)$/);
-      return m ? `new RegExp(${JSON.stringify(m[1])}, ${JSON.stringify(m[2])})` : 'null';
-    }).filter(x => x !== 'null').join(', ')}];
+    ${validExcludes.length > 0 ? `const __regexExcludes = [${validExcludes.join(', ')}];
     const __excludeMatch = __regexExcludes.some(re => re.test(__url));
     if (__excludeMatch) return;` : ''}
   }
   // ============ End URL Guard ============
-` : ''}
+`;
+  })()}
   const scriptId = ${JSON.stringify(script.id)};
   const meta = ${JSON.stringify(meta)};
   const grants = ${JSON.stringify(grants)};
@@ -7331,31 +7958,95 @@ ${req.code}
     ta.remove();
   }
   
-  // GM_notification
+  // GM_notification (with onclick, ondone, timeout, tag, silent, highlight, url)
+  const _notifCallbacks = new Map();
   function GM_notification(details, ondone) {
     if (!hasGrant('GM_notification') && !hasGrant('GM.notification')) return;
-    const opts = typeof details === 'string' ? { text: details } : details;
+    let opts;
+    if (typeof details === 'string') {
+      // GM_notification(text, title, image, onclick)
+      opts = { text: details, title: ondone, image: arguments[2] };
+      const onclickArg = arguments[3];
+      if (typeof onclickArg === 'function') opts.onclick = onclickArg;
+      ondone = undefined;
+    } else {
+      opts = details;
+    }
+    if (typeof ondone === 'function') opts.ondone = ondone;
+    const notifTag = opts.tag || ('notif_' + Math.random().toString(36).substr(2));
+    // Store callbacks
+    _notifCallbacks.set(notifTag, {
+      onclick: opts.onclick, ondone: opts.ondone
+    });
+    // Highlight tab instead of notification
+    if (opts.highlight) {
+      sendToBackground('GM_focusTab', {}).catch(() => {});
+      if (opts.ondone) { try { opts.ondone(); } catch(e) {} }
+      return;
+    }
     sendToBackground('GM_notification', {
       scriptId,
       title: opts.title || GM_info.script.name,
       text: opts.text || opts.body || '',
-      image: opts.image
+      image: opts.image,
+      timeout: opts.timeout || 0,
+      tag: notifTag,
+      silent: opts.silent || false,
+      hasOnclick: !!opts.onclick,
+      hasOndone: !!opts.ondone
     }).catch(() => {});
   }
   
-  // GM_openInTab
+  // GM_openInTab (with close(), onclose, insert, setParent, incognito)
+  const _openedTabs = new Map();
   function GM_openInTab(url, options) {
     if (!hasGrant('GM_openInTab') && !hasGrant('GM.openInTab')) return null;
     const opts = typeof options === 'boolean' ? { active: !options } : (options || {});
-    sendToBackground('GM_openInTab', { url, ...opts }).catch(() => {});
-    return { close: () => {}, closed: false, onclose: null };
+    const tabHandle = { closed: false, onclose: null, close: () => {} };
+    sendToBackground('GM_openInTab', {
+      url, scriptId, trackClose: true,
+      active: opts.active, insert: opts.insert,
+      setParent: opts.setParent, background: opts.background
+    }).then(result => {
+      if (result && result.tabId) {
+        _openedTabs.set(result.tabId, tabHandle);
+        tabHandle.close = () => {
+          sendToBackground('GM_closeTab', { tabId: result.tabId }).catch(() => {});
+          tabHandle.closed = true;
+        };
+      }
+    }).catch(() => {});
+    return tabHandle;
   }
   
-  // GM_download
+  // GM_download (with onload, onerror, onprogress, ontimeout callbacks)
+  const _downloadCallbacks = new Map();
   function GM_download(details) {
     if (!hasGrant('GM_download') && !hasGrant('GM.download')) return;
-    const opts = typeof details === 'string' ? { url: details, name: details.split('/').pop() } : details;
-    sendToBackground('GM_download', opts).catch(() => {});
+    let opts;
+    if (typeof details === 'string') {
+      opts = { url: details, name: arguments[1] || details.split('/').pop() };
+    } else {
+      opts = { ...details };
+    }
+    const callbacks = {
+      onload: opts.onload, onerror: opts.onerror,
+      onprogress: opts.onprogress, ontimeout: opts.ontimeout
+    };
+    delete opts.onload; delete opts.onerror;
+    delete opts.onprogress; delete opts.ontimeout;
+    opts.scriptId = scriptId;
+    opts.hasCallbacks = !!(callbacks.onload || callbacks.onerror || callbacks.onprogress || callbacks.ontimeout);
+    sendToBackground('GM_download', opts).then(result => {
+      if (result && result.downloadId) {
+        _downloadCallbacks.set(result.downloadId, callbacks);
+      }
+      if (result && result.error && callbacks.onerror) {
+        try { callbacks.onerror({ error: result.error }); } catch(e) {}
+      }
+    }).catch(e => {
+      if (callbacks.onerror) try { callbacks.onerror({ error: e.message || 'Download failed' }); } catch(ex) {}
+    });
   }
   
   // GM_log
@@ -7363,20 +8054,34 @@ ${req.code}
     console.log('[' + GM_info.script.name + ']', ...args);
   }
   
-  // GM_registerMenuCommand
+  // GM_registerMenuCommand (with extended options: id, accessKey, autoClose, title)
   const _menuCmds = new Map();
   function GM_registerMenuCommand(caption, callback, accessKeyOrOptions) {
     if (!hasGrant('GM_registerMenuCommand') && !hasGrant('GM.registerMenuCommand')) return null;
-    const id = typeof accessKeyOrOptions === 'string' ? accessKeyOrOptions : 
-               (accessKeyOrOptions?.id || Math.random().toString(36).substr(2));
+    let opts = {};
+    if (typeof accessKeyOrOptions === 'string') {
+      opts.accessKey = accessKeyOrOptions;
+    } else if (accessKeyOrOptions && typeof accessKeyOrOptions === 'object') {
+      opts = accessKeyOrOptions;
+    }
+    const id = opts.id || Math.random().toString(36).substr(2);
     _menuCmds.set(id, callback);
-    sendToBackground('GM_registerMenuCommand', { scriptId, commandId: id, caption }).catch(() => {});
+    sendToBackground('GM_registerMenuCommand', {
+      scriptId, commandId: id, caption,
+      accessKey: opts.accessKey || '',
+      autoClose: opts.autoClose !== false,
+      title: opts.title || ''
+    }).catch(() => {});
     return id;
   }
-  
+
   function GM_unregisterMenuCommand(id) {
     _menuCmds.delete(id);
     sendToBackground('GM_unregisterMenuCommand', { scriptId, commandId: id }).catch(() => {});
+  }
+
+  function GM_getMenuCommands() {
+    return Array.from(_menuCmds.entries()).map(([id, cb]) => ({ id, name: id }));
   }
   
   // GM_getResourceText / GM_getResourceURL
@@ -7385,8 +8090,19 @@ ${req.code}
     return await sendToBackground('GM_getResourceText', { scriptId, name });
   }
   
-  function GM_getResourceURL(name) {
-    return null;
+  async function GM_getResourceURL(name, isBlobUrl) {
+    if (!hasGrant('GM_getResourceURL') && !hasGrant('GM.getResourceUrl')) return null;
+    const dataUri = await sendToBackground('GM_getResourceURL', { scriptId, name });
+    if (!dataUri) return null;
+    // Return data URI by default, or convert to blob URL if requested
+    if (isBlobUrl === false) return dataUri;
+    try {
+      const resp = await fetch(dataUri);
+      const blob = await resp.blob();
+      return URL.createObjectURL(blob);
+    } catch (e) {
+      return dataUri;
+    }
   }
   
   // GM_addElement
@@ -7413,17 +8129,29 @@ ${req.code}
     return el;
   }
   
-  // GM_getTab / GM_saveTab / GM_getTabs (stub implementations)
+  // GM_getTab / GM_saveTab / GM_getTabs (real implementations via background)
+  let _tabData = {};
   function GM_getTab(callback) {
-    if (callback) callback({});
-    return {};
+    sendToBackground('GM_getTab', { scriptId }).then(data => {
+      _tabData = data || {};
+      if (callback) callback(_tabData);
+    }).catch(() => { if (callback) callback(_tabData); });
+    return _tabData;
   }
-  function GM_saveTab(tab) {}
+  function GM_saveTab(tab) {
+    _tabData = tab || {};
+    sendToBackground('GM_saveTab', { scriptId, data: _tabData }).catch(() => {});
+  }
   function GM_getTabs(callback) {
-    if (callback) callback({});
-    return {};
+    sendToBackground('GM_getTabs', { scriptId }).then(data => {
+      if (callback) callback(data || {});
+    }).catch(() => { if (callback) callback({}); });
   }
-  
+
+  function GM_focusTab() {
+    sendToBackground('GM_focusTab', {}).catch(() => {});
+  }
+
   // unsafeWindow
   const unsafeWindow = window;
   
@@ -7440,6 +8168,79 @@ ${req.code}
   
   // GM.* Promise-based API
   // These wait for storage to be refreshed before returning, ensuring fresh values
+  // GM_cookie (list, set, delete)
+  const GM_cookie = {
+    list: (details, callback) => {
+      if (!hasGrant('GM_cookie') && !hasGrant('GM.cookie')) {
+        if (callback) callback([], new Error('Permission denied'));
+        return;
+      }
+      sendToBackground('GM_cookie_list', details || {}).then(r => {
+        if (callback) callback(r.cookies || [], r.error ? new Error(r.error) : undefined);
+      }).catch(e => { if (callback) callback([], e); });
+    },
+    set: (details, callback) => {
+      if (!hasGrant('GM_cookie') && !hasGrant('GM.cookie')) {
+        if (callback) callback(new Error('Permission denied'));
+        return;
+      }
+      sendToBackground('GM_cookie_set', details || {}).then(r => {
+        if (callback) callback(r.error ? new Error(r.error) : undefined);
+      }).catch(e => { if (callback) callback(e); });
+    },
+    delete: (details, callback) => {
+      if (!hasGrant('GM_cookie') && !hasGrant('GM.cookie')) {
+        if (callback) callback(new Error('Permission denied'));
+        return;
+      }
+      sendToBackground('GM_cookie_delete', details || {}).then(r => {
+        if (callback) callback(r.error ? new Error(r.error) : undefined);
+      }).catch(e => { if (callback) callback(e); });
+    }
+  };
+
+  // Event listener for notification/download/tab close events from background
+  // Content.js forwards these with 'type' field (not 'action') and flat structure (not nested 'data')
+  window.addEventListener('message', function __svEventHandler(event) {
+    if (!event.data || event.data.channel !== CHANNEL_ID || event.data.direction !== 'to-userscript') return;
+
+    // Notification events (content.js sends: type, scriptId, notifTag, eventType)
+    if (event.data.type === 'notificationEvent' && event.data.scriptId === scriptId) {
+      const tag = event.data.notifTag;
+      const cbs = _notifCallbacks.get(tag);
+      if (!cbs) return;
+      if (event.data.eventType === 'click' && cbs.onclick) { try { cbs.onclick(); } catch(e) {} }
+      if (event.data.eventType === 'done') {
+        if (cbs.ondone) { try { cbs.ondone(); } catch(e) {} }
+        _notifCallbacks.delete(tag);
+      }
+    }
+
+    // Download events (content.js sends: type, scriptId, downloadId, eventType, data)
+    if (event.data.type === 'downloadEvent' && event.data.scriptId === scriptId) {
+      const d = event.data.data || {};
+      const cbs = _downloadCallbacks.get(event.data.downloadId);
+      if (!cbs) return;
+      const evType = event.data.eventType;
+      if (evType === 'load' && cbs.onload) { try { cbs.onload({ url: d.url }); } catch(e) {} _downloadCallbacks.delete(event.data.downloadId); }
+      if (evType === 'error' && cbs.onerror) { try { cbs.onerror({ error: d.error }); } catch(e) {} _downloadCallbacks.delete(event.data.downloadId); }
+      if (evType === 'progress' && cbs.onprogress) { try { cbs.onprogress({ loaded: d.loaded, total: d.total }); } catch(e) {} }
+      if (evType === 'timeout' && cbs.ontimeout) { try { cbs.ontimeout(); } catch(e) {} _downloadCallbacks.delete(event.data.downloadId); }
+    }
+
+    // Tab close events (content.js sends: type, scriptId, closedTabId)
+    if (event.data.type === 'openedTabClosed' && event.data.scriptId === scriptId) {
+      const tabId = event.data.closedTabId;
+      const handle = _openedTabs.get(tabId);
+      if (handle) {
+        handle.closed = true;
+        if (typeof handle.onclose === 'function') { try { handle.onclose(); } catch(e) {} }
+        _openedTabs.delete(tabId);
+      }
+    }
+  });
+
+  // GM.* Promise-based API
   const GM = {
     info: GM_info,
     getValue: async (k, d) => {
@@ -7460,12 +8261,11 @@ ${req.code}
     deleteValues: (keys) => Promise.resolve(GM_deleteValues(keys)),
     addStyle: (css) => Promise.resolve(GM_addStyle(css)),
     xmlHttpRequest: (d) => new Promise((res, rej) => {
-      const control = GM_xmlhttpRequest({ 
-        ...d, 
-        onload: res, 
-        onerror: (e) => rej(e.error || e) 
+      const control = GM_xmlhttpRequest({
+        ...d,
+        onload: res,
+        onerror: (e) => rej(e.error || e)
       });
-      // Return control object for abort support
       return control;
     }),
     notification: (d, ondone) => Promise.resolve(GM_notification(d, ondone)),
@@ -7473,18 +8273,22 @@ ${req.code}
     openInTab: (u, o) => Promise.resolve(GM_openInTab(u, o)),
     download: (d) => Promise.resolve(GM_download(d)),
     getResourceText: (n) => GM_getResourceText(n),
-    getResourceUrl: (n) => Promise.resolve(GM_getResourceURL(n)),
+    getResourceUrl: (n) => GM_getResourceURL(n),
     registerMenuCommand: (c, cb, o) => Promise.resolve(GM_registerMenuCommand(c, cb, o)),
     unregisterMenuCommand: (id) => Promise.resolve(GM_unregisterMenuCommand(id)),
     addValueChangeListener: (k, cb) => Promise.resolve(GM_addValueChangeListener(k, cb)),
     removeValueChangeListener: (id) => Promise.resolve(GM_removeValueChangeListener(id)),
-    getTab: () => Promise.resolve({}),
-    saveTab: (t) => Promise.resolve(),
-    getTabs: () => Promise.resolve({})
+    getTab: () => new Promise(r => GM_getTab(r)),
+    saveTab: (t) => Promise.resolve(GM_saveTab(t)),
+    getTabs: () => new Promise(r => GM_getTabs(r)),
+    cookies: {
+      list: (d) => new Promise((res, rej) => GM_cookie.list(d, (cookies, err) => err ? rej(err) : res(cookies))),
+      set: (d) => new Promise((res, rej) => GM_cookie.set(d, (err) => err ? rej(err) : res())),
+      delete: (d) => new Promise((res, rej) => GM_cookie.delete(d, (err) => err ? rej(err) : res()))
+    }
   };
 
   // CRITICAL: Expose all GM_* functions to window for Tampermonkey/Violentmonkey compatibility
-  // Many userscripts access these via window.GM_setValue or just GM_setValue in global scope
   window.GM_info = GM_info;
   window.GM_getValue = GM_getValue;
   window.GM_setValue = GM_setValue;
@@ -7502,6 +8306,7 @@ ${req.code}
   window.GM_log = GM_log;
   window.GM_registerMenuCommand = GM_registerMenuCommand;
   window.GM_unregisterMenuCommand = GM_unregisterMenuCommand;
+  window.GM_getMenuCommands = GM_getMenuCommands;
   window.GM_getResourceText = GM_getResourceText;
   window.GM_getResourceURL = GM_getResourceURL;
   window.GM_addElement = GM_addElement;
@@ -7510,6 +8315,8 @@ ${req.code}
   window.GM_getTabs = GM_getTabs;
   window.GM_addValueChangeListener = GM_addValueChangeListener;
   window.GM_removeValueChangeListener = GM_removeValueChangeListener;
+  window.GM_cookie = GM_cookie;
+  window.GM_focusTab = GM_focusTab;
   window.unsafeWindow = unsafeWindow;
   window.GM = GM;
   

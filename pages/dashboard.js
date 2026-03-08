@@ -1612,12 +1612,17 @@
                 tooltips: true,
                 highlightLines: true
             } : false,
+            hintOptions: {
+                hint: CodeMirror.hint.userscript,
+                completeSingle: false
+            },
             extraKeys: {
                 'Ctrl-S': saveCurrentScript,
                 'Cmd-S': saveCurrentScript,
                 'Ctrl-F': 'findPersistent',
                 'Esc': closeEditor,
-                'Tab': cm => cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection(indentStr, 'end')
+                'Tab': cm => cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection(indentStr, 'end'),
+                'Ctrl-Space': 'autocomplete'
             }
         });
 
@@ -1625,11 +1630,21 @@
 
         // Auto-save support
         let autoSaveTimer = null;
-        state.editor.on('change', () => {
+        state.editor.on('change', (cm, change) => {
             state.unsavedChanges = true;
             if (s.autoSave) {
                 clearTimeout(autoSaveTimer);
                 autoSaveTimer = setTimeout(() => saveCurrentScript(), 2000);
+            }
+            // Auto-trigger autocomplete on GM_ / GM. / @
+            if (change.origin === '+input' && change.text.length === 1) {
+                const ch = change.text[0];
+                const line = cm.getLine(change.to.line);
+                const pos = change.to.ch + ch.length;
+                const prefix = line.slice(0, pos);
+                if (/GM[_.]$/.test(prefix) || /\/\/\s*@\w*$/.test(prefix)) {
+                    cm.showHint({ completeSingle: false });
+                }
             }
         });
     }
