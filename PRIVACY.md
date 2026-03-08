@@ -1,6 +1,6 @@
 # ScriptVault Privacy Policy
 
-**Last Updated: January 19, 2026**
+**Last Updated: March 7, 2026**
 
 ## Overview
 
@@ -108,13 +108,12 @@ If we update this privacy policy, we will:
 ## Open Source
 
 ScriptVault is open source. You can review the complete source code to verify these privacy claims:
-- GitHub: [Your GitHub Repository URL]
+- GitHub: [SysAdminDoc/ScriptVault](https://github.com/SysAdminDoc/ScriptVault)
 
 ## Contact
 
 If you have questions about this privacy policy:
-- GitHub Issues: [Your GitHub Issues URL]
-- Email: [Your contact email - optional]
+- GitHub Issues: [ScriptVault Issues](https://github.com/SysAdminDoc/ScriptVault/issues)
 
 ---
 
