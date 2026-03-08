@@ -1,17 +1,17 @@
-// EspressoMonkey v1.0.0 - Content Script Bridge
+// ScriptVault v1.0.0 - Content Script Bridge
 // Bridges messages between userscripts (USER_SCRIPT world) and background service worker
 
 (function() {
   'use strict';
   
   // Prevent double initialization
-  if (window.__EspressoMonkey_Bridge__) {
+  if (window.__ScriptVault_Bridge__) {
     return;
   }
-  window.__EspressoMonkey_Bridge__ = true;
+  window.__ScriptVault_Bridge__ = true;
   
   // Unique channel ID to prevent conflicts with other extensions
-  const CHANNEL_ID = 'EspressoMonkey_' + chrome.runtime.id;
+  const CHANNEL_ID = 'ScriptVault_' + chrome.runtime.id;
   
   // Listen for messages from userscript world (USER_SCRIPT or page context)
   window.addEventListener('message', async (event) => {
@@ -49,9 +49,9 @@
       if (errorMsg.includes('Extension context invalidated') || 
           errorMsg.includes('message channel closed')) {
         // Extension was reloaded, silently fail
-        console.warn('[EspressoMonkey] Extension context invalidated, bridge reconnecting...');
+        console.warn('[ScriptVault] Extension context invalidated, bridge reconnecting...');
       } else {
-        console.error('[EspressoMonkey] Bridge error for', action, ':', errorMsg);
+        console.error('[ScriptVault] Bridge error for', action, ':', errorMsg);
       }
       window.postMessage({
         channel: CHANNEL_ID,
@@ -120,8 +120,8 @@
   });
   
   // Expose channel ID for userscripts and signal ready
-  window.__EspressoMonkey_ChannelID__ = CHANNEL_ID;
-  window.__EspressoMonkey_BridgeReady__ = true;
+  window.__ScriptVault_ChannelID__ = CHANNEL_ID;
+  window.__ScriptVault_BridgeReady__ = true;
   
   window.postMessage({
     channel: CHANNEL_ID,

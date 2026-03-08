@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EspressoMonkey Dashboard</title>
+    <title>ScriptVault Dashboard</title>
     <link rel="stylesheet" href="../lib/codemirror/codemirror.min.css">
     <link rel="stylesheet" href="../lib/codemirror/theme/monokai.min.css">
     <link rel="stylesheet" href="../lib/codemirror/theme/dracula.min.css">
@@ -197,6 +197,18 @@
         .tm-tab:hover {
             background: var(--bg-button-hover);
             color: var(--text-primary);
+        }
+
+        .tm-tab[data-tab="newscript"] {
+            font-size: 18px;
+            font-weight: bold;
+            padding: 4px 14px;
+            color: var(--accent-primary);
+        }
+
+        .tm-tab[data-tab="newscript"]:hover {
+            color: #fff;
+            background: var(--accent-primary);
         }
 
         .tm-tab.active {
@@ -842,6 +854,43 @@
 
         .editor-overlay.active { display: flex; }
 
+        .editor-nav {
+            display: flex;
+            gap: 2px;
+            padding: 8px 20px 0 20px;
+            background: #0d0d0d;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .editor-nav-btn {
+            padding: 6px 14px;
+            background: var(--bg-section-header);
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .editor-nav-btn:hover {
+            background: var(--bg-button-hover);
+            color: var(--text-primary);
+        }
+
+        .editor-nav-btn[data-nav="newscript"] {
+            font-size: 16px;
+            font-weight: bold;
+            padding: 2px 12px;
+            color: var(--accent-primary);
+        }
+
+        .editor-nav-btn[data-nav="newscript"]:hover {
+            color: #fff;
+            background: var(--accent-primary);
+        }
+
         .editor-header {
             display: flex;
             align-items: center;
@@ -1091,9 +1140,9 @@
     <header class="tm-header">
         <div class="tm-header-top">
             <div class="tm-logo">
-                <img src="../images/icon48.png" alt="EspressoMonkey">
+                <img src="../images/icon48.png" alt="ScriptVault">
                 <div class="tm-logo-text">
-                    <h1>EspressoMonkey<sup>v1.0.0</sup></h1>
+                    <h1>ScriptVault<sup>v1.0.0</sup></h1>
                     <small>by <a href="#">Matt</a></small>
                 </div>
             </div>
@@ -1107,6 +1156,7 @@
         </div>
         <nav class="tm-tabs">
             <button class="tm-tab active" data-tab="scripts">Installed Userscripts</button>
+            <button class="tm-tab" data-tab="newscript" id="tabNewScript" title="Create a new script">+</button>
             <button class="tm-tab" data-tab="settings">Settings</button>
             <button class="tm-tab" data-tab="utilities">Utilities</button>
             <button class="tm-tab" data-tab="help">Help</button>
@@ -1691,8 +1741,8 @@
                     <div class="setting-row">
                         <span class="label-text">Allow communication with cooperate pages:</span>
                         <select class="select-field" id="settingsAllowCommunication">
-                            <option value="version" selected>EspressoMonkey + script version</option>
-                            <option value="minimal">EspressoMonkey only</option>
+                            <option value="version" selected>ScriptVault + script version</option>
+                            <option value="minimal">ScriptVault only</option>
                             <option value="none">None</option>
                         </select>
                         <span class="help-icon" title="External message communication">?</span>
@@ -1882,7 +1932,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Reset</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button class="btn" id="btnRestartExtension">Restart EspressoMonkey</button>
+                        <button class="btn" id="btnRestartExtension">Restart ScriptVault</button>
                     </div>
                     <div class="setting-row">
                         <button class="btn btn-danger" id="btnFactoryReset">Factory Reset</button>
@@ -1899,7 +1949,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <label><input type="checkbox" id="exportIncludeStorage" checked> Include script storage</label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="exportIncludeSettings"> Include EspressoMonkey settings</label>
+                        <label><input type="checkbox" id="exportIncludeSettings"> Include ScriptVault settings</label>
                     </div>
                     <div class="setting-row">
                         <label><input type="checkbox" id="exportIncludeResources" checked> Include external script resources</label>
@@ -2055,8 +2105,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
 
             <div class="about-section">
-                <img src="../images/icon128.png" alt="EspressoMonkey">
-                <h2>EspressoMonkey</h2>
+                <img src="../images/icon128.png" alt="ScriptVault">
+                <h2>ScriptVault</h2>
                 <p class="version">Version 1.0.0</p>
                 <p>A lightweight userscript manager for Chrome.</p>
                 <div class="about-stats">
@@ -2084,6 +2134,13 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
 
     <!-- Editor Overlay -->
     <div class="editor-overlay" id="editorOverlay">
+        <div class="editor-nav">
+            <button class="editor-nav-btn" data-nav="scripts">Installed Userscripts</button>
+            <button class="editor-nav-btn" data-nav="newscript" title="Create a new script">+</button>
+            <button class="editor-nav-btn" data-nav="settings">Settings</button>
+            <button class="editor-nav-btn" data-nav="utilities">Utilities</button>
+            <button class="editor-nav-btn" data-nav="help">Help</button>
+        </div>
         <div class="editor-header">
             <span class="editor-title" id="editorTitle">Edit Script</span>
             <div class="editor-actions">

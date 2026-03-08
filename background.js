@@ -1,4 +1,4 @@
-// EspressoMonkey v1.0.0 - Background Service Worker
+// ScriptVault v1.0.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // v1.0.0: Fixed @require global scope issues (GM_config), improved DOM timing helpers
 
@@ -2683,9 +2683,9 @@ function unzipSync(data, opts) {
       deflateSync: deflateSync,
       inflateSync: inflateSync
     };
-    console.log('[EspressoMonkey] fflate inlined successfully, functions:', Object.keys(self.fflate).length);
+    console.log('[ScriptVault] fflate inlined successfully, functions:', Object.keys(self.fflate).length);
   } catch (e) {
-    console.error('[EspressoMonkey] fflate inline error:', e.message, e.stack);
+    console.error('[ScriptVault] fflate inline error:', e.message, e.stack);
   }
 })();
 // ============================================================================
@@ -2709,7 +2709,7 @@ var CloudSyncProviders = {
     requiresAuth: true,
     
     async upload(data, settings) {
-      const url = `${settings.webdavUrl.replace(/\/$/, '')}/espressomonkey-backup.json`;
+      const url = `${settings.webdavUrl.replace(/\/$/, '')}/scriptvault-backup.json`;
       const auth = btoa(`${settings.webdavUsername}:${settings.webdavPassword}`);
       
       const response = await fetch(url, {
@@ -2726,7 +2726,7 @@ var CloudSyncProviders = {
     },
     
     async download(settings) {
-      const url = `${settings.webdavUrl.replace(/\/$/, '')}/espressomonkey-backup.json`;
+      const url = `${settings.webdavUrl.replace(/\/$/, '')}/scriptvault-backup.json`;
       const auth = btoa(`${settings.webdavUsername}:${settings.webdavPassword}`);
       
       const response = await fetch(url, {
@@ -2764,7 +2764,7 @@ var CloudSyncProviders = {
     name: 'Google Drive',
     icon: '📁',
     requiresOAuth: true,
-    fileName: 'espressomonkey-backup.json',
+    fileName: 'scriptvault-backup.json',
     
     async getToken(interactive = false) {
       return new Promise((resolve, reject) => {
@@ -2842,7 +2842,7 @@ var CloudSyncProviders = {
         ...(existingFile ? {} : { parents: ['appDataFolder'] })
       };
       
-      const boundary = '-------EspressoMonkeyBoundary';
+      const boundary = '-------ScriptVaultBoundary';
       const body = [
         `--${boundary}`,
         'Content-Type: application/json; charset=UTF-8',
@@ -2933,7 +2933,7 @@ var CloudSyncProviders = {
     name: 'Dropbox',
     icon: '📦',
     requiresOAuth: true,
-    fileName: '/espressomonkey-backup.json',
+    fileName: '/scriptvault-backup.json',
     
     getAuthUrl(clientId, redirectUri) {
       const state = Math.random().toString(36).substring(2);
@@ -3104,7 +3104,7 @@ var I18n = (function() {
   const translations = {
     en: {
       // General
-      appName: 'EspressoMonkey',
+      appName: 'ScriptVault',
       enabled: 'Enabled',
       disabled: 'Disabled',
       save: 'Save',
@@ -3234,7 +3234,7 @@ var I18n = (function() {
     },
     
     es: {
-      appName: 'EspressoMonkey',
+      appName: 'ScriptVault',
       enabled: 'Activado',
       disabled: 'Desactivado',
       save: 'Guardar',
@@ -3275,7 +3275,7 @@ var I18n = (function() {
     },
     
     fr: {
-      appName: 'EspressoMonkey',
+      appName: 'ScriptVault',
       enabled: 'Activé',
       disabled: 'Désactivé',
       save: 'Enregistrer',
@@ -3312,7 +3312,7 @@ var I18n = (function() {
     },
     
     de: {
-      appName: 'EspressoMonkey',
+      appName: 'ScriptVault',
       enabled: 'Aktiviert',
       disabled: 'Deaktiviert',
       save: 'Speichern',
@@ -3349,7 +3349,7 @@ var I18n = (function() {
     },
     
     zh: {
-      appName: 'EspressoMonkey',
+      appName: 'ScriptVault',
       enabled: '已启用',
       disabled: '已禁用',
       save: '保存',
@@ -3386,7 +3386,7 @@ var I18n = (function() {
     },
     
     ja: {
-      appName: 'EspressoMonkey',
+      appName: 'ScriptVault',
       enabled: '有効',
       disabled: '無効',
       save: '保存',
@@ -3423,7 +3423,7 @@ var I18n = (function() {
     },
     
     pt: {
-      appName: 'EspressoMonkey',
+      appName: 'ScriptVault',
       enabled: 'Ativado',
       disabled: 'Desativado',
       save: 'Salvar',
@@ -3460,7 +3460,7 @@ var I18n = (function() {
     },
     
     ru: {
-      appName: 'EspressoMonkey',
+      appName: 'ScriptVault',
       enabled: 'Включено',
       disabled: 'Отключено',
       save: 'Сохранить',
@@ -3579,7 +3579,7 @@ if (typeof self !== 'undefined') {
 // END INLINED MODULES
 // ============================================================================
 
-console.log('[EspressoMonkey] Service worker starting...');
+console.log('[ScriptVault] Service worker starting...');
 
 
 // ============================================================================
@@ -3649,7 +3649,7 @@ const SettingsManager = {
     if (this.cache !== null) return;
     const data = await chrome.storage.local.get('settings');
     this.cache = { ...this.defaults, ...data.settings };
-    console.log('[EspressoMonkey] Settings loaded');
+    console.log('[ScriptVault] Settings loaded');
   },
   
   async get(key) {
@@ -3686,7 +3686,7 @@ const ScriptStorage = {
     if (this.cache !== null) return;
     const data = await chrome.storage.local.get('userscripts');
     this.cache = data.userscripts || {};
-    console.log('[EspressoMonkey] Loaded', Object.keys(this.cache).length, 'scripts');
+    console.log('[ScriptVault] Loaded', Object.keys(this.cache).length, 'scripts');
   },
   
   async save() {
@@ -3909,7 +3909,7 @@ const ScriptValues = {
         try {
           listener.callback(key, oldValue, newValue, remote);
         } catch (e) {
-          console.error('[EspressoMonkey] Value change listener error:', e);
+          console.error('[ScriptVault] Value change listener error:', e);
         }
       }
     });
@@ -4080,7 +4080,7 @@ const ResourceCache = {
       this.set(url, data);
       return data;
     } catch (e) {
-      console.error('[EspressoMonkey] Failed to fetch resource:', url, e);
+      console.error('[ScriptVault] Failed to fetch resource:', url, e);
       throw e;
     }
   },
@@ -4102,7 +4102,7 @@ function parseUserscript(code) {
 
   const meta = {
     name: 'Unnamed Script',
-    namespace: 'espressomonkey',
+    namespace: 'scriptvault',
     version: '1.0.0',
     description: '',
     author: '',
@@ -4243,7 +4243,7 @@ const UpdateSystem = {
           });
         }
       } catch (e) {
-        console.error('[EspressoMonkey] Update check failed for:', script.meta.name, e);
+        console.error('[ScriptVault] Update check failed for:', script.meta.name, e);
       }
     }
     
@@ -4371,7 +4371,7 @@ const CloudSync = {
       await SettingsManager.set('lastSync', Date.now());
       return { success: true };
     } catch (e) {
-      console.error('[EspressoMonkey] Sync failed:', e);
+      console.error('[ScriptVault] Sync failed:', e);
       return { error: e.message };
     }
   },
@@ -4530,7 +4530,7 @@ async function exportToZip() {
   // Generate zip as Uint8Array then convert to base64
   const zipData = fflate.zipSync(files, { level: 6 });
   const base64 = btoa(String.fromCharCode(...zipData));
-  return { zipData: base64, filename: `espressomonkey-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip` };
+  return { zipData: base64, filename: `scriptvault-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip` };
 }
 
 // Import from ZIP (supports Tampermonkey and other formats)
@@ -4702,7 +4702,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handleMessage(message, sender)
     .then(sendResponse)
     .catch(e => {
-      console.error('[EspressoMonkey] Unhandled message error:', e);
+      console.error('[ScriptVault] Unhandled message error:', e);
       sendResponse({ error: e.message });
     });
   return true;
@@ -4715,12 +4715,12 @@ if (chrome.runtime.onUserScriptMessage) {
     handleMessage(message, sender)
       .then(sendResponse)
       .catch(e => {
-        console.error('[EspressoMonkey] Unhandled user script message error:', e);
+        console.error('[ScriptVault] Unhandled user script message error:', e);
         sendResponse({ error: e.message });
       });
     return true;
   });
-  console.log('[EspressoMonkey] User script message listener registered');
+  console.log('[ScriptVault] User script message listener registered');
 }
 
 async function handleMessage(message, sender) {
@@ -4749,7 +4749,7 @@ async function handleMessage(message, sender) {
         const parsed = parseUserscript(data.code);
         if (parsed.error) return { error: parsed.error };
         
-        const id = data.id || generateId();
+        const id = data.id || data.scriptId || generateId();
         const existing = await ScriptStorage.get(id);
         
         const script = {
@@ -5344,7 +5344,7 @@ async function handleMessage(message, sender) {
           return { requestId, started: true };
           
         } catch (e) {
-          console.error('[EspressoMonkey] GM_xmlhttpRequest setup error:', e);
+          console.error('[ScriptVault] GM_xmlhttpRequest setup error:', e);
           return { error: e.message || 'Request setup failed', type: 'error' };
         }
       }
@@ -5382,7 +5382,7 @@ async function handleMessage(message, sender) {
         const notifId = await chrome.notifications.create({
           type: 'basic',
           iconUrl: data.image || 'images/icon128.png',
-          title: data.title || 'EspressoMonkey',
+          title: data.title || 'ScriptVault',
           message: data.text || ''
         });
         return { success: true, id: notifId };
@@ -5430,9 +5430,9 @@ async function handleMessage(message, sender) {
       // Get info
       case 'getExtensionInfo':
         return {
-          name: 'EspressoMonkey',
+          name: 'ScriptVault',
           version: chrome.runtime.getManifest().version,
-          scriptHandler: 'EspressoMonkey',
+          scriptHandler: 'ScriptVault',
           scriptMetaStr: null
         };
         
@@ -5493,7 +5493,7 @@ async function handleMessage(message, sender) {
         return { error: 'Unknown action: ' + action };
     }
   } catch (e) {
-    console.error('[EspressoMonkey] Message handler error:', e);
+    console.error('[ScriptVault] Message handler error:', e);
     return { error: e.message };
   }
 }
@@ -5559,7 +5559,7 @@ async function updateBadgeForTab(tabId, url) {
       tabId 
     });
   } catch (e) {
-    console.error('[EspressoMonkey] Failed to update badge:', e);
+    console.error('[ScriptVault] Failed to update badge:', e);
   }
 }
 
@@ -5705,19 +5705,19 @@ function matchIncludePattern(pattern, url, urlObj) {
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
-    id: 'espressomonkey-new',
+    id: 'scriptvault-new',
     title: 'Create script for this site',
     contexts: ['page']
   });
   
   chrome.contextMenus.create({
-    id: 'espressomonkey-dashboard',
-    title: 'Open EspressoMonkey Dashboard',
+    id: 'scriptvault-dashboard',
+    title: 'Open ScriptVault Dashboard',
     contexts: ['page']
   });
   
   chrome.contextMenus.create({
-    id: 'espressomonkey-toggle',
+    id: 'scriptvault-toggle',
     title: 'Toggle all scripts',
     contexts: ['page']
   });
@@ -5725,17 +5725,17 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   switch (info.menuItemId) {
-    case 'espressomonkey-new': {
+    case 'scriptvault-new': {
       const url = new URL(tab.url);
       chrome.tabs.create({
         url: `pages/dashboard.html?new=1&host=${encodeURIComponent(url.hostname)}`
       });
       break;
     }
-    case 'espressomonkey-dashboard':
+    case 'scriptvault-dashboard':
       chrome.tabs.create({ url: 'pages/dashboard.html' });
       break;
-    case 'espressomonkey-toggle': {
+    case 'scriptvault-toggle': {
       const settings = await SettingsManager.get();
       await SettingsManager.set('enabled', !settings.enabled);
       await updateBadge();
@@ -5761,7 +5761,7 @@ chrome.commands.onCommand.addListener(async (command) => {
       chrome.notifications.create({
         type: 'basic',
         iconUrl: 'images/icon128.png',
-        title: 'EspressoMonkey',
+        title: 'ScriptVault',
         message: settings.enabled ? 'Scripts disabled' : 'Scripts enabled'
       });
       break;
@@ -5858,7 +5858,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   // Don't intercept extension pages
   if (url.startsWith('chrome-extension://')) return;
   
-  console.log('[EspressoMonkey] Intercepting userscript URL:', url);
+  console.log('[ScriptVault] Intercepting userscript URL:', url);
   
   try {
     // Fetch the script content
@@ -5872,7 +5872,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
     
     // Verify it looks like a userscript
     if (!code.includes('==UserScript==')) {
-      console.log('[EspressoMonkey] Not a valid userscript, allowing normal navigation');
+      console.log('[ScriptVault] Not a valid userscript, allowing normal navigation');
       return;
     }
     
@@ -5891,7 +5891,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
     });
     
   } catch (error) {
-    console.error('[EspressoMonkey] Failed to fetch script:', error);
+    console.error('[ScriptVault] Failed to fetch script:', error);
     // Store error for install page to display
     await chrome.storage.local.set({
       pendingInstall: {
@@ -5971,7 +5971,7 @@ async function init() {
   await updateBadge();
   await setupAlarms();
   
-  console.log('[EspressoMonkey] Service worker ready');
+  console.log('[ScriptVault] Service worker ready');
 }
 
 // Configure the userScripts execution world
@@ -5979,7 +5979,7 @@ async function configureUserScriptsWorld() {
   try {
     // Check if userScripts API is available
     if (!chrome.userScripts) {
-      console.warn('[EspressoMonkey] userScripts API not available - scripts will use fallback injection');
+      console.warn('[ScriptVault] userScripts API not available - scripts will use fallback injection');
       return;
     }
     
@@ -5989,9 +5989,9 @@ async function configureUserScriptsWorld() {
       messaging: true
     });
     
-    console.log('[EspressoMonkey] userScripts world configured');
+    console.log('[ScriptVault] userScripts world configured');
   } catch (e) {
-    console.error('[EspressoMonkey] Failed to configure userScripts world:', e);
+    console.error('[ScriptVault] Failed to configure userScripts world:', e);
   }
 }
 
@@ -5999,7 +5999,7 @@ async function configureUserScriptsWorld() {
 async function registerAllScripts() {
   try {
     if (!chrome.userScripts) {
-      console.warn('[EspressoMonkey] userScripts API not available');
+      console.warn('[ScriptVault] userScripts API not available');
       return;
     }
     
@@ -6010,18 +6010,18 @@ async function registerAllScripts() {
     const settings = await SettingsManager.get();
     
     if (!settings.enabled) {
-      console.log('[EspressoMonkey] Scripts globally disabled');
+      console.log('[ScriptVault] Scripts globally disabled');
       return;
     }
     
     const enabledScripts = scripts.filter(s => s.enabled);
-    console.log(`[EspressoMonkey] Registering ${enabledScripts.length} scripts`);
+    console.log(`[ScriptVault] Registering ${enabledScripts.length} scripts`);
     
     for (const script of enabledScripts) {
       await registerScript(script);
     }
   } catch (e) {
-    console.error('[EspressoMonkey] Failed to register scripts:', e);
+    console.error('[ScriptVault] Failed to register scripts:', e);
   }
 }
 
@@ -6145,7 +6145,7 @@ async function registerScript(script) {
           requireScripts.push({ url, code });
         }
       } catch (e) {
-        console.warn(`[EspressoMonkey] Failed to fetch @require ${url}:`, e.message);
+        console.warn(`[ScriptVault] Failed to fetch @require ${url}:`, e.message);
       }
     }
     
@@ -6166,9 +6166,9 @@ async function registerScript(script) {
       world: 'USER_SCRIPT'
     }]);
     
-    console.log(`[EspressoMonkey] Registered: ${meta.name} (${requires.length} @require, ${Object.keys(storedValues).length} stored values)`);
+    console.log(`[ScriptVault] Registered: ${meta.name} (${requires.length} @require, ${Object.keys(storedValues).length} stored values)`);
   } catch (e) {
-    console.error(`[EspressoMonkey] Failed to register ${script.meta.name}:`, e);
+    console.error(`[ScriptVault] Failed to register ${script.meta.name}:`, e);
   }
 }
 
@@ -6268,17 +6268,17 @@ function isUnfetchableUrl(url) {
 
 // Fetch a @require script with caching and fallbacks
 async function fetchRequireScript(url) {
-  console.log(`[EspressoMonkey] Fetching @require: ${url}`);
+  console.log(`[ScriptVault] Fetching @require: ${url}`);
   
   // Skip URLs that are known to be unfetchable
   if (isUnfetchableUrl(url)) {
-    console.warn(`[EspressoMonkey] Skipping unfetchable @require: ${url}`);
+    console.warn(`[ScriptVault] Skipping unfetchable @require: ${url}`);
     return null;
   }
   
   // Check in-memory cache first
   if (requireCache.has(url)) {
-    console.log(`[EspressoMonkey] Using cached @require: ${url}`);
+    console.log(`[ScriptVault] Using cached @require: ${url}`);
     return requireCache.get(url);
   }
   
@@ -6290,7 +6290,7 @@ async function fetchRequireScript(url) {
       // Check if cache is less than 7 days old
       const age = Date.now() - (cached[cacheKey].timestamp || 0);
       if (age < 7 * 24 * 60 * 60 * 1000) {
-        console.log(`[EspressoMonkey] Using persistent cached @require: ${url}`);
+        console.log(`[ScriptVault] Using persistent cached @require: ${url}`);
         requireCache.set(url, cached[cacheKey].code);
         return cached[cacheKey].code;
       }
@@ -6302,11 +6302,11 @@ async function fetchRequireScript(url) {
   // Build list of URLs to try (original + fallbacks)
   const fallbacks = getFallbackUrls(url);
   const urlsToTry = [url, ...fallbacks];
-  console.log(`[EspressoMonkey] Will try ${urlsToTry.length} URLs for: ${url}`);
+  console.log(`[ScriptVault] Will try ${urlsToTry.length} URLs for: ${url}`);
   
   for (const tryUrl of urlsToTry) {
     try {
-      console.log(`[EspressoMonkey] Trying: ${tryUrl}`);
+      console.log(`[ScriptVault] Trying: ${tryUrl}`);
       const code = await fetchWithRetry(tryUrl);
       if (code) {
         // Store in both caches
@@ -6322,20 +6322,20 @@ async function fetchRequireScript(url) {
         }
         
         if (tryUrl !== url) {
-          console.log(`[EspressoMonkey] Successfully fetched ${url} from fallback: ${tryUrl}`);
+          console.log(`[ScriptVault] Successfully fetched ${url} from fallback: ${tryUrl}`);
         } else {
-          console.log(`[EspressoMonkey] Successfully fetched: ${url}`);
+          console.log(`[ScriptVault] Successfully fetched: ${url}`);
         }
         return code;
       }
     } catch (e) {
-      console.warn(`[EspressoMonkey] Failed to fetch ${tryUrl}: ${e.message}`);
+      console.warn(`[ScriptVault] Failed to fetch ${tryUrl}: ${e.message}`);
       // Try next URL
       continue;
     }
   }
   
-  console.error(`[EspressoMonkey] Failed to fetch ${url} (tried ${urlsToTry.length} URLs)`);
+  console.error(`[ScriptVault] Failed to fetch ${url} (tried ${urlsToTry.length} URLs)`);
   return null;
 }
 
@@ -6459,9 +6459,9 @@ ${req.code}
   
   // Channel ID for communication with content script bridge
   // Extension ID is injected at build time since chrome.runtime isn't available in USER_SCRIPT world
-  const CHANNEL_ID = ${JSON.stringify('EspressoMonkey_' + extId)};
+  const CHANNEL_ID = ${JSON.stringify('ScriptVault_' + extId)};
   
-  // console.log('[EspressoMonkey] Script initializing:', meta.name, 'Channel:', CHANNEL_ID);
+  // console.log('[ScriptVault] Script initializing:', meta.name, 'Channel:', CHANNEL_ID);
   
   // Grant checking - @grant none means NO APIs except GM_info
   const hasNone = grantSet.has('none');
@@ -6486,7 +6486,7 @@ ${req.code}
       resources: {},
       runAt: meta['run-at'] || 'document-idle'
     },
-    scriptHandler: 'EspressoMonkey',
+    scriptHandler: 'ScriptVault',
     version: '2.3.5'
   };
   
@@ -6513,7 +6513,7 @@ ${req.code}
     // Handle menu command execution
     if (msg.type === 'menuCommand' && msg.scriptId === scriptId) {
       const cb = _menuCmds.get(msg.commandId);
-      if (cb) try { cb(); } catch(err) { console.error('[EspressoMonkey] Menu command error:', err); }
+      if (cb) try { cb(); } catch(err) { console.error('[ScriptVault] Menu command error:', err); }
     }
     
     // Handle value change notifications (cross-tab sync)
@@ -6530,7 +6530,7 @@ ${req.code}
           try {
             listener.callback(msg.key, oldValue, msg.newValue, msg.remote !== false);
           } catch (e) {
-            console.error('[EspressoMonkey] Value change listener error:', e);
+            console.error('[ScriptVault] Value change listener error:', e);
           }
         }
       });
@@ -6569,14 +6569,14 @@ ${req.code}
           try {
             details.upload['on' + uploadEvent](response);
           } catch (e) {
-            console.error('[EspressoMonkey] XHR upload callback error:', e);
+            console.error('[ScriptVault] XHR upload callback error:', e);
           }
         }
       } else if (details[callbackName]) {
         try {
           details[callbackName](response);
         } catch (e) {
-          console.error('[EspressoMonkey] XHR callback error:', e);
+          console.error('[ScriptVault] XHR callback error:', e);
         }
       }
       
@@ -6595,7 +6595,7 @@ ${req.code}
   // Wait for bridge to be ready
   function waitForBridge() {
     // Check if already ready (content script sets this global)
-    if (window.__EspressoMonkey_BridgeReady__ || _bridgeReady) {
+    if (window.__ScriptVault_BridgeReady__ || _bridgeReady) {
       _bridgeReady = true;
       return Promise.resolve();
     }
@@ -6622,7 +6622,7 @@ ${req.code}
       
       // Also check global flag periodically (fallback)
       const checkInterval = setInterval(() => {
-        if (window.__EspressoMonkey_BridgeReady__) {
+        if (window.__ScriptVault_BridgeReady__) {
           clearInterval(checkInterval);
           window.removeEventListener('message', bridgeReadyHandler);
           _bridgeReady = true;
@@ -6656,7 +6656,7 @@ ${req.code}
       } catch (e) {
         // Extension context invalidated or messaging not available, fall through to bridge
         if (!e.message?.includes('Extension context invalidated')) {
-          console.warn('[EspressoMonkey] Direct messaging failed, trying bridge:', e.message);
+          console.warn('[ScriptVault] Direct messaging failed, trying bridge:', e.message);
         }
       }
     }
@@ -6670,7 +6670,7 @@ ${req.code}
       // Set timeout for response
       const timeout = setTimeout(() => {
         window.removeEventListener('message', handler);
-        console.warn('[EspressoMonkey] Message timeout (10s):', action);
+        console.warn('[ScriptVault] Message timeout (10s):', action);
         resolve(undefined);
       }, 10000);
 
@@ -6687,7 +6687,7 @@ ${req.code}
         if (msg.success) {
           resolve(msg.result);
         } else {
-          console.warn('[EspressoMonkey] Message error:', action, msg.error);
+          console.warn('[ScriptVault] Message error:', action, msg.error);
           resolve(undefined);
         }
       }
@@ -6720,7 +6720,7 @@ ${req.code}
       if (_cacheReadyResolve) _cacheReadyResolve();
     } catch (e) {
       // If refresh fails, continue with pre-loaded values
-      console.warn('[EspressoMonkey] Storage refresh failed, using cached values:', e.message);
+      console.warn('[ScriptVault] Storage refresh failed, using cached values:', e.message);
       _cacheReady = true;
       if (_cacheReadyResolve) _cacheReadyResolve();
     }
@@ -6823,7 +6823,7 @@ ${req.code}
   function GM_addStyle(css) {
     const style = document.createElement('style');
     style.textContent = css;
-    style.setAttribute('data-espressomonkey', scriptId);
+    style.setAttribute('data-scriptvault', scriptId);
     
     // Try to inject immediately
     function inject() {
@@ -6874,7 +6874,7 @@ ${req.code}
   // GM_xmlhttpRequest - Full implementation with all events (like Violentmonkey)
   function GM_xmlhttpRequest(details) {
     if (!hasGrant('GM_xmlhttpRequest') && !hasGrant('GM.xmlHttpRequest')) {
-      console.error('[EspressoMonkey] GM_xmlhttpRequest requires @grant GM_xmlhttpRequest');
+      console.error('[ScriptVault] GM_xmlhttpRequest requires @grant GM_xmlhttpRequest');
       if (details.onerror) details.onerror({ error: 'Permission denied', status: 0 });
       return { abort: () => {} };
     }
@@ -7222,7 +7222,7 @@ ${req.code}
         if (el) {
           resolve(el);
         } else {
-          reject(new Error('[EspressoMonkey] Timeout waiting for element: ' + selector));
+          reject(new Error('[ScriptVault] Timeout waiting for element: ' + selector));
         }
       }, timeout);
     });
@@ -7262,7 +7262,7 @@ ${req.code}
         return observer;
       })
       .catch(err => {
-        console.warn('[EspressoMonkey] safeObserve - target not found:', err.message);
+        console.warn('[ScriptVault] safeObserve - target not found:', err.message);
         return null;
       });
     
@@ -7270,10 +7270,10 @@ ${req.code}
   }
   
   // Expose DOM helpers to window for userscripts to use
-  window.__EspressoMonkey_waitForElement = __waitForElement;
-  window.__EspressoMonkey_waitForBody = __waitForBody;
-  window.__EspressoMonkey_waitForHead = __waitForHead;
-  window.__EspressoMonkey_safeObserve = __safeObserve;
+  window.__ScriptVault_waitForElement = __waitForElement;
+  window.__ScriptVault_waitForBody = __waitForBody;
+  window.__ScriptVault_waitForHead = __waitForHead;
+  window.__ScriptVault_safeObserve = __safeObserve;
   
   // Also expose as shorter aliases
   window.waitForElement = __waitForElement;
@@ -7282,7 +7282,7 @@ ${req.code}
   window.safeObserve = __safeObserve;
   
   // GM APIs exposed log disabled for performance
-  // console.log('[EspressoMonkey] GM APIs exposed to window for:', meta.name);
+  // console.log('[ScriptVault] GM APIs exposed to window for:', meta.name);
 
   // ============ @require Scripts ============
   // These run after GM APIs are available on window
@@ -7299,7 +7299,7 @@ ${libraryExports}
 
   const apiClose = `
     } catch (e) {
-      console.warn('[EspressoMonkey] Error in ' + ${JSON.stringify(meta.name)} + ':', e);
+      console.warn('[ScriptVault] Error in ' + ${JSON.stringify(meta.name)} + ':', e);
     }
   })();
 })();

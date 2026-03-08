@@ -1,10 +1,10 @@
-# EspressoMonkey Privacy Policy
+# ScriptVault Privacy Policy
 
 **Last Updated: January 19, 2026**
 
 ## Overview
 
-EspressoMonkey is a userscript manager browser extension that allows users to install and run custom JavaScript scripts on websites. This privacy policy explains what data the extension accesses, how it's used, and your rights regarding that data.
+ScriptVault is a userscript manager browser extension that allows users to install and run custom JavaScript scripts on websites. This privacy policy explains what data the extension accesses, how it's used, and your rights regarding that data.
 
 ## Data Collection
 
@@ -31,7 +31,7 @@ All data is stored **locally on your device** using Chrome's built-in storage AP
 
 ## Network Requests
 
-EspressoMonkey makes network requests only when necessary for its core functionality:
+ScriptVault makes network requests only when necessary for its core functionality:
 
 ### 1. Userscript Installation
 When you choose to install a userscript, the extension fetches the script from the source you specified (e.g., Greasy Fork, OpenUserJS, GitHub).
@@ -49,7 +49,7 @@ If a userscript includes `@resource` directives, the extension fetches those res
 
 ## Remote Code Execution
 
-As a userscript manager, EspressoMonkey executes JavaScript code from external sources. This is the core purpose of the extension. Important notes:
+As a userscript manager, ScriptVault executes JavaScript code from external sources. This is the core purpose of the extension. Important notes:
 
 - **User-initiated**: Scripts only run if you explicitly install them
 - **User-controlled**: You can disable, edit, or delete any script at any time
@@ -90,14 +90,14 @@ You have complete control over your data:
 
 To delete all extension data:
 1. Go to `chrome://extensions`
-2. Find EspressoMonkey
+2. Find ScriptVault
 3. Click "Remove" to uninstall (deletes all local data)
 
 Or use the extension's "Clear All Data" option in settings.
 
 ## Children's Privacy
 
-EspressoMonkey does not knowingly collect any information from children under 13. The extension does not collect personal information from any users.
+ScriptVault does not knowingly collect any information from children under 13. The extension does not collect personal information from any users.
 
 ## Changes to This Policy
 
@@ -107,7 +107,7 @@ If we update this privacy policy, we will:
 
 ## Open Source
 
-EspressoMonkey is open source. You can review the complete source code to verify these privacy claims:
+ScriptVault is open source. You can review the complete source code to verify these privacy claims:
 - GitHub: [Your GitHub Repository URL]
 
 ## Contact
@@ -120,4 +120,4 @@ If you have questions about this privacy policy:
 
 ## Summary
 
-**EspressoMonkey is a privacy-respecting userscript manager.** We don't collect your data, we don't track you, and we don't sell anything. All your data stays on your device under your control.
+**ScriptVault is a privacy-respecting userscript manager.** We don't collect your data, we don't track you, and we don't sell anything. All your data stays on your device under your control.

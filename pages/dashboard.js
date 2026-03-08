@@ -1,4 +1,4 @@
-// EspressoMonkey Dashboard v1.1.0 - Full-Featured Controller
+// ScriptVault Dashboard v1.1.0 - Full-Featured Controller
 (function() {
     'use strict';
 
@@ -286,7 +286,12 @@
         await checkUserScriptsAvailability();
 
         const hash = window.location.hash.slice(1);
-        if (hash) openEditorForScript(hash);
+        if (hash === 'new_script') {
+            createNewScript();
+        } else if (hash) {
+            const scriptId = hash.startsWith('script_') ? hash.slice(7) : hash;
+            openEditorForScript(scriptId);
+        }
     }
     
     // Check if userScripts API is available and enabled
@@ -330,7 +335,7 @@
             instructions = `
                 <h3 style="margin-bottom: 15px; color: var(--text-primary);">Enable User Scripts (Chrome 138+)</h3>
                 <ol style="line-height: 1.8; color: var(--text-secondary); padding-left: 20px;">
-                    <li>Right-click the EspressoMonkey extension icon in your toolbar</li>
+                    <li>Right-click the ScriptVault extension icon in your toolbar</li>
                     <li>Select <strong>"Manage Extension"</strong></li>
                     <li>Find and enable the <strong>"Allow User Scripts"</strong> toggle</li>
                     <li>Reload any open pages for scripts to take effect</li>
@@ -1004,7 +1009,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `espressomonkey-export-${Date.now()}.json`;
+                a.download = `scriptvault-export-${Date.now()}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
                 showToast(`Exported ${ids.length} scripts`, 'success');
@@ -1032,12 +1037,12 @@
                 break;
                 
             case 'delete':
-                if (!await showConfirmModal('Delete Scripts', `Delete ${ids.length} scripts? This cannot be undone.`)) return;
                 for (const id of ids) {
                     await deleteScript(id, true);
                 }
                 state.selectedScripts.clear();
                 await loadScripts();
+                updateStats();
                 showToast(`Deleted ${ids.length} scripts`, 'success');
                 break;
         }
@@ -1488,31 +1493,31 @@
         }
     }
 
-    async function deleteScript(scriptId, skipConfirm = false) {
-        const script = state.scripts.find(s => s.id === scriptId);
-        const name = script?.metadata?.name || 'this script';
-        
-        if (!skipConfirm) {
-            if (!await showConfirmModal('Delete Script', `Delete "${name}"?`)) return;
-        }
-
+    async function deleteScript(scriptId, skipReload = false) {
         try {
             await chrome.runtime.sendMessage({ action: 'deleteScript', scriptId });
             if (scriptId === state.currentScriptId) {
                 state.currentScriptId = null;
                 elements.editorOverlay.classList.remove('active');
             }
-            if (!skipConfirm) {
+            if (!skipReload) {
                 await loadScripts();
                 updateStats();
                 showToast('Deleted', 'success');
             }
         } catch (e) {
-            if (!skipConfirm) showToast('Failed', 'error');
+            if (!skipReload) showToast('Failed', 'error');
         }
     }
 
+    let _creatingScript = false;
     async function createNewScript() {
+        if (_creatingScript) return;
+        _creatingScript = true;
+
+        // Clear hash to prevent duplicate creation on refresh
+        history.replaceState(null, '', window.location.pathname);
+
         const code = `// ==UserScript==
 // @name        New Script
 // @namespace   http://example.com/
@@ -1538,6 +1543,8 @@
             }
         } catch (e) {
             showToast('Failed', 'error');
+        } finally {
+            _creatingScript = false;
         }
     }
 
@@ -1603,7 +1610,7 @@
                 const blob = new Blob([JSON.stringify(response, null, 2)], { type: 'application/json' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = `espressomonkey-backup-${new Date().toISOString().split('T')[0]}.json`;
+                a.download = `scriptvault-backup-${new Date().toISOString().split('T')[0]}.json`;
                 a.click();
                 showToast('Exported', 'success');
             }
@@ -1620,7 +1627,7 @@
                 const blob = new Blob([new Uint8Array(bytes)], { type: 'application/zip' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = response.filename || `espressomonkey-${new Date().toISOString().split('T')[0]}.zip`;
+                a.download = response.filename || `scriptvault-${new Date().toISOString().split('T')[0]}.zip`;
                 a.click();
                 showToast('Exported ZIP', 'success');
             }
@@ -1724,6 +1731,10 @@
         elements.mainTabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 const id = tab.dataset.tab;
+                if (id === 'newscript') {
+                    createNewScript();
+                    return;
+                }
                 elements.mainTabs.forEach(t => t.classList.remove('active'));
                 Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
                 tab.classList.add('active');
@@ -1792,7 +1803,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `espressomonkey-export-${Date.now()}.json`;
+            a.download = `scriptvault-export-${Date.now()}.json`;
             a.click();
             URL.revokeObjectURL(url);
             showToast(`Exported ${state.scripts.length} scripts`, 'success');
@@ -1807,6 +1818,25 @@
         elements.btnEditorDuplicate?.addEventListener('click', duplicateCurrentScript);
         elements.btnEditorDelete?.addEventListener('click', () => { if (state.currentScriptId) deleteScript(state.currentScriptId); });
         elements.btnEditorClose?.addEventListener('click', closeEditor);
+
+        // Editor nav buttons (dashboard navigation from within editor)
+        document.querySelectorAll('.editor-nav-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = btn.dataset.nav;
+                if (target === 'newscript') {
+                    closeEditor();
+                    createNewScript();
+                    return;
+                }
+                closeEditor();
+                // Switch to the target tab
+                elements.mainTabs.forEach(t => t.classList.remove('active'));
+                Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
+                const tab = document.querySelector(`.tm-tab[data-tab="${target}"]`);
+                if (tab) tab.classList.add('active');
+                elements.mainPanels[target]?.classList.add('active');
+            });
+        });
 
         // Editor tabs
         elements.editorTabs.forEach(tab => {
@@ -2107,7 +2137,7 @@
 
         // Reset buttons
         elements.btnRestartExtension?.addEventListener('click', async () => {
-            if (!await showConfirmModal('Restart', 'Restart EspressoMonkey?')) return;
+            if (!await showConfirmModal('Restart', 'Restart ScriptVault?')) return;
             await chrome.runtime.sendMessage({ action: 'restart' });
             showToast('Restarting...', 'info');
         });

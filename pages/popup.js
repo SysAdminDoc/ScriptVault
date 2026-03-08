@@ -1,4 +1,4 @@
-// EspressoMonkey Popup v1.1.0
+// ScriptVault Popup v1.1.0
 // Tampermonkey-style popup interface
 
 (function() {
@@ -158,6 +158,12 @@
                     </label>
                     <div class="script-icon">${icon}</div>
                     <span class="script-name">${escapeHtml(name)}${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}</span>
+                    <div class="script-delete" data-delete-id="${script.id}" title="Delete script">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                        </svg>
+                    </div>
                     <div class="script-arrow">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="9 18 15 12 9 6"/>
@@ -184,39 +190,44 @@
                 toggleScript(scriptId, e.target.checked);
             });
 
+            // Delete button
+            const deleteBtn = item.querySelector('.script-delete');
+            deleteBtn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteScript(scriptId);
+            });
+
             // Click on item opens dashboard
             item.addEventListener('click', (e) => {
-                if (!e.target.closest('.script-toggle')) {
+                if (!e.target.closest('.script-toggle') && !e.target.closest('.script-delete')) {
                     openDashboard(scriptId);
                 }
             });
         });
     }
 
-    // Get icon for script (emoji or favicon-style)
+    // Get favicon icon HTML for script (matches dashboard style)
     function getScriptIcon(script) {
         const meta = script.metadata || script.meta || {};
-        const name = (meta.name || '').toLowerCase();
-        
-        // Match common script types to icons
-        if (name.includes('youtube') || name.includes('ytkit')) return '▶️';
-        if (name.includes('facebook') || name.includes('fb')) return '📘';
-        if (name.includes('twitter') || name.includes('x.com')) return '🐦';
-        if (name.includes('reddit')) return '🤖';
-        if (name.includes('github')) return '🐙';
-        if (name.includes('google')) return '🔍';
-        if (name.includes('amazon')) return '📦';
-        if (name.includes('netflix')) return '🎬';
-        if (name.includes('twitch')) return '🎮';
-        if (name.includes('instagram')) return '📷';
-        if (name.includes('tiktok')) return '🎵';
-        if (name.includes('dark') || name.includes('night')) return '🌙';
-        if (name.includes('ad') && (name.includes('block') || name.includes('null'))) return '🛡️';
-        if (name.includes('download')) return '⬇️';
-        if (name.includes('privacy') || name.includes('security')) return '🔒';
-        if (name.includes('4chan') || name.includes('8chan')) return '🍀';
-        
-        // Default icon
+        const iconUrl = meta.icon || meta.iconURL;
+
+        if (iconUrl) {
+            return `<img src="${escapeHtml(iconUrl)}" onerror="this.style.display='none';this.parentElement.textContent='📜'">`;
+        }
+
+        // Derive favicon from first matched domain
+        const patterns = [...(meta.match || []), ...(meta.include || [])];
+        for (const pattern of patterns) {
+            const m = pattern.match(/^(?:\*|https?|file):\/\/(?:\*\.)?([^\/\*]+)/);
+            if (m) {
+                const domain = m[1].replace(/^\*\./, '').replace(/^www\./, '').toLowerCase();
+                if (domain && domain !== '*' && !domain.includes('*')) {
+                    const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
+                    return `<img src="${escapeHtml(faviconUrl)}" onerror="this.style.display='none';this.parentElement.textContent='📜'">`;
+                }
+            }
+        }
+
         return '📜';
     }
 
@@ -240,6 +251,24 @@
             updateBadgeForTab();
         } catch (error) {
             console.error('Failed to toggle script:', error);
+        }
+    }
+
+    // Delete a script
+    async function deleteScript(scriptId) {
+        try {
+            await chrome.runtime.sendMessage({
+                action: 'deleteScript',
+                scriptId: scriptId
+            });
+
+            // Remove from local state and re-render
+            pageScripts = pageScripts.filter(s => s.id !== scriptId);
+            renderScriptList();
+            updateEnabledState();
+            updateBadgeForTab();
+        } catch (error) {
+            console.error('Failed to delete script:', error);
         }
     }
 
@@ -285,45 +314,11 @@
         window.close();
     }
 
-    // Create new script for current page
-    async function createNewScript() {
-        try {
-            let hostname = 'example.com';
-            try {
-                hostname = new URL(currentUrl).hostname;
-            } catch (e) {}
-
-            const defaultCode = `// ==UserScript==
-// @name        New Script for ${hostname}
-// @namespace   http://espressomonkey.local/
-// @version     1.0
-// @description Script for ${hostname}
-// @author      You
-// @match       *://${hostname}/*
-// @grant       none
-// ==/UserScript==
-
-(function() {
-    'use strict';
-    
-    // Your code here...
-    
-})();`;
-
-            const response = await chrome.runtime.sendMessage({
-                action: 'createScript',
-                code: defaultCode
-            });
-
-            if (response?.success && response?.scriptId) {
-                openDashboard(response.scriptId);
-            } else {
-                openDashboard();
-            }
-        } catch (error) {
-            console.error('Failed to create script:', error);
-            openDashboard();
-        }
+    // Create new script - opens dashboard new script editor
+    function createNewScript() {
+        const url = chrome.runtime.getURL('pages/dashboard.html#new_script');
+        chrome.tabs.create({ url });
+        window.close();
     }
 
     // Find scripts on GreasyFork
@@ -362,7 +357,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = response.filename || `espressomonkey-backup-${new Date().toISOString().split('T')[0]}.zip`;
+                a.download = response.filename || `scriptvault-backup-${new Date().toISOString().split('T')[0]}.zip`;
                 a.click();
                 URL.revokeObjectURL(url);
                 
