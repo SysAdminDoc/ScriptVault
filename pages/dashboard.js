@@ -1,4 +1,4 @@
-// EspressoMonkey Dashboard v2.3.0 - Full-Featured Controller
+// EspressoMonkey Dashboard v1.1.0 - Full-Featured Controller
 (function() {
     'use strict';
 
@@ -9,7 +9,9 @@
         currentScriptId: null,
         editor: null,
         unsavedChanges: false,
-        selectedScripts: new Set()
+        selectedScripts: new Set(),
+        sortColumn: 'order',
+        sortDirection: 'asc'
     };
 
     // DOM Elements
@@ -150,6 +152,7 @@
         // Settings - Userscript Sync
         elements.settingsEnableSync = document.getElementById('settingsEnableSync');
         elements.settingsSyncType = document.getElementById('settingsSyncType');
+        elements.lastSyncTime = document.getElementById('lastSyncTime');
         elements.syncWebdavSettings = document.getElementById('syncWebdavSettings');
         elements.syncOAuthSettings = document.getElementById('syncOAuthSettings');
         elements.oauthStatus = document.getElementById('oauthStatus');
@@ -356,7 +359,7 @@
         `;
         
         showModal('Setup Instructions', instructions, [
-            { text: 'Close', action: 'close' }
+            { label: 'Close', callback: () => { hideModal(); } }
         ]);
         
         // Add event listener after modal is shown (CSP-safe)
@@ -858,17 +861,17 @@
         }
     }
     
-    // Get filtered scripts based on search and filter dropdown
+    // Get filtered and sorted scripts
     function getFilteredScripts() {
         const searchFilter = (elements.scriptSearch?.value || '').toLowerCase();
         const statusFilter = elements.filterSelect?.value || 'all';
-        
-        return state.scripts.filter(s => {
+
+        const filtered = state.scripts.filter(s => {
             // Search filter
             const name = s.metadata?.name || '';
             const desc = s.metadata?.description || '';
             const matchesSearch = name.toLowerCase().includes(searchFilter) || desc.toLowerCase().includes(searchFilter);
-            
+
             // Status filter
             let matchesStatus = true;
             if (statusFilter === 'enabled') {
@@ -876,8 +879,72 @@
             } else if (statusFilter === 'disabled') {
                 matchesStatus = s.enabled === false;
             }
-            
+
             return matchesSearch && matchesStatus;
+        });
+
+        // Apply sorting
+        const col = state.sortColumn;
+        const dir = state.sortDirection === 'asc' ? 1 : -1;
+
+        filtered.sort((a, b) => {
+            let va, vb;
+            switch (col) {
+                case 'order':
+                    va = a.position ?? 0;
+                    vb = b.position ?? 0;
+                    break;
+                case 'name':
+                    va = (a.metadata?.name || '').toLowerCase();
+                    vb = (b.metadata?.name || '').toLowerCase();
+                    return va.localeCompare(vb) * dir;
+                case 'enabled':
+                    va = a.enabled !== false ? 1 : 0;
+                    vb = b.enabled !== false ? 1 : 0;
+                    break;
+                case 'version':
+                    va = a.metadata?.version || '0';
+                    vb = b.metadata?.version || '0';
+                    return va.localeCompare(vb, undefined, { numeric: true }) * dir;
+                case 'size':
+                    va = (a.code || '').length;
+                    vb = (b.code || '').length;
+                    break;
+                case 'updated':
+                    va = a.updatedAt || 0;
+                    vb = b.updatedAt || 0;
+                    break;
+                default:
+                    va = a.position ?? 0;
+                    vb = b.position ?? 0;
+            }
+            return (va > vb ? 1 : va < vb ? -1 : 0) * dir;
+        });
+
+        return filtered;
+    }
+
+    // Handle column sort click
+    function handleSortClick(column) {
+        if (state.sortColumn === column) {
+            state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            state.sortColumn = column;
+            state.sortDirection = 'asc';
+        }
+        updateSortIndicators();
+        renderScriptTable();
+    }
+
+    // Update sort indicator icons in table headers
+    function updateSortIndicators() {
+        document.querySelectorAll('.scripts-table th.sortable').forEach(th => {
+            const indicator = th.querySelector('.sort-indicator');
+            if (!indicator) return;
+            indicator.className = 'sort-indicator';
+            if (th.dataset.sort === state.sortColumn) {
+                indicator.classList.add(state.sortDirection);
+            }
         });
     }
     
@@ -1037,9 +1104,11 @@
         if (grants.includes('GM_addStyle')) features.push({ c: 'badge-c', l: 'C' });
         if (grants.includes('GM_openInTab')) features.push({ c: 'badge-t', l: 'T' });
 
+        tr.draggable = true;
+        tr.dataset.scriptId = script.id;
         tr.innerHTML = `
             <td class="center"><input type="checkbox" class="script-checkbox" data-id="${script.id}"></td>
-            <td class="center" style="color:var(--text-muted)">${index}</td>
+            <td class="center drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text-muted)">⠿</td>
             <td class="center">
                 <label class="toggle-switch">
                     <input type="checkbox" class="script-toggle" data-id="${script.id}" ${enabled ? 'checked' : ''}>
@@ -1087,9 +1156,65 @@
         tr.querySelector('[data-action="edit"]').addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="delete"]').addEventListener('click', () => deleteScript(script.id));
 
+        // Drag-and-drop reorder
+        tr.addEventListener('dragstart', e => {
+            tr.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', script.id);
+        });
+        tr.addEventListener('dragend', () => {
+            tr.classList.remove('dragging');
+            document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        });
+        tr.addEventListener('dragover', e => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const dragging = elements.scriptTableBody?.querySelector('.dragging');
+            if (dragging && dragging !== tr) {
+                tr.classList.add('drag-over');
+            }
+        });
+        tr.addEventListener('dragleave', () => {
+            tr.classList.remove('drag-over');
+        });
+        tr.addEventListener('drop', async e => {
+            e.preventDefault();
+            tr.classList.remove('drag-over');
+            const draggedId = e.dataTransfer.getData('text/plain');
+            const targetId = script.id;
+            if (draggedId && draggedId !== targetId) {
+                await reorderScripts(draggedId, targetId);
+            }
+        });
+
         return tr;
     }
-    
+
+    // Reorder scripts by moving draggedId before targetId
+    async function reorderScripts(draggedId, targetId) {
+        const ids = state.scripts.map(s => s.id);
+        const fromIdx = ids.indexOf(draggedId);
+        const toIdx = ids.indexOf(targetId);
+        if (fromIdx === -1 || toIdx === -1) return;
+
+        // Move in local array
+        const [moved] = state.scripts.splice(fromIdx, 1);
+        state.scripts.splice(toIdx, 0, moved);
+
+        // Update positions
+        state.scripts.forEach((s, i) => s.position = i);
+
+        // Persist reorder
+        const orderedIds = state.scripts.map(s => s.id);
+        await chrome.runtime.sendMessage({ action: 'reorderScripts', data: { orderedIds } });
+
+        // Reset sort to order to show the new positions
+        state.sortColumn = 'order';
+        state.sortDirection = 'asc';
+        updateSortIndicators();
+        renderScriptTable();
+    }
+
     // Extract unique domains from @match/@include patterns
     function extractDomainsFromPatterns(patterns) {
         const domains = new Set();
@@ -1554,13 +1679,6 @@
         return div.innerHTML;
     }
     
-    function formatSize(bytes) {
-        if (bytes === 0) return '0 B';
-        const units = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + units[i];
-    }
-
     function showToast(msg, type = 'info') {
         if (!elements.toastContainer) return;
         const toast = document.createElement('div');
@@ -1573,20 +1691,23 @@
     }
 
     function showModal(title, html, actions = []) {
-        elements.modalTitle.textContent = title;
-        elements.modalBody.innerHTML = html;
-        elements.modalActions.innerHTML = '';
-        actions.forEach(a => {
-            const btn = document.createElement('button');
-            btn.className = `btn ${a.class || ''}`;
-            btn.textContent = a.label;
-            btn.onclick = a.callback;
-            elements.modalActions.appendChild(btn);
-        });
+        if (!elements.modal) return;
+        if (elements.modalTitle) elements.modalTitle.textContent = title;
+        if (elements.modalBody) elements.modalBody.innerHTML = html;
+        if (elements.modalActions) {
+            elements.modalActions.innerHTML = '';
+            actions.forEach(a => {
+                const btn = document.createElement('button');
+                btn.className = `btn ${a.class || ''}`;
+                btn.textContent = a.label;
+                btn.onclick = a.callback;
+                elements.modalActions.appendChild(btn);
+            });
+        }
         elements.modal.classList.add('show');
     }
 
-    function hideModal() { elements.modal.classList.remove('show'); }
+    function hideModal() { elements.modal?.classList.remove('show'); }
 
     function showConfirmModal(title, msg) {
         return new Promise(resolve => {
@@ -1644,7 +1765,12 @@
         });
         
         elements.btnBulkApply?.addEventListener('click', executeBulkAction);
-        
+
+        // Sortable column headers
+        document.querySelectorAll('.scripts-table th.sortable').forEach(th => {
+            th.addEventListener('click', () => handleSortClick(th.dataset.sort));
+        });
+
         elements.filterSelect?.addEventListener('change', () => {
             renderScriptTable(elements.scriptSearch?.value || '');
         });
