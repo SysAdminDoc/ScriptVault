@@ -1,4 +1,4 @@
-// ScriptVault v1.1.0 - Content Script Bridge
+// ScriptVault v1.3.0 - Content Script Bridge
 // Bridges messages between userscripts (USER_SCRIPT world) and background service worker
 
 (function() {
@@ -105,6 +105,45 @@
         scriptId: message.data?.scriptId,
         eventType: message.data?.type,
         data: message.data
+      }, '*');
+      handled = true;
+    }
+
+    // Notification event forwarding (click, done)
+    if (message.action === 'notificationEvent') {
+      window.postMessage({
+        channel: CHANNEL_ID,
+        direction: 'to-userscript',
+        type: 'notificationEvent',
+        scriptId: message.data?.scriptId,
+        notifTag: message.data?.notifId,
+        eventType: message.data?.type
+      }, '*');
+      handled = true;
+    }
+
+    // Download event forwarding (load, error, progress, timeout)
+    if (message.action === 'downloadEvent') {
+      window.postMessage({
+        channel: CHANNEL_ID,
+        direction: 'to-userscript',
+        type: 'downloadEvent',
+        scriptId: message.data?.scriptId,
+        downloadId: message.data?.downloadId,
+        eventType: message.data?.type,
+        data: message.data
+      }, '*');
+      handled = true;
+    }
+
+    // Opened tab closed event
+    if (message.action === 'openedTabClosed') {
+      window.postMessage({
+        channel: CHANNEL_ID,
+        direction: 'to-userscript',
+        type: 'openedTabClosed',
+        scriptId: message.data?.scriptId,
+        closedTabId: message.data?.tabId
       }, '*');
       handled = true;
     }
