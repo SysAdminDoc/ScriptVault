@@ -19,6 +19,7 @@ INCLUDE=(
   manifest.json
   background.js
   content.js
+  shared
   pages
   images/icon16.png
   images/icon32.png
