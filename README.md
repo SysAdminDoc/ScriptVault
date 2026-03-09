@@ -50,9 +50,13 @@ Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state management.
 - **Auto-detect installation** &mdash; Navigate to any `.user.js` URL
 - **One-click toggle** &mdash; Enable/disable scripts individually or globally
 - **Auto-updates** &mdash; Configurable update intervals with notifications
+- **Per-script update check** &mdash; Check and apply updates for individual scripts inline
 - **Version tracking** &mdash; Installed vs. available version comparison
 - **Tags & search** &mdash; Organize and filter scripts by name, description, or metadata
 - **Popup quick-edit** &mdash; Click any script in the toolbar popup to jump straight into the editor
+- **Find Scripts** &mdash; Search and install userscripts from Greasy Fork and other sources directly in the dashboard
+- **Bulk operations** &mdash; Select multiple scripts to enable, disable, update, reset, or delete with progress tracking
+- **Per-script export** &mdash; Export individual scripts as `.user.js` files
 
 ### Advanced URL Matching
 
@@ -75,8 +79,11 @@ Sync scripts across devices with 5 providers:
 
 ### Built-in Code Editor
 
+- **Tabbed editing** &mdash; Open multiple scripts simultaneously with browser-style tabs (middle-click to close)
+- **Unsaved indicators** &mdash; Visual dot on tabs with pending changes
 - **CodeMirror** with JavaScript syntax highlighting
-- **5 dark themes** &mdash; Monokai, Dracula, Material Darker, Nord, Ayu Dark
+- **5 editor themes** &mdash; Monokai, Dracula, Material Darker, Nord, Ayu Dark
+- **Status bar** &mdash; Line count and cursor position display
 - Code folding, bracket matching, auto-close
 - Search & replace (`Ctrl+F` / `Ctrl+H`)
 - Real-time userscript metadata linting
@@ -95,6 +102,7 @@ Sync scripts across devices with 5 providers:
 
 - **ZIP** &mdash; Full backup with scripts + settings
 - **JSON** &mdash; Text-based backup
+- **File import** &mdash; Drag and drop `.user.js` or `.zip` files directly into the dashboard
 - **URL import** &mdash; Install directly from any URL
 - **Clipboard import** &mdash; Paste script code directly
 
@@ -137,6 +145,8 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 | Method | Steps |
 |--------|-------|
 | **Direct URL** | Navigate to any `.user.js` URL &mdash; ScriptVault auto-detects it |
+| **Find Scripts** | Dashboard &rarr; click **Find Scripts** &rarr; search &rarr; one-click install |
+| **File drop** | Drag and drop a `.user.js` file onto the dashboard |
 | **Dashboard import** | Dashboard &rarr; Utilities &rarr; paste URL or code &rarr; Import |
 | **Create new** | Dashboard &rarr; click **+** &rarr; write script &rarr; `Ctrl+S` |
 
@@ -145,9 +155,12 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 | Action | How |
 |--------|-----|
 | Toggle | Click the switch next to any script |
-| Edit | Click the script name (dashboard or popup) |
+| Edit | Click the script name &mdash; opens in a tab (multiple scripts at once) |
+| Update | Click the refresh icon on any script to check for updates |
+| Export | Click the download icon to export a single script |
 | Delete | Click the trash icon |
 | View storage | Click the database icon to inspect `GM_getValue` data |
+| Bulk actions | Select multiple scripts via checkboxes &rarr; choose action from dropdown |
 
 ### Keyboard Shortcuts
 
@@ -224,6 +237,10 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 | Manifest V3 | Yes | Yes | Yes |
 | Full GM API (24+) | Yes | Yes | Yes |
 | Cloud Sync (5 providers) | Yes | Yes | Yes |
+| Tabbed Multi-Script Editor | Yes | No | No |
+| Built-in Script Search | Yes | No | No |
+| Bulk Operations w/ Progress | Yes | Yes | No |
+| 4 UI Themes | Yes | No | Yes |
 | Open Source | MIT | No | Yes |
 | Free | Yes | Freemium | Yes |
 
