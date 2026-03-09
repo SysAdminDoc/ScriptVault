@@ -1,6 +1,58 @@
-// ScriptVault v1.3.0 - Background Service Worker
+// ScriptVault v1.3.1 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
-// v1.1.0: Renamed to ScriptVault, popup delete/favicons, editor nav, bug fixes
+// NOTE: This file is built from source modules. Edit the individual files in
+// shared/, modules/, and lib/, then run build-background.sh to regenerate.
+
+// ScriptVault Shared Utilities
+// Used by background.js (inlined at build time) and HTML pages (via <script src>)
+
+/**
+ * Escape HTML special characters to prevent XSS.
+ * Works in both DOM (pages) and non-DOM (service worker) contexts.
+ */
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Generate a unique script ID using crypto.randomUUID().
+ */
+function generateId() {
+  return 'script_' + crypto.randomUUID();
+}
+
+/**
+ * Validate and sanitize a URL for safe use in href attributes.
+ * Returns the URL if safe, or null if potentially dangerous.
+ */
+function sanitizeUrl(url) {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (/^(javascript|data|vbscript|blob):/i.test(trimmed)) return null;
+  if (/^(https?|ftp|mailto):/i.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('#')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('//')) return trimmed;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return null;
+  return trimmed;
+}
+
+/**
+ * Format byte count as human-readable string.
+ */
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
 
 // ============================================================================
 // INLINED: fflate v0.8.2 - Browser-only ZIP library
@@ -3002,9 +3054,9 @@ var CloudSyncProviders = {
       }
     },
 
-    async getStatus() {
+    async getStatus(settings) {
       try {
-        const settings = await SettingsManager.get();
+        if (!settings) settings = await SettingsManager.get();
         if (!settings.googleDriveConnected || !settings.googleDriveToken) {
           return { connected: false };
         }
@@ -3164,6 +3216,7 @@ var CloudSyncProviders = {
     },
     
     async getStatus(settings) {
+      if (!settings) settings = await SettingsManager.get();
       if (!settings.dropboxToken) return { connected: false };
 
       try {
@@ -3356,9 +3409,9 @@ var CloudSyncProviders = {
       }
     },
 
-    async getStatus() {
+    async getStatus(settings) {
       try {
-        const settings = await SettingsManager.get();
+        if (!settings) settings = await SettingsManager.get();
         if (!settings.onedriveConnected || !settings.onedriveToken) return { connected: false };
         const token = await this.getValidToken();
         if (!token) return { connected: false };
@@ -3379,6 +3432,7 @@ var CloudSyncProviders = {
 if (typeof self !== 'undefined') {
   self.CloudSyncProviders = CloudSyncProviders;
 }
+
 
 // ============================================================================
 // INLINED: i18n.js - Internationalization Module
@@ -3868,9 +3922,6 @@ if (typeof self !== 'undefined') {
 // END INLINED MODULES
 // ============================================================================
 
-console.log('[ScriptVault] Service worker starting...');
-
-
 // ============================================================================
 // Settings Manager
 // ============================================================================
@@ -4210,24 +4261,13 @@ const ScriptValues = {
       }
     });
     
-    // OPTIMIZED: Only broadcast to other tabs (not all tabs)
-    // Use a more efficient approach - broadcast to active tabs only
-    chrome.tabs.query({ active: true }, (activeTabs) => {
-      // Also get tabs that might be running scripts
-      chrome.tabs.query({ status: 'complete' }, (allTabs) => {
-        // Deduplicate and limit to 20 tabs max for performance
-        const tabIds = new Set();
-        activeTabs.forEach(t => tabIds.add(t.id));
-        allTabs.slice(0, 20).forEach(t => tabIds.add(t.id));
-        
-        tabIds.forEach(tabId => {
-          chrome.tabs.sendMessage(tabId, {
-            action: 'valueChanged',
-            data: { scriptId, key, oldValue, newValue, remote: true }
-          }).catch(() => {}); // Ignore errors for tabs without content script
-        });
-      });
-    });
+    // Broadcast value change to all loaded tabs
+    chrome.tabs.query({ status: 'complete' }).then(tabs => {
+      const msg = { action: 'valueChanged', data: { scriptId, key, oldValue, newValue, remote: true } };
+      for (const tab of tabs) {
+        chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+      }
+    }).catch(() => {});
   }
 };
 
@@ -4404,6 +4444,9 @@ const ResourceCache = {
     if (cached && Date.now() - cached.timestamp < this.maxAge) {
       return cached;
     }
+    // Clean up expired in-memory entry
+    if (cached) delete this.cache[url];
+
     // Try persistent storage
     try {
       const key = this.STORAGE_PREFIX + url;
@@ -4412,6 +4455,8 @@ const ResourceCache = {
         this.cache[url] = stored[key];
         return stored[key];
       }
+      // Clean up expired persistent entry
+      if (stored[key]) chrome.storage.local.remove(key).catch(() => {});
     } catch (e) {}
     return null;
   },
@@ -4481,6 +4526,8 @@ const ResourceCache = {
     this.cache = {};
   }
 };
+
+console.log('[ScriptVault] Service worker starting...');
 
 // ============================================================================
 // Userscript Parser
@@ -5083,24 +5130,15 @@ async function importFromZip(zipData, options = {}) {
     }
     
     await updateBadge();
-    
+
     // Re-register all scripts after import
     await registerAllScripts();
-    
+
     return results;
-    
   } catch (e) {
-    console.error('Zip import error:', e);
-    return { error: 'Failed to read zip file: ' + e.message };
+    console.error('[ScriptVault] importFromZip error:', e);
+    return { ...results, error: e.message };
   }
-}
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-function generateId() {
-  return 'script_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
 }
 
 // ============================================================================
@@ -5234,9 +5272,69 @@ async function handleMessage(message, sender) {
       
       case 'deleteScript': {
         const scriptId = data.id || data.scriptId;
+        const settings = await SettingsManager.get();
+        const trashMode = settings.trashMode || 'disabled';
+
+        if (trashMode !== 'disabled') {
+          // Move to trash instead of permanent delete
+          const script = await ScriptStorage.get(scriptId);
+          if (script) {
+            const trashData = await chrome.storage.local.get('trash');
+            const trash = trashData.trash || [];
+            trash.push({ ...script, trashedAt: Date.now() });
+            await chrome.storage.local.set({ trash });
+          }
+        }
+
         await unregisterScript(scriptId);
         await ScriptStorage.delete(scriptId);
         await updateBadge();
+        return { success: true };
+      }
+
+      case 'getTrash': {
+        const trashData = await chrome.storage.local.get('trash');
+        const trash = trashData.trash || [];
+        // Clean expired entries
+        const settings = await SettingsManager.get();
+        const trashMode = settings.trashMode || 'disabled';
+        const maxAge = trashMode === '1' ? 86400000 : trashMode === '7' ? 604800000 : trashMode === '30' ? 2592000000 : 0;
+        const now = Date.now();
+        const valid = maxAge > 0 ? trash.filter(s => now - s.trashedAt < maxAge) : trash;
+        if (valid.length !== trash.length) {
+          await chrome.storage.local.set({ trash: valid });
+        }
+        return { trash: valid };
+      }
+
+      case 'restoreFromTrash': {
+        const scriptId = data.scriptId;
+        const trashData = await chrome.storage.local.get('trash');
+        const trash = trashData.trash || [];
+        const idx = trash.findIndex(s => s.id === scriptId);
+        if (idx === -1) return { error: 'Not found in trash' };
+
+        const script = trash[idx];
+        delete script.trashedAt;
+        trash.splice(idx, 1);
+        await chrome.storage.local.set({ trash });
+        await ScriptStorage.set(script.id, script);
+        if (script.enabled) await registerScript(script);
+        await updateBadge();
+        return { success: true };
+      }
+
+      case 'emptyTrash': {
+        await chrome.storage.local.set({ trash: [] });
+        return { success: true };
+      }
+
+      case 'permanentlyDelete': {
+        const scriptId = data.scriptId;
+        const trashData = await chrome.storage.local.get('trash');
+        const trash = trashData.trash || [];
+        const filtered = trash.filter(s => s.id !== scriptId);
+        await chrome.storage.local.set({ trash: filtered });
         return { success: true };
       }
         
@@ -5353,6 +5451,11 @@ async function handleMessage(message, sender) {
         return TabStorage.getAll();
         
       // Settings
+      case 'prefetchResources': {
+        await ResourceCache.prefetchResources(data.resources);
+        return { success: true };
+      }
+
       case 'getSettings': {
         const settings = await SettingsManager.get();
         return { settings };
@@ -5527,7 +5630,8 @@ async function handleMessage(message, sender) {
         if (!provider) return { connected: false };
 
         try {
-          if (provider.getStatus) return await provider.getStatus();
+          const settings = await SettingsManager.get();
+          if (provider.getStatus) return await provider.getStatus(settings);
           return { connected: false };
         } catch (e) {
           return { connected: false, error: e.message };
@@ -6074,8 +6178,8 @@ async function handleMessage(message, sender) {
           doesScriptMatchUrl(script, url)
         ).sort((a, b) => (a.position || 0) - (b.position || 0));
         
-        // Return with metadata property for popup compatibility
-        return filtered.map(s => ({ ...s, metadata: s.meta }));
+        // Return with metadata property for popup compatibility (strip code to reduce message size)
+        return filtered.map(({ code, ...rest }) => ({ ...rest, metadata: rest.meta }));
       }
       
       // Update badge for specific tab
@@ -7210,7 +7314,13 @@ async function fetchRequireScript(url) {
   }
   
   // Check persistent cache in chrome.storage.local
-  const cacheKey = `require_cache_${btoa(url).replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100)}`;
+  // Hash the URL to create a fixed-length collision-resistant cache key
+  const cacheKey = await (async () => {
+    const data = new TextEncoder().encode(url);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    return `require_cache_${hex}`;
+  })();
   try {
     const cached = await chrome.storage.local.get(cacheKey);
     if (cached[cacheKey]?.code) {
@@ -7837,17 +7947,15 @@ ${req.code}
     let currentMapKey = localId;
 
     // Store request details for event handling
-    _xhrRequests.set(localId, { details, aborted: false });
+    const requestEntry = { details, aborted: false };
+    _xhrRequests.set(localId, requestEntry);
 
     // Control object returned to the script
     const control = {
       abort: () => {
         aborted = true;
-        const request = _xhrRequests.get(currentMapKey);
-        if (request) {
-          request.aborted = true;
-        }
-        // If we have the server's request ID, send abort
+        requestEntry.aborted = true;
+        // Send abort using server ID if available, clean up both keys
         if (requestId) {
           sendToBackground('GM_xmlhttpRequest_abort', { requestId }).catch(() => {});
         }
@@ -7857,10 +7965,12 @@ ${req.code}
             details.onabort({ error: 'Aborted', status: 0 });
           } catch (e) {}
         }
-        _xhrRequests.delete(currentMapKey);
+        // Clean up both possible keys to avoid orphans
+        _xhrRequests.delete(localId);
+        if (requestId) _xhrRequests.delete(requestId);
       }
     };
-    
+
     // Start the request
     sendToBackground('GM_xmlhttpRequest', {
       scriptId,
@@ -7904,14 +8014,11 @@ ${req.code}
         if (details.onerror) details.onerror({ error: response.error, status: 0 });
         _xhrRequests.delete(currentMapKey);
       } else if (response.requestId) {
-        // Re-key the map so XHR event lookups by server requestId will find this entry
+        // Re-key: add server ID entry, then remove local ID
         requestId = response.requestId;
-        const request = _xhrRequests.get(currentMapKey);
-        if (request) {
-          _xhrRequests.delete(currentMapKey);
-          currentMapKey = requestId;
-          _xhrRequests.set(currentMapKey, request);
-        }
+        _xhrRequests.set(requestId, requestEntry);
+        _xhrRequests.delete(localId);
+        currentMapKey = requestId;
       }
     }).catch(err => {
       if (aborted) return;
@@ -7949,10 +8056,12 @@ ${req.code}
   }
   
   function fallbackCopyText(text) {
+    const target = document.body || document.documentElement;
+    if (!target) return;
     const ta = document.createElement('textarea');
     ta.value = text;
     ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
-    document.body.appendChild(ta);
+    target.appendChild(ta);
     ta.select();
     try { document.execCommand('copy'); } catch(e) {}
     ta.remove();
@@ -7973,7 +8082,7 @@ ${req.code}
       opts = details;
     }
     if (typeof ondone === 'function') opts.ondone = ondone;
-    const notifTag = opts.tag || ('notif_' + Math.random().toString(36).substr(2));
+    const notifTag = opts.tag || ('notif_' + Math.random().toString(36).substring(2));
     // Store callbacks
     _notifCallbacks.set(notifTag, {
       onclick: opts.onclick, ondone: opts.ondone
@@ -8064,7 +8173,7 @@ ${req.code}
     } else if (accessKeyOrOptions && typeof accessKeyOrOptions === 'object') {
       opts = accessKeyOrOptions;
     }
-    const id = opts.id || Math.random().toString(36).substr(2);
+    const id = opts.id || Math.random().toString(36).substring(2);
     _menuCmds.set(id, callback);
     sendToBackground('GM_registerMenuCommand', {
       scriptId, commandId: id, caption,

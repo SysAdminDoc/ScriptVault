@@ -41,11 +41,11 @@ async function init() {
     }
   }, true);
   
-  // Load theme
+  // Load and apply theme
   const settings = await chrome.runtime.sendMessage({ action: 'getSettings' });
-  if (settings?.theme === 'light') {
-    document.documentElement.setAttribute('data-theme', 'light');
-  }
+  const themeSettings = settings?.settings || settings || {};
+  const theme = themeSettings.layout || 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
   
   const content = document.getElementById('content');
   
@@ -236,7 +236,7 @@ function renderInstallUI(sourceUrl) {
           ${scriptMeta.homepage ? `
             <div class="meta-item">
               <span class="meta-label">Homepage</span>
-              <span class="meta-value"><a href="${escapeHtml(scriptMeta.homepage)}" target="_blank">${escapeHtml(truncateUrl(scriptMeta.homepage))}</a></span>
+              <span class="meta-value">${sanitizeUrl(scriptMeta.homepage) ? `<a href="${escapeHtml(sanitizeUrl(scriptMeta.homepage))}" target="_blank">${escapeHtml(truncateUrl(scriptMeta.homepage))}</a>` : escapeHtml(scriptMeta.homepage)}</span>
             </div>
           ` : ''}
           
@@ -392,7 +392,8 @@ function setupCodePreview() {
   const textarea = document.getElementById('code-editor');
   if (!textarea) return;
   
-  const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'default' : 'monokai';
+  const dataTheme = document.documentElement.getAttribute('data-theme');
+  const theme = dataTheme === 'light' ? 'default' : 'monokai';
   
   codeEditor = CodeMirror.fromTextArea(textarea, {
     mode: 'javascript',
@@ -487,11 +488,7 @@ function showSuccess(name, action) {
   setTimeout(() => window.close(), 2000);
 }
 
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text || '';
-  return div.innerHTML;
-}
+// escapeHtml provided by shared/utils.js
 
 function truncateUrl(url) {
   try {
