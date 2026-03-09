@@ -11,7 +11,8 @@
         unsavedChanges: false,
         selectedScripts: new Set(),
         sortColumn: 'order',
-        sortDirection: 'asc'
+        sortDirection: 'asc',
+        openTabs: {}  // { scriptId: { code, unsaved } }
     };
 
     // DOM Elements
@@ -47,10 +48,13 @@
 
         // Help button (header icon)
         elements.btnHelpTab = document.getElementById('btnHelpTab');
+        elements.btnCycleTheme = document.getElementById('btnCycleTheme');
 
         // Editor overlay
         elements.editorOverlay = document.getElementById('editorOverlay');
         elements.editorTitle = document.getElementById('editorTitle');
+        elements.editorLineCount = document.getElementById('editorLineCount');
+        elements.editorCursorPos = document.getElementById('editorCursorPos');
         elements.editorTextarea = document.getElementById('editorTextarea');
         elements.editorTabs = document.querySelectorAll('.editor-tab');
         elements.editorPanels = {
@@ -62,8 +66,9 @@
         elements.btnEditorSave = document.getElementById('btnEditorSave');
         elements.btnEditorToggle = document.getElementById('btnEditorToggle');
         elements.btnEditorDuplicate = document.getElementById('btnEditorDuplicate');
+        elements.btnEditorExport = document.getElementById('btnEditorExport');
         elements.btnEditorDelete = document.getElementById('btnEditorDelete');
-        elements.btnEditorClose = document.getElementById('btnEditorClose');
+        // btnEditorClose removed - tabs handle closing
 
         // Info panel
         elements.infoName = document.getElementById('infoName');
@@ -286,6 +291,15 @@
         elements.modalActions = document.getElementById('modalActions');
         elements.modalClose = document.querySelector('.modal-close');
 
+        // Find Scripts
+        elements.btnFindScripts = document.getElementById('btnFindScripts');
+        elements.findScriptsOverlay = document.getElementById('findScriptsOverlay');
+        elements.findScriptsInput = document.getElementById('findScriptsInput');
+        elements.findScriptsSource = document.getElementById('findScriptsSource');
+        elements.btnFindScriptsSearch = document.getElementById('btnFindScriptsSearch');
+        elements.btnCloseFindScripts = document.getElementById('btnCloseFindScripts');
+        elements.findScriptsResults = document.getElementById('findScriptsResults');
+
         // Toast
         elements.toastContainer = document.getElementById('toastContainer');
     }
@@ -294,7 +308,12 @@
     function updateHeaderHeight() {
         const header = document.querySelector('.tm-header');
         if (header) {
-            document.documentElement.style.setProperty('--header-height', header.offsetHeight + 'px');
+            const h = header.offsetHeight;
+            document.documentElement.style.setProperty('--header-height', h + 'px');
+            const toolbar = document.querySelector('.scripts-toolbar');
+            if (toolbar) {
+                document.documentElement.style.setProperty('--toolbar-bottom', (h + toolbar.offsetHeight) + 'px');
+            }
         }
     }
 
@@ -543,6 +562,10 @@
         
         // Apply theme
         document.documentElement.setAttribute('data-theme', s.layout || 'dark');
+        if (elements.btnCycleTheme) {
+            const labels = { dark: 'Dark', light: 'Light', catppuccin: 'Catppuccin', oled: 'OLED' };
+            elements.btnCycleTheme.title = `Theme: ${labels[s.layout] || 'Dark'}`;
+        }
         applyConfigMode();
 
         // Apply custom CSS
@@ -1044,6 +1067,10 @@
                     va = (a.code || '').length;
                     vb = (b.code || '').length;
                     break;
+                case 'lines':
+                    va = (a.code || '').split('\n').length;
+                    vb = (b.code || '').split('\n').length;
+                    break;
                 case 'updated':
                     va = a.updatedAt || 0;
                     vb = b.updatedAt || 0;
@@ -1113,14 +1140,32 @@
         const ids = Array.from(state.selectedScripts);
         
         switch (action) {
-            case 'toggle':
-                for (const id of ids) {
-                    const s = state.scripts.find(x => x.id === id);
-                    if (s) await toggleScriptEnabled(id, s.enabled === false);
+            case 'enable':
+                showProgress(`Enabling ${ids.length} scripts...`);
+                for (let i = 0; i < ids.length; i++) {
+                    const s = state.scripts.find(x => x.id === ids[i]);
+                    updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
+                    await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId: ids[i], enabled: true });
                 }
-                showToast(`Toggled ${ids.length} scripts`, 'success');
+                await loadScripts();
+                updateStats();
+                hideProgress();
+                showToast(`Enabled ${ids.length} scripts`, 'success');
                 break;
-                
+
+            case 'disable':
+                showProgress(`Disabling ${ids.length} scripts...`);
+                for (let i = 0; i < ids.length; i++) {
+                    const s = state.scripts.find(x => x.id === ids[i]);
+                    updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
+                    await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId: ids[i], enabled: false });
+                }
+                await loadScripts();
+                updateStats();
+                hideProgress();
+                showToast(`Disabled ${ids.length} scripts`, 'success');
+                break;
+
             case 'export':
                 const exportData = {
                     version: 2,
@@ -1143,35 +1188,51 @@
                 URL.revokeObjectURL(url);
                 showToast(`Exported ${ids.length} scripts`, 'success');
                 break;
-                
+
             case 'update':
-                showToast('Checking for updates...', 'info');
-                for (const id of ids) {
+                showProgress(`Checking updates for ${ids.length} scripts...`);
+                let updateCount = 0;
+                for (let i = 0; i < ids.length; i++) {
+                    const s = state.scripts.find(x => x.id === ids[i]);
+                    updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
                     try {
-                        await chrome.runtime.sendMessage({ action: 'checkScriptUpdate', scriptId: id });
+                        const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId: ids[i] });
+                        if (updates && updates.length > 0) {
+                            await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: ids[i], code: updates[0].code });
+                            updateCount++;
+                        }
                     } catch (e) {}
                 }
                 await loadScripts();
-                showToast('Update check complete', 'success');
+                hideProgress();
+                showToast(updateCount > 0 ? `${updateCount} script${updateCount > 1 ? 's' : ''} updated` : 'All up to date', 'success');
                 break;
-                
+
             case 'reset':
                 if (!await showConfirmModal('Factory Reset', `Reset settings for ${ids.length} scripts?`)) return;
-                for (const id of ids) {
+                showProgress(`Resetting ${ids.length} scripts...`);
+                for (let i = 0; i < ids.length; i++) {
+                    const s = state.scripts.find(x => x.id === ids[i]);
+                    updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
                     try {
-                        await chrome.runtime.sendMessage({ action: 'resetScriptSettings', scriptId: id });
+                        await chrome.runtime.sendMessage({ action: 'resetScriptSettings', scriptId: ids[i] });
                     } catch (e) {}
                 }
+                hideProgress();
                 showToast(`Reset ${ids.length} scripts`, 'success');
                 break;
-                
+
             case 'delete':
-                for (const id of ids) {
-                    await deleteScript(id, true);
+                showProgress(`Deleting ${ids.length} scripts...`);
+                for (let i = 0; i < ids.length; i++) {
+                    const s = state.scripts.find(x => x.id === ids[i]);
+                    updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
+                    await deleteScript(ids[i], true);
                 }
                 state.selectedScripts.clear();
                 await loadScripts();
                 updateStats();
+                hideProgress();
                 showToast(`Deleted ${ids.length} scripts`, 'success');
                 break;
         }
@@ -1194,10 +1255,10 @@
         }
 
         if (filtered.length === 0) {
-            elements.emptyState.style.display = 'block';
+            if (elements.emptyState) elements.emptyState.style.display = 'block';
             return;
         }
-        elements.emptyState.style.display = 'none';
+        if (elements.emptyState) elements.emptyState.style.display = 'none';
 
         filtered.forEach((script, i) => {
             const tr = createScriptRow(script, i + 1);
@@ -1213,6 +1274,7 @@
         const version = script.metadata?.version || '1.0';
         const enabled = script.enabled !== false;
         const size = formatBytes((script.code || '').length);
+        const lineCount = (script.code || '').split('\n').length;
         const matches = [...(script.metadata?.match || []), ...(script.metadata?.include || [])];
         const grants = script.metadata?.grant || [];
         const updated = script.updatedAt ? formatTime(script.updatedAt) : '-';
@@ -1257,6 +1319,7 @@
             </td>
             <td class="center">${escapeHtml(version)}</td>
             <td class="center">${size}</td>
+            <td class="center">${lineCount}</td>
             <td class="center" title="${escapeHtml(domains.join('\n'))}">${siteIconsHtml}</td>
             <td class="center">
                 <div class="feature-badges">${features.map(f => `<span class="badge ${f.c}">${f.l}</span>`).join('')}</div>
@@ -1267,6 +1330,12 @@
                 <div class="action-icons">
                     <button class="action-icon" title="Edit" data-action="edit" data-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button class="action-icon" title="Check for update" data-action="updateScript" data-id="${script.id}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                    </button>
+                    <button class="action-icon" title="Export" data-action="exportScript" data-id="${script.id}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     </button>
                     <button class="action-icon" title="Delete" data-action="delete" data-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
@@ -1289,13 +1358,36 @@
         tr.querySelector('.script-name').addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="edit"]').addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="delete"]').addEventListener('click', () => deleteScript(script.id));
+        tr.querySelector('[data-action="exportScript"]')?.addEventListener('click', () => exportSingleScript(script));
+        tr.querySelector('[data-action="updateScript"]')?.addEventListener('click', async (e) => {
+            const btn = e.currentTarget;
+            btn.style.opacity = '0.4';
+            btn.style.pointerEvents = 'none';
+            try {
+                const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId: script.id });
+                if (updates && updates.length > 0) {
+                    await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: script.id, code: updates[0].code });
+                    showToast(`${name} updated to v${updates[0].newVersion}`, 'success');
+                    setTimeout(() => loadScripts(), 800);
+                } else {
+                    showToast(`${name} is up to date`, 'info');
+                    btn.style.opacity = '';
+                    btn.style.pointerEvents = '';
+                }
+            } catch (err) {
+                showToast('Update check failed', 'error');
+                btn.style.opacity = '';
+                btn.style.pointerEvents = '';
+            }
+        });
         tr.querySelector('[data-action="checkUpdate"]')?.addEventListener('click', async (e) => {
             const el = e.target;
             el.textContent = '...';
             try {
-                const resp = await chrome.runtime.sendMessage({ action: 'checkScriptUpdate', scriptId: script.id });
-                if (resp?.updated) {
-                    el.textContent = 'Updated!';
+                const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId: script.id });
+                if (updates && updates.length > 0) {
+                    await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: script.id, code: updates[0].code });
+                    el.textContent = `v${updates[0].newVersion}`;
                     el.style.color = 'var(--accent-primary)';
                     setTimeout(() => loadScripts(), 1500);
                 } else {
@@ -1482,14 +1574,93 @@
         const script = state.scripts.find(s => s.id === scriptId);
         if (!script) return;
 
-        state.currentScriptId = scriptId;
-        state.unsavedChanges = false;
+        // Save current editor state before switching
+        if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
+            state.openTabs[state.currentScriptId].code = state.editor.getValue();
+            state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
+        }
 
+        // Create tab if not already open
+        if (!state.openTabs[scriptId]) {
+            state.openTabs[scriptId] = { code: script.code || '', unsaved: false };
+            createScriptTab(scriptId, script.metadata?.name || 'Unnamed Script');
+        }
+
+        // Activate this script tab
+        activateScriptTab(scriptId);
+    }
+
+    function createScriptTab(scriptId, name) {
+        const tabBar = document.getElementById('scriptTabsGroup');
+        const tab = document.createElement('button');
+        tab.className = 'tm-tab script-tab';
+        tab.dataset.tab = 'script_' + scriptId;
+        tab.dataset.scriptId = scriptId;
+        tab.innerHTML = `<span class="tab-name">${escapeHtml(name)}</span><span class="tab-close">&times;</span>`;
+        tabBar.appendChild(tab);
+
+        tab.addEventListener('click', (e) => {
+            if (e.target.closest('.tab-close')) {
+                closeScriptTab(scriptId);
+            } else {
+                // Save current tab state before switching
+                if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
+                    state.openTabs[state.currentScriptId].code = state.editor.getValue();
+                    state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
+                }
+                activateScriptTab(scriptId);
+            }
+        });
+
+        // Middle-click to close (like browser tabs)
+        tab.addEventListener('mousedown', (e) => {
+            if (e.button === 1) {
+                e.preventDefault();
+                closeScriptTab(scriptId);
+            }
+        });
+    }
+
+    function updateLineCount() {
+        if (elements.editorLineCount && state.editor) {
+            const lines = state.editor.lineCount();
+            elements.editorLineCount.textContent = lines + ' line' + (lines !== 1 ? 's' : '');
+        }
+    }
+
+    function updateCursorPos() {
+        if (elements.editorCursorPos && state.editor) {
+            const cursor = state.editor.getCursor();
+            elements.editorCursorPos.textContent = `Ln ${cursor.line + 1}, Col ${cursor.ch + 1}`;
+        }
+    }
+
+    function activateScriptTab(scriptId) {
+        const script = state.scripts.find(s => s.id === scriptId);
+        if (!script) return;
+
+        state.currentScriptId = scriptId;
+        const tabData = state.openTabs[scriptId];
+        state.unsavedChanges = tabData?.unsaved || false;
+
+        // Deactivate all tabs and panels
+        document.querySelectorAll('.tm-tab').forEach(t => t.classList.remove('active'));
+        Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
+        elements.btnHelpTab?.classList.remove('active');
+        closeFindScripts();
+
+        // Activate script tab
+        const tab = document.querySelector(`.tm-tab[data-script-id="${scriptId}"]`);
+        if (tab) tab.classList.add('active');
+
+        // Load editor content
         elements.editorTitle.textContent = script.metadata?.name || 'Edit Script';
         if (state.editor) {
-            state.editor.setValue(script.code || '');
+            state.editor.setValue(tabData?.code ?? script.code ?? '');
             state.editor.clearHistory();
             setTimeout(() => state.editor.refresh(), 10);
+            updateLineCount();
+            updateCursorPos();
         }
 
         elements.btnEditorToggle.textContent = script.enabled !== false ? 'Disable' : 'Enable';
@@ -1500,28 +1671,51 @@
         setTimeout(() => state.editor?.focus(), 100);
     }
 
-    function closeEditor() {
-        const finishClose = async () => {
+    function closeScriptTab(scriptId) {
+        const tabData = state.openTabs[scriptId];
+        const doClose = () => {
+            // Remove tab element
+            const tab = document.querySelector(`.tm-tab[data-script-id="${scriptId}"]`);
+            if (tab) tab.remove();
+
             // Auto-delete new scripts that were never modified
-            if (state.currentScriptId && state.editor) {
-                const code = state.editor.getValue();
-                if (isDefaultTemplate(code)) {
-                    await chrome.runtime.sendMessage({ action: 'deleteScript', scriptId: state.currentScriptId });
-                    await loadScripts();
+            const script = state.scripts.find(s => s.id === scriptId);
+            if (script && isDefaultTemplate(tabData?.code || script.code || '')) {
+                chrome.runtime.sendMessage({ action: 'deleteScript', scriptId }).then(() => {
+                    loadScripts();
                     updateStats();
+                });
+            }
+
+            delete state.openTabs[scriptId];
+
+            if (state.currentScriptId === scriptId) {
+                state.currentScriptId = null;
+                state.unsavedChanges = false;
+                elements.editorOverlay.classList.remove('active');
+
+                // Switch to another open script tab, or back to scripts panel
+                const remaining = Object.keys(state.openTabs);
+                if (remaining.length > 0) {
+                    activateScriptTab(remaining[remaining.length - 1]);
+                } else {
+                    const scriptsTab = document.querySelector('.tm-tab[data-tab="scripts"]');
+                    if (scriptsTab) {
+                        scriptsTab.classList.add('active');
+                        elements.mainPanels.scripts?.classList.add('active');
+                    }
                 }
             }
-            state.unsavedChanges = false;
-            elements.editorOverlay.classList.remove('active');
-            state.currentScriptId = null;
         };
 
-        if (state.unsavedChanges) {
-            showConfirmModal('Unsaved Changes', 'Discard changes?').then(ok => {
-                if (ok) finishClose();
-            });
+        doClose();
+    }
+
+    function closeEditor() {
+        if (state.currentScriptId) {
+            closeScriptTab(state.currentScriptId);
         } else {
-            finishClose();
+            elements.editorOverlay.classList.remove('active');
         }
     }
 
@@ -1677,11 +1871,24 @@
             }
             await chrome.runtime.sendMessage({ action: 'saveScript', scriptId: state.currentScriptId, code });
             state.unsavedChanges = false;
+            // Update open tab state
+            if (state.openTabs[state.currentScriptId]) {
+                state.openTabs[state.currentScriptId].code = code;
+                state.openTabs[state.currentScriptId].unsaved = false;
+            }
             await loadScripts();
             const script = state.scripts.find(s => s.id === state.currentScriptId);
             if (script) {
                 loadScriptInfo(script);
-                elements.editorTitle.textContent = script.metadata?.name || 'Edit Script';
+                const name = script.metadata?.name || 'Edit Script';
+                elements.editorTitle.textContent = name;
+                // Update tab name
+                const tab = document.querySelector(`.tm-tab[data-script-id="${state.currentScriptId}"]`);
+                if (tab) {
+                    tab.classList.remove('unsaved');
+                    const tabName = tab.querySelector('.tab-name');
+                    if (tabName) tabName.textContent = name;
+                }
             }
             showToast('Saved', 'success');
         } catch (e) {
@@ -1707,9 +1914,15 @@
     async function deleteScript(scriptId, skipReload = false) {
         try {
             await chrome.runtime.sendMessage({ action: 'deleteScript', scriptId });
+            // Clean up open tab if exists
+            if (state.openTabs[scriptId]) {
+                delete state.openTabs[scriptId];
+                document.querySelector(`.tm-tab.script-tab[data-script-id="${scriptId}"]`)?.remove();
+            }
             if (scriptId === state.currentScriptId) {
                 state.currentScriptId = null;
-                elements.editorOverlay.classList.remove('active');
+                state.unsavedChanges = false;
+                elements.editorOverlay?.classList.remove('active');
             }
             if (!skipReload) {
                 await loadScripts();
@@ -1850,10 +2063,20 @@
 
         document.querySelector('.CodeMirror').style.fontSize = (s.editorFontSize || 14) + 'px';
 
+        // Cursor position tracking
+        state.editor.on('cursorActivity', updateCursorPos);
+
         // Auto-save support
         let autoSaveTimer = null;
         state.editor.on('change', (cm, change) => {
             state.unsavedChanges = true;
+            // Mark tab as unsaved
+            if (state.currentScriptId) {
+                if (state.openTabs[state.currentScriptId]) state.openTabs[state.currentScriptId].unsaved = true;
+                const tab = document.querySelector(`.tm-tab[data-script-id="${state.currentScriptId}"]`);
+                if (tab) tab.classList.add('unsaved');
+            }
+            updateLineCount();
             if (s.autoSave) {
                 clearTimeout(autoSaveTimer);
                 autoSaveTimer = setTimeout(() => saveCurrentScript(), 2000);
@@ -1875,20 +2098,42 @@
     async function importScript() {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.user.js,.js';
+        input.accept = '.user.js,.js,.zip,.json';
         input.multiple = true;
         input.onchange = async e => {
-            for (const file of e.target.files) {
+            const files = Array.from(e.target.files);
+            if (!files.length) return;
+            showProgress(`Importing ${files.length} file${files.length > 1 ? 's' : ''}...`);
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                updateProgress(i + 1, files.length, `${file.name} (${i + 1}/${files.length})`);
                 try {
-                    const code = await file.text();
-                    const res = await chrome.runtime.sendMessage({ action: 'createScript', code });
-                    if (res?.success) showToast(`Imported: ${file.name}`, 'success');
+                    const name = file.name.toLowerCase();
+                    if (name.endsWith('.zip')) {
+                        const buf = await file.arrayBuffer();
+                        const bytes = new Uint8Array(buf);
+                        let binary = '';
+                        for (let j = 0; j < bytes.length; j += 8192) {
+                            binary += String.fromCharCode.apply(null, bytes.subarray(j, j + 8192));
+                        }
+                        const r = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: btoa(binary), options: { overwrite: true } });
+                        showToast(r?.error ? r.error : `Imported ${r?.imported || 0} scripts from ${file.name}`, r?.error ? 'error' : 'success');
+                    } else if (name.endsWith('.json')) {
+                        const data = JSON.parse(await file.text());
+                        await chrome.runtime.sendMessage({ action: 'importAll', data: { data, options: { overwrite: true } } });
+                        showToast(`Imported from ${file.name}`, 'success');
+                    } else {
+                        const code = await file.text();
+                        const res = await chrome.runtime.sendMessage({ action: 'createScript', code });
+                        if (res?.success) showToast(`Imported: ${file.name}`, 'success');
+                    }
                 } catch (err) {
                     showToast(`Failed: ${file.name}`, 'error');
                 }
             }
             await loadScripts();
             updateStats();
+            hideProgress();
         };
         input.click();
     }
@@ -1899,9 +2144,11 @@
             if (response) {
                 const blob = new Blob([JSON.stringify(response, null, 2)], { type: 'application/json' });
                 const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
+                const url = URL.createObjectURL(blob);
+                a.href = url;
                 a.download = `scriptvault-backup-${new Date().toISOString().split('T')[0]}.json`;
                 a.click();
+                URL.revokeObjectURL(url);
                 showToast('Exported', 'success');
             }
         } catch (e) {
@@ -1909,12 +2156,26 @@
         }
     }
 
+    function exportSingleScript(script) {
+        const meta = script.metadata || {};
+        const name = (meta.name || 'script').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const blob = new Blob([script.code || ''], { type: 'text/javascript' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${name}.user.js`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        showToast(`Exported ${meta.name || 'script'}`, 'success');
+    }
+
     async function exportToZip() {
         try {
             const response = await chrome.runtime.sendMessage({ action: 'exportZip' });
             if (response?.zipData) {
-                const bytes = atob(response.zipData).split('').map(c => c.charCodeAt(0));
-                const blob = new Blob([new Uint8Array(bytes)], { type: 'application/zip' });
+                const raw = atob(response.zipData);
+                const bytes = new Uint8Array(raw.length);
+                for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+                const blob = new Blob([bytes], { type: 'application/zip' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
                 a.download = response.filename || `scriptvault-${new Date().toISOString().split('T')[0]}.zip`;
@@ -1946,14 +2207,17 @@
     }
 
     // Helpers
-    function updateStats() {
+    async function updateStats() {
         const total = state.scripts.length;
         const active = state.scripts.filter(s => s.enabled !== false).length;
         if (elements.statTotalScripts) elements.statTotalScripts.textContent = total;
         if (elements.statActiveScripts) elements.statActiveScripts.textContent = active;
-        chrome.storage.local.getBytesInUse(null, bytes => {
-            if (elements.statTotalStorage) elements.statTotalStorage.textContent = formatBytes(bytes);
-        });
+        try {
+            const bytes = await chrome.storage.local.getBytesInUse(null);
+            if (elements.statTotalStorage) elements.statTotalStorage.textContent = formatBytes(bytes || 0);
+        } catch (e) {
+            if (elements.statTotalStorage) elements.statTotalStorage.textContent = '-';
+        }
     }
 
     function formatBytes(bytes) {
@@ -1976,7 +2240,190 @@
     }
 
     // escapeHtml provided by shared/utils.js
-    
+
+    // =========================================
+    // Find Scripts
+    // =========================================
+    const findScriptsState = { page: 1, query: '', source: 'greasyfork', loading: false };
+
+    function openFindScripts() {
+        elements.findScriptsOverlay?.classList.add('active');
+        elements.findScriptsInput?.focus();
+    }
+
+    function closeFindScripts() {
+        elements.findScriptsOverlay?.classList.remove('active');
+    }
+
+    async function searchScripts(page = 1) {
+        const query = elements.findScriptsInput?.value?.trim();
+        const source = elements.findScriptsSource?.value || 'greasyfork';
+        if (!query) return showToast('Enter a search term', 'error');
+        if (findScriptsState.loading) return;
+
+        findScriptsState.query = query;
+        findScriptsState.source = source;
+        findScriptsState.page = page;
+        findScriptsState.loading = true;
+
+        elements.findScriptsResults.innerHTML = '<div class="find-scripts-loading">Searching</div>';
+
+        try {
+            if (source === 'greasyfork') {
+                await searchGreasyFork(query, page);
+            } else if (source === 'openuserjs') {
+                searchExternal(`https://openuserjs.org/?q=${encodeURIComponent(query)}`);
+            } else if (source === 'github') {
+                searchExternal(`https://github.com/search?q=${encodeURIComponent(query + ' userscript')}&type=code`);
+            }
+        } catch (e) {
+            elements.findScriptsResults.innerHTML = `<div class="find-scripts-empty">Search failed: ${escapeHtml(e.message)}</div>`;
+        } finally {
+            findScriptsState.loading = false;
+        }
+    }
+
+    function searchExternal(url) {
+        chrome.tabs.create({ url });
+        closeFindScripts();
+    }
+
+    async function searchGreasyFork(query, page) {
+        // Detect if query looks like a domain
+        const isDomain = /^[a-zA-Z0-9]([a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}$/.test(query);
+        let apiUrl;
+        if (isDomain) {
+            apiUrl = `https://api.greasyfork.org/en/scripts/by-site/${encodeURIComponent(query)}.json?page=${page}`;
+        } else {
+            apiUrl = `https://api.greasyfork.org/en/scripts.json?q=${encodeURIComponent(query)}&page=${page}`;
+        }
+
+        const resp = await fetch(apiUrl);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const scripts = await resp.json();
+
+        if (!scripts || scripts.length === 0) {
+            elements.findScriptsResults.innerHTML = '<div class="find-scripts-empty">No scripts found. Try a different search term.</div>';
+            return;
+        }
+
+        renderFindResults(scripts, page, isDomain ? query : null);
+    }
+
+    function renderFindResults(scripts, page, domain) {
+        const html = scripts.map(s => {
+            const installs = s.total_installs >= 1000 ? Math.round(s.total_installs / 1000) + 'k' : (s.total_installs || 0);
+            const daily = s.daily_installs || 0;
+            const rating = s.fan_score ? parseFloat(s.fan_score).toFixed(0) + '%' : '--';
+            const updated = s.code_updated_at ? formatTime(s.code_updated_at) : '--';
+            const author = s.users && s.users[0] ? s.users[0].name : 'Unknown';
+            return `<div class="find-script-card">
+                <div class="find-script-info">
+                    <div class="find-script-name">
+                        <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.name)}</a>
+                        ${s.version ? `<span class="find-script-version">v${escapeHtml(s.version)}</span>` : ''}
+                    </div>
+                    <div class="find-script-desc" title="${escapeHtml(s.description || '')}">${escapeHtml(s.description || 'No description')}</div>
+                    <div class="find-script-meta">
+                        <span title="Author">${escapeHtml(author)}</span>
+                        <span title="Total installs">${installs} installs</span>
+                        <span title="Daily installs">${daily}/day</span>
+                        <span title="Rating">${rating} rating</span>
+                        <span title="Updated">${updated}</span>
+                    </div>
+                </div>
+                <div class="find-script-actions">
+                    <button class="toolbar-btn primary" data-install-url="${escapeHtml(s.code_url || '')}">Install</button>
+                    <button class="toolbar-btn" data-preview-url="${escapeHtml(s.code_url || '')}">Preview</button>
+                    <button class="toolbar-btn" data-view-url="${escapeHtml(s.url || '')}">View</button>
+                </div>
+                <div class="find-script-preview"></div>
+            </div>`;
+        }).join('');
+
+        const countText = domain
+            ? `<div class="find-scripts-count">Scripts for <strong>${escapeHtml(domain)}</strong> - Page ${page}</div>`
+            : `<div class="find-scripts-count">Page ${page} - ${scripts.length} results</div>`;
+
+        const pagination = `<div class="find-scripts-pagination">
+            ${page > 1 ? `<button class="toolbar-btn" data-find-page="${page - 1}">Previous</button>` : ''}
+            ${scripts.length >= 50 ? `<button class="toolbar-btn" data-find-page="${page + 1}">Next</button>` : ''}
+        </div>`;
+
+        elements.findScriptsResults.innerHTML = countText + html + pagination;
+
+        // Bind install buttons
+        elements.findScriptsResults.querySelectorAll('[data-install-url]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const url = btn.dataset.installUrl;
+                if (!url) return;
+                btn.textContent = 'Installing...';
+                btn.disabled = true;
+                try {
+                    const res = await chrome.runtime.sendMessage({ action: 'installFromUrl', url });
+                    if (res?.success) {
+                        btn.textContent = 'Installed';
+                        btn.classList.remove('primary');
+                        await loadScripts();
+                        updateStats();
+                        showToast('Script installed', 'success');
+                    } else {
+                        btn.textContent = 'Failed';
+                        showToast(res?.error || 'Install failed', 'error');
+                        setTimeout(() => { btn.textContent = 'Install'; btn.disabled = false; }, 2000);
+                    }
+                } catch (e) {
+                    btn.textContent = 'Error';
+                    showToast('Install failed', 'error');
+                    setTimeout(() => { btn.textContent = 'Install'; btn.disabled = false; }, 2000);
+                }
+            });
+        });
+
+        // Bind view buttons
+        elements.findScriptsResults.querySelectorAll('[data-view-url]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const url = btn.dataset.viewUrl;
+                if (url) chrome.tabs.create({ url });
+            });
+        });
+
+        // Bind preview buttons
+        elements.findScriptsResults.querySelectorAll('[data-preview-url]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const url = btn.dataset.previewUrl;
+                if (!url) return;
+                const card = btn.closest('.find-script-card');
+                const preview = card?.querySelector('.find-script-preview');
+                if (!preview) return;
+                if (preview.classList.contains('open')) {
+                    preview.classList.remove('open');
+                    btn.textContent = 'Preview';
+                    return;
+                }
+                btn.textContent = 'Loading...';
+                btn.disabled = true;
+                try {
+                    const resp = await fetch(url);
+                    const code = await resp.text();
+                    preview.textContent = code;
+                    preview.classList.add('open');
+                    btn.textContent = 'Hide';
+                } catch (e) {
+                    preview.textContent = 'Failed to load code';
+                    preview.classList.add('open');
+                    btn.textContent = 'Preview';
+                }
+                btn.disabled = false;
+            });
+        });
+
+        // Bind pagination
+        elements.findScriptsResults.querySelectorAll('[data-find-page]').forEach(btn => {
+            btn.addEventListener('click', () => searchScripts(parseInt(btn.dataset.findPage)));
+        });
+    }
+
     function showToast(msg, type = 'info') {
         if (!elements.toastContainer) return;
         const toast = document.createElement('div');
@@ -1986,6 +2433,39 @@
         elements.toastContainer.appendChild(toast);
         requestAnimationFrame(() => toast.classList.add('show'));
         setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000);
+    }
+
+    // Progress overlay helpers
+    const progressEl = {
+        overlay: null, title: null, fill: null, status: null,
+        init() {
+            this.overlay = document.getElementById('progressOverlay');
+            this.title = document.getElementById('progressTitle');
+            this.fill = document.getElementById('progressFill');
+            this.status = document.getElementById('progressStatus');
+        }
+    };
+
+    function showProgress(title) {
+        if (!progressEl.overlay) progressEl.init();
+        if (!progressEl.overlay) return;
+        if (progressEl.title) progressEl.title.textContent = title;
+        if (progressEl.fill) progressEl.fill.style.width = '0%';
+        if (progressEl.status) progressEl.status.textContent = '';
+        progressEl.overlay.classList.add('active');
+    }
+
+    function updateProgress(current, total, label) {
+        if (!progressEl.fill) return;
+        const pct = Math.round((current / total) * 100);
+        progressEl.fill.style.width = pct + '%';
+        if (progressEl.status) progressEl.status.textContent = label || `${current} / ${total}`;
+    }
+
+    function hideProgress() {
+        if (!progressEl.overlay) return;
+        progressEl.fill.style.width = '100%';
+        setTimeout(() => progressEl.overlay.classList.remove('active'), 300);
     }
 
     function showModal(title, html, actions = []) {
@@ -2022,20 +2502,25 @@
         elements.mainTabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 const id = tab.dataset.tab;
-                // Close editor if open when navigating tabs
-                if (elements.editorOverlay.classList.contains('active')) {
-                    closeEditor();
-                }
+                // Skip script tabs — they have their own handler
+                if (tab.classList.contains('script-tab')) return;
+                closeFindScripts();
                 if (id === 'newscript') {
                     createNewScript();
                     return;
                 }
-                elements.mainTabs.forEach(t => t.classList.remove('active'));
+                // Save current editor state if switching away
+                if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
+                    state.openTabs[state.currentScriptId].code = state.editor.getValue();
+                    state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
+                }
+                state.currentScriptId = null;
+                elements.editorOverlay.classList.remove('active');
+                document.querySelectorAll('.tm-tab').forEach(t => t.classList.remove('active'));
                 Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
                 tab.classList.add('active');
                 elements.mainPanels[id]?.classList.add('active');
                 if (tab.dataset.tab === 'trash') loadTrash();
-                // Deactivate help icon button when switching to other tabs
                 elements.btnHelpTab?.classList.remove('active');
             });
         });
@@ -2043,10 +2528,16 @@
         // Help icon button in header
         elements.btnHelpTab?.addEventListener('click', () => {
             const isActive = elements.btnHelpTab.classList.contains('active');
-            elements.mainTabs.forEach(t => t.classList.remove('active'));
+            // Save current editor state if switching away
+            if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
+                state.openTabs[state.currentScriptId].code = state.editor.getValue();
+                state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
+            }
+            state.currentScriptId = null;
+            elements.editorOverlay.classList.remove('active');
+            document.querySelectorAll('.tm-tab').forEach(t => t.classList.remove('active'));
             Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
             if (isActive) {
-                // Toggle back to scripts
                 elements.btnHelpTab.classList.remove('active');
                 const scriptsTab = document.querySelector('.tm-tab[data-tab="scripts"]');
                 if (scriptsTab) scriptsTab.classList.add('active');
@@ -2057,19 +2548,50 @@
             }
         });
 
+        // Theme cycle button
+        const themes = ['dark', 'light', 'catppuccin', 'oled'];
+        const themeLabels = { dark: 'Dark', light: 'Light', catppuccin: 'Catppuccin', oled: 'OLED' };
+        elements.btnCycleTheme?.addEventListener('click', () => {
+            const current = state.settings.layout || 'dark';
+            const idx = themes.indexOf(current);
+            const next = themes[(idx + 1) % themes.length];
+            saveSetting('layout', next);
+            elements.btnCycleTheme.title = `Theme: ${themeLabels[next]}`;
+            if (elements.settingsLayout) elements.settingsLayout.value = next;
+        });
+
         // Scripts
         elements.scriptSearch?.addEventListener('input', e => renderScriptTable(e.target.value));
         elements.btnNewScript?.addEventListener('click', createNewScript);
         elements.btnImportScript?.addEventListener('click', importScript);
         elements.btnCheckUpdates?.addEventListener('click', async () => {
-            showToast('Checking...', 'info');
+            showProgress('Checking for updates...');
+            updateProgress(0, 1, 'Scanning all scripts...');
             try {
-                await chrome.runtime.sendMessage({ action: 'checkAllUpdates' });
-                await loadScripts();
-                showToast('Done', 'success');
-            } catch (e) { showToast('Failed', 'error'); }
+                const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates' });
+                if (updates && updates.length > 0) {
+                    for (let i = 0; i < updates.length; i++) {
+                        updateProgress(i + 1, updates.length, `Updating ${updates[i].name || updates[i].id} (${i + 1}/${updates.length})`);
+                        await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: updates[i].id, code: updates[i].code });
+                    }
+                    await loadScripts();
+                    hideProgress();
+                    showToast(`${updates.length} script${updates.length > 1 ? 's' : ''} updated`, 'success');
+                } else {
+                    hideProgress();
+                    showToast('All scripts up to date', 'success');
+                }
+            } catch (e) { hideProgress(); showToast('Update check failed', 'error'); }
         });
-        
+
+        // Find Scripts
+        elements.btnFindScripts?.addEventListener('click', openFindScripts);
+        elements.btnCloseFindScripts?.addEventListener('click', closeFindScripts);
+        elements.btnFindScriptsSearch?.addEventListener('click', () => searchScripts(1));
+        elements.findScriptsInput?.addEventListener('keydown', e => {
+            if (e.key === 'Enter') searchScripts(1);
+        });
+
         // Bulk Actions (Tampermonkey-style)
         elements.bulkSelectAll?.addEventListener('change', e => {
             state.selectedScripts.clear();
@@ -2131,8 +2653,12 @@
             if (script) toggleScriptEnabled(script.id, script.enabled === false);
         });
         elements.btnEditorDuplicate?.addEventListener('click', duplicateCurrentScript);
+        elements.btnEditorExport?.addEventListener('click', () => {
+            const script = state.scripts.find(s => s.id === state.currentScriptId);
+            if (script) exportSingleScript(script);
+        });
         elements.btnEditorDelete?.addEventListener('click', () => { if (state.currentScriptId) deleteScript(state.currentScriptId); });
-        elements.btnEditorClose?.addEventListener('click', closeEditor);
+        // Close button removed - tabs handle closing
 
         elements.btnEmptyTrash?.addEventListener('click', async () => {
             await chrome.runtime.sendMessage({ action: 'emptyTrash' });
@@ -2596,14 +3122,32 @@
             elements.importFileName.textContent = file.name;
             const isZip = file.name.endsWith('.zip');
             if (!await showConfirmModal('Import', `Import from ${file.name}?`)) return;
+            showProgress(`Importing ${file.name}...`);
+            updateProgress(0, 1, 'Reading file...');
             try {
                 if (isZip) {
                     const buf = await file.arrayBuffer();
-                    const b64 = btoa(new Uint8Array(buf).reduce((d, b) => d + String.fromCharCode(b), ''));
+                    const bytes = new Uint8Array(buf);
+                    let binary = '';
+                    for (let i = 0; i < bytes.length; i += 8192) {
+                        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+                    }
+                    updateProgress(1, 2, 'Processing zip...');
+                    const b64 = btoa(binary);
                     const r = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: b64, options: { overwrite: true } });
                     showToast(r?.error ? r.error : `Imported ${r?.imported || 0}`, r?.error ? 'error' : 'success');
+                } else if (file.name.endsWith('.user.js') || file.name.endsWith('.js')) {
+                    const code = await file.text();
+                    updateProgress(1, 2, 'Installing script...');
+                    const r = await chrome.runtime.sendMessage({ action: 'saveScript', code });
+                    if (r?.success) {
+                        showToast('Script installed', 'success');
+                    } else {
+                        showToast(r?.error || 'Install failed', 'error');
+                    }
                 } else {
                     const data = JSON.parse(await file.text());
+                    updateProgress(1, 2, 'Importing scripts...');
                     await chrome.runtime.sendMessage({ action: 'importAll', data: { data, options: { overwrite: true } } });
                     showToast('Imported', 'success');
                 }
@@ -2611,6 +3155,8 @@
                 await loadSettings();
                 updateStats();
             } catch (err) { showToast('Failed: ' + err.message, 'error'); }
+            hideProgress();
+            e.target.value = '';
         });
 
         elements.btnInstallFromUrl?.addEventListener('click', installFromUrl);
@@ -2629,11 +3175,14 @@
             try {
                 const data = JSON.parse(txt);
                 if (!await showConfirmModal('Import', `Import ${data.scripts?.length || 0} scripts?`)) return;
+                showProgress(`Importing ${data.scripts?.length || 0} scripts...`);
+                updateProgress(0, 1, 'Processing...');
                 await chrome.runtime.sendMessage({ action: 'importAll', data: { data, options: { overwrite: true } } });
                 await loadScripts();
                 updateStats();
+                hideProgress();
                 showToast('Imported', 'success');
-            } catch (e) { showToast('Invalid JSON', 'error'); }
+            } catch (e) { hideProgress(); showToast('Invalid JSON', 'error'); }
         });
 
         // Modal
@@ -2646,11 +3195,12 @@
                 e.preventDefault();
                 saveCurrentScript();
             }
-            if (e.key === 'Escape' && elements.editorOverlay.classList.contains('active')) closeEditor();
+            if (e.key === 'Escape' && !e.defaultPrevented && elements.editorOverlay.classList.contains('active')) closeEditor();
         });
 
         window.addEventListener('beforeunload', e => {
-            if (state.unsavedChanges) { e.preventDefault(); e.returnValue = ''; }
+            const anyUnsaved = state.unsavedChanges || Object.values(state.openTabs).some(t => t.unsaved);
+            if (anyUnsaved) { e.preventDefault(); e.returnValue = ''; }
         });
     }
 
