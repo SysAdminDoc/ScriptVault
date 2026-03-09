@@ -1,8 +1,16 @@
-// ScriptVault Popup v1.1.0
+// ScriptVault Popup v1.1.1
 // Tampermonkey-style popup interface
 
 (function() {
     'use strict';
+
+    // Event delegation for favicon error handling (CSP-compliant)
+    document.addEventListener('error', function(e) {
+        if (e.target.tagName === 'IMG' && e.target.hasAttribute('data-favicon-fallback')) {
+            e.target.style.display = 'none';
+            if (e.target.parentElement) e.target.parentElement.textContent = e.target.getAttribute('data-favicon-fallback');
+        }
+    }, true);
 
     // State
     let currentTab = null;
@@ -23,6 +31,7 @@
         btnExportZip: document.getElementById('btnExportZip'),
         btnImport: document.getElementById('btnImport'),
         btnCheckUpdates: document.getElementById('btnCheckUpdates'),
+        btnBlacklistDomain: document.getElementById('btnBlacklistDomain'),
         btnDashboard: document.getElementById('btnDashboard'),
         setupWarning: document.getElementById('setupWarning'),
         btnOpenExtSettings: document.getElementById('btnOpenExtSettings'),
@@ -81,6 +90,9 @@
             console.error('Failed to load settings:', error);
             settings = { enabled: true };
         }
+        // Apply theme from settings
+        const theme = settings.layout || 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
     }
 
     // Get current tab
@@ -229,7 +241,7 @@
         const iconUrl = meta.icon || meta.iconURL;
 
         if (iconUrl) {
-            return `<img src="${escapeHtml(iconUrl)}" onerror="this.style.display='none';this.parentElement.textContent='📜'">`;
+            return `<img src="${escapeHtml(iconUrl)}" data-favicon-fallback="📜">`;
         }
 
         // Derive favicon from first matched domain
@@ -243,7 +255,7 @@
                     const faviconUrl = service === 'duckduckgo'
                         ? `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`
                         : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
-                    return `<img src="${escapeHtml(faviconUrl)}" onerror="this.style.display='none';this.parentElement.textContent='📜'">`;
+                    return `<img src="${escapeHtml(faviconUrl)}" data-favicon-fallback="📜">`;
                 }
             }
         }
@@ -443,13 +455,6 @@
         }
     }
 
-    // Escape HTML
-    function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str || '';
-        return div.innerHTML;
-    }
-
     // Setup event listeners
     function setupEventListeners() {
         // Header toggle (global enable/disable)
@@ -470,6 +475,28 @@
         elements.btnExportZip?.addEventListener('click', exportToZip);
         elements.btnImport?.addEventListener('click', importFromFile);
         elements.btnCheckUpdates?.addEventListener('click', checkForUpdates);
+
+        // Blacklist domain
+        elements.btnBlacklistDomain?.addEventListener('click', async () => {
+            if (!currentUrl) return;
+            try {
+                const domain = new URL(currentUrl).hostname;
+                const pattern = `*://${domain}/*`;
+                const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
+                const settings = response?.settings || response || {};
+                const blacklist = settings.blacklist || [];
+                if (blacklist.includes(pattern)) {
+                    // Already blacklisted - show feedback
+                    return;
+                }
+                blacklist.push(pattern);
+                await chrome.runtime.sendMessage({ action: 'setSettings', settings: { blacklist } });
+                const item = elements.btnBlacklistDomain;
+                if (item) item.querySelector('.menu-item-text').textContent = `Blacklisted ${domain}`;
+            } catch (e) {
+                console.error('Failed to blacklist:', e);
+            }
+        });
 
         // Dashboard
         elements.btnDashboard?.addEventListener('click', () => openDashboard());
