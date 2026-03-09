@@ -1,4 +1,4 @@
-// ScriptVault v1.3.1 - Background Service Worker
+// ScriptVault v1.5.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run build-background.sh to regenerate.
@@ -4732,7 +4732,13 @@ const UpdateSystem = {
     script.updatedAt = Date.now();
     
     await ScriptStorage.set(scriptId, script);
-    
+
+    // Re-register so updated code takes effect immediately
+    await unregisterScript(scriptId);
+    if (script.enabled !== false) {
+      await registerScript(script);
+    }
+
     const settings = await SettingsManager.get();
     if (settings.notifyOnUpdate) {
       chrome.notifications.create({
@@ -4742,7 +4748,7 @@ const UpdateSystem = {
         message: `${script.meta.name} updated to v${script.meta.version}`
       });
     }
-    
+
     return { success: true, script };
   },
   
@@ -4971,7 +4977,7 @@ async function exportToZip() {
         exclude: script.meta.exclude || [],
         grant: script.meta.grant || [],
         require: script.meta.require || [],
-        resource: script.meta.resource || []
+        resource: script.meta.resource || {}
       }
     };
     files[`${safeName}.options.json`] = fflate.strToU8(JSON.stringify(options, null, 2));
@@ -4984,9 +4990,14 @@ async function exportToZip() {
     }
   }
   
-  // Generate zip as Uint8Array then convert to base64
+  // Generate zip as Uint8Array then convert to base64 in chunks (avoid stack overflow)
   const zipData = fflate.zipSync(files, { level: 6 });
-  const base64 = btoa(String.fromCharCode(...zipData));
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < zipData.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, zipData.subarray(i, i + chunkSize));
+  }
+  const base64 = btoa(binary);
   return { zipData: base64, filename: `scriptvault-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip` };
 }
 
@@ -5272,6 +5283,7 @@ async function handleMessage(message, sender) {
       
       case 'deleteScript': {
         const scriptId = data.id || data.scriptId;
+        if (!scriptId) return { error: 'No script ID provided' };
         const settings = await SettingsManager.get();
         const trashMode = settings.trashMode || 'disabled';
 
@@ -6886,21 +6898,22 @@ async function installFromUrl(url) {
     const meta = parsed.meta;
     const id = generateId();
 
+    const allScripts = await ScriptStorage.getAll();
     const script = {
       id,
       code,
       meta,
       enabled: true,
-      autoUpdate: !!(meta.updateURL || meta.downloadURL),
-      lastUpdated: Date.now(),
-      installUrl: url,
-      storage: {},
-      order: Date.now()
+      position: allScripts.length,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
 
     await ScriptStorage.set(id, script);
+    await registerAllScripts();
     await updateBadge();
-    
+    await autoReloadMatchingTabs(script);
+
     return { success: true, script };
   } catch (error) {
     return { success: false, error: error.message };
@@ -7465,29 +7478,21 @@ ${req.code}
 (function() {
   'use strict';
   
-  // ============ Error Labeling ============
-  const __scriptLabel = '[Userscript: ' + ${JSON.stringify(meta.name || 'Unknown')} + ']';
-
-  // Label console.error calls with script name for easier debugging
-  const __originalConsoleError = console.error.bind(console);
-  console.error = function(...args) {
-    __originalConsoleError(__scriptLabel, ...args);
-  };
-
-  // Log uncaught errors from this userscript (don't suppress them)
-  const __handleError = function(event) {
-    if (event.filename === '' || event.filename?.includes('user_script') || !event.filename) {
-      console.warn(__scriptLabel, 'Uncaught error:', event.message);
-    }
-  };
-  window.addEventListener('error', __handleError, true);
-
-  // Log unhandled promise rejections
-  const __handleRejection = function(event) {
-    console.warn(__scriptLabel, 'Unhandled rejection:', event.reason);
-  };
-  window.addEventListener('unhandledrejection', __handleRejection, true);
-  // ============ End Error Labeling ============
+  // ============ Error Suppression ============
+  // Suppress uncaught errors and unhandled rejections from userscripts
+  // to prevent them from appearing on chrome://extensions error page.
+  // Chrome captures any error/warn/log from USER_SCRIPT world, so we
+  // must silently swallow these without any console output.
+  window.addEventListener('error', function(event) {
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    return true;
+  }, true);
+  window.addEventListener('unhandledrejection', function(event) {
+    event.stopImmediatePropagation();
+    event.preventDefault();
+  }, true);
+  // ============ End Error Suppression ============
   
   ${(() => {
     const validIncludes = regexIncludes.map(p => {
@@ -7574,7 +7579,7 @@ ${req.code}
     // Handle menu command execution
     if (msg.type === 'menuCommand' && msg.scriptId === scriptId) {
       const cb = _menuCmds.get(msg.commandId);
-      if (cb) try { cb(); } catch(err) { console.error('[ScriptVault] Menu command error:', err); }
+      if (cb) try { cb(); } catch(err) { /* silently ignore menu command errors */ }
     }
     
     // Handle value change notifications (cross-tab sync)
@@ -7591,7 +7596,7 @@ ${req.code}
           try {
             listener.callback(msg.key, oldValue, msg.newValue, msg.remote !== false);
           } catch (e) {
-            console.error('[ScriptVault] Value change listener error:', e);
+            /* silently ignore value change listener errors */
           }
         }
       });
@@ -7630,14 +7635,14 @@ ${req.code}
           try {
             details.upload['on' + uploadEvent](response);
           } catch (e) {
-            console.error('[ScriptVault] XHR upload callback error:', e);
+            /* silently ignore XHR upload callback errors */
           }
         }
       } else if (details[callbackName]) {
         try {
           details[callbackName](response);
         } catch (e) {
-          console.error('[ScriptVault] XHR callback error:', e);
+          /* silently ignore XHR callback errors */
         }
       }
       
@@ -7716,9 +7721,6 @@ ${req.code}
         return await chrome.runtime.sendMessage({ action, data });
       } catch (e) {
         // Extension context invalidated or messaging not available, fall through to bridge
-        if (!e.message?.includes('Extension context invalidated')) {
-          console.warn('[ScriptVault] Direct messaging failed, trying bridge:', e.message);
-        }
       }
     }
 
@@ -7731,7 +7733,6 @@ ${req.code}
       // Set timeout for response
       const timeout = setTimeout(() => {
         window.removeEventListener('message', handler);
-        console.warn('[ScriptVault] Message timeout (10s):', action);
         resolve(undefined);
       }, 10000);
 
@@ -7748,7 +7749,6 @@ ${req.code}
         if (msg.success) {
           resolve(msg.result);
         } else {
-          console.warn('[ScriptVault] Message error:', action, msg.error);
           resolve(undefined);
         }
       }
@@ -7781,7 +7781,6 @@ ${req.code}
       if (_cacheReadyResolve) _cacheReadyResolve();
     } catch (e) {
       // If refresh fails, continue with pre-loaded values
-      console.warn('[ScriptVault] Storage refresh failed, using cached values:', e.message);
       _cacheReady = true;
       if (_cacheReadyResolve) _cacheReadyResolve();
     }
@@ -7935,7 +7934,6 @@ ${req.code}
   // GM_xmlhttpRequest - Full implementation with all events (like Violentmonkey)
   function GM_xmlhttpRequest(details) {
     if (!hasGrant('GM_xmlhttpRequest') && !hasGrant('GM.xmlHttpRequest')) {
-      console.error('[ScriptVault] GM_xmlhttpRequest requires @grant GM_xmlhttpRequest');
       if (details.onerror) details.onerror({ error: 'Permission denied', status: 0 });
       return { abort: () => {} };
     }
@@ -8504,10 +8502,7 @@ ${req.code}
         observer.observe(el, options);
         return observer;
       })
-      .catch(err => {
-        console.warn('[ScriptVault] safeObserve - target not found:', err.message);
-        return null;
-      });
+      .catch(() => null);
     
     return { observer: null, promise };
   }
@@ -8542,7 +8537,7 @@ ${libraryExports}
 
   const apiClose = `
     } catch (e) {
-      console.warn('[ScriptVault] Error in ' + ${JSON.stringify(meta.name)} + ':', e);
+      // Silent - avoid chrome://extensions error spam
     }
   })();
 })();

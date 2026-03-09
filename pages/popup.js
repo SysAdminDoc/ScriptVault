@@ -141,38 +141,43 @@
         }
     }
 
+    // Shared dropdown state (module-level to avoid listener accumulation)
+    let activeDropdownScriptId = null;
+    let dropdownListenersAttached = false;
+
     // Render script list
     function renderScriptList() {
         if (!elements.scriptList) return;
 
+        // Work on a copy to avoid mutating the canonical pageScripts array
+        let displayScripts = [...pageScripts];
+
         // Filter: hide disabled scripts if setting enabled
         if (settings.hideDisabledPopup) {
-            pageScripts = pageScripts.filter(s => s.enabled !== false);
+            displayScripts = displayScripts.filter(s => s.enabled !== false);
         }
 
         // Sort scripts based on scriptOrder setting
         const order = settings.scriptOrder || 'auto';
         if (order === 'alpha') {
-            pageScripts.sort((a, b) => {
+            displayScripts.sort((a, b) => {
                 const na = (a.metadata || a.meta || {}).name || '';
                 const nb = (b.metadata || b.meta || {}).name || '';
                 return na.localeCompare(nb);
             });
         } else if (order === 'last-updated') {
-            pageScripts.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+            displayScripts.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
         }
 
-        if (pageScripts.length === 0) {
-            elements.scriptList.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">📜</div>
-                    <div class="empty-state-text">No scripts for this page</div>
-                </div>
-            `;
+        // Always bump enabled scripts to the top
+        displayScripts.sort((a, b) => (b.enabled !== false ? 1 : 0) - (a.enabled !== false ? 1 : 0));
+
+        if (displayScripts.length === 0) {
+            elements.scriptList.innerHTML = '';
             return;
         }
 
-        elements.scriptList.innerHTML = pageScripts.map(script => {
+        elements.scriptList.innerHTML = displayScripts.map(script => {
             const meta = script.metadata || script.meta || {};
             const name = meta.name || 'Unnamed Script';
             const version = meta.version || '';
@@ -187,30 +192,22 @@
                     </label>
                     <div class="script-icon">${icon}</div>
                     <span class="script-name">${escapeHtml(name)}${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}</span>
-                    <div class="script-delete" data-delete-id="${script.id}" title="Delete script">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                        </svg>
-                    </div>
-                    <div class="script-arrow">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9 18 15 12 9 6"/>
+                    <div class="script-more" data-more-id="${script.id}">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
                         </svg>
                     </div>
                 </div>
             `;
         }).join('');
 
-        // Attach event listeners
+        // Shared dropdown element
+        const dropdown = document.getElementById('scriptDropdown');
+        if (!dropdown) return;
+
+        // Attach per-item event listeners (these are on new DOM nodes each render, so no accumulation)
         elements.scriptList.querySelectorAll('.script-item').forEach(item => {
             const scriptId = item.dataset.scriptId;
-
-            // Toggle label - prevent click propagation
-            const toggleLabel = item.querySelector('.script-toggle');
-            toggleLabel?.addEventListener('click', (e) => {
-                e.stopPropagation();
-            });
 
             // Toggle checkbox
             const checkbox = item.querySelector('input[type="checkbox"]');
@@ -219,20 +216,78 @@
                 toggleScript(scriptId, e.target.checked);
             });
 
-            // Delete button
-            const deleteBtn = item.querySelector('.script-delete');
-            deleteBtn?.addEventListener('click', (e) => {
+            // Toggle label - prevent double-fire from row click
+            const toggleLabel = item.querySelector('.script-toggle');
+            toggleLabel?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                deleteScript(scriptId);
             });
 
-            // Click on item opens dashboard
-            item.addEventListener('click', (e) => {
-                if (!e.target.closest('.script-toggle') && !e.target.closest('.script-delete')) {
-                    openDashboard(scriptId);
+            // Row click toggles the script
+            item.addEventListener('click', () => {
+                if (checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    checkbox.dispatchEvent(new Event('change'));
                 }
             });
+
+            // More button (arrow) - position and show shared dropdown
+            const moreBtn = item.querySelector('.script-more');
+            moreBtn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (dropdown.classList.contains('open') && activeDropdownScriptId === scriptId) {
+                    dropdown.classList.remove('open');
+                    activeDropdownScriptId = null;
+                    return;
+                }
+                activeDropdownScriptId = scriptId;
+                const rect = moreBtn.getBoundingClientRect();
+                dropdown.style.top = rect.bottom + 2 + 'px';
+                dropdown.style.right = (document.documentElement.clientWidth - rect.right) + 'px';
+                dropdown.classList.add('open');
+            });
         });
+
+        // Attach dropdown action listeners ONCE (they use module-level activeDropdownScriptId)
+        if (!dropdownListenersAttached) {
+            dropdownListenersAttached = true;
+
+            dropdown.querySelector('[data-action="edit"]')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdown.classList.remove('open');
+                if (activeDropdownScriptId) openDashboard(activeDropdownScriptId);
+            });
+
+            dropdown.querySelector('[data-action="update"]')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                dropdown.classList.remove('open');
+                if (!activeDropdownScriptId) return;
+                showPopupToast('Checking for update...');
+                try {
+                    const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId: activeDropdownScriptId });
+                    if (updates && updates.length > 0) {
+                        await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: activeDropdownScriptId, code: updates[0].code });
+                        showPopupToast(`Updated to v${updates[0].newVersion}`);
+                        await loadPageScripts();
+                    } else {
+                        showPopupToast('Already up to date');
+                    }
+                } catch (err) {
+                    showPopupToast('Update check failed');
+                }
+            });
+
+            dropdown.querySelector('[data-action="delete"]')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdown.classList.remove('open');
+                if (activeDropdownScriptId) deleteScript(activeDropdownScriptId);
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', () => {
+                dropdown.classList.remove('open');
+                activeDropdownScriptId = null;
+            });
+        }
     }
 
     // Get favicon icon HTML for script (matches dashboard style)
@@ -278,7 +333,8 @@
                 script.enabled = enabled;
             }
 
-            // Update count badge and tab badge
+            // Re-render so enabled sort + visual state updates
+            renderScriptList();
             updateEnabledState();
             updateBadgeForTab();
         } catch (error) {
@@ -358,11 +414,11 @@
         try {
             let hostname = '';
             try {
-                hostname = new URL(currentUrl).hostname;
+                hostname = new URL(currentUrl).hostname.replace(/^www\./, '');
             } catch (e) {}
-            
-            const searchUrl = hostname 
-                ? `https://greasyfork.org/en/scripts?q=${encodeURIComponent(hostname)}`
+
+            const searchUrl = hostname
+                ? `https://greasyfork.org/en/scripts/by-site/${encodeURIComponent(hostname)}?filter_locale=0`
                 : 'https://greasyfork.org/en/scripts';
             chrome.tabs.create({ url: searchUrl });
             window.close();
@@ -449,10 +505,26 @@
     async function checkForUpdates() {
         try {
             await chrome.runtime.sendMessage({ action: 'checkUpdates' });
-            window.close();
+            showPopupToast('Checking for updates...');
+            setTimeout(() => window.close(), 1200);
         } catch (error) {
             console.error('Failed to check updates:', error);
         }
+    }
+
+    // Toast notification
+    function showPopupToast(msg) {
+        let toast = document.querySelector('.popup-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.className = 'popup-toast';
+            document.body.appendChild(toast);
+        }
+        toast.textContent = msg;
+        toast.classList.remove('show');
+        void toast.offsetWidth; // force reflow
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2500);
     }
 
     // Setup event listeners
@@ -469,6 +541,15 @@
         // Utilities submenu toggle
         elements.btnUtilities?.addEventListener('click', () => {
             elements.utilitiesSubmenu?.classList.toggle('open');
+            // Update blacklist item with current domain
+            if (elements.btnBlacklistDomain && currentUrl) {
+                try {
+                    const domain = new URL(currentUrl).hostname;
+                    if (domain) {
+                        elements.btnBlacklistDomain.querySelector('.menu-item-text').textContent = `Do not run on ${domain}`;
+                    }
+                } catch (e) {}
+            }
         });
 
         // Utilities actions
@@ -483,16 +564,15 @@
                 const domain = new URL(currentUrl).hostname;
                 const pattern = `*://${domain}/*`;
                 const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
-                const settings = response?.settings || response || {};
-                const blacklist = settings.blacklist || [];
+                const freshSettings = response?.settings || response || {};
+                const blacklist = freshSettings.blacklist || [];
                 if (blacklist.includes(pattern)) {
-                    // Already blacklisted - show feedback
+                    showPopupToast(`${domain} is already blacklisted`);
                     return;
                 }
                 blacklist.push(pattern);
                 await chrome.runtime.sendMessage({ action: 'setSettings', settings: { blacklist } });
-                const item = elements.btnBlacklistDomain;
-                if (item) item.querySelector('.menu-item-text').textContent = `Blacklisted ${domain}`;
+                showPopupToast(`${domain} blacklisted`);
             } catch (e) {
                 console.error('Failed to blacklist:', e);
             }
