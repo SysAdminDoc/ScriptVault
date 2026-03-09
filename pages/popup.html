@@ -1,10 +1,78 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ScriptVault</title>
     <style>
+        :root, [data-theme="dark"] {
+            --popup-bg: #1a1a1a;
+            --popup-bg-raised: #242424;
+            --popup-bg-hover: #2a2a2a;
+            --popup-border: #333;
+            --popup-border-subtle: #2a2a2a;
+            --popup-text: #e0e0e0;
+            --popup-text-muted: #888;
+            --popup-text-dim: #666;
+            --popup-accent: #4CAF50;
+            --popup-slider-bg: #444;
+            --popup-slider-knob: #888;
+            --popup-scrollbar: #444;
+            --popup-scrollbar-hover: #555;
+            --popup-danger: #ef4444;
+        }
+
+        [data-theme="light"] {
+            --popup-bg: #f5f5f5;
+            --popup-bg-raised: #ffffff;
+            --popup-bg-hover: #ebebeb;
+            --popup-border: #ddd;
+            --popup-border-subtle: #e8e8e8;
+            --popup-text: #333;
+            --popup-text-muted: #888;
+            --popup-text-dim: #aaa;
+            --popup-accent: #4CAF50;
+            --popup-slider-bg: #ccc;
+            --popup-slider-knob: #999;
+            --popup-scrollbar: #ccc;
+            --popup-scrollbar-hover: #bbb;
+            --popup-danger: #dc2626;
+        }
+
+        [data-theme="catppuccin"] {
+            --popup-bg: #1e1e2e;
+            --popup-bg-raised: #252536;
+            --popup-bg-hover: #2a2a3c;
+            --popup-border: #45475a;
+            --popup-border-subtle: #313244;
+            --popup-text: #cdd6f4;
+            --popup-text-muted: #a6adc8;
+            --popup-text-dim: #585b70;
+            --popup-accent: #a6e3a1;
+            --popup-slider-bg: #45475a;
+            --popup-slider-knob: #6c7086;
+            --popup-scrollbar: #45475a;
+            --popup-scrollbar-hover: #585b70;
+            --popup-danger: #f38ba8;
+        }
+
+        [data-theme="oled"] {
+            --popup-bg: #000000;
+            --popup-bg-raised: #0a0a0a;
+            --popup-bg-hover: #141414;
+            --popup-border: #1a1a1a;
+            --popup-border-subtle: #111;
+            --popup-text: #e0e0e0;
+            --popup-text-muted: #777;
+            --popup-text-dim: #444;
+            --popup-accent: #22c55e;
+            --popup-slider-bg: #333;
+            --popup-slider-knob: #666;
+            --popup-scrollbar: #333;
+            --popup-scrollbar-hover: #444;
+            --popup-danger: #ef4444;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -13,8 +81,8 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a1a;
-            color: #e0e0e0;
+            background: var(--popup-bg);
+            color: var(--popup-text);
             width: 320px;
             min-height: 100px;
             font-size: 14px;
@@ -25,25 +93,25 @@
             display: flex;
             align-items: center;
             padding: 12px 16px;
-            background: #242424;
-            border-bottom: 1px solid #333;
+            background: var(--popup-bg-raised);
+            border-bottom: 1px solid var(--popup-border);
             cursor: pointer;
             user-select: none;
         }
 
         .header:hover {
-            background: #2a2a2a;
+            background: var(--popup-bg-hover);
         }
 
         .header-check {
             width: 20px;
             height: 20px;
             margin-right: 12px;
-            color: #4CAF50;
+            color: var(--popup-accent);
         }
 
         .header-check.disabled {
-            color: #666;
+            color: var(--popup-text-dim);
         }
 
         .header-text {
@@ -52,7 +120,7 @@
         }
 
         .header-count {
-            background: #4CAF50;
+            background: var(--popup-accent);
             color: #fff;
             font-size: 11px;
             font-weight: 600;
@@ -67,7 +135,7 @@
         }
 
         .header-count.disabled {
-            background: #666;
+            background: var(--popup-text-dim);
         }
 
         /* Script list */
@@ -80,13 +148,13 @@
             display: flex;
             align-items: center;
             padding: 10px 16px;
-            border-bottom: 1px solid #2a2a2a;
+            border-bottom: 1px solid var(--popup-border-subtle);
             cursor: pointer;
             transition: background 0.15s;
         }
 
         .script-item:hover {
-            background: #2a2a2a;
+            background: var(--popup-bg-hover);
         }
 
         .script-toggle {
@@ -107,7 +175,7 @@
             position: absolute;
             cursor: pointer;
             inset: 0;
-            background: #444;
+            background: var(--popup-slider-bg);
             border-radius: 20px;
             transition: 0.2s;
         }
@@ -119,13 +187,13 @@
             width: 14px;
             left: 3px;
             bottom: 3px;
-            background: #888;
+            background: var(--popup-slider-knob);
             border-radius: 50%;
             transition: 0.2s;
         }
 
         .script-toggle input:checked + .slider {
-            background: #4CAF50;
+            background: var(--popup-accent);
         }
 
         .script-toggle input:checked + .slider::before {
@@ -141,7 +209,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #2a2a2a;
+            background: var(--popup-bg-hover);
             font-size: 12px;
             flex-shrink: 0;
             overflow: hidden;
@@ -163,12 +231,12 @@
         }
 
         .script-name .script-version {
-            color: #888;
+            color: var(--popup-text-muted);
             font-size: 11px;
         }
 
         .script-arrow {
-            color: #666;
+            color: var(--popup-text-dim);
             margin-left: 8px;
             flex-shrink: 0;
         }
@@ -179,7 +247,7 @@
         }
 
         .script-delete {
-            color: #666;
+            color: var(--popup-text-dim);
             margin-left: 4px;
             flex-shrink: 0;
             padding: 4px;
@@ -191,7 +259,7 @@
         }
 
         .script-delete:hover {
-            color: #ef4444;
+            color: var(--popup-danger);
             background: rgba(239, 68, 68, 0.15);
         }
 
@@ -202,7 +270,7 @@
 
         /* Menu items */
         .menu-section {
-            border-top: 1px solid #333;
+            border-top: 1px solid var(--popup-border);
         }
 
         .menu-item {
@@ -214,7 +282,7 @@
         }
 
         .menu-item:hover {
-            background: #2a2a2a;
+            background: var(--popup-bg-hover);
         }
 
         .menu-item-icon {
@@ -224,7 +292,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #888;
+            color: var(--popup-text-muted);
         }
 
         .menu-item-icon svg {
@@ -238,7 +306,7 @@
         }
 
         .menu-item-arrow {
-            color: #666;
+            color: var(--popup-text-dim);
         }
 
         .menu-item-arrow svg {
@@ -248,7 +316,7 @@
 
         /* Submenu */
         .submenu {
-            background: #1a1a1a;
+            background: var(--popup-bg);
             display: none;
         }
 
@@ -264,7 +332,7 @@
         .empty-state {
             padding: 24px 16px;
             text-align: center;
-            color: #666;
+            color: var(--popup-text-dim);
         }
 
         .empty-state-icon {
@@ -287,12 +355,12 @@
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #444;
+            background: var(--popup-scrollbar);
             border-radius: 3px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: #555;
+            background: var(--popup-scrollbar-hover);
         }
 
         /* Footer */
@@ -300,8 +368,8 @@
             display: flex;
             align-items: center;
             padding: 10px 16px;
-            background: #242424;
-            border-top: 1px solid #333;
+            background: var(--popup-bg-raised);
+            border-top: 1px solid var(--popup-border);
             cursor: pointer;
         }
 
@@ -314,11 +382,11 @@
             font-size: 12px;
             line-height: 1.4;
         }
-        
+
         .setup-warning.visible {
             display: block;
         }
-        
+
         .setup-warning-title {
             font-weight: 600;
             margin-bottom: 4px;
@@ -326,12 +394,12 @@
             align-items: center;
             gap: 6px;
         }
-        
+
         .setup-warning-text {
             opacity: 0.95;
             margin-bottom: 8px;
         }
-        
+
         .setup-warning-link {
             display: inline-block;
             padding: 4px 10px;
@@ -342,13 +410,13 @@
             font-weight: 500;
             cursor: pointer;
         }
-        
+
         .setup-warning-link:hover {
             background: rgba(255,255,255,0.3);
         }
 
         .footer:hover {
-            background: #2a2a2a;
+            background: var(--popup-bg-hover);
         }
 
         .footer-icon {
@@ -358,7 +426,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #888;
+            color: var(--popup-text-muted);
         }
 
         .footer-icon svg {
@@ -452,6 +520,18 @@
         </div>
     </div>
 
+    <div class="menu-section">
+        <div class="menu-item" id="btnBlacklistDomain">
+            <div class="menu-item-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                </svg>
+            </div>
+            <span class="menu-item-text">Blacklist this domain</span>
+        </div>
+    </div>
+
     <!-- Dashboard link -->
     <div class="footer" id="btnDashboard">
         <div class="footer-icon">
@@ -463,6 +543,7 @@
         <span class="footer-text">Dashboard</span>
     </div>
 
+    <script src="../shared/utils.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>

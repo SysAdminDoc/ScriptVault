@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -50,6 +50,50 @@
       --text-muted: #64748b;
       --border: #e2e8f0;
       --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+    }
+
+    [data-theme="catppuccin"] {
+      --bg-primary: #1e1e2e;
+      --bg-secondary: #252536;
+      --bg-tertiary: #313244;
+      --bg-hover: #3b3b52;
+      --text-primary: #cdd6f4;
+      --text-secondary: #a6adc8;
+      --text-muted: #585b70;
+      --accent: #a6e3a1;
+      --accent-hover: #94d990;
+      --accent-bg: rgba(166, 227, 161, 0.1);
+      --blue: #89b4fa;
+      --blue-hover: #74a8f7;
+      --blue-bg: rgba(137, 180, 250, 0.1);
+      --danger: #f38ba8;
+      --danger-bg: rgba(243, 139, 168, 0.1);
+      --warning: #f9e2af;
+      --warning-bg: rgba(249, 226, 175, 0.1);
+      --border: #45475a;
+      --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    [data-theme="oled"] {
+      --bg-primary: #000000;
+      --bg-secondary: #0a0a0a;
+      --bg-tertiary: #151515;
+      --bg-hover: #1f1f1f;
+      --text-primary: #e0e0e0;
+      --text-secondary: #999;
+      --text-muted: #555;
+      --accent: #22c55e;
+      --accent-hover: #16a34a;
+      --accent-bg: rgba(34, 197, 94, 0.1);
+      --blue: #60a5fa;
+      --blue-hover: #3b82f6;
+      --blue-bg: rgba(96, 165, 250, 0.1);
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.1);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.1);
+      --border: #1a1a1a;
+      --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
     }
     
     body {
@@ -640,6 +684,7 @@
     </div>
   </div>
   
+  <script src="../shared/utils.js"></script>
   <script src="install.js"></script>
 </body>
 </html>

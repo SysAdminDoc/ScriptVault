@@ -24,6 +24,7 @@
             scripts: document.getElementById('scriptsPanel'),
             settings: document.getElementById('settingsPanel'),
             utilities: document.getElementById('utilitiesPanel'),
+            trash: document.getElementById('trashPanel'),
             help: document.getElementById('helpPanel')
         };
 
@@ -43,6 +44,9 @@
         elements.btnBulkApply = document.getElementById('btnBulkApply');
         elements.filterSelect = document.getElementById('filterSelect');
         elements.scriptCounter = document.getElementById('scriptCounter');
+
+        // Help button (header icon)
+        elements.btnHelpTab = document.getElementById('btnHelpTab');
 
         // Editor overlay
         elements.editorOverlay = document.getElementById('editorOverlay');
@@ -76,6 +80,22 @@
         elements.storageList = document.getElementById('storageList');
         elements.btnAddStorage = document.getElementById('btnAddStorage');
         elements.storageSizeInfo = document.getElementById('storageSizeInfo');
+
+        // Editor toolbar
+        elements.tbtnUndo = document.getElementById('tbtnUndo');
+        elements.tbtnRedo = document.getElementById('tbtnRedo');
+        elements.tbtnSearch = document.getElementById('tbtnSearch');
+        elements.tbtnReplace = document.getElementById('tbtnReplace');
+        elements.tbtnBeautify = document.getElementById('tbtnBeautify');
+        elements.tbtnLint = document.getElementById('tbtnLint');
+        elements.tbtnFoldAll = document.getElementById('tbtnFoldAll');
+        elements.tbtnUnfoldAll = document.getElementById('tbtnUnfoldAll');
+        elements.tbtnJumpLine = document.getElementById('tbtnJumpLine');
+
+        // Externals panel
+        elements.externalRequireList = document.getElementById('externalRequireList');
+        elements.externalResourceList = document.getElementById('externalResourceList');
+        elements.btnRefreshExternals = document.getElementById('btnRefreshExternals');
 
         // Per-script settings panel
         elements.scriptAutoUpdate = document.getElementById('scriptAutoUpdate');
@@ -112,7 +132,9 @@
         elements.settingsShowFixedSource = document.getElementById('settingsShowFixedSource');
         elements.settingsLoggingLevel = document.getElementById('settingsLoggingLevel');
         elements.settingsTrashMode = document.getElementById('settingsTrashMode');
-        
+        elements.trashList = document.getElementById('trashList');
+        elements.btnEmptyTrash = document.getElementById('btnEmptyTrash');
+
         // Settings - Appearance
         elements.settingsLayout = document.getElementById('settingsLayout');
         elements.settingsCustomCss = document.getElementById('settingsCustomCss');
@@ -268,10 +290,20 @@
         elements.toastContainer = document.getElementById('toastContainer');
     }
 
+    // Measure and set header height for editor overlay positioning
+    function updateHeaderHeight() {
+        const header = document.querySelector('.tm-header');
+        if (header) {
+            document.documentElement.style.setProperty('--header-height', header.offsetHeight + 'px');
+        }
+    }
+
     // Initialize
     async function init() {
         cacheElements();
-        
+        updateHeaderHeight();
+        window.addEventListener('resize', updateHeaderHeight);
+
         // Event delegation for favicon error handling (CSP-compliant)
         // Handles images with data-favicon-fallback attribute
         document.addEventListener('error', function(e) {
@@ -511,6 +543,7 @@
         
         // Apply theme
         document.documentElement.setAttribute('data-theme', s.layout || 'dark');
+        applyConfigMode();
 
         // Apply custom CSS
         let customStyle = document.getElementById('sv-custom-css');
@@ -543,6 +576,7 @@
                 }
             }
             if (key === 'layout') document.documentElement.setAttribute('data-theme', value);
+            if (key === 'configMode') applyConfigMode();
             if (key === 'customCss') applySettingsToUI();
             showToast('Setting saved', 'success');
         } catch (e) {
@@ -563,11 +597,6 @@
         } else if (['googledrive', 'dropbox', 'onedrive'].includes(syncType) && elements.syncOAuthSettings) {
             elements.syncOAuthSettings.style.display = 'block';
         }
-    }
-    
-    // Alias for backward compatibility
-    function toggleWebdavSettings() {
-        toggleSyncProviderSettings();
     }
     
     // Update sync provider status UI
@@ -608,14 +637,14 @@
     // Load sync provider status for OAuth providers
     async function loadSyncProviderStatus() {
         const providers = ['googledrive', 'dropbox', 'onedrive'];
-        for (const provider of providers) {
+        await Promise.allSettled(providers.map(async (provider) => {
             try {
                 const response = await chrome.runtime.sendMessage({ action: 'getSyncProviderStatus', provider });
                 updateSyncProviderUI(provider, response);
             } catch (e) {
                 console.error(`Failed to get ${provider} status:`, e);
             }
-        }
+        }));
         
         // Update last sync time
         if (elements.lastSyncTime && state.settings.lastSync) {
@@ -881,7 +910,76 @@
     }
 
     function applyTheme() {
-        document.documentElement.setAttribute('data-theme', state.settings.theme || 'dark');
+        document.documentElement.setAttribute('data-theme', state.settings.layout || 'dark');
+    }
+
+    function applyConfigMode() {
+        const mode = state.settings.configMode || 'advanced';
+        document.querySelectorAll('#settingsTab .settings-section[data-config-level]').forEach(section => {
+            const level = section.getAttribute('data-config-level');
+            if (level === 'advanced' && mode !== 'advanced') {
+                section.style.display = 'none';
+            } else {
+                section.style.display = '';
+            }
+        });
+    }
+
+    // Trash
+    async function loadTrash() {
+        if (!elements.trashList) return;
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'getTrash' });
+            const trash = response?.trash || [];
+
+            if (trash.length === 0) {
+                elements.trashList.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:40px">Trash is empty</div>';
+                return;
+            }
+
+            elements.trashList.innerHTML = '';
+            const table = document.createElement('table');
+            table.className = 'script-table';
+            table.style.width = '100%';
+            table.innerHTML = '<thead><tr><th>Name</th><th class="center">Version</th><th class="center">Deleted</th><th class="center">Actions</th></tr></thead>';
+            const tbody = document.createElement('tbody');
+
+            trash.forEach(script => {
+                const tr = document.createElement('tr');
+                const name = script.metadata?.name || script.meta?.name || 'Unnamed';
+                const version = script.metadata?.version || script.meta?.version || '-';
+                const deletedAt = script.trashedAt ? formatTime(script.trashedAt) : '-';
+                tr.innerHTML = `
+                    <td>${escapeHtml(name)}</td>
+                    <td class="center">${escapeHtml(version)}</td>
+                    <td class="center">${deletedAt}</td>
+                    <td class="center">
+                        <div class="action-icons">
+                            <button class="btn" style="font-size:11px;padding:4px 10px" data-restore="${script.id}">Restore</button>
+                            <button class="btn btn-danger" style="font-size:11px;padding:4px 10px" data-permdelete="${script.id}">Delete</button>
+                        </div>
+                    </td>
+                `;
+                tr.querySelector('[data-restore]').addEventListener('click', async () => {
+                    await chrome.runtime.sendMessage({ action: 'restoreFromTrash', scriptId: script.id });
+                    showToast('Script restored', 'success');
+                    await loadTrash();
+                    await loadScripts();
+                    updateStats();
+                });
+                tr.querySelector('[data-permdelete]').addEventListener('click', async () => {
+                    await chrome.runtime.sendMessage({ action: 'permanentlyDelete', scriptId: script.id });
+                    showToast('Permanently deleted', 'success');
+                    await loadTrash();
+                });
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            elements.trashList.innerHTML = '';
+            elements.trashList.appendChild(table);
+        } catch (e) {
+            console.error('Failed to load trash:', e);
+        }
     }
 
     // Scripts
@@ -1154,7 +1252,7 @@
             <td>
                 <div class="script-name-cell">
                     ${faviconHtml}
-                    <span class="script-name" data-id="${script.id}">${escapeHtml(name)}</span>
+                    <span class="script-name" data-id="${script.id}">${escapeHtml(name)}${isBroadMatch(matches) ? ' <span title="Runs on all/most sites" style="opacity:0.5">🌐</span>' : ''}</span>
                 </div>
             </td>
             <td class="center">${escapeHtml(version)}</td>
@@ -1164,7 +1262,7 @@
                 <div class="feature-badges">${features.map(f => `<span class="badge ${f.c}">${f.l}</span>`).join('')}</div>
             </td>
             <td class="center">${homepage ? `<a href="${escapeHtml(homepage)}" target="_blank">🔗</a>` : '-'}</td>
-            <td class="center">${updated}</td>
+            <td class="center"><span class="updated-link" data-action="checkUpdate" data-id="${script.id}" title="Click to check for updates" style="cursor:pointer">${updated}</span></td>
             <td class="center">
                 <div class="action-icons">
                     <button class="action-icon" title="Edit" data-action="edit" data-id="${script.id}">
@@ -1191,6 +1289,24 @@
         tr.querySelector('.script-name').addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="edit"]').addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="delete"]').addEventListener('click', () => deleteScript(script.id));
+        tr.querySelector('[data-action="checkUpdate"]')?.addEventListener('click', async (e) => {
+            const el = e.target;
+            el.textContent = '...';
+            try {
+                const resp = await chrome.runtime.sendMessage({ action: 'checkScriptUpdate', scriptId: script.id });
+                if (resp?.updated) {
+                    el.textContent = 'Updated!';
+                    el.style.color = 'var(--accent-primary)';
+                    setTimeout(() => loadScripts(), 1500);
+                } else {
+                    el.textContent = 'Up to date';
+                    el.style.color = 'var(--text-muted)';
+                    setTimeout(() => { el.textContent = updated; el.style.color = ''; }, 2000);
+                }
+            } catch (e) {
+                el.textContent = updated;
+            }
+        });
 
         // Drag-and-drop reorder
         tr.addEventListener('dragstart', e => {
@@ -1379,23 +1495,41 @@
         elements.btnEditorToggle.textContent = script.enabled !== false ? 'Disable' : 'Enable';
         loadScriptInfo(script);
         loadScriptStorage(script);
+        loadExternals(script);
         elements.editorOverlay.classList.add('active');
         setTimeout(() => state.editor?.focus(), 100);
     }
 
     function closeEditor() {
-        if (state.unsavedChanges) {
-            showConfirmModal('Unsaved Changes', 'Discard changes?').then(ok => {
-                if (ok) {
-                    state.unsavedChanges = false;
-                    elements.editorOverlay.classList.remove('active');
-                    state.currentScriptId = null;
+        const finishClose = async () => {
+            // Auto-delete new scripts that were never modified
+            if (state.currentScriptId && state.editor) {
+                const code = state.editor.getValue();
+                if (isDefaultTemplate(code)) {
+                    await chrome.runtime.sendMessage({ action: 'deleteScript', scriptId: state.currentScriptId });
+                    await loadScripts();
+                    updateStats();
                 }
-            });
-        } else {
+            }
+            state.unsavedChanges = false;
             elements.editorOverlay.classList.remove('active');
             state.currentScriptId = null;
+        };
+
+        if (state.unsavedChanges) {
+            showConfirmModal('Unsaved Changes', 'Discard changes?').then(ok => {
+                if (ok) finishClose();
+            });
+        } else {
+            finishClose();
         }
+    }
+
+    function isDefaultTemplate(code) {
+        const trimmed = code.trim();
+        return trimmed.includes('// @name        New Script') &&
+               trimmed.includes('// Your code here...') &&
+               trimmed.split('\n').filter(l => l.trim() && !l.trim().startsWith('//') && l.trim() !== '(function() {' && l.trim() !== "'use strict';" && l.trim() !== '})();').length === 0;
     }
 
     function loadScriptInfo(script) {
@@ -1406,10 +1540,12 @@
         elements.infoDescription.textContent = m.description || '-';
 
         const hp = m.homepage || m.homepageURL;
-        elements.infoHomepage.innerHTML = hp ? `<a href="${escapeHtml(hp)}" target="_blank">${escapeHtml(hp)}</a>` : '-';
+        const safeHp = hp ? sanitizeUrl(hp) : null;
+        elements.infoHomepage.innerHTML = safeHp ? `<a href="${escapeHtml(safeHp)}" target="_blank">${escapeHtml(hp)}</a>` : (hp ? escapeHtml(hp) : '-');
 
         const up = m.updateURL || m.downloadURL;
-        elements.infoUpdateUrl.innerHTML = up ? `<a href="${escapeHtml(up)}" target="_blank">${escapeHtml(up)}</a>` : '-';
+        const safeUp = up ? sanitizeUrl(up) : null;
+        elements.infoUpdateUrl.innerHTML = safeUp ? `<a href="${escapeHtml(safeUp)}" target="_blank">${escapeHtml(up)}</a>` : (up ? escapeHtml(up) : '-');
 
         const grants = m.grant || [];
         elements.infoGrants.innerHTML = grants.length ? grants.map(g => `<span class="info-tag grant">${escapeHtml(g)}</span>`).join('') : '<span class="info-tag">none</span>';
@@ -1419,6 +1555,44 @@
 
         const res = [...(Array.isArray(m.resource) ? m.resource : []), ...(Array.isArray(m.require) ? m.require : [])];
         elements.infoResources.innerHTML = res.length ? res.map(r => `<div style="font-size:11px;margin-bottom:3px">${escapeHtml(typeof r === 'string' ? r : r.url || r.name)}</div>`).join('') : '-';
+    }
+
+    function loadExternals(script) {
+        const m = script.metadata || script.meta || {};
+        const requires = Array.isArray(m.require) ? m.require : [];
+        const resources = Array.isArray(m.resource) ? m.resource : [];
+
+        if (elements.externalRequireList) {
+            if (requires.length === 0) {
+                elements.externalRequireList.innerHTML = '<span style="color:var(--text-muted)">No @require directives</span>';
+            } else {
+                elements.externalRequireList.innerHTML = requires.map(url => {
+                    const safeUrl = sanitizeUrl(typeof url === 'string' ? url : url.url || '');
+                    const display = escapeHtml(typeof url === 'string' ? url : url.url || url.name || '');
+                    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px;border:1px solid var(--border-color);border-radius:4px;margin-bottom:6px;background:var(--bg-input)">
+                        <span style="font-family:monospace;font-size:11px;word-break:break-all;flex:1">${safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" style="color:var(--accent-secondary)">${display}</a>` : display}</span>
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        if (elements.externalResourceList) {
+            if (resources.length === 0) {
+                elements.externalResourceList.innerHTML = '<span style="color:var(--text-muted)">No @resource directives</span>';
+            } else {
+                elements.externalResourceList.innerHTML = resources.map(res => {
+                    const name = typeof res === 'string' ? res.split(/\s+/)[0] : (res.name || '');
+                    const url = typeof res === 'string' ? (res.split(/\s+/)[1] || res) : (res.url || '');
+                    const safeUrl = sanitizeUrl(url);
+                    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px;border:1px solid var(--border-color);border-radius:4px;margin-bottom:6px;background:var(--bg-input)">
+                        <div style="flex:1">
+                            <div style="font-weight:500;font-size:12px;color:var(--text-primary)">${escapeHtml(name)}</div>
+                            <div style="font-family:monospace;font-size:11px;word-break:break-all;margin-top:2px">${safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" style="color:var(--accent-secondary)">${escapeHtml(url)}</a>` : escapeHtml(url)}</div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        }
     }
 
     async function loadScriptStorage(script) {
@@ -1547,6 +1721,10 @@
         }
     }
 
+    function isBroadMatch(patterns) {
+        return patterns.some(p => p === '<all_urls>' || p === '*://*/*' || p === 'http://*/*' || p === 'https://*/*' || /^\*:\/\/\*\//.test(p));
+    }
+
     let _creatingScript = false;
     async function createNewScript() {
         if (_creatingScript) return;
@@ -1585,6 +1763,49 @@
         }
     }
 
+    function beautifyCode() {
+        if (!state.editor) return;
+        const code = state.editor.getValue();
+        const tabStr = state.editor.getOption('indentWithTabs') ? '\t' : ' '.repeat(state.editor.getOption('indentUnit') || 4);
+
+        // Simple beautifier: normalize indentation based on braces
+        const lines = code.split('\n');
+        const beautified = [];
+        let currentIndent = 0;
+
+        for (let line of lines) {
+            let trimmed = line.trim();
+            if (!trimmed) { beautified.push(''); continue; }
+
+            // Decrease indent for closing braces/brackets at line start
+            const leadingClose = /^[}\])]/.test(trimmed);
+            if (leadingClose && currentIndent > 0) currentIndent--;
+
+            beautified.push(tabStr.repeat(currentIndent) + trimmed);
+
+            // Count net brace changes (ignoring strings/comments roughly)
+            let netBraces = 0;
+            let inStr = false, strCh = '', escaped = false;
+            for (let c = 0; c < trimmed.length; c++) {
+                const ch = trimmed[c];
+                if (escaped) { escaped = false; continue; }
+                if (ch === '\\') { escaped = true; continue; }
+                if (inStr) { if (ch === strCh) inStr = false; continue; }
+                if (ch === '"' || ch === "'" || ch === '`') { inStr = true; strCh = ch; continue; }
+                if (ch === '/' && trimmed[c+1] === '/') break; // line comment
+                if (ch === '{' || ch === '[' || ch === '(') netBraces++;
+                if (ch === '}' || ch === ']' || ch === ')') netBraces--;
+            }
+            currentIndent = Math.max(0, currentIndent + netBraces);
+        }
+
+        const cursor = state.editor.getCursor();
+        state.editor.setValue(beautified.join('\n'));
+        state.editor.setCursor(cursor);
+        state.unsavedChanges = true;
+        showToast('Code beautified', 'success');
+    }
+
     // Editor init
     function initEditor() {
         if (!elements.editorTextarea) return;
@@ -1620,6 +1841,7 @@
                 'Ctrl-S': saveCurrentScript,
                 'Cmd-S': saveCurrentScript,
                 'Ctrl-F': 'findPersistent',
+                'Ctrl-H': 'replace',
                 'Esc': closeEditor,
                 'Tab': cm => cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection(indentStr, 'end'),
                 'Ctrl-Space': 'autocomplete'
@@ -1753,12 +1975,7 @@
         return 'now';
     }
 
-    function escapeHtml(str) {
-        if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
+    // escapeHtml provided by shared/utils.js
     
     function showToast(msg, type = 'info') {
         if (!elements.toastContainer) return;
@@ -1805,6 +2022,10 @@
         elements.mainTabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 const id = tab.dataset.tab;
+                // Close editor if open when navigating tabs
+                if (elements.editorOverlay.classList.contains('active')) {
+                    closeEditor();
+                }
                 if (id === 'newscript') {
                     createNewScript();
                     return;
@@ -1813,7 +2034,27 @@
                 Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
                 tab.classList.add('active');
                 elements.mainPanels[id]?.classList.add('active');
+                if (tab.dataset.tab === 'trash') loadTrash();
+                // Deactivate help icon button when switching to other tabs
+                elements.btnHelpTab?.classList.remove('active');
             });
+        });
+
+        // Help icon button in header
+        elements.btnHelpTab?.addEventListener('click', () => {
+            const isActive = elements.btnHelpTab.classList.contains('active');
+            elements.mainTabs.forEach(t => t.classList.remove('active'));
+            Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
+            if (isActive) {
+                // Toggle back to scripts
+                elements.btnHelpTab.classList.remove('active');
+                const scriptsTab = document.querySelector('.tm-tab[data-tab="scripts"]');
+                if (scriptsTab) scriptsTab.classList.add('active');
+                elements.mainPanels.scripts?.classList.add('active');
+            } else {
+                elements.btnHelpTab.classList.add('active');
+                elements.mainPanels.help?.classList.add('active');
+            }
         });
 
         // Scripts
@@ -1893,24 +2134,55 @@
         elements.btnEditorDelete?.addEventListener('click', () => { if (state.currentScriptId) deleteScript(state.currentScriptId); });
         elements.btnEditorClose?.addEventListener('click', closeEditor);
 
-        // Editor nav buttons (dashboard navigation from within editor)
-        document.querySelectorAll('.editor-nav-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const target = btn.dataset.nav;
-                if (target === 'newscript') {
-                    closeEditor();
-                    createNewScript();
-                    return;
-                }
-                closeEditor();
-                // Switch to the target tab
-                elements.mainTabs.forEach(t => t.classList.remove('active'));
-                Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
-                const tab = document.querySelector(`.tm-tab[data-tab="${target}"]`);
-                if (tab) tab.classList.add('active');
-                elements.mainPanels[target]?.classList.add('active');
-            });
+        elements.btnEmptyTrash?.addEventListener('click', async () => {
+            await chrome.runtime.sendMessage({ action: 'emptyTrash' });
+            showToast('Trash emptied', 'success');
+            await loadTrash();
         });
+
+        // Externals refresh
+        elements.btnRefreshExternals?.addEventListener('click', async () => {
+            const script = state.scripts.find(s => s.id === state.currentScriptId);
+            if (!script) return;
+            const m = script.metadata || script.meta || {};
+            const requires = Array.isArray(m.require) ? m.require : [];
+            const resources = Array.isArray(m.resource) ? m.resource : [];
+            const urls = [...requires.map(r => typeof r === 'string' ? r : r.url), ...resources.map(r => typeof r === 'string' ? r.split(/\s+/)[1] || r : r.url)].filter(Boolean);
+            if (urls.length === 0) { showToast('No external resources to refresh', 'info'); return; }
+            showToast(`Refreshing ${urls.length} resource(s)...`, 'info');
+            try {
+                await chrome.runtime.sendMessage({ action: 'prefetchResources', resources: Object.fromEntries(urls.map((u, i) => [i, u])) });
+                showToast('Resources refreshed', 'success');
+            } catch (e) {
+                showToast('Failed to refresh some resources', 'error');
+            }
+        });
+
+        // Editor toolbar buttons
+        elements.tbtnUndo?.addEventListener('click', () => state.editor?.undo());
+        elements.tbtnRedo?.addEventListener('click', () => state.editor?.redo());
+        elements.tbtnSearch?.addEventListener('click', () => state.editor?.execCommand('findPersistent'));
+        elements.tbtnReplace?.addEventListener('click', () => state.editor?.execCommand('replace'));
+        elements.tbtnBeautify?.addEventListener('click', beautifyCode);
+        elements.tbtnLint?.addEventListener('click', () => {
+            if (state.editor) {
+                state.editor.performLint();
+                showToast('Lint check complete', 'info');
+            }
+        });
+        elements.tbtnFoldAll?.addEventListener('click', () => {
+            if (state.editor) {
+                for (let i = 0; i < state.editor.lineCount(); i++) state.editor.foldCode(i);
+            }
+        });
+        elements.tbtnUnfoldAll?.addEventListener('click', () => {
+            if (state.editor) {
+                for (let i = 0; i < state.editor.lineCount(); i++) {
+                    try { state.editor.foldCode(i, null, 'unfold'); } catch(e) {}
+                }
+            }
+        });
+        elements.tbtnJumpLine?.addEventListener('click', () => state.editor?.execCommand('jumpToLine'));
 
         // Editor tabs
         elements.editorTabs.forEach(tab => {
@@ -2201,12 +2473,12 @@
             }
         });
 
-        // Permissions
-        elements.btnGrantSelected?.addEventListener('click', () => showToast('No hosts selected', 'info'));
-        elements.btnGrantAll?.addEventListener('click', () => showToast('All hosts granted', 'success'));
+        // Permissions (placeholder - full permission management not yet implemented)
+        elements.btnGrantSelected?.addEventListener('click', () => showToast('Permission management coming soon', 'info'));
+        elements.btnGrantAll?.addEventListener('click', () => showToast('Permission management coming soon', 'info'));
         elements.btnResetPermissions?.addEventListener('click', () => {
             if (elements.settingsDeniedHosts) elements.settingsDeniedHosts.value = '';
-            showToast('Permissions list reset', 'success');
+            showToast('Permissions list cleared', 'info');
         });
 
         // Reset buttons
