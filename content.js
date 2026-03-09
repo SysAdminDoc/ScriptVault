@@ -44,15 +44,8 @@
         success: true
       }, '*');
     } catch (e) {
-      // Handle specific error case where extension context was invalidated
+      // Silently handle errors - no console output to avoid chrome://extensions error spam
       const errorMsg = e.message || 'Unknown error';
-      if (errorMsg.includes('Extension context invalidated') || 
-          errorMsg.includes('message channel closed')) {
-        // Extension was reloaded, silently fail
-        console.warn('[ScriptVault] Extension context invalidated, bridge reconnecting...');
-      } else {
-        console.error('[ScriptVault] Bridge error for', action, ':', errorMsg);
-      }
       window.postMessage({
         channel: CHANNEL_ID,
         direction: 'to-userscript',

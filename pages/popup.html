@@ -92,7 +92,7 @@
         .header {
             display: flex;
             align-items: center;
-            padding: 12px 16px;
+            padding: 8px 12px;
             background: var(--popup-bg-raised);
             border-bottom: 1px solid var(--popup-border);
             cursor: pointer;
@@ -104,9 +104,9 @@
         }
 
         .header-check {
-            width: 20px;
-            height: 20px;
-            margin-right: 12px;
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
             color: var(--popup-accent);
         }
 
@@ -147,7 +147,7 @@
         .script-item {
             display: flex;
             align-items: center;
-            padding: 10px 16px;
+            padding: 6px 12px;
             border-bottom: 1px solid var(--popup-border-subtle);
             cursor: pointer;
             transition: background 0.15s;
@@ -161,7 +161,7 @@
             position: relative;
             width: 36px;
             height: 20px;
-            margin-right: 12px;
+            margin-right: 8px;
             flex-shrink: 0;
         }
 
@@ -202,9 +202,9 @@
         }
 
         .script-icon {
-            width: 24px;
-            height: 24px;
-            margin-right: 10px;
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
             border-radius: 4px;
             display: flex;
             align-items: center;
@@ -216,8 +216,8 @@
         }
 
         .script-icon img {
-            width: 20px;
-            height: 20px;
+            width: 16px;
+            height: 16px;
             border-radius: 2px;
             object-fit: contain;
         }
@@ -235,20 +235,9 @@
             font-size: 11px;
         }
 
-        .script-arrow {
+        .script-more {
             color: var(--popup-text-dim);
             margin-left: 8px;
-            flex-shrink: 0;
-        }
-
-        .script-arrow svg {
-            width: 16px;
-            height: 16px;
-        }
-
-        .script-delete {
-            color: var(--popup-text-dim);
-            margin-left: 4px;
             flex-shrink: 0;
             padding: 4px;
             border-radius: 4px;
@@ -256,16 +245,53 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            cursor: pointer;
         }
 
-        .script-delete:hover {
+        .script-more:hover {
+            color: var(--popup-text);
+            background: var(--popup-bg-hover);
+        }
+
+        .script-more svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .script-dropdown {
+            display: none;
+            position: fixed;
+            background: var(--popup-bg-raised);
+            border: 1px solid var(--popup-border);
+            border-radius: 6px;
+            min-width: 110px;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+
+        .script-dropdown.open {
+            display: block;
+        }
+
+        .script-dropdown-item {
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.15s;
+            color: var(--popup-text);
+        }
+
+        .script-dropdown-item:hover {
+            background: var(--popup-bg-hover);
+        }
+
+        .script-dropdown-item.danger {
             color: var(--popup-danger);
-            background: rgba(239, 68, 68, 0.15);
         }
 
-        .script-delete svg {
-            width: 14px;
-            height: 14px;
+        .script-dropdown-item.danger:hover {
+            background: rgba(239, 68, 68, 0.1);
         }
 
         /* Menu items */
@@ -276,7 +302,7 @@
         .menu-item {
             display: flex;
             align-items: center;
-            padding: 10px 16px;
+            padding: 6px 12px;
             cursor: pointer;
             transition: background 0.15s;
         }
@@ -286,9 +312,9 @@
         }
 
         .menu-item-icon {
-            width: 24px;
-            height: 24px;
-            margin-right: 10px;
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -296,8 +322,8 @@
         }
 
         .menu-item-icon svg {
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
         }
 
         .menu-item-text {
@@ -325,24 +351,7 @@
         }
 
         .submenu .menu-item {
-            padding-left: 46px;
-        }
-
-        /* Empty state */
-        .empty-state {
-            padding: 24px 16px;
-            text-align: center;
-            color: var(--popup-text-dim);
-        }
-
-        .empty-state-icon {
-            font-size: 32px;
-            margin-bottom: 8px;
-            opacity: 0.5;
-        }
-
-        .empty-state-text {
-            font-size: 13px;
+            padding-left: 40px;
         }
 
         /* Scrollbar */
@@ -367,7 +376,7 @@
         .footer {
             display: flex;
             align-items: center;
-            padding: 10px 16px;
+            padding: 6px 12px;
             background: var(--popup-bg-raised);
             border-top: 1px solid var(--popup-border);
             cursor: pointer;
@@ -420,9 +429,9 @@
         }
 
         .footer-icon {
-            width: 24px;
-            height: 24px;
-            margin-right: 10px;
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -430,12 +439,36 @@
         }
 
         .footer-icon svg {
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
         }
 
         .footer-text {
             font-size: 13px;
+        }
+
+        /* Toast notification */
+        .popup-toast {
+            position: fixed;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%) translateY(40px);
+            background: var(--popup-accent);
+            color: #fff;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 5px 14px;
+            border-radius: 6px;
+            opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            z-index: 2000;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .popup-toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
         }
     </style>
 </head>
@@ -462,12 +495,7 @@
     </div>
 
     <!-- Scripts for this page -->
-    <div class="script-list" id="scriptList">
-        <div class="empty-state">
-            <div class="empty-state-icon">📜</div>
-            <div class="empty-state-text">No scripts for this page</div>
-        </div>
-    </div>
+    <div class="script-list" id="scriptList"></div>
 
     <!-- Menu items -->
     <div class="menu-section">
@@ -508,27 +536,18 @@
         </div>
 
         <div class="submenu" id="utilitiesSubmenu">
+            <div class="menu-item" id="btnCheckUpdates">
+                <span class="menu-item-text">Update Userscripts</span>
+            </div>
+            <div class="menu-item" id="btnBlacklistDomain">
+                <span class="menu-item-text">Do not run on this domain</span>
+            </div>
             <div class="menu-item" id="btnExportZip">
                 <span class="menu-item-text">Export to ZIP...</span>
             </div>
             <div class="menu-item" id="btnImport">
                 <span class="menu-item-text">Import from file...</span>
             </div>
-            <div class="menu-item" id="btnCheckUpdates">
-                <span class="menu-item-text">Check for updates</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="menu-section">
-        <div class="menu-item" id="btnBlacklistDomain">
-            <div class="menu-item-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-                </svg>
-            </div>
-            <span class="menu-item-text">Blacklist this domain</span>
         </div>
     </div>
 
@@ -541,6 +560,13 @@
             </svg>
         </div>
         <span class="footer-text">Dashboard</span>
+    </div>
+
+    <!-- Shared dropdown (positioned at body level to avoid overflow clipping) -->
+    <div class="script-dropdown" id="scriptDropdown">
+        <div class="script-dropdown-item" data-action="edit">Edit</div>
+        <div class="script-dropdown-item" data-action="update">Update</div>
+        <div class="script-dropdown-item danger" data-action="delete">Delete</div>
     </div>
 
     <script src="../shared/utils.js"></script>

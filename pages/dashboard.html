@@ -56,6 +56,10 @@
             --text-secondary: #666;
             --text-muted: #999;
             --border-color: #ccc;
+            --border-section: #16a34a;
+            --accent-primary: #16a34a;
+            --accent-secondary: #2563eb;
+            --accent-error: #dc2626;
         }
 
         [data-theme="catppuccin"] {
@@ -131,7 +135,7 @@
         .tm-header {
             background: var(--bg-header);
             border-bottom: 1px solid var(--border-color);
-            padding: 6px 16px 0 16px;
+            padding: 8px 16px 2px 16px;
             position: sticky;
             top: 0;
             z-index: 100;
@@ -151,29 +155,25 @@
             opacity: 0.4;
         }
 
-        .tm-header-top {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 4px;
-        }
-
         .tm-logo {
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-shrink: 0;
+            margin-right: 12px;
         }
 
         .tm-logo img {
-            width: 28px;
-            height: 28px;
+            width: 24px;
+            height: 24px;
         }
 
         .tm-logo-text h1 {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 700;
             color: var(--text-primary);
             letter-spacing: -0.02em;
+            white-space: nowrap;
         }
 
         .tm-logo-text h1 sup {
@@ -188,26 +188,6 @@
             vertical-align: middle;
         }
 
-        .tm-logo-text small {
-            font-size: 10px;
-            color: var(--text-muted);
-            display: none;
-        }
-
-        .tm-header-icons {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .tm-header-icons a {
-            color: var(--text-muted);
-            display: flex;
-            align-items: center;
-        }
-
-        .tm-header-icons a:hover { color: var(--text-primary); }
-
         .header-icon-btn {
             background: none;
             border: 1px solid transparent;
@@ -219,6 +199,7 @@
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
+            text-decoration: none;
         }
 
         .header-icon-btn:hover {
@@ -239,7 +220,7 @@
             color: white;
             padding: 12px 20px;
             position: sticky;
-            top: 0;
+            top: var(--header-height, 35px);
             z-index: 99;
         }
         
@@ -291,10 +272,28 @@
         }
 
         /* Tabs */
+        .tm-tabs-bar {
+            display: flex;
+            align-items: center;
+            gap: 0;
+        }
+
+        .tm-tabs-scripts {
+            display: flex;
+            gap: 2px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            flex-shrink: 1;
+            min-width: 0;
+            align-self: flex-end;
+        }
+
         .tm-tabs {
             display: flex;
             gap: 2px;
-            justify-content: flex-end;
+            margin-left: auto;
+            flex-shrink: 0;
+            align-self: flex-end;
         }
 
         .tm-tab {
@@ -341,6 +340,50 @@
             z-index: 1;
         }
 
+        .tm-tab.script-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            max-width: 180px;
+            text-transform: none;
+            letter-spacing: normal;
+        }
+
+        .tm-tab.script-tab .tab-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .tm-tab.script-tab .tab-close {
+            flex-shrink: 0;
+            width: 14px;
+            height: 14px;
+            line-height: 14px;
+            text-align: center;
+            font-size: 14px;
+            border-radius: 3px;
+            opacity: 0.5;
+            transition: opacity 0.15s, background 0.15s;
+        }
+
+        .tm-tab.script-tab .tab-close:hover {
+            opacity: 1;
+            background: rgba(239, 68, 68, 0.3);
+            color: var(--accent-error);
+        }
+
+        .tm-tab.script-tab.unsaved .tab-name::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-error);
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+
         /* ============================================
            Content Area
            ============================================ */
@@ -358,68 +401,67 @@
         }
 
         /* ============================================
-           Bulk Actions Toolbar (Tampermonkey-style)
-           ============================================ */
-        .bulk-toolbar {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 4px 12px;
-            background: var(--bg-body);
-            border-bottom: 1px solid var(--border-color);
-            font-size: 11px;
-        }
-
-        .bulk-toolbar .bulk-checkbox {
-            width: 14px;
-            height: 14px;
-            accent-color: var(--accent-primary);
-        }
-
-        .bulk-toolbar .bulk-label {
-            color: var(--text-secondary);
-            white-space: nowrap;
-        }
-
-        .bulk-toolbar .bulk-select {
-            padding: 4px 8px;
-            min-width: 180px;
-        }
-
-        .bulk-toolbar .bulk-btn {
-            padding: 4px 12px;
-            font-size: 12px;
-        }
-
-        .bulk-toolbar .bulk-spacer {
-            flex: 1;
-        }
-
-        .bulk-toolbar .script-counter {
-            color: var(--accent-primary);
-            font-size: 11px;
-            font-weight: 600;
-            padding: 4px 10px;
-            background: rgba(34, 197, 94, 0.08);
-            border: 1px solid rgba(34, 197, 94, 0.15);
-            border-radius: 20px;
-        }
-
-        /* ============================================
            Scripts Table
            ============================================ */
         .scripts-toolbar {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 6px 12px;
+            padding: 5px 12px;
             background: var(--bg-section-header);
             border-bottom: 1px solid var(--border-color);
+            gap: 8px;
+            flex-wrap: wrap;
+            position: sticky;
+            top: var(--header-height, 35px);
+            z-index: 90;
         }
 
         .scripts-toolbar-left {
             display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .scripts-toolbar-right {
+            display: flex;
+            align-items: center;
             gap: 6px;
+        }
+
+        .toolbar-divider {
+            width: 1px;
+            height: 18px;
+            background: var(--border-color);
+            margin: 0 2px;
+        }
+
+        .bulk-checkbox {
+            width: 14px;
+            height: 14px;
+            accent-color: var(--accent-primary);
+        }
+
+        .bulk-select {
+            padding: 3px 6px;
+            min-width: 0;
+            font-size: 11px;
+        }
+
+        .bulk-btn {
+            padding: 3px 10px;
+            font-size: 11px;
+        }
+
+        .script-counter {
+            color: var(--accent-primary);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            background: rgba(34, 197, 94, 0.08);
+            border: 1px solid rgba(34, 197, 94, 0.15);
+            border-radius: 20px;
+            white-space: nowrap;
         }
 
         .toolbar-btn {
@@ -448,7 +490,7 @@
         }
 
         .search-box input {
-            width: 220px;
+            width: 160px;
             padding: 4px 10px 4px 28px;
             background: var(--bg-input);
             border: 1px solid var(--border-color);
@@ -474,6 +516,12 @@
         .scripts-table {
             width: 100%;
             border-collapse: collapse;
+        }
+
+        .scripts-table thead {
+            position: sticky;
+            top: var(--toolbar-bottom, 69px);
+            z-index: 80;
         }
 
         .scripts-table th {
@@ -619,56 +667,6 @@
         .empty-state svg { width: 64px; height: 64px; margin-bottom: 15px; opacity: 0.3; color: var(--accent-primary); }
         .empty-state h3 { font-size: 16px; margin-bottom: 8px; color: var(--text-secondary); font-weight: 600; }
 
-        /* ============================================
-           Settings/Utilities Sections
-           ============================================ */
-        .settings-section {
-            display: flex;
-            border-bottom: 1px solid var(--border-section);
-        }
-
-        .section-label {
-            width: 180px;
-            min-width: 180px;
-            padding: 15px 20px;
-            font-weight: bold;
-            font-size: 13px;
-            color: var(--accent-primary);
-            background: var(--bg-section-header);
-        }
-
-        .section-content {
-            flex: 1;
-            padding: 15px 20px;
-        }
-
-        .setting-row {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-            gap: 10px;
-        }
-
-        .setting-row:last-child { margin-bottom: 0; }
-
-        .setting-row label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-        }
-
-        .setting-row input[type="checkbox"] {
-            width: 14px;
-            height: 14px;
-            accent-color: var(--accent-primary);
-        }
-
-        .setting-row .label-text {
-            min-width: 180px;
-            color: var(--text-secondary);
-        }
-
         /* Form Controls */
         .input-field, .select-field {
             padding: 6px 12px;
@@ -808,35 +806,6 @@
         .setting-row .label-text {
             min-width: 280px;
             color: var(--text-secondary);
-        }
-
-        .sync-status {
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-size: 11px;
-        }
-
-        .sync-status.connected {
-            background: rgba(34, 197, 94, 0.2);
-            color: var(--accent-primary);
-        }
-
-        .sync-status.disconnected {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--accent-error);
-        }
-
-        .sync-user {
-            color: var(--accent-secondary);
-            font-weight: 500;
-        }
-
-        .sync-provider-settings {
-            margin-top: 10px;
-            padding: 12px;
-            background: var(--bg-input);
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
         }
 
         /* URL Override Patterns */
@@ -1014,6 +983,8 @@
         }
 
         .editor-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+        .editor-line-count { font-size: 11px; color: var(--text-muted); margin-left: 12px; font-weight: 400; }
+        .editor-cursor-pos { font-size: 11px; color: var(--text-muted); margin-left: 8px; font-weight: 400; font-family: 'Courier New', monospace; }
 
         .editor-actions { display: flex; gap: 8px; }
 
@@ -1137,6 +1108,177 @@
         .storage-value { font-family: monospace; color: var(--text-primary); }
 
         /* ============================================
+           Find Scripts
+           ============================================ */
+        .find-scripts-overlay {
+            display: none;
+            position: fixed;
+            top: var(--header-height, 90px);
+            left: 0; right: 0; bottom: 0;
+            background: var(--bg-body);
+            z-index: 50;
+            flex-direction: column;
+            animation: modalSlideIn 0.2s ease;
+        }
+        .find-scripts-overlay.active { display: flex; }
+        .find-scripts-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            background: var(--bg-section-header);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .find-scripts-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .find-scripts-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 22px;
+            cursor: pointer;
+            padding: 0 4px;
+            line-height: 1;
+        }
+        .find-scripts-close:hover { color: var(--text-primary); }
+        .find-scripts-search {
+            display: flex;
+            gap: 8px;
+            padding: 10px 16px;
+            background: var(--bg-content);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .find-scripts-search .input-field { flex: 1; }
+        .find-scripts-search .select-field { width: 140px; }
+        .find-scripts-results {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 16px;
+        }
+        .find-scripts-empty {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 40px 20px;
+            font-size: 13px;
+        }
+        .find-scripts-loading {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 40px 20px;
+            font-size: 13px;
+        }
+        .find-scripts-loading::after {
+            content: '';
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .find-script-card {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px 12px;
+            background: var(--bg-content);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 6px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .find-script-card:hover {
+            border-color: rgba(34, 197, 94, 0.3);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+        }
+        .find-script-info { flex: 1; min-width: 0; }
+        .find-script-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .find-script-name a {
+            color: var(--accent-secondary);
+            text-decoration: none;
+        }
+        .find-script-name a:hover { text-decoration: underline; }
+        .find-script-version {
+            font-size: 10px;
+            color: var(--text-muted);
+            background: var(--bg-button);
+            padding: 1px 5px;
+            border-radius: 4px;
+        }
+        .find-script-desc {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .find-script-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+        .find-script-meta span { display: flex; align-items: center; gap: 3px; }
+        .find-script-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .find-script-actions .toolbar-btn { font-size: 11px; padding: 3px 10px; }
+        .find-script-preview {
+            display: none;
+            grid-column: 1 / -1;
+            max-height: 300px;
+            overflow: auto;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-top: 8px;
+            padding: 8px 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+            white-space: pre;
+            color: var(--text-secondary);
+        }
+        .find-script-preview.open { display: block; }
+        .find-scripts-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px;
+        }
+        .find-scripts-pagination .toolbar-btn { font-size: 11px; }
+        .find-scripts-count {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 4px 0 8px;
+        }
+
+        /* ============================================
            Modal
            ============================================ */
         .modal-overlay {
@@ -1193,7 +1335,7 @@
             position: fixed;
             bottom: 20px;
             right: 20px;
-            z-index: 400;
+            z-index: 10000;
             display: flex;
             flex-direction: column;
             gap: 8px;
@@ -1309,38 +1451,92 @@
             color: var(--text-muted);
             cursor: help;
         }
+
+        /* ============================================
+           Progress Bar Overlay
+           ============================================ */
+        .progress-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            -webkit-backdrop-filter: blur(2px);
+            backdrop-filter: blur(2px);
+        }
+        .progress-overlay.active { display: flex; }
+        .progress-card {
+            background: var(--bg-content);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 24px 32px;
+            min-width: 340px;
+            max-width: 420px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+        .progress-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+        }
+        .progress-bar-track {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-input);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--accent-primary);
+            border-radius: 4px;
+            transition: width 0.15s ease;
+        }
+        .progress-status {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
     </style>
 </head>
 <body>
     <!-- Header -->
     <header class="tm-header">
-        <div class="tm-header-top">
+        <nav class="tm-tabs-bar">
             <div class="tm-logo">
                 <img src="../images/icon48.png" alt="ScriptVault">
                 <div class="tm-logo-text">
                     <h1>ScriptVault<sup>v1.1.0</sup></h1>
-                    <small>by <a href="https://github.com/SysAdminDoc" target="_blank" rel="noopener">SysAdminDoc</a></small>
                 </div>
-            </div>
-            <div class="tm-header-icons">
-                <button class="header-icon-btn" id="btnHelpTab" title="Help">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                    </svg>
-                </button>
-                <a href="https://github.com/SysAdminDoc/ScriptVault" target="_blank" title="GitHub" rel="noopener">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <a class="header-icon-btn" href="https://github.com/SysAdminDoc/ScriptVault" target="_blank" title="GitHub" rel="noopener">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                     </svg>
                 </a>
+                <button class="header-icon-btn" id="btnHelpTab" title="Help">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </button>
+                <button class="header-icon-btn" id="btnCycleTheme" title="Theme: Dark">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                </button>
             </div>
-        </div>
-        <nav class="tm-tabs">
-            <button class="tm-tab" data-tab="newscript" id="tabNewScript" title="Create a new script">+</button>
-            <button class="tm-tab active" data-tab="scripts">Installed Userscripts</button>
-            <button class="tm-tab" data-tab="settings">Settings</button>
-            <button class="tm-tab" data-tab="utilities">Utilities</button>
-            <button class="tm-tab" data-tab="trash">Trash</button>
+            <div class="tm-tabs-scripts" id="scriptTabsGroup"></div>
+            <div class="tm-tabs">
+                <button class="tm-tab" data-tab="newscript" id="tabNewScript" title="Create a new script">+</button>
+                <button class="tm-tab active" data-tab="scripts">Installed Userscripts</button>
+                <button class="tm-tab" data-tab="settings">Settings</button>
+                <button class="tm-tab" data-tab="utilities">Utilities</button>
+                <button class="tm-tab" data-tab="trash">Trash</button>
+            </div>
         </nav>
     </header>
     
@@ -1362,35 +1558,12 @@
     <main class="tm-content">
         <!-- Scripts Panel -->
         <div id="scriptsPanel" class="tm-panel active">
-            <!-- Tampermonkey-style Bulk Actions Toolbar -->
-            <div class="bulk-toolbar">
-                <input type="checkbox" id="bulkSelectAll" class="bulk-checkbox" title="Select all visible scripts">
-                <span class="bulk-label">Apply this to all selected scripts:</span>
-                <select id="bulkActionSelect" class="select-field bulk-select">
-                    <option value="">-- Please choose an option --</option>
-                    <option value="toggle">Toggle Enable</option>
-                    <option value="export">Export</option>
-                    <option value="update">Trigger Update</option>
-                    <option value="reset">Factory Reset</option>
-                    <option value="delete">Delete</option>
-                </select>
-                <button class="btn bulk-btn" id="btnBulkApply">Start</button>
-                <div class="bulk-spacer"></div>
-                <span class="bulk-label">Filter by:</span>
-                <select id="filterSelect" class="select-field bulk-select">
-                    <option value="all">All</option>
-                    <option value="enabled">Enabled</option>
-                    <option value="disabled">Disabled</option>
-                </select>
-                <span class="script-counter" id="scriptCounter">0 scripts</span>
-            </div>
-            
-            <!-- Main Toolbar -->
+            <!-- Combined Toolbar -->
             <div class="scripts-toolbar">
                 <div class="scripts-toolbar-left">
                     <button class="toolbar-btn primary" id="btnNewScript">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        New Script
+                        New
                     </button>
                     <button class="toolbar-btn" id="btnImportScript">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -1398,16 +1571,40 @@
                     </button>
                     <button class="toolbar-btn" id="btnCheckUpdates">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-                        Check Updates
+                        Updates
                     </button>
                     <button class="toolbar-btn" id="btnExportAll">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Export All
+                        Export
                     </button>
+                    <button class="toolbar-btn" id="btnFindScripts">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        Find
+                    </button>
+                    <div class="toolbar-divider"></div>
+                    <input type="checkbox" id="bulkSelectAll" class="bulk-checkbox" title="Select all visible scripts">
+                    <select id="bulkActionSelect" class="select-field bulk-select" title="Bulk action">
+                        <option value="">Bulk...</option>
+                        <option value="enable">Enable</option>
+                        <option value="disable">Disable</option>
+                        <option value="export">Export</option>
+                        <option value="update">Trigger Update</option>
+                        <option value="reset">Factory Reset</option>
+                        <option value="delete">Delete</option>
+                    </select>
+                    <button class="btn bulk-btn" id="btnBulkApply">Go</button>
                 </div>
-                <div class="search-box">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    <input type="text" id="scriptSearch" placeholder="Search scripts...">
+                <div class="scripts-toolbar-right">
+                    <select id="filterSelect" class="select-field bulk-select" title="Filter scripts">
+                        <option value="all">All</option>
+                        <option value="enabled">Enabled</option>
+                        <option value="disabled">Disabled</option>
+                    </select>
+                    <span class="script-counter" id="scriptCounter">0 scripts</span>
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="scriptSearch" placeholder="Search...">
+                    </div>
                 </div>
             </div>
             <div class="scripts-table-container">
@@ -1420,11 +1617,12 @@
                             <th class="sortable" style="min-width:200px" data-sort="name">Name <span class="sort-indicator"></span></th>
                             <th class="center sortable" style="width:70px" data-sort="version">Version <span class="sort-indicator"></span></th>
                             <th class="center sortable" style="width:60px" data-sort="size">Size <span class="sort-indicator"></span></th>
+                            <th class="center sortable" style="width:55px" data-sort="lines">Lines <span class="sort-indicator"></span></th>
                             <th class="center" style="width:80px">Sites</th>
                             <th class="center" style="width:80px">Features</th>
                             <th class="center" style="width:50px">🏠</th>
                             <th class="center sortable" style="width:80px" data-sort="updated">Updated <span class="sort-indicator"></span></th>
-                            <th class="center" style="width:60px">Actions</th>
+                            <th class="center" style="width:100px">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="scriptTableBody"></tbody>
@@ -2345,12 +2543,14 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <div class="editor-overlay" id="editorOverlay">
         <div class="editor-header">
             <span class="editor-title" id="editorTitle">Edit Script</span>
+            <span class="editor-line-count" id="editorLineCount"></span>
+            <span class="editor-cursor-pos" id="editorCursorPos"></span>
             <div class="editor-actions">
                 <button class="btn" id="btnEditorSave">💾 Save</button>
+                <button class="btn" id="btnEditorExport">📤 Export</button>
                 <button class="btn" id="btnEditorToggle">Disable</button>
                 <button class="btn" id="btnEditorDuplicate">Duplicate</button>
                 <button class="btn btn-danger" id="btnEditorDelete">Delete</button>
-                <button class="btn" id="btnEditorClose">✕ Close</button>
             </div>
         </div>
         <div class="editor-tabs">
@@ -2619,6 +2819,29 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
         </div>
     </div>
 
+    <!-- Find Scripts Overlay -->
+    <div class="find-scripts-overlay" id="findScriptsOverlay">
+        <div class="find-scripts-header">
+            <div class="find-scripts-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Find Userscripts
+            </div>
+            <button class="find-scripts-close" id="btnCloseFindScripts">&times;</button>
+        </div>
+        <div class="find-scripts-search">
+            <input type="text" id="findScriptsInput" class="input-field" placeholder="Search by domain or keyword (e.g. youtube.com, dark mode)...">
+            <select id="findScriptsSource" class="select-field">
+                <option value="greasyfork">GreasyFork</option>
+                <option value="openuserjs">OpenUserJS</option>
+                <option value="github">GitHub</option>
+            </select>
+            <button class="toolbar-btn primary" id="btnFindScriptsSearch">Search</button>
+        </div>
+        <div class="find-scripts-results" id="findScriptsResults">
+            <div class="find-scripts-empty">Search for userscripts by entering a domain or keyword above</div>
+        </div>
+    </div>
+
     <!-- Modal -->
     <div class="modal-overlay" id="modal">
         <div class="modal-content">
@@ -2653,5 +2876,16 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <script src="../lib/codemirror/addon/lint/userscript-lint.js"></script>
     <script src="../shared/utils.js"></script>
     <script src="dashboard.js"></script>
+
+    <!-- Progress Overlay -->
+    <div class="progress-overlay" id="progressOverlay">
+        <div class="progress-card">
+            <div class="progress-title" id="progressTitle">Working...</div>
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-status" id="progressStatus"></div>
+        </div>
+    </div>
 </body>
 </html>
