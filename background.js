@@ -1,4 +1,4 @@
-// ScriptVault v1.5.1 - Background Service Worker
+// ScriptVault v1.5.2 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run build-background.sh to regenerate.
@@ -5824,12 +5824,14 @@ async function handleMessage(message, sender) {
           };
           
           // Build fetch options
+          // No 'mode' override — Chrome extensions with <all_urls> host permissions
+          // bypass CORS automatically. Forcing mode:'cors' breaks requests to servers
+          // that don't echo the extension origin (e.g. localhost with null CORS).
           const fetchOptions = {
             method: data.method || 'GET',
             headers: data.headers || {},
             signal: controller.signal,
-            credentials: data.anonymous ? 'omit' : 'include',
-            mode: 'cors'
+            credentials: data.anonymous ? 'omit' : 'include'
           };
           
           // Add body for non-GET/HEAD requests
