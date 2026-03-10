@@ -205,9 +205,13 @@ const UpdateSystem = {
     await ScriptStorage.set(scriptId, script);
 
     // Re-register so updated code takes effect immediately
-    await unregisterScript(scriptId);
-    if (script.enabled !== false) {
-      await registerScript(script);
+    try {
+      await unregisterScript(scriptId);
+      if (script.enabled !== false) {
+        await registerScript(script);
+      }
+    } catch (regError) {
+      console.error(`[ScriptVault] Failed to re-register ${script.meta.name} after update:`, regError);
     }
 
     const settings = await SettingsManager.get();
@@ -683,10 +687,12 @@ async function handleMessage(message, sender) {
         const existing = await ScriptStorage.get(id);
         
         const script = {
+          ...existing,
           id,
           code: data.code,
           meta: parsed.meta,
           enabled: data.enabled !== undefined ? data.enabled : (existing?.enabled ?? true),
+          settings: existing?.settings || {},
           position: existing?.position ?? (await ScriptStorage.getAll()).length,
           createdAt: existing?.createdAt || Date.now(),
           updatedAt: Date.now()
@@ -3841,8 +3847,10 @@ ${req.code}
     xmlHttpRequest: (d) => new Promise((res, rej) => {
       const control = GM_xmlhttpRequest({
         ...d,
-        onload: res,
-        onerror: (e) => rej(e.error || e)
+        onload: (r) => { if (d.onload) d.onload(r); res(r); },
+        onerror: (e) => { if (d.onerror) d.onerror(e); rej(e.error || e); },
+        ontimeout: (e) => { if (d.ontimeout) d.ontimeout(e); rej(new Error('timeout')); },
+        onabort: (e) => { if (d.onabort) d.onabort(e); rej(new Error('aborted')); }
       });
       return control;
     }),
