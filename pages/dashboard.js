@@ -2069,6 +2069,8 @@
         // Auto-save support
         let autoSaveTimer = null;
         state.editor.on('change', (cm, change) => {
+            // Ignore programmatic loads (setValue) — only track actual user edits
+            if (change.origin === 'setValue') return;
             state.unsavedChanges = true;
             // Mark tab as unsaved
             if (state.currentScriptId) {
