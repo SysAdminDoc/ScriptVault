@@ -16,6 +16,7 @@
 </p>
 
 <p align="center">
+  <a href="https://chromewebstore.google.com/detail/scriptvault/jlhdbkeijcbgnonpfkfkkkhfmbeejkgh">Chrome Web Store</a> &bull;
   <a href="#features">Features</a> &bull;
   <a href="#installation">Installation</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
@@ -134,7 +135,7 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 
 ### Chrome Web Store
 
-*Coming soon*
+**[Install ScriptVault from the Chrome Web Store](https://chromewebstore.google.com/detail/scriptvault/jlhdbkeijcbgnonpfkfkkkhfmbeejkgh)**
 
 ---
 
