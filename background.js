@@ -5291,7 +5291,7 @@ async function handleMessage(message, sender) {
         const scriptId = data.id || data.scriptId;
         if (!scriptId) return { error: 'No script ID provided' };
         const settings = await SettingsManager.get();
-        const trashMode = settings.trashMode || 'disabled';
+        const trashMode = settings.trashMode || '30';
 
         if (trashMode !== 'disabled') {
           // Move to trash instead of permanent delete
@@ -5315,7 +5315,7 @@ async function handleMessage(message, sender) {
         const trash = trashData.trash || [];
         // Clean expired entries
         const settings = await SettingsManager.get();
-        const trashMode = settings.trashMode || 'disabled';
+        const trashMode = settings.trashMode || '30';
         const maxAge = trashMode === '1' ? 86400000 : trashMode === '7' ? 604800000 : trashMode === '30' ? 2592000000 : 0;
         const now = Date.now();
         const valid = maxAge > 0 ? trash.filter(s => now - s.trashedAt < maxAge) : trash;
@@ -5344,6 +5344,11 @@ async function handleMessage(message, sender) {
 
       case 'emptyTrash': {
         await chrome.storage.local.set({ trash: [] });
+        return { success: true };
+      }
+
+      case 'restart': {
+        chrome.runtime.reload();
         return { success: true };
       }
 
@@ -5897,7 +5902,14 @@ async function handleMessage(message, sender) {
               
               if (data.responseType === 'arraybuffer') {
                 const buffer = await response.arrayBuffer();
-                responseData = Array.from(new Uint8Array(buffer));
+                // Encode as base64 for efficient transfer (33% overhead vs 800%+ for number arrays)
+                const bytes = new Uint8Array(buffer);
+                let binary = '';
+                // Process in 32KB chunks to avoid call stack overflow
+                for (let offset = 0; offset < bytes.length; offset += 32768) {
+                  binary += String.fromCharCode.apply(null, bytes.subarray(offset, offset + 32768));
+                }
+                responseData = { __sv_base64__: true, data: btoa(binary) };
                 sendEvent('progress', {
                   readyState: 3,
                   lengthComputable: contentLength > 0,
@@ -7619,13 +7631,35 @@ ${req.code}
       const eventType = msg.eventType;
       const eventData = msg.data || {};
       
+      // Decode binary responses transferred as base64/dataURL
+      let responseValue = eventData.response;
+      if (responseValue && typeof responseValue === 'object' && responseValue.__sv_base64__) {
+        // arraybuffer: base64 -> ArrayBuffer
+        const binary = atob(responseValue.data);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        responseValue = bytes.buffer;
+      } else if (details.responseType === 'blob' && typeof responseValue === 'string' && responseValue.startsWith('data:')) {
+        // blob: data URL -> Blob
+        try {
+          const [header, b64] = responseValue.split(',');
+          const mime = header.match(/:(.*?);/)?.[1] || 'application/octet-stream';
+          const binary = atob(b64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          responseValue = new Blob([bytes], { type: mime });
+        } catch (e) {
+          // Fall through with data URL string if conversion fails
+        }
+      }
+
       // Build response object matching GM_xmlhttpRequest spec
       const response = {
         readyState: eventData.readyState || 0,
         status: eventData.status || 0,
         statusText: eventData.statusText || '',
         responseHeaders: eventData.responseHeaders || '',
-        response: eventData.response,
+        response: responseValue,
         responseText: eventData.responseText || '',
         responseXML: eventData.responseXML,
         finalUrl: eventData.finalUrl || details.url,
