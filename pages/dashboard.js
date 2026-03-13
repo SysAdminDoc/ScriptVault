@@ -10,8 +10,8 @@
         editor: null,
         unsavedChanges: false,
         selectedScripts: new Set(),
-        sortColumn: 'order',
-        sortDirection: 'asc',
+        sortColumn: 'updated',
+        sortDirection: 'desc',
         openTabs: {}  // { scriptId: { code, unsaved } }
     };
 
@@ -338,6 +338,7 @@
         await loadScripts();
         initEditor();
         initEventListeners();
+        updateSortIndicators();
         applyTheme();
         updateStats();
         toggleSyncProviderSettings();
@@ -456,7 +457,7 @@
         if (elements.settingsDebugMode) elements.settingsDebugMode.checked = s.debugMode || false;
         if (elements.settingsShowFixedSource) elements.settingsShowFixedSource.checked = s.showFixedSource || false;
         if (elements.settingsLoggingLevel) elements.settingsLoggingLevel.value = s.loggingLevel || 'error';
-        if (elements.settingsTrashMode) elements.settingsTrashMode.value = s.trashMode || 'disabled';
+        if (elements.settingsTrashMode) elements.settingsTrashMode.value = s.trashMode || '30';
         
         // Appearance settings
         if (elements.settingsLayout) elements.settingsLayout.value = s.layout || 'dark';
