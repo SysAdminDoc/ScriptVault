@@ -444,6 +444,62 @@ input[type="checkbox"] {
   color: var(--accent-blue);
 }
 
+.script-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ===== TAG BADGES ===== */
+.script-tags {
+  display: inline-flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.script-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--accent-blue);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  line-height: 1.4;
+}
+
+/* ===== EXECUTION STATS ===== */
+.exec-stat {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+.exec-stat.fast {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--accent-green);
+}
+
+.exec-stat.medium {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--accent-yellow);
+}
+
+.exec-stat.slow {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--accent-red);
+}
+
+.exec-stat-errors {
+  color: var(--accent-red);
+  font-size: 10px;
+  margin-left: 2px;
+}
+
 /* ===== SITE ICONS ===== */
 .sites-list {
   display: flex;
