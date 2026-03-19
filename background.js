@@ -4631,7 +4631,8 @@ function parseUserscript(code) {
     'run-in': '',
     'top-level-await': false,
     license: '',
-    copyright: ''
+    copyright: '',
+    priority: 0
   };
 
   const metaBlock = metaBlockMatch[1];
@@ -4695,6 +4696,9 @@ function parseUserscript(code) {
         break;
       case 'top-level-await':
         meta['top-level-await'] = true;
+        break;
+      case 'priority':
+        meta.priority = parseInt(value, 10) || 0;
         break;
       default:
         // Handle localized metadata like @name:ja
@@ -7295,8 +7299,17 @@ async function registerAllScripts() {
     }
     
     const enabledScripts = scripts.filter(s => s.enabled);
+
+    // Sort by @priority (higher = first), then position
+    enabledScripts.sort((a, b) => {
+      const pa = a.meta?.priority || 0;
+      const pb = b.meta?.priority || 0;
+      if (pb !== pa) return pb - pa;
+      return (a.position || 0) - (b.position || 0);
+    });
+
     console.log(`[ScriptVault] Registering ${enabledScripts.length} scripts`);
-    
+
     for (const script of enabledScripts) {
       await registerScript(script);
     }
