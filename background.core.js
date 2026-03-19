@@ -2089,14 +2089,16 @@ function matchPattern(pattern, url, urlObj) {
       return false;
     }
     
-    // Check host
+    // Check host (use urlObj.host when pattern includes port, urlObj.hostname otherwise)
     if (host !== '*') {
+      const urlHost = host.includes(':') ? urlObj.host : urlObj.hostname;
       if (host.startsWith('*.')) {
         const baseDomain = host.slice(2);
-        if (urlObj.hostname !== baseDomain && !urlObj.hostname.endsWith('.' + baseDomain)) {
+        const compareHost = host.includes(':') ? urlObj.host : urlObj.hostname;
+        if (compareHost !== baseDomain && !compareHost.endsWith('.' + baseDomain)) {
           return false;
         }
-      } else if (host !== urlObj.hostname) {
+      } else if (host !== urlHost) {
         return false;
       }
     }
