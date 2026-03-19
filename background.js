@@ -6825,8 +6825,24 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
               func: (code) => { (0, eval)(code); },
               args: [wrappedCode]
             });
+            // Feedback notification
+            const settings = await SettingsManager.get();
+            if (settings.notifyOnError !== false) {
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'images/icon128.png',
+                title: 'Script Executed',
+                message: `${script.meta.name} ran via context menu`
+              });
+            }
           } catch (e) {
             console.error(`[ScriptVault] Context-menu script execution failed:`, e);
+            chrome.notifications.create({
+              type: 'basic',
+              iconUrl: 'images/icon128.png',
+              title: 'Script Failed',
+              message: `${script.meta.name}: ${e.message || 'Unknown error'}`
+            });
           }
         }
       }

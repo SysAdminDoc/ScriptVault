@@ -450,7 +450,12 @@ function toggleCodePreview() {
 
 function handleCancel() {
   chrome.storage.local.remove('pendingInstall');
-  window.close();
+  // window.close() only works for windows opened by script; fall back to history
+  if (history.length > 1) {
+    history.back();
+  } else {
+    window.close();
+  }
 }
 
 async function handleInstall() {
