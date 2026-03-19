@@ -48,7 +48,7 @@ a:hover {
 
 /* ===== HEADER ===== */
 .header {
-  background: #0d0d0d;
+  background: var(--bg-header);
   border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
@@ -227,7 +227,8 @@ a:hover {
 }
 
 .btn-danger:hover {
-  background: #ef5350;
+  background: var(--accent-error);
+  filter: brightness(1.15);
 }
 
 .toolbar-right {
@@ -899,7 +900,7 @@ input[type="checkbox"] {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--scrollbar-thumb-hover, #555);
 }
 
 /* ===== RESPONSIVE ===== */
