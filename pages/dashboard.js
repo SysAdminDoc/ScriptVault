@@ -1681,7 +1681,7 @@
         loadScriptInfo(script);
         loadScriptStorage(script);
         loadExternals(script);
-        elements.editorOverlay.classList.add('active');
+        elements.editorOverlay?.classList.add('active');
         setTimeout(() => state.editor?.focus(), 100);
     }
 
@@ -1729,7 +1729,7 @@
         if (state.currentScriptId) {
             closeScriptTab(state.currentScriptId);
         } else {
-            elements.editorOverlay.classList.remove('active');
+            elements.editorOverlay?.classList.remove('active');
         }
     }
 
@@ -1742,21 +1742,21 @@
 
     function loadScriptInfo(script) {
         const m = script.metadata || {};
-        elements.infoName.textContent = m.name || '-';
-        elements.infoVersion.textContent = m.version || '-';
-        elements.infoAuthor.textContent = m.author || '-';
-        elements.infoDescription.textContent = m.description || '-';
+        if (elements.infoName) elements.infoName.textContent = m.name || '-';
+        if (elements.infoVersion) elements.infoVersion.textContent = m.version || '-';
+        if (elements.infoAuthor) elements.infoAuthor.textContent = m.author || '-';
+        if (elements.infoDescription) elements.infoDescription.textContent = m.description || '-';
 
         const hp = m.homepage || m.homepageURL;
         const safeHp = hp ? sanitizeUrl(hp) : null;
-        elements.infoHomepage.innerHTML = safeHp ? `<a href="${escapeHtml(safeHp)}" target="_blank">${escapeHtml(hp)}</a>` : (hp ? escapeHtml(hp) : '-');
+        if (elements.infoHomepage) elements.infoHomepage.innerHTML = safeHp ? `<a href="${escapeHtml(safeHp)}" target="_blank">${escapeHtml(hp)}</a>` : (hp ? escapeHtml(hp) : '-');
 
         const up = m.updateURL || m.downloadURL;
         const safeUp = up ? sanitizeUrl(up) : null;
-        elements.infoUpdateUrl.innerHTML = safeUp ? `<a href="${escapeHtml(safeUp)}" target="_blank">${escapeHtml(up)}</a>` : (up ? escapeHtml(up) : '-');
+        if (elements.infoUpdateUrl) elements.infoUpdateUrl.innerHTML = safeUp ? `<a href="${escapeHtml(safeUp)}" target="_blank">${escapeHtml(up)}</a>` : (up ? escapeHtml(up) : '-');
 
         const grants = m.grant || [];
-        elements.infoGrants.innerHTML = grants.length ? grants.map(g => `<span class="info-tag grant">${escapeHtml(g)}</span>`).join('') : '<span class="info-tag">none</span>';
+        if (elements.infoGrants) elements.infoGrants.innerHTML = grants.length ? grants.map(g => `<span class="info-tag grant">${escapeHtml(g)}</span>`).join('') : '<span class="info-tag">none</span>';
 
         const matches = [...(m.match || []), ...(m.include || [])];
         elements.infoMatches.innerHTML = matches.length ? matches.map(x => `<span class="info-tag">${escapeHtml(x)}</span>`).join('') : '-';
@@ -1895,7 +1895,7 @@
             if (script) {
                 loadScriptInfo(script);
                 const name = script.metadata?.name || 'Edit Script';
-                elements.editorTitle.textContent = name;
+                if (elements.editorTitle) elements.editorTitle.textContent = name;
                 // Update tab name
                 const tab = document.querySelector(`.tm-tab[data-script-id="${state.currentScriptId}"]`);
                 if (tab) {
@@ -2246,7 +2246,10 @@
     }
 
     function formatTime(ts) {
-        const diff = Date.now() - new Date(ts).getTime();
+        if (!ts) return '-';
+        const date = new Date(ts);
+        if (isNaN(date.getTime())) return '-';
+        const diff = Date.now() - date.getTime();
         const m = Math.floor(diff / 60000);
         const h = Math.floor(m / 60);
         const d = Math.floor(h / 24);
@@ -2500,7 +2503,7 @@
                 elements.modalActions.appendChild(btn);
             });
         }
-        elements.modal.classList.add('show');
+        elements.modal?.classList.add('show');
     }
 
     function hideModal() { elements.modal?.classList.remove('show'); }
@@ -2518,7 +2521,7 @@
     function initEventListeners() {
         // Main tabs
         elements.mainTabs.forEach(tab => {
-            tab.addEventListener('click', () => {
+            tab.addEventListener('click', async () => {
                 const id = tab.dataset.tab;
                 // Skip script tabs — they have their own handler
                 if (tab.classList.contains('script-tab')) return;
@@ -2533,12 +2536,12 @@
                     state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
                 }
                 state.currentScriptId = null;
-                elements.editorOverlay.classList.remove('active');
+                elements.editorOverlay?.classList.remove('active');
                 document.querySelectorAll('.tm-tab').forEach(t => t.classList.remove('active'));
                 Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
                 tab.classList.add('active');
                 elements.mainPanels[id]?.classList.add('active');
-                if (tab.dataset.tab === 'trash') loadTrash();
+                if (tab.dataset.tab === 'trash') await loadTrash();
                 elements.btnHelpTab?.classList.remove('active');
             });
         });
@@ -2552,7 +2555,7 @@
                 state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
             }
             state.currentScriptId = null;
-            elements.editorOverlay.classList.remove('active');
+            elements.editorOverlay?.classList.remove('active');
             document.querySelectorAll('.tm-tab').forEach(t => t.classList.remove('active'));
             Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
             if (isActive) {
@@ -3212,11 +3215,11 @@
 
         // Keyboard
         document.addEventListener('keydown', e => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 's' && elements.editorOverlay.classList.contains('active')) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's' && elements.editorOverlay?.classList.contains('active')) {
                 e.preventDefault();
                 saveCurrentScript();
             }
-            if (e.key === 'Escape' && !e.defaultPrevented && elements.editorOverlay.classList.contains('active')) closeEditor();
+            if (e.key === 'Escape' && !e.defaultPrevented && elements.editorOverlay?.classList.contains('active')) closeEditor();
         });
 
         window.addEventListener('beforeunload', e => {

@@ -18,5 +18,69 @@
   "cmdToggleScripts": {
     "message": "Toggle all scripts",
     "description": "Command to toggle all scripts"
+  },
+  "settingsGeneral": {
+    "message": "General",
+    "description": "General settings section"
+  },
+  "settingsSecurity": {
+    "message": "Security",
+    "description": "Security settings section"
+  },
+  "settingsEditor": {
+    "message": "Editor",
+    "description": "Editor settings section"
+  },
+  "settingsSync": {
+    "message": "Sync",
+    "description": "Sync settings section"
+  },
+  "settingsUtilities": {
+    "message": "Utilities",
+    "description": "Utilities section"
+  },
+  "sandboxRaw": {
+    "message": "Raw (page context)",
+    "description": "Raw sandbox mode"
+  },
+  "sandboxJs": {
+    "message": "JavaScript (bypass CSP)",
+    "description": "JavaScript sandbox mode"
+  },
+  "sandboxDom": {
+    "message": "DOM (extension context)",
+    "description": "DOM sandbox mode"
+  },
+  "blacklistLow": {
+    "message": "Low (warn but allow)",
+    "description": "Low blacklist severity"
+  },
+  "blacklistMedium": {
+    "message": "Medium (block with override)",
+    "description": "Medium blacklist severity"
+  },
+  "blacklistHigh": {
+    "message": "High (always block)",
+    "description": "High blacklist severity"
+  },
+  "btnSave": {
+    "message": "Save",
+    "description": "Save button"
+  },
+  "btnCancel": {
+    "message": "Cancel",
+    "description": "Cancel button"
+  },
+  "btnDelete": {
+    "message": "Delete",
+    "description": "Delete button"
+  },
+  "btnImport": {
+    "message": "Import",
+    "description": "Import button"
+  },
+  "btnExport": {
+    "message": "Export",
+    "description": "Export button"
   }
 }
