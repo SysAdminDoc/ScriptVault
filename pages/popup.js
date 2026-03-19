@@ -172,10 +172,13 @@
         // Always bump enabled scripts to the top
         displayScripts.sort((a, b) => (b.enabled !== false ? 1 : 0) - (a.enabled !== false ? 1 : 0));
 
+        const emptyState = document.getElementById('emptyState');
         if (displayScripts.length === 0) {
             elements.scriptList.innerHTML = '';
+            if (emptyState) emptyState.style.display = 'block';
             return;
         }
+        if (emptyState) emptyState.style.display = 'none';
 
         elements.scriptList.innerHTML = displayScripts.map(script => {
             const meta = script.metadata || script.meta || {};
@@ -272,14 +275,19 @@
                         showPopupToast('Already up to date');
                     }
                 } catch (err) {
-                    showPopupToast('Update check failed');
+                    showPopupToast('Update check failed', 'error');
                 }
             });
 
             dropdown.querySelector('[data-action="delete"]')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 dropdown.classList.remove('open');
-                if (activeDropdownScriptId) deleteScript(activeDropdownScriptId);
+                if (!activeDropdownScriptId) return;
+                const script = pageScripts.find(s => s.id === activeDropdownScriptId);
+                const name = (script?.metadata || script?.meta || {}).name || 'this script';
+                if (confirm(`Delete "${name}"?`)) {
+                    deleteScript(activeDropdownScriptId);
+                }
             });
 
             // Close dropdown when clicking outside
@@ -513,7 +521,7 @@
     }
 
     // Toast notification
-    function showPopupToast(msg) {
+    function showPopupToast(msg, type = 'success') {
         let toast = document.querySelector('.popup-toast');
         if (!toast) {
             toast = document.createElement('div');
@@ -521,10 +529,11 @@
             document.body.appendChild(toast);
         }
         toast.textContent = msg;
+        toast.style.background = type === 'error' ? 'var(--popup-danger)' : 'var(--popup-accent)';
         toast.classList.remove('show');
-        void toast.offsetWidth; // force reflow
+        void toast.offsetWidth;
         toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 2500);
+        setTimeout(() => toast.classList.remove('show'), 3500);
     }
 
     // Setup event listeners

@@ -2276,11 +2276,24 @@ chrome.commands.onCommand.addListener(async (command) => {
 // Alarms (Auto-update & Sync)
 // ============================================================================
 
+let _backgroundTaskRunning = false;
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === 'autoUpdate') {
-    await UpdateSystem.autoUpdate();
-  } else if (alarm.name === 'autoSync') {
-    await CloudSync.sync();
+  // Mutual exclusion — don't run update and sync concurrently
+  if (_backgroundTaskRunning) {
+    debugLog('Skipping alarm', alarm.name, '- another task is running');
+    return;
+  }
+  _backgroundTaskRunning = true;
+  try {
+    if (alarm.name === 'autoUpdate') {
+      await UpdateSystem.autoUpdate();
+    } else if (alarm.name === 'autoSync') {
+      await CloudSync.sync();
+    }
+  } catch (e) {
+    console.error('[ScriptVault] Alarm handler error:', e);
+  } finally {
+    _backgroundTaskRunning = false;
   }
 });
 
@@ -2353,33 +2366,54 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
 // ============================================================================
 
 // Intercept navigation to .user.js files
+const _pendingFetches = new Set(); // Dedup concurrent fetches
+const MAX_SCRIPT_SIZE = 5 * 1024 * 1024; // 5MB limit
+
 chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   // Only handle main frame navigation
   if (details.frameId !== 0) return;
-  
+
   const url = details.url;
-  
+
   // Check if this is a .user.js URL
   if (!url.match(/\.user\.js(\?.*)?$/i)) return;
-  
+
   // Don't intercept extension pages
   if (url.startsWith('chrome-extension://')) return;
-  
-  console.log('[ScriptVault] Intercepting userscript URL:', url);
-  
+
+  // Dedup concurrent fetches for same URL
+  if (_pendingFetches.has(url)) return;
+  _pendingFetches.add(url);
+
+  debugLog('Intercepting userscript URL:', url);
+
   try {
-    // Fetch the script content
-    const response = await fetch(url);
-    
+    // Fetch with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    
+
+    // Check content length before reading body
+    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+    if (contentLength > MAX_SCRIPT_SIZE) {
+      throw new Error(`Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+    }
+
     const code = await response.text();
+
+    if (code.length > MAX_SCRIPT_SIZE) {
+      throw new Error(`Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+    }
     
     // Verify it looks like a userscript
     if (!code.includes('==UserScript==')) {
-      console.log('[ScriptVault] Not a valid userscript, allowing normal navigation');
+      debugLog('Not a valid userscript, allowing normal navigation');
+      _pendingFetches.delete(url);
       return;
     }
     
@@ -2411,6 +2445,8 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
     chrome.tabs.update(details.tabId, {
       url: chrome.runtime.getURL('pages/install.html')
     });
+  } finally {
+    _pendingFetches.delete(url);
   }
 }, {
   url: [
