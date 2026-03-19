@@ -338,59 +338,111 @@ var CloudSyncProviders = {
     requiresOAuth: true,
     fileName: '/scriptvault-backup.json',
     
-    getAuthUrl(clientId, redirectUri) {
-      const state = Math.random().toString(36).substring(2);
-      const params = new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        response_type: 'token',
-        token_access_type: 'offline',
-        state
-      });
-      return {
-        url: `https://www.dropbox.com/oauth2/authorize?${params}`,
-        state
-      };
-    },
-    
     async connect(settings) {
       if (!settings.dropboxClientId) {
         throw new Error('Dropbox App Key is required. Create one at https://www.dropbox.com/developers/apps');
       }
-      
+
+      const clientId = settings.dropboxClientId;
       const redirectUri = chrome.identity.getRedirectURL('dropbox');
-      const { url, state } = this.getAuthUrl(settings.dropboxClientId, redirectUri);
-      
-      return new Promise((resolve, reject) => {
-        chrome.identity.launchWebAuthFlow({ url, interactive: true }, (responseUrl) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
-          
-          if (!responseUrl) {
-            reject(new Error('Authorization was cancelled'));
-            return;
-          }
-          
-          try {
-            const hash = new URL(responseUrl).hash.substring(1);
-            const params = new URLSearchParams(hash);
-            const accessToken = params.get('access_token');
-            
-            if (!accessToken) {
-              reject(new Error('No access token received'));
-              return;
-            }
-            
-            resolve({ success: true, token: accessToken });
-          } catch (e) {
-            reject(e);
-          }
-        });
+
+      // PKCE code verifier + challenge
+      const codeVerifier = Array.from(crypto.getRandomValues(new Uint8Array(32)),
+        b => b.toString(16).padStart(2, '0')).join('');
+      const encoder = new TextEncoder();
+      const digest = await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier));
+      const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+      // CSRF state parameter
+      const state = Array.from(crypto.getRandomValues(new Uint8Array(16)),
+        b => b.toString(16).padStart(2, '0')).join('');
+
+      const authUrl = 'https://www.dropbox.com/oauth2/authorize?' + new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        token_access_type: 'offline',
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256',
+        state
+      }).toString();
+
+      const responseUrl = await chrome.identity.launchWebAuthFlow({
+        url: authUrl,
+        interactive: true
       });
+
+      const url = new URL(responseUrl);
+      const returnedState = url.searchParams.get('state');
+      if (returnedState !== state) {
+        throw new Error('OAuth state mismatch - possible CSRF attack');
+      }
+      const code = url.searchParams.get('code');
+      if (!code) throw new Error('No authorization code received');
+
+      // Exchange code for tokens
+      const tokenResp = await fetch('https://api.dropboxapi.com/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          code,
+          code_verifier: codeVerifier,
+          grant_type: 'authorization_code',
+          redirect_uri: redirectUri
+        })
+      });
+
+      if (!tokenResp.ok) {
+        const err = await tokenResp.text();
+        throw new Error('Token exchange failed: ' + err);
+      }
+
+      const tokens = await tokenResp.json();
+      return {
+        success: true,
+        token: tokens.access_token,
+        refreshToken: tokens.refresh_token || ''
+      };
     },
     
+    async refreshToken(settings) {
+      const refreshTok = settings.dropboxRefreshToken;
+      const clientId = settings.dropboxClientId;
+      if (!refreshTok || !clientId) return null;
+
+      const resp = await fetch('https://api.dropboxapi.com/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          grant_type: 'refresh_token',
+          refresh_token: refreshTok
+        })
+      });
+
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      if (data.access_token) {
+        await SettingsManager.set({ dropboxToken: data.access_token });
+        return data.access_token;
+      }
+      return null;
+    },
+
+    async getValidToken(settings) {
+      if (!settings.dropboxToken) return null;
+      // Test current token
+      const test = await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${settings.dropboxToken}` }
+      });
+      if (test.ok) return settings.dropboxToken;
+      // Try refresh
+      return await this.refreshToken(settings);
+    },
+
     async disconnect(settings) {
       if (settings.dropboxToken) {
         try {
@@ -404,7 +456,7 @@ var CloudSyncProviders = {
       }
       return { success: true };
     },
-    
+
     async upload(data, settings) {
       if (!settings.dropboxToken) throw new Error('Not authenticated with Dropbox');
       

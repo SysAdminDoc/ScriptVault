@@ -1,4 +1,4 @@
-// ScriptVault Dashboard v1.1.0 - Full-Featured Controller
+// ScriptVault Dashboard v1.5.2 - Full-Featured Controller
 (function() {
     'use strict';
 
@@ -319,6 +319,13 @@
 
     // Initialize
     async function init() {
+        // Set dynamic version from manifest
+        const extVersion = 'v' + chrome.runtime.getManifest().version;
+        const headerVer = document.getElementById('headerVersion');
+        const aboutVer = document.getElementById('aboutVersion');
+        if (headerVer) headerVer.textContent = extVersion;
+        if (aboutVer) aboutVer.textContent = 'Version ' + chrome.runtime.getManifest().version;
+
         cacheElements();
         updateHeaderHeight();
         window.addEventListener('resize', updateHeaderHeight);
@@ -591,7 +598,7 @@
             if (state.editor) {
                 switch (key) {
                     case 'editorTheme': state.editor.setOption('theme', value); break;
-                    case 'editorFontSize': document.querySelector('.CodeMirror').style.fontSize = value + 'px'; break;
+                    case 'editorFontSize': { const cm = document.querySelector('.CodeMirror'); if (cm) cm.style.fontSize = value + 'px'; } break;
                     case 'wordWrap': state.editor.setOption('lineWrapping', value); break;
                     case 'tabSize': state.editor.setOption('tabSize', parseInt(value) || 4); break;
                     case 'indentWidth': state.editor.setOption('indentUnit', parseInt(value) || 4); break;
@@ -1202,7 +1209,9 @@
                             await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: ids[i], code: updates[0].code });
                             updateCount++;
                         }
-                    } catch (e) {}
+                    } catch (e) {
+                        console.warn('[ScriptVault] Update check failed for', ids[i], e.message);
+                    }
                 }
                 await loadScripts();
                 hideProgress();
@@ -1217,7 +1226,9 @@
                     updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
                     try {
                         await chrome.runtime.sendMessage({ action: 'resetScriptSettings', scriptId: ids[i] });
-                    } catch (e) {}
+                    } catch (e) {
+                        console.warn('[ScriptVault] Reset failed for', ids[i], e.message);
+                    }
                 }
                 hideProgress();
                 showToast(`Reset ${ids.length} scripts`, 'success');
@@ -1345,10 +1356,10 @@
             </td>
         `;
 
-        tr.querySelector('.script-toggle').addEventListener('change', e => {
+        tr.querySelector('.script-toggle')?.addEventListener('change', e => {
             toggleScriptEnabled(script.id, e.target.checked);
         });
-        tr.querySelector('.script-checkbox').addEventListener('change', e => {
+        tr.querySelector('.script-checkbox')?.addEventListener('change', e => {
             if (e.target.checked) {
                 state.selectedScripts.add(script.id);
             } else {
@@ -1356,9 +1367,9 @@
             }
             updateBulkCheckboxes();
         });
-        tr.querySelector('.script-name').addEventListener('click', () => openEditorForScript(script.id));
-        tr.querySelector('[data-action="edit"]').addEventListener('click', () => openEditorForScript(script.id));
-        tr.querySelector('[data-action="delete"]').addEventListener('click', () => deleteScript(script.id));
+        tr.querySelector('.script-name')?.addEventListener('click', () => openEditorForScript(script.id));
+        tr.querySelector('[data-action="edit"]')?.addEventListener('click', () => openEditorForScript(script.id));
+        tr.querySelector('[data-action="delete"]')?.addEventListener('click', () => deleteScript(script.id));
         tr.querySelector('[data-action="exportScript"]')?.addEventListener('click', () => exportSingleScript(script));
         tr.querySelector('[data-action="updateScript"]')?.addEventListener('click', async (e) => {
             const btn = e.currentTarget;
@@ -1593,6 +1604,7 @@
 
     function createScriptTab(scriptId, name) {
         const tabBar = document.getElementById('scriptTabsGroup');
+        if (!tabBar) return;
         const tab = document.createElement('button');
         tab.className = 'tm-tab script-tab';
         tab.dataset.tab = 'script_' + scriptId;
@@ -1655,7 +1667,7 @@
         if (tab) tab.classList.add('active');
 
         // Load editor content
-        elements.editorTitle.textContent = script.metadata?.name || 'Edit Script';
+        if (elements.editorTitle) elements.editorTitle.textContent = script.metadata?.name || 'Edit Script';
         if (state.editor) {
             state.editor.setValue(tabData?.code ?? script.code ?? '');
             state.editor.clearHistory();
@@ -1664,7 +1676,7 @@
             updateCursorPos();
         }
 
-        elements.btnEditorToggle.textContent = script.enabled !== false ? 'Disable' : 'Enable';
+        if (elements.btnEditorToggle) elements.btnEditorToggle.textContent = script.enabled !== false ? 'Disable' : 'Enable';
         loadScriptInfo(script);
         loadScriptStorage(script);
         loadExternals(script);
@@ -1679,6 +1691,8 @@
             const tab = document.querySelector(`.tm-tab[data-script-id="${scriptId}"]`);
             if (tab) tab.remove();
 
+            delete state.openTabs[scriptId];
+
             // Auto-delete new scripts that were never modified
             const script = state.scripts.find(s => s.id === scriptId);
             if (script && isDefaultTemplate(tabData?.code || script.code || '')) {
@@ -1688,12 +1702,10 @@
                 });
             }
 
-            delete state.openTabs[scriptId];
-
             if (state.currentScriptId === scriptId) {
                 state.currentScriptId = null;
                 state.unsavedChanges = false;
-                elements.editorOverlay.classList.remove('active');
+                elements.editorOverlay?.classList.remove('active');
 
                 // Switch to another open script tab, or back to scripts panel
                 const remaining = Object.keys(state.openTabs);
@@ -1807,7 +1819,7 @@
                 });
             }
 
-            elements.storageSizeInfo.textContent = `${formatBytes(JSON.stringify(values).length)} used`;
+            if (elements.storageSizeInfo) elements.storageSizeInfo.textContent = `${formatBytes(JSON.stringify(values).length)} used`;
         } catch (e) {
             console.error('Failed to load storage:', e);
         }
@@ -2431,7 +2443,7 @@
         if (!elements.toastContainer) return;
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-        const icons = { success: '✓', error: '✕', info: 'ℹ' };
+        const icons = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
         toast.innerHTML = `<span class="toast-icon">${icons[type]}</span><span class="toast-message">${escapeHtml(msg)}</span>`;
         elements.toastContainer.appendChild(toast);
         requestAnimationFrame(() => toast.classList.add('show'));
@@ -3122,7 +3134,7 @@
         elements.importFileInput?.addEventListener('change', async e => {
             const file = e.target.files[0];
             if (!file) return;
-            elements.importFileName.textContent = file.name;
+            if (elements.importFileName) elements.importFileName.textContent = file.name;
             const isZip = file.name.endsWith('.zip');
             if (!await showConfirmModal('Import', `Import from ${file.name}?`)) return;
             showProgress(`Importing ${file.name}...`);
