@@ -57,15 +57,36 @@ async function init() {
       showError('No script to install', 'Please try downloading the script again.');
       return;
     }
-    
+
+    // Handle fetch error from background
+    if (data.pendingInstall.error) {
+      showError('Failed to download script', data.pendingInstall.error);
+      chrome.storage.local.remove('pendingInstall');
+      return;
+    }
+
+    // Reject stale pendingInstall (older than 5 minutes)
+    if (data.pendingInstall.timestamp && Date.now() - data.pendingInstall.timestamp > 300000) {
+      showError('Install expired', 'This install request is too old. Please try downloading the script again.');
+      chrome.storage.local.remove('pendingInstall');
+      return;
+    }
+
     scriptCode = data.pendingInstall.code;
     const sourceUrl = data.pendingInstall.url || '';
-    
+
+    if (!scriptCode) {
+      showError('Empty script', 'The downloaded script was empty.');
+      chrome.storage.local.remove('pendingInstall');
+      return;
+    }
+
     // Parse metadata
     scriptMeta = parseMetadata(scriptCode);
-    
+
     if (!scriptMeta) {
       showError('Invalid userscript', 'No valid userscript metadata block found.');
+      chrome.storage.local.remove('pendingInstall');
       return;
     }
     
