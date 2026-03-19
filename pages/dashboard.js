@@ -1097,6 +1097,10 @@
                     va = a.updatedAt || 0;
                     vb = b.updatedAt || 0;
                     break;
+                case 'perf':
+                    va = a.stats?.avgTime ?? Infinity;
+                    vb = b.stats?.avgTime ?? Infinity;
+                    break;
                 default:
                     va = a.position ?? 0;
                     vb = b.position ?? 0;
@@ -1327,6 +1331,18 @@
         if (grants.includes('GM_addStyle')) features.push({ c: 'badge-c', l: 'C' });
         if (grants.includes('GM_openInTab')) features.push({ c: 'badge-t', l: 'T' });
 
+        // Execution stats
+        const stats = script.stats;
+        const statsTitle = stats ? `Runs: ${stats.runs} | Avg: ${stats.avgTime}ms | Errors: ${stats.errors}` : 'No execution data yet';
+        const speedClass = stats?.avgTime != null ? (stats.avgTime < 50 ? 'fast' : stats.avgTime < 200 ? 'medium' : 'slow') : '';
+        const statsHtml = stats && stats.runs > 0
+          ? `<span class="exec-stat ${speedClass}" title="${escapeHtml(statsTitle)}">${stats.avgTime}ms</span>${stats.errors > 0 ? `<span class="exec-stat-errors" title="${stats.errors} error(s)">!</span>` : ''}`
+          : '';
+
+        // @tag badges
+        const tags = script.metadata?.tag || script.metadata?.tags || [];
+        const tagHtml = tags.map(t => `<span class="script-tag">${escapeHtml(t)}</span>`).join('');
+
         tr.draggable = true;
         tr.dataset.scriptId = script.id;
         tr.innerHTML = `
@@ -1342,6 +1358,7 @@
                 <div class="script-name-cell">
                     ${faviconHtml}
                     <span class="script-name" data-id="${script.id}">${escapeHtml(name)}${isBroadMatch(matches) ? ' <span title="Runs on all/most sites" style="opacity:0.5">🌐</span>' : ''}</span>
+                    ${tagHtml ? `<div class="script-tags">${tagHtml}</div>` : ''}
                 </div>
             </td>
             <td class="center">${escapeHtml(version)}</td>
@@ -1353,6 +1370,7 @@
             </td>
             <td class="center">${homepage ? `<a href="${escapeHtml(homepage)}" target="_blank">🔗</a>` : '-'}</td>
             <td class="center"><span class="updated-link" data-action="checkUpdate" data-id="${script.id}" title="Click to check for updates" style="cursor:pointer">${updated}</span></td>
+            <td class="center">${statsHtml}</td>
             <td class="center">
                 <div class="action-icons">
                     <button class="action-icon" title="Edit" data-action="edit" data-id="${script.id}">

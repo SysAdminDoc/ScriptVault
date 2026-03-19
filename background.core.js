@@ -1854,6 +1854,60 @@ async function handleMessage(message, sender) {
         }
       }
 
+      // Execution profiling - get stats for dashboard
+      case 'getScriptStats': {
+        const scriptId = data.scriptId;
+        if (scriptId) {
+          const script = await ScriptStorage.get(scriptId);
+          return { stats: script?.stats || null };
+        }
+        // Get stats for all scripts
+        const scripts = await ScriptStorage.getAll();
+        const allStats = {};
+        for (const s of scripts) {
+          if (s.stats) allStats[s.id] = s.stats;
+        }
+        return { allStats };
+      }
+
+      case 'resetScriptStats': {
+        const scriptId = data.scriptId;
+        const script = await ScriptStorage.get(scriptId);
+        if (script) {
+          script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };
+          await ScriptStorage.set(scriptId, script);
+        }
+        return { success: true };
+      }
+
+      case 'reportExecTime': {
+        const scriptId = data.scriptId;
+        const script = await ScriptStorage.get(scriptId);
+        if (script) {
+          if (!script.stats) script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };
+          script.stats.runs++;
+          script.stats.totalTime += data.time;
+          script.stats.avgTime = Math.round(script.stats.totalTime / script.stats.runs * 100) / 100;
+          script.stats.lastRun = Date.now();
+          script.stats.lastUrl = data.url;
+          await ScriptStorage.set(scriptId, script);
+        }
+        return { success: true };
+      }
+
+      case 'reportExecError': {
+        const scriptId = data.scriptId;
+        const script = await ScriptStorage.get(scriptId);
+        if (script) {
+          if (!script.stats) script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };
+          script.stats.errors++;
+          script.stats.lastError = data.error;
+          script.stats.lastErrorTime = Date.now();
+          await ScriptStorage.set(scriptId, script);
+        }
+        return { success: true };
+      }
+
       // GM_audio API - Tab mute control (Tampermonkey-compatible)
       case 'GM_audio_setMute': {
         try {
@@ -4438,12 +4492,18 @@ ${libraryExports}
   // This ensures scripts see fresh values when using GM_getValue
   (async function __scriptMonkeyRunner() {
     await _waitForCache();
+    const __startTime = performance.now();
     try {
 `;
 
   const apiClose = `
     } catch (e) {
-      // Silent - avoid chrome://extensions error spam
+      // Report error to background for profiling
+      sendToBackground('reportExecError', { scriptId, error: (e?.message || String(e)).slice(0, 200) }).catch(() => {});
+    } finally {
+      // Report execution time to background for profiling
+      const __elapsed = Math.round((performance.now() - __startTime) * 100) / 100;
+      sendToBackground('reportExecTime', { scriptId, time: __elapsed, url: location.href }).catch(() => {});
     }
   })();
 })();
