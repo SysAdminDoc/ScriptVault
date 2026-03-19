@@ -110,21 +110,26 @@ function parseMetadata(code) {
     'exclude-match': [],
     grant: [],
     require: [],
-    resource: [],
+    resource: {},
     'run-at': 'document-idle',
     noframes: false
   };
-  
+
   const lines = match[1].split('\n');
   for (const line of lines) {
-    const m = line.match(/\/\/\s*@(\S+)\s+(.*)/);
+    const m = line.match(/\/\/\s*@(\S+)(?:\s+(.*))?/);
     if (!m) continue;
-    
+
     const [, key, value] = m;
-    const val = value.trim();
-    
+    const val = (value || '').trim();
+
     if (key === 'noframes') {
       meta.noframes = true;
+    } else if (key === 'resource') {
+      const resourceMatch = val.match(/^(\S+)\s+(.+)$/);
+      if (resourceMatch) {
+        meta.resource[resourceMatch[1]] = resourceMatch[2];
+      }
     } else if (Array.isArray(meta[key])) {
       meta[key].push(val);
     } else if (key in meta) {
@@ -294,17 +299,16 @@ function renderInstallUI(sourceUrl) {
       </div>
       
       <!-- Resources -->
-      ${scriptMeta.require.length > 0 || scriptMeta.resource.length > 0 ? `
+      ${scriptMeta.require.length > 0 || Object.keys(scriptMeta.resource).length > 0 ? `
         <div class="section">
           <div class="section-title">
             <span>External Resources</span>
-            <span class="count">${scriptMeta.require.length + scriptMeta.resource.length}</span>
+            <span class="count">${scriptMeta.require.length + Object.keys(scriptMeta.resource).length}</span>
           </div>
           <div class="tag-list">
             ${scriptMeta.require.map(r => `<span class="tag">${escapeHtml(getUrlFilename(r))}</span>`).join('')}
-            ${scriptMeta.resource.map(r => {
-              const parts = r.split(/\s+/);
-              return `<span class="tag">${escapeHtml(parts[0])}</span>`;
+            ${Object.keys(scriptMeta.resource).map(name => {
+              return `<span class="tag">${escapeHtml(name)}</span>`;
             }).join('')}
           </div>
         </div>

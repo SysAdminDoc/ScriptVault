@@ -1,4 +1,4 @@
-// ScriptVault Popup v1.1.1
+// ScriptVault Popup v1.5.2
 // Tampermonkey-style popup interface
 
 (function() {
@@ -566,7 +566,7 @@
                 const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
                 const freshSettings = response?.settings || response || {};
                 const blacklist = freshSettings.blacklist || [];
-                if (blacklist.includes(pattern)) {
+                if (blacklist.some(p => p === pattern || p === `*://*.${domain}/*` || p === `*://${domain}/*`)) {
                     showPopupToast(`${domain} is already blacklisted`);
                     return;
                 }

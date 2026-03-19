@@ -38,7 +38,7 @@ const ResourceCache = {
     } catch (e) {}
   },
 
-  async fetch(url) {
+  async fetchResource(url) {
     const cached = await this.get(url);
     if (cached) return cached.text;
 
@@ -77,7 +77,7 @@ const ResourceCache = {
     const cached = await this.get(url);
     if (cached && cached.dataUri) return cached.dataUri;
     // Fetch it first
-    await this.fetch(url);
+    await this.fetchResource(url);
     const entry = await this.get(url);
     return entry ? entry.dataUri : null;
   },
@@ -85,12 +85,18 @@ const ResourceCache = {
   async prefetchResources(resources) {
     if (!resources || typeof resources !== 'object') return;
     const promises = Object.values(resources).map(url =>
-      this.fetch(url).catch(e => console.warn('[ScriptVault] Resource prefetch failed:', url, e.message))
+      this.fetchResource(url).catch(e => console.warn('[ScriptVault] Resource prefetch failed:', url, e.message))
     );
     await Promise.allSettled(promises);
   },
 
-  clear() {
+  async clear() {
     this.cache = {};
+    // Also clear persistent resource cache entries
+    try {
+      const all = await chrome.storage.local.get(null);
+      const keys = Object.keys(all).filter(k => k.startsWith(this.STORAGE_PREFIX));
+      if (keys.length > 0) await chrome.storage.local.remove(keys);
+    } catch (e) {}
   }
 };
