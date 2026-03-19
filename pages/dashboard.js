@@ -1230,6 +1230,7 @@
                         console.warn('[ScriptVault] Reset failed for', ids[i], e.message);
                     }
                 }
+                await loadScripts();
                 hideProgress();
                 showToast(`Reset ${ids.length} scripts`, 'success');
                 break;
@@ -2135,8 +2136,8 @@
                         showToast(r?.error ? r.error : `Imported ${r?.imported || 0} scripts from ${file.name}`, r?.error ? 'error' : 'success');
                     } else if (name.endsWith('.json')) {
                         const data = JSON.parse(await file.text());
-                        await chrome.runtime.sendMessage({ action: 'importAll', data: { data, options: { overwrite: true } } });
-                        showToast(`Imported from ${file.name}`, 'success');
+                        const r = await chrome.runtime.sendMessage({ action: 'importAll', data: { data, options: { overwrite: true } } });
+                        showToast(r?.error ? r.error : `Imported ${r?.imported || 0} scripts from ${file.name}`, r?.error ? 'error' : 'success');
                     } else {
                         const code = await file.text();
                         const res = await chrome.runtime.sendMessage({ action: 'createScript', code });
@@ -2192,9 +2193,11 @@
                 for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
                 const blob = new Blob([bytes], { type: 'application/zip' });
                 const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
+                const objUrl = URL.createObjectURL(blob);
+                a.href = objUrl;
                 a.download = response.filename || `scriptvault-${new Date().toISOString().split('T')[0]}.zip`;
                 a.click();
+                URL.revokeObjectURL(objUrl);
                 showToast('Exported ZIP', 'success');
             }
         } catch (e) {
@@ -2281,7 +2284,7 @@
         findScriptsState.page = page;
         findScriptsState.loading = true;
 
-        elements.findScriptsResults.innerHTML = '<div class="find-scripts-loading">Searching</div>';
+        if (elements.findScriptsResults) elements.findScriptsResults.innerHTML = '<div class="find-scripts-loading">Searching</div>';
 
         try {
             if (source === 'greasyfork') {
@@ -2292,7 +2295,7 @@
                 searchExternal(`https://github.com/search?q=${encodeURIComponent(query + ' userscript')}&type=code`);
             }
         } catch (e) {
-            elements.findScriptsResults.innerHTML = `<div class="find-scripts-empty">Search failed: ${escapeHtml(e.message)}</div>`;
+            if (elements.findScriptsResults) elements.findScriptsResults.innerHTML = `<div class="find-scripts-empty">Search failed: ${escapeHtml(e.message)}</div>`;
         } finally {
             findScriptsState.loading = false;
         }
@@ -2318,7 +2321,7 @@
         const scripts = await resp.json();
 
         if (!scripts || scripts.length === 0) {
-            elements.findScriptsResults.innerHTML = '<div class="find-scripts-empty">No scripts found. Try a different search term.</div>';
+            if (elements.findScriptsResults) elements.findScriptsResults.innerHTML = '<div class="find-scripts-empty">No scripts found. Try a different search term.</div>';
             return;
         }
 
@@ -2365,10 +2368,10 @@
             ${scripts.length >= 50 ? `<button class="toolbar-btn" data-find-page="${page + 1}">Next</button>` : ''}
         </div>`;
 
-        elements.findScriptsResults.innerHTML = countText + html + pagination;
+        if (elements.findScriptsResults) elements.findScriptsResults.innerHTML = countText + html + pagination;
 
         // Bind install buttons
-        elements.findScriptsResults.querySelectorAll('[data-install-url]').forEach(btn => {
+        if (elements.findScriptsResults) elements.findScriptsResults.querySelectorAll('[data-install-url]').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const url = btn.dataset.installUrl;
                 if (!url) return;
@@ -2396,7 +2399,7 @@
         });
 
         // Bind view buttons
-        elements.findScriptsResults.querySelectorAll('[data-view-url]').forEach(btn => {
+        if (elements.findScriptsResults) elements.findScriptsResults.querySelectorAll('[data-view-url]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const url = btn.dataset.viewUrl;
                 if (url) chrome.tabs.create({ url });
@@ -2404,7 +2407,7 @@
         });
 
         // Bind preview buttons
-        elements.findScriptsResults.querySelectorAll('[data-preview-url]').forEach(btn => {
+        if (elements.findScriptsResults) elements.findScriptsResults.querySelectorAll('[data-preview-url]').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const url = btn.dataset.previewUrl;
                 if (!url) return;
@@ -2434,7 +2437,7 @@
         });
 
         // Bind pagination
-        elements.findScriptsResults.querySelectorAll('[data-find-page]').forEach(btn => {
+        if (elements.findScriptsResults) elements.findScriptsResults.querySelectorAll('[data-find-page]').forEach(btn => {
             btn.addEventListener('click', () => searchScripts(parseInt(btn.dataset.findPage)));
         });
     }
@@ -2676,8 +2679,9 @@
         // Close button removed - tabs handle closing
 
         elements.btnEmptyTrash?.addEventListener('click', async () => {
-            await chrome.runtime.sendMessage({ action: 'emptyTrash' });
-            showToast('Trash emptied', 'success');
+            if (!await showConfirmModal('Empty Trash', 'Permanently delete all trashed scripts?')) return;
+            const r = await chrome.runtime.sendMessage({ action: 'emptyTrash' });
+            showToast(r?.error ? r.error : 'Trash emptied', r?.error ? 'error' : 'success');
             await loadTrash();
         });
 
@@ -2835,7 +2839,7 @@
             
             // Action Menu
             settingsHideDisabledPopup: ['hideDisabledPopup', 'checked'],
-            settingsPopupColumns: ['popupColumns', 'value'],
+            settingsPopupColumns: ['popupColumns', 'value', v => parseInt(v) || 1],
             settingsScriptOrder: ['scriptOrder', 'value'],
             settingsBadgeInfo: ['badgeInfo', 'value'],
             
@@ -2850,11 +2854,11 @@
             // Userscript Update
             settingsUpdateDisabled: ['updateDisabled', 'checked'],
             settingsSilentUpdate: ['silentUpdate', 'checked'],
-            settingsCheckInterval: ['checkInterval', 'value'],
-            settingsNotifyHideAfter: ['notifyHideAfter', 'value'],
-            
+            settingsCheckInterval: ['checkInterval', 'value', v => parseInt(v) || 24],
+            settingsNotifyHideAfter: ['notifyHideAfter', 'value', v => parseInt(v) || 0],
+
             // Externals
-            settingsExternalsInterval: ['externalsInterval', 'value'],
+            settingsExternalsInterval: ['externalsInterval', 'value', v => parseInt(v) || 24],
             
             // Sync
             settingsEnableSync: ['enableSync', 'checked'],
@@ -2862,10 +2866,10 @@
             // Editor
             settingsEnableEditor: ['enableEditor', 'checked'],
             settingsEditorTheme: ['editorTheme', 'value'],
-            settingsEditorFontSize: ['editorFontSize', 'value'],
+            settingsEditorFontSize: ['editorFontSize', 'value', v => parseInt(v) || 13],
             settingsKeyMapping: ['keyMapping', 'value'],
-            settingsIndentWidth: ['indentWidth', 'value'],
-            settingsTabSize: ['tabSize', 'value'],
+            settingsIndentWidth: ['indentWidth', 'value', v => parseInt(v) || 4],
+            settingsTabSize: ['tabSize', 'value', v => parseInt(v) || 4],
             settingsIndentWith: ['indentWith', 'value'],
             settingsTabMode: ['tabMode', 'value'],
             settingsHighlightMatches: ['highlightMatches', 'value'],
@@ -2894,7 +2898,7 @@
             
             // BlackCheck
             settingsBlacklistSource: ['blacklistSource', 'value'],
-            settingsBlockSeverity: ['blockSeverity', 'value'],
+            settingsBlockSeverity: ['blockSeverity', 'value', v => parseInt(v) || 1],
             
             // Downloads
             settingsDownloadMode: ['downloadMode', 'value'],
@@ -2933,7 +2937,7 @@
         elements.settingsWebdavUrl?.addEventListener('blur', e => saveSetting('webdavUrl', e.target.value.trim()));
         elements.settingsWebdavUsername?.addEventListener('blur', e => saveSetting('webdavUsername', e.target.value.trim()));
         elements.settingsWebdavPassword?.addEventListener('blur', e => saveSetting('webdavPassword', e.target.value));
-        elements.settingsLintMaxSize?.addEventListener('blur', e => saveSetting('lintMaxSize', e.target.value));
+        elements.settingsLintMaxSize?.addEventListener('blur', e => saveSetting('lintMaxSize', parseInt(e.target.value) || 500));
 
         // Textarea inputs that save on blur
         elements.settingsCustomCss?.addEventListener('blur', e => saveSetting('customCss', e.target.value));
@@ -3045,26 +3049,28 @@
         // Cloud
         async function updateCloudUI() {
             const provider = elements.cloudProvider?.value || 'googledrive';
+            const st = elements.cloudStatusText;
+            const ui = elements.cloudUserInfo;
+            const bc = elements.btnCloudConnect;
+            const bd = elements.btnCloudDisconnect;
+            const ar = elements.cloudActionsRow;
             try {
                 const r = await chrome.runtime.sendMessage({ action: 'cloudStatus', provider });
                 if (r?.connected) {
-                    elements.cloudStatusText.textContent = 'Connected';
-                    elements.cloudStatusText.style.color = 'var(--accent)';
-                    elements.cloudUserInfo.textContent = r.user?.email || r.user?.name || '';
-                    elements.btnCloudConnect.style.display = 'none';
-                    elements.btnCloudDisconnect.style.display = '';
-                    elements.cloudActionsRow.style.display = '';
+                    if (st) { st.textContent = 'Connected'; st.style.color = 'var(--accent)'; }
+                    if (ui) ui.textContent = r.user?.email || r.user?.name || '';
+                    if (bc) bc.style.display = 'none';
+                    if (bd) bd.style.display = '';
+                    if (ar) ar.style.display = '';
                 } else {
-                    elements.cloudStatusText.textContent = 'Not connected';
-                    elements.cloudStatusText.style.color = 'var(--text-muted)';
-                    elements.cloudUserInfo.textContent = '';
-                    elements.btnCloudConnect.style.display = '';
-                    elements.btnCloudDisconnect.style.display = 'none';
-                    elements.cloudActionsRow.style.display = 'none';
+                    if (st) { st.textContent = 'Not connected'; st.style.color = 'var(--text-muted)'; }
+                    if (ui) ui.textContent = '';
+                    if (bc) bc.style.display = '';
+                    if (bd) bd.style.display = 'none';
+                    if (ar) ar.style.display = 'none';
                 }
             } catch (e) {
-                elements.cloudStatusText.textContent = 'Error';
-                elements.cloudStatusText.style.color = 'var(--danger)';
+                if (st) { st.textContent = 'Error'; st.style.color = 'var(--danger)'; }
             }
         }
 
