@@ -598,7 +598,7 @@
             if (state.editor) {
                 switch (key) {
                     case 'editorTheme': state.editor.setOption('theme', value); break;
-                    case 'editorFontSize': { const cm = document.querySelector('.CodeMirror'); if (cm) cm.style.fontSize = value + 'px'; } break;
+                    case 'editorFontSize': { const cm = document.querySelector('.CodeMirror'); if (cm) cm.style.fontSize = value + '%'; } break;
                     case 'wordWrap': state.editor.setOption('lineWrapping', value); break;
                     case 'tabSize': state.editor.setOption('tabSize', parseInt(value) || 4); break;
                     case 'indentWidth': state.editor.setOption('indentUnit', parseInt(value) || 4); break;
@@ -940,8 +940,22 @@
         }
     }
 
+    // Map dashboard themes to sensible editor theme defaults
+    const DASHBOARD_TO_EDITOR_THEME = {
+        dark: 'material-darker',
+        light: 'default',
+        catppuccin: 'dracula',
+        oled: 'monokai'
+    };
+
     function applyTheme() {
-        document.documentElement.setAttribute('data-theme', state.settings.layout || 'dark');
+        const layout = state.settings.layout || 'dark';
+        document.documentElement.setAttribute('data-theme', layout);
+        // Auto-sync editor theme if user hasn't explicitly chosen one
+        if (state.editor && (!state.settings.editorTheme || state.settings.editorTheme === 'default')) {
+            const mapped = DASHBOARD_TO_EDITOR_THEME[layout] || 'material-darker';
+            state.editor.setOption('theme', mapped);
+        }
     }
 
     function applyConfigMode() {
@@ -1722,6 +1736,10 @@
             }
         };
 
+        // Check for unsaved changes (skip if noSaveConfirm setting is enabled)
+        if (tabData?.unsaved && !state.settings.noSaveConfirm) {
+            if (!confirm('You have unsaved changes. Close without saving?')) return;
+        }
         doClose();
     }
 
@@ -2075,7 +2093,8 @@
             }
         });
 
-        document.querySelector('.CodeMirror').style.fontSize = (s.editorFontSize || 14) + 'px';
+        const cmEl = document.querySelector('.CodeMirror');
+        if (cmEl) cmEl.style.fontSize = (s.editorFontSize || 100) + '%';
 
         // Cursor position tracking
         state.editor.on('cursorActivity', updateCursorPos);
@@ -2869,7 +2888,7 @@
             // Editor
             settingsEnableEditor: ['enableEditor', 'checked'],
             settingsEditorTheme: ['editorTheme', 'value'],
-            settingsEditorFontSize: ['editorFontSize', 'value', v => parseInt(v) || 13],
+            settingsEditorFontSize: ['editorFontSize', 'value', v => parseInt(v) || 100],
             settingsKeyMapping: ['keyMapping', 'value'],
             settingsIndentWidth: ['indentWidth', 'value', v => parseInt(v) || 4],
             settingsTabSize: ['tabSize', 'value', v => parseInt(v) || 4],
