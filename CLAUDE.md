@@ -67,3 +67,8 @@ v1.5.2
 - All GM_* functions enforce `@grant` checks: `GM_unregisterMenuCommand`, `GM_getMenuCommands`, `GM_focusTab`, `GM_addElement`, `GM_loadScript`
 - Install page parser uses same regex as background parser (`(?:\s+(.*))?` for optional values) — supports `@noframes`, `@unwrap`
 - Install page `@resource` stored as `{name: url}` object (not array of raw strings) — consistent with background parser
+- `@priority` metadata: integer, higher values execute first. `registerAllScripts` sorts by priority then position
+- Per-script execution profiling: `performance.now()` wraps script runner, stats stored as `script.stats` object
+- Script conflict detection: `findConflictingScripts()` compares @match/@include patterns across all scripts
+- Info panel shows full perf stats (runs, avg/total time, errors, last URL) with Reset Stats button
+- Popup shows color-coded execution time badges (green <50ms, yellow <200ms, red 200ms+)
