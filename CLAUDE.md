@@ -55,8 +55,14 @@ v1.5.2
 - `autoReloadMatchingTabs` is debounced (500ms) to prevent mass tab reloads
 - `cleanupStaleCaches()` runs on init to prune expired `require_cache_*` and `res_cache_*` entries
 - Lint: `@grant none` + GM API usage shows `info` severity (not `error`) since some managers still expose APIs
-- `GM_info.version` is dynamic from `chrome.runtime.getManifest().version` — not hardcoded
+- `GM_info` has full Tampermonkey parity: uuid, scriptMetaStr, scriptWillUpdate, isIncognito, platform, downloadMode
 - `GM.xmlHttpRequest` returns a Promise with `.abort()` method attached (not just a plain Promise)
+- `window.onurlchange` intercepts pushState/replaceState/popstate/hashchange for SPA detection
+- `GM_audio` provides tab mute control (setMute, getState) via chrome.tabs API
+- `@top-level-await` wraps user script in async IIFE
+- `@run-in` injects runtime guard for incognito/normal tab filtering
+- `@tag` parsed as array, `@license`/`@copyright` as strings
+- SRI hash verification: @require URLs with #sha256=base64 fragment are verified after fetch
 - `GM_info.script.resources` populated from actual `meta.resource` object, not empty `{}`
 - All GM_* functions enforce `@grant` checks: `GM_unregisterMenuCommand`, `GM_getMenuCommands`, `GM_focusTab`, `GM_addElement`, `GM_loadScript`
 - Install page parser uses same regex as background parser (`(?:\s+(.*))?` for optional values) — supports `@noframes`, `@unwrap`
