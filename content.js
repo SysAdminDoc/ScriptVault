@@ -1,14 +1,15 @@
-// ScriptVault v1.3.0 - Content Script Bridge
+// ScriptVault v1.5.2 - Content Script Bridge
 // Bridges messages between userscripts (USER_SCRIPT world) and background service worker
 
 (function() {
   'use strict';
   
-  // Prevent double initialization
-  if (window.__ScriptVault_Bridge__) {
+  // Prevent double initialization (use extension ID to avoid page-level spoofing)
+  const bridgeKey = '__ScriptVault_Bridge_' + chrome.runtime.id + '__';
+  if (window[bridgeKey]) {
     return;
   }
-  window.__ScriptVault_Bridge__ = true;
+  Object.defineProperty(window, bridgeKey, { value: true, writable: false, configurable: false });
   
   // Unique channel ID to prevent conflicts with other extensions
   const CHANNEL_ID = 'ScriptVault_' + chrome.runtime.id;
@@ -42,7 +43,7 @@
         id: msgId,
         result: result,
         success: true
-      }, '*');
+      }, '/');
     } catch (e) {
       // Silently handle errors - no console output to avoid chrome://extensions error spam
       const errorMsg = e.message || 'Unknown error';
@@ -52,7 +53,7 @@
         id: msgId,
         error: errorMsg,
         success: false
-      }, '*');
+      }, '/');
     }
   });
   
@@ -69,7 +70,7 @@
         type: 'menuCommand',
         scriptId: message.data?.scriptId,
         commandId: message.data?.commandId
-      }, '*');
+      }, '/');
       handled = true;
     }
     
@@ -84,7 +85,7 @@
         oldValue: message.data?.oldValue,
         newValue: message.data?.newValue,
         remote: message.data?.remote
-      }, '*');
+      }, '/');
       handled = true;
     }
     
@@ -98,7 +99,7 @@
         scriptId: message.data?.scriptId,
         eventType: message.data?.type,
         data: message.data
-      }, '*');
+      }, '/');
       handled = true;
     }
 
@@ -111,7 +112,7 @@
         scriptId: message.data?.scriptId,
         notifTag: message.data?.notifId,
         eventType: message.data?.type
-      }, '*');
+      }, '/');
       handled = true;
     }
 
@@ -125,7 +126,7 @@
         downloadId: message.data?.downloadId,
         eventType: message.data?.type,
         data: message.data
-      }, '*');
+      }, '/');
       handled = true;
     }
 
@@ -137,7 +138,7 @@
         type: 'openedTabClosed',
         scriptId: message.data?.scriptId,
         closedTabId: message.data?.tabId
-      }, '*');
+      }, '/');
       handled = true;
     }
     
@@ -159,5 +160,5 @@
     channel: CHANNEL_ID,
     direction: 'to-userscript',
     type: 'bridgeReady'
-  }, '*');
+  }, '/');
 })();

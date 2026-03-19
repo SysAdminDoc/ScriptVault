@@ -413,15 +413,23 @@ async function importScripts(data, options = {}) {
 async function exportToZip() {
   const scripts = await ScriptStorage.getAll();
   const files = {}; // fflate uses { filename: Uint8Array } format
-  
+  const usedNames = new Set();
+
   for (const script of scripts) {
-    // Create safe filename
-    const safeName = (script.meta.name || 'unnamed')
+    // Create safe filename, deduplicating collisions
+    let safeName = (script.meta.name || 'unnamed')
       .replace(/[<>:"/\\|?*]/g, '_')
       .replace(/\s+/g, ' ')
       .trim()
       .substring(0, 100);
-    
+
+    if (usedNames.has(safeName)) {
+      let counter = 2;
+      while (usedNames.has(`${safeName}_${counter}`)) counter++;
+      safeName = `${safeName}_${counter}`;
+    }
+    usedNames.add(safeName);
+
     // Add the userscript file
     files[`${safeName}.user.js`] = fflate.strToU8(script.code);
     
@@ -502,26 +510,26 @@ async function importFromZip(zipData, options = {}) {
     
     // Find all .user.js files
     const userScripts = fileNames.filter(name => name.endsWith('.user.js'));
-    
+    const allExistingScripts = await ScriptStorage.getAll();
+
     for (const filename of userScripts) {
       try {
         const code = fflate.strFromU8(unzipped[filename]);
-        
+
         // Validate it's a userscript
         if (!code.includes('==UserScript==')) {
           results.errors.push({ name: filename, error: 'Not a valid userscript' });
           continue;
         }
-        
+
         const parsed = parseUserscript(code);
         if (parsed.error) {
           results.errors.push({ name: filename, error: parsed.error });
           continue;
         }
-        
+
         // Check for existing script with same name/namespace
-        const allScripts = await ScriptStorage.getAll();
-        const existing = allScripts.find(s => 
+        const existing = allExistingScripts.find(s =>
           s.meta.name === parsed.meta.name && 
           (s.meta.namespace === parsed.meta.namespace || (!s.meta.namespace && !parsed.meta.namespace))
         );
@@ -1033,6 +1041,7 @@ async function handleMessage(message, sender) {
               updates.googleDriveUser = result.user;
             } else if (providerName === 'dropbox') {
               updates.dropboxToken = result.token;
+              updates.dropboxRefreshToken = result.refreshToken || '';
               if (result.user) updates.dropboxUser = result.user;
               // Fetch user info after connecting
               const status = await provider.getStatus({ dropboxToken: result.token });
@@ -1062,7 +1071,13 @@ async function handleMessage(message, sender) {
             updates.googleDriveUser = null;
           } else if (providerName === 'dropbox') {
             updates.dropboxToken = '';
+            updates.dropboxRefreshToken = '';
             updates.dropboxUser = null;
+          } else if (providerName === 'onedrive') {
+            updates.onedriveToken = '';
+            updates.onedriveRefreshToken = '';
+            updates.onedriveConnected = false;
+            updates.onedriveUser = null;
           }
           await SettingsManager.set(updates);
           return { success: true };
@@ -1208,7 +1223,7 @@ async function handleMessage(message, sender) {
         
       // Resources
       case 'fetchResource':
-        return await ResourceCache.fetch(data.url);
+        return await ResourceCache.fetchResource(data.url);
 
       case 'GM_getResourceText': {
         const script = await ScriptStorage.get(data.scriptId);
@@ -1216,7 +1231,7 @@ async function handleMessage(message, sender) {
         const url = script.meta.resource[data.name];
         if (!url) return null;
         try {
-          return await ResourceCache.fetch(url);
+          return await ResourceCache.fetchResource(url);
         } catch (e) {
           return null;
         }
@@ -1231,6 +1246,24 @@ async function handleMessage(message, sender) {
           return await ResourceCache.getDataUri(url2);
         } catch (e) {
           return null;
+        }
+      }
+
+      // GM_loadScript - Fetch a script URL and return its source code
+      // Allows userscripts to dynamically load libraries at runtime
+      case 'GM_loadScript': {
+        try {
+          if (!data.url) return { error: 'No URL provided' };
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), data.timeout || 30000);
+          const response = await fetch(data.url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (!response.ok) return { error: `HTTP ${response.status}` };
+          const code = await response.text();
+          if (!code || code.length === 0) return { error: 'Empty response' };
+          return { code };
+        } catch (e) {
+          return { error: e.message || 'Fetch failed' };
         }
       }
 
@@ -1618,7 +1651,6 @@ async function handleMessage(message, sender) {
         const tabId = sender.tab?.id;
         // Track notification for callbacks
         if (tabId && (data.hasOnclick || data.hasOndone)) {
-          if (!self._notifCallbacks) self._notifCallbacks = new Map();
           self._notifCallbacks.set(notifId, {
             tabId, scriptId: data.scriptId,
             hasOnclick: data.hasOnclick, hasOndone: data.hasOndone
@@ -1823,19 +1855,36 @@ async function handleMessage(message, sender) {
 // Auto-reload matching tabs
 // ============================================================================
 
+// Debounced auto-reload to prevent mass tab reloads on rapid saves
+let _autoReloadTimer = null;
+let _autoReloadScripts = [];
+
 async function autoReloadMatchingTabs(script) {
   const settings = await SettingsManager.get();
   if (!settings.autoReload) return;
-  try {
-    const tabs = await chrome.tabs.query({});
-    for (const tab of tabs) {
-      if (tab.url && doesScriptMatchUrl(script, tab.url)) {
-        chrome.tabs.reload(tab.id);
+
+  _autoReloadScripts.push(script);
+  if (_autoReloadTimer) clearTimeout(_autoReloadTimer);
+
+  _autoReloadTimer = setTimeout(async () => {
+    const scripts = _autoReloadScripts;
+    _autoReloadScripts = [];
+    _autoReloadTimer = null;
+
+    try {
+      const tabs = await chrome.tabs.query({});
+      const reloaded = new Set();
+      for (const tab of tabs) {
+        if (reloaded.has(tab.id)) continue;
+        if (tab.url && scripts.some(s => doesScriptMatchUrl(s, tab.url))) {
+          chrome.tabs.reload(tab.id);
+          reloaded.add(tab.id);
+        }
       }
+    } catch (e) {
+      console.error('[ScriptVault] Auto-reload failed:', e);
     }
-  } catch (e) {
-    console.error('[ScriptVault] Auto-reload failed:', e);
-  }
+  }, 500);
 }
 
 // ============================================================================
@@ -2437,7 +2486,36 @@ async function init() {
   await updateBadge();
   await setupAlarms();
 
+  // Clean up stale persistent caches (require_cache_, res_cache_)
+  cleanupStaleCaches();
+
   console.log('[ScriptVault] Service worker ready');
+}
+
+// Remove expired persistent cache entries to prevent storage bloat
+async function cleanupStaleCaches() {
+  try {
+    const all = await chrome.storage.local.get(null);
+    const now = Date.now();
+    const maxRequireAge = 7 * 24 * 60 * 60 * 1000; // 7 days
+    const maxResourceAge = ResourceCache.maxAge; // 24 hours
+    const keysToRemove = [];
+
+    for (const [key, value] of Object.entries(all)) {
+      if (key.startsWith('require_cache_') && value?.timestamp) {
+        if (now - value.timestamp > maxRequireAge) keysToRemove.push(key);
+      } else if (key.startsWith('res_cache_') && value?.timestamp) {
+        if (now - value.timestamp > maxResourceAge) keysToRemove.push(key);
+      }
+    }
+
+    if (keysToRemove.length > 0) {
+      await chrome.storage.local.remove(keysToRemove);
+      debugLog(`Cleaned up ${keysToRemove.length} stale cache entries`);
+    }
+  } catch (e) {
+    // Non-critical, ignore errors
+  }
 }
 
 // Configure the userScripts execution world
@@ -2803,17 +2881,17 @@ function isUnfetchableUrl(url) {
 
 // Fetch a @require script with caching and fallbacks
 async function fetchRequireScript(url) {
-  console.log(`[ScriptVault] Fetching @require: ${url}`);
-  
+  debugLog('Fetching @require:', url);
+
   // Skip URLs that are known to be unfetchable
   if (isUnfetchableUrl(url)) {
     console.warn(`[ScriptVault] Skipping unfetchable @require: ${url}`);
     return null;
   }
-  
+
   // Check in-memory cache first
   if (requireCache.has(url)) {
-    console.log(`[ScriptVault] Using cached @require: ${url}`);
+    debugLog('Using cached @require:', url);
     return requireCache.get(url);
   }
   
@@ -2831,7 +2909,7 @@ async function fetchRequireScript(url) {
       // Check if cache is less than 7 days old
       const age = Date.now() - (cached[cacheKey].timestamp || 0);
       if (age < 7 * 24 * 60 * 60 * 1000) {
-        console.log(`[ScriptVault] Using persistent cached @require: ${url}`);
+        debugLog('Using persistent cached @require:', url);
         requireCache.set(url, cached[cacheKey].code);
         return cached[cacheKey].code;
       }
@@ -2843,11 +2921,11 @@ async function fetchRequireScript(url) {
   // Build list of URLs to try (original + fallbacks)
   const fallbacks = getFallbackUrls(url);
   const urlsToTry = [url, ...fallbacks];
-  console.log(`[ScriptVault] Will try ${urlsToTry.length} URLs for: ${url}`);
-  
+  debugLog(`Will try ${urlsToTry.length} URLs for:`, url);
+
   for (const tryUrl of urlsToTry) {
     try {
-      console.log(`[ScriptVault] Trying: ${tryUrl}`);
+      debugLog('Trying:', tryUrl);
       const code = await fetchWithRetry(tryUrl);
       if (code) {
         // Store in both caches
@@ -2863,9 +2941,9 @@ async function fetchRequireScript(url) {
         }
         
         if (tryUrl !== url) {
-          console.log(`[ScriptVault] Successfully fetched ${url} from fallback: ${tryUrl}`);
+          debugLog(`Successfully fetched ${url} from fallback:`, tryUrl);
         } else {
-          console.log(`[ScriptVault] Successfully fetched: ${url}`);
+          debugLog('Successfully fetched:', url);
         }
         return code;
       }
@@ -3040,11 +3118,14 @@ ${req.code}
       includes: meta.include || [],
       excludes: meta.exclude || [],
       grants: grants,
-      resources: {},
-      runAt: meta['run-at'] || 'document-idle'
+      resources: meta.resource || {},
+      requires: meta.require || [],
+      runAt: meta['run-at'] || 'document-idle',
+      connect: meta.connect || [],
+      noframes: meta.noframes || false
     },
     scriptHandler: 'ScriptVault',
-    version: '2.3.5'
+    version: ${JSON.stringify(chrome.runtime.getManifest().version)}
   };
   
   // Storage cache - mutable so we can refresh it with fresh values from background
@@ -3275,10 +3356,10 @@ ${req.code}
         id: id,
         action: action,
         data: data
-      }, '*');
+      }, '/');
     });
   }
-  
+
   // Refresh storage cache from background
   // This ensures we have the latest values, not stale values from registration time
   async function _refreshStorageCache() {
@@ -3696,11 +3777,14 @@ ${req.code}
   }
 
   function GM_unregisterMenuCommand(id) {
+    if (!hasGrant('GM_registerMenuCommand') && !hasGrant('GM.registerMenuCommand') &&
+        !hasGrant('GM_unregisterMenuCommand') && !hasGrant('GM.unregisterMenuCommand')) return;
     _menuCmds.delete(id);
     sendToBackground('GM_unregisterMenuCommand', { scriptId, commandId: id }).catch(() => {});
   }
 
   function GM_getMenuCommands() {
+    if (!hasGrant('GM_registerMenuCommand') && !hasGrant('GM.registerMenuCommand')) return [];
     return Array.from(_menuCmds.entries()).map(([id, cb]) => ({ id, name: id }));
   }
   
@@ -3727,6 +3811,7 @@ ${req.code}
   
   // GM_addElement
   function GM_addElement(parentOrTag, tagOrAttrs, attrsOrUndefined) {
+    if (!hasGrant('GM_addElement') && !hasGrant('GM.addElement')) return null;
     let parent, tag, attrs;
     if (typeof parentOrTag === 'string') {
       tag = parentOrTag;
@@ -3749,6 +3834,36 @@ ${req.code}
     return el;
   }
   
+  // GM_loadScript - Dynamically fetch and eval a script URL at runtime
+  // Fetches via background service worker (bypasses CORS/CSP), evals in userscript scope
+  // Masks module/define/exports to force UMD libraries to set globals on window
+  const _loadedScripts = new Set();
+  async function GM_loadScript(url, options = {}) {
+    if (!hasGrant('GM_xmlhttpRequest') && !hasGrant('GM.xmlHttpRequest')) {
+      throw new Error('GM_loadScript requires @grant GM_xmlhttpRequest');
+    }
+    if (!url) throw new Error('GM_loadScript: No URL provided');
+    if (!options.force && _loadedScripts.has(url)) return;
+    const result = await sendToBackground('GM_loadScript', { url, timeout: options.timeout });
+    if (result.error) throw new Error('GM_loadScript: ' + result.error);
+    // Temporarily mask module systems so UMD scripts create window globals
+    const _savedModule = window.module;
+    const _savedExports = window.exports;
+    const _savedDefine = window.define;
+    try {
+      window.module = undefined;
+      window.exports = undefined;
+      window.define = undefined;
+      const fn = new Function(result.code);
+      fn.call(window);
+    } finally {
+      window.module = _savedModule;
+      window.exports = _savedExports;
+      window.define = _savedDefine;
+    }
+    _loadedScripts.add(url);
+  }
+
   // GM_getTab / GM_saveTab / GM_getTabs (real implementations via background)
   let _tabData = {};
   function GM_getTab(callback) {
@@ -3769,6 +3884,8 @@ ${req.code}
   }
 
   function GM_focusTab() {
+    if (!hasGrant('GM_focusTab') && !hasGrant('GM.focusTab') &&
+        !hasGrant('GM_openInTab') && !hasGrant('GM.openInTab')) return;
     sendToBackground('GM_focusTab', {}).catch(() => {});
   }
 
@@ -3880,16 +3997,20 @@ ${req.code}
     setValues: (vals) => Promise.resolve(GM_setValues(vals)),
     deleteValues: (keys) => Promise.resolve(GM_deleteValues(keys)),
     addStyle: (css) => Promise.resolve(GM_addStyle(css)),
-    xmlHttpRequest: (d) => new Promise((res, rej) => {
-      const control = GM_xmlhttpRequest({
-        ...d,
-        onload: (r) => { if (d.onload) d.onload(r); res(r); },
-        onerror: (e) => { if (d.onerror) d.onerror(e); rej(e.error || e); },
-        ontimeout: (e) => { if (d.ontimeout) d.ontimeout(e); rej(new Error('timeout')); },
-        onabort: (e) => { if (d.onabort) d.onabort(e); rej(new Error('aborted')); }
+    xmlHttpRequest: (d) => {
+      let control;
+      const promise = new Promise((res, rej) => {
+        control = GM_xmlhttpRequest({
+          ...d,
+          onload: (r) => { if (d.onload) d.onload(r); res(r); },
+          onerror: (e) => { if (d.onerror) d.onerror(e); rej(e.error || e); },
+          ontimeout: (e) => { if (d.ontimeout) d.ontimeout(e); rej(new Error('timeout')); },
+          onabort: (e) => { if (d.onabort) d.onabort(e); rej(new Error('aborted')); }
+        });
       });
-      return control;
-    }),
+      promise.abort = () => control.abort();
+      return promise;
+    },
     notification: (d, ondone) => Promise.resolve(GM_notification(d, ondone)),
     setClipboard: (t, type) => Promise.resolve(GM_setClipboard(t, type)),
     openInTab: (u, o) => Promise.resolve(GM_openInTab(u, o)),
@@ -3903,6 +4024,7 @@ ${req.code}
     getTab: () => new Promise(r => GM_getTab(r)),
     saveTab: (t) => Promise.resolve(GM_saveTab(t)),
     getTabs: () => new Promise(r => GM_getTabs(r)),
+    loadScript: (url, opts) => GM_loadScript(url, opts),
     cookies: {
       list: (d) => new Promise((res, rej) => GM_cookie.list(d, (cookies, err) => err ? rej(err) : res(cookies))),
       set: (d) => new Promise((res, rej) => GM_cookie.set(d, (err) => err ? rej(err) : res())),
@@ -3932,6 +4054,7 @@ ${req.code}
   window.GM_getResourceText = GM_getResourceText;
   window.GM_getResourceURL = GM_getResourceURL;
   window.GM_addElement = GM_addElement;
+  window.GM_loadScript = GM_loadScript;
   window.GM_getTab = GM_getTab;
   window.GM_saveTab = GM_saveTab;
   window.GM_getTabs = GM_getTabs;
@@ -4143,7 +4266,11 @@ function convertIncludeToMatch(include) {
   
   // Handle patterns like *://example.com/*
   if (pattern.startsWith('*://')) {
-    // This is already close to a match pattern, just validate
+    // Ensure pattern has a path component
+    const afterScheme = pattern.slice(4); // after *://
+    if (!afterScheme.includes('/')) {
+      pattern += '/*';
+    }
     return pattern;
   }
   

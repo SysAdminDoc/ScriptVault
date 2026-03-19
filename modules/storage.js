@@ -375,16 +375,17 @@ const TabStorage = {
   }
 };
 
+// Global notification callback tracker (initialized once, used by GM_notification handler)
+if (!self._notifCallbacks) self._notifCallbacks = new Map();
+
 // Clean up tab data when tab closes
 chrome.tabs.onRemoved.addListener((tabId) => {
   TabStorage.delete(tabId);
   // Also abort any pending XHR requests for this tab
   XhrManager.abortByTab(tabId);
   // Clean up notification callbacks for this tab
-  if (self._notifCallbacks) {
-    for (const [notifId, info] of self._notifCallbacks) {
-      if (info.tabId === tabId) self._notifCallbacks.delete(notifId);
-    }
+  for (const [notifId, info] of self._notifCallbacks) {
+    if (info.tabId === tabId) self._notifCallbacks.delete(notifId);
   }
 });
 
