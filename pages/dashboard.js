@@ -1343,6 +1343,12 @@
         const tags = script.metadata?.tag || script.metadata?.tags || [];
         const tagHtml = tags.map(t => `<span class="script-tag">${escapeHtml(t)}</span>`).join('');
 
+        // Conflict detection for table row
+        const conflicts = findConflictingScripts(script.id, matches);
+        const conflictHtml = conflicts.length > 0
+          ? `<span class="conflict-badge" title="Overlaps with: ${escapeHtml(conflicts.map(c => c.name).join(', '))}">! ${conflicts.length}</span>`
+          : '';
+
         tr.draggable = true;
         tr.dataset.scriptId = script.id;
         tr.innerHTML = `
@@ -1359,6 +1365,7 @@
                     ${faviconHtml}
                     <span class="script-name" data-id="${script.id}">${escapeHtml(name)}${isBroadMatch(matches) ? ' <span title="Runs on all/most sites" style="opacity:0.5">🌐</span>' : ''}</span>
                     ${tagHtml ? `<div class="script-tags">${tagHtml}</div>` : ''}
+                    ${conflictHtml}
                 </div>
             </td>
             <td class="center">${escapeHtml(version)}</td>
@@ -1799,6 +1806,73 @@
 
         const res = [...(Array.isArray(m.resource) ? m.resource : []), ...(Array.isArray(m.require) ? m.require : [])];
         elements.infoResources.innerHTML = res.length ? res.map(r => `<div style="font-size:11px;margin-bottom:3px">${escapeHtml(typeof r === 'string' ? r : r.url || r.name)}</div>`).join('') : '-';
+
+        // Performance stats
+        const perfEl = document.getElementById('infoPerfStats');
+        const resetBtn = document.getElementById('btnResetStats');
+        if (perfEl) {
+            const s = script.stats;
+            if (s && s.runs > 0) {
+                const lastRun = s.lastRun ? new Date(s.lastRun).toLocaleString() : '-';
+                perfEl.innerHTML = `
+                    <span class="perf-label">Runs:</span><span class="perf-value">${s.runs}</span>
+                    <span class="perf-label">Avg Time:</span><span class="perf-value">${s.avgTime}ms</span>
+                    <span class="perf-label">Total Time:</span><span class="perf-value">${Math.round(s.totalTime)}ms</span>
+                    <span class="perf-label">Errors:</span><span class="perf-value">${s.errors}${s.lastError ? ` (${escapeHtml(s.lastError)})` : ''}</span>
+                    <span class="perf-label">Last Run:</span><span class="perf-value">${escapeHtml(lastRun)}</span>
+                    ${s.lastUrl ? `<span class="perf-label">Last URL:</span><span class="perf-value" style="word-break:break-all">${escapeHtml(s.lastUrl)}</span>` : ''}
+                `;
+                if (resetBtn) {
+                    resetBtn.style.display = '';
+                    resetBtn.onclick = async () => {
+                        await chrome.runtime.sendMessage({ action: 'resetScriptStats', data: { scriptId: script.id } });
+                        script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };
+                        loadScriptInfo(script);
+                        renderScriptTable();
+                        showToast('Stats reset');
+                    };
+                }
+            } else {
+                perfEl.textContent = 'No execution data yet';
+                if (resetBtn) resetBtn.style.display = 'none';
+            }
+        }
+
+        // Conflict detection
+        const conflictsEl = document.getElementById('infoConflicts');
+        if (conflictsEl) {
+            const myPatterns = [...(m.match || []), ...(m.include || [])];
+            const conflicts = findConflictingScripts(script.id, myPatterns);
+            if (conflicts.length > 0) {
+                conflictsEl.innerHTML = conflicts.map(c =>
+                    `<div class="conflict-list-item">${escapeHtml(c.name)} <span style="color:var(--text-muted)">(${escapeHtml(c.sharedPatterns.join(', '))})</span></div>`
+                ).join('');
+            } else {
+                conflictsEl.textContent = 'None';
+            }
+        }
+    }
+
+    // Find scripts with overlapping @match/@include patterns
+    function findConflictingScripts(scriptId, patterns) {
+        if (!patterns.length) return [];
+        const conflicts = [];
+        const normalizePattern = p => p.replace(/\s+/g, '').toLowerCase();
+        const myNorm = new Set(patterns.map(normalizePattern));
+
+        for (const other of state.scripts) {
+            if (other.id === scriptId) continue;
+            const om = other.metadata || {};
+            const otherPatterns = [...(om.match || []), ...(om.include || [])];
+            const shared = otherPatterns.filter(p => myNorm.has(normalizePattern(p)));
+            if (shared.length > 0) {
+                conflicts.push({
+                    name: om.name || 'Unnamed Script',
+                    sharedPatterns: shared.slice(0, 3) // limit display
+                });
+            }
+        }
+        return conflicts;
     }
 
     function loadExternals(script) {

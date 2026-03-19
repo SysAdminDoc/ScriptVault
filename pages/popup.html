@@ -235,6 +235,30 @@
             font-size: 11px;
         }
 
+        .script-perf {
+            font-size: 10px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
+            margin-left: 4px;
+        }
+
+        .script-perf.fast {
+            background: rgba(76, 175, 80, 0.15);
+            color: var(--popup-accent);
+        }
+
+        .script-perf.medium {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+        }
+
+        .script-perf.slow {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--popup-danger);
+        }
+
         .script-more {
             color: var(--popup-text-dim);
             margin-left: 8px;

@@ -187,6 +187,12 @@
             const enabled = script.enabled !== false;
             const icon = getScriptIcon(script);
 
+            // Perf badge
+            const stats = script.stats;
+            const perfHtml = stats && stats.runs > 0
+                ? `<span class="script-perf ${stats.avgTime < 50 ? 'fast' : stats.avgTime < 200 ? 'medium' : 'slow'}" title="Avg: ${stats.avgTime}ms (${stats.runs} runs${stats.errors ? ', ' + stats.errors + ' errors' : ''})">${stats.avgTime}ms</span>`
+                : '';
+
             return `
                 <div class="script-item" data-script-id="${script.id}">
                     <label class="script-toggle">
@@ -195,6 +201,7 @@
                     </label>
                     <div class="script-icon">${icon}</div>
                     <span class="script-name">${escapeHtml(name)}${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}</span>
+                    ${perfHtml}
                     <div class="script-more" data-more-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="currentColor">
                             <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
