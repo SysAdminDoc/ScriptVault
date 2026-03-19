@@ -1291,6 +1291,9 @@
         }
         if (elements.emptyState) elements.emptyState.style.display = 'none';
 
+        // Precompute conflict map once (avoids O(n^2) per-row scan)
+        _conflictCache = buildConflictMap(state.scripts);
+
         filtered.forEach((script, i) => {
             const tr = createScriptRow(script, i + 1);
             elements.scriptTableBody.appendChild(tr);
@@ -1853,26 +1856,51 @@
         }
     }
 
-    // Find scripts with overlapping @match/@include patterns
-    function findConflictingScripts(scriptId, patterns) {
-        if (!patterns.length) return [];
-        const conflicts = [];
-        const normalizePattern = p => p.replace(/\s+/g, '').toLowerCase();
-        const myNorm = new Set(patterns.map(normalizePattern));
+    // Precomputed conflict cache (rebuilt each render, avoids O(n^2) per row)
+    let _conflictCache = {};
 
-        for (const other of state.scripts) {
-            if (other.id === scriptId) continue;
-            const om = other.metadata || {};
-            const otherPatterns = [...(om.match || []), ...(om.include || [])];
-            const shared = otherPatterns.filter(p => myNorm.has(normalizePattern(p)));
-            if (shared.length > 0) {
-                conflicts.push({
-                    name: om.name || 'Unnamed Script',
-                    sharedPatterns: shared.slice(0, 3) // limit display
-                });
+    function buildConflictMap(scripts) {
+        const patternToScripts = {};
+        const normalizePattern = p => p.replace(/\s+/g, '').toLowerCase();
+
+        for (const s of scripts) {
+            const m = s.metadata || {};
+            const patterns = [...(m.match || []), ...(m.include || [])];
+            for (const p of patterns) {
+                const norm = normalizePattern(p);
+                if (!patternToScripts[norm]) patternToScripts[norm] = [];
+                patternToScripts[norm].push({ id: s.id, name: m.name || 'Unnamed Script', pattern: p });
             }
         }
-        return conflicts;
+
+        // Build per-script conflict list
+        const result = {};
+        for (const s of scripts) {
+            const m = s.metadata || {};
+            const patterns = [...(m.match || []), ...(m.include || [])];
+            const conflicts = [];
+            const seen = new Set();
+            for (const p of patterns) {
+                const norm = normalizePattern(p);
+                const others = patternToScripts[norm] || [];
+                for (const o of others) {
+                    if (o.id === s.id || seen.has(o.id)) continue;
+                    seen.add(o.id);
+                    const shared = patterns.filter(pp =>
+                        (patternToScripts[normalizePattern(pp)] || []).some(x => x.id === o.id)
+                    );
+                    conflicts.push({ name: o.name, sharedPatterns: shared.slice(0, 3) });
+                }
+            }
+            if (conflicts.length > 0) result[s.id] = conflicts;
+        }
+        return result;
+    }
+
+    // Find scripts with overlapping @match/@include patterns (uses precomputed cache)
+    function findConflictingScripts(scriptId, patterns) {
+        if (!patterns.length) return [];
+        return _conflictCache[scriptId] || [];
     }
 
     function loadExternals(script) {

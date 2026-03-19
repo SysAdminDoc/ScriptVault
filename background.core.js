@@ -1894,7 +1894,8 @@ async function handleMessage(message, sender) {
           script.stats.avgTime = Math.round(script.stats.totalTime / script.stats.runs * 100) / 100;
           script.stats.lastRun = Date.now();
           script.stats.lastUrl = data.url;
-          await ScriptStorage.set(scriptId, script);
+          // Update cache only (debounced save to avoid excessive storage writes)
+          _debouncedStatsSave();
         }
         return { success: true };
       }
@@ -1907,7 +1908,8 @@ async function handleMessage(message, sender) {
           script.stats.errors++;
           script.stats.lastError = data.error;
           script.stats.lastErrorTime = Date.now();
-          await ScriptStorage.set(scriptId, script);
+          // Update cache only (debounced save to avoid excessive storage writes)
+          _debouncedStatsSave();
         }
         return { success: true };
       }
@@ -2390,6 +2392,16 @@ chrome.commands.onCommand.addListener(async (command) => {
 // Alarms (Auto-update & Sync)
 // ============================================================================
 
+// Debounced stats save — coalesces rapid reportExecTime/Error writes into a single storage write
+let _statsSaveTimer = null;
+function _debouncedStatsSave() {
+  if (_statsSaveTimer) clearTimeout(_statsSaveTimer);
+  _statsSaveTimer = setTimeout(() => {
+    _statsSaveTimer = null;
+    ScriptStorage.save().catch(() => {});
+  }, 5000);
+}
+
 let _backgroundTaskRunning = false;
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   // Mutual exclusion — don't run update and sync concurrently
@@ -2430,8 +2442,9 @@ async function setupAlarms() {
   
   // Setup sync alarm
   if (settings.syncEnabled && settings.syncProvider !== 'none') {
+    const syncMs = settings.syncInterval || 3600000; // Default 1 hour
     chrome.alarms.create('autoSync', {
-      periodInMinutes: settings.syncInterval / 60000
+      periodInMinutes: Math.max(1, syncMs / 60000)
     });
   }
 }
