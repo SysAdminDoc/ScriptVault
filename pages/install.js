@@ -133,7 +133,13 @@ function parseMetadata(code) {
     require: [],
     resource: {},
     'run-at': 'document-idle',
-    noframes: false
+    noframes: false,
+    connect: [],
+    antifeature: [],
+    tag: [],
+    'run-in': '',
+    'inject-into': 'auto',
+    'top-level-await': false
   };
 
   const lines = match[1].split('\n');
@@ -144,8 +150,10 @@ function parseMetadata(code) {
     const [, key, value] = m;
     const val = (value || '').trim();
 
-    if (key === 'noframes') {
-      meta.noframes = true;
+    if (key === 'noframes' || key === 'unwrap') {
+      meta[key] = true;
+    } else if (key === 'top-level-await') {
+      meta['top-level-await'] = true;
     } else if (key === 'resource') {
       const resourceMatch = val.match(/^(\S+)\s+(.+)$/);
       if (resourceMatch) {
