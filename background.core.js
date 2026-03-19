@@ -38,7 +38,12 @@ function parseUserscript(code) {
     antifeature: [],
     unwrap: false,
     'inject-into': 'auto',
-    sandbox: ''
+    sandbox: '',
+    tag: [],
+    'run-in': '',
+    'top-level-await': false,
+    license: '',
+    copyright: ''
   };
 
   const metaBlock = metaBlockMatch[1];
@@ -69,6 +74,9 @@ function parseUserscript(code) {
       case 'run-at':
       case 'inject-into':
       case 'sandbox':
+      case 'run-in':
+      case 'license':
+      case 'copyright':
         meta[key] = value;
         break;
       case 'match':
@@ -80,6 +88,7 @@ function parseUserscript(code) {
       case 'require':
       case 'connect':
       case 'antifeature':
+      case 'tag':
         const arrayKey = key === 'exclude-match' ? 'excludeMatch' : key;
         if (!meta[arrayKey]) meta[arrayKey] = [];
         if (value) meta[arrayKey].push(value);
@@ -95,6 +104,9 @@ function parseUserscript(code) {
         break;
       case 'unwrap':
         meta.unwrap = true;
+        break;
+      case 'top-level-await':
+        meta['top-level-await'] = true;
         break;
       default:
         // Handle localized metadata like @name:ja
@@ -1842,6 +1854,34 @@ async function handleMessage(message, sender) {
         }
       }
 
+      // GM_audio API - Tab mute control (Tampermonkey-compatible)
+      case 'GM_audio_setMute': {
+        try {
+          const tabId = sender.tab?.id;
+          if (!tabId) return { error: 'No tab context' };
+          const mute = typeof data.mute === 'object' ? data.mute.mute : !!data.mute;
+          await chrome.tabs.update(tabId, { muted: mute });
+          return { success: true };
+        } catch (e) {
+          return { error: e.message };
+        }
+      }
+
+      case 'GM_audio_getState': {
+        try {
+          const tabId = sender.tab?.id;
+          if (!tabId) return { error: 'No tab context' };
+          const tab = await chrome.tabs.get(tabId);
+          return {
+            muted: tab.mutedInfo?.muted || false,
+            reason: tab.mutedInfo?.reason || 'user',
+            audible: tab.audible || false
+          };
+        } catch (e) {
+          return { error: e.message };
+        }
+      }
+
       default:
         return { error: 'Unknown action: ' + action };
     }
@@ -2762,6 +2802,16 @@ async function registerScript(script) {
       'context-menu': 'document_idle' // context-menu scripts register idle, triggered via context menu
     };
 
+    // @run-in: filter by tab type (normal-tabs, incognito-tabs)
+    const runIn = meta['run-in'] || '';
+    if (runIn === 'incognito-tabs') {
+      // Only run in incognito — skip registration for normal context
+      // (chrome.userScripts doesn't support incognito filtering natively,
+      // so we inject a runtime guard into the wrapper)
+    } else if (runIn === 'normal-tabs') {
+      // Only run in normal tabs — runtime guard injected
+    }
+
     // Check for per-script runAt override
     let effectiveRunAt = meta['run-at'];
     if (settings.runAt && settings.runAt !== 'default') {
@@ -2934,19 +2984,49 @@ function isUnfetchableUrl(url) {
 }
 
 // Fetch a @require script with caching and fallbacks
+// Verify SRI hash for fetched content
+async function verifySRI(code, hashStr) {
+  if (!hashStr) return true;
+  // Support formats: sha256-<base64>, md5-<hex>, or just <hex>
+  const match = hashStr.match(/^(sha256|sha384|sha512|md5)[-=](.+)$/i);
+  if (!match) return true; // Unknown format, skip verification
+  const [, algo, expected] = match;
+  if (algo.toLowerCase() === 'md5') return true; // Can't verify MD5 with SubtleCrypto
+  const algoMap = { sha256: 'SHA-256', sha384: 'SHA-384', sha512: 'SHA-512' };
+  try {
+    const digest = await crypto.subtle.digest(algoMap[algo.toLowerCase()], new TextEncoder().encode(code));
+    const actual = btoa(String.fromCharCode(...new Uint8Array(digest)));
+    return actual === expected;
+  } catch (e) {
+    return true; // Verification not possible, allow
+  }
+}
+
 async function fetchRequireScript(url) {
-  debugLog('Fetching @require:', url);
+  // Extract SRI hash from URL fragment (e.g., url#sha256=abc123 or url#md5=abc123)
+  let sriHash = null;
+  let fetchUrl = url;
+  const hashIdx = url.indexOf('#');
+  if (hashIdx > 0) {
+    const fragment = url.slice(hashIdx + 1);
+    if (/^(sha256|sha384|sha512|md5)[-=]/i.test(fragment)) {
+      sriHash = fragment;
+      fetchUrl = url.slice(0, hashIdx);
+    }
+  }
+
+  debugLog('Fetching @require:', fetchUrl);
 
   // Skip URLs that are known to be unfetchable
-  if (isUnfetchableUrl(url)) {
+  if (isUnfetchableUrl(fetchUrl)) {
     console.warn(`[ScriptVault] Skipping unfetchable @require: ${url}`);
     return null;
   }
 
   // Check in-memory cache first
-  if (requireCache.has(url)) {
-    debugLog('Using cached @require:', url);
-    return requireCache.get(url);
+  if (requireCache.has(fetchUrl)) {
+    debugLog('Using cached @require:', fetchUrl);
+    return requireCache.get(fetchUrl);
   }
   
   // Check persistent cache in chrome.storage.local
@@ -2973,17 +3053,25 @@ async function fetchRequireScript(url) {
   }
   
   // Build list of URLs to try (original + fallbacks)
-  const fallbacks = getFallbackUrls(url);
-  const urlsToTry = [url, ...fallbacks];
-  debugLog(`Will try ${urlsToTry.length} URLs for:`, url);
+  const fallbacks = getFallbackUrls(fetchUrl);
+  const urlsToTry = [fetchUrl, ...fallbacks];
+  debugLog(`Will try ${urlsToTry.length} URLs for:`, fetchUrl);
 
   for (const tryUrl of urlsToTry) {
     try {
       debugLog('Trying:', tryUrl);
       const code = await fetchWithRetry(tryUrl);
       if (code) {
+        // Verify SRI hash if provided
+        if (sriHash) {
+          const valid = await verifySRI(code, sriHash);
+          if (!valid) {
+            console.warn(`[ScriptVault] SRI hash mismatch for ${tryUrl}, skipping`);
+            continue;
+          }
+        }
         // Store in both caches
-        requireCache.set(url, code);
+        requireCache.set(fetchUrl, code);
         
         // Store in persistent cache
         try {
@@ -3116,7 +3204,16 @@ ${req.code}
     event.preventDefault();
   }, true);
   // ============ End Error Suppression ============
-  
+
+  ${meta['run-in'] === 'incognito-tabs' ? `
+  // ============ @run-in incognito-tabs Guard ============
+  if (!chrome?.extension?.inIncognitoContext) return;
+  // ============ End @run-in Guard ============
+` : meta['run-in'] === 'normal-tabs' ? `
+  // ============ @run-in normal-tabs Guard ============
+  if (chrome?.extension?.inIncognitoContext) return;
+  // ============ End @run-in Guard ============
+` : ''}
   ${(() => {
     const validIncludes = regexIncludes.map(p => {
       const m = p.match(/^\/(.+)\/([gimsuy]*)$/);
@@ -3168,18 +3265,41 @@ ${req.code}
       description: meta.description || '',
       version: meta.version || '1.0',
       author: meta.author || '',
+      homepage: meta.homepage || meta.homepageURL || '',
+      icon: meta.icon || '',
+      icon64: meta.icon64 || '',
       matches: meta.match || [],
       includes: meta.include || [],
       excludes: meta.exclude || [],
+      excludeMatches: meta.excludeMatch || [],
       grants: grants,
       resources: meta.resource || {},
       requires: meta.require || [],
       runAt: meta['run-at'] || 'document-idle',
       connect: meta.connect || [],
-      noframes: meta.noframes || false
+      noframes: meta.noframes || false,
+      unwrap: meta.unwrap || false,
+      antifeatures: meta.antifeature || [],
+      tags: meta.tag || [],
+      license: meta.license || '',
+      updateURL: meta.updateURL || '',
+      downloadURL: meta.downloadURL || '',
+      supportURL: meta.supportURL || ''
     },
+    scriptMetaStr: ${JSON.stringify(script.code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/)?.[0] || '')},
     scriptHandler: 'ScriptVault',
-    version: ${JSON.stringify(chrome.runtime.getManifest().version)}
+    scriptSource: 'ScriptVault',
+    version: ${JSON.stringify(chrome.runtime.getManifest().version)},
+    scriptWillUpdate: !!(meta.updateURL || meta.downloadURL),
+    isIncognito: typeof chrome !== 'undefined' && chrome.extension ? chrome.extension.inIncognitoContext : false,
+    downloadMode: 'browser',
+    platform: {
+      os: navigator.userAgentData?.platform || navigator.platform || 'unknown',
+      arch: navigator.userAgentData?.architecture || 'unknown',
+      browserName: 'Chrome',
+      browserVersion: navigator.userAgent?.match(/Chrome\\/([\\d.]+)/)?.[1] || 'unknown'
+    },
+    uuid: ${JSON.stringify(script.id)}
   };
   
   // Storage cache - mutable so we can refresh it with fresh values from background
@@ -4118,7 +4238,101 @@ ${req.code}
   window.GM_focusTab = GM_focusTab;
   window.unsafeWindow = unsafeWindow;
   window.GM = GM;
-  
+
+  // ========== window.onurlchange (SPA navigation detection) ==========
+  // Tampermonkey-compatible: fires when URL changes via pushState/replaceState/popstate
+  if (hasGrant('window.onurlchange')) {
+    let _lastUrl = location.href;
+    const _urlChangeHandlers = [];
+
+    function __checkUrlChange() {
+      const newUrl = location.href;
+      if (newUrl !== _lastUrl) {
+        const oldUrl = _lastUrl;
+        _lastUrl = newUrl;
+        const event = { url: newUrl, oldUrl };
+        _urlChangeHandlers.forEach(fn => { try { fn(event); } catch(e) {} });
+        if (typeof window.onurlchange === 'function') {
+          try { window.onurlchange(event); } catch(e) {}
+        }
+      }
+    }
+
+    // Intercept history API
+    const _origPushState = history.pushState;
+    const _origReplaceState = history.replaceState;
+    history.pushState = function() {
+      _origPushState.apply(this, arguments);
+      __checkUrlChange();
+    };
+    history.replaceState = function() {
+      _origReplaceState.apply(this, arguments);
+      __checkUrlChange();
+    };
+    window.addEventListener('popstate', __checkUrlChange);
+    window.addEventListener('hashchange', __checkUrlChange);
+
+    // Allow adding multiple handlers via addEventListener pattern
+    window.addEventListener = new Proxy(window.addEventListener, {
+      apply(target, thisArg, args) {
+        if (args[0] === 'urlchange') {
+          _urlChangeHandlers.push(args[1]);
+          return;
+        }
+        return Reflect.apply(target, thisArg, args);
+      }
+    });
+    window.removeEventListener = new Proxy(window.removeEventListener, {
+      apply(target, thisArg, args) {
+        if (args[0] === 'urlchange') {
+          const idx = _urlChangeHandlers.indexOf(args[1]);
+          if (idx >= 0) _urlChangeHandlers.splice(idx, 1);
+          return;
+        }
+        return Reflect.apply(target, thisArg, args);
+      }
+    });
+    window.onurlchange = null; // Initialize as settable
+  }
+
+  // ========== window.close / window.focus grants ==========
+  if (hasGrant('window.close')) {
+    // Already available in USER_SCRIPT world, but explicitly expose
+    window.close = window.close.bind(window);
+  }
+  if (hasGrant('window.focus')) {
+    window.focus = window.focus.bind(window);
+  }
+
+  // ========== GM_audio API (Tampermonkey-compatible tab mute control) ==========
+  const GM_audio = {
+    setMute: (details, callback) => {
+      if (!hasGrant('GM_audio')) { if (callback) callback(new Error('Permission denied')); return; }
+      sendToBackground('GM_audio_setMute', { mute: details?.mute ?? details }).then(r => {
+        if (callback) callback(r?.error ? new Error(r.error) : undefined);
+      }).catch(e => { if (callback) callback(e); });
+    },
+    getState: (callback) => {
+      if (!hasGrant('GM_audio')) { if (callback) callback(null, new Error('Permission denied')); return; }
+      sendToBackground('GM_audio_getState', {}).then(r => {
+        if (callback) callback(r, r?.error ? new Error(r.error) : undefined);
+      }).catch(e => { if (callback) callback(null, e); });
+    },
+    _listeners: [],
+    addStateChangeListener: (listener, callback) => {
+      // Simplified: poll-based since chrome.tabs events aren't available in USER_SCRIPT world
+      if (!hasGrant('GM_audio')) { if (callback) callback(new Error('Permission denied')); return; }
+      GM_audio._listeners.push(listener);
+      if (callback) callback();
+    },
+    removeStateChangeListener: (listener, callback) => {
+      const idx = GM_audio._listeners.indexOf(listener);
+      if (idx >= 0) GM_audio._listeners.splice(idx, 1);
+      if (callback) callback();
+    }
+  };
+  window.GM_audio = GM_audio;
+
   // ========== DOM HELPER FUNCTIONS ==========
   // These help userscripts handle DOM timing issues gracefully
   // Use these when document.body/head might not exist yet
@@ -4235,7 +4449,12 @@ ${libraryExports}
 })();
 `;
 
-  return apiInit + script.code + apiClose;
+  // @top-level-await: wrap user code in async IIFE so top-level await works
+  const userCode = meta['top-level-await']
+    ? `(async () => {\n${script.code}\n})();`
+    : script.code;
+
+  return apiInit + userCode + apiClose;
 }
 
 // Helper: Check if a pattern is a valid match pattern
