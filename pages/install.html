@@ -647,8 +647,53 @@
     .success-message {
       font-size: 14px;
       color: var(--text-muted);
+      margin-bottom: 20px;
     }
-    
+
+    .success-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 8px;
+    }
+
+    /* Downgrade badge */
+    .downgrade-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: var(--danger-bg);
+      color: var(--danger);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .btn-downgrade {
+      background: var(--warning);
+      color: #000;
+    }
+
+    .btn-downgrade:hover {
+      filter: brightness(0.9);
+      transform: translateY(-1px);
+    }
+
+    /* Install error inline */
+    .install-error {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--danger-bg);
+      border: 1px solid var(--danger);
+      border-radius: var(--radius-sm);
+      color: var(--danger);
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
     /* Responsive */
     @media (max-width: 600px) {
       .meta-grid {
@@ -667,7 +712,7 @@
   <div class="container">
     <div class="header">
       <div class="header-left">
-        <div class="logo">🔐</div>
+        <div class="logo"><img src="../images/icon48.png" alt="ScriptVault" style="width:32px;height:32px"></div>
         <div class="header-text">
           <h1>Install Userscript</h1>
           <p>Review the script before installing</p>

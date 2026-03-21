@@ -1,4 +1,4 @@
-// ScriptVault Popup v1.5.2
+// ScriptVault Popup v1.6.0
 // Tampermonkey-style popup interface
 
 (function() {
@@ -16,6 +16,7 @@
     let currentTab = null;
     let currentUrl = '';
     let pageScripts = [];
+    let allScripts = [];
     let settings = {};
     let userScriptsAvailable = true;
 
@@ -43,9 +44,63 @@
         await checkUserScriptsAvailability();
         await loadSettings();
         await getCurrentTab();
+        await loadAllScripts();
         await loadPageScripts();
         setupEventListeners();
         updateEnabledState();
+        updateUrlBar();
+        updateFooterCount();
+        updateEmptyStateHint();
+    }
+
+    // Load all scripts for total count
+    async function loadAllScripts() {
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'getScripts' });
+            allScripts = response?.scripts || [];
+        } catch (e) {
+            allScripts = [];
+        }
+    }
+
+    // Show current URL
+    function updateUrlBar() {
+        const urlBar = document.getElementById('urlBar');
+        if (urlBar && currentUrl) {
+            try {
+                const u = new URL(currentUrl);
+                urlBar.textContent = u.hostname + u.pathname;
+            } catch {
+                urlBar.textContent = '';
+            }
+        }
+    }
+
+    // Show total count in footer
+    function updateFooterCount() {
+        const el = document.getElementById('footerTotalCount');
+        if (el) {
+            const total = allScripts.length;
+            const active = allScripts.filter(s => s.enabled !== false).length;
+            el.textContent = `${active}/${total} scripts`;
+        }
+    }
+
+    // Contextual empty state hint
+    function updateEmptyStateHint() {
+        const el = document.getElementById('emptyStateHint');
+        if (!el) return;
+        try {
+            const hostname = new URL(currentUrl).hostname.replace(/^www\./, '');
+            if (hostname) {
+                el.innerHTML = `<a href="#" id="emptyFindLink" style="color:var(--popup-accent);text-decoration:underline;cursor:pointer">Find scripts for ${escapeHtml(hostname)}</a>`;
+                document.getElementById('emptyFindLink')?.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    chrome.tabs.create({ url: `https://greasyfork.org/en/scripts/by-site/${encodeURIComponent(hostname)}?filter_locale=0` });
+                    window.close();
+                });
+            }
+        } catch {}
     }
     
     // Check if userScripts API is available and enabled
@@ -180,12 +235,16 @@
         }
         if (emptyState) emptyState.style.display = 'none';
 
-        elements.scriptList.innerHTML = displayScripts.map(script => {
+        elements.scriptList.innerHTML = displayScripts.map((script, i) => {
             const meta = script.metadata || script.meta || {};
             const name = meta.name || 'Unnamed Script';
             const version = meta.version || '';
+            const description = meta.description || '';
             const enabled = script.enabled !== false;
             const icon = getScriptIcon(script);
+
+            // Running indicator — script is enabled AND matches current URL
+            const isRunning = enabled && script._matchesCurrent !== false;
 
             // Perf badge
             const stats = script.stats;
@@ -193,14 +252,24 @@
                 ? `<span class="script-perf ${stats.avgTime < 50 ? 'fast' : stats.avgTime < 200 ? 'medium' : 'slow'}" title="Avg: ${stats.avgTime}ms (${stats.runs} runs${stats.errors ? ', ' + stats.errors + ' errors' : ''})">${stats.avgTime}ms</span>`
                 : '';
 
+            // Error dot
+            const errorDot = stats?.errors > 0 ? `<span class="script-error-dot" title="${stats.errors} error(s)"></span>` : '';
+
+            // Description tooltip
+            const descAttr = description ? ` title="${escapeHtml(description)}"` : '';
+
+            // Stagger animation delay
+            const animDelay = `style="animation-delay: ${i * 30}ms"`;
+
             return `
-                <div class="script-item" data-script-id="${script.id}">
+                <div class="script-item${isRunning ? '' : ' not-running'}" data-script-id="${script.id}"${descAttr} ${animDelay}>
                     <label class="script-toggle">
                         <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${script.id}">
                         <span class="slider"></span>
                     </label>
                     <div class="script-icon">${icon}</div>
-                    <span class="script-name">${escapeHtml(name)}${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}</span>
+                    <span class="script-name" data-edit-id="${script.id}">${escapeHtml(name)}${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}</span>
+                    ${errorDot}
                     ${perfHtml}
                     <div class="script-more" data-more-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="currentColor">
@@ -232,12 +301,10 @@
                 e.stopPropagation();
             });
 
-            // Row click toggles the script
-            item.addEventListener('click', () => {
-                if (checkbox) {
-                    checkbox.checked = !checkbox.checked;
-                    checkbox.dispatchEvent(new Event('change'));
-                }
+            // Script name click opens in dashboard editor
+            item.querySelector('.script-name')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openDashboard(scriptId);
             });
 
             // More button (arrow) - position and show shared dropdown
@@ -284,6 +351,35 @@
                 } catch (err) {
                     showPopupToast('Update check failed', 'error');
                 }
+            });
+
+            dropdown.querySelector('[data-action="copyUrl"]')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                dropdown.classList.remove('open');
+                if (!activeDropdownScriptId) return;
+                const script = pageScripts.find(s => s.id === activeDropdownScriptId);
+                const url = (script?.metadata || script?.meta || {}).downloadURL || (script?.metadata || script?.meta || {}).updateURL;
+                if (url) {
+                    try {
+                        await navigator.clipboard.writeText(url);
+                        showPopupToast('Install URL copied');
+                    } catch { showPopupToast('Copy failed', 'error'); }
+                } else {
+                    showPopupToast('No download URL', 'error');
+                }
+            });
+
+            dropdown.querySelector('[data-action="pin"]')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                dropdown.classList.remove('open');
+                if (!activeDropdownScriptId) return;
+                const script = pageScripts.find(s => s.id === activeDropdownScriptId);
+                if (!script) return;
+                const settings = script.settings || {};
+                settings.pinned = !settings.pinned;
+                await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: activeDropdownScriptId, settings });
+                script.settings = settings;
+                showPopupToast(settings.pinned ? 'Pinned' : 'Unpinned');
             });
 
             dropdown.querySelector('[data-action="delete"]')?.addEventListener('click', (e) => {
