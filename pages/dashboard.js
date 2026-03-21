@@ -1,4 +1,4 @@
-// ScriptVault Dashboard v1.5.2 - Full-Featured Controller
+// ScriptVault Dashboard v1.6.0 - Full-Featured Controller
 (function() {
     'use strict';
 
@@ -6,13 +6,17 @@
     const state = {
         scripts: [],
         settings: {},
+        folders: [],
         currentScriptId: null,
         editor: null,
         unsavedChanges: false,
         selectedScripts: new Set(),
         sortColumn: 'updated',
         sortDirection: 'desc',
-        openTabs: {}  // { scriptId: { code, unsaved } }
+        openTabs: {},  // { scriptId: { code, unsaved } }
+        _collapsedFolders: new Set(),
+        _lastCheckedId: null,
+        _quotaWarned: false
     };
 
     // DOM Elements
@@ -342,6 +346,7 @@
         }, true); // Use capture phase to catch errors before they propagate
         
         await loadSettings();
+        await loadFolders();
         await loadScripts();
         initEditor();
         initEventListeners();
@@ -350,6 +355,7 @@
         updateStats();
         toggleSyncProviderSettings();
         loadSyncProviderStatus();
+        loadWorkspaces();
         await checkUserScriptsAvailability();
 
         const hash = window.location.hash.slice(1);
@@ -748,7 +754,11 @@
         if (elements.scriptRunAt) elements.scriptRunAt.value = settings.runAt || 'default';
         if (elements.scriptInjectInto) elements.scriptInjectInto.value = settings.injectInto || 'auto';
         if (elements.scriptNotifyErrors) elements.scriptNotifyErrors.checked = settings.notifyErrors || false;
-        
+
+        // Notes
+        const notesEl = document.getElementById('scriptNotes');
+        if (notesEl) notesEl.value = settings.notes || '';
+
         // URL Override settings
         // Original patterns checkboxes
         if (elements.useOriginalIncludes) {
@@ -886,6 +896,7 @@
             runAt: elements.scriptRunAt?.value || 'default',
             injectInto: elements.scriptInjectInto?.value || 'auto',
             notifyErrors: elements.scriptNotifyErrors?.checked || false,
+            notes: document.getElementById('scriptNotes')?.value || '',
             // URL Override settings
             useOriginalIncludes: elements.useOriginalIncludes?.checked ?? true,
             useOriginalMatches: elements.useOriginalMatches?.checked ?? true,
@@ -1028,11 +1039,70 @@
     }
 
     // Scripts
+    // Folders
+    async function loadFolders() {
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'getFolders' });
+            state.folders = response?.folders || [];
+        } catch (e) {
+            state.folders = [];
+        }
+    }
+
+    async function createFolder() {
+        const name = prompt('Folder name:');
+        if (!name?.trim()) return;
+        const colors = ['#60a5fa', '#f87171', '#fbbf24', '#a78bfa', '#34d399', '#fb923c'];
+        const color = colors[state.folders?.length % colors.length] || '#60a5fa';
+        try {
+            const res = await chrome.runtime.sendMessage({ action: 'createFolder', name: name.trim(), color });
+            if (res?.folder) {
+                await loadFolders();
+                renderScriptTable();
+                showToast('Folder created', 'success');
+            }
+        } catch (e) { showToast('Failed', 'error'); }
+    }
+
+    async function deleteFolder(folderId) {
+        if (!await showConfirmModal('Delete Folder', 'Delete this folder? Scripts will not be deleted.')) return;
+        await chrome.runtime.sendMessage({ action: 'deleteFolder', id: folderId });
+        await loadFolders();
+        renderScriptTable();
+        showToast('Folder deleted', 'success');
+    }
+
+    async function moveScriptToFolder(scriptId) {
+        const folders = state.folders || [];
+        const currentFolder = folders.find(f => f.scriptIds?.includes(scriptId));
+        const options = [
+            '<option value="">No folder</option>',
+            ...folders.map(f => `<option value="${f.id}" ${currentFolder?.id === f.id ? 'selected' : ''}>${escapeHtml(f.name)}</option>`)
+        ].join('');
+
+        showModal('Move to Folder', `
+            <select class="select-field" id="moveToFolderSelect" style="width:100%;margin-bottom:10px">${options}</select>
+        `, [
+            { label: 'Move', class: 'btn-primary', callback: async () => {
+                const toId = document.getElementById('moveToFolderSelect')?.value || null;
+                const fromId = currentFolder?.id || null;
+                if (fromId !== toId) {
+                    await chrome.runtime.sendMessage({ action: 'moveScriptToFolder', scriptId, fromFolderId: fromId, toFolderId: toId });
+                    await loadFolders();
+                    renderScriptTable();
+                }
+                hideModal();
+            }},
+            { label: 'Cancel', callback: () => hideModal() }
+        ]);
+    }
+
     async function loadScripts() {
         try {
             const response = await chrome.runtime.sendMessage({ action: 'getScripts' });
             if (response?.scripts) {
                 state.scripts = response.scripts;
+                updateTagFilterOptions();
                 renderScriptTable();
             }
         } catch (e) {
@@ -1041,22 +1111,90 @@
     }
     
     // Get filtered and sorted scripts
+    // Rebuild tag filter options dynamically
+    function updateTagFilterOptions() {
+        if (!elements.filterSelect) return;
+        const allTags = new Set();
+        for (const s of state.scripts) {
+            const tags = s.metadata?.tag || s.metadata?.tags || [];
+            tags.forEach(t => allTags.add(t));
+        }
+        // Remove old tag options
+        elements.filterSelect.querySelectorAll('option[data-tag]').forEach(o => o.remove());
+        // Add tag options
+        if (allTags.size > 0) {
+            const sep = document.createElement('option');
+            sep.disabled = true;
+            sep.textContent = '--- Tags ---';
+            sep.dataset.tag = '_sep';
+            elements.filterSelect.appendChild(sep);
+            for (const tag of [...allTags].sort()) {
+                const opt = document.createElement('option');
+                opt.value = 'tag:' + tag;
+                opt.textContent = '#' + tag;
+                opt.dataset.tag = tag;
+                elements.filterSelect.appendChild(opt);
+            }
+        }
+    }
+
     function getFilteredScripts() {
         const searchFilter = (elements.scriptSearch?.value || '').toLowerCase();
         const statusFilter = elements.filterSelect?.value || 'all';
+
+        const isCodeSearch = searchFilter.startsWith('code:');
+        const effectiveSearch = isCodeSearch ? searchFilter.slice(5) : searchFilter;
 
         const filtered = state.scripts.filter(s => {
             // Search filter
             const name = s.metadata?.name || '';
             const desc = s.metadata?.description || '';
-            const matchesSearch = name.toLowerCase().includes(searchFilter) || desc.toLowerCase().includes(searchFilter);
+            const author = s.metadata?.author || '';
+            let matchesSearch;
+            if (isCodeSearch && effectiveSearch) {
+                matchesSearch = (s.code || '').toLowerCase().includes(effectiveSearch);
+            } else if (effectiveSearch) {
+                matchesSearch = name.toLowerCase().includes(effectiveSearch) ||
+                    desc.toLowerCase().includes(effectiveSearch) ||
+                    author.toLowerCase().includes(effectiveSearch);
+            } else {
+                matchesSearch = true;
+            }
 
             // Status filter
             let matchesStatus = true;
+            const m = s.metadata || {};
+            const grants = m.grant || [];
+            const patterns = [...(m.match || []), ...(m.include || [])];
+
             if (statusFilter === 'enabled') {
                 matchesStatus = s.enabled !== false;
             } else if (statusFilter === 'disabled') {
                 matchesStatus = s.enabled === false;
+            } else if (statusFilter === 'has-errors') {
+                matchesStatus = s.stats?.errors > 0;
+            } else if (statusFilter === 'has-updates') {
+                matchesStatus = !!(m.updateURL || m.downloadURL);
+            } else if (statusFilter === 'no-url') {
+                matchesStatus = !(m.updateURL || m.downloadURL);
+            } else if (statusFilter === 'grant:xhr') {
+                matchesStatus = grants.includes('GM_xmlhttpRequest') || grants.includes('GM.xmlHttpRequest');
+            } else if (statusFilter === 'grant:storage') {
+                matchesStatus = grants.some(g => g.includes('getValue') || g.includes('setValue'));
+            } else if (statusFilter === 'grant:style') {
+                matchesStatus = grants.includes('GM_addStyle') || grants.includes('GM.addStyle');
+            } else if (statusFilter === 'grant:none') {
+                matchesStatus = grants.length === 0 || (grants.length === 1 && grants[0] === 'none');
+            } else if (statusFilter === 'scope:broad') {
+                matchesStatus = patterns.some(p => ['*://*/*', '<all_urls>', 'http://*/*', 'https://*/*'].includes(p) || /^\*:\/\/\*\//.test(p));
+            } else if (statusFilter === 'scope:single') {
+                const domains = new Set();
+                patterns.forEach(p => { const d = p.match(/^(?:\*|https?):\/\/(?:\*\.)?([^/*]+)/); if (d) domains.add(d[1].replace(/^\*\./, '')); });
+                matchesStatus = domains.size === 1;
+            } else if (statusFilter.startsWith('tag:')) {
+                const tag = statusFilter.slice(4);
+                const tags = m.tag || m.tags || [];
+                matchesStatus = tags.includes(tag);
             }
 
             return matchesSearch && matchesStatus;
@@ -1106,6 +1244,13 @@
                     vb = b.position ?? 0;
             }
             return (va > vb ? 1 : va < vb ? -1 : 0) * dir;
+        });
+
+        // Pinned scripts always sort to top
+        filtered.sort((a, b) => {
+            const aPinned = a.settings?.pinned ? 1 : 0;
+            const bPinned = b.settings?.pinned ? 1 : 0;
+            return bPinned - aPinned;
         });
 
         return filtered;
@@ -1294,12 +1439,77 @@
         // Precompute conflict map once (avoids O(n^2) per-row scan)
         _conflictCache = buildConflictMap(state.scripts);
 
-        filtered.forEach((script, i) => {
-            const tr = createScriptRow(script, i + 1);
-            elements.scriptTableBody.appendChild(tr);
-        });
-        
+        // Render with folder grouping if folders exist
+        const folders = state.folders || [];
+        const collapsedFolders = state._collapsedFolders || new Set();
+
+        if (folders.length > 0) {
+            // Scripts in folders
+            const assignedIds = new Set();
+            let rowIdx = 1;
+
+            for (const folder of folders) {
+                const folderScripts = filtered.filter(s => folder.scriptIds?.includes(s.id));
+                if (folderScripts.length === 0) continue;
+                folderScripts.forEach(s => assignedIds.add(s.id));
+
+                // Folder header row
+                const collapsed = collapsedFolders.has(folder.id);
+                const folderTr = document.createElement('tr');
+                folderTr.className = `folder-row${collapsed ? ' collapsed' : ''}`;
+                folderTr.dataset.folderId = folder.id;
+                folderTr.innerHTML = `<td colspan="14">
+                    <span class="folder-icon">\u25BC</span>
+                    <span class="folder-color" style="background:${escapeHtml(folder.color)}"></span>
+                    ${escapeHtml(folder.name)} <span class="folder-count">(${folderScripts.length})</span>
+                    <span class="folder-actions">
+                        <button data-folder-delete="${folder.id}" title="Delete folder">x</button>
+                    </span>
+                </td>`;
+                folderTr.addEventListener('click', (e) => {
+                    if (e.target.closest('[data-folder-delete]')) {
+                        e.stopPropagation();
+                        deleteFolder(folder.id);
+                        return;
+                    }
+                    if (collapsedFolders.has(folder.id)) collapsedFolders.delete(folder.id);
+                    else collapsedFolders.add(folder.id);
+                    state._collapsedFolders = collapsedFolders;
+                    renderScriptTable();
+                });
+                elements.scriptTableBody.appendChild(folderTr);
+
+                // Scripts in this folder
+                if (!collapsed) {
+                    for (const script of folderScripts) {
+                        elements.scriptTableBody.appendChild(createScriptRow(script, rowIdx++));
+                    }
+                }
+            }
+
+            // Unassigned scripts
+            const unassigned = filtered.filter(s => !assignedIds.has(s.id));
+            if (unassigned.length > 0 && assignedIds.size > 0) {
+                const headerTr = document.createElement('tr');
+                headerTr.className = 'folder-row';
+                headerTr.innerHTML = `<td colspan="14">
+                    <span class="folder-icon">\u25BC</span>
+                    Uncategorized <span class="folder-count">(${unassigned.length})</span>
+                </td>`;
+                elements.scriptTableBody.appendChild(headerTr);
+            }
+            for (const script of unassigned) {
+                elements.scriptTableBody.appendChild(createScriptRow(script, rowIdx++));
+            }
+        } else {
+            // No folders — flat list
+            filtered.forEach((script, i) => {
+                elements.scriptTableBody.appendChild(createScriptRow(script, i + 1));
+            });
+        }
+
         updateBulkCheckboxes();
+        applyColumnVisibility();
     }
 
     function createScriptRow(script, index) {
@@ -1352,6 +1562,16 @@
           ? `<span class="conflict-badge" title="Overlaps with: ${escapeHtml(conflicts.map(c => c.name).join(', '))}">! ${conflicts.length}</span>`
           : '';
 
+        // Health indicators
+        const hasErrors = script.stats?.errors > 0;
+        const daysSinceUpdate = script.updatedAt ? Math.floor((Date.now() - script.updatedAt) / 86400000) : 0;
+        const isStale = daysSinceUpdate > 180 && (script.metadata?.updateURL || script.metadata?.downloadURL);
+        const perfBudget = script.settings?.perfBudget || state.settings.perfBudget || 200;
+        const overBudget = script.stats?.avgTime > perfBudget && script.stats?.runs > 2;
+        if (hasErrors) tr.classList.add('row-has-errors');
+        if (isStale) tr.classList.add('row-stale');
+        if (overBudget) tr.classList.add('row-over-budget');
+
         tr.draggable = true;
         tr.dataset.scriptId = script.id;
         tr.innerHTML = `
@@ -1366,7 +1586,8 @@
             <td>
                 <div class="script-name-cell">
                     ${faviconHtml}
-                    <span class="script-name" data-id="${script.id}">${escapeHtml(name)}${isBroadMatch(matches) ? ' <span title="Runs on all/most sites" style="opacity:0.5">🌐</span>' : ''}</span>
+                    <span class="script-name" data-id="${script.id}" title="${escapeHtml(script.metadata?.description || '')}">${escapeHtml(name)}${isBroadMatch(matches) ? ' <span title="Runs on all/most sites" style="opacity:0.5">🌐</span>' : ''}</span>
+                    ${script.metadata?.author ? `<span class="script-author">${escapeHtml(script.metadata.author)}</span>` : ''}
                     ${tagHtml ? `<div class="script-tags">${tagHtml}</div>` : ''}
                     ${conflictHtml}
                 </div>
@@ -1383,14 +1604,23 @@
             <td class="center">${statsHtml}</td>
             <td class="center">
                 <div class="action-icons">
+                    <button class="action-icon ${script.settings?.pinned ? 'pinned' : ''}" title="${script.settings?.pinned ? 'Unpin' : 'Pin to top'}" data-action="pin" data-id="${script.id}">
+                        <svg viewBox="0 0 24 24" fill="${script.settings?.pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M12 2L9.1 8.6 2 9.2l5.5 4.8L5.8 21 12 17.3 18.2 21l-1.7-7 5.5-4.8-7.1-.6z"/></svg>
+                    </button>
                     <button class="action-icon" title="Edit" data-action="edit" data-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
-                    <button class="action-icon" title="Check for update" data-action="updateScript" data-id="${script.id}">
+                    <button class="action-icon" title="Check for update (right-click: force update)" data-action="updateScript" data-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                     </button>
                     <button class="action-icon" title="Export" data-action="exportScript" data-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    </button>${(script.metadata?.downloadURL || script.metadata?.updateURL) ? `
+                    <button class="action-icon" title="Copy install URL" data-action="copyUrl" data-id="${script.id}" data-url="${escapeHtml(script.metadata.downloadURL || script.metadata.updateURL)}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    </button>` : ''}
+                    <button class="action-icon" title="Move to folder" data-action="moveFolder" data-id="${script.id}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                     </button>
                     <button class="action-icon" title="Delete" data-action="delete" data-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
@@ -1402,18 +1632,55 @@
         tr.querySelector('.script-toggle')?.addEventListener('change', e => {
             toggleScriptEnabled(script.id, e.target.checked);
         });
-        tr.querySelector('.script-checkbox')?.addEventListener('change', e => {
-            if (e.target.checked) {
-                state.selectedScripts.add(script.id);
+        tr.querySelector('.script-checkbox')?.addEventListener('click', e => {
+            const checkbox = e.target;
+            // Shift+click multi-select
+            if (e.shiftKey && state._lastCheckedId) {
+                const allRows = [...elements.scriptTableBody.querySelectorAll('.script-checkbox')];
+                const lastIdx = allRows.findIndex(cb => cb.dataset.id === state._lastCheckedId);
+                const curIdx = allRows.findIndex(cb => cb.dataset.id === script.id);
+                if (lastIdx !== -1 && curIdx !== -1) {
+                    const start = Math.min(lastIdx, curIdx);
+                    const end = Math.max(lastIdx, curIdx);
+                    for (let i = start; i <= end; i++) {
+                        allRows[i].checked = checkbox.checked;
+                        const id = allRows[i].dataset.id;
+                        if (checkbox.checked) state.selectedScripts.add(id);
+                        else state.selectedScripts.delete(id);
+                    }
+                }
             } else {
-                state.selectedScripts.delete(script.id);
+                if (checkbox.checked) state.selectedScripts.add(script.id);
+                else state.selectedScripts.delete(script.id);
             }
+            state._lastCheckedId = script.id;
             updateBulkCheckboxes();
         });
         tr.querySelector('.script-name')?.addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="edit"]')?.addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="delete"]')?.addEventListener('click', () => deleteScript(script.id));
         tr.querySelector('[data-action="exportScript"]')?.addEventListener('click', () => exportSingleScript(script));
+        tr.querySelector('[data-action="moveFolder"]')?.addEventListener('click', () => moveScriptToFolder(script.id));
+        tr.querySelector('[data-action="copyUrl"]')?.addEventListener('click', async (e) => {
+            const url = e.currentTarget.dataset.url;
+            if (url) {
+                try {
+                    await navigator.clipboard.writeText(url);
+                    showToast('Install URL copied', 'success');
+                } catch {
+                    showToast('Copy failed', 'error');
+                }
+            }
+        });
+        tr.querySelector('[data-action="pin"]')?.addEventListener('click', async () => {
+            const s = state.scripts.find(x => x.id === script.id);
+            if (!s) return;
+            if (!s.settings) s.settings = {};
+            s.settings.pinned = !s.settings.pinned;
+            await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: script.id, settings: s.settings });
+            renderScriptTable();
+            showToast(s.settings.pinned ? 'Pinned' : 'Unpinned', 'success');
+        });
         tr.querySelector('[data-action="updateScript"]')?.addEventListener('click', async (e) => {
             const btn = e.currentTarget;
             btn.style.opacity = '0.4';
@@ -1431,6 +1698,29 @@
                 }
             } catch (err) {
                 showToast('Update check failed', 'error');
+                btn.style.opacity = '';
+                btn.style.pointerEvents = '';
+            }
+        });
+        // Right-click = force update (bypass HTTP cache)
+        tr.querySelector('[data-action="updateScript"]')?.addEventListener('contextmenu', async (e) => {
+            e.preventDefault();
+            const btn = e.currentTarget;
+            btn.style.opacity = '0.4';
+            btn.style.pointerEvents = 'none';
+            showToast(`Force-updating ${name}...`, 'info');
+            try {
+                const res = await chrome.runtime.sendMessage({ action: 'forceUpdate', scriptId: script.id });
+                if (res?.success) {
+                    showToast(`${name} force-updated to v${res.script?.meta?.version || '?'}`, 'success');
+                    setTimeout(() => loadScripts(), 800);
+                } else {
+                    showToast(res?.error || 'Force update failed', 'error');
+                    btn.style.opacity = '';
+                    btn.style.pointerEvents = '';
+                }
+            } catch (err) {
+                showToast('Force update failed', 'error');
                 btn.style.opacity = '';
                 btn.style.pointerEvents = '';
             }
@@ -1854,6 +2144,112 @@
                 conflictsEl.textContent = 'None';
             }
         }
+
+        // Version history / rollback
+        const historyEl = document.getElementById('infoVersionHistory');
+        if (historyEl) {
+            const history = script.versionHistory || [];
+            if (history.length > 0) {
+                historyEl.innerHTML = history.map((h, idx) =>
+                    `<div class="version-history-item">
+                        <span class="version-history-ver">v${escapeHtml(h.version)}</span>
+                        <span class="version-history-date">${formatTime(h.updatedAt)}</span>
+                        <button class="toolbar-btn version-rollback-btn" data-rollback-idx="${idx}" title="Rollback to this version">Rollback</button>
+                        <button class="toolbar-btn version-diff-btn" data-diff-idx="${idx}" title="View diff with current code">Diff</button>
+                    </div>`
+                ).reverse().join('');
+
+                historyEl.querySelectorAll('.version-rollback-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const idx = parseInt(btn.dataset.rollbackIdx);
+                        const ver = history[idx]?.version || '?';
+                        if (!await showConfirmModal('Rollback', `Rollback to v${ver}? Current code will be lost.`)) return;
+                        try {
+                            const res = await chrome.runtime.sendMessage({ action: 'rollbackScript', scriptId: script.id, index: idx });
+                            if (res?.success) {
+                                await loadScripts();
+                                const updated = state.scripts.find(s => s.id === script.id);
+                                if (updated) {
+                                    loadScriptInfo(updated);
+                                    if (state.editor && state.currentScriptId === script.id) {
+                                        state.editor.setValue(updated.code);
+                                        state.unsavedChanges = false;
+                                    }
+                                }
+                                showToast('Rolled back to v' + ver, 'success');
+                            } else {
+                                showToast(res?.error || 'Rollback failed', 'error');
+                            }
+                        } catch (e) {
+                            showToast('Rollback failed', 'error');
+                        }
+                    });
+                });
+                // Diff buttons
+                historyEl.querySelectorAll('.version-diff-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const idx = parseInt(btn.dataset.diffIdx);
+                        const oldCode = history[idx]?.code || '';
+                        const newCode = script.code || '';
+                        showDiffView(oldCode, newCode, `v${history[idx]?.version || '?'}`, `v${(script.metadata || script.meta || {}).version || 'current'}`);
+                    });
+                });
+            } else {
+                historyEl.textContent = 'No previous versions';
+            }
+        }
+    }
+
+    function showDiffView(oldCode, newCode, oldLabel, newLabel) {
+        const oldLines = oldCode.split('\n');
+        const newLines = newCode.split('\n');
+
+        // Simple line-by-line diff
+        const maxLen = Math.max(oldLines.length, newLines.length);
+        let diffHtml = '';
+        let additions = 0, deletions = 0, unchanged = 0;
+
+        for (let i = 0; i < maxLen; i++) {
+            const oldLine = oldLines[i];
+            const newLine = newLines[i];
+            const lineNum = i + 1;
+
+            if (oldLine === undefined) {
+                // Added
+                diffHtml += `<div class="diff-line diff-add"><span class="diff-ln">${lineNum}</span><span class="diff-sign">+</span><span class="diff-text">${escapeHtml(newLine)}</span></div>`;
+                additions++;
+            } else if (newLine === undefined) {
+                // Deleted
+                diffHtml += `<div class="diff-line diff-del"><span class="diff-ln">${lineNum}</span><span class="diff-sign">-</span><span class="diff-text">${escapeHtml(oldLine)}</span></div>`;
+                deletions++;
+            } else if (oldLine !== newLine) {
+                // Changed
+                diffHtml += `<div class="diff-line diff-del"><span class="diff-ln">${lineNum}</span><span class="diff-sign">-</span><span class="diff-text">${escapeHtml(oldLine)}</span></div>`;
+                diffHtml += `<div class="diff-line diff-add"><span class="diff-ln">${lineNum}</span><span class="diff-sign">+</span><span class="diff-text">${escapeHtml(newLine)}</span></div>`;
+                additions++;
+                deletions++;
+            } else {
+                unchanged++;
+                // Only show context lines (3 before/after changes)
+                const hasNearbyChange = (i2) => {
+                    for (let j = Math.max(0, i2 - 3); j <= Math.min(maxLen - 1, i2 + 3); j++) {
+                        if (j === i2) continue;
+                        if ((oldLines[j] || '') !== (newLines[j] || '')) return true;
+                    }
+                    return false;
+                };
+                if (hasNearbyChange(i)) {
+                    diffHtml += `<div class="diff-line diff-ctx"><span class="diff-ln">${lineNum}</span><span class="diff-sign"> </span><span class="diff-text">${escapeHtml(newLine)}</span></div>`;
+                }
+            }
+        }
+
+        const summary = `<div class="diff-summary"><span class="diff-add-count">+${additions}</span> <span class="diff-del-count">-${deletions}</span> <span class="diff-unch-count">${unchanged} unchanged</span></div>`;
+        const header = `<div class="diff-header"><span>${escapeHtml(oldLabel)}</span> vs <span>${escapeHtml(newLabel)}</span></div>`;
+
+        showModal('Version Diff', `${header}${summary}<div class="diff-container">${diffHtml || '<div style="padding:20px;text-align:center;color:var(--text-muted)">No differences found</div>'}</div>`, [
+            { label: 'Close', callback: () => hideModal() }
+        ]);
     }
 
     // Precomputed conflict cache (rebuilt each render, avoids O(n^2) per row)
@@ -2091,14 +2487,12 @@
     }
 
     let _creatingScript = false;
-    async function createNewScript() {
-        if (_creatingScript) return;
-        _creatingScript = true;
 
-        // Clear hash to prevent duplicate creation on refresh
-        history.replaceState(null, '', window.location.pathname);
-
-        const code = `// ==UserScript==
+    const SCRIPT_TEMPLATES = {
+        blank: {
+            label: 'Blank Script',
+            desc: 'Empty starter with metadata block',
+            code: `// ==UserScript==
 // @name        New Script
 // @namespace   http://example.com/
 // @version     1.0
@@ -2111,21 +2505,235 @@
 (function() {
     'use strict';
     // Your code here...
-})();`;
+})();`
+        },
+        domModifier: {
+            label: 'Page Modifier',
+            desc: 'Modify page content and layout',
+            code: `// ==UserScript==
+// @name        Page Modifier
+// @namespace   http://example.com/
+// @version     1.0
+// @description Modify page elements
+// @author      You
+// @match       *://*/*
+// @grant       GM_addStyle
+// @run-at      document-end
+// ==/UserScript==
 
-        try {
-            const response = await chrome.runtime.sendMessage({ action: 'createScript', code });
-            if (response?.success) {
-                await loadScripts();
-                updateStats();
-                openEditorForScript(response.scriptId);
-                showToast('Created', 'success');
-            }
-        } catch (e) {
-            showToast('Failed', 'error');
-        } finally {
-            _creatingScript = false;
+(function() {
+    'use strict';
+
+    // Add custom CSS
+    GM_addStyle(\`
+        /* Your styles here */
+    \`);
+
+    // Wait for element then modify
+    function waitForElement(selector, callback) {
+        const el = document.querySelector(selector);
+        if (el) return callback(el);
+        const observer = new MutationObserver((mutations, obs) => {
+            const el = document.querySelector(selector);
+            if (el) { obs.disconnect(); callback(el); }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    // Example: modify an element
+    // waitForElement('.target', el => { el.textContent = 'Modified!'; });
+})();`
+        },
+        cssInjector: {
+            label: 'CSS Injector',
+            desc: 'Inject custom styles into a page',
+            code: `// ==UserScript==
+// @name        Custom CSS
+// @namespace   http://example.com/
+// @version     1.0
+// @description Inject custom styles
+// @author      You
+// @match       *://*/*
+// @grant       GM_addStyle
+// @run-at      document-start
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    GM_addStyle(\`
+        /* Dark mode override example */
+        body {
+            background: #1a1a1a !important;
+            color: #e0e0e0 !important;
         }
+
+        /* Hide elements */
+        .ads, .banner, .popup {
+            display: none !important;
+        }
+    \`);
+})();`
+        },
+        apiInterceptor: {
+            label: 'API Interceptor',
+            desc: 'Intercept fetch/XHR requests',
+            code: `// ==UserScript==
+// @name        API Interceptor
+// @namespace   http://example.com/
+// @version     1.0
+// @description Intercept and modify network requests
+// @author      You
+// @match       *://*/*
+// @grant       unsafeWindow
+// @run-at      document-start
+// ==/UserScript==
+
+(function() {
+    'use strict';
+    const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
+    // Intercept fetch
+    const originalFetch = win.fetch;
+    win.fetch = async function(...args) {
+        const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
+        console.log('[Intercepted fetch]', url);
+
+        const response = await originalFetch.apply(this, args);
+        // Modify response if needed
+        return response;
+    };
+
+    // Intercept XMLHttpRequest
+    const originalOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+        console.log('[Intercepted XHR]', method, url);
+        return originalOpen.call(this, method, url, ...rest);
+    };
+})();`
+        },
+        spaScript: {
+            label: 'SPA Content Script',
+            desc: 'React to URL changes in single-page apps',
+            code: `// ==UserScript==
+// @name        SPA Script
+// @namespace   http://example.com/
+// @version     1.0
+// @description Handle SPA navigation
+// @author      You
+// @match       *://*/*
+// @grant       window.onurlchange
+// @run-at      document-end
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    function onPageLoad(url) {
+        console.log('Page loaded:', url);
+        // Run your logic here each time the page/URL changes
+    }
+
+    // Initial page load
+    onPageLoad(location.href);
+
+    // SPA navigation detection
+    if (window.onurlchange === null) {
+        window.addEventListener('urlchange', (e) => {
+            onPageLoad(e.url || location.href);
+        });
+    }
+})();`
+        },
+        crossSiteRequest: {
+            label: 'Cross-Site Request',
+            desc: 'Fetch data from external APIs',
+            code: `// ==UserScript==
+// @name        API Client
+// @namespace   http://example.com/
+// @version     1.0
+// @description Fetch data from external APIs
+// @author      You
+// @match       *://*/*
+// @grant       GM_xmlhttpRequest
+// @grant       GM_getValue
+// @grant       GM_setValue
+// @connect     api.example.com
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // Cross-origin request example
+    GM_xmlhttpRequest({
+        method: 'GET',
+        url: 'https://api.example.com/data',
+        onload: function(response) {
+            try {
+                const data = JSON.parse(response.responseText);
+                console.log('API response:', data);
+            } catch (e) {
+                console.error('Parse error:', e);
+            }
+        },
+        onerror: function(err) {
+            console.error('Request failed:', err);
+        }
+    });
+
+    // Cache results
+    // const cached = GM_getValue('apiCache');
+    // GM_setValue('apiCache', { data, timestamp: Date.now() });
+})();`
+        }
+    };
+
+    async function createNewScript() {
+        if (_creatingScript) return;
+
+        // Clear hash to prevent duplicate creation on refresh
+        history.replaceState(null, '', window.location.pathname);
+
+        const templateHtml = Object.entries(SCRIPT_TEMPLATES).map(([key, t]) => `
+            <div class="template-card" data-template="${key}" tabindex="0" role="button">
+                <div class="template-name">${escapeHtml(t.label)}</div>
+                <div class="template-desc">${escapeHtml(t.desc)}</div>
+            </div>
+        `).join('');
+
+        showModal('New Script', `
+            <p style="margin-bottom: 16px; color: var(--text-secondary);">Choose a template to get started:</p>
+            <div class="template-grid">${templateHtml}</div>
+        `, [
+            { label: 'Cancel', callback: () => hideModal() }
+        ]);
+
+        // Bind template clicks
+        document.querySelectorAll('.template-card').forEach(card => {
+            const handler = async () => {
+                hideModal();
+                const key = card.dataset.template;
+                const template = SCRIPT_TEMPLATES[key];
+                if (!template) return;
+
+                _creatingScript = true;
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'createScript', code: template.code });
+                    if (response?.success) {
+                        await loadScripts();
+                        updateStats();
+                        openEditorForScript(response.scriptId);
+                        showToast('Created from ' + template.label, 'success');
+                    }
+                } catch (e) {
+                    showToast('Failed', 'error');
+                } finally {
+                    _creatingScript = false;
+                }
+            };
+            card.addEventListener('click', handler);
+            card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } });
+        });
     }
 
     function beautifyCode() {
@@ -2209,7 +2817,8 @@
                 'Ctrl-H': 'replace',
                 'Esc': closeEditor,
                 'Tab': cm => cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection(indentStr, 'end'),
-                'Ctrl-Space': 'autocomplete'
+                'Ctrl-Space': 'autocomplete',
+                'Ctrl-/': () => document.getElementById('tbtnComment')?.click()
             }
         });
 
@@ -2344,6 +2953,38 @@
         }
     }
 
+    function exportStatsCSV() {
+        const rows = [['Name', 'Version', 'Enabled', 'Runs', 'Avg Time (ms)', 'Total Time (ms)', 'Errors', 'Last Run', 'Last URL', 'Size (bytes)', 'Lines', 'Tags', 'Matches']];
+        for (const s of state.scripts) {
+            const m = s.metadata || {};
+            const st = s.stats || {};
+            rows.push([
+                m.name || 'Unnamed',
+                m.version || '',
+                s.enabled !== false ? 'Yes' : 'No',
+                st.runs || 0,
+                st.avgTime || 0,
+                Math.round(st.totalTime || 0),
+                st.errors || 0,
+                st.lastRun ? new Date(st.lastRun).toISOString() : '',
+                st.lastUrl || '',
+                (s.code || '').length,
+                (s.code || '').split('\n').length,
+                (m.tag || []).join('; '),
+                [...(m.match || []), ...(m.include || [])].join('; ')
+            ]);
+        }
+        const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const a = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        a.href = url;
+        a.download = `scriptvault-stats-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Stats exported to CSV', 'success');
+    }
+
     async function installFromUrl() {
         const url = elements.importUrlInput?.value?.trim();
         if (!url) return showToast('Enter URL', 'error');
@@ -2372,6 +3013,24 @@
         try {
             const bytes = await chrome.storage.local.getBytesInUse(null);
             if (elements.statTotalStorage) elements.statTotalStorage.textContent = formatBytes(bytes || 0);
+
+            // Storage quota bar
+            const quotaBar = document.getElementById('storageQuotaBar');
+            const quotaText = document.getElementById('storageQuotaText');
+            const QUOTA_BYTES = 10 * 1024 * 1024; // 10MB Chrome limit
+            const pct = Math.min(100, (bytes / QUOTA_BYTES) * 100);
+            if (quotaBar) {
+                quotaBar.style.width = pct + '%';
+                quotaBar.className = 'quota-bar-fill' + (pct > 90 ? ' danger' : pct > 70 ? ' warning' : '');
+            }
+            if (quotaText) {
+                quotaText.textContent = `${formatBytes(bytes)} / ${formatBytes(QUOTA_BYTES)} (${pct.toFixed(1)}%)`;
+            }
+            // Show warning toast if over 85%
+            if (pct > 85 && !state._quotaWarned) {
+                state._quotaWarned = true;
+                showToast(`Storage at ${pct.toFixed(0)}% capacity - consider cleaning up`, 'warning');
+            }
         } catch (e) {
             if (elements.statTotalStorage) elements.statTotalStorage.textContent = '-';
         }
@@ -2432,7 +3091,7 @@
             if (source === 'greasyfork') {
                 await searchGreasyFork(query, page);
             } else if (source === 'openuserjs') {
-                searchExternal(`https://openuserjs.org/?q=${encodeURIComponent(query)}`);
+                await searchOpenUserJS(query, page);
             } else if (source === 'github') {
                 searchExternal(`https://github.com/search?q=${encodeURIComponent(query + ' userscript')}&type=code`);
             }
@@ -2470,18 +3129,61 @@
         renderFindResults(scripts, page, isDomain ? query : null);
     }
 
+    async function searchOpenUserJS(query, page) {
+        // OpenUserJS has a JSON API at /api/script/list
+        const apiUrl = `https://openuserjs.org/api/script/list?q=${encodeURIComponent(query)}&p=${page}&limit=25`;
+        try {
+            const resp = await fetch(apiUrl);
+            if (!resp.ok) {
+                // Fallback to external if API fails
+                searchExternal(`https://openuserjs.org/?q=${encodeURIComponent(query)}`);
+                return;
+            }
+            const data = await resp.json();
+            const scripts = data?.scripts || data || [];
+            if (!Array.isArray(scripts) || scripts.length === 0) {
+                if (elements.findScriptsResults) elements.findScriptsResults.innerHTML = '<div class="find-scripts-empty">No scripts found on OpenUserJS. Try a different term.</div>';
+                return;
+            }
+            // Normalize to same format as GreasyFork results
+            const normalized = scripts.map(s => ({
+                name: s.name || 'Unnamed',
+                description: s.about || s.description || '',
+                version: s.meta?.version || '',
+                url: `https://openuserjs.org/scripts/${encodeURIComponent(s.author || '_')}/${encodeURIComponent(s.name || '')}`,
+                code_url: s.installURL || `https://openuserjs.org/install/${encodeURIComponent(s.author || '_')}/${encodeURIComponent(s.name || '')}.user.js`,
+                total_installs: s.installs || 0,
+                daily_installs: 0,
+                fan_score: s.rating || 0,
+                code_updated_at: s.updated || s._updated,
+                users: [{ name: s.author || 'Unknown' }]
+            }));
+            renderFindResults(normalized, page, null);
+        } catch (e) {
+            // Fallback to external
+            searchExternal(`https://openuserjs.org/?q=${encodeURIComponent(query)}`);
+        }
+    }
+
     function renderFindResults(scripts, page, domain) {
+        // Build installed script lookup for duplicate detection
+        const installedNames = new Set(state.scripts.map(s => (s.metadata?.name || '').toLowerCase()));
+
         const html = scripts.map(s => {
             const installs = s.total_installs >= 1000 ? Math.round(s.total_installs / 1000) + 'k' : (s.total_installs || 0);
             const daily = s.daily_installs || 0;
             const rating = s.fan_score ? parseFloat(s.fan_score).toFixed(0) + '%' : '--';
             const updated = s.code_updated_at ? formatTime(s.code_updated_at) : '--';
             const author = s.users && s.users[0] ? s.users[0].name : 'Unknown';
-            return `<div class="find-script-card">
+            const isInstalled = installedNames.has((s.name || '').toLowerCase());
+            const installedBadge = isInstalled ? '<span class="find-installed-badge">Installed</span>' : '';
+
+            return `<div class="find-script-card${isInstalled ? ' already-installed' : ''}">
                 <div class="find-script-info">
                     <div class="find-script-name">
                         <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.name)}</a>
                         ${s.version ? `<span class="find-script-version">v${escapeHtml(s.version)}</span>` : ''}
+                        ${installedBadge}
                     </div>
                     <div class="find-script-desc" title="${escapeHtml(s.description || '')}">${escapeHtml(s.description || 'No description')}</div>
                     <div class="find-script-meta">
@@ -2493,7 +3195,7 @@
                     </div>
                 </div>
                 <div class="find-script-actions">
-                    <button class="toolbar-btn primary" data-install-url="${escapeHtml(s.code_url || '')}">Install</button>
+                    <button class="toolbar-btn primary" data-install-url="${escapeHtml(s.code_url || '')}">${isInstalled ? 'Reinstall' : 'Install'}</button>
                     <button class="toolbar-btn" data-preview-url="${escapeHtml(s.code_url || '')}">Preview</button>
                     <button class="toolbar-btn" data-view-url="${escapeHtml(s.url || '')}">View</button>
                 </div>
@@ -2593,6 +3295,23 @@
         elements.toastContainer.appendChild(toast);
         requestAnimationFrame(() => toast.classList.add('show'));
         setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000);
+
+        // Log to activity log
+        logActivity(msg, type);
+    }
+
+    function logActivity(msg, type = 'info') {
+        const logEl = document.getElementById('activityLog');
+        if (!logEl) return;
+        if (logEl.textContent === 'No activity yet') logEl.innerHTML = '';
+        const time = new Date().toLocaleTimeString();
+        const typeIcons = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
+        const entry = document.createElement('div');
+        entry.className = `activity-entry activity-${type}`;
+        entry.innerHTML = `<span class="activity-time">${time}</span><span class="activity-icon">${typeIcons[type] || 'ℹ'}</span>${escapeHtml(msg)}`;
+        logEl.prepend(entry);
+        // Keep only last 50 entries
+        while (logEl.children.length > 50) logEl.removeChild(logEl.lastChild);
     }
 
     // Progress overlay helpers
@@ -2722,7 +3441,42 @@
 
         // Scripts
         elements.scriptSearch?.addEventListener('input', e => renderScriptTable(e.target.value));
+
+        // Column visibility toggle
+        document.getElementById('btnColumnToggle')?.addEventListener('click', () => {
+            const columns = [
+                { id: 'version', label: 'Version' },
+                { id: 'size', label: 'Size' },
+                { id: 'lines', label: 'Lines' },
+                { id: 'sites', label: 'Sites' },
+                { id: 'features', label: 'Features' },
+                { id: 'home', label: 'Homepage' },
+                { id: 'updated', label: 'Updated' },
+                { id: 'perf', label: 'Perf' }
+            ];
+            const hidden = state.settings._hiddenColumns || [];
+            const html = columns.map(c => {
+                const visible = !hidden.includes(c.id);
+                return `<label class="column-toggle-item"><input type="checkbox" data-col-id="${c.id}" ${visible ? 'checked' : ''}> ${c.label}</label>`;
+            }).join('');
+            showModal('Column Visibility', `<div class="column-toggle-list">${html}</div>`, [
+                { label: 'Apply', class: 'btn-primary', callback: () => {
+                    const newHidden = [];
+                    document.querySelectorAll('.column-toggle-item input').forEach(cb => {
+                        if (!cb.checked) newHidden.push(cb.dataset.colId);
+                    });
+                    if (!state.settings._hiddenColumns) state.settings._hiddenColumns = [];
+                    state.settings._hiddenColumns = newHidden;
+                    applyColumnVisibility();
+                    hideModal();
+                    // Persist
+                    chrome.runtime.sendMessage({ action: 'setSettings', settings: { _hiddenColumns: newHidden } });
+                }},
+                { label: 'Cancel', callback: () => hideModal() }
+            ]);
+        });
         elements.btnNewScript?.addEventListener('click', createNewScript);
+        document.getElementById('btnNewFolder')?.addEventListener('click', createFolder);
         elements.btnImportScript?.addEventListener('click', importScript);
         elements.btnCheckUpdates?.addEventListener('click', async () => {
             showProgress('Checking for updates...');
@@ -2845,6 +3599,68 @@
             }
         });
 
+        // Library search (cdnjs API)
+        const libSearchInput = document.getElementById('libSearchInput');
+        const libSearchResults = document.getElementById('libSearchResults');
+        const btnLibSearch = document.getElementById('btnLibSearch');
+
+        async function searchLibraries() {
+            const query = libSearchInput?.value?.trim();
+            if (!query) return;
+            if (libSearchResults) libSearchResults.innerHTML = '<div style="padding:8px;color:var(--text-muted)">Searching...</div>';
+            try {
+                const resp = await fetch(`https://api.cdnjs.com/libraries?search=${encodeURIComponent(query)}&fields=description,version,filename&limit=10`);
+                if (!resp.ok) throw new Error('Search failed');
+                const data = await resp.json();
+                if (!data.results || data.results.length === 0) {
+                    if (libSearchResults) libSearchResults.innerHTML = '<div style="padding:8px;color:var(--text-muted)">No libraries found</div>';
+                    return;
+                }
+                if (libSearchResults) libSearchResults.innerHTML = data.results.map(lib => {
+                    const cdnUrl = `https://cdnjs.cloudflare.com/ajax/libs/${lib.name}/${lib.version}/${lib.filename}`;
+                    return `<div class="lib-result">
+                        <div class="lib-result-info">
+                            <span class="lib-result-name">${escapeHtml(lib.name)}</span>
+                            <span class="lib-result-version">v${escapeHtml(lib.version)}</span>
+                            <div class="lib-result-desc">${escapeHtml(lib.description || '')}</div>
+                        </div>
+                        <button class="toolbar-btn primary lib-add-btn" data-lib-url="${escapeHtml(cdnUrl)}" title="Insert @require into script header">Add</button>
+                    </div>`;
+                }).join('');
+
+                // Bind add buttons
+                libSearchResults?.querySelectorAll('.lib-add-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const url = btn.dataset.libUrl;
+                        if (!url || !state.editor) return;
+                        const code = state.editor.getValue();
+                        // Insert @require before ==/UserScript==
+                        const insertLine = `// @require      ${url}`;
+                        const updated = code.replace(/(\/\/\s*==\/UserScript==)/, insertLine + '\n$1');
+                        if (updated !== code) {
+                            state.editor.setValue(updated);
+                            state.unsavedChanges = true;
+                            if (state.openTabs[state.currentScriptId]) {
+                                state.openTabs[state.currentScriptId].unsaved = true;
+                            }
+                            const tab = document.querySelector(`.tm-tab[data-script-id="${state.currentScriptId}"]`);
+                            if (tab) tab.classList.add('unsaved');
+                            btn.textContent = 'Added';
+                            btn.disabled = true;
+                            showToast('Library added to @require', 'success');
+                        } else {
+                            showToast('Could not find metadata block', 'error');
+                        }
+                    });
+                });
+            } catch (e) {
+                if (libSearchResults) libSearchResults.innerHTML = `<div style="padding:8px;color:var(--accent-red)">Search failed: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        btnLibSearch?.addEventListener('click', searchLibraries);
+        libSearchInput?.addEventListener('keydown', e => { if (e.key === 'Enter') searchLibraries(); });
+
         // Editor toolbar buttons
         elements.tbtnUndo?.addEventListener('click', () => state.editor?.undo());
         elements.tbtnRedo?.addEventListener('click', () => state.editor?.redo());
@@ -2870,6 +3686,81 @@
             }
         });
         elements.tbtnJumpLine?.addEventListener('click', () => state.editor?.execCommand('jumpToLine'));
+
+        // Comment toggle (Ctrl+/)
+        document.getElementById('tbtnComment')?.addEventListener('click', () => {
+            if (!state.editor) return;
+            const cm = state.editor;
+            const sel = cm.listSelections();
+            cm.operation(() => {
+                for (const range of sel) {
+                    const from = Math.min(range.anchor.line, range.head.line);
+                    const to = Math.max(range.anchor.line, range.head.line);
+                    // Check if all lines are commented
+                    let allCommented = true;
+                    for (let i = from; i <= to; i++) {
+                        if (!cm.getLine(i).trimStart().startsWith('//')) { allCommented = false; break; }
+                    }
+                    for (let i = from; i <= to; i++) {
+                        const line = cm.getLine(i);
+                        if (allCommented) {
+                            // Uncomment
+                            const idx = line.indexOf('//');
+                            const after = line[idx + 2] === ' ' ? 3 : 2;
+                            cm.replaceRange(line.slice(0, idx) + line.slice(idx + after), {line: i, ch: 0}, {line: i, ch: line.length});
+                        } else {
+                            // Comment
+                            cm.replaceRange('// ' + line, {line: i, ch: 0}, {line: i, ch: line.length});
+                        }
+                    }
+                }
+            });
+            state.unsavedChanges = true;
+        });
+
+        // Word wrap toggle
+        document.getElementById('tbtnWordWrap')?.addEventListener('click', () => {
+            if (!state.editor) return;
+            const current = state.editor.getOption('lineWrapping');
+            state.editor.setOption('lineWrapping', !current);
+            const btn = document.getElementById('tbtnWordWrap');
+            if (btn) btn.classList.toggle('active', !current);
+            showToast(`Word wrap ${!current ? 'on' : 'off'}`, 'info');
+        });
+
+        // Insert snippet dropdown
+        document.getElementById('tbtnSnippet')?.addEventListener('click', () => {
+            if (!state.editor) return;
+            const snippets = {
+                'GM_xmlhttpRequest': "GM_xmlhttpRequest({\n    method: 'GET',\n    url: '',\n    onload: function(response) {\n        console.log(response.responseText);\n    },\n    onerror: function(err) {\n        console.error(err);\n    }\n});",
+                'GM_notification': "GM_notification({\n    text: '',\n    title: 'Notification',\n    timeout: 5000\n});",
+                'GM_addStyle': "GM_addStyle(`\n    /* CSS here */\n`);",
+                'GM_setValue / getValue': "const val = GM_getValue('key', 'default');\nGM_setValue('key', val);",
+                'waitForElement': "function waitForElement(sel, cb) {\n    const el = document.querySelector(sel);\n    if (el) return cb(el);\n    new MutationObserver((_, obs) => {\n        const el = document.querySelector(sel);\n        if (el) { obs.disconnect(); cb(el); }\n    }).observe(document.body, { childList: true, subtree: true });\n}",
+                'IIFE wrapper': "(function() {\n    'use strict';\n    \n})();",
+                'addEventListener': "document.addEventListener('DOMContentLoaded', () => {\n    \n});"
+            };
+            const html = Object.entries(snippets).map(([name]) =>
+                `<div class="snippet-item" data-snippet="${escapeHtml(name)}">${escapeHtml(name)}</div>`
+            ).join('');
+            showModal('Insert Snippet', `<div class="snippet-list">${html}</div>`, [
+                { label: 'Cancel', callback: () => hideModal() }
+            ]);
+            document.querySelectorAll('.snippet-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const name = item.dataset.snippet;
+                    const code = snippets[name];
+                    if (code && state.editor) {
+                        state.editor.replaceSelection(code);
+                        state.unsavedChanges = true;
+                        if (state.openTabs[state.currentScriptId]) state.openTabs[state.currentScriptId].unsaved = true;
+                        const tab = document.querySelector(`.tm-tab[data-script-id="${state.currentScriptId}"]`);
+                        if (tab) tab.classList.add('unsaved');
+                    }
+                    hideModal();
+                });
+            });
+        });
 
         // Editor tabs
         elements.editorTabs.forEach(tab => {
@@ -3186,6 +4077,94 @@
         // Utilities
         elements.btnExportFile?.addEventListener('click', exportAllScripts);
         elements.btnExportZip?.addEventListener('click', exportToZip);
+        document.getElementById('btnExportStats')?.addEventListener('click', exportStatsCSV);
+        // Tampermonkey backup import
+        document.getElementById('btnImportTampermonkey')?.addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.txt,.tampermonkey';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const text = await file.text();
+                if (!text.includes('==UserScript==')) {
+                    showToast('Not a valid Tampermonkey backup file', 'error');
+                    return;
+                }
+                showProgress('Importing Tampermonkey backup...');
+                updateProgress(0, 1, 'Parsing scripts...');
+                try {
+                    const res = await chrome.runtime.sendMessage({ action: 'importTampermonkeyBackup', text, overwrite: true });
+                    if (res?.error) {
+                        showToast(res.error, 'error');
+                    } else {
+                        showToast(`Imported ${res?.imported || 0} scripts${res?.skipped ? `, ${res.skipped} skipped` : ''}${res?.errors?.length ? `, ${res.errors.length} errors` : ''}`, 'success');
+                        await loadScripts();
+                        updateStats();
+                    }
+                } catch (err) {
+                    showToast('Import failed: ' + err.message, 'error');
+                }
+                hideProgress();
+            };
+            input.click();
+        });
+
+        document.getElementById('btnClearLog')?.addEventListener('click', () => {
+            const logEl = document.getElementById('activityLog');
+            if (logEl) logEl.innerHTML = '<div style="color:var(--text-muted)">No activity yet</div>';
+        });
+
+        // Workspaces
+        document.getElementById('btnCreateWorkspace')?.addEventListener('click', async () => {
+            const name = prompt('Workspace name:');
+            if (!name?.trim()) return;
+            const res = await chrome.runtime.sendMessage({ action: 'createWorkspace', name: name.trim() });
+            if (res?.workspace) { showToast('Workspace saved', 'success'); loadWorkspaces(); }
+        });
+
+        // Network Log
+        document.getElementById('btnRefreshNetLog')?.addEventListener('click', loadNetworkLog);
+        document.getElementById('btnClearNetLog')?.addEventListener('click', async () => {
+            await chrome.runtime.sendMessage({ action: 'clearNetworkLog' });
+            loadNetworkLog();
+            showToast('Network log cleared', 'success');
+        });
+        document.getElementById('btnExportNetLog')?.addEventListener('click', async () => {
+            const res = await chrome.runtime.sendMessage({ action: 'getNetworkLog' });
+            if (!res?.log?.length) { showToast('No requests to export', 'info'); return; }
+            const har = {
+                log: {
+                    version: '1.2',
+                    creator: { name: 'ScriptVault', version: chrome.runtime.getManifest().version },
+                    entries: res.log.map(e => ({
+                        startedDateTime: new Date(e.timestamp).toISOString(),
+                        time: e.duration || 0,
+                        request: { method: e.method, url: e.url, httpVersion: 'HTTP/1.1', headers: [], queryString: [], bodySize: e.requestSize || 0 },
+                        response: { status: e.status || 0, statusText: e.statusText || '', httpVersion: 'HTTP/1.1', headers: [], content: { size: e.responseSize || 0, mimeType: 'text/plain' }, bodySize: e.responseSize || 0 },
+                        comment: e.scriptName || ''
+                    }))
+                }
+            };
+            const blob = new Blob([JSON.stringify(har, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `scriptvault-netlog-${new Date().toISOString().split('T')[0]}.har`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showToast('Exported as HAR', 'success');
+        });
+
+        // Performance Budget
+        document.getElementById('btnSavePerfBudget')?.addEventListener('click', async () => {
+            const budget = parseInt(document.getElementById('perfBudgetDefault')?.value || '200');
+            if (isNaN(budget) || budget < 10) { showToast('Invalid budget', 'error'); return; }
+            await chrome.runtime.sendMessage({ action: 'setSettings', settings: { perfBudget: budget } });
+            state.settings.perfBudget = budget;
+            showToast(`Budget set to ${budget}ms`, 'success');
+            renderScriptTable();
+        });
+
         elements.btnChooseFile?.addEventListener('click', () => elements.importFileInput?.click());
 
         // Cloud
@@ -3324,6 +4303,29 @@
 
         elements.btnInstallFromUrl?.addEventListener('click', installFromUrl);
 
+        // Batch URL install
+        document.getElementById('btnBatchInstall')?.addEventListener('click', async () => {
+            const textarea = document.getElementById('batchUrlInput');
+            const urls = (textarea?.value || '').split('\n').map(u => u.trim()).filter(u => u && u.startsWith('http'));
+            if (urls.length === 0) return showToast('No valid URLs found', 'error');
+            if (!await showConfirmModal('Batch Install', `Install ${urls.length} script${urls.length > 1 ? 's' : ''} from URLs?`)) return;
+            showProgress(`Installing ${urls.length} scripts...`);
+            let installed = 0, failed = 0;
+            for (let i = 0; i < urls.length; i++) {
+                updateProgress(i + 1, urls.length, urls[i].split('/').pop() || urls[i]);
+                try {
+                    const res = await chrome.runtime.sendMessage({ action: 'installFromUrl', url: urls[i] });
+                    if (res?.success) installed++;
+                    else failed++;
+                } catch (e) { failed++; }
+            }
+            hideProgress();
+            await loadScripts();
+            updateStats();
+            if (textarea) textarea.value = '';
+            showToast(`Installed ${installed}${failed > 0 ? `, ${failed} failed` : ''}`, installed > 0 ? 'success' : 'error');
+        });
+
         elements.btnTextareaExport?.addEventListener('click', async () => {
             const r = await chrome.runtime.sendMessage({ action: 'exportAll' });
             if (r && elements.textareaData) {
@@ -3352,19 +4354,550 @@
         elements.modalClose?.addEventListener('click', hideModal);
         elements.modal?.addEventListener('click', e => { if (e.target === elements.modal) hideModal(); });
 
-        // Keyboard
+        // Pattern tester
+        document.getElementById('btnTestPattern')?.addEventListener('click', testPatterns);
+        document.getElementById('patternTestUrl')?.addEventListener('keydown', e => { if (e.key === 'Enter') testPatterns(); });
+
+        // Keyboard shortcuts
         document.addEventListener('keydown', e => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 's' && elements.editorOverlay?.classList.contains('active')) {
+            const ctrl = e.ctrlKey || e.metaKey;
+            const editorActive = elements.editorOverlay?.classList.contains('active');
+
+            // Ctrl+S — save in editor
+            if (ctrl && e.key === 's' && editorActive) {
                 e.preventDefault();
                 saveCurrentScript();
+                return;
             }
-            if (e.key === 'Escape' && !e.defaultPrevented && elements.editorOverlay?.classList.contains('active')) closeEditor();
+            // Escape — close editor
+            if (e.key === 'Escape' && !e.defaultPrevented && editorActive) {
+                closeEditor();
+                return;
+            }
+            // Ctrl+N — new script
+            if (ctrl && e.key === 'n' && !editorActive) {
+                e.preventDefault();
+                createNewScript();
+                return;
+            }
+            // Ctrl+I — import script
+            if (ctrl && e.key === 'i' && !editorActive) {
+                e.preventDefault();
+                importScript();
+                return;
+            }
+            // Alt+1-5 — switch dashboard tabs
+            if (e.altKey && !ctrl && e.key >= '1' && e.key <= '5') {
+                e.preventDefault();
+                const tabNames = ['scripts', 'settings', 'utilities', 'trash', 'help'];
+                const idx = parseInt(e.key) - 1;
+                if (tabNames[idx]) {
+                    // Close editor if open
+                    if (editorActive) {
+                        if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
+                            state.openTabs[state.currentScriptId].code = state.editor.getValue();
+                            state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
+                        }
+                        state.currentScriptId = null;
+                        elements.editorOverlay?.classList.remove('active');
+                    }
+                    document.querySelectorAll('.tm-tab').forEach(t => t.classList.remove('active'));
+                    Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
+                    const tab = document.querySelector(`.tm-tab[data-tab="${tabNames[idx]}"]`);
+                    tab?.classList.add('active');
+                    elements.mainPanels[tabNames[idx]]?.classList.add('active');
+                    if (tabNames[idx] === 'trash') loadTrash();
+                }
+                return;
+            }
+            // Ctrl+W — close current script tab
+            if (ctrl && e.key === 'w' && editorActive && state.currentScriptId) {
+                e.preventDefault();
+                closeScriptTab(state.currentScriptId);
+                return;
+            }
+            // Ctrl+Tab / Ctrl+Shift+Tab — cycle open script tabs
+            if (ctrl && e.key === 'Tab' && editorActive) {
+                e.preventDefault();
+                const openIds = Object.keys(state.openTabs);
+                if (openIds.length < 2) return;
+                const curIdx = openIds.indexOf(state.currentScriptId);
+                const nextIdx = e.shiftKey
+                    ? (curIdx - 1 + openIds.length) % openIds.length
+                    : (curIdx + 1) % openIds.length;
+                activateScriptTab(openIds[nextIdx]);
+                return;
+            }
+            // Ctrl+K — command palette
+            if (ctrl && e.key === 'k') {
+                e.preventDefault();
+                openCommandPalette();
+                return;
+            }
+            // Ctrl+/ — focus dashboard search
+            if (ctrl && e.key === '/' && !editorActive) {
+                e.preventDefault();
+                elements.scriptSearch?.focus();
+                return;
+            }
         });
 
         window.addEventListener('beforeunload', e => {
             const anyUnsaved = state.unsavedChanges || Object.values(state.openTabs).some(t => t.unsaved);
             if (anyUnsaved) { e.preventDefault(); e.returnValue = ''; }
         });
+
+        // Drag-and-drop file installation
+        const dropZone = document.body;
+        let _dragCounter = 0;
+
+        dropZone.addEventListener('dragenter', e => {
+            if (!e.dataTransfer?.types?.includes('Files')) return;
+            e.preventDefault();
+            _dragCounter++;
+            if (_dragCounter === 1) showDropOverlay(true);
+        });
+        dropZone.addEventListener('dragleave', () => {
+            _dragCounter--;
+            if (_dragCounter <= 0) { _dragCounter = 0; showDropOverlay(false); }
+        });
+        dropZone.addEventListener('dragover', e => {
+            if (!e.dataTransfer?.types?.includes('Files')) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        });
+        dropZone.addEventListener('drop', async e => {
+            e.preventDefault();
+            _dragCounter = 0;
+            showDropOverlay(false);
+            const files = [...(e.dataTransfer?.files || [])];
+            if (files.length === 0) return;
+
+            let installed = 0, errors = 0;
+            showProgress('Installing dropped files...');
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                updateProgress(i + 1, files.length, file.name);
+                try {
+                    if (file.name.endsWith('.user.js') || file.name.endsWith('.js')) {
+                        const code = await file.text();
+                        if (!code.includes('==UserScript==')) { errors++; continue; }
+                        const res = await chrome.runtime.sendMessage({ action: 'importScript', code });
+                        if (res?.success) installed++;
+                        else errors++;
+                    } else if (file.name.endsWith('.zip')) {
+                        const buf = await file.arrayBuffer();
+                        const bytes = new Uint8Array(buf);
+                        let binary = '';
+                        for (let j = 0; j < bytes.length; j += 8192) {
+                            binary += String.fromCharCode.apply(null, bytes.subarray(j, j + 8192));
+                        }
+                        const base64 = btoa(binary);
+                        const res = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: base64, options: { overwrite: true } });
+                        installed += res?.imported || 0;
+                        errors += res?.errors?.length || 0;
+                    }
+                } catch (err) {
+                    console.error('Drop install error:', err);
+                    errors++;
+                }
+            }
+
+            hideProgress();
+            await loadScripts();
+            updateStats();
+            if (installed > 0) showToast(`Installed ${installed} script${installed > 1 ? 's' : ''}${errors > 0 ? ` (${errors} failed)` : ''}`, 'success');
+            else showToast('No valid userscripts found in dropped files', 'error');
+        });
+    }
+
+    function applyColumnVisibility() {
+        const hidden = state.settings._hiddenColumns || [];
+        // Column index mapping: version=4, size=5, lines=6, sites=7, features=8, home=9, updated=10, perf=11
+        const colMap = { version: 4, size: 5, lines: 6, sites: 7, features: 8, home: 9, updated: 10, perf: 11 };
+        const table = document.querySelector('.scripts-table');
+        if (!table) return;
+        // Reset all columns
+        for (const [name, idx] of Object.entries(colMap)) {
+            const display = hidden.includes(name) ? 'none' : '';
+            // Header
+            const th = table.querySelector(`th[data-col="${name}"]`);
+            if (th) th.style.display = display;
+            // Body cells
+            table.querySelectorAll(`tbody tr`).forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells[idx]) cells[idx].style.display = display;
+            });
+        }
+    }
+
+    function testPatterns() {
+        const urlInput = document.getElementById('patternTestUrl');
+        const resultsEl = document.getElementById('patternTestResults');
+        const testUrl = urlInput?.value?.trim();
+        if (!testUrl || !resultsEl) return;
+
+        try {
+            new URL(testUrl); // validate URL
+        } catch {
+            resultsEl.innerHTML = '<span style="color:var(--accent-red)">Invalid URL format</span>';
+            return;
+        }
+
+        const matching = [];
+        const notMatching = [];
+
+        for (const s of state.scripts) {
+            const m = s.metadata || {};
+            const patterns = [...(m.match || []), ...(m.include || [])];
+            const excludes = [...(m.exclude || []), ...(m.excludeMatch || [])];
+            let matches = false;
+
+            for (const p of patterns) {
+                if (testUrlAgainstPattern(testUrl, p)) { matches = true; break; }
+            }
+            // Check excludes
+            if (matches) {
+                for (const p of excludes) {
+                    if (testUrlAgainstPattern(testUrl, p)) { matches = false; break; }
+                }
+            }
+
+            if (matches) matching.push(s);
+            else notMatching.push(s);
+        }
+
+        if (matching.length === 0) {
+            resultsEl.innerHTML = '<div style="padding:8px;color:var(--text-muted)">No scripts match this URL</div>';
+        } else {
+            resultsEl.innerHTML = `<div style="margin-bottom:6px;font-weight:600;color:var(--accent-green)">${matching.length} script${matching.length > 1 ? 's' : ''} would run:</div>` +
+                matching.map(s => {
+                    const name = s.metadata?.name || 'Unnamed';
+                    const enabled = s.enabled !== false;
+                    return `<div class="pattern-test-match"><span class="pattern-test-indicator ${enabled ? 'active' : 'inactive'}"></span> ${escapeHtml(name)} ${!enabled ? '<span style="color:var(--text-muted)">(disabled)</span>' : ''}</div>`;
+                }).join('');
+        }
+    }
+
+    function testUrlAgainstPattern(url, pattern) {
+        // Handle <all_urls>
+        if (pattern === '<all_urls>') return true;
+
+        // Handle regex patterns (/regex/)
+        if (pattern.startsWith('/') && pattern.endsWith('/')) {
+            try {
+                return new RegExp(pattern.slice(1, -1)).test(url);
+            } catch { return false; }
+        }
+
+        // Handle glob @include patterns
+        if (pattern.includes('*') && !pattern.includes('://')) {
+            // Glob-style include
+            const re = new RegExp('^' + pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+            return re.test(url);
+        }
+
+        // Handle @match patterns: scheme://host/path
+        const matchRe = /^(\*|https?|file|ftp):\/\/(\*|\*\.[^/*]+|[^/*]+)\/(.*)$/;
+        const m = pattern.match(matchRe);
+        if (!m) {
+            // Fallback: try as glob
+            const re = new RegExp('^' + pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+            return re.test(url);
+        }
+
+        const [, scheme, host, path] = m;
+        let parsed;
+        try { parsed = new URL(url); } catch { return false; }
+
+        // Check scheme
+        if (scheme !== '*' && parsed.protocol !== scheme + ':') return false;
+
+        // Check host
+        if (host !== '*') {
+            if (host.startsWith('*.')) {
+                const domain = host.slice(2);
+                if (parsed.hostname !== domain && !parsed.hostname.endsWith('.' + domain)) return false;
+            } else if (parsed.hostname !== host) return false;
+        }
+
+        // Check path
+        if (path !== '*') {
+            const pathPattern = new RegExp('^' + path.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+            const urlPath = parsed.pathname + parsed.search;
+            if (!pathPattern.test(urlPath) && !pathPattern.test(parsed.pathname)) return false;
+        }
+
+        return true;
+    }
+
+    // =========================================
+    // Workspaces
+    // =========================================
+    async function loadWorkspaces() {
+        const container = document.getElementById('workspaceList');
+        if (!container) return;
+        try {
+            const res = await chrome.runtime.sendMessage({ action: 'getWorkspaces' });
+            const { active, list } = res || {};
+            if (!list || list.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:4px 0">No workspaces saved</div>';
+                return;
+            }
+            container.innerHTML = list.map(ws => `
+                <div class="workspace-item${ws.id === active ? ' active' : ''}" data-ws-id="${ws.id}">
+                    <span class="workspace-name">${escapeHtml(ws.name)}</span>
+                    <span class="workspace-scripts">${Object.keys(ws.snapshot || {}).length} scripts</span>
+                    <div class="workspace-actions">
+                        <button class="toolbar-btn${ws.id === active ? ' primary' : ''}" data-ws-activate="${ws.id}">${ws.id === active ? 'Active' : 'Switch'}</button>
+                        <button class="toolbar-btn" data-ws-save="${ws.id}" title="Update with current state">Save</button>
+                        <button class="toolbar-btn" data-ws-delete="${ws.id}" title="Delete">x</button>
+                    </div>
+                </div>
+            `).join('');
+
+            container.querySelectorAll('[data-ws-activate]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = btn.dataset.wsActivate;
+                    showToast('Switching workspace...', 'info');
+                    const res = await chrome.runtime.sendMessage({ action: 'activateWorkspace', id });
+                    if (res?.success) {
+                        await loadScripts();
+                        await loadWorkspaces();
+                        showToast(`Workspace "${res.name}" activated`, 'success');
+                    } else {
+                        showToast(res?.error || 'Failed', 'error');
+                    }
+                });
+            });
+            container.querySelectorAll('[data-ws-save]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    await chrome.runtime.sendMessage({ action: 'saveWorkspace', id: btn.dataset.wsSave });
+                    showToast('Workspace updated', 'success');
+                    loadWorkspaces();
+                });
+            });
+            container.querySelectorAll('[data-ws-delete]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    await chrome.runtime.sendMessage({ action: 'deleteWorkspace', id: btn.dataset.wsDelete });
+                    showToast('Workspace deleted', 'success');
+                    loadWorkspaces();
+                });
+            });
+        } catch (e) {
+            container.innerHTML = '<div style="color:var(--text-muted);font-size:12px">Failed to load workspaces</div>';
+        }
+    }
+
+    // =========================================
+    // Network Log
+    // =========================================
+    async function loadNetworkLog() {
+        const container = document.getElementById('networkLogContainer');
+        if (!container) return;
+        try {
+            const res = await chrome.runtime.sendMessage({ action: 'getNetworkLog', limit: 50 });
+            const log = res?.log || [];
+            const stats = res?.stats || {};
+
+            if (log.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-muted)">No network requests logged yet</div>';
+                return;
+            }
+
+            let html = `<div class="netlog-stats">
+                <span>${stats.totalRequests || 0} requests</span>
+                <span>${stats.totalErrors || 0} errors</span>
+                <span>${formatBytes(stats.totalBytes || 0)} transferred</span>
+            </div>`;
+
+            html += log.map(e => {
+                const statusClass = e.error ? 'netlog-error' : (e.status >= 400 ? 'netlog-warn' : 'netlog-ok');
+                const time = new Date(e.timestamp).toLocaleTimeString();
+                let domain = '';
+                try { domain = new URL(e.url).hostname; } catch {}
+                return `<div class="netlog-entry ${statusClass}">
+                    <span class="netlog-method">${escapeHtml(e.method || 'GET')}</span>
+                    <span class="netlog-status">${e.error ? 'ERR' : e.status || '?'}</span>
+                    <span class="netlog-url" title="${escapeHtml(e.url)}">${escapeHtml(domain)}${e.url.length > 40 ? '...' : ''}</span>
+                    <span class="netlog-script" title="${escapeHtml(e.scriptName || '')}">${escapeHtml((e.scriptName || '').slice(0, 20))}</span>
+                    <span class="netlog-size">${e.responseSize ? formatBytes(e.responseSize) : '-'}</span>
+                    <span class="netlog-time">${time}</span>
+                </div>`;
+            }).join('');
+
+            container.innerHTML = html;
+        } catch (e) {
+            container.innerHTML = '<div style="color:var(--text-muted)">Failed to load network log</div>';
+        }
+    }
+
+    // =========================================
+    // Command Palette (Ctrl+K)
+    // =========================================
+    function openCommandPalette() {
+        let overlay = document.getElementById('commandPalette');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'commandPalette';
+            overlay.innerHTML = `
+                <div class="cmd-backdrop"></div>
+                <div class="cmd-dialog">
+                    <input type="text" class="cmd-input" placeholder="Type a command, script name, or action..." autofocus>
+                    <div class="cmd-results"></div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            const backdrop = overlay.querySelector('.cmd-backdrop');
+            backdrop.addEventListener('click', closeCommandPalette);
+
+            const input = overlay.querySelector('.cmd-input');
+            input.addEventListener('input', () => renderCommandResults(input.value));
+            input.addEventListener('keydown', (e) => {
+                const items = overlay.querySelectorAll('.cmd-item');
+                const active = overlay.querySelector('.cmd-item.active');
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (!active && items.length) { items[0].classList.add('active'); items[0].scrollIntoView({ block: 'nearest' }); }
+                    else if (active?.nextElementSibling) { active.classList.remove('active'); active.nextElementSibling.classList.add('active'); active.nextElementSibling.scrollIntoView({ block: 'nearest' }); }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (active?.previousElementSibling) { active.classList.remove('active'); active.previousElementSibling.classList.add('active'); active.previousElementSibling.scrollIntoView({ block: 'nearest' }); }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const target = active || items[0];
+                    if (target) target.click();
+                } else if (e.key === 'Escape') {
+                    closeCommandPalette();
+                }
+            });
+        }
+
+        overlay.classList.add('open');
+        const input = overlay.querySelector('.cmd-input');
+        input.value = '';
+        input.focus();
+        renderCommandResults('');
+    }
+
+    function closeCommandPalette() {
+        document.getElementById('commandPalette')?.classList.remove('open');
+    }
+
+    function renderCommandResults(query) {
+        const results = document.querySelector('#commandPalette .cmd-results');
+        if (!results) return;
+
+        const q = query.toLowerCase().trim();
+
+        // Build command list
+        const commands = [
+            // Actions
+            { category: 'Actions', label: 'New Script', desc: 'Create a new script from template', action: () => { closeCommandPalette(); createNewScript(); } },
+            { category: 'Actions', label: 'Import Script', desc: 'Import from file', action: () => { closeCommandPalette(); importScript(); } },
+            { category: 'Actions', label: 'Check for Updates', desc: 'Check all scripts for updates', action: () => { closeCommandPalette(); document.getElementById('btnCheckUpdates')?.click(); } },
+            { category: 'Actions', label: 'Export All (ZIP)', desc: 'Export all scripts as ZIP', action: () => { closeCommandPalette(); exportToZip(); } },
+            { category: 'Actions', label: 'Export All (JSON)', desc: 'Export all scripts as JSON', action: () => { closeCommandPalette(); exportAllScripts(); } },
+            { category: 'Actions', label: 'Export Stats CSV', desc: 'Export execution statistics', action: () => { closeCommandPalette(); exportStatsCSV(); } },
+            { category: 'Actions', label: 'Find Scripts', desc: 'Search GreasyFork/OpenUserJS', action: () => { closeCommandPalette(); openFindScripts(); } },
+            // Navigation
+            { category: 'Navigation', label: 'Scripts Tab', desc: 'Go to installed scripts', action: () => { closeCommandPalette(); switchTab('scripts'); } },
+            { category: 'Navigation', label: 'Settings Tab', desc: 'Open settings', action: () => { closeCommandPalette(); switchTab('settings'); } },
+            { category: 'Navigation', label: 'Utilities Tab', desc: 'Import/export tools', action: () => { closeCommandPalette(); switchTab('utilities'); } },
+            { category: 'Navigation', label: 'Trash Tab', desc: 'View deleted scripts', action: () => { closeCommandPalette(); switchTab('trash'); } },
+            { category: 'Navigation', label: 'Help Tab', desc: 'Shortcuts and documentation', action: () => { closeCommandPalette(); switchTab('help'); } },
+            // Settings
+            { category: 'Settings', label: 'Toggle Dark/Light Theme', desc: 'Switch between themes', action: () => { closeCommandPalette(); document.getElementById('btnCycleTheme')?.click(); } },
+            { category: 'Settings', label: 'Toggle Word Wrap', desc: 'Editor word wrap on/off', action: () => { closeCommandPalette(); document.getElementById('tbtnWordWrap')?.click(); } },
+            { category: 'Settings', label: 'Column Visibility', desc: 'Show/hide table columns', action: () => { closeCommandPalette(); document.getElementById('btnColumnToggle')?.click(); } },
+        ];
+
+        // Add installed scripts as commands
+        for (const s of state.scripts) {
+            const name = s.metadata?.name || 'Unnamed';
+            commands.push({
+                category: 'Scripts',
+                label: name,
+                desc: s.metadata?.description || `v${s.metadata?.version || '?'} - ${s.enabled !== false ? 'Enabled' : 'Disabled'}`,
+                action: () => { closeCommandPalette(); openEditorForScript(s.id); }
+            });
+        }
+
+        // Filter
+        const filtered = q
+            ? commands.filter(c => c.label.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q) || c.category.toLowerCase().includes(q))
+            : commands;
+
+        // Group by category
+        const groups = {};
+        for (const c of filtered.slice(0, 20)) {
+            if (!groups[c.category]) groups[c.category] = [];
+            groups[c.category].push(c);
+        }
+
+        if (Object.keys(groups).length === 0) {
+            results.innerHTML = '<div class="cmd-empty">No matching commands</div>';
+            return;
+        }
+
+        let html = '';
+        for (const [cat, items] of Object.entries(groups)) {
+            html += `<div class="cmd-group">${escapeHtml(cat)}</div>`;
+            html += items.map((c, i) => `<div class="cmd-item${i === 0 && !q ? '' : ''}" data-cmd-idx="${commands.indexOf(c)}"><span class="cmd-label">${escapeHtml(c.label)}</span><span class="cmd-desc">${escapeHtml(c.desc)}</span></div>`).join('');
+        }
+
+        results.innerHTML = html;
+
+        // Bind clicks
+        results.querySelectorAll('.cmd-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const idx = parseInt(item.dataset.cmdIdx);
+                commands[idx]?.action();
+            });
+            item.addEventListener('mouseenter', () => {
+                results.querySelectorAll('.cmd-item.active').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+            });
+        });
+    }
+
+    function switchTab(name) {
+        const editorActive = elements.editorOverlay?.classList.contains('active');
+        if (editorActive) {
+            if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
+                state.openTabs[state.currentScriptId].code = state.editor.getValue();
+                state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
+            }
+            state.currentScriptId = null;
+            elements.editorOverlay?.classList.remove('active');
+        }
+        document.querySelectorAll('.tm-tab').forEach(t => t.classList.remove('active'));
+        Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
+        elements.btnHelpTab?.classList.remove('active');
+
+        if (name === 'help') {
+            // Help tab is a separate header icon, not a .tm-tab
+            elements.btnHelpTab?.classList.add('active');
+            elements.mainPanels.help?.classList.add('active');
+        } else {
+            const tab = document.querySelector(`.tm-tab[data-tab="${name}"]`);
+            tab?.classList.add('active');
+            elements.mainPanels[name]?.classList.add('active');
+        }
+        if (name === 'trash') loadTrash();
+    }
+
+    function showDropOverlay(show) {
+        let overlay = document.getElementById('dropOverlay');
+        if (show && !overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'dropOverlay';
+            overlay.innerHTML = '<div class="drop-overlay-content"><div class="drop-overlay-icon">📥</div><div class="drop-overlay-text">Drop .user.js or .zip files to install</div></div>';
+            document.body.appendChild(overlay);
+        }
+        if (overlay) overlay.classList.toggle('active', show);
     }
 
     // Start

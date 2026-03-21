@@ -277,6 +277,14 @@
             background: var(--popup-bg-hover);
         }
 
+        .script-item.not-running {
+            opacity: 0.55;
+        }
+
+        .script-item.not-running:hover {
+            opacity: 0.8;
+        }
+
         .script-more svg {
             width: 16px;
             height: 16px;
@@ -502,17 +510,64 @@
             opacity: 1;
             transform: translateX(-50%) translateY(0);
         }
+
+        /* URL bar */
+        .url-bar {
+            padding: 4px 12px;
+            font-size: 11px;
+            color: var(--popup-text-dim);
+            background: var(--popup-bg);
+            border-bottom: 1px solid var(--popup-border-subtle);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: none;
+        }
+
+        .url-bar:not(:empty) {
+            display: block;
+        }
+
+        /* Footer total count */
+        .footer-count {
+            margin-left: auto;
+            font-size: 11px;
+            color: var(--popup-text-dim);
+        }
+
+        /* Error indicator on script item */
+        .script-error-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--popup-danger);
+            flex-shrink: 0;
+            margin-left: 4px;
+            title: "Script has errors";
+        }
+
+        /* Script item stagger entrance */
+        @keyframes popupSlideIn {
+            from { opacity: 0; transform: translateX(-6px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .script-item {
+            animation: popupSlideIn 0.15s ease-out both;
+        }
     </style>
 </head>
 <body>
-    <!-- Enabled toggle header -->
+    <!-- Header with branding + toggle -->
     <div class="header" id="headerToggle" role="button" tabindex="0" title="Toggle all scripts on/off">
         <svg class="header-check" id="headerCheckIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12"/>
         </svg>
-        <span class="header-text">Enabled</span>
+        <span class="header-text">ScriptVault</span>
         <span class="header-count" id="headerCount"></span>
     </div>
+    <!-- Current URL bar -->
+    <div class="url-bar" id="urlBar"></div>
     
     <!-- Setup Warning Banner (Chrome 138+) -->
     <div class="setup-warning" id="setupWarning">
@@ -533,7 +588,7 @@
     <div id="emptyState" style="display:none; padding:20px 16px; text-align:center;">
         <div style="font-size:28px; margin-bottom:8px; opacity:0.6;">📜</div>
         <div style="font-size:13px; font-weight:500; color:var(--popup-text); margin-bottom:4px;">No scripts for this page</div>
-        <div style="font-size:12px; color:var(--popup-text-muted);">Find scripts on GreasyFork or create your own</div>
+        <div id="emptyStateHint" style="font-size:12px; color:var(--popup-text-muted);">Find scripts on GreasyFork or create your own</div>
     </div>
 
     <!-- Menu items -->
@@ -599,12 +654,15 @@
             </svg>
         </div>
         <span class="footer-text">Dashboard</span>
+        <span class="footer-count" id="footerTotalCount"></span>
     </div>
 
     <!-- Shared dropdown (positioned at body level to avoid overflow clipping) -->
     <div class="script-dropdown" id="scriptDropdown">
-        <div class="script-dropdown-item" data-action="edit">Edit</div>
-        <div class="script-dropdown-item" data-action="update">Update</div>
+        <div class="script-dropdown-item" data-action="edit">Edit in Dashboard</div>
+        <div class="script-dropdown-item" data-action="update">Check for Update</div>
+        <div class="script-dropdown-item" data-action="copyUrl">Copy Install URL</div>
+        <div class="script-dropdown-item" data-action="pin">Pin / Unpin</div>
         <div class="script-dropdown-item danger" data-action="delete">Delete</div>
     </div>
 

@@ -1593,6 +1593,10 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         Export
                     </button>
+                    <button class="toolbar-btn" id="btnNewFolder" title="Create a new folder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                        Folder
+                    </button>
                     <button class="toolbar-btn" id="btnFindScripts">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         Find
@@ -1615,12 +1619,27 @@
                         <option value="all">All</option>
                         <option value="enabled">Enabled</option>
                         <option value="disabled">Disabled</option>
+                        <option disabled>--- Status ---</option>
+                        <option value="has-errors">Has Errors</option>
+                        <option value="has-updates">Has Update URL</option>
+                        <option value="no-url">No Update URL</option>
+                        <option disabled>--- Grants ---</option>
+                        <option value="grant:xhr">Uses XHR</option>
+                        <option value="grant:storage">Uses Storage</option>
+                        <option value="grant:style">Uses AddStyle</option>
+                        <option value="grant:none">Grant None</option>
+                        <option disabled>--- Scope ---</option>
+                        <option value="scope:broad">Broad Match (*)</option>
+                        <option value="scope:single">Single Site</option>
                     </select>
                     <span class="script-counter" id="scriptCounter">0 scripts</span>
                     <div class="search-box">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="text" id="scriptSearch" placeholder="Search...">
+                        <input type="text" id="scriptSearch" placeholder="Search... (code: to search in code)">
                     </div>
+                    <button class="toolbar-btn" id="btnColumnToggle" title="Show/hide columns" style="margin-left:6px;padding:4px 8px">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M12 3v18M3 12h18M3 6h18M3 18h18"/></svg>
+                    </button>
                 </div>
             </div>
             <div class="scripts-table-container">
@@ -1631,14 +1650,14 @@
                             <th class="center sortable" style="width:40px" data-sort="order"># <span class="sort-indicator"></span></th>
                             <th class="center sortable" style="width:50px" data-sort="enabled">Enabled <span class="sort-indicator"></span></th>
                             <th class="sortable" style="min-width:200px" data-sort="name">Name <span class="sort-indicator"></span></th>
-                            <th class="center sortable" style="width:70px" data-sort="version">Version <span class="sort-indicator"></span></th>
-                            <th class="center sortable" style="width:60px" data-sort="size">Size <span class="sort-indicator"></span></th>
-                            <th class="center sortable" style="width:55px" data-sort="lines">Lines <span class="sort-indicator"></span></th>
-                            <th class="center" style="width:80px">Sites</th>
-                            <th class="center" style="width:80px">Features</th>
-                            <th class="center" style="width:50px">🏠</th>
-                            <th class="center sortable" style="width:80px" data-sort="updated">Updated <span class="sort-indicator"></span></th>
-                            <th class="center sortable" style="width:65px" data-sort="perf">Perf <span class="sort-indicator"></span></th>
+                            <th class="center sortable" style="width:70px" data-sort="version" data-col="version">Version <span class="sort-indicator"></span></th>
+                            <th class="center sortable" style="width:60px" data-sort="size" data-col="size">Size <span class="sort-indicator"></span></th>
+                            <th class="center sortable" style="width:55px" data-sort="lines" data-col="lines">Lines <span class="sort-indicator"></span></th>
+                            <th class="center" style="width:80px" data-col="sites">Sites</th>
+                            <th class="center" style="width:80px" data-col="features">Features</th>
+                            <th class="center" style="width:50px" data-col="home">🏠</th>
+                            <th class="center sortable" style="width:80px" data-sort="updated" data-col="updated">Updated <span class="sort-indicator"></span></th>
+                            <th class="center sortable" style="width:65px" data-sort="perf" data-col="perf">Perf <span class="sort-indicator"></span></th>
                             <th class="center" style="width:100px">Actions</th>
                         </tr>
                     </thead>
@@ -2420,6 +2439,26 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
 
             <div class="settings-section">
+                <div class="section-label">Script Stats</div>
+                <div class="section-content">
+                    <div class="setting-row">
+                        <button class="btn" id="btnExportStats">Export CSV</button>
+                        <span style="font-size:11px;color:var(--text-muted);margin-left:8px">Export execution stats for all scripts</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Tampermonkey Import</div>
+                <div class="section-content">
+                    <div class="setting-row">
+                        <button class="btn" id="btnImportTampermonkey">Import .txt Backup</button>
+                        <span style="font-size:11px;color:var(--text-muted);margin-left:8px">Import from Tampermonkey's text backup format</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
                 <div class="section-label">TextArea</div>
                 <div class="section-content">
                     <div class="setting-row">
@@ -2443,6 +2482,67 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                 </div>
             </div>
+
+            <div class="settings-section">
+                <div class="section-label">Batch Install from URLs</div>
+                <div class="section-content">
+                    <div class="setting-row">
+                        <textarea class="textarea-field" id="batchUrlInput" rows="4" placeholder="Paste one .user.js URL per line..." style="width:100%;font-size:12px;resize:vertical"></textarea>
+                    </div>
+                    <div class="setting-row">
+                        <button class="btn" id="btnBatchInstall">Install All</button>
+                        <span style="font-size:11px;color:var(--text-muted);margin-left:8px">One URL per line</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Workspaces</div>
+                <div class="section-content">
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Save and switch between different sets of enabled/disabled scripts</div>
+                    <div id="workspaceList" style="margin-bottom:8px"></div>
+                    <div class="setting-row">
+                        <button class="btn" id="btnCreateWorkspace">Save Current as Workspace</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Network Request Log</div>
+                <div class="section-content">
+                    <div id="networkLogContainer" style="max-height:250px;overflow-y:auto;font-size:12px">
+                        <div style="color:var(--text-muted)">No network requests logged yet. GM_xmlhttpRequest calls will appear here.</div>
+                    </div>
+                    <div class="setting-row" style="margin-top:8px;gap:8px">
+                        <button class="btn" id="btnRefreshNetLog">Refresh</button>
+                        <button class="btn" id="btnClearNetLog">Clear</button>
+                        <button class="btn" id="btnExportNetLog">Export HAR</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Performance Budgets</div>
+                <div class="section-content">
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Set execution time limits per script. Scripts exceeding budget are highlighted.</div>
+                    <div class="setting-row">
+                        <span class="label-text">Default budget (ms):</span>
+                        <input type="number" class="input-field" id="perfBudgetDefault" value="200" style="width:80px" min="10" max="10000">
+                        <button class="btn" id="btnSavePerfBudget" style="margin-left:8px">Save</button>
+                    </div>
+                    <div id="perfBudgetOverrides" style="margin-top:8px;font-size:12px"></div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Activity Log</div>
+                <div class="section-content">
+                    <div id="activityLog" class="activity-log" style="max-height:200px;overflow-y:auto;font-size:12px;color:var(--text-muted)">No activity yet</div>
+                    <div class="setting-row" style="margin-top:8px">
+                        <button class="btn" id="btnClearLog">Clear Log</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Trash Panel -->
@@ -2460,8 +2560,88 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
 
         <!-- Help Panel -->
         <div id="helpPanel" class="tm-panel">
+            <!-- Getting Started -->
+            <div class="help-section">
+                <div class="shortcuts-title">Getting Started</div>
+                <div class="help-content">
+                    <div class="help-step"><strong>Install scripts:</strong> Navigate to any <code>.user.js</code> URL, use Find Scripts, or drag files onto this dashboard.</div>
+                    <div class="help-step"><strong>Manage scripts:</strong> Toggle on/off, click name to edit, right-click update icon to force-update.</div>
+                    <div class="help-step"><strong>Templates:</strong> Click <strong>+ New</strong> to pick from 6 starter templates.</div>
+                    <div class="help-step"><strong>Cloud sync:</strong> Settings tab &rarr; Sync section. Supports WebDAV, Google Drive, Dropbox, OneDrive.</div>
+                    <div class="help-step"><strong>Bulk actions:</strong> Select scripts with checkboxes (Shift+click for range), then use the action dropdown.</div>
+                </div>
+            </div>
+
+            <!-- Dashboard Shortcuts -->
+            <div class="help-section">
+                <div class="shortcuts-title">Dashboard Shortcuts</div>
+                <div class="shortcuts-grid">
+                    <span class="shortcut-key">Ctrl+N</span>
+                    <span class="shortcut-desc">New Script</span>
+                    <span class="shortcut-key">Ctrl+I</span>
+                    <span class="shortcut-desc">Import Script</span>
+                    <span class="shortcut-key">Ctrl+/</span>
+                    <span class="shortcut-desc">Focus Search</span>
+                    <span class="shortcut-key">Alt+1-5</span>
+                    <span class="shortcut-desc">Switch Tabs</span>
+                    <span class="shortcut-key">Ctrl+W</span>
+                    <span class="shortcut-desc">Close Script Tab</span>
+                    <span class="shortcut-key">Ctrl+Tab</span>
+                    <span class="shortcut-desc">Next Script Tab</span>
+                    <span class="shortcut-key">Ctrl+Shift+Tab</span>
+                    <span class="shortcut-desc">Previous Script Tab</span>
+                </div>
+            </div>
+
+            <!-- GM API Reference -->
+            <div class="help-section">
+                <div class="shortcuts-title">GM API Quick Reference</div>
+                <div class="help-api-grid">
+                    <div class="help-api-group">
+                        <div class="help-api-category">Storage</div>
+                        <code>GM_getValue(key, default)</code>
+                        <code>GM_setValue(key, value)</code>
+                        <code>GM_deleteValue(key)</code>
+                        <code>GM_listValues()</code>
+                    </div>
+                    <div class="help-api-group">
+                        <div class="help-api-category">Network</div>
+                        <code>GM_xmlhttpRequest(details)</code>
+                        <code>GM_download(details)</code>
+                        <code>GM_fetch(url, options)</code>
+                    </div>
+                    <div class="help-api-group">
+                        <div class="help-api-category">UI</div>
+                        <code>GM_addStyle(css)</code>
+                        <code>GM_notification(details)</code>
+                        <code>GM_registerMenuCommand(name, fn)</code>
+                        <code>GM_addElement(tag, attrs)</code>
+                    </div>
+                    <div class="help-api-group">
+                        <div class="help-api-category">Utilities</div>
+                        <code>GM_info</code>
+                        <code>GM_openInTab(url, opts)</code>
+                        <code>GM_setClipboard(data)</code>
+                        <code>GM_getResourceText(name)</code>
+                    </div>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:8px">All functions also available as promise-based <code>GM.*</code> variants (e.g., <code>await GM.getValue()</code>)</div>
+            </div>
+
+            <!-- Pattern Tester -->
+            <div class="help-section">
+                <div class="shortcuts-title">@match Pattern Tester</div>
+                <div class="help-content">
+                    <div style="display:flex;gap:8px;margin-bottom:8px">
+                        <input type="text" class="input-field" id="patternTestUrl" placeholder="Enter a URL to test (e.g., https://example.com/page)" style="flex:1">
+                        <button class="btn btn-primary" id="btnTestPattern">Test</button>
+                    </div>
+                    <div id="patternTestResults" style="font-size:12px;color:var(--text-muted)">Enter a URL to see which scripts would run on it</div>
+                </div>
+            </div>
+
             <div class="shortcuts-container">
-                <div class="shortcuts-title">Editor</div>
+                <div class="shortcuts-title">Editor Shortcuts</div>
                 <div class="shortcuts-grid">
                     <span class="shortcut-key">Key Mapping</span>
                     <span class="shortcut-desc"><em>windows</em></span>
@@ -2551,6 +2731,12 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <div class="stat-label">Storage Used</div>
                     </div>
                 </div>
+                <div class="quota-bar-container">
+                    <div class="quota-bar-track">
+                        <div class="quota-bar-fill" id="storageQuotaBar"></div>
+                    </div>
+                    <div class="quota-bar-text" id="storageQuotaText">-- / 10 MB</div>
+                </div>
                 <div class="about-links">
                     <a href="https://github.com/SysAdminDoc/ScriptVault" target="_blank">GitHub</a>
                     <a href="https://greasyfork.org" target="_blank">GreasyFork</a>
@@ -2622,6 +2808,19 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 Go to Line
             </button>
+            <div class="toolbar-separator"></div>
+            <button class="toolbar-btn" id="tbtnComment" title="Toggle Comment (Ctrl+/)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h7M4 12h16M4 17h11"/><path d="M17 7l3 3-3 3"/></svg>
+                //
+            </button>
+            <button class="toolbar-btn" id="tbtnWordWrap" title="Toggle Word Wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h15a3 3 0 010 6H9m0 0l3-3m-3 3l3 3"/></svg>
+                Wrap
+            </button>
+            <button class="toolbar-btn" id="tbtnSnippet" title="Insert Code Snippet">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                Snippet
+            </button>
         </div>
         <div class="editor-body">
             <div class="editor-main">
@@ -2658,6 +2857,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             </div>
                             <span class="info-label">Conflicts:</span>
                             <div class="info-value" id="infoConflicts">-</div>
+                            <span class="info-label">Version History:</span>
+                            <div class="info-value" id="infoVersionHistory">No previous versions</div>
                         </div>
                     </div>
                 </div>
@@ -2720,7 +2921,16 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                 </div>
                             </div>
                         </div>
-                        
+
+                        <div class="settings-section" style="margin-bottom: 20px;">
+                            <div class="section-label">Notes</div>
+                            <div class="section-content">
+                                <div class="setting-row">
+                                    <textarea class="textarea-field" id="scriptNotes" rows="3" placeholder="Personal notes about this script..." style="width:100%;resize:vertical;font-size:12px"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- URL Overrides - Tampermonkey-style -->
                         <div class="settings-section url-overrides-section" style="margin-bottom: 20px;">
                             <div class="section-label">URL Overrides</div>
@@ -2828,6 +3038,16 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
                             <h3 style="color: var(--text-primary);">External Resources</h3>
                             <button class="btn" id="btnRefreshExternals" title="Re-fetch all external resources">Refresh All</button>
+                        </div>
+                        <div class="settings-section" style="margin-bottom: 20px;">
+                            <div class="section-label">Find Libraries</div>
+                            <div class="section-content">
+                                <div style="display:flex;gap:8px;margin-bottom:10px">
+                                    <input type="text" class="input-field" id="libSearchInput" placeholder="Search CDN libraries (e.g. jquery, lodash, react)" style="flex:1">
+                                    <button class="btn btn-primary" id="btnLibSearch">Search</button>
+                                </div>
+                                <div id="libSearchResults" style="font-size:12px;color:var(--text-muted)">Search cdnjs for popular libraries to add as @require</div>
+                            </div>
                         </div>
                         <div class="settings-section" style="margin-bottom: 20px;">
                             <div class="section-label">@require</div>

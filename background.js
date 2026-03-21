@@ -1,4 +1,4 @@
-// ScriptVault v1.5.2 - Background Service Worker
+// ScriptVault v1.6.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run build-background.sh to regenerate.
@@ -4391,6 +4391,89 @@ chrome.notifications.onClosed.addListener((notifId, byUser) => {
   self._notifCallbacks.delete(notifId);
 });
 
+// ============================================================================
+// Folder Storage
+// ============================================================================
+
+const FolderStorage = {
+  cache: null,
+
+  async init() {
+    if (this.cache !== null) return;
+    const data = await chrome.storage.local.get('scriptFolders');
+    this.cache = data.scriptFolders || [];
+  },
+
+  async save() {
+    await chrome.storage.local.set({ scriptFolders: this.cache });
+  },
+
+  async getAll() {
+    await this.init();
+    return this.cache;
+  },
+
+  async create(name, color = '#60a5fa') {
+    await this.init();
+    const folder = { id: generateId(), name, color, collapsed: false, scriptIds: [], createdAt: Date.now() };
+    this.cache.push(folder);
+    await this.save();
+    return folder;
+  },
+
+  async update(id, updates) {
+    await this.init();
+    const folder = this.cache.find(f => f.id === id);
+    if (folder) {
+      Object.assign(folder, updates);
+      await this.save();
+    }
+    return folder;
+  },
+
+  async delete(id) {
+    await this.init();
+    this.cache = this.cache.filter(f => f.id !== id);
+    await this.save();
+  },
+
+  async addScript(folderId, scriptId) {
+    await this.init();
+    const folder = this.cache.find(f => f.id === folderId);
+    if (folder && !folder.scriptIds.includes(scriptId)) {
+      folder.scriptIds.push(scriptId);
+      await this.save();
+    }
+  },
+
+  async removeScript(folderId, scriptId) {
+    await this.init();
+    const folder = this.cache.find(f => f.id === folderId);
+    if (folder) {
+      folder.scriptIds = folder.scriptIds.filter(id => id !== scriptId);
+      await this.save();
+    }
+  },
+
+  async moveScript(scriptId, fromFolderId, toFolderId) {
+    await this.init();
+    if (fromFolderId) {
+      const from = this.cache.find(f => f.id === fromFolderId);
+      if (from) from.scriptIds = from.scriptIds.filter(id => id !== scriptId);
+    }
+    if (toFolderId) {
+      const to = this.cache.find(f => f.id === toFolderId);
+      if (to && !to.scriptIds.includes(scriptId)) to.scriptIds.push(scriptId);
+    }
+    await this.save();
+  },
+
+  getFolderForScript(scriptId) {
+    if (!this.cache) return null;
+    return this.cache.find(f => f.scriptIds.includes(scriptId)) || null;
+  }
+};
+
 // Shared tracker for GM_openInTab close notifications (avoids per-call listener leak)
 const _openTabTrackers = new Map(); // openedTabId -> { callerTabId, scriptId }
 chrome.tabs.onRemoved.addListener((closedTabId) => {
@@ -4583,6 +4666,334 @@ const ResourceCache = {
       const keys = Object.keys(all).filter(k => k.startsWith(this.STORAGE_PREFIX));
       if (keys.length > 0) await chrome.storage.local.remove(keys);
     } catch (e) {}
+  }
+};
+
+
+// ScriptVault - Static Analysis Engine
+// Scans userscript code for suspicious or dangerous patterns
+
+const ScriptAnalyzer = {
+  // Pattern definitions with risk weights
+  patterns: [
+    // Code execution
+    { id: 'eval', regex: /\beval\s*\(/g, label: 'eval() call', risk: 30, category: 'execution', desc: 'Dynamic code execution can run arbitrary code' },
+    { id: 'function-ctor', regex: /\bnew\s+Function\s*\(/g, label: 'new Function()', risk: 30, category: 'execution', desc: 'Creates functions from strings, equivalent to eval' },
+    { id: 'settimeout-str', regex: /setTimeout\s*\(\s*['"`]/g, label: 'setTimeout with string', risk: 20, category: 'execution', desc: 'String argument to setTimeout acts like eval' },
+    { id: 'setinterval-str', regex: /setInterval\s*\(\s*['"`]/g, label: 'setInterval with string', risk: 20, category: 'execution', desc: 'String argument to setInterval acts like eval' },
+    { id: 'document-write', regex: /document\.write\s*\(/g, label: 'document.write()', risk: 10, category: 'execution', desc: 'Can overwrite entire page content' },
+    { id: 'innerhtml-assign', regex: /\.innerHTML\s*=/g, label: 'innerHTML assignment', risk: 5, category: 'execution', desc: 'Can inject HTML including scripts (XSS risk)' },
+
+    // Data access
+    { id: 'cookie-access', regex: /document\.cookie/g, label: 'Cookie access', risk: 25, category: 'data', desc: 'Can read or modify browser cookies' },
+    { id: 'localstorage', regex: /localStorage\.(get|set|remove)Item/g, label: 'localStorage access', risk: 10, category: 'data', desc: 'Reads or writes persistent page data' },
+    { id: 'sessionstorage', regex: /sessionStorage\.(get|set|remove)Item/g, label: 'sessionStorage access', risk: 5, category: 'data', desc: 'Reads or writes session data' },
+    { id: 'indexeddb', regex: /indexedDB\.open/g, label: 'IndexedDB access', risk: 10, category: 'data', desc: 'Opens browser database' },
+
+    // Network
+    { id: 'fetch-call', regex: /\bfetch\s*\(/g, label: 'fetch() call', risk: 10, category: 'network', desc: 'Makes network requests (same-origin)' },
+    { id: 'xhr-open', regex: /XMLHttpRequest|\.open\s*\(\s*['"](?:GET|POST|PUT|DELETE)/gi, label: 'XMLHttpRequest', risk: 10, category: 'network', desc: 'Makes network requests' },
+    { id: 'websocket', regex: /new\s+WebSocket\s*\(/g, label: 'WebSocket', risk: 20, category: 'network', desc: 'Opens persistent connection to a server' },
+    { id: 'beacon', regex: /navigator\.sendBeacon/g, label: 'sendBeacon()', risk: 15, category: 'network', desc: 'Sends data to a server, often used for tracking' },
+
+    // Fingerprinting
+    { id: 'canvas-fp', regex: /\.toDataURL\s*\(|\.getImageData\s*\(/g, label: 'Canvas fingerprinting', risk: 20, category: 'fingerprint', desc: 'Can generate unique device fingerprint via canvas' },
+    { id: 'webgl-fp', regex: /getExtension\s*\(\s*['"]WEBGL/g, label: 'WebGL fingerprinting', risk: 20, category: 'fingerprint', desc: 'Can identify GPU for device fingerprinting' },
+    { id: 'audio-fp', regex: /AudioContext|OfflineAudioContext/g, label: 'Audio fingerprinting', risk: 15, category: 'fingerprint', desc: 'Can generate audio-based device fingerprint' },
+    { id: 'navigator-props', regex: /navigator\.(platform|userAgent|language|hardwareConcurrency|deviceMemory|plugins)/g, label: 'Navigator property access', risk: 5, category: 'fingerprint', desc: 'Reads browser/device information' },
+
+    // Obfuscation indicators
+    { id: 'atob-long', regex: /atob\s*\(\s*['"][A-Za-z0-9+/=]{100,}['"]\s*\)/g, label: 'Large base64 decode', risk: 25, category: 'obfuscation', desc: 'Decodes large embedded base64 data (possible obfuscation)' },
+    { id: 'hex-escape', regex: /\\x[0-9a-fA-F]{2}(?:\\x[0-9a-fA-F]{2}){10,}/g, label: 'Hex escape sequences', risk: 20, category: 'obfuscation', desc: 'Long hex-encoded strings suggest obfuscated code' },
+    { id: 'char-fromcode', regex: /String\.fromCharCode\s*\([^)]{20,}\)/g, label: 'String.fromCharCode chain', risk: 15, category: 'obfuscation', desc: 'Building strings from char codes (obfuscation technique)' },
+
+    // Crypto mining
+    { id: 'wasm-mining', regex: /WebAssembly\.(instantiate|compile|Module)/g, label: 'WebAssembly usage', risk: 15, category: 'mining', desc: 'WebAssembly can be used for crypto mining' },
+    { id: 'worker-creation', regex: /new\s+Worker\s*\(/g, label: 'Web Worker creation', risk: 10, category: 'mining', desc: 'Workers can run background computations' },
+
+    // DOM clobbering / hijacking
+    { id: 'form-submit', regex: /\.submit\s*\(\s*\)/g, label: 'Form auto-submit', risk: 15, category: 'hijack', desc: 'Automatically submits forms' },
+    { id: 'window-open', regex: /window\.open\s*\(/g, label: 'window.open()', risk: 5, category: 'hijack', desc: 'Opens new windows/popups' },
+    { id: 'location-assign', regex: /(?:window\.|document\.)?location\s*=|location\.(?:href|assign|replace)\s*=/g, label: 'Page redirect', risk: 10, category: 'hijack', desc: 'Redirects the page to another URL' },
+    { id: 'event-prevent', regex: /addEventListener\s*\(\s*['"](?:beforeunload|unload)['"]/g, label: 'Unload handler', risk: 10, category: 'hijack', desc: 'Prevents or intercepts page navigation' },
+  ],
+
+  // Analyze a script and return findings
+  analyze(code) {
+    const findings = [];
+    let totalRisk = 0;
+
+    // Strip comments to reduce false positives
+    const strippedCode = code
+      .replace(/\/\/.*$/gm, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+
+    for (const pattern of this.patterns) {
+      pattern.regex.lastIndex = 0;
+      const matches = strippedCode.match(pattern.regex);
+      if (matches && matches.length > 0) {
+        const count = matches.length;
+        const adjustedRisk = Math.min(pattern.risk * Math.min(count, 3), pattern.risk * 3); // Cap at 3x
+        totalRisk += adjustedRisk;
+        findings.push({
+          id: pattern.id,
+          label: pattern.label,
+          category: pattern.category,
+          desc: pattern.desc,
+          risk: pattern.risk,
+          count,
+          adjustedRisk
+        });
+      }
+    }
+
+    // Check for high-entropy strings (possible obfuscation)
+    const longStrings = strippedCode.match(/['"][^'"]{200,}['"]/g);
+    if (longStrings && longStrings.length > 0) {
+      const entropy = this.calculateEntropy(longStrings[0]);
+      if (entropy > 4.5) {
+        findings.push({
+          id: 'high-entropy',
+          label: 'High-entropy string detected',
+          category: 'obfuscation',
+          desc: `Found ${longStrings.length} long string(s) with high randomness (entropy: ${entropy.toFixed(1)})`,
+          risk: 20,
+          count: longStrings.length,
+          adjustedRisk: 20
+        });
+        totalRisk += 20;
+      }
+    }
+
+    // Calculate risk level
+    const riskLevel = totalRisk >= 80 ? 'high' : totalRisk >= 40 ? 'medium' : totalRisk >= 15 ? 'low' : 'minimal';
+
+    // Group findings by category
+    const categories = {};
+    for (const f of findings) {
+      if (!categories[f.category]) categories[f.category] = [];
+      categories[f.category].push(f);
+    }
+
+    return {
+      totalRisk: Math.min(totalRisk, 100),
+      riskLevel,
+      findings,
+      categories,
+      summary: this.generateSummary(riskLevel, findings)
+    };
+  },
+
+  calculateEntropy(str) {
+    const freq = {};
+    for (const ch of str) {
+      freq[ch] = (freq[ch] || 0) + 1;
+    }
+    let entropy = 0;
+    const len = str.length;
+    for (const count of Object.values(freq)) {
+      const p = count / len;
+      entropy -= p * Math.log2(p);
+    }
+    return entropy;
+  },
+
+  generateSummary(riskLevel, findings) {
+    if (findings.length === 0) return 'No suspicious patterns detected.';
+    const cats = [...new Set(findings.map(f => f.category))];
+    const catLabels = {
+      execution: 'dynamic code execution',
+      data: 'data access',
+      network: 'network activity',
+      fingerprint: 'device fingerprinting',
+      obfuscation: 'code obfuscation',
+      mining: 'potential mining',
+      hijack: 'page manipulation'
+    };
+    const labels = cats.map(c => catLabels[c] || c).join(', ');
+    return `Found ${findings.length} pattern(s) involving ${labels}.`;
+  }
+};
+
+// ScriptVault - Network Request Logger
+// Logs all GM_xmlhttpRequest calls for transparency and debugging
+
+const NetworkLog = {
+  _log: [],
+  _maxEntries: 500,
+
+  add(entry) {
+    this._log.unshift({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      timestamp: Date.now(),
+      ...entry
+    });
+    if (this._log.length > this._maxEntries) {
+      this._log = this._log.slice(0, this._maxEntries);
+    }
+  },
+
+  getAll(filters = {}) {
+    let results = this._log;
+    if (filters.scriptId) {
+      results = results.filter(e => e.scriptId === filters.scriptId);
+    }
+    if (filters.method) {
+      results = results.filter(e => e.method?.toUpperCase() === filters.method.toUpperCase());
+    }
+    if (filters.domain) {
+      results = results.filter(e => {
+        try { return new URL(e.url).hostname.includes(filters.domain); } catch { return false; }
+      });
+    }
+    if (filters.status) {
+      if (filters.status === 'error') {
+        results = results.filter(e => e.error || (e.status && e.status >= 400));
+      } else if (filters.status === 'success') {
+        results = results.filter(e => !e.error && e.status && e.status < 400);
+      }
+    }
+    return results.slice(0, filters.limit || 100);
+  },
+
+  getStats() {
+    const byScript = {};
+    const byDomain = {};
+    let totalRequests = 0;
+    let totalErrors = 0;
+    let totalBytes = 0;
+
+    for (const entry of this._log) {
+      totalRequests++;
+      if (entry.error || (entry.status && entry.status >= 400)) totalErrors++;
+      totalBytes += entry.responseSize || 0;
+
+      // By script
+      const sid = entry.scriptId || 'unknown';
+      if (!byScript[sid]) byScript[sid] = { count: 0, errors: 0, bytes: 0, scriptName: entry.scriptName || sid };
+      byScript[sid].count++;
+      if (entry.error) byScript[sid].errors++;
+      byScript[sid].bytes += entry.responseSize || 0;
+
+      // By domain
+      try {
+        const domain = new URL(entry.url).hostname;
+        if (!byDomain[domain]) byDomain[domain] = { count: 0, errors: 0, bytes: 0 };
+        byDomain[domain].count++;
+        if (entry.error) byDomain[domain].errors++;
+        byDomain[domain].bytes += entry.responseSize || 0;
+      } catch {}
+    }
+
+    return { totalRequests, totalErrors, totalBytes, byScript, byDomain };
+  },
+
+  clear(scriptId) {
+    if (scriptId) {
+      this._log = this._log.filter(e => e.scriptId !== scriptId);
+    } else {
+      this._log = [];
+    }
+  }
+};
+
+// ScriptVault - Workspaces
+// Named sets of enabled/disabled script states for quick context switching
+
+const WorkspaceManager = {
+  _cache: null,
+
+  async _init() {
+    if (this._cache !== null) return;
+    const data = await chrome.storage.local.get('workspaces');
+    this._cache = data.workspaces || { active: null, list: [] };
+  },
+
+  async _save() {
+    await chrome.storage.local.set({ workspaces: this._cache });
+  },
+
+  async getAll() {
+    await this._init();
+    return { active: this._cache.active, list: this._cache.list };
+  },
+
+  async create(name) {
+    await this._init();
+    // Snapshot current enabled states
+    const scripts = await ScriptStorage.getAll();
+    const snapshot = {};
+    for (const s of scripts) {
+      snapshot[s.id] = s.enabled !== false;
+    }
+    const workspace = {
+      id: generateId(),
+      name,
+      snapshot,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    this._cache.list.push(workspace);
+    await this._save();
+    return workspace;
+  },
+
+  async update(id, updates) {
+    await this._init();
+    const ws = this._cache.list.find(w => w.id === id);
+    if (!ws) return null;
+    if (updates.name !== undefined) ws.name = updates.name;
+    ws.updatedAt = Date.now();
+    await this._save();
+    return ws;
+  },
+
+  async save(id) {
+    // Save current state into existing workspace
+    await this._init();
+    const ws = this._cache.list.find(w => w.id === id);
+    if (!ws) return null;
+    const scripts = await ScriptStorage.getAll();
+    ws.snapshot = {};
+    for (const s of scripts) {
+      ws.snapshot[s.id] = s.enabled !== false;
+    }
+    ws.updatedAt = Date.now();
+    await this._save();
+    return ws;
+  },
+
+  async activate(id) {
+    await this._init();
+    const ws = this._cache.list.find(w => w.id === id);
+    if (!ws) return { error: 'Workspace not found' };
+
+    // Apply snapshot
+    const scripts = await ScriptStorage.getAll();
+    for (const s of scripts) {
+      const shouldBeEnabled = ws.snapshot[s.id];
+      if (shouldBeEnabled !== undefined && (s.enabled !== false) !== shouldBeEnabled) {
+        s.enabled = shouldBeEnabled;
+        s.updatedAt = Date.now();
+        await ScriptStorage.set(s.id, s);
+      }
+    }
+
+    this._cache.active = id;
+    await this._save();
+
+    // Re-register all scripts
+    await registerAllScripts();
+    await updateBadge();
+
+    return { success: true, name: ws.name };
+  },
+
+  async delete(id) {
+    await this._init();
+    this._cache.list = this._cache.list.filter(w => w.id !== id);
+    if (this._cache.active === id) this._cache.active = null;
+    await this._save();
   }
 };
 
@@ -4798,10 +5209,22 @@ const UpdateSystem = {
   async applyUpdate(scriptId, newCode) {
     const script = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
-    
+
     const parsed = parseUserscript(newCode);
     if (parsed.error) return parsed;
-    
+
+    // Store previous version for rollback (keep last 3)
+    if (!script.versionHistory) script.versionHistory = [];
+    script.versionHistory.push({
+      version: script.meta.version,
+      code: script.code,
+      updatedAt: script.updatedAt || Date.now()
+    });
+    // Trim to last 3 versions
+    if (script.versionHistory.length > 3) {
+      script.versionHistory = script.versionHistory.slice(-3);
+    }
+
     script.code = newCode;
     script.meta = parsed.meta;
     script.updatedAt = Date.now();
@@ -5611,10 +6034,65 @@ async function handleMessage(message, sender) {
       // Updates
       case 'checkUpdates':
         return await UpdateSystem.checkForUpdates(data?.scriptId);
-        
+
+      case 'forceUpdate': {
+        // Force re-download bypassing HTTP cache
+        const scriptId = data.scriptId;
+        const script = await ScriptStorage.get(scriptId);
+        if (!script) return { error: 'Script not found' };
+        const downloadUrl = script.meta.downloadURL || script.meta.updateURL;
+        if (!downloadUrl) return { error: 'No download URL configured' };
+        try {
+          const response = await fetch(downloadUrl, {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+          });
+          if (!response.ok) return { error: `HTTP ${response.status}` };
+          const newCode = await response.text();
+          const parsed = parseUserscript(newCode);
+          if (parsed.error) return parsed;
+          // Apply as update (saves version history)
+          return await UpdateSystem.applyUpdate(scriptId, newCode);
+        } catch (e) {
+          return { error: e.message };
+        }
+      }
+
       case 'applyUpdate':
         return await UpdateSystem.applyUpdate(data.scriptId, data.code);
-        
+
+      case 'getVersionHistory': {
+        const script = await ScriptStorage.get(data.scriptId);
+        return { history: script?.versionHistory || [] };
+      }
+
+      case 'rollbackScript': {
+        const script = await ScriptStorage.get(data.scriptId);
+        if (!script) return { error: 'Script not found' };
+        if (!script.versionHistory || script.versionHistory.length === 0) {
+          return { error: 'No version history available' };
+        }
+        const targetIdx = data.index !== undefined ? data.index : script.versionHistory.length - 1;
+        const target = script.versionHistory[targetIdx];
+        if (!target) return { error: 'Version not found' };
+
+        const parsed = parseUserscript(target.code);
+        if (parsed.error) return parsed;
+
+        // Remove the rolled-back-to version and all after it from history
+        script.versionHistory = script.versionHistory.slice(0, targetIdx);
+        script.code = target.code;
+        script.meta = parsed.meta;
+        script.updatedAt = Date.now();
+
+        await ScriptStorage.set(data.scriptId, script);
+        await unregisterScript(data.scriptId);
+        if (script.enabled !== false) {
+          await registerScript(script);
+        }
+        return { success: true, script: { ...script, metadata: script.meta } };
+      }
+
       // Sync
       case 'sync':
         return await CloudSync.sync();
@@ -5815,10 +6293,113 @@ async function handleMessage(message, sender) {
         
       case 'importAll':
         return await importScripts(data.data, data.options);
-        
+
+      case 'importTampermonkeyBackup': {
+        // Parse Tampermonkey .txt backup format
+        // Format: multiple scripts separated by blank lines, each with ==UserScript== blocks
+        const text = data.text || '';
+        const scriptBlocks = [];
+        // Split on double newlines that precede ==UserScript== headers
+        const parts = text.split(/\n\s*\n(?=\/\/\s*==UserScript==)/);
+        for (const part of parts) {
+          const trimmed = part.trim();
+          if (trimmed.includes('==UserScript==') && trimmed.includes('==/UserScript==')) {
+            scriptBlocks.push(trimmed);
+          }
+        }
+        if (scriptBlocks.length === 0) {
+          return { error: 'No valid userscripts found in backup file' };
+        }
+        const results = { imported: 0, skipped: 0, errors: [] };
+        for (const code of scriptBlocks) {
+          try {
+            const parsed = parseUserscript(code);
+            if (parsed.error) { results.errors.push({ error: parsed.error }); continue; }
+            const existing = (await ScriptStorage.getAll()).find(s =>
+              s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
+            );
+            if (existing && !data.overwrite) { results.skipped++; continue; }
+            const id = existing?.id || generateId();
+            await ScriptStorage.set(id, {
+              id, code, meta: parsed.meta,
+              enabled: true,
+              position: existing?.position ?? (await ScriptStorage.getAll()).length,
+              createdAt: existing?.createdAt || Date.now(),
+              updatedAt: Date.now()
+            });
+            results.imported++;
+          } catch (e) {
+            results.errors.push({ error: e.message });
+          }
+        }
+        await registerAllScripts();
+        await updateBadge();
+        return results;
+      }
+
       case 'exportZip':
         return await exportToZip();
-      
+
+      // Folders
+      // Workspaces
+      case 'getWorkspaces':
+        return await WorkspaceManager.getAll();
+
+      case 'createWorkspace':
+        return { workspace: await WorkspaceManager.create(data.name) };
+
+      case 'saveWorkspace':
+        return { workspace: await WorkspaceManager.save(data.id) };
+
+      case 'activateWorkspace':
+        return await WorkspaceManager.activate(data.id);
+
+      case 'updateWorkspace':
+        return { workspace: await WorkspaceManager.update(data.id, data.updates) };
+
+      case 'deleteWorkspace':
+        await WorkspaceManager.delete(data.id);
+        return { success: true };
+
+      // Network Log
+      case 'getNetworkLog':
+        return { log: NetworkLog.getAll(data || {}), stats: NetworkLog.getStats() };
+
+      case 'clearNetworkLog':
+        NetworkLog.clear(data?.scriptId);
+        return { success: true };
+
+      // Static Analysis
+      case 'analyzeScript': {
+        const code = data.code || '';
+        return ScriptAnalyzer.analyze(code);
+      }
+
+      case 'getFolders':
+        return { folders: await FolderStorage.getAll() };
+
+      case 'createFolder':
+        return { folder: await FolderStorage.create(data.name, data.color) };
+
+      case 'updateFolder':
+        return { folder: await FolderStorage.update(data.id, data.updates) };
+
+      case 'deleteFolder':
+        await FolderStorage.delete(data.id);
+        return { success: true };
+
+      case 'addScriptToFolder':
+        await FolderStorage.addScript(data.folderId, data.scriptId);
+        return { success: true };
+
+      case 'removeScriptFromFolder':
+        await FolderStorage.removeScript(data.folderId, data.scriptId);
+        return { success: true };
+
+      case 'moveScriptToFolder':
+        await FolderStorage.moveScript(data.scriptId, data.fromFolderId, data.toFolderId);
+        return { success: true };
+
       case 'importFromZip':
         return await importFromZip(data.zipData, data.options || {});
       
@@ -5912,6 +6493,21 @@ async function handleMessage(message, sender) {
           const tabId = sender.tab?.id;
           const request = XhrManager.create(tabId, data.scriptId, data);
           const { id: requestId } = request;
+
+          // Log to network log
+          const _netLogStartTime = Date.now();
+          const _netLogEntry = {
+            scriptId: data.scriptId,
+            scriptName: '',
+            method: (data.method || 'GET').toUpperCase(),
+            url: data.url,
+            requestSize: data.data ? (typeof data.data === 'string' ? data.data.length : 0) : 0
+          };
+          // Resolve script name
+          try {
+            const _xhrScript = await ScriptStorage.get(data.scriptId);
+            _netLogEntry.scriptName = _xhrScript?.meta?.name || data.scriptId;
+          } catch {};
           
           // Create AbortController for this request
           const controller = new AbortController();
@@ -6120,10 +6716,20 @@ async function handleMessage(message, sender) {
               
               // Send load event
               sendEvent('load', finalResponse);
-              
+
+              // Log successful request
+              NetworkLog.add({
+                ..._netLogEntry,
+                status: finalResponse.status,
+                statusText: finalResponse.statusText,
+                responseSize: responseText?.length || 0,
+                duration: Date.now() - _netLogStartTime,
+                finalUrl: finalResponse.finalUrl
+              });
+
               // Send loadend event
               sendEvent('loadend', finalResponse);
-              
+
               // Clean up
               XhrManager.remove(requestId);
               
@@ -6139,6 +6745,9 @@ async function handleMessage(message, sender) {
               const errorType = isAbort ? 'abort' : 'error';
               const errorMsg = isAbort ? 'Request aborted' : (e.message || 'Network error');
               
+              // Log failed request
+              NetworkLog.add({ ..._netLogEntry, status: 0, error: errorMsg, duration: Date.now() - _netLogStartTime });
+
               sendEvent(errorType, {
                 readyState: 4,
                 status: 0,
@@ -6482,7 +7091,8 @@ async function handleMessage(message, sender) {
           script.stats.avgTime = Math.round(script.stats.totalTime / script.stats.runs * 100) / 100;
           script.stats.lastRun = Date.now();
           script.stats.lastUrl = data.url;
-          await ScriptStorage.set(scriptId, script);
+          // Update cache only (debounced save to avoid excessive storage writes)
+          _debouncedStatsSave();
         }
         return { success: true };
       }
@@ -6495,7 +7105,8 @@ async function handleMessage(message, sender) {
           script.stats.errors++;
           script.stats.lastError = data.error;
           script.stats.lastErrorTime = Date.now();
-          await ScriptStorage.set(scriptId, script);
+          // Update cache only (debounced save to avoid excessive storage writes)
+          _debouncedStatsSave();
         }
         return { success: true };
       }
@@ -6526,6 +7137,21 @@ async function handleMessage(message, sender) {
         } catch (e) {
           return { error: e.message };
         }
+      }
+
+      case 'GM_audio_watchState': {
+        // Start watching tab audio state changes for the requesting tab
+        const tabId = sender.tab?.id;
+        if (!tabId) return { error: 'No tab context' };
+        if (!self._audioWatchedTabs) self._audioWatchedTabs = new Set();
+        self._audioWatchedTabs.add(tabId);
+        return { success: true };
+      }
+
+      case 'GM_audio_unwatchState': {
+        const tabId = sender.tab?.id;
+        if (tabId && self._audioWatchedTabs) self._audioWatchedTabs.delete(tabId);
+        return { success: true };
       }
 
       default:
@@ -6978,6 +7604,16 @@ chrome.commands.onCommand.addListener(async (command) => {
 // Alarms (Auto-update & Sync)
 // ============================================================================
 
+// Debounced stats save — coalesces rapid reportExecTime/Error writes into a single storage write
+let _statsSaveTimer = null;
+function _debouncedStatsSave() {
+  if (_statsSaveTimer) clearTimeout(_statsSaveTimer);
+  _statsSaveTimer = setTimeout(() => {
+    _statsSaveTimer = null;
+    ScriptStorage.save().catch(() => {});
+  }, 5000);
+}
+
 let _backgroundTaskRunning = false;
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   // Mutual exclusion — don't run update and sync concurrently
@@ -7018,8 +7654,9 @@ async function setupAlarms() {
   
   // Setup sync alarm
   if (settings.syncEnabled && settings.syncProvider !== 'none') {
+    const syncMs = settings.syncInterval || 3600000; // Default 1 hour
     chrome.alarms.create('autoSync', {
-      periodInMinutes: settings.syncInterval / 60000
+      periodInMinutes: Math.max(1, syncMs / 60000)
     });
   }
 }
@@ -7045,6 +7682,23 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.url || changeInfo.status === 'complete') {
     if (tab.url) {
       await updateBadgeForTab(tabId, tab.url);
+    }
+  }
+
+  // Forward audio state changes to watched tabs
+  if (('audible' in changeInfo || 'mutedInfo' in changeInfo) && self._audioWatchedTabs?.has(tabId)) {
+    try {
+      await chrome.tabs.sendMessage(tabId, {
+        action: 'audioStateChanged',
+        data: {
+          muted: tab.mutedInfo?.muted || false,
+          reason: tab.mutedInfo?.reason || 'user',
+          audible: tab.audible || false
+        }
+      });
+    } catch (e) {
+      // Tab may have been closed
+      self._audioWatchedTabs.delete(tabId);
     }
   }
 });
@@ -8974,15 +9628,33 @@ ${req.code}
       }).catch(e => { if (callback) callback(null, e); });
     },
     _listeners: [],
+    _watching: false,
     addStateChangeListener: (listener, callback) => {
-      // Simplified: poll-based since chrome.tabs events aren't available in USER_SCRIPT world
       if (!hasGrant('GM_audio')) { if (callback) callback(new Error('Permission denied')); return; }
       GM_audio._listeners.push(listener);
+      if (!GM_audio._watching) {
+        GM_audio._watching = true;
+        sendToBackground('GM_audio_watchState', {});
+        // Listen for audio state change events from content script bridge
+        window.addEventListener('message', (e) => {
+          if (e.source !== window || !e.data || e.data.channel !== window.__ScriptVault_ChannelID__) return;
+          if (e.data.type === 'audioStateChanged') {
+            const state = e.data.data;
+            for (const fn of GM_audio._listeners) {
+              try { fn(state); } catch (err) { console.error('[GM_audio listener]', err); }
+            }
+          }
+        });
+      }
       if (callback) callback();
     },
     removeStateChangeListener: (listener, callback) => {
       const idx = GM_audio._listeners.indexOf(listener);
       if (idx >= 0) GM_audio._listeners.splice(idx, 1);
+      if (GM_audio._listeners.length === 0 && GM_audio._watching) {
+        GM_audio._watching = false;
+        sendToBackground('GM_audio_unwatchState', {});
+      }
       if (callback) callback();
     }
   };

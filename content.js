@@ -1,4 +1,4 @@
-// ScriptVault v1.5.2 - Content Script Bridge
+// ScriptVault v1.6.0 - Content Script Bridge
 // Bridges messages between userscripts (USER_SCRIPT world) and background service worker
 
 (function() {
@@ -125,6 +125,17 @@
         scriptId: message.data?.scriptId,
         downloadId: message.data?.downloadId,
         eventType: message.data?.type,
+        data: message.data
+      }, '/');
+      handled = true;
+    }
+
+    // Audio state change event
+    if (message.action === 'audioStateChanged') {
+      window.postMessage({
+        channel: CHANNEL_ID,
+        direction: 'to-userscript',
+        type: 'audioStateChanged',
         data: message.data
       }, '/');
       handled = true;

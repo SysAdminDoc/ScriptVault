@@ -35,6 +35,13 @@ echo "Building background.js v$VERSION..."
   echo ""
   cat "$SCRIPT_DIR/modules/resources.js"
   echo ""
+  # New bg/ modules
+  if [ -d "$SCRIPT_DIR/bg" ]; then
+    for f in "$SCRIPT_DIR/bg"/*.js; do
+      [ -f "$f" ] && { echo ""; cat "$f"; }
+    done
+  fi
+  echo ""
   cat "$SCRIPT_DIR/background.core.js"
 } > "$OUT"
 

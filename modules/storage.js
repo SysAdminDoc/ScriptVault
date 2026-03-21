@@ -415,6 +415,89 @@ chrome.notifications.onClosed.addListener((notifId, byUser) => {
   self._notifCallbacks.delete(notifId);
 });
 
+// ============================================================================
+// Folder Storage
+// ============================================================================
+
+const FolderStorage = {
+  cache: null,
+
+  async init() {
+    if (this.cache !== null) return;
+    const data = await chrome.storage.local.get('scriptFolders');
+    this.cache = data.scriptFolders || [];
+  },
+
+  async save() {
+    await chrome.storage.local.set({ scriptFolders: this.cache });
+  },
+
+  async getAll() {
+    await this.init();
+    return this.cache;
+  },
+
+  async create(name, color = '#60a5fa') {
+    await this.init();
+    const folder = { id: generateId(), name, color, collapsed: false, scriptIds: [], createdAt: Date.now() };
+    this.cache.push(folder);
+    await this.save();
+    return folder;
+  },
+
+  async update(id, updates) {
+    await this.init();
+    const folder = this.cache.find(f => f.id === id);
+    if (folder) {
+      Object.assign(folder, updates);
+      await this.save();
+    }
+    return folder;
+  },
+
+  async delete(id) {
+    await this.init();
+    this.cache = this.cache.filter(f => f.id !== id);
+    await this.save();
+  },
+
+  async addScript(folderId, scriptId) {
+    await this.init();
+    const folder = this.cache.find(f => f.id === folderId);
+    if (folder && !folder.scriptIds.includes(scriptId)) {
+      folder.scriptIds.push(scriptId);
+      await this.save();
+    }
+  },
+
+  async removeScript(folderId, scriptId) {
+    await this.init();
+    const folder = this.cache.find(f => f.id === folderId);
+    if (folder) {
+      folder.scriptIds = folder.scriptIds.filter(id => id !== scriptId);
+      await this.save();
+    }
+  },
+
+  async moveScript(scriptId, fromFolderId, toFolderId) {
+    await this.init();
+    if (fromFolderId) {
+      const from = this.cache.find(f => f.id === fromFolderId);
+      if (from) from.scriptIds = from.scriptIds.filter(id => id !== scriptId);
+    }
+    if (toFolderId) {
+      const to = this.cache.find(f => f.id === toFolderId);
+      if (to && !to.scriptIds.includes(scriptId)) to.scriptIds.push(scriptId);
+    }
+    await this.save();
+  },
+
+  getFolderForScript(scriptId) {
+    if (!this.cache) return null;
+    return this.cache.find(f => f.scriptIds.includes(scriptId)) || null;
+  }
+};
+
 // Shared tracker for GM_openInTab close notifications (avoids per-call listener leak)
 const _openTabTrackers = new Map(); // openedTabId -> { callerTabId, scriptId }
 chrome.tabs.onRemoved.addListener((closedTabId) => {
