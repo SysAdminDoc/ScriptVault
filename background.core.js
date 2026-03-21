@@ -210,10 +210,22 @@ const UpdateSystem = {
   async applyUpdate(scriptId, newCode) {
     const script = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
-    
+
     const parsed = parseUserscript(newCode);
     if (parsed.error) return parsed;
-    
+
+    // Store previous version for rollback (keep last 3)
+    if (!script.versionHistory) script.versionHistory = [];
+    script.versionHistory.push({
+      version: script.meta.version,
+      code: script.code,
+      updatedAt: script.updatedAt || Date.now()
+    });
+    // Trim to last 3 versions
+    if (script.versionHistory.length > 3) {
+      script.versionHistory = script.versionHistory.slice(-3);
+    }
+
     script.code = newCode;
     script.meta = parsed.meta;
     script.updatedAt = Date.now();
@@ -1023,10 +1035,65 @@ async function handleMessage(message, sender) {
       // Updates
       case 'checkUpdates':
         return await UpdateSystem.checkForUpdates(data?.scriptId);
-        
+
+      case 'forceUpdate': {
+        // Force re-download bypassing HTTP cache
+        const scriptId = data.scriptId;
+        const script = await ScriptStorage.get(scriptId);
+        if (!script) return { error: 'Script not found' };
+        const downloadUrl = script.meta.downloadURL || script.meta.updateURL;
+        if (!downloadUrl) return { error: 'No download URL configured' };
+        try {
+          const response = await fetch(downloadUrl, {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+          });
+          if (!response.ok) return { error: `HTTP ${response.status}` };
+          const newCode = await response.text();
+          const parsed = parseUserscript(newCode);
+          if (parsed.error) return parsed;
+          // Apply as update (saves version history)
+          return await UpdateSystem.applyUpdate(scriptId, newCode);
+        } catch (e) {
+          return { error: e.message };
+        }
+      }
+
       case 'applyUpdate':
         return await UpdateSystem.applyUpdate(data.scriptId, data.code);
-        
+
+      case 'getVersionHistory': {
+        const script = await ScriptStorage.get(data.scriptId);
+        return { history: script?.versionHistory || [] };
+      }
+
+      case 'rollbackScript': {
+        const script = await ScriptStorage.get(data.scriptId);
+        if (!script) return { error: 'Script not found' };
+        if (!script.versionHistory || script.versionHistory.length === 0) {
+          return { error: 'No version history available' };
+        }
+        const targetIdx = data.index !== undefined ? data.index : script.versionHistory.length - 1;
+        const target = script.versionHistory[targetIdx];
+        if (!target) return { error: 'Version not found' };
+
+        const parsed = parseUserscript(target.code);
+        if (parsed.error) return parsed;
+
+        // Remove the rolled-back-to version and all after it from history
+        script.versionHistory = script.versionHistory.slice(0, targetIdx);
+        script.code = target.code;
+        script.meta = parsed.meta;
+        script.updatedAt = Date.now();
+
+        await ScriptStorage.set(data.scriptId, script);
+        await unregisterScript(data.scriptId);
+        if (script.enabled !== false) {
+          await registerScript(script);
+        }
+        return { success: true, script: { ...script, metadata: script.meta } };
+      }
+
       // Sync
       case 'sync':
         return await CloudSync.sync();
@@ -1227,10 +1294,113 @@ async function handleMessage(message, sender) {
         
       case 'importAll':
         return await importScripts(data.data, data.options);
-        
+
+      case 'importTampermonkeyBackup': {
+        // Parse Tampermonkey .txt backup format
+        // Format: multiple scripts separated by blank lines, each with ==UserScript== blocks
+        const text = data.text || '';
+        const scriptBlocks = [];
+        // Split on double newlines that precede ==UserScript== headers
+        const parts = text.split(/\n\s*\n(?=\/\/\s*==UserScript==)/);
+        for (const part of parts) {
+          const trimmed = part.trim();
+          if (trimmed.includes('==UserScript==') && trimmed.includes('==/UserScript==')) {
+            scriptBlocks.push(trimmed);
+          }
+        }
+        if (scriptBlocks.length === 0) {
+          return { error: 'No valid userscripts found in backup file' };
+        }
+        const results = { imported: 0, skipped: 0, errors: [] };
+        for (const code of scriptBlocks) {
+          try {
+            const parsed = parseUserscript(code);
+            if (parsed.error) { results.errors.push({ error: parsed.error }); continue; }
+            const existing = (await ScriptStorage.getAll()).find(s =>
+              s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
+            );
+            if (existing && !data.overwrite) { results.skipped++; continue; }
+            const id = existing?.id || generateId();
+            await ScriptStorage.set(id, {
+              id, code, meta: parsed.meta,
+              enabled: true,
+              position: existing?.position ?? (await ScriptStorage.getAll()).length,
+              createdAt: existing?.createdAt || Date.now(),
+              updatedAt: Date.now()
+            });
+            results.imported++;
+          } catch (e) {
+            results.errors.push({ error: e.message });
+          }
+        }
+        await registerAllScripts();
+        await updateBadge();
+        return results;
+      }
+
       case 'exportZip':
         return await exportToZip();
-      
+
+      // Folders
+      // Workspaces
+      case 'getWorkspaces':
+        return await WorkspaceManager.getAll();
+
+      case 'createWorkspace':
+        return { workspace: await WorkspaceManager.create(data.name) };
+
+      case 'saveWorkspace':
+        return { workspace: await WorkspaceManager.save(data.id) };
+
+      case 'activateWorkspace':
+        return await WorkspaceManager.activate(data.id);
+
+      case 'updateWorkspace':
+        return { workspace: await WorkspaceManager.update(data.id, data.updates) };
+
+      case 'deleteWorkspace':
+        await WorkspaceManager.delete(data.id);
+        return { success: true };
+
+      // Network Log
+      case 'getNetworkLog':
+        return { log: NetworkLog.getAll(data || {}), stats: NetworkLog.getStats() };
+
+      case 'clearNetworkLog':
+        NetworkLog.clear(data?.scriptId);
+        return { success: true };
+
+      // Static Analysis
+      case 'analyzeScript': {
+        const code = data.code || '';
+        return ScriptAnalyzer.analyze(code);
+      }
+
+      case 'getFolders':
+        return { folders: await FolderStorage.getAll() };
+
+      case 'createFolder':
+        return { folder: await FolderStorage.create(data.name, data.color) };
+
+      case 'updateFolder':
+        return { folder: await FolderStorage.update(data.id, data.updates) };
+
+      case 'deleteFolder':
+        await FolderStorage.delete(data.id);
+        return { success: true };
+
+      case 'addScriptToFolder':
+        await FolderStorage.addScript(data.folderId, data.scriptId);
+        return { success: true };
+
+      case 'removeScriptFromFolder':
+        await FolderStorage.removeScript(data.folderId, data.scriptId);
+        return { success: true };
+
+      case 'moveScriptToFolder':
+        await FolderStorage.moveScript(data.scriptId, data.fromFolderId, data.toFolderId);
+        return { success: true };
+
       case 'importFromZip':
         return await importFromZip(data.zipData, data.options || {});
       
@@ -1324,6 +1494,21 @@ async function handleMessage(message, sender) {
           const tabId = sender.tab?.id;
           const request = XhrManager.create(tabId, data.scriptId, data);
           const { id: requestId } = request;
+
+          // Log to network log
+          const _netLogStartTime = Date.now();
+          const _netLogEntry = {
+            scriptId: data.scriptId,
+            scriptName: '',
+            method: (data.method || 'GET').toUpperCase(),
+            url: data.url,
+            requestSize: data.data ? (typeof data.data === 'string' ? data.data.length : 0) : 0
+          };
+          // Resolve script name
+          try {
+            const _xhrScript = await ScriptStorage.get(data.scriptId);
+            _netLogEntry.scriptName = _xhrScript?.meta?.name || data.scriptId;
+          } catch {};
           
           // Create AbortController for this request
           const controller = new AbortController();
@@ -1532,10 +1717,20 @@ async function handleMessage(message, sender) {
               
               // Send load event
               sendEvent('load', finalResponse);
-              
+
+              // Log successful request
+              NetworkLog.add({
+                ..._netLogEntry,
+                status: finalResponse.status,
+                statusText: finalResponse.statusText,
+                responseSize: responseText?.length || 0,
+                duration: Date.now() - _netLogStartTime,
+                finalUrl: finalResponse.finalUrl
+              });
+
               // Send loadend event
               sendEvent('loadend', finalResponse);
-              
+
               // Clean up
               XhrManager.remove(requestId);
               
@@ -1551,6 +1746,9 @@ async function handleMessage(message, sender) {
               const errorType = isAbort ? 'abort' : 'error';
               const errorMsg = isAbort ? 'Request aborted' : (e.message || 'Network error');
               
+              // Log failed request
+              NetworkLog.add({ ..._netLogEntry, status: 0, error: errorMsg, duration: Date.now() - _netLogStartTime });
+
               sendEvent(errorType, {
                 readyState: 4,
                 status: 0,
@@ -1940,6 +2138,21 @@ async function handleMessage(message, sender) {
         } catch (e) {
           return { error: e.message };
         }
+      }
+
+      case 'GM_audio_watchState': {
+        // Start watching tab audio state changes for the requesting tab
+        const tabId = sender.tab?.id;
+        if (!tabId) return { error: 'No tab context' };
+        if (!self._audioWatchedTabs) self._audioWatchedTabs = new Set();
+        self._audioWatchedTabs.add(tabId);
+        return { success: true };
+      }
+
+      case 'GM_audio_unwatchState': {
+        const tabId = sender.tab?.id;
+        if (tabId && self._audioWatchedTabs) self._audioWatchedTabs.delete(tabId);
+        return { success: true };
       }
 
       default:
@@ -2470,6 +2683,23 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.url || changeInfo.status === 'complete') {
     if (tab.url) {
       await updateBadgeForTab(tabId, tab.url);
+    }
+  }
+
+  // Forward audio state changes to watched tabs
+  if (('audible' in changeInfo || 'mutedInfo' in changeInfo) && self._audioWatchedTabs?.has(tabId)) {
+    try {
+      await chrome.tabs.sendMessage(tabId, {
+        action: 'audioStateChanged',
+        data: {
+          muted: tab.mutedInfo?.muted || false,
+          reason: tab.mutedInfo?.reason || 'user',
+          audible: tab.audible || false
+        }
+      });
+    } catch (e) {
+      // Tab may have been closed
+      self._audioWatchedTabs.delete(tabId);
     }
   }
 });
@@ -4399,15 +4629,33 @@ ${req.code}
       }).catch(e => { if (callback) callback(null, e); });
     },
     _listeners: [],
+    _watching: false,
     addStateChangeListener: (listener, callback) => {
-      // Simplified: poll-based since chrome.tabs events aren't available in USER_SCRIPT world
       if (!hasGrant('GM_audio')) { if (callback) callback(new Error('Permission denied')); return; }
       GM_audio._listeners.push(listener);
+      if (!GM_audio._watching) {
+        GM_audio._watching = true;
+        sendToBackground('GM_audio_watchState', {});
+        // Listen for audio state change events from content script bridge
+        window.addEventListener('message', (e) => {
+          if (e.source !== window || !e.data || e.data.channel !== window.__ScriptVault_ChannelID__) return;
+          if (e.data.type === 'audioStateChanged') {
+            const state = e.data.data;
+            for (const fn of GM_audio._listeners) {
+              try { fn(state); } catch (err) { console.error('[GM_audio listener]', err); }
+            }
+          }
+        });
+      }
       if (callback) callback();
     },
     removeStateChangeListener: (listener, callback) => {
       const idx = GM_audio._listeners.indexOf(listener);
       if (idx >= 0) GM_audio._listeners.splice(idx, 1);
+      if (GM_audio._listeners.length === 0 && GM_audio._watching) {
+        GM_audio._watching = false;
+        sendToBackground('GM_audio_unwatchState', {});
+      }
       if (callback) callback();
     }
   };

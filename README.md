@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.5.0-22c55e?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.6.0-22c55e?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/manifest-v3-60a5fa?style=flat-square" alt="Manifest V3">
   <img src="https://img.shields.io/badge/license-MIT-orange?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/chrome-120%2B-blue?style=flat-square" alt="Chrome 120+">
@@ -58,6 +58,24 @@ Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state management.
 - **Find Scripts** &mdash; Search and install userscripts from Greasy Fork and other sources directly in the dashboard
 - **Bulk operations** &mdash; Select multiple scripts to enable, disable, update, reset, or delete with progress tracking
 - **Per-script export** &mdash; Export individual scripts as `.user.js` files
+- **Script templates** &mdash; 6 starter templates (blank, page modifier, CSS injector, API interceptor, SPA script, cross-site request)
+- **Version rollback** &mdash; Auto-saves last 3 versions on update; one-click rollback from info panel
+- **Storage quota monitor** &mdash; Visual quota bar with warning when approaching Chrome's 10MB limit
+- **Tag filtering** &mdash; Filter scripts by `@tag` metadata in the dashboard dropdown
+- **Drag-and-drop install** &mdash; Drop `.user.js` or `.zip` files onto the dashboard to install
+- **Shift+click multi-select** &mdash; Select ranges of scripts with Shift+click
+- **Library browser** &mdash; Search and add CDN libraries (`@require`) from cdnjs directly in the editor
+- **Advanced filters** &mdash; Filter scripts by grant type, error status, update URL, scope breadth, or tags
+- **Code snippets** &mdash; Insert GM API templates directly from the editor toolbar
+- **Keyboard shortcuts** &mdash; Ctrl+N new, Alt+1-5 switch tabs, Ctrl+W close tab, Ctrl+Tab cycle tabs
+- **Script pinning** &mdash; Pin favorite scripts to the top of the list
+- **Pattern tester** &mdash; Test any URL to see which scripts would run on it
+- **Activity log** &mdash; Timestamped log of all installs, updates, and errors
+- **Script health** &mdash; Visual indicators for scripts with errors or stale updates
+- **Tampermonkey import** &mdash; Import from Tampermonkey's `.txt` backup format
+- **Batch URL install** &mdash; Paste multiple `.user.js` URLs to install at once
+- **Script notes** &mdash; Personal notes per script, saved with settings
+- **Version diff view** &mdash; Compare any previous version against current code
 
 ### Advanced URL Matching
 
@@ -103,7 +121,7 @@ Sync scripts across devices with 5 providers:
 
 - **ZIP** &mdash; Full backup with scripts + settings
 - **JSON** &mdash; Text-based backup
-- **File import** &mdash; Drag and drop `.user.js` or `.zip` files directly into the dashboard
+- **File import** &mdash; Drag and drop `.user.js` or `.zip` files anywhere on the dashboard
 - **URL import** &mdash; Install directly from any URL
 - **Clipboard import** &mdash; Paste script code directly
 
@@ -240,6 +258,18 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 | Cloud Sync (5 providers) | Yes | Yes | Yes |
 | Tabbed Multi-Script Editor | Yes | No | No |
 | Built-in Script Search | Yes | No | No |
+| Script Templates | 6 | No | No |
+| Version Rollback | Yes (3) | No | No |
+| CDN Library Browser | Yes | No | No |
+| Drag-and-Drop Install | Yes | Yes | No |
+| Tag Filtering | Yes | No | No |
+| Script Pinning | Yes | No | No |
+| Pattern Tester | Yes | No | No |
+| Activity Log | Yes | No | No |
+| Script Health Indicators | Yes | No | No |
+| Tampermonkey Import | Yes | N/A | No |
+| Version Diff View | Yes | No | No |
+| Storage Quota Monitor | Yes | No | No |
 | Bulk Operations w/ Progress | Yes | Yes | No |
 | 4 UI Themes | Yes | No | Yes |
 | Open Source | MIT | No | Yes |
@@ -295,6 +325,6 @@ MIT License &mdash; see [LICENSE](LICENSE) for details.
 ---
 
 <p align="center">
-  <strong>ScriptVault v1.5.0</strong><br>
+  <strong>ScriptVault v1.6.0</strong><br>
   <em>Your scripts, your rules &mdash; locked down and loaded</em>
 </p>

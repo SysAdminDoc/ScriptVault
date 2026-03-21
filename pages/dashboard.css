@@ -1047,3 +1047,821 @@ input[type="checkbox"] {
     flex-shrink: 0;
   }
 }
+
+/* ============================================
+   Script Template Picker
+   ============================================ */
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.template-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+
+.template-card:hover {
+  border-color: var(--accent-green);
+  background: var(--bg-row-hover);
+  transform: translateY(-1px);
+}
+
+.template-card:focus-visible {
+  outline: 2px solid var(--accent-green);
+  outline-offset: -2px;
+}
+
+.template-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.template-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ============================================
+   Storage Quota Bar
+   ============================================ */
+.quota-bar-container {
+  margin-top: 12px;
+  padding: 0 4px;
+}
+
+.quota-bar-track {
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.quota-bar-fill {
+  height: 100%;
+  background: var(--accent-green);
+  border-radius: 3px;
+  transition: width 0.3s ease, background 0.3s ease;
+  width: 0;
+}
+
+.quota-bar-fill.warning {
+  background: var(--accent-yellow);
+}
+
+.quota-bar-fill.danger {
+  background: var(--accent-red);
+}
+
+.quota-bar-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* ============================================
+   Version History
+   ============================================ */
+.version-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.version-history-item:not(:last-child) {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+}
+
+.version-history-ver {
+  font-weight: 600;
+  color: var(--accent-blue);
+  min-width: 50px;
+}
+
+.version-history-date {
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.version-rollback-btn {
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+}
+
+/* ============================================
+   Drag & Drop File Install Overlay
+   ============================================ */
+#dropOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+#dropOverlay.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.drop-overlay-content {
+  text-align: center;
+  padding: 60px;
+  border: 3px dashed var(--accent-green);
+  border-radius: 20px;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.drop-overlay-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.drop-overlay-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent-green);
+}
+
+/* ============================================
+   Library Search Results
+   ============================================ */
+.lib-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.lib-result:last-child {
+  border-bottom: none;
+}
+
+.lib-result-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.lib-result-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.lib-result-version {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+.lib-result-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.lib-add-btn {
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Help Panel Sections
+   ============================================ */
+.help-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.help-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.help-step {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: 4px 0;
+}
+
+.help-step code {
+  background: var(--bg-input);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.help-api-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.help-api-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.help-api-category {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent-green);
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+
+.help-api-group code {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 2px 0;
+  display: block;
+}
+
+/* ============================================
+   Snippet Picker
+   ============================================ */
+.snippet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.snippet-item {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.snippet-item:hover {
+  background: var(--bg-row-hover);
+  transform: translateX(4px);
+}
+
+/* Active toolbar button state */
+.toolbar-btn.active {
+  background: var(--accent-green) !important;
+  color: #000 !important;
+}
+
+@media (max-width: 900px) {
+  .help-api-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================
+   Script Author (in name cell)
+   ============================================ */
+.script-author {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+/* ============================================
+   Diff View
+   ============================================ */
+.diff-header {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+.diff-summary {
+  display: flex;
+  gap: 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.diff-add-count {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.diff-del-count {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.diff-unch-count {
+  color: var(--text-muted);
+}
+
+.diff-container {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.diff-line {
+  display: flex;
+  padding: 0 8px;
+  white-space: pre;
+  min-height: 20px;
+}
+
+.diff-ln {
+  width: 40px;
+  text-align: right;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  padding-right: 8px;
+  user-select: none;
+}
+
+.diff-sign {
+  width: 16px;
+  flex-shrink: 0;
+  font-weight: 700;
+  user-select: none;
+}
+
+.diff-text {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.diff-add {
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.diff-add .diff-sign {
+  color: #4ade80;
+}
+
+.diff-del {
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.diff-del .diff-sign {
+  color: #f87171;
+}
+
+.diff-ctx {
+  background: transparent;
+}
+
+.diff-ctx .diff-sign {
+  color: var(--text-muted);
+}
+
+/* ============================================
+   Pin Button
+   ============================================ */
+.action-icon.pinned {
+  color: var(--accent-yellow) !important;
+}
+
+/* ============================================
+   Script Health Indicators
+   ============================================ */
+tr.row-has-errors {
+  border-left: 3px solid var(--accent-red);
+}
+
+tr.row-stale {
+  border-left: 3px solid var(--accent-yellow);
+}
+
+tr.row-has-errors.row-stale {
+  border-left: 3px solid var(--accent-orange);
+}
+
+tr.row-over-budget {
+  border-right: 3px solid var(--accent-purple);
+}
+
+/* ============================================
+   Activity Log
+   ============================================ */
+.activity-log {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--bg-input);
+}
+
+.activity-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.activity-entry:last-child {
+  border-bottom: none;
+}
+
+.activity-time {
+  color: var(--text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+  min-width: 60px;
+}
+
+.activity-icon {
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+}
+
+.activity-success .activity-icon { color: var(--accent-green); }
+.activity-error .activity-icon { color: var(--accent-red); }
+.activity-warning .activity-icon { color: var(--accent-yellow); }
+.activity-info .activity-icon { color: var(--accent-blue); }
+
+/* ============================================
+   Pattern Tester
+   ============================================ */
+.pattern-test-match {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.pattern-test-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pattern-test-indicator.active {
+  background: var(--accent-green);
+}
+
+.pattern-test-indicator.inactive {
+  background: var(--text-muted);
+}
+
+/* ============================================
+   Column Toggle
+   ============================================ */
+.column-toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.column-toggle-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.column-toggle-item input {
+  accent-color: var(--accent-green);
+}
+
+/* ============================================
+   Find Scripts - Installed Badge
+   ============================================ */
+.find-installed-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--accent-green);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.find-script-card.already-installed {
+  border-left: 3px solid var(--accent-green);
+}
+
+/* ============================================
+   Command Palette
+   ============================================ */
+#commandPalette {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+}
+
+#commandPalette.open {
+  display: block;
+}
+
+.cmd-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.cmd-dialog {
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 560px;
+  max-width: 90vw;
+  background: var(--bg-header);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  animation: cmdSlideIn 0.15s ease-out;
+}
+
+@keyframes cmdSlideIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.cmd-input {
+  width: 100%;
+  padding: 16px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+}
+
+.cmd-input::placeholder {
+  color: var(--text-muted);
+}
+
+.cmd-results {
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.cmd-group {
+  padding: 6px 16px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+
+.cmd-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.cmd-item:hover,
+.cmd-item.active {
+  background: var(--bg-row-hover);
+}
+
+.cmd-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.cmd-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+.cmd-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ============================================
+   Script Folders
+   ============================================ */
+.folder-row {
+  background: var(--bg-header) !important;
+  cursor: pointer;
+  user-select: none;
+}
+
+.folder-row td {
+  padding: 6px 12px !important;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.folder-row:hover td {
+  color: var(--text-primary);
+}
+
+.folder-icon {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  margin-right: 6px;
+  transition: transform 0.15s;
+}
+
+.folder-row.collapsed .folder-icon {
+  transform: rotate(-90deg);
+}
+
+.folder-color {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.folder-count {
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.folder-actions {
+  float: right;
+  display: flex;
+  gap: 4px;
+}
+
+.folder-actions button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.folder-actions button:hover {
+  color: var(--text-primary);
+  background: var(--bg-row-hover);
+}
+
+/* ============================================
+   Workspace Items
+   ============================================ */
+.workspace-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.workspace-item.active {
+  border-color: var(--accent-green);
+  background: rgba(74, 222, 128, 0.05);
+}
+
+.workspace-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.workspace-scripts {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.workspace-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* ============================================
+   Network Log
+   ============================================ */
+.netlog-stats {
+  display: flex;
+  gap: 16px;
+  padding: 6px 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.netlog-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 11px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.netlog-method {
+  font-weight: 700;
+  min-width: 36px;
+  color: var(--accent-blue);
+}
+
+.netlog-status {
+  min-width: 28px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.netlog-ok .netlog-status { color: var(--accent-green); }
+.netlog-warn .netlog-status { color: var(--accent-yellow); }
+.netlog-error .netlog-status { color: var(--accent-red); }
+
+.netlog-url {
+  flex: 1;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.netlog-script {
+  color: var(--text-muted);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.netlog-size {
+  color: var(--text-muted);
+  min-width: 50px;
+  text-align: right;
+}
+
+.netlog-time {
+  color: var(--text-muted);
+  min-width: 65px;
+  text-align: right;
+}
