@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "homepage_url": "https://github.com/SysAdminDoc/ScriptVault",
@@ -27,7 +27,9 @@
     "webNavigation",
     "unlimitedStorage",
     "alarms",
-    "downloads"
+    "downloads",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess"
   ],
   "optional_permissions": [
     "clipboardWrite",
