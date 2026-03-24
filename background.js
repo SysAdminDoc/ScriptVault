@@ -1,4 +1,4 @@
-// ScriptVault v1.7.6 - Background Service Worker
+// ScriptVault v1.7.7 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run build-background.sh to regenerate.
@@ -4703,6 +4703,7 @@ const ScriptAnalyzer = {
   },
 
   async _ensureOffscreen() {
+    if (!chrome.offscreen) throw new Error('Offscreen API not available');
     const existing = await chrome.offscreen.hasDocument().catch(() => false);
     if (!existing) {
       await chrome.offscreen.createDocument({
@@ -10269,6 +10270,7 @@ ${req.code}
     },
     _listeners: [],
     _watching: false,
+    _msgHandler: null,
     addStateChangeListener: (listener, callback) => {
       if (!hasGrant('GM_audio')) { if (callback) callback(new Error('Permission denied')); return; }
       GM_audio._listeners.push(listener);
@@ -10276,15 +10278,16 @@ ${req.code}
         GM_audio._watching = true;
         sendToBackground('GM_audio_watchState', {});
         // Listen for audio state change events from content script bridge
-        window.addEventListener('message', (e) => {
-          if (e.source !== window || !e.data || e.data.channel !== window.__ScriptVault_ChannelID__) return;
+        GM_audio._msgHandler = (e) => {
+          if (e.source !== window || !e.data || e.data.channel !== CHANNEL_ID) return;
           if (e.data.type === 'audioStateChanged') {
             const state = e.data.data;
             for (const fn of GM_audio._listeners) {
               try { fn(state); } catch (err) { console.error('[GM_audio listener]', err); }
             }
           }
-        });
+        };
+        window.addEventListener('message', GM_audio._msgHandler);
       }
       if (callback) callback();
     },
@@ -10293,6 +10296,10 @@ ${req.code}
       if (idx >= 0) GM_audio._listeners.splice(idx, 1);
       if (GM_audio._listeners.length === 0 && GM_audio._watching) {
         GM_audio._watching = false;
+        if (GM_audio._msgHandler) {
+          window.removeEventListener('message', GM_audio._msgHandler);
+          GM_audio._msgHandler = null;
+        }
         sendToBackground('GM_audio_unwatchState', {});
       }
       if (callback) callback();

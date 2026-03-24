@@ -228,7 +228,7 @@
             padding: 12px 20px;
             position: sticky;
             top: var(--header-height, 35px);
-            z-index: 99;
+            z-index: 101;
         }
         
         .setup-warning-content {
@@ -1123,7 +1123,7 @@
             top: var(--header-height, 90px);
             left: 0; right: 0; bottom: 0;
             background: var(--bg-body);
-            z-index: 50;
+            z-index: 55;
             flex-direction: column;
             animation: modalSlideIn 0.2s ease;
         }
@@ -1306,8 +1306,8 @@
             background: var(--bg-content);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            min-width: 400px;
-            max-width: 500px;
+            min-width: min(400px, 90vw);
+            max-width: min(500px, 95vw);
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
             animation: modalSlideIn 0.25s ease;
         }
