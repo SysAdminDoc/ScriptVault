@@ -1,4 +1,4 @@
-// ScriptVault DevTools Panel v1.7.3
+// ScriptVault DevTools Panel v1.7.4
 // Network inspection, execution profiling, and console capture
 
 (function () {
@@ -232,7 +232,7 @@
       comment: e.scriptName || ''
     }));
 
-    const har = { log: { version: '1.2', creator: { name: 'ScriptVault', version: '1.7.3' }, entries } };
+    const har = { log: { version: '1.2', creator: { name: 'ScriptVault', version: '1.7.4' }, entries } };
     const blob = new Blob([JSON.stringify(har, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
