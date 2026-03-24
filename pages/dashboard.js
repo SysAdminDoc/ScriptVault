@@ -1,4 +1,4 @@
-// ScriptVault Dashboard v1.6.0 - Full-Featured Controller
+// ScriptVault Dashboard v1.7.0 - Full-Featured Controller
 (function() {
     'use strict';
 
@@ -84,6 +84,9 @@
         elements.infoGrants = document.getElementById('infoGrants');
         elements.infoMatches = document.getElementById('infoMatches');
         elements.infoResources = document.getElementById('infoResources');
+        elements.infoContributionURL = document.getElementById('infoContributionURL');
+        elements.infoCompatible = document.getElementById('infoCompatible');
+        elements.infoLicense = document.getElementById('infoLicense');
 
         // Storage panel
         elements.storageList = document.getElementById('storageList');
@@ -109,6 +112,7 @@
         // Per-script settings panel
         elements.scriptAutoUpdate = document.getElementById('scriptAutoUpdate');
         elements.scriptNotifyUpdates = document.getElementById('scriptNotifyUpdates');
+        elements.scriptSyncLock = document.getElementById('scriptSyncLock');
         elements.scriptRunAt = document.getElementById('scriptRunAt');
         elements.scriptInjectInto = document.getElementById('scriptInjectInto');
         elements.scriptNotifyErrors = document.getElementById('scriptNotifyErrors');
@@ -604,12 +608,12 @@
             if (state.editor) {
                 switch (key) {
                     case 'editorTheme': state.editor.setOption('theme', value); break;
-                    case 'editorFontSize': { const cm = document.querySelector('.CodeMirror'); if (cm) cm.style.fontSize = value + '%'; } break;
+                    case 'editorFontSize': { if (state.editor?.isMonaco) { state.editor.setFontSize(parseInt(value) || 100); } else { const cm = document.querySelector('.CodeMirror'); if (cm) cm.style.fontSize = value + '%'; } } break;
                     case 'wordWrap': state.editor.setOption('lineWrapping', value); break;
                     case 'tabSize': state.editor.setOption('tabSize', parseInt(value) || 4); break;
                     case 'indentWidth': state.editor.setOption('indentUnit', parseInt(value) || 4); break;
                     case 'indentWith': state.editor.setOption('indentWithTabs', value !== 'spaces'); break;
-                    case 'lintOnType': state.editor.setOption('lint', value ? { getAnnotations: window.lintUserscript, delay: 300, tooltips: true, highlightLines: true } : false); break;
+                    case 'lintOnType': if (!state.editor?.isMonaco) { state.editor.setOption('lint', value ? { getAnnotations: window.lintUserscript, delay: 300, tooltips: true, highlightLines: true } : false); } break;
                 }
             }
             if (key === 'layout') document.documentElement.setAttribute('data-theme', value);
@@ -751,6 +755,9 @@
         // Basic settings
         if (elements.scriptAutoUpdate) elements.scriptAutoUpdate.checked = settings.autoUpdate !== false;
         if (elements.scriptNotifyUpdates) elements.scriptNotifyUpdates.checked = settings.notifyUpdates !== false;
+        if (elements.scriptSyncLock) elements.scriptSyncLock.checked = settings.userModified === true;
+        const syncLockStatus = document.getElementById('syncLockStatus');
+        if (syncLockStatus) syncLockStatus.style.display = settings.userModified ? '' : 'none';
         if (elements.scriptRunAt) elements.scriptRunAt.value = settings.runAt || 'default';
         if (elements.scriptInjectInto) elements.scriptInjectInto.value = settings.injectInto || 'auto';
         if (elements.scriptNotifyErrors) elements.scriptNotifyErrors.checked = settings.notifyErrors || false;
@@ -893,6 +900,7 @@
         const settings = {
             autoUpdate: elements.scriptAutoUpdate?.checked ?? true,
             notifyUpdates: elements.scriptNotifyUpdates?.checked ?? true,
+            userModified: elements.scriptSyncLock?.checked ?? false,
             runAt: elements.scriptRunAt?.value || 'default',
             injectInto: elements.scriptInjectInto?.value || 'auto',
             notifyErrors: elements.scriptNotifyErrors?.checked || false,
@@ -2002,6 +2010,7 @@
         // Load editor content
         if (elements.editorTitle) elements.editorTitle.textContent = script.metadata?.name || 'Edit Script';
         if (state.editor) {
+            if (state.editor.isMonaco) state.editor.setScriptId(script.id);
             state.editor.setValue(tabData?.code ?? script.code ?? '');
             state.editor.clearHistory();
             setTimeout(() => state.editor.refresh(), 10);
@@ -2090,6 +2099,32 @@
         const up = m.updateURL || m.downloadURL;
         const safeUp = up ? sanitizeUrl(up) : null;
         if (elements.infoUpdateUrl) elements.infoUpdateUrl.innerHTML = safeUp ? `<a href="${escapeHtml(safeUp)}" target="_blank">${escapeHtml(up)}</a>` : (up ? escapeHtml(up) : '-');
+
+        // @contributionURL
+        const contribEl = document.getElementById('infoContributionURL');
+        if (contribEl) {
+            const cu = m.contributionURL || '';
+            const safeCu = cu ? sanitizeUrl(cu) : null;
+            contribEl.innerHTML = safeCu ? `<a href="${escapeHtml(safeCu)}" target="_blank">${escapeHtml(cu)}</a>` : (cu ? escapeHtml(cu) : '-');
+        }
+
+        // @compatible / @incompatible
+        const compatEl = document.getElementById('infoCompatible');
+        if (compatEl) {
+            const compat = m.compatible || [];
+            const incompat = m.incompatible || [];
+            if (compat.length || incompat.length) {
+                const compatHtml = compat.map(c => `<span class="info-tag" style="background:var(--success-bg,#1a3a1a);color:var(--success-text,#4ade80)">✓ ${escapeHtml(c)}</span>`).join('');
+                const incompatHtml = incompat.map(c => `<span class="info-tag" style="background:var(--error-bg,#3a1a1a);color:var(--error-text,#f87171)">✗ ${escapeHtml(c)}</span>`).join('');
+                compatEl.innerHTML = compatHtml + incompatHtml;
+            } else {
+                compatEl.innerHTML = '<span style="color:var(--text-muted)">Not specified</span>';
+            }
+        }
+
+        // @license
+        const licenseEl = document.getElementById('infoLicense');
+        if (licenseEl) licenseEl.textContent = m.license || m.copyright || '-';
 
         const grants = m.grant || [];
         if (elements.infoGrants) elements.infoGrants.innerHTML = grants.length ? grants.map(g => `<span class="info-tag grant">${escapeHtml(g)}</span>`).join('') : '<span class="info-tag">none</span>';
@@ -2364,26 +2399,47 @@
         const item = document.createElement('div');
         item.className = 'storage-item';
         const valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
+        let currentKey = key;
 
         item.innerHTML = `
-            <span class="storage-key">${escapeHtml(key)}</span>
+            <span class="storage-key" title="Click to rename" style="cursor:pointer">${escapeHtml(key)}</span>
             <input type="text" class="input-field" value="${escapeHtml(valStr)}" style="flex:1">
             <div class="btn-group">
-                <button class="btn" title="Save">💾</button>
+                <button class="btn" title="Save value">💾</button>
+                <button class="btn" title="Rename key">✏️</button>
                 <button class="btn btn-danger" title="Delete">🗑️</button>
             </div>
         `;
 
+        const keySpan = item.querySelector('.storage-key');
+
         item.querySelector('.btn:first-of-type').addEventListener('click', async () => {
             let newVal = item.querySelector('.input-field').value;
             try { newVal = JSON.parse(newVal); } catch (e) {}
-            await chrome.runtime.sendMessage({ action: 'setScriptValue', scriptId, key, value: newVal });
+            await chrome.runtime.sendMessage({ action: 'setScriptValue', scriptId, key: currentKey, value: newVal });
             showToast('Saved', 'success');
         });
 
+        // Rename button
+        item.querySelectorAll('.btn')[1].addEventListener('click', async () => {
+            const newKey = prompt('Rename key:', currentKey);
+            if (!newKey || newKey === currentKey) return;
+            const res = await chrome.runtime.sendMessage({ action: 'renameScriptValue', scriptId, oldKey: currentKey, newKey });
+            if (res?.success) {
+                currentKey = newKey;
+                keySpan.textContent = newKey;
+                showToast('Key renamed', 'success');
+            } else {
+                showToast(res?.error || 'Rename failed', 'error');
+            }
+        });
+
+        // Rename on key span click too
+        keySpan.addEventListener('click', () => item.querySelectorAll('.btn')[1].click());
+
         item.querySelector('.btn-danger').addEventListener('click', async () => {
-            if (await showConfirmModal('Delete', `Delete "${key}"?`)) {
-                await chrome.runtime.sendMessage({ action: 'deleteScriptValue', scriptId, key });
+            if (await showConfirmModal('Delete', `Delete "${currentKey}"?`)) {
+                await chrome.runtime.sendMessage({ action: 'deleteScriptValue', scriptId, key: currentKey });
                 item.remove();
                 showToast('Deleted', 'success');
             }
@@ -2417,7 +2473,7 @@
                 code = code.split('\n').map(line => line.replace(/\s+$/, '')).join('\n');
                 state.editor.setValue(code);
             }
-            await chrome.runtime.sendMessage({ action: 'saveScript', scriptId: state.currentScriptId, code });
+            await chrome.runtime.sendMessage({ action: 'saveScript', scriptId: state.currentScriptId, code, markModified: true });
             state.unsavedChanges = false;
             // Update open tab state
             if (state.openTabs[state.currentScriptId]) {
@@ -4445,6 +4501,13 @@
         window.addEventListener('beforeunload', e => {
             const anyUnsaved = state.unsavedChanges || Object.values(state.openTabs).some(t => t.unsaved);
             if (anyUnsaved) { e.preventDefault(); e.returnValue = ''; }
+        });
+
+        // Surface unhandled promise rejections to the activity log so they're visible
+        window.addEventListener('unhandledrejection', e => {
+            const msg = e.reason?.message || String(e.reason) || 'Unknown error';
+            console.error('[ScriptVault] Unhandled rejection:', e.reason);
+            logActivity('Internal error: ' + msg, 'error');
         });
 
         // Drag-and-drop file installation

@@ -4,16 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ScriptVault Dashboard</title>
-    <link rel="stylesheet" href="../lib/codemirror/codemirror.min.css">
-    <link rel="stylesheet" href="../lib/codemirror/theme/monokai.min.css">
-    <link rel="stylesheet" href="../lib/codemirror/theme/dracula.min.css">
-    <link rel="stylesheet" href="../lib/codemirror/theme/material-darker.min.css">
-    <link rel="stylesheet" href="../lib/codemirror/theme/nord.min.css">
-    <link rel="stylesheet" href="../lib/codemirror/theme/ayu-dark.min.css">
-    <link rel="stylesheet" href="../lib/codemirror/addon/fold/foldgutter.css">
-    <link rel="stylesheet" href="../lib/codemirror/addon/dialog/dialog.css">
-    <link rel="stylesheet" href="../lib/codemirror/addon/search/matchesonscrollbar.css">
-    <link rel="stylesheet" href="../lib/codemirror/addon/hint/show-hint.css">
+    <!-- CodeMirror minimal (lint CSS only — editor is now Monaco via sandboxed iframe) -->
     <link rel="stylesheet" href="../lib/codemirror/addon/lint/lint.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2825,8 +2816,15 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
         <div class="editor-body">
             <div class="editor-main">
                 <div id="codePanel" class="editor-panel active">
-                    <div class="code-editor-wrapper">
-                        <textarea id="editorTextarea"></textarea>
+                    <div class="code-editor-wrapper" id="editorWrapper">
+                        <!-- Monaco editor runs in a sandboxed iframe to allow eval (required by Monaco's tokenizer) -->
+                        <iframe id="monacoFrame"
+                                src="editor-sandbox.html"
+                                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                                style="width:100%;height:100%;border:none;display:block;"
+                                title="Monaco Editor"></iframe>
+                        <!-- Fallback textarea shown while Monaco loads or if iframe fails -->
+                        <textarea id="editorTextarea" style="display:none;width:100%;height:100%;background:#1a1a1a;color:#e0e0e0;font-family:monospace;font-size:13px;border:none;resize:none;padding:8px;box-sizing:border-box;"></textarea>
                     </div>
                 </div>
                 <div id="infoPanel" class="editor-panel">
@@ -2844,6 +2842,12 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             <span class="info-value" id="infoHomepage">-</span>
                             <span class="info-label">Update URL:</span>
                             <span class="info-value" id="infoUpdateUrl">-</span>
+                            <span class="info-label">License:</span>
+                            <span class="info-value" id="infoLicense">-</span>
+                            <span class="info-label">Contribution:</span>
+                            <span class="info-value" id="infoContributionURL">-</span>
+                            <span class="info-label">Compatible:</span>
+                            <div class="info-tags" id="infoCompatible"><span style="color:var(--text-muted)">Not specified</span></div>
                             <span class="info-label">Grants:</span>
                             <div class="info-tags" id="infoGrants">-</div>
                             <span class="info-label">Matches:</span>
@@ -2886,6 +2890,18 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                 </div>
                                 <div class="setting-row">
                                     <label><input type="checkbox" id="scriptNotifyUpdates" checked> Notify when updated</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-section" style="margin-bottom: 20px;">
+                            <div class="section-label">Sync</div>
+                            <div class="section-content">
+                                <div class="setting-row">
+                                    <label title="When enabled, cloud sync will not overwrite this script's local changes"><input type="checkbox" id="scriptSyncLock"> Lock from cloud sync (protect local edits)</label>
+                                </div>
+                                <div class="setting-row" id="syncLockStatus" style="font-size:12px;color:var(--text-muted);padding-left:22px;display:none">
+                                    Script was manually edited — sync will not overwrite. Uncheck to allow sync.
                                 </div>
                             </div>
                         </div>
@@ -3105,24 +3121,13 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <!-- Toast -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- Scripts -->
+    <!-- Scripts — Monaco is loaded inside the sandboxed iframe (editor-sandbox.html) -->
+    <!-- CodeMirror kept as lint-only reference for the userscript linter -->
     <script src="../lib/codemirror/codemirror.min.js"></script>
-    <script src="../lib/codemirror/mode/javascript/javascript.min.js"></script>
-    <script src="../lib/codemirror/addon/edit/closebrackets.min.js"></script>
-    <script src="../lib/codemirror/addon/edit/matchbrackets.min.js"></script>
-    <script src="../lib/codemirror/addon/fold/foldcode.min.js"></script>
-    <script src="../lib/codemirror/addon/fold/foldgutter.min.js"></script>
-    <script src="../lib/codemirror/addon/fold/brace-fold.min.js"></script>
-    <script src="../lib/codemirror/addon/fold/comment-fold.min.js"></script>
-    <script src="../lib/codemirror/addon/search/search.min.js"></script>
-    <script src="../lib/codemirror/addon/search/searchcursor.min.js"></script>
-    <script src="../lib/codemirror/addon/search/jump-to-line.min.js"></script>
-    <script src="../lib/codemirror/addon/dialog/dialog.min.js"></script>
-    <script src="../lib/codemirror/addon/hint/show-hint.min.js"></script>
-    <script src="../lib/codemirror/addon/hint/userscript-hint.js"></script>
     <script src="../lib/codemirror/addon/lint/lint.min.js"></script>
     <script src="../lib/codemirror/addon/lint/userscript-lint.js"></script>
     <script src="../shared/utils.js"></script>
+    <script src="monaco-adapter.js"></script>
     <script src="dashboard.js"></script>
 
     <!-- Progress Overlay -->

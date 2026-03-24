@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <title>ScriptVault</title>
+    <style>
+        :root, [data-theme="dark"] {
+            --bg: #1e1e1e;
+            --bg-raised: #252525;
+            --bg-row: #282828;
+            --bg-hover: #2e2e2e;
+            --border: #3a3a3a;
+            --text: #d4d4d4;
+            --text-muted: #888;
+            --text-dim: #555;
+            --accent: #4CAF50;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #60a5fa;
+            --method-get: #4ade80;
+            --method-post: #60a5fa;
+            --method-put: #fbbf24;
+            --method-delete: #f87171;
+            --method-other: #a78bfa;
+        }
+        [data-theme="light"] {
+            --bg: #f8f8f8;
+            --bg-raised: #ffffff;
+            --bg-row: #fafafa;
+            --bg-hover: #f0f0f0;
+            --border: #e0e0e0;
+            --text: #333;
+            --text-muted: #666;
+            --text-dim: #aaa;
+            --accent: #16a34a;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --info: #2563eb;
+            --method-get: #15803d;
+            --method-post: #1d4ed8;
+            --method-put: #b45309;
+            --method-delete: #b91c1c;
+            --method-other: #7c3aed;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; font-size: 12px; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Toolbar */
+        .toolbar { display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: var(--bg-raised); border-bottom: 1px solid var(--border); flex-shrink: 0; height: 32px; }
+        .toolbar-title { font-weight: 600; color: var(--accent); font-size: 12px; }
+        .toolbar-sep { width: 1px; height: 16px; background: var(--border); }
+        .tab-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 3px 8px; border-radius: 3px; font-size: 12px; transition: color 0.15s; }
+        .tab-btn:hover { color: var(--text); background: var(--bg-hover); }
+        .tab-btn.active { color: var(--accent); background: var(--bg-hover); }
+        .spacer { flex: 1; }
+        .toolbar-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; padding: 2px 8px; border-radius: 3px; font-size: 11px; }
+        .toolbar-btn:hover { color: var(--text); border-color: var(--text-muted); }
+        .filter-input { background: var(--bg-row); border: 1px solid var(--border); color: var(--text); padding: 2px 6px; border-radius: 3px; font-size: 11px; width: 140px; }
+        .filter-input:focus { outline: none; border-color: var(--accent); }
+
+        /* Panels */
+        .panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+        .panel.active { display: flex; }
+
+        /* ── Network panel ─────────────────────────────────────────────── */
+        .net-stats { display: flex; gap: 12px; padding: 4px 8px; background: var(--bg-raised); border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: 11px; color: var(--text-muted); }
+        .net-stat { display: flex; align-items: center; gap: 4px; }
+        .net-stat-val { font-weight: 600; color: var(--text); }
+        .net-stat-err { color: var(--danger); }
+
+        .net-table-wrap { flex: 1; overflow: auto; min-height: 0; }
+        .net-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .net-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 500; text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; }
+        .net-table th:hover { color: var(--text); }
+        .net-table td { padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; vertical-align: middle; }
+        .net-table tr:hover td { background: var(--bg-hover); }
+        .net-table tr.selected td { background: var(--bg-hover); outline: 1px solid var(--accent); }
+
+        .method-badge { font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 2px; }
+        .method-GET { color: var(--method-get); }
+        .method-POST { color: var(--method-post); }
+        .method-PUT { color: var(--method-put); }
+        .method-DELETE { color: var(--method-delete); }
+        .status-ok { color: var(--accent); }
+        .status-err { color: var(--danger); }
+        .status-redir { color: var(--warning); }
+        .time-fast { color: var(--accent); }
+        .time-med { color: var(--warning); }
+        .time-slow { color: var(--danger); }
+
+        /* Detail pane */
+        .net-detail { display: none; width: 320px; border-left: 1px solid var(--border); overflow-y: auto; flex-shrink: 0; background: var(--bg-raised); }
+        .net-detail.open { display: block; }
+        .net-detail-header { padding: 6px 8px; font-weight: 600; font-size: 11px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .net-detail-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; line-height: 1; }
+        .net-detail-section { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+        .net-detail-section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px; }
+        .net-detail-row { display: flex; gap: 4px; margin-bottom: 2px; font-size: 11px; }
+        .net-detail-key { color: var(--text-muted); flex-shrink: 0; min-width: 80px; }
+        .net-detail-val { word-break: break-all; }
+        .net-body-pre { font-family: 'Consolas', monospace; font-size: 10px; white-space: pre-wrap; word-break: break-all; background: var(--bg); padding: 6px; border-radius: 3px; margin-top: 4px; max-height: 200px; overflow-y: auto; color: var(--text); }
+
+        .net-split { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+        /* ── Execution panel ───────────────────────────────────────────── */
+        .exec-table-wrap { flex: 1; overflow: auto; }
+        .exec-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .exec-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 500; text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--border); }
+        .exec-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
+        .exec-table tr:hover td { background: var(--bg-hover); }
+        .exec-bar-wrap { width: 80px; height: 6px; background: var(--bg-row); border-radius: 3px; overflow: hidden; }
+        .exec-bar { height: 100%; border-radius: 3px; }
+        .exec-bar.fast { background: var(--accent); }
+        .exec-bar.med { background: var(--warning); }
+        .exec-bar.slow { background: var(--danger); }
+
+        /* ── Console panel ─────────────────────────────────────────────── */
+        .console-wrap { flex: 1; overflow-y: auto; padding: 4px 0; }
+        .console-entry { display: flex; gap: 8px; padding: 2px 8px; border-bottom: 1px solid var(--border); font-family: 'Consolas', monospace; font-size: 11px; }
+        .console-entry:hover { background: var(--bg-hover); }
+        .console-ts { color: var(--text-dim); flex-shrink: 0; font-size: 10px; padding-top: 1px; }
+        .console-script { color: var(--accent); flex-shrink: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .console-level { flex-shrink: 0; font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 2px; }
+        .console-level.log { color: var(--text-muted); }
+        .console-level.warn { color: var(--warning); background: rgba(245,158,11,0.1); }
+        .console-level.error { color: var(--danger); background: rgba(239,68,68,0.1); }
+        .console-level.info { color: var(--info); background: rgba(96,165,250,0.1); }
+        .console-msg { flex: 1; word-break: break-all; white-space: pre-wrap; }
+
+        /* Empty state */
+        .empty-state { flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 6px; color: var(--text-muted); }
+        .empty-icon { font-size: 28px; }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <span class="toolbar-title">ScriptVault</span>
+        <div class="toolbar-sep"></div>
+        <button class="tab-btn active" data-tab="network">Network</button>
+        <button class="tab-btn" data-tab="execution">Execution</button>
+        <button class="tab-btn" data-tab="console">Console</button>
+        <div class="spacer"></div>
+        <input class="filter-input" id="filterInput" type="text" placeholder="Filter…">
+        <button class="toolbar-btn" id="btnClear">Clear</button>
+        <button class="toolbar-btn" id="btnExportHAR" style="display:none">Export HAR</button>
+        <button class="toolbar-btn" id="btnRefresh">Refresh</button>
+    </div>
+
+    <!-- Network panel -->
+    <div class="panel active" id="panelNetwork">
+        <div class="net-stats" id="netStats">
+            <span class="net-stat"><span class="net-stat-val" id="netTotal">0</span> requests</span>
+            <span class="net-stat"><span class="net-stat-val net-stat-err" id="netErrors">0</span> errors</span>
+            <span class="net-stat"><span class="net-stat-val" id="netBytes">0 B</span> transferred</span>
+        </div>
+        <div class="net-split">
+            <div class="net-table-wrap" id="netTableWrap">
+                <table class="net-table">
+                    <thead>
+                        <tr>
+                            <th style="width:55px">Method</th>
+                            <th>URL</th>
+                            <th style="width:55px">Status</th>
+                            <th style="width:65px">Time</th>
+                            <th style="width:60px">Size</th>
+                            <th style="width:120px">Script</th>
+                        </tr>
+                    </thead>
+                    <tbody id="netTableBody"></tbody>
+                </table>
+            </div>
+            <div class="net-detail" id="netDetail">
+                <div class="net-detail-header">
+                    <span id="netDetailTitle">Request Detail</span>
+                    <button class="net-detail-close" id="btnCloseDetail">×</button>
+                </div>
+                <div id="netDetailBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Execution panel -->
+    <div class="panel" id="panelExecution">
+        <div class="exec-table-wrap">
+            <table class="exec-table">
+                <thead>
+                    <tr>
+                        <th>Script</th>
+                        <th style="width:50px">Runs</th>
+                        <th style="width:80px">Avg Time</th>
+                        <th style="width:80px">Total Time</th>
+                        <th style="width:60px">Errors</th>
+                        <th style="width:100px">Relative Load</th>
+                    </tr>
+                </thead>
+                <tbody id="execTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Console panel -->
+    <div class="panel" id="panelConsole">
+        <div class="console-wrap" id="consoleWrap">
+            <div class="empty-state" id="consoleEmpty">
+                <div class="empty-icon">🖥️</div>
+                <div>Console messages from user scripts will appear here</div>
+                <div style="font-size:10px;margin-top:4px">Requires scripts to use <code>GM_log()</code> or the console bridge</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="devtools-panel.js"></script>
+</body>
+</html>

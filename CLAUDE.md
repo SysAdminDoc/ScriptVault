@@ -1,43 +1,66 @@
 # ScriptVault
 
 ## Overview
-Modern userscript manager built with Chrome Manifest V3. Tampermonkey-inspired functionality with cloud sync, auto-updates, and a full dashboard.
+Modern userscript manager built with Chrome Manifest V3. Tampermonkey-inspired functionality with cloud sync, auto-updates, a full dashboard, Monaco editor, DevTools panel, and a persistent side panel.
 
 ## Version
-v1.6.0
+v1.7.0
 
 ## Tech Stack
 - Chrome MV3 extension (JavaScript)
 - Background service worker (built from source modules via `build-background.sh`)
 - `chrome.userScripts` API for script injection (USER_SCRIPT world)
 - `chrome.storage.local` for persistence
-- CodeMirror editor in dashboard
+- **Monaco Editor** (v0.52.2, CDN-loaded in sandboxed iframe) — replaces CodeMirror as the main editor
 - Cloud sync: WebDAV, Google Drive (PKCE), Dropbox (PKCE), OneDrive (PKCE)
 - fflate for ZIP import/export
+- Acorn.js (v8.14.1) for AST-based static analysis (via offscreen document)
+- diff.js (v7.0.0) for 3-way text merge in sync conflict resolution
 - i18n: 8 languages (en, es, fr, de, zh, ja, pt, ru)
+- `chrome.sidePanel` API (Chrome 114+) for persistent side panel
+- `chrome.devtools.panels` for DevTools integration
+- `chrome.offscreen` API for heavy computation off the service worker
+- Web Crypto Ed25519 (Chrome 113+) for script signing
 
 ## Build
-- `bash build-background.sh` - Concatenates source modules into `background.js`
-- `bash build.sh` - Packages extension into CWS-ready ZIP
-- **Never edit `background.js` directly** - edit source files, then rebuild
+- `bash build-background.sh` — Concatenates source modules into `background.js` (currently ~10,584 lines)
+- `bash build.sh` — Packages extension into CWS-ready ZIP
+- **Never edit `background.js` directly** — edit source files in `bg/`, `modules/`, `shared/`, then rebuild
 
 ## Key Files
-- `manifest.json` - Extension manifest (version source of truth)
-- `background.core.js` - Main service worker logic (~4850 lines)
-- `bg/analyzer.js` - Static analysis engine (28 pattern detectors, risk scoring)
-- `bg/netlog.js` - Network request logger (GM_xmlhttpRequest interception)
-- `bg/workspaces.js` - Workspace manager (named script state snapshots)
-- `modules/storage.js` - SettingsManager, ScriptStorage, ScriptValues, TabStorage, FolderStorage
-- `modules/sync-providers.js` - CloudSyncProviders (WebDAV, Google Drive, Dropbox, OneDrive)
-- `modules/resources.js` - ResourceCache for @resource/@require
-- `modules/xhr.js` - XhrManager for GM_xmlhttpRequest abort tracking
-- `modules/i18n.js` - I18n module with inline translations
-- `shared/utils.js` - escapeHtml, generateId, sanitizeUrl, formatBytes
-- `content.js` - Content script bridge (ISOLATED world <-> USER_SCRIPT world)
-- `pages/popup.js` - Browser action popup (~710 lines)
-- `pages/dashboard.js` - Full dashboard (~4900 lines)
-- `pages/install.js` - Userscript install confirmation page (~790 lines)
-- `lib/fflate.js` - ZIP compression library
+
+### Background (service worker)
+- `manifest.json` — Extension manifest (version source of truth)
+- `background.core.js` — Main service worker logic (~5000 lines)
+- `bg/analyzer.js` — AST-based static analysis engine (31 detectors, Acorn via offscreen document, regex fallback)
+- `bg/netlog.js` — Network request logger (GM_xmlhttpRequest + full proxy capture: fetch/XHR/WebSocket/sendBeacon)
+- `bg/workspaces.js` — Workspace manager (named script state snapshots)
+- `bg/signing.js` — Ed25519 script signing/verification (Web Crypto API)
+
+### Modules (inlined into background.js)
+- `modules/storage.js` — SettingsManager, ScriptStorage, ScriptValues, TabStorage, FolderStorage
+- `modules/sync-providers.js` — CloudSyncProviders (WebDAV, Google Drive, Dropbox, OneDrive)
+- `modules/resources.js` — ResourceCache for @resource/@require
+- `modules/xhr.js` — XhrManager for GM_xmlhttpRequest abort tracking
+- `modules/i18n.js` — I18n module with inline translations
+- `shared/utils.js` — escapeHtml, generateId, sanitizeUrl, formatBytes
+
+### Extension Pages
+- `content.js` — Content script bridge (ISOLATED world <-> USER_SCRIPT world)
+- `pages/popup.html/js` — Browser action popup (~710 lines)
+- `pages/dashboard.html/js` — Full dashboard (~4900 lines)
+- `pages/install.html/js` — Userscript install confirmation page (~790 lines)
+- `pages/sidepanel.html/js` — Persistent side panel (chrome.sidePanel, Chrome 114+)
+- `pages/devtools.html` — DevTools panel registration page
+- `pages/devtools-panel.html/js` — DevTools panel UI (Network/Execution/Console tabs)
+- `pages/editor-sandbox.html` — Sandboxed iframe hosting Monaco editor (loads from CDN)
+- `pages/monaco-adapter.js` — Bridges dashboard.js CodeMirror API to Monaco iframe via postMessage
+
+### Offscreen / Libraries
+- `offscreen.html` + `offscreen.js` — Offscreen document: AST analysis, 3-way merge, diff generation
+- `lib/fflate.js` — ZIP compression library
+- `lib/acorn.min.js` — Acorn JS parser (UMD, 114KB) — used in offscreen.js
+- `lib/diff.min.js` — diff.js (UMD, 24KB) — used in offscreen.js for 3-way text merge
 
 ## Architecture
 - Source modules are inlined into `background.js` at build time (Chrome MV3 service workers don't reliably support importScripts)
@@ -45,18 +68,24 @@ v1.6.0
 - Content script bridge forwards messages between USER_SCRIPT world and background
 - `chrome.runtime.onUserScriptMessage` used for direct USER_SCRIPT -> background messaging (Chrome 131+)
 - Regex @include patterns: extracted into broad match patterns for registration, fine-filtered at runtime
+- **Monaco editor**: runs in a sandboxed iframe (`pages/editor-sandbox.html`) to allow `eval` (required by Monaco's tokenizer); sandboxed pages bypass extension CSP and can load the Monaco CDN; `monaco-adapter.js` intercepts `CodeMirror.fromTextArea` to return a compatible adapter
+- **Offscreen document**: created on-demand by `ScriptAnalyzer._ensureOffscreen()` or sync logic; handles AST analysis and merge operations so the service worker stays lean; communicates via `chrome.runtime.sendMessage` with types prefixed `offscreen_`
+- **Network proxy**: `buildWrappedScript` injects fetch/XHR/WebSocket/sendBeacon proxies into every user script; all captured traffic flows to `NetworkLog` via `netlog_record` message
+- **3-way sync merge**: `_performSync()` detects concurrent edits via `script.syncBaseCode`; routes to offscreen `offscreen_merge`; falls back to last-write-wins on failure
+- **Ed25519 signing**: keypair stored in `chrome.storage.local`; signature embedded as `@signature` metadata tag; trust store in `settings.trustedSigningKeys`
 
 ## Gotchas
 - Version strings: manifest.json is source of truth; comment headers in content.js/popup.js/dashboard.js must match; dashboard reads dynamically from manifest via `chrome.runtime.getManifest().version`
+- **Never edit `background.js` directly** — it is regenerated by `build-background.sh` from the source files
 - `ResourceCache.fetchResource()` (not `.fetch()`) to avoid shadowing global fetch
 - `self._notifCallbacks` initialized in storage.js, used in background.core.js GM_notification handler
 - Dropbox uses PKCE auth code flow (not implicit grant) with state validation + refresh token
-- `postMessage` uses `'/'` targetOrigin (same-origin only) in both content.js and the wrapped script builder — never `'*'`
+- `postMessage` uses `'/'` targetOrigin (same-origin only) in content.js and the wrapped script builder — **exception**: the Monaco adapter uses `'*'` because it communicates with a sandboxed iframe which has null origin
 - Bridge init key uses extension ID + `Object.defineProperty` to prevent page-level spoofing
 - Dashboard DOM access: always null-check `elements.*` before `.textContent`/`.classList` assignment — many elements are optional
 - `exportToZip` deduplicates filenames with `_2`, `_3` suffix counters
 - `autoReloadMatchingTabs` is debounced (500ms) to prevent mass tab reloads
-- `cleanupStaleCaches()` runs on init to prune expired `require_cache_*` and `res_cache_*` entries
+- `cleanupStaleCaches()` runs on init to prune expired `require_cache_*`, `res_cache_*`, trash entries, and tombstones >30 days
 - Lint: `@grant none` + GM API usage shows `info` severity (not `error`) since some managers still expose APIs
 - `GM_info` has full Tampermonkey parity: uuid, scriptMetaStr, scriptWillUpdate, isIncognito, platform, downloadMode
 - `GM.xmlHttpRequest` returns a Promise with `.abort()` method attached (not just a plain Promise)
@@ -64,7 +93,7 @@ v1.6.0
 - `GM_audio` provides tab mute control (setMute, getState) via chrome.tabs API
 - `@top-level-await` wraps user script in async IIFE
 - `@run-in` injects runtime guard for incognito/normal tab filtering
-- `@tag` parsed as array, `@license`/`@copyright` as strings
+- `@tag` parsed as array, `@license`/`@copyright` as strings, `@contributionURL` as string, `@compatible`/`@incompatible` as arrays, `@webRequest` parsed as JSON
 - SRI hash verification: @require URLs with #sha256=base64 fragment are verified after fetch
 - `GM_info.script.resources` populated from actual `meta.resource` object, not empty `{}`
 - All GM_* functions enforce `@grant` checks: `GM_unregisterMenuCommand`, `GM_getMenuCommands`, `GM_focusTab`, `GM_addElement`, `GM_loadScript`
@@ -91,7 +120,7 @@ v1.6.0
 - Popup enhancements: description tooltip on script items, not-running opacity indicator for disabled scripts
 - Dashboard keyboard shortcuts: Ctrl+N (new), Ctrl+I (import), Alt+1-5 (tab switch), Ctrl+W (close tab), Ctrl+Tab (cycle tabs), Ctrl+/ (focus search)
 - Advanced search filters: filter by errors, update URL, grant type (xhr/storage/style/none), scope (broad/single-site), plus tag filters
-- Editor toolbar: comment toggle (//) button, word wrap toggle, snippet insert dropdown (7 snippets)
+- Editor toolbar: comment toggle (//) button, word wrap toggle, snippet insert dropdown (7 snippets) — all route through Monaco adapter
 - OpenUserJS embedded search: API-based in-dashboard results (falls back to external if API unavailable)
 - Help panel: Getting Started guide, Dashboard Shortcuts section, GM API Quick Reference (4 categories)
 - Batch URL install: paste multiple URLs (one per line) to install in sequence, with progress
@@ -113,18 +142,108 @@ v1.6.0
 - Install page audit (16 fixes): script size/line count display, @connect domains section, @antifeature warnings, @run-at/noframes display, version downgrade warning, inline install errors (no more alert()), large script warning (>500KB), success page shows "Open in Dashboard" button with 5s auto-close, proper extension icon instead of emoji, entrance animation, keyboard shortcuts (Enter=install, Escape=cancel), CodeMirror theme matches catppuccin/oled, @tag display, resource tooltips, show 8 URL patterns (was 5)
 - Popup audit (12 fixes): ScriptVault branding in header, URL bar showing current hostname, total script count in footer, contextual empty state with GreasyFork link, error dots on scripts with errors, stagger animation on script items, click name opens editor (not toggle), dropdown adds Copy URL + Pin/Unpin actions
 - Command Palette: Ctrl+K opens fuzzy-search command palette. Actions, navigation, settings, and all installed scripts searchable. Arrow keys + Enter navigation. Grouped by category.
-- Static Analysis Engine: bg/analyzer.js with 28 pattern detectors across 7 categories (execution, data, network, fingerprint, obfuscation, mining, hijack). Risk score 0-100. Runs on install page with color-coded results. High-entropy string detection.
 - Script Folders: FolderStorage module in storage.js. CRUD operations. Drag scripts into folders. Collapsible folder headers in table. Folder color dots. "New Folder" button in toolbar. "Move to Folder" in script actions. Folder delete with confirmation.
 - Build system: bg/ directory auto-included in build-background.sh
-- Network Request Log (Phase 3C): bg/netlog.js logs all GM_xmlhttpRequest calls. Stores method, URL, status, duration, response size, script name. getNetworkLog/clearNetworkLog message handlers. Dashboard UI with stats bar + scrollable log. HAR export.
-- Workspaces (Phase 4B): bg/workspaces.js manages named snapshots of enabled/disabled script states. Create/activate/save/delete. Dashboard UI with workspace list + switch/save/delete buttons. Activating a workspace re-registers all scripts.
-- Performance Budgets (Phase 5B): configurable default budget (ms) in settings. Per-script budget override. Scripts exceeding budget get purple right border (row-over-budget). Budget setting UI in Utilities panel.
+- Network Request Log: bg/netlog.js logs ALL network calls (GM_xmlhttpRequest + in-page fetch/XHR/WebSocket/sendBeacon). Dashboard UI with stats bar + scrollable log. HAR export. DevTools panel shows the same log.
+- Workspaces: bg/workspaces.js manages named snapshots of enabled/disabled script states. Create/activate/save/delete. Dashboard UI with workspace list + switch/save/delete buttons. Activating a workspace re-registers all scripts.
+- Performance Budgets: configurable default budget (ms) in settings. Per-script budget override. Scripts exceeding budget get purple right border (row-over-budget). Budget setting UI in Utilities panel.
+- **Monaco editor**: `state.editor.isMonaco === true` — use this flag in dashboard.js to branch Monaco-specific behavior. `setFontSize(pct)` instead of DOM `.CodeMirror` CSS. `lintOnType` setOption is a no-op (Monaco handles its own error display). `clearHistory()` and `setCursor()` are no-ops.
+- **Offscreen document**: `ScriptAnalyzer._ensureOffscreen()` creates it on first use with reason `DOM_SCRAPING`. Only one offscreen document can exist at a time; check with `chrome.offscreen.hasDocument()` before creating.
+- **getNetworkLog** message handler now returns a flat array (not `{log, stats}`). Use `getNetworkLogStats` for stats separately.
+- **syncBaseCode**: stored on each script after a successful sync; used as the 3-way merge ancestor. Cleared/overwritten after each merge. If absent, sync falls back to last-write-wins.
+- **Ed25519 signing**: `@signature base64sig|base64pubkey|timestamp` embedded as last line before `==/UserScript==`. Strip the signature line before verifying (it wasn't included when signed). `settings.trustedSigningKeys` is a map of `{publicKey: {name, addedAt}}`.
+- **Side panel**: responds to `chrome.tabs.onActivated` and `chrome.tabs.onUpdated` to refresh script list on navigation. Uses same `sendToBackground` pattern as popup.
+- **DevTools panel**: auto-refreshes every 3s. `getNetworkLog` returns flat array; `getNetworkLogStats` for totals. HAR export uses `URL.createObjectURL` + programmatic `<a>` click.
+
+## Changes (2026-03-23)
+- `worldId` per-script isolation: `registerScript` configures and assigns `worldId: script.id` (Chrome 133+); `unregisterScript` calls `resetWorldConfiguration`. Fallback to shared world on Chrome <133.
+- `user-modified` sync flag: `saveScript` from editor passes `markModified: true` → sets `settings.userModified = true`. `CloudSync.sync()` skips overwriting scripts with `userModified = true`. Per-script settings panel shows "Lock from cloud sync" toggle.
+- `GM_webRequest`: `@webRequest` parsed as JSON from metadata; `applyWebRequestRules`/`removeWebRequestRules` translate to `chrome.declarativeNetRequest.updateDynamicRules`. Runtime `GM_webRequest(rules, listener)` messages background. `declarativeNetRequest`+`declarativeNetRequestWithHostAccess` added to both manifests.
+- Key renaming in storage editor: `createStorageItem` has ✏️ rename button + click-on-key-name UX. `renameScriptValue` message handler in background (read old → write new → delete old).
+- `@contributionURL`, `@compatible`, `@incompatible` added to parser and info panel HTML/JS. Linter and hint autocomplete updated.
+- Chrome 138 detection: `configureUserScriptsWorld` saves `_userScriptsAvailable`/`_chromeVersion` to settings. `getExtensionStatus` message returns version-aware `setupMessage`. Popup `checkUserScriptsAvailability` uses `getExtensionStatus` for accurate per-version guidance.
+
+## Audit Round 3 (2026-03-23)
+- `updateBadge()` all-tabs path parallelized: fetches settings+scripts once, passes them to `Promise.allSettled()` over all tabs — eliminates N redundant cache reads; `updateBadgeForTab(tabId, url, settings?, scripts?)` accepts pre-fetched params to avoid re-fetching per call
+- GM_download safety timeout (`dlSafetyId`) now stored and cleared via shared `cleanupDlListener()` helper — prevents 5-minute timer from running after download already completed/errored; user timeout also uses `cleanupDlListener()`
+- XHR async IIFE `.catch()` added — guards against any exception escaping the try/catch inside the fire-and-forget block; ensures `XhrManager.remove()` is always called
+- `popup.js` `updateEmptyStateHint()` converted from `innerHTML` template string to safe DOM API (`createElement` / `textContent` / `appendChild`) — no XSS exposure even if template is later modified
+- `bg/analyzer.js` 4 new risk patterns: prototype pollution (`__proto__`/`Object.setPrototypeOf`/`prototype[`), `document.domain` assignment, `postMessage` with wildcard origin (`*`), `Object.defineProperty` on global object — total patterns now 31 (then upgraded to full AST)
+
+## Audit Round 2 (2026-03-23)
+- Dropbox `getStatus()` null crash fixed: `user.name?.display_name || user.display_name || ''` (sync-providers.js)
+- Workspace `activate()` N storage writes → 1 batch: mutates `ScriptStorage.cache` directly, calls `ScriptStorage.save()` once
+- `saveScript` dashboard handler now enforces `MAX_SCRIPT_SIZE` (5MB) same as download handler
+- `autoUpdate` `Promise.allSettled` failures now logged to console with error messages
+- `CloudSync.sync()` refactored: 90s outer timeout via `Promise.race([_performSync(), timeoutPromise])` prevents indefinite hang; body extracted to `_performSync()`
+- Sync tombstones: deleted script IDs stored in `syncTombstones` storage key; `_performSync()` skips tombstoned scripts so deleted scripts don't reappear after sync; tombstones propagate across devices via sync payload; `cleanupStaleCaches()` prunes tombstones >30 days
+- Dashboard global `unhandledrejection` handler logs errors to activity log and console
+
+## Performance & Reliability Audit (2026-03-23)
+- `registerAllScripts()` parallelised with `Promise.allSettled` — scripts no longer register sequentially on startup
+- `UpdateSystem.autoUpdate()` parallelised with `Promise.allSettled` — independent updates applied concurrently
+- O(n²) fix in `importFromZip`/`importScripts`: `_importPosition` counter cached once before loop instead of re-querying length per iteration
+- `UpdateSystem.applyUpdate` respects `userModified` flag: returns `{ skipped: true, reason: 'user-modified' }` without touching the script
+- `compareVersions` handles pre-release suffixes: `1.0.0-beta` < `1.0.0` via `-.*$` strip + post-compare flag
+- `CloudSync.sync()` mutex lock via `_syncInProgress` boolean in `finally` block — prevents concurrent sync runs
+- `setScriptSettings` only re-registers on execution-affecting key changes (`EXEC_KEYS` allowlist); notes/autoUpdate/userModified changes skip re-registration
+- `fetchWithRetry` 5MB response size cap: rejects via Content-Length header check and post-read body length check
+- `cleanupStaleCaches()` now also prunes expired trash entries on init using the `trashMode` retention setting
 
 ## Bug Audit (2026-03-21)
 - Fixed: NetworkLog duration calculation used `_netLogEntry.timestamp` which was undefined; replaced with dedicated `_netLogStartTime` variable
 - Fixed: `state.folders`, `state._collapsedFolders`, `state._lastCheckedId`, `state._quotaWarned` not initialized in dashboard state object
 - Fixed: `switchTab('help')` in command palette failed because help tab is a header icon, not a `.tm-tab`; added special case handling
-- Verified: All version strings match (v1.6.0 across manifest, manifest-firefox, content.js, popup.js, dashboard.js)
+- Verified: All version strings match (v1.7.0 across manifest, manifest-firefox, content.js, popup.js, dashboard.js)
 - Verified: All bg/ modules load before background.core.js in build output
 - Verified: `escapeHtml` available in popup.js (shared/utils.js loaded first)
 - Verified: Column index mapping still correct after pin button addition (pin is inside actions TD, not a new column)
+
+## Major Feature Additions (2026-03-23)
+
+### Libraries Added
+- `lib/acorn.min.js` — Acorn JS parser (v8.14.1, 114KB UMD) for AST-based static analysis in offscreen.js
+- `lib/diff.min.js` — diff.js (v7.0.0, 24KB UMD) for 3-way text merge in offscreen.js
+
+### Side Panel (`chrome.sidePanel`)
+- `pages/sidepanel.html` + `pages/sidepanel.js` — persistent companion panel beside pages
+- Shows scripts for current page with toggles, timing badges, error dots; live-updates on tab navigation
+- `sidePanel` permission + `side_panel.default_path` in manifest
+
+### DevTools Panel (`chrome.devtools`)
+- `pages/devtools.html` — devtools registration page (`devtools_page` in manifest)
+- `pages/devtools-panel.html` + `pages/devtools-panel.js` — Network/Execution/Console tabs; HAR export; auto-refresh every 3s
+
+### Offscreen Document (`chrome.offscreen`)
+- `offscreen.html` + `offscreen.js` — AST analysis (Acorn), 3-way merge (diff.js), diff generation
+- `offscreen` permission in manifest; message types: `offscreen_analyze`, `offscreen_merge`, `offscreen_diff`, `offscreen_ping`
+
+### AST-Based Static Analyzer (`bg/analyzer.js` v2)
+- `ScriptAnalyzer.analyzeAsync()` routes to offscreen Acorn AST walk; regex fallback if unavailable
+- 31 pattern detectors with zero false positives from comments/strings; results include `{line, col}` location
+
+### Full Network Capture (script wrapper)
+- `buildWrappedScript` injects fetch/XHR/WebSocket/sendBeacon proxies into every user script
+- All traffic routes through `netlog_record` message → `NetworkLog.add()`
+- `getNetworkLog` handler returns flat array; `getNetworkLogStats` for stats
+
+### Ed25519 Script Signing (`bg/signing.js`)
+- Keypair generated and stored in `chrome.storage.local`; signature embedded as `@signature` metadata tag
+- Trust store in `settings.trustedSigningKeys`; Web Crypto Ed25519 requires Chrome 113+
+- Message handlers: `signing_sign`, `signing_verify`, `signing_verifyRaw`, `signing_trustKey`, `signing_untrustKey`, `signing_getTrustedKeys`, `signing_generateNewKeypair`, `signing_getPublicKey`
+
+### 3-Way Text Merge in Sync
+- `_performSync()` routes concurrent edits through offscreen `offscreen_merge`
+- `script.syncBaseCode` tracks last-synced code as merge ancestor; conflict markers are git-style
+- `mergeConflict: true` stored in `script.settings` when automatic merge fails
+
+### Monaco Editor (sandboxed iframe)
+- `pages/editor-sandbox.html` — sandboxed page (eval allowed); loads Monaco v0.52.2 from jsdelivr CDN
+- `pages/monaco-adapter.js` — intercepts `CodeMirror.fromTextArea`, returns Monaco-compatible adapter
+- Custom themes: `sv-dark`, `sv-light`, `sv-catppuccin`; completion provider for userscript metadata
+- CodeMirror stripped from dashboard; only lint CSS + lint JS kept
+
+### Manifest Changes (manifest.json)
+- New permissions: `sidePanel`, `offscreen`
+- New keys: `side_panel`, `devtools_page`, `sandbox.pages`, `content_security_policy`
+- CSP sandbox entry allows `https://cdn.jsdelivr.net` for Monaco CDN loading
