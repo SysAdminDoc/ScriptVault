@@ -28,23 +28,23 @@
 
 ## Features
 
-### GM API &mdash; 24+ Functions
+### GM API &mdash; 35+ Functions
 
 Full Greasemonkey/Tampermonkey API compatibility with promise-based `GM.*` async variants.
 
 | Storage | Network | UI | Utilities |
 |---------|---------|-----|-----------|
 | `GM_getValue` | `GM_xmlhttpRequest` | `GM_addStyle` | `GM_info` |
-| `GM_setValue` | `GM_fetch` | `GM_notification` | `GM_log` |
-| `GM_deleteValue` | `GM_download` | `GM_registerMenuCommand` | `GM_setClipboard` |
+| `GM_setValue` | `GM_download` | `GM_notification` | `GM_log` |
+| `GM_deleteValue` | `GM_webRequest` | `GM_registerMenuCommand` | `GM_setClipboard` |
 | `GM_listValues` | | `GM_unregisterMenuCommand` | `GM_openInTab` |
-| `GM_getValues` | | `GM_addElement` | `GM_getResourceText` |
-| `GM_setValues` | | | `GM_getResourceURL` |
-| `GM_deleteValues` | | | |
-| `GM_addValueChangeListener` | | | |
-| `GM_removeValueChangeListener` | | | |
+| `GM_getValues` | | `GM_getMenuCommands` | `GM_getResourceText` |
+| `GM_setValues` | | `GM_addElement` | `GM_getResourceURL` |
+| `GM_deleteValues` | | `GM_loadScript` | `GM_cookie` |
+| `GM_addValueChangeListener` | | `GM_audio` | `GM_focusTab` |
+| `GM_removeValueChangeListener` | | | `GM_closeTab` |
 
-Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state management.
+Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state, `window.close`, `window.focus`, `window.onurlchange` grants, and `@top-level-await` support.
 
 ### Script Management
 
@@ -76,6 +76,14 @@ Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state management.
 - **Batch URL install** &mdash; Paste multiple `.user.js` URLs to install at once
 - **Script notes** &mdash; Personal notes per script, saved with settings
 - **Version diff view** &mdash; Compare any previous version against current code
+- **Script folders** &mdash; Organize scripts into color-coded folders with drag-and-drop
+- **Workspaces** &mdash; Named snapshots of enabled/disabled script states for quick context switching
+- **Command palette** &mdash; Ctrl+K to fuzzy-search actions, scripts, and settings
+- **Execution profiling** &mdash; Per-script timing stats with color-coded performance badges
+- **Performance budgets** &mdash; Configurable time budget per script with visual over-budget indicators
+- **Column visibility** &mdash; Toggle which columns appear in the script table
+- **Full-text search** &mdash; Prefix with `code:` to search inside script source code
+- **Copy install URL** &mdash; One-click clipboard copy of script download/update URL
 
 ### Advanced URL Matching
 
@@ -96,24 +104,59 @@ Sync scripts across devices with 5 providers:
 | OneDrive | Microsoft account integration |
 | Browser Sync | Chrome's built-in sync |
 
-### Built-in Code Editor
+### Monaco Editor
 
+- **Monaco Editor** &mdash; Same editor that powers VS Code, loaded in a sandboxed iframe
 - **Tabbed editing** &mdash; Open multiple scripts simultaneously with browser-style tabs (middle-click to close)
 - **Unsaved indicators** &mdash; Visual dot on tabs with pending changes
-- **CodeMirror** with JavaScript syntax highlighting
-- **5 editor themes** &mdash; Monokai, Dracula, Material Darker, Nord, Ayu Dark
+- **4 editor themes** &mdash; Dark, Light, Catppuccin Mocha, OLED
 - **Status bar** &mdash; Line count and cursor position display
-- Code folding, bracket matching, auto-close
+- **IntelliSense** &mdash; Autocomplete for GM API functions and `@metadata` directives
+- Code folding, bracket matching, bracket pair colorization, auto-close
 - Search & replace (`Ctrl+F` / `Ctrl+H`)
 - Real-time userscript metadata linting
+- **Code beautifier** &mdash; One-click indentation normalization
+- **Snippet insert** &mdash; 7 GM API code templates from the toolbar
 - Open in vscode.dev for external editing
+
+### DevTools Panel
+
+- **Network inspector** &mdash; View all GM_xmlhttpRequest + fetch/XHR/WebSocket/sendBeacon calls from userscripts
+- **Execution profiler** &mdash; See run count, avg/total time, and errors per script
+- **HAR export** &mdash; Export network log in standard HAR format
+- Auto-refreshes every 3 seconds
+
+### Side Panel
+
+- **Persistent companion panel** &mdash; Always visible alongside the active page (Chrome 114+)
+- Shows scripts running on the current page with toggles, timing badges, and error dots
+- Live updates on tab navigation
+- Quick access to dashboard and script creation
+
+### Script Signing (Ed25519)
+
+- **Cryptographic signing** &mdash; Sign scripts with your Ed25519 keypair
+- **Signature verification** &mdash; Verify integrity of installed scripts
+- **Trust store** &mdash; Manage trusted author public keys
+- `@signature` metadata tag embedded in script header
+
+### Static Analysis
+
+- **AST-based analyzer** &mdash; 31 risk pattern detectors using Acorn parser
+- **Zero false positives** &mdash; AST walk ignores comments and strings
+- **Risk scoring** &mdash; Color-coded risk level (minimal/low/medium/high)
+- Categories: execution, data access, network, fingerprinting, obfuscation, mining, DOM hijacking
+- Shown on install page before script installation
 
 ### Security
 
-- **Script isolation** &mdash; `USER_SCRIPT` world via `chrome.userScripts` API
+- **Script isolation** &mdash; `USER_SCRIPT` world via `chrome.userScripts` API, per-script worldId (Chrome 133+)
+- **Static analysis** &mdash; AST-based risk scoring with 31 pattern detectors on every install
+- **Script signing** &mdash; Ed25519 cryptographic signatures with trust store
 - **Blacklist system** &mdash; Remote + manual blacklists
 - **Permission analysis** &mdash; Visual `@grant` permission breakdown on install
 - **`@connect` validation** &mdash; Restrict XHR domains
+- **SRI verification** &mdash; `@require` URLs with `#sha256=` hash are verified after fetch
 - **CSP handling** &mdash; Works on sites with strict Content Security Policies
 - **Zero telemetry** &mdash; No phone home, all data stays local
 
@@ -223,6 +266,13 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 // @license        MIT
 // @antifeature    tracking
 // @tag            productivity
+// @priority       10
+// @inject-into    auto
+// @compatible     chrome
+// @incompatible   firefox Needs polyfill
+// @contributionURL https://example.com/donate
+// @webRequest     {"selector":"*ad*","action":"cancel"}
+// @top-level-await
 // ==/UserScript==
 ```
 
@@ -234,6 +284,7 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 | `document-body` | When `<body>` exists |
 | `document-end` | When DOM is complete (default) |
 | `document-idle` | When page is fully loaded |
+| `context-menu` | On right-click context menu |
 
 ---
 
@@ -254,21 +305,30 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 | Feature | ScriptVault | Tampermonkey | ViolentMonkey |
 |---------|:-----------:|:------------:|:-------------:|
 | Manifest V3 | Yes | Yes | Yes |
-| Full GM API (24+) | Yes | Yes | Yes |
-| Cloud Sync (5 providers) | Yes | Yes | Yes |
+| Full GM API (35+) | Yes | Yes | Yes |
+| Monaco Editor (VS Code) | Yes | No | No |
+| DevTools Panel | Yes | No | No |
+| Side Panel | Yes | No | No |
+| Script Signing (Ed25519) | Yes | No | No |
+| AST Static Analysis (31 detectors) | Yes | No | No |
+| Cloud Sync (4 providers) | Yes | Yes | Yes |
+| 3-Way Sync Merge | Yes | No | No |
 | Tabbed Multi-Script Editor | Yes | No | No |
 | Built-in Script Search | Yes | No | No |
 | Script Templates | 6 | No | No |
 | Version Rollback | Yes (3) | No | No |
 | CDN Library Browser | Yes | No | No |
+| Workspaces | Yes | No | No |
+| Script Folders | Yes | No | No |
+| Command Palette (Ctrl+K) | Yes | No | No |
 | Drag-and-Drop Install | Yes | Yes | No |
 | Tag Filtering | Yes | No | No |
 | Script Pinning | Yes | No | No |
 | Pattern Tester | Yes | No | No |
-| Activity Log | Yes | No | No |
-| Script Health Indicators | Yes | No | No |
-| Tampermonkey Import | Yes | N/A | No |
 | Version Diff View | Yes | No | No |
+| Network Request Log + HAR | Yes | No | No |
+| Execution Profiling | Yes | No | No |
+| Performance Budgets | Yes | No | No |
 | Storage Quota Monitor | Yes | No | No |
 | Bulk Operations w/ Progress | Yes | Yes | No |
 | 4 UI Themes | Yes | No | Yes |
@@ -281,18 +341,43 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 
 ```
 ScriptVault/
-├── manifest.json              # Extension manifest (MV3)
-├── background.js              # Service worker — API, sync, script registration
+├── manifest.json              # Chrome MV3 manifest
+├── manifest-firefox.json      # Firefox MV3 manifest
+├── background.js              # Service worker (built from source modules)
+├── background.core.js         # Main service worker logic (~5500 lines)
 ├── content.js                 # Content script bridge (USER_SCRIPT <-> background)
+├── offscreen.html/js          # Offscreen document (AST analysis, 3-way merge)
+├── build-background.sh        # Concatenates modules into background.js
+├── build.sh                   # Packages CWS-ready ZIP
+├── bg/
+│   ├── analyzer.js            # AST-based static analysis engine
+│   ├── netlog.js              # Network request logger
+│   ├── signing.js             # Ed25519 script signing
+│   └── workspaces.js          # Workspace state manager
+├── modules/
+│   ├── storage.js             # Settings, scripts, values, folders
+│   ├── sync-providers.js      # WebDAV, Google Drive, Dropbox, OneDrive
+│   ├── resources.js           # @resource/@require cache
+│   ├── xhr.js                 # XHR abort tracking
+│   └── i18n.js                # Inline translations (8 languages)
+├── shared/
+│   └── utils.js               # escapeHtml, generateId, sanitizeUrl, formatBytes
 ├── pages/
-│   ├── dashboard.html/js/css  # Main settings & editor UI
+│   ├── dashboard.html/js      # Main dashboard + Monaco editor (~5000 lines)
 │   ├── popup.html/js          # Toolbar popup
-│   └── install.html/js        # Script installation page
-├── images/                    # Extension icons (16-512px, .ico)
+│   ├── install.html/js        # Script installation page
+│   ├── sidepanel.html/js      # Persistent side panel (Chrome 114+)
+│   ├── devtools.html          # DevTools registration
+│   ├── devtools-panel.html/js # DevTools network + profiling UI
+│   ├── editor-sandbox.html    # Sandboxed Monaco editor iframe
+│   └── monaco-adapter.js      # CodeMirror-to-Monaco API bridge
 ├── lib/
-│   └── codemirror/            # CodeMirror editor + addons
-└── _locales/
-    └── */messages.json        # 8 language translations
+│   ├── codemirror/            # CodeMirror (lint only)
+│   ├── acorn.min.js           # Acorn JS parser for AST analysis
+│   ├── diff.min.js            # diff.js for 3-way merge
+│   └── fflate.js              # ZIP compression
+├── images/                    # Extension icons
+└── _locales/                  # 8 language translations
 ```
 
 ---
@@ -319,7 +404,9 @@ MIT License &mdash; see [LICENSE](LICENSE) for details.
 
 - [Tampermonkey](https://www.tampermonkey.net/) &mdash; Setting the standard in userscript management
 - [ViolentMonkey](https://violentmonkey.github.io/) &mdash; Manifest V3 inspiration
-- [CodeMirror](https://codemirror.net/) &mdash; Code editor
+- [Monaco Editor](https://microsoft.github.io/monaco-editor/) &mdash; The VS Code editor powering the script editor
+- [Acorn](https://github.com/acornjs/acorn) &mdash; JavaScript parser for AST-based static analysis
+- [jsdiff](https://github.com/kpdecker/jsdiff) &mdash; Text diffing for 3-way sync merge
 - [fflate](https://github.com/101arrowz/fflate) &mdash; Fast ZIP compression
 
 ---
