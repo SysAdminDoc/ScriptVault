@@ -12,6 +12,7 @@ var CloudSyncProviders = {
     requiresAuth: true,
     
     async upload(data, settings) {
+      if (!settings.webdavUrl) throw new Error('WebDAV URL is required');
       const url = `${settings.webdavUrl.replace(/\/$/, '')}/scriptvault-backup.json`;
       const auth = btoa(`${settings.webdavUsername}:${settings.webdavPassword}`);
       
@@ -29,6 +30,7 @@ var CloudSyncProviders = {
     },
     
     async download(settings) {
+      if (!settings.webdavUrl) throw new Error('WebDAV URL is required');
       const url = `${settings.webdavUrl.replace(/\/$/, '')}/scriptvault-backup.json`;
       const auth = btoa(`${settings.webdavUsername}:${settings.webdavPassword}`);
       
@@ -93,10 +95,16 @@ var CloudSyncProviders = {
         })
       });
 
-      if (!resp.ok) return null;
+      if (!resp.ok) {
+        console.warn('[CloudSync] Google token refresh failed:', resp.status);
+        return null;
+      }
       const data = await resp.json();
       if (data.access_token) {
         await SettingsManager.set({ googleDriveToken: data.access_token });
+        if (data.refresh_token) {
+          await SettingsManager.set({ googleDriveRefreshToken: data.refresh_token });
+        }
         return data.access_token;
       }
       return null;
@@ -240,7 +248,7 @@ var CloudSyncProviders = {
         mimeType: 'application/json'
       };
 
-      const boundary = '-------ScriptVaultBoundary';
+      const boundary = '-------ScriptVault' + crypto.getRandomValues(new Uint8Array(8)).reduce((s, b) => s + b.toString(16).padStart(2, '0'), '');
       const body = [
         `--${boundary}`,
         'Content-Type: application/json; charset=UTF-8',
@@ -422,7 +430,10 @@ var CloudSyncProviders = {
         })
       });
 
-      if (!resp.ok) return null;
+      if (!resp.ok) {
+        console.warn('[CloudSync] Dropbox token refresh failed:', resp.status);
+        return null;
+      }
       const data = await resp.json();
       if (data.access_token) {
         await SettingsManager.set({ dropboxToken: data.access_token });
@@ -668,6 +679,7 @@ var CloudSyncProviders = {
     async upload(data) {
       const token = await this.getValidToken();
       if (!token) throw new Error('Not authenticated with OneDrive');
+      if (!data || typeof data !== 'object') throw new Error('Invalid backup data');
 
       const response = await fetch(
         `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,

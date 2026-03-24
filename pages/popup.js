@@ -1,4 +1,4 @@
-// ScriptVault Popup v1.7.0
+// ScriptVault Popup v1.7.1
 // Tampermonkey-style popup interface
 
 (function() {
@@ -411,10 +411,12 @@
                 }
             });
 
-            // Close dropdown when clicking outside
-            document.addEventListener('click', () => {
-                dropdown.classList.remove('open');
-                activeDropdownScriptId = null;
+            // Close dropdown when clicking outside (but not inside it)
+            document.addEventListener('click', (e) => {
+                if (!dropdown.contains(e.target) && !e.target.closest('.script-more')) {
+                    dropdown.classList.remove('open');
+                    activeDropdownScriptId = null;
+                }
             });
         }
     }

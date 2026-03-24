@@ -3058,16 +3058,19 @@ async function installFromUrl(url) {
       throw new Error(parsed.error);
     }
     const meta = parsed.meta;
-    const id = generateId();
-
     const allScripts = await ScriptStorage.getAll();
+
+    // Check for existing script with same name+namespace (update instead of duplicate)
+    const existing = allScripts.find(s => s.meta.name === meta.name && s.meta.namespace === meta.namespace);
+    const id = existing ? existing.id : generateId();
+
     const script = {
       id,
       code,
       meta,
-      enabled: true,
-      position: allScripts.length,
-      createdAt: Date.now(),
+      enabled: existing ? existing.enabled : true,
+      position: existing ? existing.position : allScripts.length,
+      createdAt: existing ? existing.createdAt : Date.now(),
       updatedAt: Date.now()
     };
 

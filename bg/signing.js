@@ -53,8 +53,10 @@ const ScriptSigning = {
       privateKey,
       encoder.encode(code)
     );
-    const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
-    const publicKeyB64 = kp.publicKeyJwk.x; // JWK x field is the base64url-encoded public key
+    // Convert to base64url to match JWK's x field encoding
+    const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const publicKeyB64 = kp.publicKeyJwk.x; // JWK x field is base64url-encoded
     return {
       signature: signatureB64,
       publicKey: publicKeyB64,
@@ -86,7 +88,9 @@ const ScriptSigning = {
       );
 
       const encoder = new TextEncoder();
-      const sigBytes = Uint8Array.from(atob(signatureInfo.signature), c => c.charCodeAt(0));
+      // Convert base64url back to standard base64 for atob()
+      const sigB64 = signatureInfo.signature.replace(/-/g, '+').replace(/_/g, '/');
+      const sigBytes = Uint8Array.from(atob(sigB64), c => c.charCodeAt(0));
 
       const valid = await crypto.subtle.verify(
         { name: 'Ed25519' },

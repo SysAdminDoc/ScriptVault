@@ -2,3 +2,6 @@
 build/
 .DS_Store
 Thumbs.db
+scriptvault.pem
+*.crx
+*.zip
