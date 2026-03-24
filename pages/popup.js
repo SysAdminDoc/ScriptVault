@@ -1,4 +1,4 @@
-// ScriptVault Popup v1.7.4
+// ScriptVault Popup v1.7.5
 // Tampermonkey-style popup interface
 
 (function() {

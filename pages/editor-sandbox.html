@@ -221,6 +221,20 @@
       case 'set-font-size':
         if (editor) editor.updateOptions({ fontSize: msg.size || 13 });
         break;
+      case 'insert-text':
+        if (editor) {
+          editor.focus();
+          const sel = editor.getSelection();
+          editor.executeEdits('snippet', [{ range: sel, text: msg.text || '', forceMoveMarkers: true }]);
+        }
+        break;
+      case 'action':
+        if (editor && msg.id) {
+          const act = editor.getAction(msg.id);
+          if (act) act.run();
+          else editor.trigger('adapter', msg.id, null);
+        }
+        break;
     }
   });
 
