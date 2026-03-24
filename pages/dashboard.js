@@ -1,4 +1,4 @@
-// ScriptVault Dashboard v1.7.1 - Full-Featured Controller
+// ScriptVault Dashboard v1.7.2 - Full-Featured Controller
 (function() {
     'use strict';
 
@@ -1270,7 +1270,8 @@
             state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
         } else {
             state.sortColumn = column;
-            state.sortDirection = 'asc';
+            // Default to desc for time-based columns (newest first)
+            state.sortDirection = (column === 'updated' || column === 'perf') ? 'desc' : 'asc';
         }
         updateSortIndicators();
         renderScriptTable();

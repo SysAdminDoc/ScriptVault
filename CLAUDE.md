@@ -4,7 +4,7 @@
 Modern userscript manager built with Chrome Manifest V3. Tampermonkey-inspired functionality with cloud sync, auto-updates, a full dashboard, Monaco editor, DevTools panel, and a persistent side panel.
 
 ## Version
-v1.7.1
+v1.7.2
 
 ## Tech Stack
 - Chrome MV3 extension (JavaScript)
@@ -194,7 +194,7 @@ v1.7.1
 - Fixed: NetworkLog duration calculation used `_netLogEntry.timestamp` which was undefined; replaced with dedicated `_netLogStartTime` variable
 - Fixed: `state.folders`, `state._collapsedFolders`, `state._lastCheckedId`, `state._quotaWarned` not initialized in dashboard state object
 - Fixed: `switchTab('help')` in command palette failed because help tab is a header icon, not a `.tm-tab`; added special case handling
-- Verified: All version strings match (v1.7.1 across manifest, manifest-firefox, content.js, popup.js, dashboard.js)
+- Verified: All version strings match (v1.7.2 across manifest, manifest-firefox, content.js, popup.js, dashboard.js)
 - Verified: All bg/ modules load before background.core.js in build output
 - Verified: `escapeHtml` available in popup.js (shared/utils.js loaded first)
 - Verified: Column index mapping still correct after pin button addition (pin is inside actions TD, not a new column)

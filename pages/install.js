@@ -1,4 +1,4 @@
-// ScriptVault Install Page v1.7.1
+// ScriptVault Install Page v1.7.2
 
 // Dangerous permissions that warrant security warnings
 const DANGEROUS_PERMISSIONS = [
@@ -46,7 +46,7 @@ async function init() {
       const fallback = e.target.getAttribute('data-icon-fallback');
       e.target.style.display = 'none';
       if (e.target.parentElement && fallback) {
-        e.target.parentElement.innerHTML = fallback;
+        e.target.parentElement.textContent = fallback;
       }
     }
   }, true);
@@ -672,22 +672,23 @@ function showSuccess(name, action, scriptId) {
     </div>
   `;
 
+  const autoCloseTimer = setTimeout(() => {
+    if (history.length > 1) history.back();
+    else window.close();
+  }, 5000);
+
   document.getElementById('btnSuccessClose')?.addEventListener('click', () => {
+    clearTimeout(autoCloseTimer);
     if (history.length > 1) history.back();
     else window.close();
   });
   document.getElementById('btnOpenDashboard')?.addEventListener('click', () => {
+    clearTimeout(autoCloseTimer);
     const url = scriptId
       ? chrome.runtime.getURL(`pages/dashboard.html#script_${scriptId}`)
       : chrome.runtime.getURL('pages/dashboard.html');
     chrome.tabs.update({ url });
   });
-
-  // Auto-close after 5s (longer than before)
-  setTimeout(() => {
-    if (history.length > 1) history.back();
-    else window.close();
-  }, 5000);
 }
 
 // Utilities

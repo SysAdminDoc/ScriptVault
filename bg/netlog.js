@@ -3,7 +3,7 @@
 
 const NetworkLog = {
   _log: [],
-  _maxEntries: 500,
+  _maxEntries: 2000,
 
   add(entry) {
     this._log.unshift({
