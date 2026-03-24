@@ -1,4 +1,4 @@
-// ScriptVault v1.7.7 - Background Service Worker
+// ScriptVault v1.7.8 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run build-background.sh to regenerate.
@@ -6020,7 +6020,7 @@ async function handleMessage(message, sender) {
 
         // Re-register the script with userScripts API
         await unregisterScript(id);
-        if (script.enabled) {
+        if (script.enabled !== false) {
           await registerScript(script);
         }
         
@@ -6140,7 +6140,7 @@ async function handleMessage(message, sender) {
         trash.splice(idx, 1);
         await chrome.storage.local.set({ trash });
         await ScriptStorage.set(script.id, script);
-        if (script.enabled) await registerScript(script);
+        if (script.enabled !== false) await registerScript(script);
         await updateBadge();
         return { success: true };
       }
@@ -6612,7 +6612,7 @@ async function handleMessage(message, sender) {
         const needsReregister = EXEC_KEYS.some(k =>
           JSON.stringify(oldSettings[k]) !== JSON.stringify(data.settings[k])
         );
-        if (needsReregister && script.enabled) {
+        if (needsReregister && script.enabled !== false) {
           await unregisterScript(data.scriptId);
           await registerScript(script);
         }
@@ -7827,12 +7827,20 @@ function matchPattern(pattern, url, urlObj) {
     
     // Check host (use urlObj.host when pattern includes port, urlObj.hostname otherwise)
     if (host !== '*') {
-      const urlHost = host.includes(':') ? urlObj.host : urlObj.hostname;
+      const hasPort = host.includes(':');
+      const urlHost = hasPort ? urlObj.host : urlObj.hostname;
       if (host.startsWith('*.')) {
         const baseDomain = host.slice(2);
-        const compareHost = host.includes(':') ? urlObj.host : urlObj.hostname;
-        if (compareHost !== baseDomain && !compareHost.endsWith('.' + baseDomain)) {
-          return false;
+        if (hasPort) {
+          // For *.example.com:8080, compare host (includes port) against baseDomain
+          if (urlHost !== baseDomain && !urlHost.endsWith('.' + baseDomain)) {
+            return false;
+          }
+        } else {
+          // For *.example.com, compare hostname only
+          if (urlObj.hostname !== baseDomain && !urlObj.hostname.endsWith('.' + baseDomain)) {
+            return false;
+          }
         }
       } else if (host !== urlHost) {
         return false;
@@ -8430,7 +8438,7 @@ async function registerAllScripts() {
       return;
     }
     
-    const enabledScripts = scripts.filter(s => s.enabled);
+    const enabledScripts = scripts.filter(s => s.enabled !== false);
 
     // Sort by @priority (higher = first), then position
     enabledScripts.sort((a, b) => {
@@ -8443,7 +8451,11 @@ async function registerAllScripts() {
     console.log(`[ScriptVault] Registering ${enabledScripts.length} scripts`);
 
     // Register all scripts in parallel — significantly faster on large script collections
-    await Promise.allSettled(enabledScripts.map(script => registerScript(script)));
+    const results = await Promise.allSettled(enabledScripts.map(script => registerScript(script)));
+    const failures = results.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      console.warn(`[ScriptVault] ${failures.length} script(s) failed to register:`, failures.map(r => r.reason?.message || r.reason));
+    }
   } catch (e) {
     console.error('[ScriptVault] Failed to register scripts:', e);
   }
@@ -9046,6 +9058,12 @@ async function applyWebRequestRules(scriptId, rules) {
     });
 
     if (dnrRules.length > 0) {
+      // Check dynamic rule quota (Chrome limit: 30,000)
+      const existing = await chrome.declarativeNetRequest.getDynamicRules();
+      if (existing.length + dnrRules.length > 30000) {
+        console.warn(`[ScriptVault] DNR rule limit would be exceeded: ${existing.length} + ${dnrRules.length} > 30000`);
+        return;
+      }
       await chrome.declarativeNetRequest.updateDynamicRules({ addRules: dnrRules });
       _webRequestRuleMap.set(scriptId, ruleIds);
       debugLog(`[GM_webRequest] Applied ${dnrRules.length} rules for script ${scriptId}`);
@@ -10529,9 +10547,9 @@ ${libraryExports}
 function isValidMatchPattern(pattern) {
   if (!pattern) return false;
   if (pattern === '<all_urls>') return true;
-  
-  // Basic match pattern validation
-  const matchRegex = /^(\*|https?|file|ftp):\/\/(\*|\*\.[^/*]+|[^/*]+)\/.*$/;
+
+  // Match pattern validation (allows ports: http://localhost:3000/*)
+  const matchRegex = /^(\*|https?|file|ftp):\/\/(\*|\*\.[^/*]+|[^/*:]+(?::\d+)?)\/.*$/;
   return matchRegex.test(pattern);
 }
 
@@ -10607,34 +10625,29 @@ function convertIncludeToMatch(include) {
   
   // Handle patterns like *://example.com/*
   if (pattern.startsWith('*://')) {
-    // Ensure pattern has a path component
-    const afterScheme = pattern.slice(4); // after *://
-    if (!afterScheme.includes('/')) {
-      pattern += '/*';
-    }
-    return pattern;
+    const afterScheme = pattern.slice(4);
+    if (!afterScheme.includes('/')) pattern += '/*';
+    return isValidMatchPattern(pattern) ? pattern : null;
   }
-  
+
   // Handle patterns like http://example.com/*
   if (pattern.match(/^https?:\/\//)) {
-    // Add wildcard path if not present
-    if (!pattern.includes('/*') && !pattern.endsWith('/')) {
-      pattern += '/*';
-    }
-    return pattern;
+    if (!pattern.includes('/*') && !pattern.endsWith('/')) pattern += '/*';
+    return isValidMatchPattern(pattern) ? pattern : null;
   }
-  
+
   // Handle patterns like *.example.com
   if (pattern.startsWith('*.')) {
-    return '*://' + pattern + '/*';
+    const result = '*://' + pattern + '/*';
+    return isValidMatchPattern(result) ? result : null;
   }
-  
+
   // Handle patterns like example.com
   if (!pattern.includes('://') && !pattern.startsWith('/')) {
-    return '*://' + pattern + '/*';
+    const result = '*://' + pattern + '/*';
+    return isValidMatchPattern(result) ? result : null;
   }
-  
-  // Can't convert, return null
+
   return null;
 }
 
