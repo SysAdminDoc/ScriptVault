@@ -1,4 +1,4 @@
-// ScriptVault DevTools Panel v1.7.0
+// ScriptVault DevTools Panel v1.7.1
 // Network inspection, execution profiling, and console capture
 
 (function () {
@@ -22,12 +22,15 @@
 
   async function refreshAll() {
     try {
-      const [logRes, scriptsRes] = await Promise.all([
-        chrome.runtime.sendMessage({ type: 'getNetworkLog', limit: 200 }),
-        chrome.runtime.sendMessage({ type: 'getScripts' })
+      const [logResult, scriptsResult] = await Promise.allSettled([
+        chrome.runtime.sendMessage({ action: 'getNetworkLog', limit: 200 }),
+        chrome.runtime.sendMessage({ action: 'getScripts' })
       ]);
-      netLog = logRes || [];
-      scripts = Object.values(scriptsRes || {});
+      if (logResult.status === 'fulfilled') netLog = logResult.value || [];
+      if (scriptsResult.status === 'fulfilled') {
+        const val = scriptsResult.value;
+        scripts = val?.scripts || Object.values(val || {});
+      }
       renderNetwork();
       renderExecution();
     } catch (e) {
@@ -58,7 +61,7 @@
   function setupToolbar() {
     $('btnRefresh').addEventListener('click', refreshAll);
     $('btnClear').addEventListener('click', async () => {
-      await chrome.runtime.sendMessage({ type: 'clearNetworkLog' });
+      await chrome.runtime.sendMessage({ action: 'clearNetworkLog' });
       netLog = [];
       renderNetwork();
     });
@@ -229,7 +232,7 @@
       comment: e.scriptName || ''
     }));
 
-    const har = { log: { version: '1.2', creator: { name: 'ScriptVault', version: '1.7.0' }, entries } };
+    const har = { log: { version: '1.2', creator: { name: 'ScriptVault', version: '1.7.1' }, entries } };
     const blob = new Blob([JSON.stringify(har, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

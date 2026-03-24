@@ -1,4 +1,4 @@
-// ScriptVault v1.7.0 - Content Script Bridge
+// ScriptVault v1.7.1 - Content Script Bridge
 // Bridges messages between userscripts (USER_SCRIPT world) and background service worker
 
 (function() {
@@ -43,7 +43,7 @@
         id: msgId,
         result: result,
         success: true
-      }, '/');
+      }, window.location.origin);
     } catch (e) {
       // Silently handle errors - no console output to avoid chrome://extensions error spam
       const errorMsg = e.message || 'Unknown error';
@@ -53,7 +53,7 @@
         id: msgId,
         error: errorMsg,
         success: false
-      }, '/');
+      }, window.location.origin);
     }
   });
   
@@ -70,7 +70,7 @@
         type: 'menuCommand',
         scriptId: message.data?.scriptId,
         commandId: message.data?.commandId
-      }, '/');
+      }, window.location.origin);
       handled = true;
     }
     
@@ -85,7 +85,7 @@
         oldValue: message.data?.oldValue,
         newValue: message.data?.newValue,
         remote: message.data?.remote
-      }, '/');
+      }, window.location.origin);
       handled = true;
     }
     
@@ -99,7 +99,7 @@
         scriptId: message.data?.scriptId,
         eventType: message.data?.type,
         data: message.data
-      }, '/');
+      }, window.location.origin);
       handled = true;
     }
 
@@ -112,7 +112,7 @@
         scriptId: message.data?.scriptId,
         notifTag: message.data?.notifId,
         eventType: message.data?.type
-      }, '/');
+      }, window.location.origin);
       handled = true;
     }
 
@@ -126,7 +126,7 @@
         downloadId: message.data?.downloadId,
         eventType: message.data?.type,
         data: message.data
-      }, '/');
+      }, window.location.origin);
       handled = true;
     }
 
@@ -137,7 +137,7 @@
         direction: 'to-userscript',
         type: 'audioStateChanged',
         data: message.data
-      }, '/');
+      }, window.location.origin);
       handled = true;
     }
 
@@ -149,7 +149,7 @@
         type: 'openedTabClosed',
         scriptId: message.data?.scriptId,
         closedTabId: message.data?.tabId
-      }, '/');
+      }, window.location.origin);
       handled = true;
     }
     
