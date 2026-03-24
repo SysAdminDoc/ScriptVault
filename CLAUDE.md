@@ -4,7 +4,7 @@
 Modern userscript manager built with Chrome Manifest V3. Tampermonkey-inspired functionality with cloud sync, auto-updates, a full dashboard, Monaco editor, DevTools panel, and a persistent side panel.
 
 ## Version
-v1.7.4
+v1.7.5
 
 ## Tech Stack
 - Chrome MV3 extension (JavaScript)
@@ -88,8 +88,8 @@ v1.7.4
 - `cleanupStaleCaches()` runs on init to prune expired `require_cache_*`, `res_cache_*`, trash entries, and tombstones >30 days
 - Lint: `@grant none` + GM API usage shows `warning` severity (upgraded from `info` in v1.7.2). Unknown `@grant` values and invalid `@sandbox` values are `error` severity.
 - **Side panel / DevTools must use `action:` key** (not `type:`) for background messages. Background returns `{ scripts: [...] }` — callers need `res?.scripts`. `setScriptSettings` expects `scriptId` not `id`.
-- **GM_cookie_set/GM_cookie_delete** require `url` and `name` parameters (validated in v1.7.4)
-- **GM_unregisterMenuCommand** handler added in v1.7.4 — previously calls were silently dropped
+- **GM_cookie_set/GM_cookie_delete** require `url` and `name` parameters (validated in v1.7.5)
+- **GM_unregisterMenuCommand** handler added in v1.7.5 — previously calls were silently dropped
 - **XHR local request IDs** use sequential counter `_xhrSeqId++` (not `Math.random`) to prevent collision
 - **Notification callbacks** cleaned up on auto-timeout (not all platforms fire `onClosed`)
 - **Menu commands** cleaned from session storage when a script is deleted
@@ -163,7 +163,7 @@ v1.7.4
 - **Side panel**: responds to `chrome.tabs.onActivated` and `chrome.tabs.onUpdated` to refresh script list on navigation. Uses same `sendToBackground` pattern as popup.
 - **DevTools panel**: auto-refreshes every 3s. `getNetworkLog` returns flat array; `getNetworkLogStats` for totals. HAR export uses `URL.createObjectURL` + programmatic `<a>` click.
 
-## v1.7.0 → v1.7.4 Audit (2026-03-24, 4 rounds)
+## v1.7.0 → v1.7.5 Audit (2026-03-24, 4 rounds)
 
 ### v1.7.0 — Major Feature Release
 - DevTools panel, Side panel, Script signing (Ed25519), Monaco editor adapter, Offscreen document
@@ -185,7 +185,7 @@ v1.7.4
 - GM_webRequest added to hints + grant values, duplicate hint directives removed
 - Dashboard: updated column defaults to desc sort, network log cap 500 -> 2000
 
-### v1.7.4 — Memory Leaks & Validation
+### v1.7.5 — Memory Leaks & Validation
 - Added missing GM_unregisterMenuCommand handler (calls were silently dropped)
 - Menu commands cleaned from session storage on script delete
 - Notification callback cleanup on auto-timeout
@@ -232,7 +232,7 @@ v1.7.4
 - Fixed: NetworkLog duration calculation used `_netLogEntry.timestamp` which was undefined; replaced with dedicated `_netLogStartTime` variable
 - Fixed: `state.folders`, `state._collapsedFolders`, `state._lastCheckedId`, `state._quotaWarned` not initialized in dashboard state object
 - Fixed: `switchTab('help')` in command palette failed because help tab is a header icon, not a `.tm-tab`; added special case handling
-- Verified: All version strings match (v1.7.4 across manifest, manifest-firefox, content.js, popup.js, dashboard.js)
+- Verified: All version strings match (v1.7.5 across manifest, manifest-firefox, content.js, popup.js, dashboard.js)
 - Verified: All bg/ modules load before background.core.js in build output
 - Verified: `escapeHtml` available in popup.js (shared/utils.js loaded first)
 - Verified: Column index mapping still correct after pin button addition (pin is inside actions TD, not a new column)

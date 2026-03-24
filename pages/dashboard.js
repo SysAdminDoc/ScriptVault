@@ -1,4 +1,4 @@
-// ScriptVault Dashboard v1.7.4 - Full-Featured Controller
+// ScriptVault Dashboard v1.7.5 - Full-Featured Controller
 (function() {
     'use strict';
 
@@ -3734,17 +3734,25 @@
         elements.tbtnBeautify?.addEventListener('click', beautifyCode);
         elements.tbtnLint?.addEventListener('click', () => {
             if (state.editor) {
-                state.editor.performLint();
-                showToast('Lint check complete', 'info');
+                if (state.editor.isMonaco) {
+                    showToast('Monaco editor handles diagnostics automatically', 'info');
+                } else {
+                    state.editor.performLint();
+                    showToast('Lint check complete', 'info');
+                }
             }
         });
         elements.tbtnFoldAll?.addEventListener('click', () => {
-            if (state.editor) {
+            if (state.editor?.isMonaco) {
+                state.editor.foldAll();
+            } else if (state.editor) {
                 for (let i = 0; i < state.editor.lineCount(); i++) state.editor.foldCode(i);
             }
         });
         elements.tbtnUnfoldAll?.addEventListener('click', () => {
-            if (state.editor) {
+            if (state.editor?.isMonaco) {
+                state.editor.unfoldAll();
+            } else if (state.editor) {
                 for (let i = 0; i < state.editor.lineCount(); i++) {
                     try { state.editor.foldCode(i, null, 'unfold'); } catch(e) {}
                 }
@@ -3755,13 +3763,17 @@
         // Comment toggle (Ctrl+/)
         document.getElementById('tbtnComment')?.addEventListener('click', () => {
             if (!state.editor) return;
+            if (state.editor.isMonaco) {
+                state.editor.toggleComment();
+                state.unsavedChanges = true;
+                return;
+            }
             const cm = state.editor;
             const sel = cm.listSelections();
             cm.operation(() => {
                 for (const range of sel) {
                     const from = Math.min(range.anchor.line, range.head.line);
                     const to = Math.max(range.anchor.line, range.head.line);
-                    // Check if all lines are commented
                     let allCommented = true;
                     for (let i = from; i <= to; i++) {
                         if (!cm.getLine(i).trimStart().startsWith('//')) { allCommented = false; break; }
@@ -3769,12 +3781,10 @@
                     for (let i = from; i <= to; i++) {
                         const line = cm.getLine(i);
                         if (allCommented) {
-                            // Uncomment
                             const idx = line.indexOf('//');
                             const after = line[idx + 2] === ' ' ? 3 : 2;
                             cm.replaceRange(line.slice(0, idx) + line.slice(idx + after), {line: i, ch: 0}, {line: i, ch: line.length});
                         } else {
-                            // Comment
                             cm.replaceRange('// ' + line, {line: i, ch: 0}, {line: i, ch: line.length});
                         }
                     }
