@@ -1,4 +1,4 @@
-// ScriptVault Dashboard v1.7.2 - Full-Featured Controller
+// ScriptVault Dashboard v1.7.3 - Full-Featured Controller
 (function() {
     'use strict';
 
@@ -1325,7 +1325,11 @@
                 for (let i = 0; i < ids.length; i++) {
                     const s = state.scripts.find(x => x.id === ids[i]);
                     updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
-                    await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId: ids[i], enabled: true });
+                    try {
+                        await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId: ids[i], enabled: true });
+                    } catch (e) {
+                        console.warn('[ScriptVault] Enable failed for', ids[i], e.message);
+                    }
                 }
                 await loadScripts();
                 updateStats();
@@ -1338,7 +1342,11 @@
                 for (let i = 0; i < ids.length; i++) {
                     const s = state.scripts.find(x => x.id === ids[i]);
                     updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
-                    await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId: ids[i], enabled: false });
+                    try {
+                        await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId: ids[i], enabled: false });
+                    } catch (e) {
+                        console.warn('[ScriptVault] Disable failed for', ids[i], e.message);
+                    }
                 }
                 await loadScripts();
                 updateStats();
@@ -2042,7 +2050,7 @@
                 chrome.runtime.sendMessage({ action: 'deleteScript', scriptId }).then(() => {
                     loadScripts();
                     updateStats();
-                });
+                }).catch(e => console.warn('[ScriptVault] Auto-delete failed:', e.message));
             }
 
             if (state.currentScriptId === scriptId) {
