@@ -1,4 +1,4 @@
-// ScriptVault Side Panel v1.7.1
+// ScriptVault Side Panel v1.7.2
 // Persistent companion panel — always visible alongside the active page
 
 (function () {
