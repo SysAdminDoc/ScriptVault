@@ -1,4 +1,4 @@
-// ScriptVault v1.7.7 - Content Script Bridge
+// ScriptVault v1.7.8 - Content Script Bridge
 // Bridges messages between userscripts (USER_SCRIPT world) and background service worker
 
 (function() {
