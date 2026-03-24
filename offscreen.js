@@ -1,4 +1,4 @@
-// ScriptVault Offscreen Document v1.7.2
+// ScriptVault Offscreen Document v1.7.3
 // Handles CPU-intensive tasks off the service worker:
 //   - AST-based script analysis (via Acorn)
 //   - 3-way text merge for sync conflict resolution
