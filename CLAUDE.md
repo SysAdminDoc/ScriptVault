@@ -23,7 +23,7 @@ v1.7.3
 - Web Crypto Ed25519 (Chrome 113+) for script signing
 
 ## Build
-- `bash build-background.sh` — Concatenates source modules into `background.js` (currently ~10,584 lines)
+- `bash build-background.sh` — Concatenates source modules into `background.js` (currently ~10,634 lines)
 - `bash build.sh` — Packages extension into CWS-ready ZIP
 - **Never edit `background.js` directly** — edit source files in `bg/`, `modules/`, `shared/`, then rebuild
 
@@ -33,7 +33,7 @@ v1.7.3
 - `manifest.json` — Extension manifest (version source of truth)
 - `background.core.js` — Main service worker logic (~5000 lines)
 - `bg/analyzer.js` — AST-based static analysis engine (31 detectors, Acorn via offscreen document, regex fallback)
-- `bg/netlog.js` — Network request logger (GM_xmlhttpRequest + full proxy capture: fetch/XHR/WebSocket/sendBeacon)
+- `bg/netlog.js` — Network request logger (GM_xmlhttpRequest + full proxy capture: fetch/XHR/WebSocket/sendBeacon, 2000 entry cap)
 - `bg/workspaces.js` — Workspace manager (named script state snapshots)
 - `bg/signing.js` — Ed25519 script signing/verification (Web Crypto API)
 
@@ -80,13 +80,21 @@ v1.7.3
 - `ResourceCache.fetchResource()` (not `.fetch()`) to avoid shadowing global fetch
 - `self._notifCallbacks` initialized in storage.js, used in background.core.js GM_notification handler
 - Dropbox uses PKCE auth code flow (not implicit grant) with state validation + refresh token
-- `postMessage` uses `'/'` targetOrigin (same-origin only) in content.js and the wrapped script builder — **exception**: the Monaco adapter uses `'*'` because it communicates with a sandboxed iframe which has null origin
+- `postMessage` uses `window.location.origin` targetOrigin in content.js (fixed from `'/'` in v1.7.1) — **exception**: the Monaco adapter uses the iframe's origin, and the sandboxed editor uses `'*'` because sandbox pages have null origin
 - Bridge init key uses extension ID + `Object.defineProperty` to prevent page-level spoofing
 - Dashboard DOM access: always null-check `elements.*` before `.textContent`/`.classList` assignment — many elements are optional
 - `exportToZip` deduplicates filenames with `_2`, `_3` suffix counters
 - `autoReloadMatchingTabs` is debounced (500ms) to prevent mass tab reloads
 - `cleanupStaleCaches()` runs on init to prune expired `require_cache_*`, `res_cache_*`, trash entries, and tombstones >30 days
-- Lint: `@grant none` + GM API usage shows `info` severity (not `error`) since some managers still expose APIs
+- Lint: `@grant none` + GM API usage shows `warning` severity (upgraded from `info` in v1.7.2). Unknown `@grant` values and invalid `@sandbox` values are `error` severity.
+- **Side panel / DevTools must use `action:` key** (not `type:`) for background messages. Background returns `{ scripts: [...] }` — callers need `res?.scripts`. `setScriptSettings` expects `scriptId` not `id`.
+- **GM_cookie_set/GM_cookie_delete** require `url` and `name` parameters (validated in v1.7.3)
+- **GM_unregisterMenuCommand** handler added in v1.7.3 — previously calls were silently dropped
+- **XHR local request IDs** use sequential counter `_xhrSeqId++` (not `Math.random`) to prevent collision
+- **Notification callbacks** cleaned up on auto-timeout (not all platforms fire `onClosed`)
+- **Menu commands** cleaned from session storage when a script is deleted
+- **Offscreen document** validates `_sender.id === chrome.runtime.id` to reject cross-extension messages
+- **Signing** uses base64url encoding for signatures (matching JWK `x` field format); verify converts back via `replace(/-/g, '+').replace(/_/g, '/')`
 - `GM_info` has full Tampermonkey parity: uuid, scriptMetaStr, scriptWillUpdate, isIncognito, platform, downloadMode
 - `GM.xmlHttpRequest` returns a Promise with `.abort()` method attached (not just a plain Promise)
 - `window.onurlchange` intercepts pushState/replaceState/popstate/hashchange for SPA detection
@@ -154,6 +162,36 @@ v1.7.3
 - **Ed25519 signing**: `@signature base64sig|base64pubkey|timestamp` embedded as last line before `==/UserScript==`. Strip the signature line before verifying (it wasn't included when signed). `settings.trustedSigningKeys` is a map of `{publicKey: {name, addedAt}}`.
 - **Side panel**: responds to `chrome.tabs.onActivated` and `chrome.tabs.onUpdated` to refresh script list on navigation. Uses same `sendToBackground` pattern as popup.
 - **DevTools panel**: auto-refreshes every 3s. `getNetworkLog` returns flat array; `getNetworkLogStats` for totals. HAR export uses `URL.createObjectURL` + programmatic `<a>` click.
+
+## v1.7.0 → v1.7.3 Audit (2026-03-24, 4 rounds)
+
+### v1.7.0 — Major Feature Release
+- DevTools panel, Side panel, Script signing (Ed25519), Monaco editor adapter, Offscreen document
+- New metadata: @contributionURL, @compatible, @incompatible, @webRequest
+- Pre-release version comparison, parallel auto-update, user-modified sync skip
+- Yjs + diff libraries for collaborative editing foundation
+- background.js: 10,634 lines (up from 9,668)
+
+### v1.7.1 — Security & Critical Bug Fixes
+- **Security**: postMessage origin validation in content.js (`'/'` -> `location.origin`), Monaco adapter frame origin, offscreen sender ID validation, signing base64url encoding fix
+- **Critical**: Side panel + DevTools were non-functional (`type:` -> `action:` message key), sidepanel `id` -> `scriptId`, duplicate `action:` key in new script button
+- Duplicate script installations fixed (installFromUrl deduplicates by name+namespace)
+- Popup dropdown click-inside fix, DevTools Promise.allSettled, sidepanel error recovery UI
+- WebDAV null URL validation, random multipart boundary, token refresh logging, OneDrive data validation
+
+### v1.7.2 — Linter & Install Page
+- Linter severity: unknown @grant -> error, invalid @sandbox -> error, @grant none + API -> warning
+- Install page: XSS fix (innerHTML -> textContent), auto-close race (clearTimeout on button click)
+- GM_webRequest added to hints + grant values, duplicate hint directives removed
+- Dashboard: updated column defaults to desc sort, network log cap 500 -> 2000
+
+### v1.7.3 — Memory Leaks & Validation
+- Added missing GM_unregisterMenuCommand handler (calls were silently dropped)
+- Menu commands cleaned from session storage on script delete
+- Notification callback cleanup on auto-timeout
+- XHR local ID: Math.random -> sequential counter (_xhrSeqId)
+- GM_cookie_set/delete: url+name validation
+- Dashboard bulk enable/disable: try-catch per item, auto-delete .catch()
 
 ## Changes (2026-03-23)
 - `worldId` per-script isolation: `registerScript` configures and assigns `worldId: script.id` (Chrome 133+); `unregisterScript` calls `resetWorldConfiguration`. Fallback to shared world on Chrome <133.
@@ -247,3 +285,8 @@ v1.7.3
 - New permissions: `sidePanel`, `offscreen`
 - New keys: `side_panel`, `devtools_page`, `sandbox.pages`, `content_security_policy`
 - CSP sandbox entry allows `https://cdn.jsdelivr.net` for Monaco CDN loading
+
+### Build Artifacts
+- `*.crx`, `*.zip`, `*.pem` added to `.gitignore` (v1.7.1)
+- CRX built with OpenSSL RSA key (`scriptvault.pem`, gitignored)
+- ZIP built via `build.sh` + 7-Zip (includes `offscreen.html`/`offscreen.js` added in v1.7.0)
