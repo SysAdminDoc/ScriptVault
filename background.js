@@ -1,4 +1,4 @@
-// ScriptVault v1.7.5 - Background Service Worker
+// ScriptVault v1.7.6 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run build-background.sh to regenerate.

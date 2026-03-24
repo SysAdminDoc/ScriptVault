@@ -1,4 +1,4 @@
-// ScriptVault Install Page v1.7.5
+// ScriptVault Install Page v1.7.6
 
 // Dangerous permissions that warrant security warnings
 const DANGEROUS_PERMISSIONS = [
@@ -526,9 +526,9 @@ function renderInstallUI(sourceUrl) {
   setupCodePreview();
 
   // Setup event listeners
-  document.getElementById('btn-cancel').addEventListener('click', handleCancel);
-  document.getElementById('btn-install').addEventListener('click', handleInstall);
-  document.getElementById('toggle-code').addEventListener('click', toggleCodePreview);
+  document.getElementById('btn-cancel')?.addEventListener('click', handleCancel);
+  document.getElementById('btn-install')?.addEventListener('click', handleInstall);
+  document.getElementById('toggle-code')?.addEventListener('click', toggleCodePreview);
 
   document.getElementById('enable-install')?.addEventListener('change', (e) => {
     enableOnInstall = e.target.checked;

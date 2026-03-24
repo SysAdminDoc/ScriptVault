@@ -1,4 +1,4 @@
-// ScriptVault Side Panel v1.7.5
+// ScriptVault Side Panel v1.7.6
 // Persistent companion panel — always visible alongside the active page
 
 (function () {
@@ -11,7 +11,7 @@
   let allCollapsed = false;
   let refreshTimer = null;
 
-  const $ = id => document.getElementById(id);
+  const $ = id => document.getElementById(id) || document.createElement('div'); // null-safe
 
   // ── Init ────────────────────────────────────────────────────────────────
   async function init() {

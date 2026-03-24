@@ -1,4 +1,4 @@
-// ScriptVault Dashboard v1.7.5 - Full-Featured Controller
+// ScriptVault Dashboard v1.7.6 - Full-Featured Controller
 (function() {
     'use strict';
 
@@ -2422,7 +2422,7 @@
 
         const keySpan = item.querySelector('.storage-key');
 
-        item.querySelector('.btn:first-of-type').addEventListener('click', async () => {
+        item.querySelector('.btn:first-of-type')?.addEventListener('click', async () => {
             let newVal = item.querySelector('.input-field').value;
             try { newVal = JSON.parse(newVal); } catch (e) {}
             await chrome.runtime.sendMessage({ action: 'setScriptValue', scriptId, key: currentKey, value: newVal });
@@ -2430,7 +2430,7 @@
         });
 
         // Rename button
-        item.querySelectorAll('.btn')[1].addEventListener('click', async () => {
+        item.querySelectorAll('.btn')[1]?.addEventListener('click', async () => {
             const newKey = prompt('Rename key:', currentKey);
             if (!newKey || newKey === currentKey) return;
             const res = await chrome.runtime.sendMessage({ action: 'renameScriptValue', scriptId, oldKey: currentKey, newKey });
@@ -2444,9 +2444,9 @@
         });
 
         // Rename on key span click too
-        keySpan.addEventListener('click', () => item.querySelectorAll('.btn')[1].click());
+        keySpan?.addEventListener('click', () => item.querySelectorAll('.btn')[1]?.click());
 
-        item.querySelector('.btn-danger').addEventListener('click', async () => {
+        item.querySelector('.btn-danger')?.addEventListener('click', async () => {
             if (await showConfirmModal('Delete', `Delete "${currentKey}"?`)) {
                 await chrome.runtime.sendMessage({ action: 'deleteScriptValue', scriptId, key: currentKey });
                 item.remove();
@@ -4859,8 +4859,7 @@
 
         overlay.classList.add('open');
         const input = overlay.querySelector('.cmd-input');
-        input.value = '';
-        input.focus();
+        if (input) { input.value = ''; input.focus(); }
         renderCommandResults('');
     }
 
