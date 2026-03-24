@@ -19,6 +19,7 @@ const ScriptAnalyzer = {
   },
 
   async _ensureOffscreen() {
+    if (!chrome.offscreen) throw new Error('Offscreen API not available');
     const existing = await chrome.offscreen.hasDocument().catch(() => false);
     if (!existing) {
       await chrome.offscreen.createDocument({
