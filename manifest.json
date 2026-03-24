@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "minimum_chrome_version": "120",
@@ -22,7 +22,11 @@
     "webNavigation",
     "unlimitedStorage",
     "alarms",
-    "downloads"
+    "downloads",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
+    "sidePanel",
+    "offscreen"
   ],
   "optional_permissions": [
     "clipboardWrite",
@@ -44,9 +48,20 @@
     "default_title": "__MSG_extName__",
     "default_popup": "pages/popup.html"
   },
+  "side_panel": {
+    "default_path": "pages/sidepanel.html"
+  },
+  "devtools_page": "pages/devtools.html",
   "options_ui": {
     "page": "pages/dashboard.html",
     "open_in_tab": true
+  },
+  "sandbox": {
+    "pages": ["pages/editor-sandbox.html"]
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';",
+    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' https://cdn.jsdelivr.net; object-src 'self';"
   },
   "content_scripts": [{
     "matches": ["<all_urls>"],

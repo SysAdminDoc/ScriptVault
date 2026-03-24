@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScriptVault Monaco Editor</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; }
+  #container { width: 100%; height: 100%; }
+  #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #888; font-family: sans-serif; font-size: 13px; background: #1e1e1e; z-index: 10; }
+</style>
+</head>
+<body>
+<div id="loading">Loading editor…</div>
+<div id="container"></div>
+<script>
+(function () {
+  'use strict';
+
+  const loading = document.getElementById('loading');
+  let editor = null;
+  let isReady = false;
+  let pendingValue = null;
+  let pendingOptions = null;
+  let currentTheme = 'vs-dark';
+  let ignoreNextChange = false;
+
+  // ── Load Monaco from CDN ──────────────────────────────────────────────────
+  // The sandbox CSP allows https://cdn.jsdelivr.net. Monaco runs here with
+  // eval permitted (sandboxed page — no extension CSP restriction).
+  const loaderScript = document.createElement('script');
+  loaderScript.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js';
+  loaderScript.onload = initMonaco;
+  loaderScript.onerror = () => {
+    loading.textContent = 'Failed to load Monaco from CDN. Check your internet connection.';
+  };
+  document.head.appendChild(loaderScript);
+
+  function initMonaco() {
+    require.config({
+      paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' }
+    });
+
+    require(['vs/editor/editor.main'], function (monaco) {
+      // ── Custom userscript language extension ──────────────────────────────
+      // Register @metadata keywords in the completion provider
+      monaco.languages.registerCompletionItemProvider('javascript', {
+        triggerCharacters: ['@'],
+        provideCompletionItems(model, position) {
+          const textUntilPosition = model.getValueInRange({ startLineNumber: 1, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column });
+          // Only complete inside the userscript header
+          if (!textUntilPosition.includes('==UserScript==') || textUntilPosition.includes('==/UserScript==')) return { suggestions: [] };
+
+          const metaKeys = ['name','namespace','description','version','author','match','include','exclude','grant','require','resource','run-at','noframes','unwrap','icon','homepageURL','updateURL','downloadURL','antifeature','compatible','incompatible','tag','license','contributionURL','connect','priority','top-level-await','run-in','inject-into','sandbox','webRequest'];
+          const grantValues = ['GM_getValue','GM_setValue','GM_deleteValue','GM_listValues','GM_getValues','GM_setValues','GM_deleteValues','GM_addStyle','GM_xmlhttpRequest','GM.xmlHttpRequest','GM_setClipboard','GM_notification','GM_openInTab','GM_download','GM_log','GM_registerMenuCommand','GM_unregisterMenuCommand','GM_getMenuCommands','GM_getResourceText','GM_getResourceURL','GM_addElement','GM_loadScript','GM_getTab','GM_saveTab','GM_getTabs','GM_addValueChangeListener','GM_removeValueChangeListener','GM_cookie','GM_focusTab','GM_webRequest','GM_audio','window.close','window.focus','window.onurlchange','none','*'];
+          const runAtValues = ['document-start','document-body','document-end','document-idle','context-menu'];
+
+          const word = model.getWordUntilPosition(position);
+          const range = { startLineNumber: position.lineNumber, startColumn: word.startColumn, endLineNumber: position.lineNumber, endColumn: word.endColumn };
+
+          const suggestions = metaKeys.map(key => ({
+            label: '@' + key,
+            kind: monaco.languages.CompletionItemKind.Keyword,
+            insertText: '@' + key + ' ',
+            range,
+            detail: 'Userscript metadata'
+          }));
+
+          // Grant completions
+          grantValues.forEach(v => suggestions.push({
+            label: 'grant ' + v,
+            kind: monaco.languages.CompletionItemKind.Value,
+            insertText: 'grant ' + v,
+            range,
+            detail: 'GM permission'
+          }));
+
+          return { suggestions };
+        }
+      });
+
+      // ── Create editor ─────────────────────────────────────────────────────
+      editor = monaco.editor.create(document.getElementById('container'), {
+        value: '',
+        language: 'javascript',
+        theme: currentTheme,
+        fontSize: 13,
+        fontFamily: "'Cascadia Code', 'Fira Code', Consolas, 'Courier New', monospace",
+        fontLigatures: true,
+        lineNumbers: 'on',
+        minimap: { enabled: true },
+        scrollBeyondLastLine: false,
+        wordWrap: 'off',
+        automaticLayout: true,
+        tabSize: 4,
+        insertSpaces: true,
+        matchBrackets: 'always',
+        autoClosingBrackets: 'always',
+        autoClosingQuotes: 'always',
+        folding: true,
+        renderWhitespace: 'none',
+        suggest: { showKeywords: true, showSnippets: true },
+        quickSuggestions: { other: true, comments: false, strings: false },
+        parameterHints: { enabled: true },
+        renderLineHighlight: 'line',
+        cursorBlinking: 'smooth',
+        smoothScrolling: true,
+        bracketPairColorization: { enabled: true }
+      });
+
+      // ── Keyboard shortcuts ─────────────────────────────────────────────────
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+        parent.postMessage({ type: 'save' }, '*');
+      });
+      editor.addCommand(monaco.KeyCode.Escape, () => {
+        parent.postMessage({ type: 'close' }, '*');
+      });
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Slash, () => {
+        editor.getAction('editor.action.commentLine')?.run();
+      });
+
+      // ── Change tracking ────────────────────────────────────────────────────
+      editor.onDidChangeModelContent(() => {
+        if (ignoreNextChange) { ignoreNextChange = false; return; }
+        parent.postMessage({ type: 'change', value: editor.getValue() }, '*');
+      });
+
+      // ── Cursor tracking ────────────────────────────────────────────────────
+      editor.onDidChangeCursorPosition(e => {
+        parent.postMessage({ type: 'cursor', line: e.position.lineNumber, col: e.position.column }, '*');
+      });
+
+      // ── Custom themes matching ScriptVault themes ──────────────────────────
+      monaco.editor.defineTheme('sv-dark', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: '6a737d', fontStyle: 'italic' }
+        ],
+        colors: {
+          'editor.background': '#1a1a1a',
+          'editor.foreground': '#e0e0e0',
+          'editorLineNumber.foreground': '#555',
+          'editorLineNumber.activeForeground': '#888',
+          'editor.lineHighlightBackground': '#242424',
+          'editor.selectionBackground': '#264F78',
+          'editorGutter.background': '#1a1a1a',
+          'scrollbarSlider.background': '#444',
+          'scrollbarSlider.hoverBackground': '#555'
+        }
+      });
+
+      monaco.editor.defineTheme('sv-light', {
+        base: 'vs',
+        inherit: true,
+        rules: [],
+        colors: {
+          'editor.background': '#ffffff',
+          'editor.foreground': '#333333'
+        }
+      });
+
+      monaco.editor.defineTheme('sv-catppuccin', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [],
+        colors: {
+          'editor.background': '#1e1e2e',
+          'editor.foreground': '#cdd6f4',
+          'editorLineNumber.foreground': '#45475a',
+          'editor.lineHighlightBackground': '#252536'
+        }
+      });
+
+      isReady = true;
+      loading.style.display = 'none';
+
+      // Apply any pending operations
+      if (pendingOptions) { applyOptions(pendingOptions); pendingOptions = null; }
+      if (pendingValue !== null) { setValue(pendingValue); pendingValue = null; }
+
+      // Signal ready to parent
+      parent.postMessage({ type: 'ready' }, '*');
+    });
+  }
+
+  // ── Message handler (from dashboard) ──────────────────────────────────────
+  window.addEventListener('message', function (e) {
+    const msg = e.data;
+    if (!msg || typeof msg !== 'object') return;
+
+    switch (msg.type) {
+      case 'set-value':
+        if (isReady) setValue(msg.value || '', msg.scriptId);
+        else pendingValue = msg.value || '';
+        break;
+      case 'get-value':
+        if (editor) e.source.postMessage({ type: 'value', value: editor.getValue(), requestId: msg.requestId }, e.origin || '*');
+        break;
+      case 'set-theme':
+        currentTheme = mapTheme(msg.theme);
+        if (editor) monaco.editor.setTheme(currentTheme);
+        break;
+      case 'set-options':
+        if (isReady) applyOptions(msg.options || {});
+        else pendingOptions = msg.options || {};
+        break;
+      case 'focus':
+        if (editor) editor.focus();
+        break;
+      case 'format':
+        if (editor) editor.getAction('editor.action.formatDocument')?.run();
+        break;
+      case 'toggle-comment':
+        if (editor) editor.getAction('editor.action.commentLine')?.run();
+        break;
+      case 'toggle-word-wrap':
+        if (editor) editor.updateOptions({ wordWrap: editor.getOption(monaco.editor.EditorOption.wordWrap) === 'off' ? 'on' : 'off' });
+        break;
+      case 'set-font-size':
+        if (editor) editor.updateOptions({ fontSize: msg.size || 13 });
+        break;
+    }
+  });
+
+  function setValue(value, scriptId) {
+    if (!editor) return;
+    ignoreNextChange = true;
+    // Preserve cursor position on same-script reload
+    const pos = editor.getPosition();
+    editor.setValue(value);
+    if (pos) editor.setPosition(pos);
+    editor.focus();
+  }
+
+  function applyOptions(opts) {
+    if (!editor) return;
+    const updates = {};
+    if (opts.tabSize != null) updates.tabSize = opts.tabSize;
+    if (opts.insertSpaces != null) updates.insertSpaces = opts.insertSpaces;
+    if (opts.wordWrap != null) updates.wordWrap = opts.wordWrap ? 'on' : 'off';
+    if (opts.fontSize != null) updates.fontSize = opts.fontSize;
+    if (opts.lineNumbers != null) updates.lineNumbers = opts.lineNumbers ? 'on' : 'off';
+    if (opts.minimap != null) updates.minimap = { enabled: opts.minimap };
+    if (Object.keys(updates).length) editor.updateOptions(updates);
+    if (opts.theme) { currentTheme = mapTheme(opts.theme); monaco.editor.setTheme(currentTheme); }
+  }
+
+  function mapTheme(theme) {
+    const map = { dark: 'sv-dark', light: 'sv-light', catppuccin: 'sv-catppuccin', oled: 'sv-dark', monokai: 'monokai', dracula: 'vs-dark', nord: 'vs-dark', default: 'vs-dark' };
+    return map[theme] || 'sv-dark';
+  }
+})();
+</script>
+</body>
+</html>

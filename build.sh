@@ -19,6 +19,8 @@ INCLUDE=(
   manifest.json
   background.js
   content.js
+  offscreen.html
+  offscreen.js
   shared
   pages
   images/icon16.png

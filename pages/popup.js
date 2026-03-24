@@ -1,4 +1,4 @@
-// ScriptVault Popup v1.6.0
+// ScriptVault Popup v1.7.0
 // Tampermonkey-style popup interface
 
 (function() {
@@ -93,12 +93,18 @@
         try {
             const hostname = new URL(currentUrl).hostname.replace(/^www\./, '');
             if (hostname) {
-                el.innerHTML = `<a href="#" id="emptyFindLink" style="color:var(--popup-accent);text-decoration:underline;cursor:pointer">Find scripts for ${escapeHtml(hostname)}</a>`;
-                document.getElementById('emptyFindLink')?.addEventListener('click', (e) => {
+                el.textContent = '';
+                const link = document.createElement('a');
+                link.href = '#';
+                link.id = 'emptyFindLink';
+                link.textContent = `Find scripts for ${hostname}`;
+                link.style.cssText = 'color:var(--popup-accent);text-decoration:underline;cursor:pointer';
+                link.addEventListener('click', (e) => {
                     e.preventDefault();
                     chrome.tabs.create({ url: `https://greasyfork.org/en/scripts/by-site/${encodeURIComponent(hostname)}?filter_locale=0` });
                     window.close();
                 });
+                el.appendChild(link);
             }
         } catch {}
     }
@@ -106,30 +112,42 @@
     // Check if userScripts API is available and enabled
     async function checkUserScriptsAvailability() {
         try {
+            // Use background's getExtensionStatus for Chrome version-aware messaging
+            const status = await chrome.runtime.sendMessage({ action: 'getExtensionStatus' });
+            userScriptsAvailable = status?.userScriptsAvailable !== false;
+
+            if (!userScriptsAvailable) {
+                showSetupWarning(status?.setupMessage);
+            } else {
+                hideSetupWarning();
+            }
+        } catch (error) {
+            // Fallback: check directly
             if (!chrome.userScripts) {
                 userScriptsAvailable = false;
                 showSetupWarning();
-                return;
+            } else {
+                try {
+                    await chrome.userScripts.getScripts();
+                    userScriptsAvailable = true;
+                    hideSetupWarning();
+                } catch (e) {
+                    userScriptsAvailable = false;
+                    showSetupWarning();
+                }
             }
-            
-            // Try to use the API to see if it's enabled
-            await chrome.userScripts.getScripts();
-            userScriptsAvailable = true;
-            hideSetupWarning();
-        } catch (error) {
-            // Error likely means userScripts not enabled
-            console.warn('userScripts API not available:', error.message);
-            userScriptsAvailable = false;
-            showSetupWarning();
         }
     }
-    
-    function showSetupWarning() {
+
+    function showSetupWarning(message) {
         if (elements.setupWarning) {
             elements.setupWarning.classList.add('visible');
+            // Update message if provided and an element exists for it
+            const msgEl = elements.setupWarning.querySelector('.setup-warning-msg, p, span');
+            if (msgEl && message) msgEl.textContent = message;
         }
     }
-    
+
     function hideSetupWarning() {
         if (elements.setupWarning) {
             elements.setupWarning.classList.remove('visible');

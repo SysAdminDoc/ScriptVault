@@ -533,7 +533,7 @@ var CloudSyncProviders = {
         const user = await response.json();
         return {
           connected: true,
-          user: { email: user.email, name: user.name.display_name }
+          user: { email: user.email, name: user.name?.display_name || user.display_name || '' }
         };
       } catch (e) {
         return { connected: false };

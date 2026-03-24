@@ -44,6 +44,10 @@ function parseUserscript(code) {
     'top-level-await': false,
     license: '',
     copyright: '',
+    contributionURL: '',
+    compatible: [],
+    incompatible: [],
+    webRequest: null,
     priority: 0
   };
 
@@ -78,6 +82,7 @@ function parseUserscript(code) {
       case 'run-in':
       case 'license':
       case 'copyright':
+      case 'contributionURL':
         meta[key] = value;
         break;
       case 'match':
@@ -90,6 +95,8 @@ function parseUserscript(code) {
       case 'connect':
       case 'antifeature':
       case 'tag':
+      case 'compatible':
+      case 'incompatible':
         const arrayKey = key === 'exclude-match' ? 'excludeMatch' : key;
         if (!meta[arrayKey]) meta[arrayKey] = [];
         if (value) meta[arrayKey].push(value);
@@ -111,6 +118,9 @@ function parseUserscript(code) {
         break;
       case 'priority':
         meta.priority = parseInt(value, 10) || 0;
+        break;
+      case 'webRequest':
+        try { meta.webRequest = JSON.parse(value); } catch (e) {}
         break;
       default:
         // Handle localized metadata like @name:ja
@@ -195,21 +205,32 @@ const UpdateSystem = {
   },
   
   compareVersions(v1, v2) {
-    const parts1 = v1.split('.').map(Number);
-    const parts2 = v2.split('.').map(Number);
-    
+    // Strip pre-release suffix (e.g. "1.2.0-beta.1" → "1.2.0") before numeric comparison.
+    // A version with a pre-release suffix is treated as less than the same version without one.
+    const preRelease1 = v1.includes('-');
+    const preRelease2 = v2.includes('-');
+    const clean1 = (typeof v1 === 'string' ? v1 : String(v1)).replace(/-.*$/, '');
+    const clean2 = (typeof v2 === 'string' ? v2 : String(v2)).replace(/-.*$/, '');
+    const parts1 = clean1.split('.').map(n => parseInt(n, 10) || 0);
+    const parts2 = clean2.split('.').map(n => parseInt(n, 10) || 0);
+
     for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
       const p1 = parts1[i] || 0;
       const p2 = parts2[i] || 0;
       if (p1 > p2) return 1;
       if (p1 < p2) return -1;
     }
+    // Numeric parts are equal — a pre-release is less than a release of the same version
+    if (preRelease1 && !preRelease2) return -1;
+    if (!preRelease1 && preRelease2) return 1;
     return 0;
   },
   
   async applyUpdate(scriptId, newCode) {
     const script = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
+    // Don't auto-update scripts the user has locally edited
+    if (script.settings?.userModified) return { skipped: true, reason: 'user-modified' };
 
     const parsed = parseUserscript(newCode);
     if (parsed.error) return parsed;
@@ -258,12 +279,15 @@ const UpdateSystem = {
   async autoUpdate() {
     const settings = await SettingsManager.get();
     if (!settings.autoUpdate) return;
-    
+
     const updates = await this.checkForUpdates();
-    for (const update of updates) {
-      await this.applyUpdate(update.id, update.code);
+    // Apply all pending updates in parallel — each applyUpdate is independent
+    const results = await Promise.allSettled(updates.map(update => this.applyUpdate(update.id, update.code)));
+    const failed = results.filter(r => r.status === 'rejected');
+    if (failed.length > 0) {
+      console.error('[ScriptVault] Auto-update failures:', failed.map(r => r.reason?.message || r.reason));
     }
-    
+
     await SettingsManager.set('lastUpdateCheck', Date.now());
   }
 };
@@ -277,69 +301,146 @@ const CloudSync = {
   get providers() {
     return CloudSyncProviders;
   },
-  
+
+  _syncInProgress: false,
+
   async sync() {
-    const settings = await SettingsManager.get();
-    if (!settings.syncEnabled || settings.syncProvider === 'none') return;
-    
-    const provider = this.providers[settings.syncProvider];
-    if (!provider) return;
-    
+    // Prevent concurrent syncs — second call defers until first completes
+    if (this._syncInProgress) {
+      debugLog('[CloudSync] Sync already in progress, skipping');
+      return { skipped: true };
+    }
+    this._syncInProgress = true;
+
+    let _timeoutId;
     try {
-      // Get local data
-      const scripts = await ScriptStorage.getAll();
-      const localData = {
-        version: 1,
-        timestamp: Date.now(),
-        scripts: scripts.map(s => ({
-          id: s.id,
-          code: s.code,
-          enabled: s.enabled,
-          position: s.position,
-          updatedAt: s.updatedAt
-        }))
-      };
-      
-      // Get remote data
-      const remoteData = await provider.download(settings);
-      
-      if (remoteData) {
-        // Merge: prefer newer versions
-        const merged = this.mergeData(localData, remoteData);
-        
-        // Apply merged data locally
-        for (const script of merged.scripts) {
-          const existing = await ScriptStorage.get(script.id);
-          if (!existing || script.updatedAt > existing.updatedAt) {
-            const parsed = parseUserscript(script.code);
-            if (!parsed.error) {
-              await ScriptStorage.set(script.id, {
-                id: script.id,
-                code: script.code,
-                meta: parsed.meta,
-                enabled: script.enabled,
-                position: script.position,
-                updatedAt: script.updatedAt,
-                createdAt: existing?.createdAt || script.updatedAt
-              });
-            }
-          }
-        }
-        
-        // Upload merged data
-        merged.timestamp = Date.now();
-        await provider.upload(merged, settings);
-      } else {
-        // First sync, just upload
-        await provider.upload(localData, settings);
-      }
-      
-      await SettingsManager.set('lastSync', Date.now());
-      return { success: true };
+      const timeoutPromise = new Promise((_, reject) => {
+        _timeoutId = setTimeout(() => reject(new Error('Sync timed out after 90s')), 90000);
+      });
+      return await Promise.race([this._performSync(), timeoutPromise]);
     } catch (e) {
       console.error('[ScriptVault] Sync failed:', e);
       return { error: e.message };
+    } finally {
+      clearTimeout(_timeoutId);
+      this._syncInProgress = false;
     }
+  },
+
+  async _performSync() {
+    const settings = await SettingsManager.get();
+    if (!settings.syncEnabled || settings.syncProvider === 'none') return;
+
+    const provider = this.providers[settings.syncProvider];
+    if (!provider) return;
+
+    // Load tombstones (IDs of locally-deleted scripts, to prevent sync re-importing them)
+    const tombstoneData = await chrome.storage.local.get('syncTombstones');
+    const tombstones = tombstoneData.syncTombstones || {};
+
+    // Get local data
+    const scripts = await ScriptStorage.getAll();
+    const localData = {
+      version: 1,
+      timestamp: Date.now(),
+      scripts: scripts.map(s => ({
+        id: s.id,
+        code: s.code,
+        enabled: s.enabled,
+        position: s.position,
+        settings: s.settings || {},
+        updatedAt: s.updatedAt
+      })),
+      tombstones
+    };
+
+    // Get remote data
+    const remoteData = await provider.download(settings);
+
+    if (remoteData) {
+      // Merge tombstones from remote so deletions propagate across devices
+      const mergedTombstones = { ...tombstones, ...(remoteData.tombstones || {}) };
+
+      // Merge: prefer newer versions
+      const merged = this.mergeData(localData, remoteData);
+
+      // Apply merged data locally, skipping tombstoned (deleted) scripts
+      // Uses 3-way text merge (via offscreen doc) when both sides have changed since sync base
+      for (const script of merged.scripts) {
+        if (mergedTombstones[script.id]) continue; // deleted on some device, don't re-import
+        const existing = await ScriptStorage.get(script.id);
+        // Skip scripts marked as locally modified — user edits take precedence over remote
+        if (existing?.settings?.userModified) continue;
+
+        const remoteScript = remoteData.scripts?.find(s => s.id === script.id);
+        const localScript = localData.scripts?.find(s => s.id === script.id);
+
+        let codeToSave = script.code;
+        let mergeConflict = false;
+
+        // 3-way merge: both sides changed since last known base
+        if (existing && remoteScript && localScript &&
+            existing.code !== remoteScript.code &&
+            existing.code !== localScript.code) {
+          const base = existing.syncBaseCode || existing.code;
+          if (base && base !== localScript.code && base !== remoteScript.code) {
+            try {
+              await ScriptAnalyzer._ensureOffscreen();
+              const mergeResult = await chrome.runtime.sendMessage({
+                type: 'offscreen_merge',
+                base,
+                local: localScript.code,
+                remote: remoteScript.code
+              });
+              if (mergeResult && !mergeResult.error) {
+                codeToSave = mergeResult.merged;
+                mergeConflict = mergeResult.conflicts || false;
+                debugLog(`[CloudSync] 3-way merge for ${script.id}: conflicts=${mergeConflict}`);
+              }
+            } catch (e) {
+              debugLog('[CloudSync] 3-way merge failed, using timestamp winner:', e.message);
+              // Fall back to last-write-wins (already set via merged.scripts)
+            }
+          }
+        }
+
+        if (!existing || script.updatedAt > existing.updatedAt || mergeConflict) {
+          const parsed = parseUserscript(codeToSave);
+          if (!parsed.error) {
+            await ScriptStorage.set(script.id, {
+              id: script.id,
+              code: codeToSave,
+              meta: parsed.meta,
+              enabled: script.enabled,
+              position: script.position,
+              settings: {
+                ...(existing?.settings || {}),
+                ...(mergeConflict ? { mergeConflict: true } : {})
+              },
+              updatedAt: Math.max(script.updatedAt, existing?.updatedAt || 0),
+              createdAt: existing?.createdAt || script.updatedAt,
+              syncBaseCode: codeToSave // record merged result as new base for future syncs
+            });
+          }
+        }
+      }
+
+      // Persist merged tombstones locally
+      if (Object.keys(mergedTombstones).length > Object.keys(tombstones).length) {
+        await chrome.storage.local.set({ syncTombstones: mergedTombstones });
+      }
+
+      // Upload merged data (includes tombstones)
+      merged.timestamp = Date.now();
+      merged.tombstones = mergedTombstones;
+      await provider.upload(merged, settings);
+    } else {
+      // First sync, just upload (include tombstones so remote gets deletion info)
+      await provider.upload(localData, settings);
+    }
+
+    await SettingsManager.set('lastSync', Date.now());
+    return { success: true };
   },
   
   mergeData(local, remote) {
@@ -392,11 +493,14 @@ async function exportAllScripts() {
 async function importScripts(data, options = {}) {
   const { overwrite = false } = options;
   const results = { imported: 0, skipped: 0, errors: [] };
-  
+
   if (!data.scripts || !Array.isArray(data.scripts)) {
     return { error: 'Invalid import format' };
   }
-  
+
+  // Cache existing count once to avoid O(n²) getAll() inside the loop
+  let _importPosition = (await ScriptStorage.getAll()).length;
+
   for (const script of data.scripts) {
     try {
       const parsed = parseUserscript(script.code);
@@ -404,19 +508,19 @@ async function importScripts(data, options = {}) {
         results.errors.push({ name: script.id, error: parsed.error });
         continue;
       }
-      
+
       const existing = await ScriptStorage.get(script.id);
       if (existing && !overwrite) {
         results.skipped++;
         continue;
       }
-      
+
       await ScriptStorage.set(script.id, {
         id: script.id,
         code: script.code,
         meta: parsed.meta,
         enabled: script.enabled ?? true,
-        position: script.position ?? 0,
+        position: script.position ?? _importPosition++,
         createdAt: script.createdAt || Date.now(),
         updatedAt: script.updatedAt || Date.now()
       });
@@ -539,6 +643,8 @@ async function importFromZip(zipData, options = {}) {
     // Find all .user.js files
     const userScripts = fileNames.filter(name => name.endsWith('.user.js'));
     const allExistingScripts = await ScriptStorage.getAll();
+    // Starting position for newly-imported scripts (avoids O(n²) getAll() per script)
+    let _importPosition = allExistingScripts.length;
 
     for (const filename of userScripts) {
       try {
@@ -602,7 +708,7 @@ async function importFromZip(zipData, options = {}) {
           code: code,
           meta: parsed.meta,
           enabled: enabled,
-          position: existing?.position ?? (await ScriptStorage.getAll()).length,
+          position: existing?.position ?? _importPosition++,
           createdAt: existing?.createdAt || Date.now(),
           updatedAt: Date.now()
         };
@@ -640,7 +746,7 @@ async function importFromZip(zipData, options = {}) {
             code: code,
             meta: parsed.meta,
             enabled: true,
-            position: (await ScriptStorage.getAll()).length,
+            position: _importPosition++,
             createdAt: Date.now(),
             updatedAt: Date.now()
           });
@@ -716,19 +822,26 @@ async function handleMessage(message, sender) {
       }
         
       case 'saveScript': {
+        if (data.code && data.code.length > MAX_SCRIPT_SIZE) {
+          return { error: `Script too large (${formatBytes(data.code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
+        }
         const parsed = parseUserscript(data.code);
         if (parsed.error) return { error: parsed.error };
         
         const id = data.id || data.scriptId || generateId();
         const existing = await ScriptStorage.get(id);
         
+        const scriptSettings = { ...(existing?.settings || {}) };
+        // Mark as locally modified when saved from editor — prevents sync from overwriting
+        if (data.markModified) scriptSettings.userModified = true;
+
         const script = {
           ...existing,
           id,
           code: data.code,
           meta: parsed.meta,
           enabled: data.enabled !== undefined ? data.enabled : (existing?.enabled ?? true),
-          settings: existing?.settings || {},
+          settings: scriptSettings,
           position: existing?.position ?? (await ScriptStorage.getAll()).length,
           createdAt: existing?.createdAt || Date.now(),
           updatedAt: Date.now()
@@ -813,6 +926,13 @@ async function handleMessage(message, sender) {
 
         await unregisterScript(scriptId);
         await ScriptStorage.delete(scriptId);
+
+        // Record tombstone so sync won't re-import this script from remote
+        const tombstoneData = await chrome.storage.local.get('syncTombstones');
+        const tombstones = tombstoneData.syncTombstones || {};
+        tombstones[scriptId] = Date.now();
+        await chrome.storage.local.set({ syncTombstones: tombstones });
+
         await updateBadge();
         return { success: true };
       }
@@ -989,6 +1109,25 @@ async function handleMessage(message, sender) {
       case 'getSettings': {
         const settings = await SettingsManager.get();
         return { settings };
+      }
+
+      case 'getExtensionStatus': {
+        const settings = await SettingsManager.get();
+        const ver = settings._chromeVersion || _getChromeVersion();
+        const userScriptsAvailable = settings._userScriptsAvailable !== false && !!chrome.userScripts;
+        let setupRequired = false;
+        let setupMessage = '';
+        if (!userScriptsAvailable) {
+          setupRequired = true;
+          if (ver >= 138) {
+            setupMessage = 'Enable "Allow User Scripts" for ScriptVault in chrome://extensions';
+          } else if (ver >= 120) {
+            setupMessage = 'Enable Developer Mode in chrome://extensions to run userscripts';
+          } else {
+            setupMessage = 'Chrome 120 or newer is required';
+          }
+        }
+        return { userScriptsAvailable, setupRequired, setupMessage, chromeVersion: ver };
       }
         
       case 'getSetting':
@@ -1263,6 +1402,17 @@ async function handleMessage(message, sender) {
         await ScriptValues.deleteAll(data.scriptId);
         return { success: true };
       }
+
+      // Values Editor - Rename a key
+      case 'renameScriptValue': {
+        const { scriptId, oldKey, newKey } = data;
+        if (!scriptId || !oldKey || !newKey || oldKey === newKey) return { error: 'Invalid rename parameters' };
+        const current = await ScriptValues.get(scriptId, oldKey);
+        if (current === undefined) return { error: 'Key not found' };
+        await ScriptValues.set(scriptId, newKey, current);
+        await ScriptValues.delete(scriptId, oldKey);
+        return { success: true };
+      }
       
       // Per-Script Settings
       case 'getScriptSettings': {
@@ -1274,17 +1424,23 @@ async function handleMessage(message, sender) {
       case 'setScriptSettings': {
         const script = await ScriptStorage.get(data.scriptId);
         if (!script) return { error: 'Script not found' };
-        
-        script.settings = { ...script.settings, ...data.settings };
+
+        const oldSettings = script.settings || {};
+        script.settings = { ...oldSettings, ...data.settings };
         script.updatedAt = Date.now();
         await ScriptStorage.set(data.scriptId, script);
-        
-        // Re-register if needed
-        await unregisterScript(data.scriptId);
-        if (script.enabled) {
+
+        // Only re-register if execution-affecting settings changed
+        const EXEC_KEYS = ['runAt', 'injectInto', 'useOriginalMatches', 'useOriginalIncludes',
+                           'useOriginalExcludes', 'userMatches', 'userIncludes', 'userExcludes'];
+        const needsReregister = EXEC_KEYS.some(k =>
+          JSON.stringify(oldSettings[k]) !== JSON.stringify(data.settings[k])
+        );
+        if (needsReregister && script.enabled) {
+          await unregisterScript(data.scriptId);
           await registerScript(script);
         }
-        
+
         return { success: true };
       }
       
@@ -1362,19 +1518,79 @@ async function handleMessage(message, sender) {
         await WorkspaceManager.delete(data.id);
         return { success: true };
 
-      // Network Log
-      case 'getNetworkLog':
-        return { log: NetworkLog.getAll(data || {}), stats: NetworkLog.getStats() };
+      // Network Log — returns flat array (limit optional) + stats
+      case 'getNetworkLog': {
+        const filters = typeof data === 'object' && data ? data : {};
+        const log = NetworkLog.getAll(filters);
+        const stats = NetworkLog.getStats();
+        // Support both flat-array callers (DevTools) and object callers (dashboard)
+        return log; // stats available via getNetworkLogStats
+      }
+
+      case 'getNetworkLogStats':
+        return NetworkLog.getStats();
 
       case 'clearNetworkLog':
         NetworkLog.clear(data?.scriptId);
         return { success: true };
 
-      // Static Analysis
+      // Record a network request from the in-page proxy (fetch/XHR/WebSocket/sendBeacon)
+      case 'netlog_record':
+        NetworkLog.add({
+          method: data.method || 'GET',
+          url: data.url || '',
+          status: data.status,
+          statusText: data.statusText,
+          duration: data.duration,
+          responseSize: data.responseSize,
+          responseHeaders: data.responseHeaders,
+          scriptId: data.scriptId,
+          scriptName: data.scriptName,
+          error: data.error,
+          type: data.type || 'fetch'
+        });
+        return { ok: true };
+
+      // Static Analysis — routes through offscreen document for AST analysis
       case 'analyzeScript': {
         const code = data.code || '';
-        return ScriptAnalyzer.analyze(code);
+        return ScriptAnalyzer.analyzeAsync(code);
       }
+
+      // ── Script Signing (Ed25519) ──────────────────────────────────────────
+      case 'signing_getPublicKey':
+        return { publicKey: await ScriptSigning.getPublicKeyJwk() };
+
+      case 'signing_sign': {
+        if (!data.code) return { error: 'No code provided' };
+        return ScriptSigning.signAndEmbedInCode(data.code);
+      }
+
+      case 'signing_verify': {
+        if (!data.code) return { error: 'No code provided' };
+        return ScriptSigning.verifyCodeSignature(data.code);
+      }
+
+      case 'signing_verifyRaw': {
+        if (!data.code || !data.signatureInfo) return { error: 'Missing inputs' };
+        return ScriptSigning.verifyScript(data.code, data.signatureInfo);
+      }
+
+      case 'signing_trustKey': {
+        if (!data.publicKey) return { error: 'No public key' };
+        return ScriptSigning.trustKey(data.publicKey, data.name);
+      }
+
+      case 'signing_untrustKey': {
+        if (!data.publicKey) return { error: 'No public key' };
+        return ScriptSigning.untrustKey(data.publicKey);
+      }
+
+      case 'signing_getTrustedKeys':
+        return { keys: await ScriptSigning.getTrustedKeys() };
+
+      case 'signing_generateNewKeypair':
+        return ScriptSigning.generateAndStoreKeypair();
 
       case 'getFolders':
         return { folders: await FolderStorage.getAll() };
@@ -1763,8 +1979,12 @@ async function handleMessage(message, sender) {
               
               XhrManager.remove(requestId);
             }
-          })();
-          
+          })().catch(e => {
+            // Guard against any unexpected exception escaping the try/catch above
+            console.error('[ScriptVault] Unexpected XHR handler error:', e);
+            XhrManager.remove(requestId);
+          });
+
           // Return request ID immediately so content script can track/abort
           return { requestId, started: true };
           
@@ -1808,18 +2028,23 @@ async function handleMessage(message, sender) {
               }).catch(() => {});
             };
             let dlTimeoutId = null;
+            let dlSafetyId = null;
+            // Remove listener and clear all associated timers
+            const cleanupDlListener = () => {
+              chrome.downloads.onChanged.removeListener(dlListener);
+              if (dlTimeoutId) clearTimeout(dlTimeoutId);
+              if (dlSafetyId) clearTimeout(dlSafetyId);
+            };
             // Monitor download state changes
             const dlListener = (delta) => {
               if (delta.id !== downloadId) return;
               if (delta.state) {
                 if (delta.state.current === 'complete') {
-                  if (dlTimeoutId) clearTimeout(dlTimeoutId);
                   sendDlEvent('load', { url: data.url });
-                  chrome.downloads.onChanged.removeListener(dlListener);
+                  cleanupDlListener();
                 } else if (delta.state.current === 'interrupted') {
-                  if (dlTimeoutId) clearTimeout(dlTimeoutId);
                   sendDlEvent('error', { error: delta.error?.current || 'Download interrupted' });
-                  chrome.downloads.onChanged.removeListener(dlListener);
+                  cleanupDlListener();
                 }
               }
               if (delta.bytesReceived) {
@@ -1835,13 +2060,11 @@ async function handleMessage(message, sender) {
               dlTimeoutId = setTimeout(() => {
                 chrome.downloads.cancel(downloadId).catch(() => {});
                 sendDlEvent('timeout');
-                chrome.downloads.onChanged.removeListener(dlListener);
+                cleanupDlListener();
               }, data.timeout);
             }
             // Safety: remove listener after 5 minutes max to prevent leaks
-            setTimeout(() => {
-              chrome.downloads.onChanged.removeListener(dlListener);
-            }, 300000);
+            dlSafetyId = setTimeout(cleanupDlListener, 300000);
           }
           return { success: true, downloadId };
         } catch (e) {
@@ -2056,6 +2279,18 @@ async function handleMessage(message, sender) {
         }
       }
 
+      // GM_webRequest — runtime rule update from script
+      case 'GM_webRequest': {
+        const scriptId = sender.userScriptId || data.scriptId;
+        if (!scriptId) return { error: 'No script context' };
+        // Verify the script has @grant GM_webRequest
+        const script = await ScriptStorage.get(scriptId);
+        if (!script?.meta?.grant?.includes('GM_webRequest')) return { error: 'Not granted' };
+        const rules = Array.isArray(data.rules) ? data.rules : (data.rules ? [data.rules] : []);
+        await applyWebRequestRules(scriptId, rules);
+        return { success: true, count: rules.length };
+      }
+
       // Execution profiling - get stats for dashboard
       case 'getScriptStats': {
         const scriptId = data.scriptId;
@@ -2206,43 +2441,45 @@ async function autoReloadMatchingTabs(script) {
 
 async function updateBadge(tabId = null) {
   const settings = await SettingsManager.get();
-  
+
   if (!settings.showBadge || settings.enabled === false) {
     chrome.action.setBadgeText({ text: '', tabId: tabId || undefined });
     return;
   }
-  
-  // If no specific tab, update for all tabs
+
+  // If no specific tab, update all tabs in parallel — fetch settings+scripts once and share
   if (!tabId) {
     try {
-      const tabs = await chrome.tabs.query({});
-      for (const tab of tabs) {
-        if (tab.id && tab.url) {
-          await updateBadgeForTab(tab.id, tab.url);
-        }
-      }
+      const [tabs, scripts] = await Promise.all([
+        chrome.tabs.query({}),
+        ScriptStorage.getAll()
+      ]);
+      await Promise.allSettled(
+        tabs.filter(t => t.id && t.url).map(t => updateBadgeForTab(t.id, t.url, settings, scripts))
+      );
     } catch (e) {
-      // Fallback: just clear the badge
       chrome.action.setBadgeText({ text: '' });
     }
     return;
   }
 }
 
-// Update badge for a specific tab based on its URL
-async function updateBadgeForTab(tabId, url) {
-  const settings = await SettingsManager.get();
-  
+// Update badge for a specific tab based on its URL.
+// Accepts optional pre-fetched settings/scripts to avoid redundant cache reads when
+// called from updateBadge() in a loop over many tabs.
+async function updateBadgeForTab(tabId, url, settings, scripts) {
+  if (!settings) settings = await SettingsManager.get();
+
   if (!settings.showBadge || settings.enabled === false) {
     chrome.action.setBadgeText({ text: '', tabId });
     return;
   }
-  
+
   if (!url || url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url.startsWith('about:')) {
     chrome.action.setBadgeText({ text: '', tabId });
     return;
   }
-  
+
   try {
     // Check global page filter
     if (isUrlBlockedByGlobalSettings(url, settings)) {
@@ -2250,13 +2487,9 @@ async function updateBadgeForTab(tabId, url) {
       return;
     }
 
-    // Get scripts that match this URL
-    const scripts = await ScriptStorage.getAll();
-    const matchingScripts = scripts.filter(script => {
-      if (!script.enabled) return false;
-      return doesScriptMatchUrl(script, url);
-    });
-    
+    if (!scripts) scripts = await ScriptStorage.getAll();
+    const matchingScripts = scripts.filter(script => script.enabled && doesScriptMatchUrl(script, url));
+
     const badgeInfo = settings.badgeInfo || 'running';
     let badgeText = '';
     if (badgeInfo === 'running') {
@@ -2266,14 +2499,8 @@ async function updateBadgeForTab(tabId, url) {
       badgeText = allEnabled > 0 ? String(allEnabled) : '';
     }
     // badgeInfo === 'none' leaves badgeText empty
-    chrome.action.setBadgeText({
-      text: badgeText,
-      tabId
-    });
-    chrome.action.setBadgeBackgroundColor({ 
-      color: settings.badgeColor || '#22c55e',
-      tabId 
-    });
+    chrome.action.setBadgeText({ text: badgeText, tabId });
+    chrome.action.setBadgeBackgroundColor({ color: settings.badgeColor || '#22c55e', tabId });
   } catch (e) {
     console.error('[ScriptVault] Failed to update badge:', e);
   }
@@ -2887,7 +3114,7 @@ async function init() {
   console.log('[ScriptVault] Service worker ready');
 }
 
-// Remove expired persistent cache entries to prevent storage bloat
+// Remove expired persistent cache entries and stale trash items to prevent storage bloat
 async function cleanupStaleCaches() {
   try {
     const all = await chrome.storage.local.get(null);
@@ -2911,6 +3138,45 @@ async function cleanupStaleCaches() {
   } catch (e) {
     // Non-critical, ignore errors
   }
+
+  // Prune sync tombstones older than 30 days (they're only needed during the sync window)
+  try {
+    const tombstoneData = await chrome.storage.local.get('syncTombstones');
+    const tombstones = tombstoneData.syncTombstones || {};
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const pruned = Object.fromEntries(Object.entries(tombstones).filter(([, ts]) => ts > cutoff));
+    if (Object.keys(pruned).length !== Object.keys(tombstones).length) {
+      await chrome.storage.local.set({ syncTombstones: pruned });
+    }
+  } catch (e) { /* non-critical */ }
+
+  // Prune expired trash entries based on trashMode retention setting
+  try {
+    const settings = await SettingsManager.get();
+    const trashMode = settings.trashMode || '30';
+    if (trashMode === 'disabled') return;
+    const maxAge = trashMode === '1' ? 86400000 : trashMode === '7' ? 604800000 : 2592000000; // 1/7/30 days
+    const trashData = await chrome.storage.local.get('trash');
+    const trash = trashData.trash || [];
+    const now = Date.now();
+    const valid = trash.filter(s => now - s.trashedAt < maxAge);
+    if (valid.length !== trash.length) {
+      await chrome.storage.local.set({ trash: valid });
+      debugLog(`Pruned ${trash.length - valid.length} expired trash entries`);
+    }
+  } catch (e) {
+    // Non-critical, ignore errors
+  }
+}
+
+// Detect Chrome major version from user agent (available in service worker via self.navigator)
+function _getChromeVersion() {
+  try {
+    const m = (self.navigator?.userAgent || '').match(/Chrome\/(\d+)/);
+    return m ? parseInt(m[1], 10) : 0;
+  } catch (e) {
+    return 0;
+  }
 }
 
 // Configure the userScripts execution world
@@ -2918,17 +3184,29 @@ async function configureUserScriptsWorld() {
   try {
     // Check if userScripts API is available
     if (!chrome.userScripts) {
-      console.warn('[ScriptVault] userScripts API not available - scripts will use fallback injection');
+      // Determine why: Chrome 120+ requires either Developer Mode (pre-138)
+      // or the "Allow User Scripts" toggle (138+)
+      const ver = _getChromeVersion();
+      if (ver >= 138) {
+        console.warn('[ScriptVault] userScripts API not available — enable the "Allow User Scripts" toggle in chrome://extensions for ScriptVault');
+      } else if (ver >= 120) {
+        console.warn('[ScriptVault] userScripts API not available — enable Developer Mode in chrome://extensions');
+      } else {
+        console.warn('[ScriptVault] userScripts API not available — Chrome 120+ required');
+      }
+      await SettingsManager.set({ _userScriptsAvailable: false, _chromeVersion: ver });
       return;
     }
-    
-    // Configure the USER_SCRIPT world
+
+    await SettingsManager.set({ _userScriptsAvailable: true, _chromeVersion: _getChromeVersion() });
+
+    // Configure the default USER_SCRIPT world
     await chrome.userScripts.configureWorld({
       csp: "script-src 'self' 'unsafe-inline' 'unsafe-eval' *",
       messaging: true
     });
-    
-    console.log('[ScriptVault] userScripts world configured');
+
+    console.log('[ScriptVault] userScripts world configured (Chrome', _getChromeVersion(), ')');
   } catch (e) {
     console.error('[ScriptVault] Failed to configure userScripts world:', e);
   }
@@ -2965,9 +3243,8 @@ async function registerAllScripts() {
 
     console.log(`[ScriptVault] Registering ${enabledScripts.length} scripts`);
 
-    for (const script of enabledScripts) {
-      await registerScript(script);
-    }
+    // Register all scripts in parallel — significantly faster on large script collections
+    await Promise.allSettled(enabledScripts.map(script => registerScript(script)));
   } catch (e) {
     console.error('[ScriptVault] Failed to register scripts:', e);
   }
@@ -3181,6 +3458,25 @@ async function registerScript(script) {
       allFrames: !meta.noframes,
       world: world
     };
+
+    // Chrome 133+: configure and use a per-script worldId for isolation.
+    // Each script gets its own USER_SCRIPT world so globals don't bleed across scripts.
+    let worldConfigured = false;
+    try {
+      await chrome.userScripts.configureWorld({
+        worldId: script.id,
+        csp: "script-src 'self' 'unsafe-inline' 'unsafe-eval' *",
+        messaging: true
+      });
+      worldConfigured = true;
+    } catch (e) {
+      // Chrome <133 doesn't support worldId on configureWorld — fall through to default world
+    }
+
+    if (worldConfigured) {
+      registration.worldId = script.id;
+    }
+
     try {
       // Chrome 131+ supports messaging in USER_SCRIPT world
       await chrome.userScripts.register([{ ...registration, messaging: world === 'USER_SCRIPT' }]);
@@ -3194,6 +3490,12 @@ async function registerScript(script) {
     }
     
     console.log(`[ScriptVault] Registered: ${meta.name} (${requires.length} @require, ${Object.keys(storedValues).length} stored values)`);
+
+    // Apply @webRequest declarativeNetRequest rules if defined
+    if (meta.webRequest) {
+      const rules = Array.isArray(meta.webRequest) ? meta.webRequest : [meta.webRequest];
+      await applyWebRequestRules(script.id, rules);
+    }
   } catch (e) {
     console.error(`[ScriptVault] Failed to register ${script.meta.name}:`, e);
   }
@@ -3433,14 +3735,25 @@ async function fetchWithRetry(url, retries = 2) {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      
+
+      // Reject excessively large @require scripts (>5MB) to prevent memory issues
+      const MAX_REQUIRE_BYTES = 5 * 1024 * 1024;
+      const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+      if (contentLength > MAX_REQUIRE_BYTES) {
+        throw new Error(`Response too large (${Math.round(contentLength / 1024)}KB, max 5MB)`);
+      }
+
       const code = await response.text();
-      
+
+      if (code.length > MAX_REQUIRE_BYTES) {
+        throw new Error(`Response too large (${Math.round(code.length / 1024)}KB, max 5MB)`);
+      }
+
       // Basic validation - should look like JavaScript
       if (code && code.length > 0) {
         return code;
       }
-      
+
       throw new Error('Empty response');
     } catch (e) {
       if (i === retries) {
@@ -3454,10 +3767,118 @@ async function fetchWithRetry(url, retries = 2) {
 }
 
 // Unregister a single script
+// ============================================================================
+// GM_webRequest — declarativeNetRequest rule management
+// ============================================================================
+
+// Maps scriptId -> array of rule IDs applied via @webRequest / GM_webRequest
+const _webRequestRuleMap = new Map();
+
+// Stable numeric rule ID from a string (scriptId + rule index)
+function _makeRuleId(scriptId, index) {
+  // Use a hash-like approach: sum char codes * position, mod safe range
+  let h = 0;
+  for (let i = 0; i < scriptId.length; i++) h = (h * 31 + scriptId.charCodeAt(i)) & 0x7fffffff;
+  return ((h % 100000) * 100 + (index % 100)) || (index + 1);
+}
+
+// Translate GM_webRequest rule selector/action to declarativeNetRequest format
+function _translateWebRequestRule(rule, ruleId) {
+  const dnr = { id: ruleId, priority: rule.priority || 1, condition: {}, action: {} };
+
+  // Selector -> condition
+  const sel = rule.selector || {};
+  if (sel.url) {
+    const urlFilter = sel.url;
+    if (Array.isArray(urlFilter)) {
+      // Multiple URL patterns: pick first include (DNR only supports one urlFilter per rule)
+      const incl = urlFilter.find(u => u.include);
+      if (incl) dnr.condition.urlFilter = incl.include;
+      const excl = urlFilter.find(u => u.exclude);
+      if (excl) dnr.condition.excludedInitiatorDomains = [excl.exclude.replace(/\*/g, '')].filter(Boolean);
+    } else if (typeof urlFilter === 'string') {
+      dnr.condition.urlFilter = urlFilter;
+    }
+  }
+  if (sel.tab) dnr.condition.tabIds = Array.isArray(sel.tab) ? sel.tab : [sel.tab];
+  if (sel.type) dnr.condition.resourceTypes = Array.isArray(sel.type) ? sel.type : [sel.type];
+
+  // Action
+  const act = rule.action || {};
+  if (act.cancel) {
+    dnr.action.type = 'block';
+  } else if (act.redirect) {
+    dnr.action.type = 'redirect';
+    dnr.action.redirect = typeof act.redirect === 'string'
+      ? { url: act.redirect }
+      : { url: act.redirect.url || act.redirect.regexSubstitution || '' };
+  } else if (act.setRequestHeaders) {
+    dnr.action.type = 'modifyHeaders';
+    dnr.action.requestHeaders = Object.entries(act.setRequestHeaders).map(([name, value]) =>
+      value === null ? { header: name, operation: 'remove' } : { header: name, operation: 'set', value }
+    );
+  } else if (act.setResponseHeaders) {
+    dnr.action.type = 'modifyHeaders';
+    dnr.action.responseHeaders = Object.entries(act.setResponseHeaders).map(([name, value]) =>
+      value === null ? { header: name, operation: 'remove' } : { header: name, operation: 'set', value }
+    );
+  } else {
+    return null; // unsupported action
+  }
+
+  return dnr;
+}
+
+async function applyWebRequestRules(scriptId, rules) {
+  if (!chrome.declarativeNetRequest || !Array.isArray(rules) || rules.length === 0) return;
+  try {
+    // Remove any existing rules for this script first
+    await removeWebRequestRules(scriptId);
+
+    const dnrRules = [];
+    const ruleIds = [];
+    rules.forEach((rule, idx) => {
+      const ruleId = _makeRuleId(scriptId, idx);
+      const dnr = _translateWebRequestRule(rule, ruleId);
+      if (dnr) {
+        dnrRules.push(dnr);
+        ruleIds.push(ruleId);
+      }
+    });
+
+    if (dnrRules.length > 0) {
+      await chrome.declarativeNetRequest.updateDynamicRules({ addRules: dnrRules });
+      _webRequestRuleMap.set(scriptId, ruleIds);
+      debugLog(`[GM_webRequest] Applied ${dnrRules.length} rules for script ${scriptId}`);
+    }
+  } catch (e) {
+    console.warn('[ScriptVault] GM_webRequest rule apply failed:', e.message);
+  }
+}
+
+async function removeWebRequestRules(scriptId) {
+  if (!chrome.declarativeNetRequest) return;
+  const existing = _webRequestRuleMap.get(scriptId);
+  if (existing && existing.length > 0) {
+    try {
+      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing });
+    } catch (e) {}
+    _webRequestRuleMap.delete(scriptId);
+  }
+}
+
 async function unregisterScript(scriptId) {
+  // Remove any @webRequest declarativeNetRequest rules
+  await removeWebRequestRules(scriptId);
   try {
     if (!chrome.userScripts) return;
     await chrome.userScripts.unregister({ ids: [scriptId] });
+    // Chrome 133+: reset the per-script world configuration to free resources
+    try {
+      await chrome.userScripts.resetWorldConfiguration({ worldId: scriptId });
+    } catch (e) {
+      // Chrome <133 doesn't support resetWorldConfiguration — ignore
+    }
   } catch (e) {
     // Script might not be registered
   }
@@ -4546,6 +4967,25 @@ ${req.code}
   window.GM_removeValueChangeListener = GM_removeValueChangeListener;
   window.GM_cookie = GM_cookie;
   window.GM_focusTab = GM_focusTab;
+
+  // ========== GM_webRequest (Tampermonkey-compatible, declarativeNetRequest-backed) ==========
+  function GM_webRequest(rules, listener) {
+    if (!hasGrant('GM_webRequest')) {
+      console.warn('[ScriptVault] GM_webRequest requires @grant GM_webRequest');
+      return;
+    }
+    const ruleArray = Array.isArray(rules) ? rules : [rules];
+    sendToBackground('GM_webRequest', { rules: ruleArray }).catch(e =>
+      console.warn('[ScriptVault] GM_webRequest failed:', e.message)
+    );
+    // listener is called with (info, message, details) when a rule matches;
+    // declarativeNetRequest doesn't support runtime callbacks, so we no-op this.
+    if (typeof listener === 'function') {
+      console.info('[ScriptVault] GM_webRequest: runtime listener not supported in MV3 — use @webRequest metadata for static rules');
+    }
+  }
+  window.GM_webRequest = GM_webRequest;
+
   window.unsafeWindow = unsafeWindow;
   window.GM = GM;
 
@@ -4746,13 +5186,101 @@ ${req.code}
   window.__ScriptVault_waitForBody = __waitForBody;
   window.__ScriptVault_waitForHead = __waitForHead;
   window.__ScriptVault_safeObserve = __safeObserve;
-  
+
   // Also expose as shorter aliases
   window.waitForElement = __waitForElement;
   window.waitForBody = __waitForBody;
   window.waitForHead = __waitForHead;
   window.safeObserve = __safeObserve;
-  
+
+  // ========== Network Proxy (full capture: fetch, XHR, WebSocket, sendBeacon) ==========
+  // Intercepts all network calls made by this script and logs them to the network log.
+  // Logs are viewable in the DevTools panel and the dashboard Network Log.
+  (function __svNetProxy() {
+    const _scriptName = ${JSON.stringify(meta.name || script.id)};
+    const _scriptId = ${JSON.stringify(script.id)};
+
+    function _log(entry) {
+      sendToBackground('netlog_record', { scriptId: _scriptId, scriptName: _scriptName, ...entry }).catch(() => {});
+    }
+
+    // ── fetch ──────────────────────────────────────────────────────────────
+    const _origFetch = window.fetch;
+    window.fetch = function __svFetch(input, init) {
+      const method = (init?.method || 'GET').toUpperCase();
+      const url = typeof input === 'string' ? input : input?.url || String(input);
+      const t0 = performance.now();
+      return _origFetch.apply(this, arguments).then(resp => {
+        const duration = Math.round(performance.now() - t0);
+        const cl = parseInt(resp.headers.get('content-length') || '0') || 0;
+        _log({ type: 'fetch', method, url, status: resp.status, statusText: resp.statusText, duration, responseSize: cl, responseHeaders: Object.fromEntries(resp.headers.entries()) });
+        return resp;
+      }, err => {
+        const duration = Math.round(performance.now() - t0);
+        _log({ type: 'fetch', method, url, error: err?.message || String(err), duration });
+        throw err;
+      });
+    };
+
+    // ── XMLHttpRequest ─────────────────────────────────────────────────────
+    const _OrigXHR = window.XMLHttpRequest;
+    window.XMLHttpRequest = function __svXHR() {
+      const xhr = new _OrigXHR();
+      let _method = 'GET', _url = '', _t0 = 0;
+      const _origOpen = xhr.open.bind(xhr);
+      xhr.open = function(method, url) {
+        _method = (method || 'GET').toUpperCase();
+        _url = String(url);
+        return _origOpen.apply(this, arguments);
+      };
+      const _origSend = xhr.send.bind(xhr);
+      xhr.send = function() {
+        _t0 = performance.now();
+        xhr.addEventListener('loadend', () => {
+          const duration = Math.round(performance.now() - _t0);
+          if (xhr.status) {
+            _log({ type: 'xhr', method: _method, url: _url, status: xhr.status, statusText: xhr.statusText, duration, responseSize: (xhr.responseText || '').length });
+          } else {
+            _log({ type: 'xhr', method: _method, url: _url, error: 'Request failed', duration });
+          }
+        }, { once: true });
+        return _origSend.apply(this, arguments);
+      };
+      return xhr;
+    };
+    window.XMLHttpRequest.prototype = _OrigXHR.prototype;
+
+    // ── WebSocket ──────────────────────────────────────────────────────────
+    const _OrigWS = window.WebSocket;
+    window.WebSocket = function __svWebSocket(url, protocols) {
+      const ws = protocols ? new _OrigWS(url, protocols) : new _OrigWS(url);
+      const t0 = performance.now();
+      let bytesSent = 0, bytesRecv = 0;
+      ws.addEventListener('open', () => {
+        _log({ type: 'websocket', method: 'WS', url: String(url), status: 101, statusText: 'Switching Protocols', duration: Math.round(performance.now() - t0) });
+      });
+      ws.addEventListener('message', e => { bytesRecv += (e.data?.length || 0); });
+      ws.addEventListener('close', e => {
+        _log({ type: 'websocket', method: 'WS_CLOSE', url: String(url), status: e.code, duration: Math.round(performance.now() - t0), responseSize: bytesRecv });
+      });
+      const _origSendWS = ws.send.bind(ws);
+      ws.send = function(data) { bytesSent += (data?.length || 0); return _origSendWS(data); };
+      return ws;
+    };
+    window.WebSocket.prototype = _OrigWS.prototype;
+    Object.assign(window.WebSocket, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
+
+    // ── sendBeacon ─────────────────────────────────────────────────────────
+    const _origBeacon = navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = function __svBeacon(url, data) {
+      const result = _origBeacon(url, data);
+      const size = data ? (typeof data === 'string' ? data.length : (data?.byteLength || data?.size || 0)) : 0;
+      _log({ type: 'beacon', method: 'POST', url: String(url), status: result ? 200 : 0, duration: 0, responseSize: size });
+      return result;
+    };
+  })();
+  // ========== End Network Proxy ==========
+
   // GM APIs exposed log disabled for performance
   // console.log('[ScriptVault] GM APIs exposed to window for:', meta.name);
 
