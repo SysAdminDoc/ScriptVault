@@ -1,4 +1,4 @@
-// ScriptVault v1.7.2 - Background Service Worker
+// ScriptVault v1.7.3 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run build-background.sh to regenerate.
@@ -6093,6 +6093,15 @@ async function handleMessage(message, sender) {
         await unregisterScript(scriptId);
         await ScriptStorage.delete(scriptId);
 
+        // Clean up menu commands for deleted script
+        try {
+          const cmdData = await chrome.storage.session.get('menuCommands');
+          if (cmdData?.menuCommands?.[scriptId]) {
+            delete cmdData.menuCommands[scriptId];
+            await chrome.storage.session.set(cmdData);
+          }
+        } catch {}
+
         // Record tombstone so sync won't re-import this script from remote
         const tombstoneData = await chrome.storage.local.get('syncTombstones');
         const tombstones = tombstoneData.syncTombstones || {};
@@ -7263,6 +7272,8 @@ async function handleMessage(message, sender) {
         if (data.timeout && data.timeout > 0) {
           setTimeout(() => {
             chrome.notifications.clear(notifId).catch(() => {});
+            // Clean up callback tracker (onClosed listener may not fire on all platforms)
+            self._notifCallbacks.delete(notifId);
           }, data.timeout);
         }
         return { success: true, id: notifId };
@@ -7363,6 +7374,21 @@ async function handleMessage(message, sender) {
         return { success: true };
       }
       
+      case 'unregisterMenuCommand':
+      case 'GM_unregisterMenuCommand': {
+        const commands = await chrome.storage.session.get('menuCommands') || {};
+        if (commands.menuCommands?.[data.scriptId]) {
+          commands.menuCommands[data.scriptId] = commands.menuCommands[data.scriptId].filter(
+            c => c.id !== data.commandId
+          );
+          if (commands.menuCommands[data.scriptId].length === 0) {
+            delete commands.menuCommands[data.scriptId];
+          }
+          await chrome.storage.session.set(commands);
+        }
+        return { success: true };
+      }
+
       // Get menu commands
       case 'getMenuCommands': {
         const result = await chrome.storage.session.get('menuCommands');
@@ -7416,6 +7442,8 @@ async function handleMessage(message, sender) {
 
       case 'GM_cookie_set': {
         try {
+          if (!data.url) return { error: 'url is required for cookie set' };
+          if (!data.name) return { error: 'name is required for cookie set' };
           const cookie = await chrome.cookies.set({
             url: data.url,
             name: data.name,
@@ -7435,6 +7463,7 @@ async function handleMessage(message, sender) {
 
       case 'GM_cookie_delete': {
         try {
+          if (!data.url || !data.name) return { error: 'url and name are required for cookie delete' };
           await chrome.cookies.remove({
             url: data.url,
             name: data.name
@@ -9211,6 +9240,7 @@ ${req.code}
   
   // XHR request tracking (like Violentmonkey's idMap)
   const _xhrRequests = new Map(); // requestId -> { details, aborted }
+  let _xhrSeqId = 0;
   
   // Value change listeners (like Tampermonkey)
   const _valueChangeListeners = new Map(); // listenerId -> { key, callback }
@@ -9607,7 +9637,7 @@ ${req.code}
     }
     
     // Generate unique request ID
-    const localId = 'xhr_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const localId = 'xhr_' + (++_xhrSeqId) + '_' + Date.now().toString(36);
     let requestId = null;
     let aborted = false;
     let currentMapKey = localId;

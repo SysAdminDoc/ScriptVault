@@ -1,4 +1,4 @@
-// ScriptVault Install Page v1.7.2
+// ScriptVault Install Page v1.7.3
 
 // Dangerous permissions that warrant security warnings
 const DANGEROUS_PERMISSIONS = [
