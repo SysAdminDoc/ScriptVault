@@ -1,4 +1,4 @@
-// ScriptVault v1.7.1 - Background Service Worker
+// ScriptVault v1.7.2 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run build-background.sh to regenerate.
@@ -4802,7 +4802,7 @@ const ScriptAnalyzer = {
 
 const NetworkLog = {
   _log: [],
-  _maxEntries: 500,
+  _maxEntries: 2000,
 
   add(entry) {
     this._log.unshift({
