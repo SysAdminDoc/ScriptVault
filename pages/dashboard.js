@@ -1,4 +1,4 @@
-// ScriptVault Dashboard v1.7.3 - Full-Featured Controller
+// ScriptVault Dashboard v1.7.4 - Full-Featured Controller
 (function() {
     'use strict';
 
@@ -352,7 +352,7 @@
         await loadSettings();
         await loadFolders();
         await loadScripts();
-        initEditor();
+        try { initEditor(); } catch (e) { console.error('[ScriptVault] Editor init failed:', e); }
         initEventListeners();
         updateSortIndicators();
         applyTheme();
@@ -2871,10 +2871,10 @@
                 tooltips: true,
                 highlightLines: true
             } : false,
-            hintOptions: {
+            hintOptions: CodeMirror.hint?.userscript ? {
                 hint: CodeMirror.hint.userscript,
                 completeSingle: false
-            },
+            } : undefined,
             extraKeys: {
                 'Ctrl-S': saveCurrentScript,
                 'Cmd-S': saveCurrentScript,
