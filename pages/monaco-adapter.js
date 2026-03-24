@@ -1,4 +1,4 @@
-// ScriptVault Monaco Adapter v1.7.4
+// ScriptVault Monaco Adapter v1.7.5
 // Provides a CodeMirror-compatible API surface that delegates to the Monaco
 // sandboxed iframe. Dashboard.js calls state.editor.getValue/setValue/etc.,
 // which this adapter intercepts and routes via postMessage.
@@ -126,8 +126,18 @@
     indentSelection() {},
 
     replaceSelection(text) {
-      // Not fully implemented — delegate to focus + type
-      sendToFrame({ type: 'focus' });
+      if (_useFallback) {
+        if (fallbackTextarea) {
+          const start = fallbackTextarea.selectionStart;
+          const end = fallbackTextarea.selectionEnd;
+          const val = fallbackTextarea.value;
+          fallbackTextarea.value = val.slice(0, start) + text + val.slice(end);
+          fallbackTextarea.selectionStart = fallbackTextarea.selectionEnd = start + text.length;
+          _value = fallbackTextarea.value;
+        }
+        return;
+      }
+      sendToFrame({ type: 'insert-text', text });
     },
 
     focus() {
@@ -154,6 +164,9 @@
     getOption(key) {
       if (key === 'theme') return 'monaco';
       if (key === 'lineWrapping') return false;
+      if (key === 'indentWithTabs') return false;
+      if (key === 'indentUnit') return 4;
+      if (key === 'tabSize') return 4;
       return undefined;
     },
 
@@ -190,12 +203,43 @@
       });
     },
 
+    // Monaco equivalents for CodeMirror methods
+    undo() { sendToFrame({ type: 'action', id: 'undo' }); },
+    redo() { sendToFrame({ type: 'action', id: 'redo' }); },
+    foldCode() { /* Monaco folding managed internally */ },
+    foldAll() { sendToFrame({ type: 'action', id: 'editor.foldAll' }); },
+    unfoldAll() { sendToFrame({ type: 'action', id: 'editor.unfoldAll' }); },
+    performLint() { /* Monaco handles diagnostics internally */ },
+    getLine(n) {
+      const lines = _value.split('\n');
+      return lines[n] || '';
+    },
+    replaceRange(text, from, to) {
+      // Minimal line-level replace for comment toggle
+      const lines = _value.split('\n');
+      if (from && to && from.line === to.line) {
+        lines[from.line] = text;
+        const newVal = lines.join('\n');
+        _value = newVal;
+        this.setValue(newVal);
+      }
+    },
+    listSelections() {
+      // Return a single zero-width selection at start
+      return [{ anchor: { line: 0, ch: 0 }, head: { line: 0, ch: 0 } }];
+    },
+    operation(fn) { if (fn) fn(); },
+
     // No-op CodeMirror methods not applicable to Monaco
     clearHistory() {},
     setCursor() {},
     markText() { return { clear() {} }; },
     getSearchCursor() { return { findNext() { return false; }, from() {}, to() {} }; },
-    execCommand() {},
+    showHint() { /* Monaco handles completions internally */ },
+    execCommand(cmd) {
+      if (cmd === 'findPersistent') sendToFrame({ type: 'action', id: 'actions.find' });
+      else if (cmd === 'replace') sendToFrame({ type: 'action', id: 'editor.action.startFindReplaceAction' });
+    },
 
     // isMonaco flag for feature detection in dashboard.js
     isMonaco: true
