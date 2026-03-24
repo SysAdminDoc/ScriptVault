@@ -1,4 +1,4 @@
-// ScriptVault Popup v1.7.5
+// ScriptVault Popup v1.7.6
 // Tampermonkey-style popup interface
 
 (function() {
@@ -678,7 +678,8 @@
                 try {
                     const domain = new URL(currentUrl).hostname;
                     if (domain) {
-                        elements.btnBlacklistDomain.querySelector('.menu-item-text').textContent = `Do not run on ${domain}`;
+                        const menuText = elements.btnBlacklistDomain.querySelector('.menu-item-text');
+                        if (menuText) menuText.textContent = `Do not run on ${domain}`;
                     }
                 } catch (e) {}
             }
