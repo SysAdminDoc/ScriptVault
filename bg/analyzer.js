@@ -78,10 +78,11 @@ const ScriptAnalyzer = {
         findings.push({ id: pattern.id, label: pattern.label, category: pattern.category, desc: pattern.desc, risk: pattern.risk, count, adjustedRisk });
       }
     }
-    const longStrings = strippedCode.match(/['"][^'"]{200,}['"]/g);
+    const longStrings = strippedCode.match(/['"][^'"]{80,}['"]/g);
     if (longStrings && longStrings.length > 0) {
       const entropy = this.calculateEntropy(longStrings[0]);
-      if (entropy > 4.5) {
+      const threshold = longStrings[0].length >= 200 ? 4.5 : 5.2;
+      if (entropy > threshold) {
         findings.push({ id: 'high-entropy', label: 'High-entropy string detected', category: 'obfuscation', desc: `Found ${longStrings.length} long string(s) with high randomness (entropy: ${entropy.toFixed(1)})`, risk: 20, count: longStrings.length, adjustedRisk: 20 });
         totalRisk += 20;
       }
