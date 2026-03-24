@@ -111,7 +111,7 @@
 
       // ── Keyboard shortcuts ─────────────────────────────────────────────────
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        parent.postMessage({ type: 'save' }, '*');
+        parent.postMessage({ type: 'save' }, '*'); // sandbox cannot know parent origin
       });
       editor.addCommand(monaco.KeyCode.Escape, () => {
         parent.postMessage({ type: 'close' }, '*');
@@ -196,7 +196,7 @@
         else pendingValue = msg.value || '';
         break;
       case 'get-value':
-        if (editor) e.source.postMessage({ type: 'value', value: editor.getValue(), requestId: msg.requestId }, e.origin || '*');
+        if (editor) e.source.postMessage({ type: 'value', value: editor.getValue(), requestId: msg.requestId }, e.origin || location.origin);
         break;
       case 'set-theme':
         currentTheme = mapTheme(msg.theme);

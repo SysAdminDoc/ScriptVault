@@ -1,4 +1,4 @@
-// ScriptVault Monaco Adapter v1.7.0
+// ScriptVault Monaco Adapter v1.7.1
 // Provides a CodeMirror-compatible API surface that delegates to the Monaco
 // sandboxed iframe. Dashboard.js calls state.editor.getValue/setValue/etc.,
 // which this adapter intercepts and routes via postMessage.
@@ -72,7 +72,7 @@
 
   function sendToFrame(msg) {
     if (_useFallback || !frame?.contentWindow) return;
-    frame.contentWindow.postMessage(msg, '*');
+    frame.contentWindow.postMessage(msg, new URL(frame.src).origin || '*');
   }
 
   function whenReady(fn) {

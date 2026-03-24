@@ -1,4 +1,4 @@
-// ScriptVault Offscreen Document v1.7.0
+// ScriptVault Offscreen Document v1.7.1
 // Handles CPU-intensive tasks off the service worker:
 //   - AST-based script analysis (via Acorn)
 //   - 3-way text merge for sync conflict resolution
@@ -8,6 +8,8 @@
 'use strict';
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  // Only accept messages from our own extension
+  if (_sender.id !== chrome.runtime.id) return false;
   switch (msg.type) {
     case 'offscreen_analyze':
       sendResponse(handleAnalyze(msg.code));
@@ -307,13 +309,15 @@ function walkAST(node, visitor, parent = null) {
 function checkHighEntropyStrings(ast) {
   const longStrings = [];
   walkAST(ast, node => {
-    if (node.type === 'Literal' && typeof node.value === 'string' && node.value.length >= 200) {
+    if (node.type === 'Literal' && typeof node.value === 'string' && node.value.length >= 80) {
       longStrings.push(node.value);
     }
   });
   if (!longStrings.length) return null;
   const entropy = calculateEntropy(longStrings[0]);
-  if (entropy <= 4.5) return null;
+  // Shorter strings need higher entropy to flag; longer strings are suspicious at lower entropy
+  const threshold = longStrings[0].length >= 200 ? 4.5 : 5.2;
+  if (entropy <= threshold) return null;
   return {
     id: 'high-entropy',
     label: 'High-entropy string detected',

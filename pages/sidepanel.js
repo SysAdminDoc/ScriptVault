@@ -1,4 +1,4 @@
-// ScriptVault Side Panel v1.7.0
+// ScriptVault Side Panel v1.7.1
 // Persistent companion panel — always visible alongside the active page
 
 (function () {
@@ -23,8 +23,8 @@
   }
 
   async function loadSettings() {
-    const res = await chrome.runtime.sendMessage({ type: 'getSettings' });
-    settings = res || {};
+    const res = await chrome.runtime.sendMessage({ action: 'getSettings' });
+    settings = res?.settings || res || {};
   }
 
   function applyTheme() {
@@ -36,13 +36,22 @@
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       currentTab = tab;
       updateUrlBar();
-      const res = await chrome.runtime.sendMessage({ type: 'getScripts' });
-      allScripts = Object.values(res || {});
+      const res = await chrome.runtime.sendMessage({ action: 'getScripts' });
+      allScripts = res?.scripts || Object.values(res || {});
       computePageScripts();
       renderPageScripts();
       renderAllScripts();
     } catch (e) {
       console.error('[SP] refresh error:', e);
+      // Show error state instead of blank panel
+      const list = $('pageScriptList');
+      if (list) {
+        list.innerHTML = '';
+        const err = document.createElement('div');
+        err.className = 'sp-empty';
+        err.textContent = 'Connection lost. Click refresh.';
+        list.appendChild(err);
+      }
     }
   }
 
@@ -215,7 +224,7 @@
 
   // ── Actions ──────────────────────────────────────────────────────────────
   async function toggleScript(id, enabled) {
-    await chrome.runtime.sendMessage({ type: 'setScriptSettings', id, settings: { enabled } });
+    await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: id, settings: { enabled } });
     // Optimistic update
     const script = allScripts.find(s => s.id === id);
     if (script) script.enabled = enabled;
@@ -228,7 +237,7 @@
     const anyEnabled = pageScripts.some(s => s.enabled !== false);
     const newState = !anyEnabled;
     await Promise.allSettled(pageScripts.map(s =>
-      chrome.runtime.sendMessage({ type: 'setScriptSettings', id: s.id, settings: { enabled: newState } })
+      chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: s.id, settings: { enabled: newState } })
     ));
     for (const s of pageScripts) s.enabled = newState;
     computePageScripts();
@@ -237,20 +246,20 @@
   }
 
   function openInEditor(id) {
-    chrome.runtime.sendMessage({ type: 'openDashboard', scriptId: id });
+    chrome.runtime.sendMessage({ action: 'openDashboard', scriptId: id });
   }
 
   // ── Event listeners ───────────────────────────────────────────────────────
   function setupEventListeners() {
     $('btnRefresh').addEventListener('click', refresh);
-    $('btnDashboard').addEventListener('click', () => chrome.runtime.sendMessage({ type: 'openDashboard' }));
-    $('btnNewScript').addEventListener('click', () => chrome.runtime.sendMessage({ type: 'openDashboard', action: 'newScript' }));
+    $('btnDashboard').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }));
+    $('btnNewScript').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard', data: { newScript: true } }));
     $('btnFindScripts').addEventListener('click', () => {
       let hostname = '';
       try { hostname = new URL(currentTab?.url || '').hostname; } catch {}
       chrome.tabs.create({ url: 'https://greasyfork.org/en/scripts/by-site/' + encodeURIComponent(hostname) });
     });
-    $('btnOpenDash').addEventListener('click', () => chrome.runtime.sendMessage({ type: 'openDashboard' }));
+    $('btnOpenDash').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }));
     $('btnToggleAll').addEventListener('click', toggleAll);
     $('allSectionHeader').addEventListener('click', () => {
       allCollapsed = !allCollapsed;
