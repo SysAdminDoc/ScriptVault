@@ -83,7 +83,7 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--popup-bg);
             color: var(--popup-text);
-            width: 320px;
+            width: 360px;
             min-height: 100px;
             font-size: 14px;
         }
@@ -555,6 +555,107 @@
         .script-item {
             animation: popupSlideIn 0.15s ease-out both;
         }
+
+        /* v2.0 Enhancements */
+        .script-quick-edit {
+            color: var(--popup-text-dim);
+            margin-left: 4px;
+            flex-shrink: 0;
+            padding: 3px;
+            border-radius: 4px;
+            transition: color 0.15s, background 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+        }
+
+        .script-item:hover .script-quick-edit {
+            opacity: 1;
+        }
+
+        .script-quick-edit:hover {
+            color: var(--popup-accent);
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        .script-quick-edit svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* Running status pulse */
+        .script-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-right: 6px;
+        }
+
+        .script-status.running {
+            background: var(--popup-accent);
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+
+        .script-status.idle {
+            background: var(--popup-text-dim);
+        }
+
+        .script-status.error {
+            background: var(--popup-danger);
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); }
+            50% { opacity: 0.7; box-shadow: 0 0 0 3px rgba(76, 175, 80, 0); }
+        }
+
+        /* Recently installed highlight */
+        .script-item.recently-installed {
+            background: rgba(76, 175, 80, 0.05);
+            border-left: 2px solid var(--popup-accent);
+        }
+
+        /* Script tag badges */
+        .script-tags {
+            display: flex;
+            gap: 3px;
+            margin-left: 4px;
+            flex-shrink: 0;
+        }
+
+        .script-tag {
+            font-size: 9px;
+            padding: 1px 4px;
+            border-radius: 3px;
+            background: rgba(96, 165, 250, 0.1);
+            color: var(--popup-text-muted);
+        }
+
+        /* Toggle animation enhancement */
+        .script-toggle input:checked + .slider {
+            transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .script-toggle .slider::before {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            .script-item { border-bottom: 2px solid var(--popup-border); }
+            .script-name { font-weight: 600; }
+            .header { border-bottom: 2px solid var(--popup-accent); }
+        }
+
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            .script-item { animation: none; }
+            .script-status.running { animation: none; }
+            .script-toggle .slider, .script-toggle .slider::before { transition: none; }
+        }
     </style>
 </head>
 <body>
@@ -657,6 +758,12 @@
         <span class="footer-count" id="footerTotalCount"></span>
     </div>
 
+    <!-- Shortcut hint & feedback -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 12px;font-size:10px;color:var(--popup-text-dim);border-top:1px solid var(--popup-border-subtle)">
+        <span>Alt+Shift+D Dashboard</span>
+        <span id="btnFeedback" style="cursor:pointer;color:var(--popup-text-muted);transition:color 0.15s" onmouseover="this.style.color='var(--popup-accent)'" onmouseout="this.style.color='var(--popup-text-muted)'">Feedback</span>
+    </div>
+
     <!-- Shared dropdown (positioned at body level to avoid overflow clipping) -->
     <div class="script-dropdown" id="scriptDropdown">
         <div class="script-dropdown-item" data-action="edit">Edit in Dashboard</div>
@@ -667,6 +774,7 @@
     </div>
 
     <script src="../shared/utils.js"></script>
+    <script src="popup-timeline.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>

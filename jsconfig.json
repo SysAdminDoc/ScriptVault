@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "checkJs": true,
+    "strict": false,
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["chrome"],
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": ["shared/*"],
+      "@modules/*": ["modules/*"],
+      "@bg/*": ["bg/*"],
+      "@lib/*": ["lib/*"]
+    }
+  },
+  "include": [
+    "shared/**/*.js",
+    "modules/**/*.js",
+    "bg/**/*.js",
+    "background.core.js",
+    "content.js",
+    "offscreen.js",
+    "pages/**/*.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "lib/monaco",
+    "lib/codemirror"
+  ]
+}
