@@ -1,4 +1,4 @@
-// ScriptVault Side Panel v1.7.8
+// ScriptVault Side Panel v2.0.0
 // Persistent companion panel — always visible alongside the active page
 
 (function () {
@@ -10,6 +10,8 @@
   let settings = {};
   let allCollapsed = false;
   let refreshTimer = null;
+  let searchQuery = '';
+  let sortMode = 'default'; // default, alpha, perf, errors
 
   const $ = id => document.getElementById(id) || document.createElement('div'); // null-safe
 
@@ -135,13 +137,41 @@
   // ── Render all scripts ────────────────────────────────────────────────────
   function renderAllScripts() {
     const list = $('allScriptList');
-    $('allScriptCount').textContent = allScripts.length;
+    let filtered = [...allScripts];
+
+    // Apply search filter
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(s => {
+        const meta = s.meta || {};
+        return (meta.name || '').toLowerCase().includes(q) ||
+               (meta.description || '').toLowerCase().includes(q) ||
+               (meta.author || '').toLowerCase().includes(q);
+      });
+    }
+
+    $('allScriptCount').textContent = filtered.length + (filtered.length !== allScripts.length ? '/' + allScripts.length : '');
+
     list.innerHTML = '';
-    // Sort: enabled first, then alpha
-    const sorted = [...allScripts].sort((a, b) => {
+
+    // Sort based on current mode
+    const sorted = filtered.sort((a, b) => {
+      // Always enabled first
       if ((a.enabled !== false) !== (b.enabled !== false)) return (b.enabled !== false) - (a.enabled !== false);
-      return (a.meta?.name || '').localeCompare(b.meta?.name || '');
+      switch (sortMode) {
+        case 'alpha':
+          return (a.meta?.name || '').localeCompare(b.meta?.name || '');
+        case 'perf':
+          return (b.stats?.avgTime || 0) - (a.stats?.avgTime || 0);
+        case 'errors':
+          return (b.stats?.errors || 0) - (a.stats?.errors || 0);
+        case 'recent':
+          return (b.updatedAt || 0) - (a.updatedAt || 0);
+        default:
+          return (a.meta?.name || '').localeCompare(b.meta?.name || '');
+      }
     });
+
     for (const script of sorted) {
       list.appendChild(buildScriptItem(script, false));
     }
@@ -266,6 +296,37 @@
       $('allScriptList').classList.toggle('collapsed', allCollapsed);
       $('collapseIcon').textContent = allCollapsed ? '▶' : '▼';
     });
+
+    // v2.0: Search filter
+    const searchEl = $('spSearch');
+    if (searchEl) {
+      searchEl.addEventListener('input', (e) => {
+        searchQuery = e.target.value.trim();
+        renderAllScripts();
+      });
+      // Ctrl+F focuses search
+      document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+          e.preventDefault();
+          searchEl.focus();
+        }
+        if (e.key === 'Escape' && document.activeElement === searchEl) {
+          searchEl.value = '';
+          searchQuery = '';
+          searchEl.blur();
+          renderAllScripts();
+        }
+      });
+    }
+
+    // v2.0: Sort controls
+    const sortEl = $('spSort');
+    if (sortEl) {
+      sortEl.addEventListener('change', (e) => {
+        sortMode = e.target.value;
+        renderAllScripts();
+      });
+    }
   }
 
   function setupTabListeners() {

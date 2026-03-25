@@ -1,9 +1,39 @@
 console.log('[ScriptVault] Service worker starting...');
 
 // ============================================================================
+// Debug Logger — conditional logging based on settings
+// ============================================================================
+
+/**
+ * Log a debug message. Only outputs if debugMode is enabled in settings.
+ * Falls back to no-op in production to avoid Chrome DevTools spam.
+ * @param {...any} args - Arguments to log
+ */
+let _debugEnabled = false;
+function debugLog(...args) {
+  if (_debugEnabled) console.log('[ScriptVault]', ...args);
+}
+function debugWarn(...args) {
+  if (_debugEnabled) console.warn('[ScriptVault]', ...args);
+}
+
+// Load debug setting on startup (async — logs before this completes go to console.log)
+(async () => {
+  try {
+    const data = await chrome.storage.local.get('settings');
+    _debugEnabled = data.settings?.debugMode === true;
+  } catch {}
+})();
+
+// ============================================================================
 // Userscript Parser
 // ============================================================================
 
+/**
+ * Parse a userscript's metadata block and extract all supported directives.
+ * @param {string} code - The full userscript source code
+ * @returns {{ meta?: Object, code?: string, metaBlock?: string, error?: string }} Parsed result or error
+ */
 function parseUserscript(code) {
   const metaBlockMatch = code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/);
   if (!metaBlockMatch) {
@@ -250,10 +280,8 @@ const UpdateSystem = {
     script.code = newCode;
     script.meta = parsed.meta;
     script.updatedAt = Date.now();
-    
-    await ScriptStorage.set(scriptId, script);
 
-    // Re-register so updated code takes effect immediately
+    // Re-register FIRST so we can verify the new code works before persisting
     try {
       await unregisterScript(scriptId);
       if (script.enabled !== false) {
@@ -261,7 +289,14 @@ const UpdateSystem = {
       }
     } catch (regError) {
       console.error(`[ScriptVault] Failed to re-register ${script.meta.name} after update:`, regError);
+      // Registration failed — still save the updated code (user can manually fix)
+      // but mark the failure so the UI can show it
+      script.settings = script.settings || {};
+      script.settings._registrationError = regError.message || 'Registration failed after update';
     }
+
+    // Persist to storage after registration attempt
+    await ScriptStorage.set(scriptId, script);
 
     const settings = await SettingsManager.get();
     if (settings.notifyOnUpdate) {
@@ -796,7 +831,7 @@ if (chrome.runtime.onUserScriptMessage) {
       });
     return true;
   });
-  console.log('[ScriptVault] User script message listener registered');
+  debugLog('User script message listener registered');
 }
 
 async function handleMessage(message, sender) {
@@ -851,12 +886,26 @@ async function handleMessage(message, sender) {
         await updateBadge();
         await autoReloadMatchingTabs(script);
 
+        // v2.0: Live reload — also reload if script has live reload enabled
+        try {
+          const lrData = await chrome.storage.local.get('liveReloadScripts');
+          if (lrData.liveReloadScripts?.[id]) {
+            // Force reload all matching tabs immediately (bypass debounce)
+            const allTabs = await chrome.tabs.query({});
+            for (const tab of allTabs) {
+              if (tab.url && doesScriptMatchUrl(script, tab.url)) {
+                try { chrome.tabs.reload(tab.id); } catch {}
+              }
+            }
+          }
+        } catch {}
+
         // Re-register the script with userScripts API
         await unregisterScript(id);
         if (script.enabled !== false) {
           await registerScript(script);
         }
-        
+
         const settings = await SettingsManager.get();
         if (!existing && settings.notifyOnInstall) {
           chrome.notifications.create({
@@ -1228,8 +1277,17 @@ async function handleMessage(message, sender) {
         const parsed = parseUserscript(target.code);
         if (parsed.error) return parsed;
 
-        // Remove the rolled-back-to version and all after it from history
-        script.versionHistory = script.versionHistory.slice(0, targetIdx);
+        // Save current version before rolling back (so user can undo the rollback)
+        script.versionHistory.push({
+          version: script.meta.version,
+          code: script.code,
+          updatedAt: script.updatedAt || Date.now()
+        });
+        // Trim to last 5 versions (allow extra room for rollback undos)
+        if (script.versionHistory.length > 5) {
+          script.versionHistory = script.versionHistory.slice(-5);
+        }
+
         script.code = target.code;
         script.meta = parsed.meta;
         script.updatedAt = Date.now();
@@ -1497,6 +1555,281 @@ async function handleMessage(message, sender) {
           } catch (e) {
             results.errors.push({ error: e.message });
           }
+        }
+        await registerAllScripts();
+        await updateBadge();
+        return results;
+      }
+
+      // v2.0: Storage Quota
+      case 'getStorageUsage': {
+        if (typeof QuotaManager !== 'undefined') return await QuotaManager.getUsage();
+        return { bytesUsed: 0, quota: 10485760, percentage: 0, level: 'ok' };
+      }
+      case 'getStorageBreakdown': {
+        if (typeof QuotaManager !== 'undefined') return await QuotaManager.getBreakdown();
+        return {};
+      }
+      case 'cleanupStorage': {
+        if (typeof QuotaManager !== 'undefined') return await QuotaManager.cleanup(data.options || {});
+        return { freedBytes: 0, actions: [] };
+      }
+
+      // v2.0: Backup Scheduler
+      case 'createBackup': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.createBackup(data.reason || 'manual');
+        return { error: 'BackupScheduler not available' };
+      }
+      case 'getBackups': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.getBackups();
+        return { backups: [] };
+      }
+      case 'restoreBackup': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.restoreBackup(data.backupId, data.options);
+        return { error: 'BackupScheduler not available' };
+      }
+      case 'deleteBackup': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.deleteBackup(data.backupId);
+        return { error: 'BackupScheduler not available' };
+      }
+      case 'getBackupSettings': {
+        if (typeof BackupScheduler !== 'undefined') return BackupScheduler.getSettings();
+        return {};
+      }
+      case 'setBackupSettings': {
+        if (typeof BackupScheduler !== 'undefined') { await BackupScheduler.setSettings(data.settings); return { success: true }; }
+        return { error: 'BackupScheduler not available' };
+      }
+
+      // v2.0: Script Analytics
+      case 'recordAnalytics': {
+        const analyticsData = await chrome.storage.local.get('analytics');
+        const analytics = analyticsData.analytics || {};
+        const today = new Date().toISOString().slice(0, 10);
+        if (!analytics[today]) analytics[today] = {};
+        const sid = data.scriptId;
+        if (!analytics[today][sid]) analytics[today][sid] = { runs: 0, totalTime: 0, errors: 0, urls: [] };
+        analytics[today][sid].runs++;
+        analytics[today][sid].totalTime += data.duration || 0;
+        if (data.error) analytics[today][sid].errors++;
+        if (data.url && !analytics[today][sid].urls.includes(data.url)) {
+          analytics[today][sid].urls.push(data.url);
+          if (analytics[today][sid].urls.length > 50) analytics[today][sid].urls = analytics[today][sid].urls.slice(-50);
+        }
+        // Prune data older than 90 days
+        const cutoffDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        for (const date of Object.keys(analytics)) {
+          if (date < cutoffDate) delete analytics[date];
+        }
+        await chrome.storage.local.set({ analytics });
+        return { success: true };
+      }
+      case 'getAnalytics': {
+        const aData = await chrome.storage.local.get('analytics');
+        return { analytics: aData.analytics || {} };
+      }
+      case 'getAnalyticsForScript': {
+        const aData2 = await chrome.storage.local.get('analytics');
+        const analytics2 = aData2.analytics || {};
+        const scriptData = {};
+        for (const [date, scripts] of Object.entries(analytics2)) {
+          if (scripts[data.scriptId]) scriptData[date] = scripts[data.scriptId];
+        }
+        return { data: scriptData };
+      }
+
+      // v2.0: Profiles
+      case 'getProfiles': {
+        const pData = await chrome.storage.local.get(['profiles', 'activeProfileId']);
+        return { profiles: pData.profiles || [], activeProfileId: pData.activeProfileId || null };
+      }
+      case 'switchProfile': {
+        const pData2 = await chrome.storage.local.get('profiles');
+        const profiles = pData2.profiles || [];
+        const profile = profiles.find(p => p.id === data.profileId);
+        if (!profile) return { error: 'Profile not found' };
+        // Apply script states from profile
+        const scripts = await ScriptStorage.getAll();
+        for (const script of scripts) {
+          const newEnabled = profile.scriptStates?.[script.id] ?? script.enabled;
+          if (script.enabled !== newEnabled) {
+            script.enabled = newEnabled;
+            await ScriptStorage.set(script.id, script);
+          }
+        }
+        await chrome.storage.local.set({ activeProfileId: data.profileId });
+        await registerAllScripts();
+        await updateBadge();
+        return { success: true };
+      }
+      case 'saveProfile': {
+        const pData3 = await chrome.storage.local.get('profiles');
+        const profiles3 = pData3.profiles || [];
+        const idx = profiles3.findIndex(p => p.id === data.profile.id);
+        if (idx >= 0) profiles3[idx] = data.profile;
+        else profiles3.push(data.profile);
+        await chrome.storage.local.set({ profiles: profiles3 });
+        return { success: true };
+      }
+      case 'deleteProfile': {
+        const pData4 = await chrome.storage.local.get(['profiles', 'activeProfileId']);
+        const profiles4 = (pData4.profiles || []).filter(p => p.id !== data.profileId);
+        const updates = { profiles: profiles4 };
+        if (pData4.activeProfileId === data.profileId) updates.activeProfileId = null;
+        await chrome.storage.local.set(updates);
+        return { success: true };
+      }
+
+      // v2.0: Collections
+      case 'getCollections': {
+        const cData = await chrome.storage.local.get('scriptCollections');
+        return { collections: cData.scriptCollections || [] };
+      }
+      case 'saveCollection': {
+        const cData2 = await chrome.storage.local.get('scriptCollections');
+        const collections = cData2.scriptCollections || [];
+        const cidx = collections.findIndex(c => c.id === data.collection.id);
+        if (cidx >= 0) collections[cidx] = data.collection;
+        else collections.push(data.collection);
+        await chrome.storage.local.set({ scriptCollections: collections });
+        return { success: true };
+      }
+      case 'deleteCollection': {
+        const cData3 = await chrome.storage.local.get('scriptCollections');
+        const collections3 = (cData3.scriptCollections || []).filter(c => c.id !== data.collectionId);
+        await chrome.storage.local.set({ scriptCollections: collections3 });
+        return { success: true };
+      }
+
+      // v2.0: CSP Reports
+      case 'reportCSPFailure': {
+        const cspData = await chrome.storage.local.get('cspReports');
+        const reports = cspData.cspReports || [];
+        reports.push({ url: data.url, scriptId: data.scriptId, directive: data.directive, timestamp: Date.now() });
+        // Keep last 500 reports
+        if (reports.length > 500) reports.splice(0, reports.length - 500);
+        await chrome.storage.local.set({ cspReports: reports });
+        return { success: true };
+      }
+      case 'getCSPReports': {
+        const cspData2 = await chrome.storage.local.get('cspReports');
+        return { reports: cspData2.cspReports || [] };
+      }
+
+      // v2.0: Gist Integration
+      case 'getGistSettings': {
+        const gData = await chrome.storage.local.get('gistSettings');
+        return gData.gistSettings || {};
+      }
+      case 'saveGistSettings': {
+        await chrome.storage.local.set({ gistSettings: data.settings });
+        return { success: true };
+      }
+
+      // v2.0: Violentmonkey backup import
+      case 'importViolentmonkeyBackup': {
+        // VM exports as ZIP containing individual .user.js files + a violentmonkey JSON
+        // Or as individual .user.js files pasted as text
+        const text = data.text || '';
+        const results = { imported: 0, skipped: 0, errors: [] };
+
+        // Try JSON format first (VM settings export)
+        try {
+          const vmData = JSON.parse(text);
+          if (vmData.scripts && Array.isArray(vmData.scripts)) {
+            for (const vmScript of vmData.scripts) {
+              try {
+                const code = vmScript.code || vmScript.custom?.code || '';
+                if (!code) { results.skipped++; continue; }
+                const parsed = parseUserscript(code);
+                if (parsed.error) { results.errors.push({ name: vmScript.props?.name, error: parsed.error }); continue; }
+                const existing = (await ScriptStorage.getAll()).find(s =>
+                  s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
+                );
+                if (existing && !data.overwrite) { results.skipped++; continue; }
+                const id = existing?.id || generateId();
+                await ScriptStorage.set(id, {
+                  id, code, meta: parsed.meta,
+                  enabled: vmScript.config?.enabled !== false,
+                  position: existing?.position ?? (await ScriptStorage.getAll()).length,
+                  createdAt: existing?.createdAt || Date.now(),
+                  updatedAt: Date.now()
+                });
+                results.imported++;
+              } catch (e) {
+                results.errors.push({ error: e.message });
+              }
+            }
+            await registerAllScripts();
+            await updateBadge();
+            return results;
+          }
+        } catch { /* Not JSON — try text format */ }
+
+        // Fallback: same as Tampermonkey text format
+        const parts = text.split(/\n\s*\n(?=\/\/\s*==UserScript==)/);
+        for (const part of parts) {
+          const trimmed = part.trim();
+          if (trimmed.includes('==UserScript==') && trimmed.includes('==/UserScript==')) {
+            try {
+              const parsed = parseUserscript(trimmed);
+              if (parsed.error) { results.errors.push({ error: parsed.error }); continue; }
+              const existing = (await ScriptStorage.getAll()).find(s =>
+                s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
+              );
+              if (existing && !data.overwrite) { results.skipped++; continue; }
+              const id = existing?.id || generateId();
+              await ScriptStorage.set(id, {
+                id, code: trimmed, meta: parsed.meta,
+                enabled: true,
+                position: existing?.position ?? (await ScriptStorage.getAll()).length,
+                createdAt: existing?.createdAt || Date.now(),
+                updatedAt: Date.now()
+              });
+              results.imported++;
+            } catch (e) {
+              results.errors.push({ error: e.message });
+            }
+          }
+        }
+        await registerAllScripts();
+        await updateBadge();
+        return results;
+      }
+
+      // v2.0: Greasemonkey backup import (GM4 JSON format)
+      case 'importGreasemonkeyBackup': {
+        const text = data.text || '';
+        const results = { imported: 0, skipped: 0, errors: [] };
+        try {
+          const gmData = JSON.parse(text);
+          // GM4 exports as array of script objects
+          const scripts = Array.isArray(gmData) ? gmData : (gmData.scripts || []);
+          for (const gmScript of scripts) {
+            try {
+              const code = gmScript.source || gmScript.code || gmScript.content || '';
+              if (!code) { results.skipped++; continue; }
+              const parsed = parseUserscript(code);
+              if (parsed.error) { results.errors.push({ name: gmScript.name, error: parsed.error }); continue; }
+              const existing = (await ScriptStorage.getAll()).find(s =>
+                s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
+              );
+              if (existing && !data.overwrite) { results.skipped++; continue; }
+              const id = existing?.id || generateId();
+              await ScriptStorage.set(id, {
+                id, code, meta: parsed.meta,
+                enabled: gmScript.enabled !== false,
+                position: existing?.position ?? (await ScriptStorage.getAll()).length,
+                createdAt: existing?.createdAt || Date.now(),
+                updatedAt: Date.now()
+              });
+              results.imported++;
+            } catch (e) {
+              results.errors.push({ error: e.message });
+            }
+          }
+        } catch (e) {
+          return { error: 'Invalid Greasemonkey backup format: ' + e.message };
         }
         await registerAllScripts();
         await updateBadge();
@@ -2419,11 +2752,183 @@ async function handleMessage(message, sender) {
         return { success: true };
       }
 
+      // ── v2.0 Module Handlers ──────────────────────────────────────────────
+
+      // NPM Package Resolution
+      case 'npmResolve': {
+        if (typeof NpmResolver !== 'undefined') {
+          return await NpmResolver.resolve(data.spec);
+        }
+        return { error: 'NpmResolver not available' };
+      }
+
+      case 'npmResolveAll': {
+        if (typeof NpmResolver !== 'undefined') {
+          return await NpmResolver.resolveAll(data.requires);
+        }
+        return { error: 'NpmResolver not available' };
+      }
+
+      // Error Log
+      case 'logError': {
+        if (typeof ErrorLog !== 'undefined') {
+          await ErrorLog.log(data.entry || data);
+          return { success: true };
+        }
+        return { error: 'ErrorLog not available' };
+      }
+
+      case 'getErrorLog': {
+        if (typeof ErrorLog !== 'undefined') {
+          return await ErrorLog.getAll(data.filters);
+        }
+        return { log: [] };
+      }
+
+      case 'getErrorLogGrouped': {
+        if (typeof ErrorLog !== 'undefined') {
+          return await ErrorLog.getGrouped();
+        }
+        return { groups: [] };
+      }
+
+      case 'exportErrorLog': {
+        if (typeof ErrorLog !== 'undefined') {
+          const format = data.format || 'json';
+          if (format === 'csv') return { data: await ErrorLog.exportCSV() };
+          if (format === 'text') return { data: await ErrorLog.exportText() };
+          return { data: await ErrorLog.exportJSON() };
+        }
+        return { error: 'ErrorLog not available' };
+      }
+
+      case 'clearErrorLog': {
+        if (typeof ErrorLog !== 'undefined') {
+          await ErrorLog.clear();
+          return { success: true };
+        }
+        return { error: 'ErrorLog not available' };
+      }
+
+      // Notification System
+      case 'getNotificationPrefs': {
+        if (typeof NotificationSystem !== 'undefined') {
+          return await NotificationSystem.getPreferences();
+        }
+        return {};
+      }
+
+      case 'setNotificationPrefs': {
+        if (typeof NotificationSystem !== 'undefined') {
+          await NotificationSystem.setPreferences(data.prefs);
+          return { success: true };
+        }
+        return { error: 'NotificationSystem not available' };
+      }
+
+      case 'generateDigest': {
+        if (typeof NotificationSystem !== 'undefined') {
+          return await NotificationSystem.generateDigest();
+        }
+        return { error: 'NotificationSystem not available' };
+      }
+
+      // Performance History
+      case 'getPerfHistory': {
+        const histData = await chrome.storage.local.get('perfHistory');
+        return { history: histData.perfHistory || [] };
+      }
+
+      case 'savePerfSnapshot': {
+        const histData2 = await chrome.storage.local.get('perfHistory');
+        const history = histData2.perfHistory || [];
+        history.push({ timestamp: Date.now(), data: data.snapshot });
+        // Keep last 30 days
+        const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
+        const trimmed = history.filter(h => h.timestamp > cutoff);
+        await chrome.storage.local.set({ perfHistory: trimmed });
+        return { success: true };
+      }
+
+      // Easy Cloud Sync
+      case 'easyCloudConnect': {
+        if (typeof EasyCloudSync !== 'undefined') {
+          return await EasyCloudSync.connect();
+        }
+        return { error: 'EasyCloudSync not available' };
+      }
+
+      case 'easyCloudDisconnect': {
+        if (typeof EasyCloudSync !== 'undefined') {
+          return await EasyCloudSync.disconnect();
+        }
+        return { error: 'EasyCloudSync not available' };
+      }
+
+      case 'easyCloudSync': {
+        if (typeof EasyCloudSync !== 'undefined') {
+          return await EasyCloudSync.sync();
+        }
+        return { error: 'EasyCloudSync not available' };
+      }
+
+      case 'easyCloudStatus': {
+        if (typeof EasyCloudSync !== 'undefined') {
+          return await EasyCloudSync.getStatus();
+        }
+        return { connected: false };
+      }
+
+      // Script Console Capture (for debugger)
+      case 'scriptConsoleCapture': {
+        // Append captured console entries to session storage
+        const key = `console_${data.scriptId}`;
+        const existing = await chrome.storage.session.get(key);
+        const entries = existing[key] || [];
+        entries.push(...(data.entries || []));
+        // Keep last 200 entries per script
+        const trimmedEntries = entries.slice(-200);
+        await chrome.storage.session.set({ [key]: trimmedEntries });
+        return { success: true };
+      }
+
+      case 'getScriptConsole': {
+        const consoleData = await chrome.storage.session.get(`console_${data.scriptId}`);
+        return { entries: consoleData[`console_${data.scriptId}`] || [] };
+      }
+
+      case 'clearScriptConsole': {
+        await chrome.storage.session.remove(`console_${data.scriptId}`);
+        return { success: true };
+      }
+
+      // Live Reload toggle
+      case 'setLiveReload': {
+        const lrData = await chrome.storage.local.get('liveReloadScripts');
+        const lrScripts = lrData.liveReloadScripts || {};
+        if (data.enabled) {
+          lrScripts[data.scriptId] = true;
+        } else {
+          delete lrScripts[data.scriptId];
+        }
+        await chrome.storage.local.set({ liveReloadScripts: lrScripts });
+        return { success: true };
+      }
+
+      case 'getLiveReloadScripts': {
+        const lrData2 = await chrome.storage.local.get('liveReloadScripts');
+        return { scripts: lrData2.liveReloadScripts || {} };
+      }
+
       default:
         return { error: 'Unknown action: ' + action };
     }
   } catch (e) {
     console.error('[ScriptVault] Message handler error:', e);
+    // Log to error system if available
+    if (typeof ErrorLog !== 'undefined') {
+      try { ErrorLog.log({ timestamp: Date.now(), error: e.message, stack: e.stack, context: 'handleMessage', action: action }); } catch {}
+    }
     return { error: e.message };
   }
 }
@@ -2747,6 +3252,14 @@ async function setupContextMenus() {
     contexts: ['page']
   });
 
+  // v2.0: Install from link — right-click a .user.js link to install
+  chrome.contextMenus.create({
+    id: 'scriptvault-install-link',
+    title: 'Install userscript from link',
+    contexts: ['link'],
+    targetUrlPatterns: ['*://*/*.user.js', '*://*/*.user.js?*']
+  });
+
   // Add context menu entries for @run-at context-menu scripts
   const scripts = await ScriptStorage.getAll();
   const contextScripts = scripts.filter(s => s.enabled !== false && s.meta && s.meta['run-at'] === 'context-menu');
@@ -2766,8 +3279,26 @@ async function setupContextMenus() {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   setupContextMenus();
+
+  // v2.0: Initialize backup scheduler (needs alarm registration on install)
+  if (typeof BackupScheduler !== 'undefined') {
+    try { await BackupScheduler.init(); } catch (e) { console.error('[ScriptVault] BackupScheduler init error:', e); }
+  }
+
+  // v2.0: Schedule notification digest (needs alarm registration on install)
+  if (typeof NotificationSystem !== 'undefined') {
+    try { await NotificationSystem.scheduleDigest(); } catch (e) { console.error('[ScriptVault] Digest schedule error:', e); }
+  }
+
+  // v2.0: Register public API listeners
+  if (typeof PublicAPI !== 'undefined') {
+    try { PublicAPI.init(); } catch (e) { console.error('[ScriptVault] PublicAPI init error:', e); }
+  }
+
+  // Note: Migration.run() is called in the main init() function, not here,
+  // to avoid running it twice on install (onInstalled + init both fire).
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -2786,6 +3317,36 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       const settings = await SettingsManager.get();
       await SettingsManager.set('enabled', !settings.enabled);
       await updateBadge();
+      break;
+    }
+    case 'scriptvault-install-link': {
+      // v2.0: Install userscript from a right-clicked .user.js link
+      const linkUrl = info.linkUrl;
+      if (linkUrl) {
+        try {
+          const response = await fetch(linkUrl);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const code = await response.text();
+          if (code.includes('==UserScript==')) {
+            await chrome.storage.local.set({
+              pendingInstall: { code, url: linkUrl, timestamp: Date.now() }
+            });
+            chrome.tabs.create({ url: chrome.runtime.getURL('pages/install.html') });
+          } else {
+            chrome.notifications.create({
+              type: 'basic', iconUrl: 'images/icon128.png',
+              title: 'Not a Userscript',
+              message: 'The linked file does not contain a valid ==UserScript== block.'
+            });
+          }
+        } catch (e) {
+          chrome.notifications.create({
+            type: 'basic', iconUrl: 'images/icon128.png',
+            title: 'Install Failed',
+            message: `Could not fetch script: ${e.message}`
+          });
+        }
+      }
       break;
     }
     default: {
@@ -3078,13 +3639,30 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 // Handle direct script installation from URL
 async function installFromUrl(url) {
   try {
-    const response = await fetch(url);
+    // Timeout after 30 seconds
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    
+
+    // Size limit: 5MB (same as webNavigation handler)
+    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+    if (contentLength > MAX_SCRIPT_SIZE) {
+      throw new Error(`Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+    }
+
     const code = await response.text();
-    
+
+    // Post-read size check (content-length may be missing)
+    if (code.length > MAX_SCRIPT_SIZE) {
+      throw new Error(`Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+    }
+
     if (!code.includes('==UserScript==')) {
       throw new Error('Not a valid userscript');
     }
@@ -3150,6 +3728,21 @@ async function init() {
 
   // Clean up stale persistent caches (require_cache_, res_cache_)
   cleanupStaleCaches();
+
+  // v2.0: Run migration if needed
+  if (typeof Migration !== 'undefined') {
+    try { await Migration.run(); } catch (e) { console.error('[ScriptVault] Migration error:', e); }
+  }
+
+  // v2.0: Auto-cleanup storage if above threshold
+  if (typeof QuotaManager !== 'undefined') {
+    try { await QuotaManager.autoCleanup(); } catch (e) { console.error('[ScriptVault] Quota cleanup error:', e); }
+  }
+
+  // v2.0: Register global error handlers for ErrorLog
+  if (typeof ErrorLog !== 'undefined' && typeof ErrorLog.registerGlobalHandlers === 'function') {
+    ErrorLog.registerGlobalHandlers();
+  }
 
   console.log('[ScriptVault] Service worker ready');
 }
@@ -3246,7 +3839,7 @@ async function configureUserScriptsWorld() {
       messaging: true
     });
 
-    console.log('[ScriptVault] userScripts world configured (Chrome', _getChromeVersion(), ')');
+    debugLog('userScripts world configured (Chrome', _getChromeVersion(), ')');
   } catch (e) {
     console.error('[ScriptVault] Failed to configure userScripts world:', e);
   }
@@ -3267,7 +3860,7 @@ async function registerAllScripts() {
     const settings = await SettingsManager.get();
     
     if (!settings.enabled) {
-      console.log('[ScriptVault] Scripts globally disabled');
+      debugLog('Scripts globally disabled');
       return;
     }
     
@@ -3281,7 +3874,22 @@ async function registerAllScripts() {
       return (a.position || 0) - (b.position || 0);
     });
 
-    console.log(`[ScriptVault] Registering ${enabledScripts.length} scripts`);
+    debugLog(`Registering ${enabledScripts.length} scripts`);
+
+    // v2.0: Preload all @require dependencies in parallel before registration
+    // This prevents N sequential fetches during registration
+    const allRequires = new Set();
+    for (const script of enabledScripts) {
+      for (const req of (script.meta?.require || [])) {
+        allRequires.add(req);
+      }
+    }
+    if (allRequires.size > 0) {
+      debugLog(`Preloading ${allRequires.size} @require dependencies`);
+      const preloadStart = Date.now();
+      await Promise.allSettled([...allRequires].map(url => fetchRequireScript(url)));
+      debugLog(`Preloaded in ${Date.now() - preloadStart}ms`);
+    }
 
     // Register all scripts in parallel — significantly faster on large script collections
     const results = await Promise.allSettled(enabledScripts.map(script => registerScript(script)));
@@ -3451,7 +4059,7 @@ async function registerScript(script) {
     const isContextMenu = effectiveRunAt === 'context-menu';
     if (isContextMenu) {
       // Context-menu scripts are not auto-registered; they run on-demand via context menu click
-      console.log(`[ScriptVault] Skipping auto-register for context-menu script: ${meta.name}`);
+      debugLog(`Skipping auto-register for context-menu script: ${meta.name}`);
       return;
     }
     const runAt = runAtMap[effectiveRunAt] || 'document_idle';
@@ -3469,15 +4077,31 @@ async function registerScript(script) {
     const requireScripts = [];
     const requires = Array.isArray(meta.require) ? meta.require : (meta.require ? [meta.require] : []);
     
+    const failedRequires = [];
     for (const url of requires) {
       try {
         const code = await fetchRequireScript(url);
         if (code) {
           requireScripts.push({ url, code });
+        } else {
+          failedRequires.push(url);
         }
       } catch (e) {
         console.warn(`[ScriptVault] Failed to fetch @require ${url}:`, e.message);
+        failedRequires.push(url);
       }
+    }
+
+    // Track failed @require dependencies on the script for UI notification
+    if (failedRequires.length > 0) {
+      script.settings = script.settings || {};
+      script.settings._failedRequires = failedRequires;
+      await ScriptStorage.set(script.id, script);
+      debugWarn(`${meta.name}: ${failedRequires.length} @require dependency(s) failed to load`);
+    } else if (script.settings?._failedRequires) {
+      // Clear previous failures
+      delete script.settings._failedRequires;
+      await ScriptStorage.set(script.id, script);
     }
     
     // Pre-fetch @resource dependencies
@@ -3488,7 +4112,7 @@ async function registerScript(script) {
     
     // Build the script code with GM API wrapper, @require scripts, and pre-loaded storage
     if (injectIntoPage) {
-      console.log(`[ScriptVault] Note: @inject-into page / @sandbox raw not fully supported in MV3, running in USER_SCRIPT world: ${meta.name}`);
+      debugLog(`Note: @inject-into page / @sandbox raw not fully supported in MV3, running in USER_SCRIPT world: ${meta.name}`);
     }
     const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
     
@@ -3533,7 +4157,7 @@ async function registerScript(script) {
       }
     }
     
-    console.log(`[ScriptVault] Registered: ${meta.name} (${requires.length} @require, ${Object.keys(storedValues).length} stored values)`);
+    debugLog(`Registered: ${meta.name} (${requires.length} @require, ${Object.keys(storedValues).length} stored values)`);
 
     // Apply @webRequest declarativeNetRequest rules if defined
     if (meta.webRequest) {
@@ -3542,6 +4166,12 @@ async function registerScript(script) {
     }
   } catch (e) {
     console.error(`[ScriptVault] Failed to register ${script.meta.name}:`, e);
+    // Mark script with registration failure for UI display
+    try {
+      script.settings = script.settings || {};
+      script.settings._registrationError = e.message || 'Registration failed';
+      await ScriptStorage.set(script.id, script);
+    } catch {}
   }
 }
 
@@ -3970,6 +4600,34 @@ ${req.code}
 (function() {
   'use strict';
   
+  // ============ Console Capture (v2.0) ============
+  // Intercept console.log/warn/error for per-script debugging
+  {
+    const _origConsole = { log: console.log, warn: console.warn, error: console.error, info: console.info, debug: console.debug };
+    const _scriptId = ${JSON.stringify(script.id)};
+    const _captureLimit = 200;
+    let _captureBuffer = [];
+    function _captureConsole(level, args) {
+      try {
+        _captureBuffer.push({ level, args: Array.from(args).map(a => { try { return typeof a === 'object' ? JSON.stringify(a).slice(0, 500) : String(a); } catch { return String(a); } }), timestamp: Date.now() });
+        if (_captureBuffer.length > _captureLimit) _captureBuffer.shift();
+        // Batch-send every 2 seconds
+        if (!_captureConsole._timer) {
+          _captureConsole._timer = setTimeout(() => {
+            try { chrome.runtime.sendMessage({ action: 'scriptConsoleCapture', scriptId: _scriptId, entries: _captureBuffer.splice(0) }); } catch {}
+            _captureConsole._timer = null;
+          }, 2000);
+        }
+      } catch {}
+    }
+    console.log = function() { _captureConsole('log', arguments); return _origConsole.log.apply(console, arguments); };
+    console.warn = function() { _captureConsole('warn', arguments); return _origConsole.warn.apply(console, arguments); };
+    console.error = function() { _captureConsole('error', arguments); return _origConsole.error.apply(console, arguments); };
+    console.info = function() { _captureConsole('info', arguments); return _origConsole.info.apply(console, arguments); };
+    console.debug = function() { _captureConsole('debug', arguments); return _origConsole.debug.apply(console, arguments); };
+  }
+  // ============ End Console Capture ============
+
   // ============ Error Suppression ============
   // Suppress uncaught errors and unhandled rejections from userscripts
   // to prevent them from appearing on chrome://extensions error page.
@@ -3978,11 +4636,14 @@ ${req.code}
   window.addEventListener('error', function(event) {
     event.stopImmediatePropagation();
     event.preventDefault();
+    // Report to error log
+    try { chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.message || 'Unknown error', url: location.href, line: event.lineno, col: event.colno, timestamp: Date.now() } }); } catch {}
     return true;
   }, true);
   window.addEventListener('unhandledrejection', function(event) {
     event.stopImmediatePropagation();
     event.preventDefault();
+    try { chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.reason?.message || String(event.reason) || 'Unhandled rejection', url: location.href, timestamp: Date.now() } }); } catch {}
   }, true);
   // ============ End Error Suppression ============
 

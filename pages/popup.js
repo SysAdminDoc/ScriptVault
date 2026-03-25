@@ -1,4 +1,4 @@
-// ScriptVault Popup v1.7.8
+// ScriptVault Popup v2.0.0
 // Tampermonkey-style popup interface
 
 (function() {
@@ -51,6 +51,12 @@
         updateUrlBar();
         updateFooterCount();
         updateEmptyStateHint();
+
+        // v2.0: Initialize execution timeline
+        if (typeof PopupTimeline !== 'undefined') {
+            const footer = document.querySelector('.footer');
+            if (footer) PopupTimeline.init(footer, pageScripts);
+        }
     }
 
     // Load all scripts for total count
@@ -179,13 +185,13 @@
         }
     }
 
-    // Load scripts for current page
+    // Load scripts for current page (with 5s timeout)
     async function loadPageScripts() {
         try {
-            const response = await chrome.runtime.sendMessage({
-                action: 'getScriptsForUrl',
-                url: currentUrl
-            });
+            const response = await Promise.race([
+                chrome.runtime.sendMessage({ action: 'getScriptsForUrl', url: currentUrl }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+            ]);
 
             pageScripts = response || [];
             renderScriptList();
@@ -195,6 +201,21 @@
             pageScripts = [];
             renderScriptList();
             updateEnabledState();
+
+            // Show distinct error state when background is unresponsive
+            const emptyState = document.getElementById('emptyState');
+            if (emptyState) {
+                emptyState.style.display = 'block';
+                emptyState.innerHTML = `
+                    <div style="font-size:24px;margin-bottom:8px;opacity:0.6">&#x26A0;</div>
+                    <div style="font-size:13px;font-weight:500;color:var(--popup-text);margin-bottom:4px">
+                        ${error.message === 'timeout' ? 'ScriptVault is loading...' : 'Connection error'}
+                    </div>
+                    <div style="font-size:12px;color:var(--popup-text-muted)">
+                        ${error.message === 'timeout' ? 'The background service is still starting up. Try again in a moment.' : 'Could not connect to ScriptVault background service.'}
+                    </div>
+                `;
+            }
         }
     }
 
@@ -279,8 +300,16 @@
             // Stagger animation delay
             const animDelay = `style="animation-delay: ${i * 30}ms"`;
 
+            // Running status indicator
+            const statusClass = stats?.errors > 0 ? 'error' : (isRunning ? 'running' : 'idle');
+            const statusTitle = stats?.errors > 0 ? `${stats.errors} error(s)` : (isRunning ? 'Running on this page' : 'Not active');
+
+            // Recently installed (< 1 hour ago)
+            const recentClass = script.installedAt && (Date.now() - script.installedAt < 3600000) ? ' recently-installed' : '';
+
             return `
-                <div class="script-item${isRunning ? '' : ' not-running'}" data-script-id="${script.id}"${descAttr} ${animDelay}>
+                <div class="script-item${isRunning ? '' : ' not-running'}${recentClass}" data-script-id="${script.id}"${descAttr} ${animDelay}>
+                    <span class="script-status ${statusClass}" title="${statusTitle}"></span>
                     <label class="script-toggle">
                         <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${script.id}">
                         <span class="slider"></span>
@@ -289,6 +318,11 @@
                     <span class="script-name" data-edit-id="${script.id}">${escapeHtml(name)}${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}</span>
                     ${errorDot}
                     ${perfHtml}
+                    <div class="script-quick-edit" data-quickedit-id="${script.id}" title="Quick edit">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    </div>
                     <div class="script-more" data-more-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="currentColor">
                             <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
@@ -321,6 +355,12 @@
 
             // Script name click opens in dashboard editor
             item.querySelector('.script-name')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openDashboard(scriptId);
+            });
+
+            // Quick edit button opens editor directly
+            item.querySelector('.script-quick-edit')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 openDashboard(scriptId);
             });
@@ -716,11 +756,14 @@
         
         // Setup warning - Open extension settings
         elements.btnOpenExtSettings?.addEventListener('click', () => {
-            // Get extension ID and open management page
             const extensionId = chrome.runtime.id;
-            chrome.tabs.create({ 
-                url: `chrome://extensions/?id=${extensionId}` 
-            });
+            chrome.tabs.create({ url: `chrome://extensions/?id=${extensionId}` });
+            window.close();
+        });
+
+        // Feedback link
+        document.getElementById('btnFeedback')?.addEventListener('click', () => {
+            chrome.tabs.create({ url: 'https://github.com/SysAdminDoc/ScriptVault/issues' });
             window.close();
         });
     }

@@ -105,6 +105,18 @@
 
         /* Loading */
         .sp-loading { padding: 12px 10px; text-align: center; color: var(--text-muted); font-size: 11px; }
+
+        /* v2.0: Search & Sort */
+        .sp-search-bar { display: flex; align-items: center; gap: 4px; padding: 4px 10px; background: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .sp-search-input { flex: 1; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 3px; padding: 3px 6px; font-size: 11px; color: var(--text); outline: none; }
+        .sp-search-input:focus { border-color: var(--accent); }
+        .sp-search-input::placeholder { color: var(--text-muted); }
+        .sp-sort-select { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 3px; padding: 3px 4px; font-size: 10px; color: var(--text); cursor: pointer; }
+
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; animation: none !important; }
+        }
     </style>
 </head>
 <body>
@@ -131,6 +143,18 @@
 
     <div class="sp-list" id="pageScriptList">
         <div class="sp-loading">Loading scripts…</div>
+    </div>
+
+    <!-- v2.0: Search & Sort Controls -->
+    <div class="sp-search-bar">
+        <input type="text" class="sp-search-input" id="spSearch" placeholder="Search scripts... (Ctrl+F)">
+        <select class="sp-sort-select" id="spSort" title="Sort scripts">
+            <option value="default">A-Z</option>
+            <option value="alpha">Name</option>
+            <option value="perf">Slowest</option>
+            <option value="errors">Most Errors</option>
+            <option value="recent">Recently Updated</option>
+        </select>
     </div>
 
     <div class="sp-all-section" id="allSection">

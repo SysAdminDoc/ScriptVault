@@ -35,6 +35,17 @@ echo "Building background.js v$VERSION..."
   echo ""
   cat "$SCRIPT_DIR/modules/resources.js"
   echo ""
+  # v2.0 modules (skip if not present yet)
+  [ -f "$SCRIPT_DIR/modules/npm-resolve.js" ] && { echo ""; cat "$SCRIPT_DIR/modules/npm-resolve.js"; }
+  [ -f "$SCRIPT_DIR/modules/error-log.js" ] && { echo ""; cat "$SCRIPT_DIR/modules/error-log.js"; }
+  [ -f "$SCRIPT_DIR/modules/notifications.js" ] && { echo ""; cat "$SCRIPT_DIR/modules/notifications.js"; }
+  [ -f "$SCRIPT_DIR/modules/sync-easycloud.js" ] && { echo ""; cat "$SCRIPT_DIR/modules/sync-easycloud.js"; }
+  [ -f "$SCRIPT_DIR/modules/backup-scheduler.js" ] && { echo ""; cat "$SCRIPT_DIR/modules/backup-scheduler.js"; }
+  [ -f "$SCRIPT_DIR/modules/userstyles.js" ] && { echo ""; cat "$SCRIPT_DIR/modules/userstyles.js"; }
+  [ -f "$SCRIPT_DIR/modules/public-api.js" ] && { echo ""; cat "$SCRIPT_DIR/modules/public-api.js"; }
+  [ -f "$SCRIPT_DIR/modules/migration.js" ] && { echo ""; cat "$SCRIPT_DIR/modules/migration.js"; }
+  [ -f "$SCRIPT_DIR/modules/quota-manager.js" ] && { echo ""; cat "$SCRIPT_DIR/modules/quota-manager.js"; }
+  echo ""
   # New bg/ modules
   if [ -d "$SCRIPT_DIR/bg" ]; then
     for f in "$SCRIPT_DIR/bg"/*.js; do

@@ -1,4 +1,4 @@
-// ScriptVault DevTools Panel v1.7.8
+// ScriptVault DevTools Panel v2.0.0
 // Network inspection, execution profiling, and console capture
 
 (function () {

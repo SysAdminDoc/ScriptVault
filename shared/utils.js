@@ -1,9 +1,12 @@
+// @ts-check
 // ScriptVault Shared Utilities
 // Used by background.js (inlined at build time) and HTML pages (via <script src>)
 
 /**
  * Escape HTML special characters to prevent XSS.
  * Works in both DOM (pages) and non-DOM (service worker) contexts.
+ * @param {string} str - The string to escape
+ * @returns {string} The escaped string
  */
 function escapeHtml(str) {
   if (!str) return '';
@@ -17,6 +20,7 @@ function escapeHtml(str) {
 
 /**
  * Generate a unique script ID using crypto.randomUUID().
+ * @returns {string} A unique ID prefixed with 'script_'
  */
 function generateId() {
   return 'script_' + crypto.randomUUID();
@@ -25,6 +29,8 @@ function generateId() {
 /**
  * Validate and sanitize a URL for safe use in href attributes.
  * Returns the URL if safe, or null if potentially dangerous.
+ * @param {string} url - The URL to sanitize
+ * @returns {string|null} The sanitized URL or null if unsafe
  */
 function sanitizeUrl(url) {
   if (!url) return null;
@@ -40,6 +46,8 @@ function sanitizeUrl(url) {
 
 /**
  * Format byte count as human-readable string.
+ * @param {number} bytes - The byte count to format
+ * @returns {string} Human-readable string like '1.5 MB'
  */
 function formatBytes(bytes) {
   if (!bytes || bytes <= 0) return '0 B';

@@ -1,7 +1,36 @@
+# Build artifacts
 *.zip
+*.crx
 build/
+dist/
+
+# Signing keys
+scriptvault.pem
+*.pem
+*.key
+*.p12
+
+# Secrets / environment
+.env
+.env.*
+*.secret
+credentials.json
+
+# Dependencies
+node_modules/
+
+# OS files
 .DS_Store
 Thumbs.db
-scriptvault.pem
-*.crx
-*.zip
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Coverage
+coverage/
+.nyc_output/

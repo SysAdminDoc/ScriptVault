@@ -1509,11 +1509,41 @@
             font-size: 11px;
             color: var(--text-secondary);
         }
+
+        /* Lazy loading states */
+        .lazy-loading-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+            font-size: 13px;
+            gap: 12px;
+        }
+        .lazy-spinner {
+            width: 28px;
+            height: 28px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: lazySpin 0.8s linear infinite;
+        }
+        @keyframes lazySpin {
+            to { transform: rotate(360deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .lazy-spinner { animation: none; border-top-color: var(--text-muted); }
+        }
     </style>
 </head>
 <body>
+    <!-- Accessibility: Skip to main content -->
+    <a href="#scriptsPanel" class="skip-link" style="position:absolute;top:-40px;left:0;background:var(--accent-primary);color:#fff;padding:8px 16px;z-index:9999;font-size:14px;transition:top 0.2s;border-radius:0 0 4px 0" onfocus="this.style.top='0'" onblur="this.style.top='-40px'">Skip to main content</a>
+    <!-- Live region for screen reader announcements -->
+    <div id="a11yAnnouncer" role="status" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap"></div>
     <!-- Header -->
-    <header class="tm-header">
+    <header class="tm-header" role="banner">
         <nav class="tm-tabs-bar">
             <div class="tm-logo">
                 <img src="../images/icon48.png" alt="ScriptVault">
@@ -1543,6 +1573,10 @@
                 <button class="tm-tab" data-tab="settings">Settings</button>
                 <button class="tm-tab" data-tab="utilities">Utilities</button>
                 <button class="tm-tab" data-tab="trash">Trash</button>
+                <button class="tm-tab" data-tab="store">Script Store</button>
+                <button class="tm-tab" data-tab="performance">Performance</button>
+                <button class="tm-tab" data-tab="analytics">Analytics</button>
+                <button class="tm-tab" data-tab="ai">AI Assistant</button>
             </div>
         </nav>
     </header>
@@ -1562,7 +1596,7 @@
     </div>
 
     <!-- Content -->
-    <main class="tm-content">
+    <main class="tm-content" role="main" id="mainContent">
         <!-- Scripts Panel -->
         <div id="scriptsPanel" class="tm-panel active">
             <!-- Combined Toolbar -->
@@ -1628,7 +1662,10 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         <input type="text" id="scriptSearch" placeholder="Search... (code: to search in code)">
                     </div>
-                    <button class="toolbar-btn" id="btnColumnToggle" title="Show/hide columns" style="margin-left:6px;padding:4px 8px">
+                    <button class="toolbar-btn" id="btnViewToggle" title="Toggle table/card view" style="margin-left:4px;padding:4px 8px">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px" id="viewToggleIcon"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    </button>
+                    <button class="toolbar-btn" id="btnColumnToggle" title="Show/hide columns" style="margin-left:4px;padding:4px 8px">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M12 3v18M3 12h18M3 6h18M3 18h18"/></svg>
                     </button>
                 </div>
@@ -2549,6 +2586,34 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
         </div>
 
+        <!-- Script Store Panel -->
+        <div id="storePanel" class="tm-panel">
+            <div id="storeContainer" style="padding: 20px;">
+                <div class="lazy-loading-state"><div class="lazy-spinner"></div><div>Loading Script Store...</div></div>
+            </div>
+        </div>
+
+        <!-- Performance Panel -->
+        <div id="performancePanel" class="tm-panel">
+            <div id="performanceContainer" style="padding: 20px;">
+                <div class="lazy-loading-state"><div class="lazy-spinner"></div><div>Loading Performance Dashboard...</div></div>
+            </div>
+        </div>
+
+        <!-- Analytics Panel -->
+        <div id="analyticsPanel" class="tm-panel">
+            <div id="analyticsContainer" style="padding: 20px;">
+                <div class="lazy-loading-state"><div class="lazy-spinner"></div><div>Loading Analytics...</div></div>
+            </div>
+        </div>
+
+        <!-- AI Assistant Panel -->
+        <div id="aiPanel" class="tm-panel">
+            <div id="aiContainer" style="padding: 20px;">
+                <div class="lazy-loading-state"><div class="lazy-spinner"></div><div>Loading AI Assistant...</div></div>
+            </div>
+        </div>
+
         <!-- Help Panel -->
         <div id="helpPanel" class="tm-panel">
             <!-- Getting Started -->
@@ -3127,8 +3192,19 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <script src="../lib/codemirror/addon/lint/lint.min.js"></script>
     <script src="../lib/codemirror/addon/lint/userscript-lint.js"></script>
     <script src="../shared/utils.js"></script>
+
+    <!-- Eager modules (critical path — loaded synchronously) -->
+    <script src="dashboard-lazy-loader.js"></script>
+    <script src="dashboard-i18n-v2.js"></script>
+    <script src="dashboard-firefox-compat.js"></script>
+    <script src="dashboard-a11y.js"></script>
+    <script src="dashboard-keyboard.js"></script>
     <script src="monaco-adapter.js"></script>
     <script src="dashboard.js"></script>
+
+    <!-- All other v2.0 modules are loaded lazily by dashboard-lazy-loader.js -->
+    <!-- They load on-demand when the user navigates to the relevant tab or feature -->
+    <!-- See LazyLoader.TAB_MODULES, EDITOR_MODULES, ON_DEMAND_MODULES for the full map -->
 
     <!-- Progress Overlay -->
     <div class="progress-overlay" id="progressOverlay">

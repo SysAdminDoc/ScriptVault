@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.7.8-22c55e?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-2.0.0-22c55e?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/manifest-v3-60a5fa?style=flat-square" alt="Manifest V3">
   <img src="https://img.shields.io/badge/license-MIT-orange?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/chrome-120%2B-blue?style=flat-square" alt="Chrome 120+">
@@ -173,6 +173,74 @@ Sync scripts across devices with 5 providers:
 Available in 8 languages:
 
 English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portuguese &bull; Russian &bull; Chinese
+
+### v2.0 — New Features
+
+<details>
+<summary><strong>Click to expand all v2.0 features (58 major features)</strong></summary>
+
+#### Discovery & Store
+- **Built-in Script Store** &mdash; Search, browse, and install scripts from Greasy Fork directly in the dashboard
+- **OpenUserJS Integration** &mdash; Additional script source alongside Greasy Fork
+- **Script Collections** &mdash; Group scripts into installable bundles with 4 built-in packs
+- **Smart Recommendations** &mdash; AI-powered script suggestions based on browsing patterns
+- **Script Sharing** &mdash; QR code generation, data URL encoding, standalone HTML export
+
+#### AI & Intelligence
+- **AI Assistant** &mdash; Generate scripts from natural language, explain code, security reviews, auto-fix errors
+- **Supports OpenAI, Anthropic, Ollama (local), and custom endpoints**
+- **Encrypted API key storage** (AES-256-GCM with PBKDF2)
+- **Advanced Linter** &mdash; 21 rules with one-click auto-fix, hardcoded secret detection
+- **Script Diff Tool** &mdash; Side-by-side and unified diff with merge support
+
+#### Monitoring & Analytics
+- **Performance Dashboard** &mdash; Impact scores, sparkline trends, auto-disable recommendations
+- **Script Analytics** &mdash; 90-day execution stats with canvas charts (line/bar/donut)
+- **Activity Heatmap** &mdash; 365-day GitHub-style contribution grid
+- **Error Log** &mdash; 500-entry structured log with JSON/CSV/text export
+- **CSP Compatibility Reporter** &mdash; Track which sites block scripts with workaround suggestions
+
+#### Debugging & Development
+- **Script Debugger** &mdash; Per-script console capture, live reload, variable inspector, error timeline
+- **DevTools Waterfall** &mdash; Canvas-based network timeline with request body inspector
+- **Visual Pattern Builder** &mdash; Construct @match patterns by decomposing URLs
+- **30+ Code Snippets** &mdash; Searchable library across 8 categories with editor integration
+- **Custom Templates** &mdash; Save/share script templates with variable substitution wizard
+
+#### UX & Customization
+- **Card View** &mdash; Grid layout alternative with site favicons and status indicators
+- **10 Theme Presets** &mdash; Dark, Light, Catppuccin, OLED, Nord, Dracula, Solarized, Monokai, Gruvbox
+- **Custom Theme Editor** &mdash; 21 CSS variable pickers with live preview and import/export
+- **Keyboard Navigation** &mdash; Full keyboard-first nav with optional Vim keybindings
+- **Onboarding Wizard** &mdash; 5-step welcome flow with Tampermonkey import
+- **What's New Modal** &mdash; Changelog shown once per version update
+- **Gamification** &mdash; 31 achievements, streaks, user levels, shareable profile cards
+
+#### Sync & Backup
+- **Zero-Config Cloud Sync** &mdash; One-click Google Drive sync via chrome.identity
+- **GitHub Gist Integration** &mdash; Import/export/sync scripts with GitHub Gists
+- **Automated Backups** &mdash; Scheduled daily/weekly backups with configurable retention
+- **Multi-Profile Support** &mdash; Different script configurations for different contexts
+- **Violentmonkey/Greasemonkey Import** &mdash; Import from VM JSON and GM4 backup formats
+
+#### Platform & Architecture
+- **UserStyles/CSS Support** &mdash; `.user.css` files with variable editor, Stylus import
+- **Script Chaining** &mdash; Visual pipeline builder for sequential script execution
+- **npm Package Resolution** &mdash; `@require npm:lodash` with CDN fallback chain
+- **Script Scheduling** &mdash; Time/day/date-based execution with visual picker
+- **Public Extension API** &mdash; External message API with rate limiting and webhooks
+- **Firefox Compatibility Layer** &mdash; Polyfills for cross-browser v2.0 module support
+- **Lazy Module Loading** &mdash; Dashboard loads 7 eager scripts, defers 30+ until needed
+- **Automatic Migration** &mdash; Seamless v1.x → v2.0 data migration
+- **Storage Quota Manager** &mdash; Auto-cleanup when approaching Chrome's 10MB limit
+
+#### Quality & Testing
+- **159 Unit Tests** &mdash; Vitest suite covering parser, utilities, versions, analyzer, network log
+- **JSDoc Type Annotations** &mdash; @ts-check compatible on critical functions
+- **esbuild Build System** &mdash; Modern bundler with minification and source maps
+- **Accessibility (WCAG 2.1 AA)** &mdash; ARIA labels, focus trapping, high contrast, reduced motion
+
+</details>
 
 ---
 
