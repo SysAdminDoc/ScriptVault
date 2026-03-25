@@ -173,6 +173,102 @@
         }
       });
 
+      monaco.editor.defineTheme('sv-oled', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: '555555', fontStyle: 'italic' }
+        ],
+        colors: {
+          'editor.background': '#000000',
+          'editor.foreground': '#e0e0e0',
+          'editorLineNumber.foreground': '#444',
+          'editorLineNumber.activeForeground': '#888',
+          'editor.lineHighlightBackground': '#0a0a0a',
+          'editor.selectionBackground': '#1a3a5c',
+          'editorGutter.background': '#000000',
+          'scrollbarSlider.background': '#333',
+          'editorWidget.background': '#0a0a0a',
+          'editorWidget.border': '#222'
+        }
+      });
+
+      monaco.editor.defineTheme('sv-nord', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: '616e88', fontStyle: 'italic' },
+          { token: 'keyword', foreground: '81a1c1' },
+          { token: 'string', foreground: 'a3be8c' },
+          { token: 'number', foreground: 'b48ead' }
+        ],
+        colors: {
+          'editor.background': '#2e3440',
+          'editor.foreground': '#d8dee9',
+          'editorLineNumber.foreground': '#4c566a',
+          'editor.lineHighlightBackground': '#3b4252',
+          'editor.selectionBackground': '#434c5e',
+          'editorGutter.background': '#2e3440'
+        }
+      });
+
+      monaco.editor.defineTheme('sv-dracula', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: '6272a4', fontStyle: 'italic' },
+          { token: 'keyword', foreground: 'ff79c6' },
+          { token: 'string', foreground: 'f1fa8c' },
+          { token: 'number', foreground: 'bd93f9' }
+        ],
+        colors: {
+          'editor.background': '#282a36',
+          'editor.foreground': '#f8f8f2',
+          'editorLineNumber.foreground': '#6272a4',
+          'editor.lineHighlightBackground': '#44475a',
+          'editor.selectionBackground': '#44475a',
+          'editorGutter.background': '#282a36'
+        }
+      });
+
+      monaco.editor.defineTheme('sv-gruvbox', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: '928374', fontStyle: 'italic' },
+          { token: 'keyword', foreground: 'fb4934' },
+          { token: 'string', foreground: 'b8bb26' },
+          { token: 'number', foreground: 'd3869b' }
+        ],
+        colors: {
+          'editor.background': '#282828',
+          'editor.foreground': '#ebdbb2',
+          'editorLineNumber.foreground': '#665c54',
+          'editor.lineHighlightBackground': '#3c3836',
+          'editor.selectionBackground': '#504945',
+          'editorGutter.background': '#282828'
+        }
+      });
+
+      monaco.editor.defineTheme('sv-solarized-dark', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: '586e75', fontStyle: 'italic' },
+          { token: 'keyword', foreground: '859900' },
+          { token: 'string', foreground: '2aa198' },
+          { token: 'number', foreground: 'd33682' }
+        ],
+        colors: {
+          'editor.background': '#002b36',
+          'editor.foreground': '#839496',
+          'editorLineNumber.foreground': '#586e75',
+          'editor.lineHighlightBackground': '#073642',
+          'editor.selectionBackground': '#073642',
+          'editorGutter.background': '#002b36'
+        }
+      });
+
       isReady = true;
       loading.style.display = 'none';
 
@@ -262,7 +358,12 @@
   }
 
   function mapTheme(theme) {
-    const map = { dark: 'sv-dark', light: 'sv-light', catppuccin: 'sv-catppuccin', oled: 'sv-dark', monokai: 'monokai', dracula: 'vs-dark', nord: 'vs-dark', default: 'vs-dark' };
+    const map = {
+      dark: 'sv-dark', light: 'sv-light', catppuccin: 'sv-catppuccin', oled: 'sv-oled',
+      nord: 'sv-nord', dracula: 'sv-dracula', gruvbox: 'sv-gruvbox',
+      'solarized-dark': 'sv-solarized-dark', 'solarized-light': 'sv-light',
+      monokai: 'sv-gruvbox', default: 'sv-dark'
+    };
     return map[theme] || 'sv-dark';
   }
 })();

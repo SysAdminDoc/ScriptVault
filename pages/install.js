@@ -1,4 +1,4 @@
-// ScriptVault Install Page v1.7.8
+// ScriptVault Install Page v2.0.0
 
 // Dangerous permissions that warrant security warnings
 const DANGEROUS_PERMISSIONS = [
@@ -478,8 +478,39 @@ function renderInstallUI(sourceUrl) {
           </label>
         </div>
       ` : ''}
+
+      ${scriptMeta.author ? `
+        <div class="option-row">
+          <div class="option-info">
+            <span class="option-label">Trust this author</span>
+            <span class="option-description">Auto-install future scripts from <strong>${escapeHtml(scriptMeta.author)}</strong> without review</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="trust-author">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      ` : ''}
     </div>
   `;
+
+  // v2.0: Dependency check — verify @require URLs are reachable
+  if (scriptMeta.require.length > 0) {
+    const depTags = scriptMeta.require.map(url =>
+      '<span class="tag" data-dep-url="' + escapeHtml(url) + '" title="' + escapeHtml(url) + '">' + escapeHtml(getUrlFilename(url)) + '</span>'
+    ).join('');
+    html += `
+      <div class="section" style="margin:0 0 12px">
+        <div class="section-title" style="font-size:12px">
+          <span>Dependencies (${scriptMeta.require.length})</span>
+          <span class="count" id="dep-status" style="background:var(--text-muted)">Checking...</span>
+        </div>
+        <div class="tag-list" id="dep-list">${depTags}</div>
+      </div>
+    `;
+    // Check dependencies asynchronously after render
+    setTimeout(() => checkDependencies(scriptMeta.require), 100);
+  }
 
   // Code preview
   html += `
@@ -617,6 +648,13 @@ async function handleInstall() {
     }
 
     await chrome.storage.local.remove('pendingInstall');
+
+    // v2.0: Save trusted author if checked
+    const trustCheck = document.getElementById('trust-author');
+    if (trustCheck?.checked && scriptMeta.author) {
+      saveTrustedAuthor(scriptMeta.author);
+    }
+
     showSuccess(scriptMeta.name, existingScript ? 'updated' : 'installed', result.scriptId);
 
   } catch (e) {
@@ -732,6 +770,46 @@ function formatBytes(bytes) {
   const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// v2.0: Check @require dependency URLs
+async function checkDependencies(requires) {
+  let ok = 0, fail = 0;
+  for (const url of requires) {
+    const tag = document.querySelector(`[data-dep-url="${CSS.escape(url)}"]`);
+    try {
+      const resp = await fetch(url, { method: 'HEAD', mode: 'no-cors' });
+      // no-cors won't give us status, so any response = likely OK
+      if (tag) { tag.classList.add('safe'); tag.title = url + ' — OK'; }
+      ok++;
+    } catch {
+      if (tag) { tag.classList.add('warning'); tag.title = url + ' — UNREACHABLE'; }
+      fail++;
+    }
+  }
+  const statusEl = document.getElementById('dep-status');
+  if (statusEl) {
+    if (fail === 0) {
+      statusEl.textContent = 'All OK';
+      statusEl.style.background = 'var(--accent)';
+      statusEl.style.color = '#fff';
+    } else {
+      statusEl.textContent = `${fail} unreachable`;
+      statusEl.style.background = 'var(--warning)';
+      statusEl.style.color = '#fff';
+    }
+  }
+}
+
+// v2.0: Save trusted author
+function saveTrustedAuthor(author) {
+  chrome.storage.local.get('trustedAuthors', (data) => {
+    const authors = data.trustedAuthors || [];
+    if (!authors.includes(author)) {
+      authors.push(author);
+      chrome.storage.local.set({ trustedAuthors: authors });
+    }
+  });
 }
 
 // Static analysis
