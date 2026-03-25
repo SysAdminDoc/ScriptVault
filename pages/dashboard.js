@@ -31,10 +31,7 @@
             utilities: document.getElementById('utilitiesPanel'),
             trash: document.getElementById('trashPanel'),
             help: document.getElementById('helpPanel'),
-            store: document.getElementById('storePanel'),
-            performance: document.getElementById('performancePanel'),
-            analytics: document.getElementById('analyticsPanel'),
-            ai: document.getElementById('aiPanel')
+            store: document.getElementById('storePanel')
         };
 
         // Scripts tab
@@ -383,11 +380,9 @@
     // Safe module initializer with error boundary
     // Container ID mapping for multi-word module names
     const _containerIds = {
-        'Store': 'storeContainer', 'Performance': 'performanceContainer',
-        'Analytics': 'analyticsContainer', 'AI': 'aiContainer',
+        'Store': 'storeContainer',
         'CardView': 'cardViewContainer', 'PatternBuilder': 'patternBuilderContainer',
         'ThemeEditor': 'themeEditorContainer', 'DepGraph': 'depGraphContainer',
-        'OpenUserJS': 'oujsContainer',
     };
     function safeInit(name, fn) {
         try { fn(); } catch (e) {
@@ -407,22 +402,12 @@
     // Uses LazyLoader to defer non-critical modules until needed
     function initV2Modules() {
         // Only init modules that are eagerly loaded (a11y, keyboard, firefox-compat, i18n)
-        // Store, Performance, Analytics, AI are lazy-loaded on tab switch
+        // Eagerly loaded modules
         safeInit('Keyboard', () => { if (typeof KeyboardNav !== 'undefined') KeyboardNav.init(); });
         safeInit('A11y', () => { if (typeof A11y !== 'undefined') A11y.init(); });
         safeInit('FirefoxCompat', () => { if (typeof FirefoxCompat !== 'undefined') FirefoxCompat.polyfill(); });
 
-        // Onboarding and What's New are one-time modals — load on demand
-        safeInit('Onboarding', () => {
-            if (typeof LazyLoader !== 'undefined') {
-                LazyLoader.loadOnDemand('onboarding').then(() => {
-                    if (typeof OnboardingWizard !== 'undefined') {
-                        OnboardingWizard.shouldShow().then(show => { if (show) OnboardingWizard.show(); });
-                    }
-                });
-            }
-        });
-
+        // What's New modal — shows once per version
         safeInit('WhatsNew', () => {
             if (typeof LazyLoader !== 'undefined') {
                 LazyLoader.loadOnDemand('whatsnew').then(() => {
@@ -457,27 +442,6 @@
                             installedScripts: state.scripts,
                             onInstall: (url) => chrome.runtime.sendMessage({ action: 'installFromUrl', url })
                         });
-                    }
-                });
-                break;
-            case 'performance':
-                safeInit('Performance', () => {
-                    if (typeof PerformanceDashboard !== 'undefined') {
-                        PerformanceDashboard.init(document.getElementById('performanceContainer'));
-                    }
-                });
-                break;
-            case 'analytics':
-                safeInit('Analytics', () => {
-                    if (typeof ScriptAnalytics !== 'undefined') {
-                        ScriptAnalytics.init(document.getElementById('analyticsContainer'));
-                    }
-                });
-                break;
-            case 'ai':
-                safeInit('AI', () => {
-                    if (typeof AIAssistant !== 'undefined') {
-                        AIAssistant.init(document.getElementById('aiContainer'));
                     }
                 });
                 break;
@@ -5184,10 +5148,7 @@
         if (name === 'trash') loadTrash();
 
         // Lazy-load and initialize modules for this tab
-        lazyInitTab(name).then(() => {
-            if (name === 'performance' && typeof PerformanceDashboard !== 'undefined') PerformanceDashboard.refresh?.();
-            if (name === 'analytics' && typeof ScriptAnalytics !== 'undefined') ScriptAnalytics.refresh?.();
-        });
+        lazyInitTab(name);
     }
 
     function showDropOverlay(show) {

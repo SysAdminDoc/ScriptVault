@@ -351,6 +351,38 @@ const ScriptStore = (() => {
     color: var(--text-muted);
 }
 
+/* Source badges on cards */
+.ss-source-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
+    margin-left: 4px;
+}
+.ss-source-bar {
+    display: flex;
+    gap: 12px;
+    padding: 6px 16px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-section-header);
+    flex-wrap: wrap;
+    align-items: center;
+}
+.ss-source-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.ss-source-chip:not(.active) {
+    opacity: 0.4;
+    text-decoration: line-through;
+}
+
 /* Footer status bar */
 .ss-footer {
     display: flex;
@@ -418,23 +450,157 @@ const ScriptStore = (() => {
     }
 
     // =========================================
-    // API
+    // Multi-Source API
     // =========================================
-    async function fetchGreasyFork(params = {}) {
-        const { query, page = 1, sort, site } = params;
-        let url;
 
-        if (site) {
-            url = `https://api.greasyfork.org/en/scripts/by-site/${encodeURIComponent(site)}.json?page=${page}`;
-        } else {
-            url = `https://api.greasyfork.org/en/scripts.json?page=${page}`;
-            if (query) url += `&q=${encodeURIComponent(query)}`;
-            if (sort) url += `&sort=${encodeURIComponent(sort)}`;
+    // Source definitions — each has a fetch function that returns normalized results
+    const SOURCES = {
+        greasyfork: {
+            label: 'Greasy Fork',
+            color: '#670000',
+            async fetch({ query, page, sort, site }) {
+                let url;
+                if (site) {
+                    url = `https://api.greasyfork.org/en/scripts/by-site/${encodeURIComponent(site)}.json?page=${page || 1}`;
+                } else {
+                    url = `https://api.greasyfork.org/en/scripts.json?page=${page || 1}`;
+                    if (query) url += `&q=${encodeURIComponent(query)}`;
+                    if (sort) url += `&sort=${encodeURIComponent(sort)}`;
+                }
+                const resp = await fetch(url);
+                if (!resp.ok) return [];
+                const data = await resp.json();
+                return data.map(s => ({
+                    source: 'greasyfork',
+                    id: 'gf_' + s.id,
+                    name: s.name || 'Unnamed',
+                    author: s.users?.[0]?.name || 'Unknown',
+                    description: s.description || '',
+                    version: s.version || '',
+                    totalInstalls: s.total_installs || 0,
+                    dailyInstalls: s.daily_installs || 0,
+                    rating: s.fan_score ? parseFloat(s.fan_score).toFixed(0) + '%' : '--',
+                    updatedAt: s.code_updated_at,
+                    codeUrl: s.code_url || '',
+                    pageUrl: s.url || '',
+                }));
+            }
+        },
+        openuserjs: {
+            label: 'OpenUserJS',
+            color: '#2c3e50',
+            async fetch({ query, page }) {
+                if (!query) return [];
+                try {
+                    // OpenUserJS has a limited API — search by script name
+                    const resp = await fetch(`https://openuserjs.org/api/script/search?q=${encodeURIComponent(query)}&p=${page || 1}&limit=15`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!resp.ok) return [];
+                    const data = await resp.json();
+                    const scripts = Array.isArray(data) ? data : (data.scripts || data.data || []);
+                    return scripts.map(s => ({
+                        source: 'openuserjs',
+                        id: 'oujs_' + (s._id || s.name),
+                        name: s.name || 'Unnamed',
+                        author: s.author || s._authorId || 'Unknown',
+                        description: s.description || s.about || '',
+                        version: s.version || '',
+                        totalInstalls: s.installs || 0,
+                        dailyInstalls: 0,
+                        rating: s.rating ? String(Math.round(s.rating)) + '%' : '--',
+                        updatedAt: s.updated || s.updatedAt,
+                        codeUrl: s.installURL || `https://openuserjs.org/install/${encodeURIComponent(s.author || '')}/${encodeURIComponent(s.name || '')}.user.js`,
+                        pageUrl: s.url || `https://openuserjs.org/scripts/${encodeURIComponent(s.author || '')}/${encodeURIComponent(s.name || '')}`,
+                    }));
+                } catch (e) {
+                    console.warn('[ScriptStore] OpenUserJS fetch failed:', e.message);
+                    return [];
+                }
+            }
+        },
+        github: {
+            label: 'GitHub',
+            color: '#24292e',
+            async fetch({ query, page }) {
+                if (!query) return [];
+                try {
+                    // Search GitHub for .user.js files
+                    const resp = await fetch(`https://api.github.com/search/code?q=${encodeURIComponent(query)}+extension:user.js+in:file&per_page=10&page=${page || 1}`, {
+                        headers: { 'Accept': 'application/vnd.github.v3+json' }
+                    });
+                    if (!resp.ok) return [];
+                    const data = await resp.json();
+                    return (data.items || []).map(item => {
+                        const repo = item.repository;
+                        return {
+                            source: 'github',
+                            id: 'gh_' + item.sha,
+                            name: item.name.replace('.user.js', ''),
+                            author: repo?.owner?.login || 'Unknown',
+                            description: repo?.description || '',
+                            version: '',
+                            totalInstalls: repo?.stargazers_count || 0,
+                            dailyInstalls: 0,
+                            rating: repo?.stargazers_count ? repo.stargazers_count + ' stars' : '--',
+                            updatedAt: repo?.updated_at,
+                            codeUrl: item.html_url?.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/') || '',
+                            pageUrl: item.html_url || '',
+                        };
+                    });
+                } catch (e) {
+                    console.warn('[ScriptStore] GitHub search failed:', e.message);
+                    return [];
+                }
+            }
         }
+    };
 
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`API returned ${resp.status}`);
-        return resp.json();
+    // Active sources (all enabled by default)
+    let _activeSources = new Set(['greasyfork', 'openuserjs', 'github']);
+
+    /**
+     * Unified search across all active sources.
+     * Fetches from all sources in parallel, deduplicates by name, and merges.
+     */
+    async function fetchAllSources(params = {}) {
+        const sourceKeys = [..._activeSources];
+        const promises = sourceKeys.map(key => {
+            const src = SOURCES[key];
+            if (!src) return Promise.resolve([]);
+            return src.fetch(params).catch(() => []);
+        });
+
+        const results = await Promise.allSettled(promises);
+        let allScripts = [];
+        const sourceStats = {};
+
+        results.forEach((result, i) => {
+            const key = sourceKeys[i];
+            const scripts = result.status === 'fulfilled' ? result.value : [];
+            sourceStats[key] = scripts.length;
+            allScripts.push(...scripts);
+        });
+
+        // Deduplicate by name (case-insensitive) — prefer the one with more installs
+        const seen = new Map();
+        for (const s of allScripts) {
+            const key = s.name.toLowerCase();
+            if (!seen.has(key) || (seen.get(key).totalInstalls < s.totalInstalls)) {
+                seen.set(key, s);
+            }
+        }
+        const deduped = [...seen.values()];
+
+        // Sort by total installs descending (most popular first)
+        deduped.sort((a, b) => b.totalInstalls - a.totalInstalls);
+
+        return { scripts: deduped, sourceStats };
+    }
+
+    // Keep backward-compatible single-source fetch for site-specific search
+    async function fetchGreasyFork(params = {}) {
+        return SOURCES.greasyfork.fetch(params);
     }
 
     // =========================================
@@ -464,7 +630,7 @@ const ScriptStore = (() => {
         if (footer) footer.textContent = text;
     }
 
-    function renderCards(scripts, page, contextLabel) {
+    function renderCards(scripts, page, contextLabel, sourceStats) {
         const el = getResultsEl();
         if (!el) return;
 
@@ -475,6 +641,19 @@ const ScriptStore = (() => {
 
         let html = '';
 
+        // Source stats bar (shows how many results came from each source)
+        if (sourceStats) {
+            const statsHtml = Object.entries(sourceStats)
+                .filter(([, count]) => count > 0)
+                .map(([key, count]) => {
+                    const src = SOURCES[key];
+                    return `<span class="ss-source-stat" style="border-left:3px solid ${src?.color || '#666'};padding-left:6px">${src?.label || key}: ${count}</span>`;
+                }).join('');
+            if (statsHtml) {
+                html += `<div class="ss-source-bar">${statsHtml}<span class="ss-source-stat" style="font-weight:600">${scripts.length} total (deduplicated)</span></div>`;
+            }
+        }
+
         if (contextLabel) {
             html += `<div class="ss-result-count">${contextLabel} - Page ${page}</div>`;
         } else {
@@ -482,17 +661,21 @@ const ScriptStore = (() => {
         }
 
         scripts.forEach(s => {
+            // Unified format — works with both old GF format and new normalized format
             const name = s.name || 'Unnamed';
-            const author = s.users?.[0]?.name || 'Unknown';
+            const author = s.author || s.users?.[0]?.name || 'Unknown';
             const desc = s.description || 'No description';
             const version = s.version || '';
-            const totalInstalls = s.total_installs || 0;
-            const dailyInstalls = s.daily_installs || 0;
-            const rating = s.fan_score ? parseFloat(s.fan_score).toFixed(0) + '%' : '--';
-            const updated = formatDate(s.code_updated_at);
+            const totalInstalls = s.totalInstalls ?? s.total_installs ?? 0;
+            const dailyInstalls = s.dailyInstalls ?? s.daily_installs ?? 0;
+            const rating = s.rating || (s.fan_score ? parseFloat(s.fan_score).toFixed(0) + '%' : '--');
+            const updated = formatDate(s.updatedAt || s.code_updated_at);
             const installed = isInstalled(name);
-            const codeUrl = s.code_url || '';
-            const pageUrl = s.url || '';
+            const codeUrl = s.codeUrl || s.code_url || '';
+            const pageUrl = s.pageUrl || s.url || '';
+            const source = s.source || 'greasyfork';
+            const srcDef = SOURCES[source];
+            const sourceBadge = srcDef ? `<span class="ss-source-badge" style="background:${srcDef.color};color:#fff">${srcDef.label}</span>` : '';
 
             html += `
 <div class="ss-card${installed ? ' installed' : ''}" data-script-name="${escapeHtml(name)}">
@@ -500,14 +683,15 @@ const ScriptStore = (() => {
         <div class="ss-card-name">
             <a href="${escapeHtml(pageUrl)}" target="_blank" rel="noopener">${escapeHtml(name)}</a>
             ${version ? `<span class="ss-card-version">v${escapeHtml(version)}</span>` : ''}
+            ${sourceBadge}
             ${installed ? '<span class="ss-installed-badge">Installed</span>' : ''}
         </div>
         <div class="ss-card-desc" title="${escapeHtml(desc)}">${escapeHtml(desc)}</div>
         <div class="ss-card-meta">
             <span title="Author">${escapeHtml(author)}</span>
             <span title="Total installs">${formatNumber(totalInstalls)} installs</span>
-            <span title="Daily installs">${formatNumber(dailyInstalls)}/day</span>
-            <span title="Rating">${rating} rating</span>
+            ${dailyInstalls > 0 ? `<span title="Daily installs">${formatNumber(dailyInstalls)}/day</span>` : ''}
+            <span title="Rating">${rating}</span>
             <span title="Last updated">${updated}</span>
         </div>
     </div>
@@ -640,39 +824,45 @@ const ScriptStore = (() => {
     async function executeSearch() {
         if (_state.loading) return;
         _state.loading = true;
-        showLoading();
+        showLoading('Searching across ' + _activeSources.size + ' sources...');
 
         try {
             await refreshInstalledNames();
 
             let scripts;
             let contextLabel = null;
+            let sourceStats = null;
 
             if (_state.siteHostname) {
+                // Site-specific uses Greasy Fork only (it has the by-site API)
                 scripts = await fetchGreasyFork({ site: _state.siteHostname, page: _state.page });
                 contextLabel = `Scripts for ${_state.siteHostname}`;
             } else if (_state.sortMode && !_state.query && !_state.category) {
+                // Popular/Trending uses Greasy Fork only
                 scripts = await fetchGreasyFork({ sort: _state.sortMode, page: _state.page });
                 const sortLabel = _state.sortMode === 'daily_installs' ? 'Trending' : 'Popular';
                 contextLabel = sortLabel + ' scripts';
             } else {
+                // Keyword/category search — use ALL sources
                 const query = _state.query || (_state.category ? CATEGORIES[_state.category]?.query : '');
                 if (!query) {
                     showEmpty('Enter a search term or select a category to browse scripts.');
                     _state.loading = false;
                     return;
                 }
-                scripts = await fetchGreasyFork({
+                const result = await fetchAllSources({
                     query,
                     page: _state.page,
                     sort: _state.sortMode || undefined,
                 });
+                scripts = result.scripts;
+                sourceStats = result.sourceStats;
                 if (_state.category) {
                     contextLabel = CATEGORIES[_state.category]?.label;
                 }
             }
 
-            renderCards(scripts, _state.page, contextLabel);
+            renderCards(scripts, _state.page, contextLabel, sourceStats);
         } catch (e) {
             showError('Search failed: ' + e.message);
         } finally {
@@ -726,13 +916,18 @@ const ScriptStore = (() => {
         <span class="ss-nav-sep"></span>
         <span class="ss-chip" data-sort="total_installs">Popular</span>
         <span class="ss-chip" data-sort="daily_installs">Trending</span>
+        <span class="ss-nav-sep"></span>
+        <span class="ss-nav-label">Sources:</span>
+        ${Object.entries(SOURCES).map(([key, src]) =>
+            `<span class="ss-chip active ss-source-chip" data-source="${key}" style="border-left:3px solid ${src.color}">${src.label}</span>`
+        ).join('')}
     </div>
     <div class="ss-results">
         <div class="ss-empty">Search for userscripts or browse categories above to discover scripts.</div>
     </div>
     <div class="ss-footer">
         <span class="ss-footer-text">Ready</span>
-        <span>Powered by Greasy Fork</span>
+        <span>Greasy Fork &bull; OpenUserJS &bull; GitHub</span>
     </div>
 </div>`;
     }
@@ -782,6 +977,22 @@ const ScriptStore = (() => {
                 _state.sortMode = chip.dataset.sort;
                 updateActiveChips();
                 executeSearch();
+            });
+        });
+
+        // Source toggle chips
+        container.querySelectorAll('.ss-source-chip[data-source]').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const src = chip.dataset.source;
+                if (_activeSources.has(src)) {
+                    // Don't allow disabling all sources
+                    if (_activeSources.size <= 1) return;
+                    _activeSources.delete(src);
+                    chip.classList.remove('active');
+                } else {
+                    _activeSources.add(src);
+                    chip.classList.add('active');
+                }
             });
         });
     }

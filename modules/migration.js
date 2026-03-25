@@ -139,23 +139,6 @@ const Migration = (() => {
       });
     }
 
-    // 7. Create initial performance snapshot
-    try {
-      const perfHistory = await chrome.storage.local.get('perfHistory');
-      if (!perfHistory.perfHistory || perfHistory.perfHistory.length === 0) {
-        const allScripts = Object.values(scripts);
-        const snapshot = {};
-        for (const s of allScripts) {
-          if (s.stats) {
-            snapshot[s.id] = { avgTime: s.stats.avgTime || 0, runs: s.stats.runs || 0, errors: s.stats.errors || 0 };
-          }
-        }
-        await chrome.storage.local.set({
-          perfHistory: [{ timestamp: Date.now(), data: snapshot }]
-        });
-      }
-    } catch {}
-
     console.log('[Migration] v2.0 migration complete');
   }
 

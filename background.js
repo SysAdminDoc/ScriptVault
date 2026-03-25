@@ -1,4 +1,4 @@
-// ScriptVault v2.0.0 - Background Service Worker
+// ScriptVault v2.0.1 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run build-background.sh to regenerate.
@@ -9144,23 +9144,6 @@ const Migration = (() => {
       });
     }
 
-    // 7. Create initial performance snapshot
-    try {
-      const perfHistory = await chrome.storage.local.get('perfHistory');
-      if (!perfHistory.perfHistory || perfHistory.perfHistory.length === 0) {
-        const allScripts = Object.values(scripts);
-        const snapshot = {};
-        for (const s of allScripts) {
-          if (s.stats) {
-            snapshot[s.id] = { avgTime: s.stats.avgTime || 0, runs: s.stats.runs || 0, errors: s.stats.errors || 0 };
-          }
-        }
-        await chrome.storage.local.set({
-          perfHistory: [{ timestamp: Date.now(), data: snapshot }]
-        });
-      }
-    } catch {}
-
     console.log('[Migration] v2.0 migration complete');
   }
 
@@ -9284,34 +9267,7 @@ const QuotaManager = (() => {
       }
     }
 
-    // 2. Trim analytics data to 30 days (from 90)
-    if (options.analytics !== false) {
-      const analyticsData = await chrome.storage.local.get('analytics');
-      if (analyticsData.analytics) {
-        const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        const old = Object.keys(analyticsData.analytics).filter(d => d < cutoff);
-        if (old.length > 0) {
-          for (const date of old) delete analyticsData.analytics[date];
-          await chrome.storage.local.set({ analytics: analyticsData.analytics });
-          actions.push(`Pruned ${old.length} days of old analytics`);
-          freedBytes += old.length * 500; // Estimate
-        }
-      }
-    }
-
-    // 3. Trim performance history to 14 days
-    if (options.perfHistory !== false) {
-      const perfData = await chrome.storage.local.get('perfHistory');
-      if (perfData.perfHistory && perfData.perfHistory.length > 14) {
-        const trimmed = perfData.perfHistory.slice(-14);
-        const removed = perfData.perfHistory.length - trimmed.length;
-        await chrome.storage.local.set({ perfHistory: trimmed });
-        actions.push(`Pruned ${removed} perf history entries`);
-        freedBytes += removed * 200;
-      }
-    }
-
-    // 4. Trim error log to 200 entries
+    // 2. Trim error log to 200 entries
     if (options.errorLog !== false) {
       const errData = await chrome.storage.local.get('errorLog');
       if (errData.errorLog && errData.errorLog.length > 200) {
@@ -11471,42 +11427,6 @@ async function handleMessage(message, sender) {
       }
 
       // v2.0: Script Analytics
-      case 'recordAnalytics': {
-        const analyticsData = await chrome.storage.local.get('analytics');
-        const analytics = analyticsData.analytics || {};
-        const today = new Date().toISOString().slice(0, 10);
-        if (!analytics[today]) analytics[today] = {};
-        const sid = data.scriptId;
-        if (!analytics[today][sid]) analytics[today][sid] = { runs: 0, totalTime: 0, errors: 0, urls: [] };
-        analytics[today][sid].runs++;
-        analytics[today][sid].totalTime += data.duration || 0;
-        if (data.error) analytics[today][sid].errors++;
-        if (data.url && !analytics[today][sid].urls.includes(data.url)) {
-          analytics[today][sid].urls.push(data.url);
-          if (analytics[today][sid].urls.length > 50) analytics[today][sid].urls = analytics[today][sid].urls.slice(-50);
-        }
-        // Prune data older than 90 days
-        const cutoffDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        for (const date of Object.keys(analytics)) {
-          if (date < cutoffDate) delete analytics[date];
-        }
-        await chrome.storage.local.set({ analytics });
-        return { success: true };
-      }
-      case 'getAnalytics': {
-        const aData = await chrome.storage.local.get('analytics');
-        return { analytics: aData.analytics || {} };
-      }
-      case 'getAnalyticsForScript': {
-        const aData2 = await chrome.storage.local.get('analytics');
-        const analytics2 = aData2.analytics || {};
-        const scriptData = {};
-        for (const [date, scripts] of Object.entries(analytics2)) {
-          if (scripts[data.scriptId]) scriptData[date] = scripts[data.scriptId];
-        }
-        return { data: scriptData };
-      }
-
       // v2.0: Profiles
       case 'getProfiles': {
         const pData = await chrome.storage.local.get(['profiles', 'activeProfileId']);
@@ -12703,22 +12623,6 @@ async function handleMessage(message, sender) {
       }
 
       // Performance History
-      case 'getPerfHistory': {
-        const histData = await chrome.storage.local.get('perfHistory');
-        return { history: histData.perfHistory || [] };
-      }
-
-      case 'savePerfSnapshot': {
-        const histData2 = await chrome.storage.local.get('perfHistory');
-        const history = histData2.perfHistory || [];
-        history.push({ timestamp: Date.now(), data: data.snapshot });
-        // Keep last 30 days
-        const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
-        const trimmed = history.filter(h => h.timestamp > cutoff);
-        await chrome.storage.local.set({ perfHistory: trimmed });
-        return { success: true };
-      }
-
       // Easy Cloud Sync
       case 'easyCloudConnect': {
         if (typeof EasyCloudSync !== 'undefined') {

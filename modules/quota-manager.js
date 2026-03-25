@@ -87,34 +87,7 @@ const QuotaManager = (() => {
       }
     }
 
-    // 2. Trim analytics data to 30 days (from 90)
-    if (options.analytics !== false) {
-      const analyticsData = await chrome.storage.local.get('analytics');
-      if (analyticsData.analytics) {
-        const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        const old = Object.keys(analyticsData.analytics).filter(d => d < cutoff);
-        if (old.length > 0) {
-          for (const date of old) delete analyticsData.analytics[date];
-          await chrome.storage.local.set({ analytics: analyticsData.analytics });
-          actions.push(`Pruned ${old.length} days of old analytics`);
-          freedBytes += old.length * 500; // Estimate
-        }
-      }
-    }
-
-    // 3. Trim performance history to 14 days
-    if (options.perfHistory !== false) {
-      const perfData = await chrome.storage.local.get('perfHistory');
-      if (perfData.perfHistory && perfData.perfHistory.length > 14) {
-        const trimmed = perfData.perfHistory.slice(-14);
-        const removed = perfData.perfHistory.length - trimmed.length;
-        await chrome.storage.local.set({ perfHistory: trimmed });
-        actions.push(`Pruned ${removed} perf history entries`);
-        freedBytes += removed * 200;
-      }
-    }
-
-    // 4. Trim error log to 200 entries
+    // 2. Trim error log to 200 entries
     if (options.errorLog !== false) {
       const errData = await chrome.storage.local.get('errorLog');
       if (errData.errorLog && errData.errorLog.length > 200) {

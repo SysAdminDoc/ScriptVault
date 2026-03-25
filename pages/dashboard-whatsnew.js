@@ -12,8 +12,6 @@ const WhatsNew = (() => {
       date: '2026-03-24',
       highlights: [
         { icon: '🛍️', title: 'Built-in Script Store', desc: 'Search, browse, and install scripts from Greasy Fork — right from the dashboard.' },
-        { icon: '🤖', title: 'AI Assistant', desc: 'Generate scripts from natural language, explain code, run AI security reviews, and auto-fix errors.' },
-        { icon: '📊', title: 'Performance Dashboard', desc: 'Track script impact scores, page load delta, 30-day trend sparklines, and auto-disable recommendations.' },
         { icon: '🐛', title: 'Script Debugger', desc: 'Per-script console capture, live reload on save, variable inspector, and error timeline.' },
         { icon: '🗂️', title: 'Card View', desc: 'Toggle between table and visual card view with site favicons and status indicators.' },
         { icon: '⌨️', title: 'Keyboard Navigation & Vim Mode', desc: 'Full keyboard-first navigation with optional Vim keybindings. Press ? for help.' },
@@ -22,9 +20,7 @@ const WhatsNew = (() => {
         { icon: '📦', title: 'npm Package Resolution', desc: 'Use @require npm:lodash to auto-resolve packages via CDN with SRI verification.' },
         { icon: '🔔', title: 'Smart Notifications', desc: 'Update alerts, error notifications after 3 consecutive failures, and optional weekly digest.' },
         { icon: '📋', title: 'Error Log & Export', desc: '500-entry structured error log with JSON/CSV/text export and error grouping.' },
-        { icon: '♿', title: 'Accessibility (WCAG 2.1 AA)', desc: 'ARIA labels, focus trapping, screen reader announcements, high contrast, and reduced motion.' },
-        { icon: '👋', title: 'Onboarding Wizard', desc: 'Welcome flow for new users with Tampermonkey import and starter script suggestions.' },
-        { icon: '🧪', title: 'Test Suite', desc: '159 unit tests covering parser, utilities, version comparison, analyzer, and network log.' }
+        { icon: '♿', title: 'Accessibility (WCAG 2.1 AA)', desc: 'ARIA labels, focus trapping, screen reader announcements, high contrast, and reduced motion.' }
       ],
       improvements: [
         'esbuild-based build system with minification and source maps',
