@@ -21,13 +21,10 @@ const LazyLoader = (() => {
 
   // Map: tab name → modules to load when that tab is activated
   const TAB_MODULES = {
-    store: ['dashboard-store.js', 'dashboard-openuserjs.js'],
-    performance: ['dashboard-performance.js'],
-    analytics: ['dashboard-analytics.js', 'dashboard-heatmap.js'],
-    ai: ['dashboard-ai.js'],
+    store: ['dashboard-store.js'],
     scripts: ['dashboard-cardview.js', 'dashboard-linter.js', 'dashboard-recommendations.js'],
     settings: ['dashboard-theme-editor.js'],
-    utilities: ['dashboard-collections.js', 'dashboard-standalone.js', 'dashboard-depgraph.js'],
+    utilities: ['dashboard-collections.js', 'dashboard-standalone.js', 'dashboard-depgraph.js', 'dashboard-heatmap.js'],
     help: [],
     trash: [],
   };
@@ -42,7 +39,6 @@ const LazyLoader = (() => {
 
   // Modules loaded on demand (user action triggers)
   const ON_DEMAND_MODULES = {
-    onboarding: 'dashboard-onboarding.js',
     whatsnew: 'dashboard-whatsnew.js',
     sharing: 'dashboard-sharing.js',
     gist: 'dashboard-gist.js',

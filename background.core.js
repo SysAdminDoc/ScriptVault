@@ -1602,42 +1602,6 @@ async function handleMessage(message, sender) {
       }
 
       // v2.0: Script Analytics
-      case 'recordAnalytics': {
-        const analyticsData = await chrome.storage.local.get('analytics');
-        const analytics = analyticsData.analytics || {};
-        const today = new Date().toISOString().slice(0, 10);
-        if (!analytics[today]) analytics[today] = {};
-        const sid = data.scriptId;
-        if (!analytics[today][sid]) analytics[today][sid] = { runs: 0, totalTime: 0, errors: 0, urls: [] };
-        analytics[today][sid].runs++;
-        analytics[today][sid].totalTime += data.duration || 0;
-        if (data.error) analytics[today][sid].errors++;
-        if (data.url && !analytics[today][sid].urls.includes(data.url)) {
-          analytics[today][sid].urls.push(data.url);
-          if (analytics[today][sid].urls.length > 50) analytics[today][sid].urls = analytics[today][sid].urls.slice(-50);
-        }
-        // Prune data older than 90 days
-        const cutoffDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        for (const date of Object.keys(analytics)) {
-          if (date < cutoffDate) delete analytics[date];
-        }
-        await chrome.storage.local.set({ analytics });
-        return { success: true };
-      }
-      case 'getAnalytics': {
-        const aData = await chrome.storage.local.get('analytics');
-        return { analytics: aData.analytics || {} };
-      }
-      case 'getAnalyticsForScript': {
-        const aData2 = await chrome.storage.local.get('analytics');
-        const analytics2 = aData2.analytics || {};
-        const scriptData = {};
-        for (const [date, scripts] of Object.entries(analytics2)) {
-          if (scripts[data.scriptId]) scriptData[date] = scripts[data.scriptId];
-        }
-        return { data: scriptData };
-      }
-
       // v2.0: Profiles
       case 'getProfiles': {
         const pData = await chrome.storage.local.get(['profiles', 'activeProfileId']);
@@ -2834,22 +2798,6 @@ async function handleMessage(message, sender) {
       }
 
       // Performance History
-      case 'getPerfHistory': {
-        const histData = await chrome.storage.local.get('perfHistory');
-        return { history: histData.perfHistory || [] };
-      }
-
-      case 'savePerfSnapshot': {
-        const histData2 = await chrome.storage.local.get('perfHistory');
-        const history = histData2.perfHistory || [];
-        history.push({ timestamp: Date.now(), data: data.snapshot });
-        // Keep last 30 days
-        const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
-        const trimmed = history.filter(h => h.timestamp > cutoff);
-        await chrome.storage.local.set({ perfHistory: trimmed });
-        return { success: true };
-      }
-
       // Easy Cloud Sync
       case 'easyCloudConnect': {
         if (typeof EasyCloudSync !== 'undefined') {
