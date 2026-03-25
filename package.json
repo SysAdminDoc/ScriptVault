@@ -1,0 +1,21 @@
+{
+  "name": "scriptvault",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "build:bg": "node esbuild.config.mjs --bg-only",
+    "build:monaco": "node esbuild.config.mjs --monaco-only",
+    "watch": "node esbuild.config.mjs --watch",
+    "test": "vitest run",
+    "lint": "eslint shared/ modules/ bg/ background.core.js content.js",
+    "clean": "rm -f background.js && rm -rf lib/monaco"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "esbuild": "^0.24.0",
+    "monaco-editor": "^0.52.0",
+    "vitest": "^2.1.0"
+  }
+}

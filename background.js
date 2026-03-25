@@ -1,14 +1,17 @@
-// ScriptVault v1.7.8 - Background Service Worker
+// ScriptVault v2.0.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run build-background.sh to regenerate.
 
+// @ts-check
 // ScriptVault Shared Utilities
 // Used by background.js (inlined at build time) and HTML pages (via <script src>)
 
 /**
  * Escape HTML special characters to prevent XSS.
  * Works in both DOM (pages) and non-DOM (service worker) contexts.
+ * @param {string} str - The string to escape
+ * @returns {string} The escaped string
  */
 function escapeHtml(str) {
   if (!str) return '';
@@ -22,6 +25,7 @@ function escapeHtml(str) {
 
 /**
  * Generate a unique script ID using crypto.randomUUID().
+ * @returns {string} A unique ID prefixed with 'script_'
  */
 function generateId() {
   return 'script_' + crypto.randomUUID();
@@ -30,6 +34,8 @@ function generateId() {
 /**
  * Validate and sanitize a URL for safe use in href attributes.
  * Returns the URL if safe, or null if potentially dangerous.
+ * @param {string} url - The URL to sanitize
+ * @returns {string|null} The sanitized URL or null if unsafe
  */
 function sanitizeUrl(url) {
   if (!url) return null;
@@ -45,6 +51,8 @@ function sanitizeUrl(url) {
 
 /**
  * Format byte count as human-readable string.
+ * @param {number} bytes - The byte count to format
+ * @returns {string} Human-readable string like '1.5 MB'
  */
 function formatBytes(bytes) {
   if (!bytes || bytes <= 0) return '0 B';
@@ -4682,6 +4690,4700 @@ const ResourceCache = {
 };
 
 
+// ============================================================================
+// NPM Package Resolver for @require directives
+// ============================================================================
+// Resolves `@require npm:package-name` and `@require npm:package-name@version`
+// to CDN URLs with fallback chain and integrity verification.
+// Designed for service worker context (no DOM, fetch API only).
+// ============================================================================
+
+const NpmResolver = {
+  CACHE_KEY: 'npmCache',
+  CACHE_TTL: 86400000, // 24 hours
+  REGISTRY_URL: 'https://registry.npmjs.org',
+  REQUEST_TIMEOUT: 10000, // 10 seconds
+
+  // Pre-mapped shortcuts for popular packages (name -> CDN path overrides)
+  POPULAR_PACKAGES: {
+    'lodash':       { cdn: 'lodash', file: 'lodash.min.js' },
+    'jquery':       { cdn: 'jquery', file: 'jquery.min.js' },
+    'axios':        { cdn: 'axios', file: 'axios.min.js' },
+    'moment':       { cdn: 'moment', file: 'moment.min.js' },
+    'dayjs':        { cdn: 'dayjs', file: 'dayjs.min.js' },
+    'rxjs':         { cdn: 'rxjs', file: 'rxjs.umd.min.js' },
+    'underscore':   { cdn: 'underscore', file: 'underscore-min.js' },
+    'ramda':        { cdn: 'ramda', file: 'ramda.min.js' },
+    'dompurify':    { cdn: 'dompurify', file: 'purify.min.js' },
+    'marked':       { cdn: 'marked', file: 'marked.min.js' },
+    'highlight.js': { cdn: 'highlight.js', file: 'highlight.min.js' },
+    'chart.js':     { cdn: 'Chart.js', file: 'chart.umd.js' },
+    'three':        { cdn: 'three', file: 'three.min.js' },
+    'd3':           { cdn: 'd3', file: 'd3.min.js' },
+    'gsap':         { cdn: 'gsap', file: 'gsap.min.js' },
+    'animejs':      { cdn: 'animejs', file: 'anime.min.js' },
+    'anime.js':     { cdn: 'animejs', file: 'anime.min.js' },
+    'sweetalert2':  { cdn: 'sweetalert2', file: 'sweetalert2.all.min.js' },
+    'tippy.js':     { cdn: 'tippy.js', file: 'tippy-bundle.umd.min.js' },
+    'sortablejs':   { cdn: 'Sortable', file: 'Sortable.min.js' },
+    'luxon':        { cdn: 'luxon', file: 'luxon.min.js' }
+  },
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Check if a require URL uses the npm: prefix.
+   * @param {string} url
+   * @returns {boolean}
+   */
+  isNpmRequire(url) {
+    return typeof url === 'string' && url.startsWith('npm:');
+  },
+
+  /**
+   * Resolve a single npm require spec to a CDN URL.
+   * @param {string} requireSpec - e.g. "npm:lodash" or "npm:lodash@4.17.21"
+   * @returns {Promise<{url: string, integrity: string, version: string}>}
+   */
+  async resolve(requireSpec) {
+    if (!this.isNpmRequire(requireSpec)) {
+      throw new Error(`Not an npm require: ${requireSpec}`);
+    }
+
+    const { name, version: requestedVersion } = this._parseSpec(requireSpec);
+    const cacheKey = `${name}@${requestedVersion || 'latest'}`;
+
+    // Check cache first
+    const cached = await this._getCache(cacheKey);
+    if (cached) return cached;
+
+    // Resolve version if not pinned
+    const version = requestedVersion || await this._resolveLatestVersion(name);
+    if (!version) {
+      throw new Error(`Failed to resolve version for package: ${name}`);
+    }
+
+    // Try CDN chain with fallback
+    const urls = this._buildCdnUrls(name, version);
+    let lastError = null;
+
+    for (const url of urls) {
+      try {
+        const content = await this._fetchWithTimeout(url);
+        const integrity = await this._computeSriHash(content);
+        const result = { url, integrity, version };
+        await this._setCache(cacheKey, result);
+        return result;
+      } catch (err) {
+        lastError = err;
+        // Continue to next CDN
+      }
+    }
+
+    throw new Error(
+      `Failed to resolve npm:${name}@${version} from all CDNs: ${lastError?.message || 'unknown error'}`
+    );
+  },
+
+  /**
+   * Batch-resolve multiple npm require specs.
+   * @param {string[]} requires - Array of require specs
+   * @returns {Promise<Map<string, {url: string, integrity: string, version: string}>>}
+   */
+  async resolveAll(requires) {
+    const results = new Map();
+    const promises = requires.map(async (spec) => {
+      try {
+        const result = await this.resolve(spec);
+        results.set(spec, result);
+      } catch (err) {
+        results.set(spec, { error: err.message });
+      }
+    });
+    await Promise.allSettled(promises);
+    return results;
+  },
+
+  /**
+   * Fetch metadata for a package from the npm registry.
+   * @param {string} packageName
+   * @returns {Promise<{name: string, version: string, description: string, homepage: string, main: string}>}
+   */
+  async getPackageInfo(packageName) {
+    const sanitized = this._sanitizePackageName(packageName);
+    const url = `${this.REGISTRY_URL}/${encodeURIComponent(sanitized).replace('%40', '@')}/latest`;
+
+    const response = await this._fetchWithTimeout(url, { isJson: true });
+    const data = JSON.parse(response);
+
+    return {
+      name: data.name,
+      version: data.version,
+      description: data.description || '',
+      homepage: data.homepage || '',
+      main: data.main || 'index.js'
+    };
+  },
+
+  /**
+   * Clear all cached npm resolution data.
+   */
+  async clearCache() {
+    try {
+      await chrome.storage.local.remove(this.CACHE_KEY);
+    } catch (e) {
+      // Ignore storage errors
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // Internal helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Parse an npm require spec into name and optional version.
+   * Handles scoped packages (e.g. npm:@scope/name@version).
+   * @param {string} spec
+   * @returns {{name: string, version: string|null}}
+   */
+  _parseSpec(spec) {
+    // Strip "npm:" prefix
+    const raw = spec.slice(4);
+    if (!raw) throw new Error('Empty npm package spec');
+
+    let name, version = null;
+
+    if (raw.startsWith('@')) {
+      // Scoped package: @scope/name or @scope/name@version
+      const slashIdx = raw.indexOf('/');
+      if (slashIdx === -1) throw new Error(`Invalid scoped package: ${raw}`);
+      const afterScope = raw.indexOf('@', slashIdx);
+      if (afterScope > slashIdx) {
+        name = raw.slice(0, afterScope);
+        version = raw.slice(afterScope + 1);
+      } else {
+        name = raw;
+      }
+    } else {
+      // Regular package: name or name@version
+      const atIdx = raw.indexOf('@');
+      if (atIdx > 0) {
+        name = raw.slice(0, atIdx);
+        version = raw.slice(atIdx + 1);
+      } else {
+        name = raw;
+      }
+    }
+
+    name = this._sanitizePackageName(name);
+    if (version) version = this._sanitizeVersion(version);
+
+    return { name, version };
+  },
+
+  /**
+   * Validate and sanitize a package name.
+   * @param {string} name
+   * @returns {string}
+   */
+  _sanitizePackageName(name) {
+    const trimmed = name.trim();
+    // npm package names: lowercase, can contain hyphens, dots, underscores, scoped with @
+    if (!/^(@[a-z0-9\-~][a-z0-9\-._~]*\/)?[a-z0-9\-~][a-z0-9\-._~]*$/.test(trimmed)) {
+      throw new Error(`Invalid package name: ${trimmed}`);
+    }
+    return trimmed;
+  },
+
+  /**
+   * Validate and sanitize a version string.
+   * @param {string} version
+   * @returns {string}
+   */
+  _sanitizeVersion(version) {
+    const trimmed = version.trim();
+    // Allow semver, ranges, and tags (e.g. "4.17.21", "^1.0.0", "latest", "next")
+    if (!/^[a-z0-9\-._^~>=<| *]+$/i.test(trimmed)) {
+      throw new Error(`Invalid version: ${trimmed}`);
+    }
+    return trimmed;
+  },
+
+  /**
+   * Resolve the latest version of a package from the npm registry.
+   * @param {string} name
+   * @returns {Promise<string|null>}
+   */
+  async _resolveLatestVersion(name) {
+    try {
+      const info = await this.getPackageInfo(name);
+      return info.version;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /**
+   * Build the ordered CDN URL list for a package.
+   * Prefers UMD/IIFE bundles for userscript compatibility.
+   * @param {string} name
+   * @param {string} version
+   * @returns {string[]}
+   */
+  _buildCdnUrls(name, version) {
+    const popular = this.POPULAR_PACKAGES[name];
+    const urls = [];
+
+    if (popular) {
+      // Use known-good paths for popular packages
+      urls.push(`https://cdn.jsdelivr.net/npm/${name}@${version}/dist/${popular.file}`);
+      urls.push(`https://unpkg.com/${name}@${version}/dist/${popular.file}`);
+      urls.push(
+        `https://cdnjs.cloudflare.com/ajax/libs/${popular.cdn}/${version}/${popular.file}`
+      );
+    }
+
+    // Generic CDN chain (always included as final fallback)
+    // jsdelivr +esm endpoint auto-detects the right entry point
+    urls.push(`https://cdn.jsdelivr.net/npm/${name}@${version}/+esm`);
+    urls.push(`https://unpkg.com/${name}@${version}`);
+    urls.push(
+      `https://cdnjs.cloudflare.com/ajax/libs/${name}/${version}/${name}.min.js`
+    );
+
+    // Deduplicate while preserving order
+    return [...new Set(urls)];
+  },
+
+  /**
+   * Fetch a URL with a timeout. Returns the response body as text.
+   * @param {string} url
+   * @param {{isJson?: boolean}} options
+   * @returns {Promise<string>}
+   */
+  async _fetchWithTimeout(url, options = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT);
+
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: options.isJson ? { 'Accept': 'application/json' } : {}
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} for ${url}`);
+      }
+      return await response.text();
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+
+  /**
+   * Compute SHA-256 SRI hash from content string.
+   * Uses the Web Crypto API (available in service workers).
+   * @param {string} content
+   * @returns {Promise<string>} - SRI hash in "sha256-..." format
+   */
+  async _computeSriHash(content) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(content);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = new Uint8Array(hashBuffer);
+    // Convert to base64
+    let binary = '';
+    for (let i = 0; i < hashArray.length; i++) {
+      binary += String.fromCharCode(hashArray[i]);
+    }
+    return `sha256-${btoa(binary)}`;
+  },
+
+  /**
+   * Read a single entry from the npm cache.
+   * @param {string} key
+   * @returns {Promise<{url: string, integrity: string, version: string}|null>}
+   */
+  async _getCache(key) {
+    try {
+      const stored = await chrome.storage.local.get(this.CACHE_KEY);
+      const cache = stored[this.CACHE_KEY];
+      if (!cache || typeof cache !== 'object') return null;
+
+      const entry = cache[key];
+      if (!entry) return null;
+
+      // Check TTL
+      if (Date.now() - entry.timestamp > this.CACHE_TTL) {
+        // Expired — remove lazily
+        delete cache[key];
+        chrome.storage.local.set({ [this.CACHE_KEY]: cache }).catch(() => {});
+        return null;
+      }
+
+      return { url: entry.url, integrity: entry.integrity, version: entry.version };
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /**
+   * Write a single entry to the npm cache.
+   * @param {string} key
+   * @param {{url: string, integrity: string, version: string}} result
+   */
+  async _setCache(key, result) {
+    try {
+      const stored = await chrome.storage.local.get(this.CACHE_KEY);
+      const cache = (stored[this.CACHE_KEY] && typeof stored[this.CACHE_KEY] === 'object')
+        ? stored[this.CACHE_KEY]
+        : {};
+
+      cache[key] = {
+        url: result.url,
+        integrity: result.integrity,
+        version: result.version,
+        timestamp: Date.now()
+      };
+
+      await chrome.storage.local.set({ [this.CACHE_KEY]: cache });
+    } catch (e) {
+      // Storage write failures are non-fatal
+    }
+  }
+};
+
+// ============================================================================
+// Error Reporting / Log Export
+// ============================================================================
+
+const ErrorLog = {
+  STORAGE_KEY: 'errorLog',
+  MAX_ENTRIES: 500,
+
+  // In-memory cache; loaded on first access
+  _cache: null,
+
+  // ---------------------------------------------------------------------------
+  // Core Operations
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Log an error entry.
+   * entry: { scriptId, scriptName?, error, stack?, url?, line?, col?, context? }
+   */
+  async log(entry) {
+    const entries = await this._load();
+
+    const record = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      scriptId: entry.scriptId || null,
+      scriptName: entry.scriptName || null,
+      error: typeof entry.error === 'string' ? entry.error : (entry.error?.message || String(entry.error)),
+      stack: entry.stack || entry.error?.stack || null,
+      url: entry.url || null,
+      line: entry.line ?? null,
+      col: entry.col ?? null,
+      context: entry.context || null
+    };
+
+    // Resolve script name if not provided
+    if (!record.scriptName && record.scriptId) {
+      try {
+        if (typeof ScriptStorage !== 'undefined') {
+          const script = await ScriptStorage.get(record.scriptId);
+          if (script?.meta?.name) record.scriptName = script.meta.name;
+        }
+      } catch (_) { /* ignore */ }
+    }
+
+    entries.push(record);
+
+    // FIFO: trim to max entries
+    if (entries.length > this.MAX_ENTRIES) {
+      entries.splice(0, entries.length - this.MAX_ENTRIES);
+    }
+
+    this._cache = entries;
+    await this._save();
+
+    return record;
+  },
+
+  /**
+   * Get all log entries, optionally filtered.
+   * filters: { scriptId?, startDate?, endDate?, errorType?, search? }
+   */
+  async getAll(filters) {
+    let entries = await this._load();
+
+    if (!filters) return [...entries];
+
+    if (filters.scriptId) {
+      entries = entries.filter(e => e.scriptId === filters.scriptId);
+    }
+    if (filters.startDate) {
+      const start = typeof filters.startDate === 'number' ? filters.startDate : new Date(filters.startDate).getTime();
+      entries = entries.filter(e => e.timestamp >= start);
+    }
+    if (filters.endDate) {
+      const end = typeof filters.endDate === 'number' ? filters.endDate : new Date(filters.endDate).getTime();
+      entries = entries.filter(e => e.timestamp <= end);
+    }
+    if (filters.errorType) {
+      const type = filters.errorType.toLowerCase();
+      entries = entries.filter(e => {
+        const msg = (e.error || '').toLowerCase();
+        return msg.includes(type);
+      });
+    }
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      entries = entries.filter(e =>
+        (e.error || '').toLowerCase().includes(q) ||
+        (e.scriptName || '').toLowerCase().includes(q) ||
+        (e.stack || '').toLowerCase().includes(q) ||
+        (e.url || '').toLowerCase().includes(q) ||
+        (e.context || '').toLowerCase().includes(q)
+      );
+    }
+
+    return entries;
+  },
+
+  // ---------------------------------------------------------------------------
+  // Error Grouping
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Group identical errors by (error message + scriptId).
+   * Returns array of { key, error, scriptId, scriptName, count, firstSeen, lastSeen, sampleStack }
+   */
+  async getGrouped(filters) {
+    const entries = await this.getAll(filters);
+    const groups = new Map();
+
+    for (const entry of entries) {
+      const key = `${entry.scriptId || ''}::${entry.error || ''}`;
+
+      if (groups.has(key)) {
+        const group = groups.get(key);
+        group.count++;
+        if (entry.timestamp < group.firstSeen) group.firstSeen = entry.timestamp;
+        if (entry.timestamp > group.lastSeen) group.lastSeen = entry.timestamp;
+        // Keep the most recent stack trace
+        if (entry.stack && entry.timestamp >= group.lastSeen) {
+          group.sampleStack = entry.stack;
+        }
+      } else {
+        groups.set(key, {
+          key,
+          error: entry.error,
+          scriptId: entry.scriptId,
+          scriptName: entry.scriptName,
+          count: 1,
+          firstSeen: entry.timestamp,
+          lastSeen: entry.timestamp,
+          sampleStack: entry.stack || null
+        });
+      }
+    }
+
+    // Sort by most recent occurrence descending
+    return [...groups.values()].sort((a, b) => b.lastSeen - a.lastSeen);
+  },
+
+  // ---------------------------------------------------------------------------
+  // Export Formats
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Export as structured JSON string.
+   */
+  async exportJSON(filters) {
+    const entries = await this.getAll(filters);
+    return JSON.stringify({
+      exported: new Date().toISOString(),
+      count: entries.length,
+      entries
+    }, null, 2);
+  },
+
+  /**
+   * Export as human-readable text log.
+   */
+  async exportText(filters) {
+    const entries = await this.getAll(filters);
+    const lines = [
+      `ScriptVault Error Log - Exported ${new Date().toISOString()}`,
+      `Total entries: ${entries.length}`,
+      '='.repeat(80),
+      ''
+    ];
+
+    for (const e of entries) {
+      const time = new Date(e.timestamp).toISOString();
+      lines.push(`[${time}] ${e.scriptName || e.scriptId || 'Unknown'}`);
+      lines.push(`  Error: ${e.error}`);
+      if (e.url) lines.push(`  URL: ${e.url}${e.line != null ? `:${e.line}` : ''}${e.col != null ? `:${e.col}` : ''}`);
+      if (e.context) lines.push(`  Context: ${e.context}`);
+      if (e.stack) {
+        lines.push('  Stack:');
+        for (const sLine of e.stack.split('\n').slice(0, 5)) {
+          lines.push(`    ${sLine.trim()}`);
+        }
+      }
+      lines.push('');
+    }
+
+    return lines.join('\n');
+  },
+
+  /**
+   * Export as CSV string.
+   */
+  async exportCSV(filters) {
+    const entries = await this.getAll(filters);
+    const headers = ['timestamp', 'datetime', 'scriptId', 'scriptName', 'error', 'url', 'line', 'col', 'context'];
+
+    const escapeCSV = (val) => {
+      if (val == null) return '';
+      const str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    };
+
+    const rows = [headers.join(',')];
+    for (const e of entries) {
+      rows.push([
+        e.timestamp,
+        new Date(e.timestamp).toISOString(),
+        escapeCSV(e.scriptId),
+        escapeCSV(e.scriptName),
+        escapeCSV(e.error),
+        escapeCSV(e.url),
+        e.line ?? '',
+        e.col ?? '',
+        escapeCSV(e.context)
+      ].join(','));
+    }
+
+    return rows.join('\n');
+  },
+
+  // ---------------------------------------------------------------------------
+  // Management
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Clear all log entries, or entries for a specific script.
+   */
+  async clear(scriptId) {
+    if (scriptId) {
+      const entries = await this._load();
+      this._cache = entries.filter(e => e.scriptId !== scriptId);
+      await this._save();
+    } else {
+      this._cache = [];
+      await this._save();
+    }
+  },
+
+  /**
+   * Get error log statistics.
+   * Returns { total, byScript, oldest, newest, storageBytes }
+   */
+  async getStats() {
+    const entries = await this._load();
+
+    const byScript = {};
+    for (const e of entries) {
+      const key = e.scriptId || 'unknown';
+      if (!byScript[key]) {
+        byScript[key] = { scriptId: e.scriptId, scriptName: e.scriptName, count: 0 };
+      }
+      byScript[key].count++;
+    }
+
+    const storageBytes = JSON.stringify(entries).length;
+
+    return {
+      total: entries.length,
+      maxEntries: this.MAX_ENTRIES,
+      byScript: Object.values(byScript).sort((a, b) => b.count - a.count),
+      oldest: entries.length > 0 ? entries[0].timestamp : null,
+      newest: entries.length > 0 ? entries[entries.length - 1].timestamp : null,
+      storageBytes
+    };
+  },
+
+  // ---------------------------------------------------------------------------
+  // Capture Helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Register global error listeners on the service worker.
+   * Call once during service worker initialization.
+   */
+  registerGlobalHandlers() {
+    // Unhandled errors
+    self.addEventListener('error', (event) => {
+      this.log({
+        scriptId: null,
+        scriptName: 'ServiceWorker',
+        error: event.message || 'Unknown error',
+        stack: event.error?.stack || null,
+        url: event.filename || null,
+        line: event.lineno ?? null,
+        col: event.colno ?? null,
+        context: 'global-error-handler'
+      }).catch(() => { /* prevent infinite loop */ });
+    });
+
+    // Unhandled promise rejections
+    self.addEventListener('unhandledrejection', (event) => {
+      const reason = event.reason;
+      this.log({
+        scriptId: null,
+        scriptName: 'ServiceWorker',
+        error: reason?.message || String(reason),
+        stack: reason?.stack || null,
+        context: 'unhandled-rejection'
+      }).catch(() => { /* prevent infinite loop */ });
+    });
+
+    console.log('[ScriptVault] Error log global handlers registered');
+  },
+
+  /**
+   * Log a script execution error (from USER_SCRIPT world messages).
+   */
+  async logScriptError(scriptId, scriptName, errorData) {
+    return this.log({
+      scriptId,
+      scriptName,
+      error: errorData.message || errorData.error || 'Script execution error',
+      stack: errorData.stack || null,
+      url: errorData.url || null,
+      line: errorData.line ?? errorData.lineno ?? null,
+      col: errorData.col ?? errorData.colno ?? null,
+      context: 'script-execution'
+    });
+  },
+
+  /**
+   * Log a GM API call failure.
+   */
+  async logGMError(scriptId, scriptName, apiName, error) {
+    return this.log({
+      scriptId,
+      scriptName,
+      error: `GM API ${apiName}: ${typeof error === 'string' ? error : (error?.message || String(error))}`,
+      stack: error?.stack || null,
+      context: `gm-api-${apiName}`
+    });
+  },
+
+  // ---------------------------------------------------------------------------
+  // Internal Storage
+  // ---------------------------------------------------------------------------
+
+  async _load() {
+    if (this._cache) return this._cache;
+    const data = await chrome.storage.local.get(this.STORAGE_KEY);
+    this._cache = data[this.STORAGE_KEY] || [];
+    return this._cache;
+  },
+
+  async _save() {
+    await chrome.storage.local.set({ [this.STORAGE_KEY]: this._cache });
+  }
+};
+
+// ============================================================================
+// Notification & Alert System
+// ============================================================================
+
+const NotificationSystem = {
+  ALARM_WEEKLY_DIGEST: 'scriptvault-weekly-digest',
+  STORAGE_KEY_PREFS: 'notificationPrefs',
+  STORAGE_KEY_DIGEST: 'weeklyDigest',
+  STORAGE_KEY_ERROR_COUNTS: 'notifErrorCounts',
+  STORAGE_KEY_RATE_LIMITS: 'notifRateLimits',
+
+  // Default notification preferences
+  defaultPrefs: {
+    updates: true,
+    errors: true,
+    digest: false,
+    security: true,
+    quietHoursEnabled: false,
+    quietHoursStart: 22, // 10 PM
+    quietHoursEnd: 7     // 7 AM
+  },
+
+  // In-memory caches (rebuilt from storage on service worker wake)
+  _prefsCache: null,
+  _errorCounts: null,   // { scriptId: consecutiveCount }
+  _rateLimits: null,    // { scriptId: lastNotifTimestamp }
+
+  // ---------------------------------------------------------------------------
+  // Preferences
+  // ---------------------------------------------------------------------------
+
+  async getPreferences() {
+    if (this._prefsCache) return { ...this._prefsCache };
+    const data = await chrome.storage.local.get(this.STORAGE_KEY_PREFS);
+    this._prefsCache = { ...this.defaultPrefs, ...data[this.STORAGE_KEY_PREFS] };
+    return { ...this._prefsCache };
+  },
+
+  async setPreferences(prefs) {
+    const current = await this.getPreferences();
+    this._prefsCache = { ...current, ...prefs };
+    await chrome.storage.local.set({ [this.STORAGE_KEY_PREFS]: this._prefsCache });
+
+    // If digest was toggled, manage the alarm
+    if ('digest' in prefs) {
+      if (prefs.digest) {
+        await this.scheduleDigest();
+      } else {
+        await chrome.alarms.clear(this.ALARM_WEEKLY_DIGEST);
+      }
+    }
+    return { ...this._prefsCache };
+  },
+
+  // ---------------------------------------------------------------------------
+  // Quiet Hours
+  // ---------------------------------------------------------------------------
+
+  async _isQuietHours() {
+    const prefs = await this.getPreferences();
+    if (!prefs.quietHoursEnabled) return false;
+
+    const now = new Date();
+    const hour = now.getHours();
+    const { quietHoursStart, quietHoursEnd } = prefs;
+
+    // Handle overnight ranges (e.g., 22 to 7)
+    if (quietHoursStart > quietHoursEnd) {
+      return hour >= quietHoursStart || hour < quietHoursEnd;
+    }
+    // Same-day range (e.g., 1 to 6)
+    return hour >= quietHoursStart && hour < quietHoursEnd;
+  },
+
+  // ---------------------------------------------------------------------------
+  // Script Update Notifications
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Notify about script updates. Accepts a single script or an array.
+   * Each item: { id, name, version, oldVersion? }
+   */
+  async notifyUpdate(scripts) {
+    const prefs = await this.getPreferences();
+    if (!prefs.updates) return;
+    if (await this._isQuietHours()) return;
+
+    const list = Array.isArray(scripts) ? scripts : [scripts];
+    if (list.length === 0) return;
+
+    // Track for weekly digest
+    await this._addDigestData('updatedScripts', list.map(s => ({
+      id: s.id,
+      name: s.name,
+      version: s.version,
+      oldVersion: s.oldVersion || null,
+      timestamp: Date.now()
+    })));
+
+    let title, message, notifId;
+
+    if (list.length === 1) {
+      const s = list[0];
+      title = 'Script Updated';
+      message = `${s.name} updated to v${s.version}`;
+      notifId = `update-${s.id}-${Date.now()}`;
+    } else {
+      title = `${list.length} Scripts Updated`;
+      message = list.map(s => s.name).join(', ');
+      notifId = `update-batch-${Date.now()}`;
+    }
+
+    try {
+      await chrome.notifications.create(notifId, {
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('images/icon128.png'),
+        title,
+        message,
+        priority: 0
+      });
+    } catch (e) {
+      console.error('[ScriptVault] Failed to create update notification:', e);
+    }
+
+    // Store click context so we can open the dashboard to the right script
+    await this._setClickContext(notifId, {
+      action: 'openScript',
+      scriptId: list.length === 1 ? list[0].id : null
+    });
+  },
+
+  // ---------------------------------------------------------------------------
+  // Error Alerts
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Track and notify on script errors.
+   * Notifies after 3 consecutive errors, rate-limited to 1/hour per script.
+   */
+  async notifyError(scriptId, error) {
+    const prefs = await this.getPreferences();
+    if (!prefs.errors) return;
+
+    // Load/init error count tracker
+    if (!this._errorCounts) {
+      const data = await chrome.storage.local.get(this.STORAGE_KEY_ERROR_COUNTS);
+      this._errorCounts = data[this.STORAGE_KEY_ERROR_COUNTS] || {};
+    }
+    if (!this._rateLimits) {
+      const data = await chrome.storage.local.get(this.STORAGE_KEY_RATE_LIMITS);
+      this._rateLimits = data[this.STORAGE_KEY_RATE_LIMITS] || {};
+    }
+
+    // Increment consecutive error count
+    this._errorCounts[scriptId] = (this._errorCounts[scriptId] || 0) + 1;
+    await chrome.storage.local.set({ [this.STORAGE_KEY_ERROR_COUNTS]: this._errorCounts });
+
+    // Track for digest
+    await this._addDigestData('errors', [{
+      scriptId,
+      message: typeof error === 'string' ? error : (error?.message || 'Unknown error'),
+      timestamp: Date.now()
+    }]);
+
+    // Only notify after 3 consecutive errors
+    if (this._errorCounts[scriptId] < 3) return;
+
+    // Rate limit: max 1 notification per script per hour
+    const lastNotif = this._rateLimits[scriptId] || 0;
+    const ONE_HOUR = 3600000;
+    if (Date.now() - lastNotif < ONE_HOUR) return;
+
+    // Check quiet hours
+    if (await this._isQuietHours()) return;
+
+    // Build notification
+    const errorMsg = typeof error === 'string' ? error : (error?.message || 'Unknown error');
+    const snippet = errorMsg.length > 120 ? errorMsg.substring(0, 117) + '...' : errorMsg;
+
+    // Try to resolve script name
+    let scriptName = scriptId;
+    try {
+      if (typeof ScriptStorage !== 'undefined') {
+        const script = await ScriptStorage.get(scriptId);
+        if (script?.meta?.name) scriptName = script.meta.name;
+      }
+    } catch (_) { /* ignore */ }
+
+    const notifId = `error-${scriptId}-${Date.now()}`;
+    try {
+      await chrome.notifications.create(notifId, {
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('images/icon128.png'),
+        title: `Script Error: ${scriptName}`,
+        message: `${this._errorCounts[scriptId]} consecutive errors\n${snippet}`,
+        priority: 1
+      });
+    } catch (e) {
+      console.error('[ScriptVault] Failed to create error notification:', e);
+    }
+
+    // Update rate limit
+    this._rateLimits[scriptId] = Date.now();
+    await chrome.storage.local.set({ [this.STORAGE_KEY_RATE_LIMITS]: this._rateLimits });
+
+    await this._setClickContext(notifId, {
+      action: 'openScript',
+      scriptId
+    });
+  },
+
+  /**
+   * Reset the consecutive error count for a script (call on successful execution).
+   */
+  async resetErrorCount(scriptId) {
+    if (!this._errorCounts) {
+      const data = await chrome.storage.local.get(this.STORAGE_KEY_ERROR_COUNTS);
+      this._errorCounts = data[this.STORAGE_KEY_ERROR_COUNTS] || {};
+    }
+    if (this._errorCounts[scriptId]) {
+      delete this._errorCounts[scriptId];
+      await chrome.storage.local.set({ [this.STORAGE_KEY_ERROR_COUNTS]: this._errorCounts });
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // Blacklist Alerts
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Warn when a script matches the blacklist or introduces new risk patterns.
+   * reason: string describing the match
+   */
+  async notifyBlacklist(scriptId, reason) {
+    const prefs = await this.getPreferences();
+    if (!prefs.security) return;
+    // Security alerts ignore quiet hours — they are urgent
+
+    let scriptName = scriptId;
+    try {
+      if (typeof ScriptStorage !== 'undefined') {
+        const script = await ScriptStorage.get(scriptId);
+        if (script?.meta?.name) scriptName = script.meta.name;
+      }
+    } catch (_) { /* ignore */ }
+
+    const notifId = `blacklist-${scriptId}-${Date.now()}`;
+    try {
+      await chrome.notifications.create(notifId, {
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('images/icon128.png'),
+        title: 'Security Warning',
+        message: `${scriptName}: ${reason}`,
+        priority: 2,
+        requireInteraction: true
+      });
+    } catch (e) {
+      console.error('[ScriptVault] Failed to create blacklist notification:', e);
+    }
+
+    // Track for digest
+    await this._addDigestData('securityAlerts', [{
+      scriptId,
+      scriptName,
+      reason,
+      timestamp: Date.now()
+    }]);
+
+    await this._setClickContext(notifId, {
+      action: 'openScript',
+      scriptId
+    });
+  },
+
+  // ---------------------------------------------------------------------------
+  // Weekly Digest
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Schedule the weekly digest alarm. Fires every 7 days.
+   */
+  async scheduleDigest() {
+    const prefs = await this.getPreferences();
+    if (!prefs.digest) return;
+
+    // Check if alarm already exists
+    const existing = await chrome.alarms.get(this.ALARM_WEEKLY_DIGEST);
+    if (existing) return;
+
+    // Schedule to fire in 7 days, repeating weekly
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    await chrome.alarms.create(this.ALARM_WEEKLY_DIGEST, {
+      delayInMinutes: WEEK_MS / 60000,
+      periodInMinutes: WEEK_MS / 60000
+    });
+    console.log('[ScriptVault] Weekly digest alarm scheduled');
+  },
+
+  /**
+   * Generate and display the weekly digest.
+   * Compiles: scripts updated, errors encountered, storage usage, stale scripts.
+   */
+  async generateDigest() {
+    const data = await chrome.storage.local.get(this.STORAGE_KEY_DIGEST);
+    const digest = data[this.STORAGE_KEY_DIGEST] || this._emptyDigest();
+
+    // Calculate storage usage
+    let storageUsage = null;
+    try {
+      const estimate = await navigator.storage?.estimate?.();
+      if (estimate) {
+        storageUsage = {
+          used: estimate.usage || 0,
+          quota: estimate.quota || 0
+        };
+      }
+    } catch (_) { /* storage estimate not available in all contexts */ }
+
+    // Find stale scripts (not updated in 90+ days)
+    let staleScripts = [];
+    try {
+      if (typeof ScriptStorage !== 'undefined') {
+        const all = await ScriptStorage.getAll();
+        const NINETY_DAYS = 90 * 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        staleScripts = all
+          .filter(s => s.updatedAt && (now - s.updatedAt) > NINETY_DAYS)
+          .map(s => ({ id: s.id, name: s.meta?.name || 'Unknown', lastUpdated: s.updatedAt }));
+      }
+    } catch (_) { /* ignore */ }
+
+    const summary = {
+      period: {
+        start: digest.periodStart || Date.now() - (7 * 24 * 60 * 60 * 1000),
+        end: Date.now()
+      },
+      updatedScripts: digest.updatedScripts || [],
+      totalErrors: (digest.errors || []).length,
+      uniqueErrorScripts: [...new Set((digest.errors || []).map(e => e.scriptId))].length,
+      securityAlerts: digest.securityAlerts || [],
+      storageUsage,
+      staleScripts,
+      generatedAt: Date.now()
+    };
+
+    // Build notification message
+    const lines = [];
+    if (summary.updatedScripts.length > 0) {
+      lines.push(`${summary.updatedScripts.length} script(s) updated`);
+    }
+    if (summary.totalErrors > 0) {
+      lines.push(`${summary.totalErrors} error(s) from ${summary.uniqueErrorScripts} script(s)`);
+    }
+    if (summary.securityAlerts.length > 0) {
+      lines.push(`${summary.securityAlerts.length} security alert(s)`);
+    }
+    if (summary.staleScripts.length > 0) {
+      lines.push(`${summary.staleScripts.length} stale script(s) (90+ days)`);
+    }
+    if (storageUsage) {
+      const pct = ((storageUsage.used / storageUsage.quota) * 100).toFixed(1);
+      lines.push(`Storage: ${pct}% used`);
+    }
+
+    if (lines.length === 0) {
+      lines.push('No activity this week');
+    }
+
+    // Show notification (skip quiet hours check for digest — it fires at its scheduled time)
+    const notifId = `digest-${Date.now()}`;
+    try {
+      await chrome.notifications.create(notifId, {
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('images/icon128.png'),
+        title: 'ScriptVault Weekly Digest',
+        message: lines.join('\n'),
+        priority: 0
+      });
+    } catch (e) {
+      console.error('[ScriptVault] Failed to create digest notification:', e);
+    }
+
+    // Store the compiled digest for dashboard access
+    summary.message = lines.join('\n');
+    await chrome.storage.local.set({ [this.STORAGE_KEY_DIGEST]: {
+      ...this._emptyDigest(),
+      lastSummary: summary
+    }});
+
+    await this._setClickContext(notifId, { action: 'openDashboard' });
+
+    return summary;
+  },
+
+  // ---------------------------------------------------------------------------
+  // Notification Click Handler
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Handle notification clicks. Call this from the background
+   * chrome.notifications.onClicked listener.
+   */
+  async handleClick(notifId) {
+    const ctxKey = `notifCtx_${notifId}`;
+    const data = await chrome.storage.local.get(ctxKey);
+    const ctx = data[ctxKey];
+    await chrome.storage.local.remove(ctxKey);
+    chrome.notifications.clear(notifId);
+
+    if (!ctx) return;
+
+    const dashboardUrl = chrome.runtime.getURL('pages/dashboard.html');
+
+    if (ctx.action === 'openScript' && ctx.scriptId) {
+      try {
+        await chrome.tabs.create({ url: `${dashboardUrl}#script=${ctx.scriptId}` });
+      } catch (_) {
+        await chrome.tabs.create({ url: dashboardUrl });
+      }
+    } else if (ctx.action === 'openDashboard') {
+      await chrome.tabs.create({ url: dashboardUrl });
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // Internal Helpers
+  // ---------------------------------------------------------------------------
+
+  _emptyDigest() {
+    return {
+      periodStart: Date.now(),
+      updatedScripts: [],
+      errors: [],
+      securityAlerts: [],
+      lastSummary: null
+    };
+  },
+
+  async _addDigestData(field, items) {
+    const data = await chrome.storage.local.get(this.STORAGE_KEY_DIGEST);
+    const digest = data[this.STORAGE_KEY_DIGEST] || this._emptyDigest();
+
+    if (!digest[field]) digest[field] = [];
+    digest[field].push(...items);
+
+    // Cap stored digest entries to prevent unbounded growth
+    const MAX_DIGEST_ENTRIES = 200;
+    if (digest[field].length > MAX_DIGEST_ENTRIES) {
+      digest[field] = digest[field].slice(-MAX_DIGEST_ENTRIES);
+    }
+
+    await chrome.storage.local.set({ [this.STORAGE_KEY_DIGEST]: digest });
+  },
+
+  async _setClickContext(notifId, context) {
+    const ctxKey = `notifCtx_${notifId}`;
+    await chrome.storage.local.set({ [ctxKey]: context });
+
+    // Auto-clean after 5 minutes to avoid storage cruft
+    setTimeout(async () => {
+      try {
+        await chrome.storage.local.remove(ctxKey);
+      } catch (_) { /* ignore */ }
+    }, 5 * 60 * 1000);
+  },
+
+  // ---------------------------------------------------------------------------
+  // Alarm Handler
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Handle alarms. Call this from the background chrome.alarms.onAlarm listener.
+   * Returns true if the alarm was handled by this module.
+   */
+  async handleAlarm(alarm) {
+    if (alarm.name === this.ALARM_WEEKLY_DIGEST) {
+      await this.generateDigest();
+      return true;
+    }
+    return false;
+  },
+
+  // ---------------------------------------------------------------------------
+  // Init
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Initialize the notification system. Call once on service worker startup.
+   * Re-registers the digest alarm if the preference is enabled.
+   */
+  async init() {
+    const prefs = await this.getPreferences();
+    if (prefs.digest) {
+      await this.scheduleDigest();
+    }
+    console.log('[ScriptVault] Notification system initialized');
+  }
+};
+
+// ============================================================================
+// INLINED: sync-easycloud.js - Zero-Config Google Cloud Sync (EasyCloud)
+// Uses chrome.identity.getAuthToken for one-click Google Drive sync
+// (inlined to bypass Chrome service worker importScripts caching)
+// ============================================================================
+
+var EasyCloudSync = (() => {
+  'use strict';
+
+  // ---------------------------------------------------------------------------
+  // Constants
+  // ---------------------------------------------------------------------------
+
+  const TAG = '[EasyCloud]';
+  const ALARM_NAME = 'easycloud-periodic-sync';
+  const ALARM_PERIOD_MINUTES = 15;
+  const DEBOUNCE_MS = 5000;
+  const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+  const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
+  const SYNC_FILE_NAME = 'scriptvault-sync.json';
+  const STORAGE_KEY_PREFIX = 'easycloud_';
+
+  // Storage keys
+  const KEYS = {
+    CONNECTED:    STORAGE_KEY_PREFIX + 'connected',
+    DEVICE_ID:    STORAGE_KEY_PREFIX + 'deviceId',
+    LAST_SYNC:    STORAGE_KEY_PREFIX + 'lastSync',
+    STATUS:       STORAGE_KEY_PREFIX + 'status',
+    OFFLINE_QUEUE: STORAGE_KEY_PREFIX + 'offlineQueue',
+    USER_EMAIL:   STORAGE_KEY_PREFIX + 'userEmail',
+    USER_NAME:    STORAGE_KEY_PREFIX + 'userName',
+    FILE_ID:      STORAGE_KEY_PREFIX + 'fileId',
+  };
+
+  // Sync statuses
+  const STATUS = {
+    IDLE:    'synced',
+    SYNCING: 'syncing',
+    ERROR:   'error',
+    OFFLINE: 'offline',
+  };
+
+  // ---------------------------------------------------------------------------
+  // Internal state
+  // ---------------------------------------------------------------------------
+
+  let _status = STATUS.IDLE;
+  let _syncInProgress = false;
+  let _debounceTimer = null;
+  let _statusListeners = [];
+  let _cachedToken = null;
+  let _cachedFileId = null;
+  let _deviceId = null;
+  let _initialized = false;
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  function log(...args) {
+    console.log(TAG, ...args);
+  }
+
+  function warn(...args) {
+    console.warn(TAG, ...args);
+  }
+
+  function setStatus(newStatus) {
+    if (_status === newStatus) return;
+    _status = newStatus;
+    _persistStatus(newStatus);
+    for (const cb of _statusListeners) {
+      try { cb(newStatus); } catch (e) { warn('Status listener error:', e); }
+    }
+  }
+
+  async function _persistStatus(status) {
+    try {
+      await chrome.storage.local.set({ [KEYS.STATUS]: status });
+    } catch (_) { /* best effort */ }
+  }
+
+  async function _getStorageValues(keys) {
+    return chrome.storage.local.get(keys);
+  }
+
+  async function _setStorageValues(obj) {
+    return chrome.storage.local.set(obj);
+  }
+
+  /**
+   * Generate or retrieve a stable device ID for conflict resolution.
+   */
+  async function _ensureDeviceId() {
+    if (_deviceId) return _deviceId;
+    const data = await _getStorageValues([KEYS.DEVICE_ID]);
+    if (data[KEYS.DEVICE_ID]) {
+      _deviceId = data[KEYS.DEVICE_ID];
+      return _deviceId;
+    }
+    // Generate a new device ID
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    _deviceId = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    await _setStorageValues({ [KEYS.DEVICE_ID]: _deviceId });
+    return _deviceId;
+  }
+
+  function _isOnline() {
+    // In service worker context, navigator.onLine is available
+    return typeof navigator !== 'undefined' ? navigator.onLine : true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Token management via chrome.identity
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Get a valid OAuth token using Chrome's built-in identity API.
+   * This is the zero-config path: no client ID, no manual OAuth.
+   */
+  async function _getAuthToken(interactive = false) {
+    if (!chrome.identity || !chrome.identity.getAuthToken) {
+      throw new Error('chrome.identity API not available. Grant the "identity" permission.');
+    }
+
+    try {
+      // chrome.identity.getAuthToken returns { token } in MV3
+      const result = await chrome.identity.getAuthToken({
+        interactive,
+        scopes: [
+          'https://www.googleapis.com/auth/drive.appdata',
+          'https://www.googleapis.com/auth/userinfo.email',
+          'https://www.googleapis.com/auth/userinfo.profile',
+        ],
+      });
+
+      const token = result?.token || result;
+      if (!token || typeof token !== 'string') {
+        throw new Error('No token returned from chrome.identity');
+      }
+
+      _cachedToken = token;
+      return token;
+    } catch (e) {
+      _cachedToken = null;
+      throw e;
+    }
+  }
+
+  /**
+   * Remove cached token and force a fresh one.
+   */
+  async function _refreshToken() {
+    if (_cachedToken) {
+      try {
+        await chrome.identity.removeCachedAuthToken({ token: _cachedToken });
+      } catch (_) { /* ignore */ }
+      _cachedToken = null;
+    }
+    return _getAuthToken(false);
+  }
+
+  /**
+   * Get a valid token, refreshing if needed.
+   */
+  async function _getValidToken() {
+    // Try cached first
+    if (_cachedToken) {
+      const ok = await _testToken(_cachedToken);
+      if (ok) return _cachedToken;
+      // Invalidate and retry
+      try {
+        await chrome.identity.removeCachedAuthToken({ token: _cachedToken });
+      } catch (_) { /* ignore */ }
+      _cachedToken = null;
+    }
+
+    // Try non-interactive (uses cached Chrome session)
+    try {
+      return await _getAuthToken(false);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function _testToken(token) {
+    try {
+      const resp = await fetch(`${DRIVE_API}/about?fields=user`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      return resp.ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Google Drive operations (appDataFolder)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Find the sync file in appDataFolder.
+   */
+  async function _findSyncFile(token) {
+    // Check cached file ID first
+    if (_cachedFileId) {
+      // Verify it still exists
+      try {
+        const resp = await fetch(
+          `${DRIVE_API}/files/${_cachedFileId}?fields=id,modifiedTime`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        if (resp.ok) return _cachedFileId;
+      } catch (_) { /* fall through to search */ }
+      _cachedFileId = null;
+    }
+
+    // Search for the file
+    const query = encodeURIComponent(`name='${SYNC_FILE_NAME}' and trashed=false`);
+    const resp = await fetch(
+      `${DRIVE_API}/files?q=${query}&spaces=appDataFolder&fields=files(id,modifiedTime)`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+
+    if (!resp.ok) {
+      throw new Error(`Drive file search failed: ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const file = data.files?.[0];
+    if (file) {
+      _cachedFileId = file.id;
+      await _setStorageValues({ [KEYS.FILE_ID]: file.id });
+    }
+    return file?.id || null;
+  }
+
+  /**
+   * Download sync data from Drive appDataFolder.
+   */
+  async function _downloadFromDrive(token) {
+    const fileId = await _findSyncFile(token);
+    if (!fileId) return null;
+
+    const resp = await fetch(
+      `${DRIVE_API}/files/${fileId}?alt=media`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+
+    if (resp.status === 404) {
+      _cachedFileId = null;
+      return null;
+    }
+    if (!resp.ok) {
+      throw new Error(`Drive download failed: ${resp.status}`);
+    }
+
+    return resp.json();
+  }
+
+  /**
+   * Upload sync data to Drive appDataFolder.
+   */
+  async function _uploadToDrive(token, data) {
+    const fileId = await _findSyncFile(token);
+
+    const metadata = {
+      name: SYNC_FILE_NAME,
+      mimeType: 'application/json',
+    };
+    if (!fileId) {
+      metadata.parents = ['appDataFolder'];
+    }
+
+    const boundary = '---EasyCloud' + crypto.getRandomValues(new Uint8Array(8))
+      .reduce((s, b) => s + b.toString(16).padStart(2, '0'), '');
+    const body = [
+      `--${boundary}`,
+      'Content-Type: application/json; charset=UTF-8',
+      '',
+      JSON.stringify(metadata),
+      `--${boundary}`,
+      'Content-Type: application/json',
+      '',
+      JSON.stringify(data),
+      `--${boundary}--`,
+    ].join('\r\n');
+
+    const url = fileId
+      ? `${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=multipart`
+      : `${DRIVE_UPLOAD_API}/files?uploadType=multipart`;
+
+    const resp = await fetch(url, {
+      method: fileId ? 'PATCH' : 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      throw new Error(`Drive upload failed (${resp.status}): ${errText}`);
+    }
+
+    const result = await resp.json();
+    if (result.id && !_cachedFileId) {
+      _cachedFileId = result.id;
+      await _setStorageValues({ [KEYS.FILE_ID]: result.id });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Offline queue
+  // ---------------------------------------------------------------------------
+
+  async function _enqueueOfflineChange(change) {
+    const data = await _getStorageValues([KEYS.OFFLINE_QUEUE]);
+    const queue = data[KEYS.OFFLINE_QUEUE] || [];
+    queue.push({ ...change, queuedAt: Date.now() });
+    // Cap queue to 500 entries to avoid storage bloat
+    if (queue.length > 500) queue.splice(0, queue.length - 500);
+    await _setStorageValues({ [KEYS.OFFLINE_QUEUE]: queue });
+  }
+
+  async function _drainOfflineQueue() {
+    const data = await _getStorageValues([KEYS.OFFLINE_QUEUE]);
+    const queue = data[KEYS.OFFLINE_QUEUE] || [];
+    if (queue.length === 0) return;
+
+    log(`Draining offline queue (${queue.length} entries)`);
+    // Clear queue first (sync will pick up current state)
+    await _setStorageValues({ [KEYS.OFFLINE_QUEUE]: [] });
+    // Trigger a full sync — the current local state already includes queued changes
+    await _performSync();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Merge logic
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Merge local and remote sync data with multi-device conflict resolution.
+   * - Newest wins for enable/disable and metadata
+   * - 3-way merge for code changes (delegated to offscreen document)
+   * - Tombstone propagation for deletes
+   */
+  async function _mergeData(localData, remoteData, deviceId) {
+    const localScripts = new Map((localData.scripts || []).map(s => [s.id, s]));
+    const remoteScripts = new Map((remoteData.scripts || []).map(s => [s.id, s]));
+
+    // Merge tombstones — union of all known deletions
+    const localTombstones = localData.tombstones || {};
+    const remoteTombstones = remoteData.tombstones || {};
+    const mergedTombstones = { ...localTombstones, ...remoteTombstones };
+
+    // Collect all script IDs
+    const allIds = new Set([...localScripts.keys(), ...remoteScripts.keys()]);
+    const mergedScripts = [];
+
+    for (const id of allIds) {
+      // Skip tombstoned scripts
+      if (mergedTombstones[id]) continue;
+
+      const local = localScripts.get(id);
+      const remote = remoteScripts.get(id);
+
+      if (!remote) {
+        // Only local — keep it
+        mergedScripts.push(local);
+        continue;
+      }
+
+      if (!local) {
+        // Only remote — import it
+        mergedScripts.push(remote);
+        continue;
+      }
+
+      // Both exist — merge
+      const merged = { ...local };
+      const localNewer = (local.updatedAt || 0) >= (remote.updatedAt || 0);
+
+      // Enable/disable: newest wins
+      if ((remote.updatedAt || 0) > (local.updatedAt || 0)) {
+        merged.enabled = remote.enabled;
+        merged.position = remote.position;
+        merged.settings = { ...local.settings, ...remote.settings };
+      }
+
+      // Code merge
+      if (local.code !== remote.code) {
+        const base = local.syncBaseCode || remote.syncBaseCode || null;
+
+        if (base && base !== local.code && base !== remote.code) {
+          // Both sides changed since base — attempt 3-way merge
+          try {
+            if (typeof ScriptAnalyzer !== 'undefined' && ScriptAnalyzer._ensureOffscreen) {
+              await ScriptAnalyzer._ensureOffscreen();
+              const mergeResult = await chrome.runtime.sendMessage({
+                type: 'offscreen_merge',
+                base,
+                local: local.code,
+                remote: remote.code,
+              });
+              if (mergeResult && !mergeResult.error) {
+                merged.code = mergeResult.merged;
+                if (mergeResult.conflicts) {
+                  merged.settings = { ...(merged.settings || {}), mergeConflict: true };
+                }
+                log(`3-way merge for ${id}: conflicts=${mergeResult.conflicts || false}`);
+              } else {
+                // Merge failed — newest wins
+                merged.code = localNewer ? local.code : remote.code;
+              }
+            } else {
+              // No offscreen available — newest wins
+              merged.code = localNewer ? local.code : remote.code;
+            }
+          } catch (e) {
+            warn(`3-way merge failed for ${id}:`, e.message);
+            merged.code = localNewer ? local.code : remote.code;
+          }
+        } else {
+          // Only one side changed, or no base — newest wins
+          merged.code = localNewer ? local.code : remote.code;
+        }
+      }
+
+      merged.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0);
+      merged.syncBaseCode = merged.code;
+      merged.lastSyncDevice = deviceId;
+      mergedScripts.push(merged);
+    }
+
+    return {
+      version: 1,
+      timestamp: Date.now(),
+      deviceId,
+      scripts: mergedScripts,
+      tombstones: mergedTombstones,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Core sync
+  // ---------------------------------------------------------------------------
+
+  async function _performSync() {
+    if (_syncInProgress) {
+      log('Sync already in progress, skipping');
+      return { skipped: true };
+    }
+
+    if (!_isOnline()) {
+      setStatus(STATUS.OFFLINE);
+      return { offline: true };
+    }
+
+    _syncInProgress = true;
+    setStatus(STATUS.SYNCING);
+
+    try {
+      const token = await _getValidToken();
+      if (!token) {
+        setStatus(STATUS.ERROR);
+        return { error: 'Not authenticated' };
+      }
+
+      const deviceId = await _ensureDeviceId();
+
+      // Load tombstones
+      const tombstoneData = await _getStorageValues(['syncTombstones']);
+      const tombstones = tombstoneData.syncTombstones || {};
+
+      // Build local data snapshot
+      const scripts = await ScriptStorage.getAll();
+      const localData = {
+        version: 1,
+        timestamp: Date.now(),
+        deviceId,
+        scripts: scripts.map(s => ({
+          id: s.id,
+          code: s.code,
+          enabled: s.enabled,
+          position: s.position,
+          settings: s.settings || {},
+          updatedAt: s.updatedAt || 0,
+          syncBaseCode: s.syncBaseCode || null,
+        })),
+        tombstones,
+      };
+
+      // Download remote
+      const remoteData = await _downloadFromDrive(token);
+
+      if (remoteData) {
+        // Merge
+        const merged = await _mergeData(localData, remoteData, deviceId);
+
+        // Apply merged scripts locally
+        for (const script of merged.scripts) {
+          if (merged.tombstones[script.id]) continue;
+
+          const existing = await ScriptStorage.get(script.id);
+
+          // Skip user-modified scripts
+          if (existing?.settings?.userModified) continue;
+
+          if (!existing || script.updatedAt > (existing.updatedAt || 0)) {
+            const parsed = typeof parseUserscript === 'function'
+              ? parseUserscript(script.code)
+              : { meta: {}, error: null };
+
+            if (!parsed.error) {
+              await ScriptStorage.set(script.id, {
+                id: script.id,
+                code: script.code,
+                meta: parsed.meta,
+                enabled: script.enabled,
+                position: script.position,
+                settings: {
+                  ...(existing?.settings || {}),
+                  ...(script.settings || {}),
+                  userModified: false,
+                },
+                updatedAt: script.updatedAt,
+                createdAt: existing?.createdAt || script.updatedAt,
+                syncBaseCode: script.code,
+                lastSyncDevice: deviceId,
+              });
+            }
+          }
+        }
+
+        // Persist merged tombstones
+        const mergedTombstones = merged.tombstones || {};
+        if (Object.keys(mergedTombstones).length > Object.keys(tombstones).length) {
+          await chrome.storage.local.set({ syncTombstones: mergedTombstones });
+        }
+
+        // Upload merged data
+        merged.timestamp = Date.now();
+        await _uploadToDrive(token, merged);
+      } else {
+        // First sync — upload local data
+        await _uploadToDrive(token, localData);
+      }
+
+      const now = Date.now();
+      await _setStorageValues({ [KEYS.LAST_SYNC]: now });
+
+      // Also update the global lastSync for compatibility with existing CloudSync
+      try {
+        await SettingsManager.set('lastSync', now);
+      } catch (_) { /* best effort */ }
+
+      setStatus(STATUS.IDLE);
+      log('Sync completed successfully');
+      return { success: true, timestamp: now };
+    } catch (e) {
+      warn('Sync failed:', e);
+      setStatus(STATUS.ERROR);
+      return { error: e.message };
+    } finally {
+      _syncInProgress = false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Debounced sync trigger
+  // ---------------------------------------------------------------------------
+
+  function _debouncedSync() {
+    if (_debounceTimer) {
+      clearTimeout(_debounceTimer);
+    }
+    _debounceTimer = setTimeout(() => {
+      _debounceTimer = null;
+      _performSync().catch(e => warn('Debounced sync error:', e));
+    }, DEBOUNCE_MS);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Alarm-based periodic sync
+  // ---------------------------------------------------------------------------
+
+  async function _setupPeriodicSync() {
+    try {
+      await chrome.alarms.create(ALARM_NAME, {
+        delayInMinutes: ALARM_PERIOD_MINUTES,
+        periodInMinutes: ALARM_PERIOD_MINUTES,
+      });
+    } catch (e) {
+      warn('Failed to create periodic sync alarm:', e);
+    }
+  }
+
+  async function _clearPeriodicSync() {
+    try {
+      await chrome.alarms.clear(ALARM_NAME);
+    } catch (_) { /* ignore */ }
+  }
+
+  function _handleAlarm(alarm) {
+    if (alarm.name !== ALARM_NAME) return;
+    _performSync().catch(e => warn('Periodic sync error:', e));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Online/offline handling
+  // ---------------------------------------------------------------------------
+
+  function _handleOnline() {
+    log('Back online, draining queue and syncing');
+    _drainOfflineQueue().catch(e => warn('Queue drain error:', e));
+  }
+
+  function _handleOffline() {
+    log('Went offline');
+    setStatus(STATUS.OFFLINE);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Event listeners for auto-sync on script changes
+  // ---------------------------------------------------------------------------
+
+  function _setupStorageListener() {
+    // Listen for script storage changes to trigger auto-sync
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== 'local') return;
+
+      // Check if userscripts data changed (ScriptStorage uses 'userscripts' key)
+      if (changes.userscripts) {
+        const data = _getStorageValues([KEYS.CONNECTED]).then(d => {
+          if (d[KEYS.CONNECTED]) {
+            _debouncedSync();
+          }
+        }).catch(() => {});
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  const api = {
+    /**
+     * Initialize EasyCloud sync. Call once on extension startup.
+     * Sets up alarms, listeners, and triggers initial sync if connected.
+     */
+    async init() {
+      if (_initialized) return;
+      _initialized = true;
+
+      // Restore cached state
+      const data = await _getStorageValues([
+        KEYS.CONNECTED,
+        KEYS.DEVICE_ID,
+        KEYS.STATUS,
+        KEYS.FILE_ID,
+      ]);
+
+      _deviceId = data[KEYS.DEVICE_ID] || null;
+      _cachedFileId = data[KEYS.FILE_ID] || null;
+
+      if (data[KEYS.STATUS]) {
+        _status = data[KEYS.STATUS];
+      }
+
+      // Set up storage change listener for auto-sync
+      _setupStorageListener();
+
+      // Set up alarm listener
+      chrome.alarms.onAlarm.addListener(_handleAlarm);
+
+      // Online/offline events (available in service workers)
+      if (typeof self !== 'undefined') {
+        self.addEventListener('online', _handleOnline);
+        self.addEventListener('offline', _handleOffline);
+      }
+
+      // If already connected, start periodic sync and do initial sync
+      if (data[KEYS.CONNECTED]) {
+        if (!_isOnline()) {
+          setStatus(STATUS.OFFLINE);
+        } else {
+          await _setupPeriodicSync();
+          // Fire initial sync without blocking init
+          _performSync().catch(e => warn('Init sync error:', e));
+        }
+      }
+
+      log('Initialized');
+    },
+
+    /**
+     * Connect to Google Drive via chrome.identity (interactive sign-in).
+     * Returns { success, user } or { success: false, error }.
+     */
+    async connect() {
+      try {
+        // Request identity permission if not already granted
+        if (chrome.permissions && chrome.permissions.request) {
+          const granted = await chrome.permissions.request({
+            permissions: ['identity'],
+          });
+          if (!granted) {
+            return { success: false, error: 'Identity permission denied' };
+          }
+        }
+
+        // Interactive auth
+        const token = await _getAuthToken(true);
+        if (!token) {
+          return { success: false, error: 'Authentication failed' };
+        }
+
+        // Fetch user info
+        let user = {};
+        try {
+          const resp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          if (resp.ok) {
+            user = await resp.json();
+          }
+        } catch (_) { /* non-fatal */ }
+
+        await _ensureDeviceId();
+
+        // Persist connected state
+        await _setStorageValues({
+          [KEYS.CONNECTED]: true,
+          [KEYS.USER_EMAIL]: user.email || '',
+          [KEYS.USER_NAME]: user.name || '',
+        });
+
+        // Start periodic sync
+        await _setupPeriodicSync();
+
+        // Trigger immediate sync
+        _performSync().catch(e => warn('Post-connect sync error:', e));
+
+        setStatus(STATUS.IDLE);
+        log('Connected as', user.email || '(unknown)');
+
+        return {
+          success: true,
+          user: { email: user.email, name: user.name, picture: user.picture },
+        };
+      } catch (e) {
+        warn('Connect failed:', e);
+        return { success: false, error: e.message };
+      }
+    },
+
+    /**
+     * Disconnect from Google Drive. Revokes token and clears state.
+     */
+    async disconnect() {
+      try {
+        // Revoke token
+        if (_cachedToken) {
+          try {
+            await chrome.identity.removeCachedAuthToken({ token: _cachedToken });
+            await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${_cachedToken}`)
+              .catch(() => {});
+          } catch (_) { /* best effort */ }
+          _cachedToken = null;
+        }
+
+        // Clear periodic sync
+        await _clearPeriodicSync();
+
+        // Clear stored state
+        await _setStorageValues({
+          [KEYS.CONNECTED]: false,
+          [KEYS.USER_EMAIL]: '',
+          [KEYS.USER_NAME]: '',
+          [KEYS.FILE_ID]: '',
+          [KEYS.OFFLINE_QUEUE]: [],
+          [KEYS.STATUS]: STATUS.IDLE,
+        });
+
+        _cachedFileId = null;
+        _status = STATUS.IDLE;
+
+        // Notify listeners
+        for (const cb of _statusListeners) {
+          try { cb(STATUS.IDLE); } catch (_) { /* ignore */ }
+        }
+
+        log('Disconnected');
+        return { success: true };
+      } catch (e) {
+        warn('Disconnect error:', e);
+        return { success: false, error: e.message };
+      }
+    },
+
+    /**
+     * Trigger an immediate sync. Returns sync result.
+     */
+    async sync() {
+      if (!_isOnline()) {
+        setStatus(STATUS.OFFLINE);
+        return { offline: true };
+      }
+
+      const data = await _getStorageValues([KEYS.CONNECTED]);
+      if (!data[KEYS.CONNECTED]) {
+        return { error: 'Not connected. Call connect() first.' };
+      }
+
+      return _performSync();
+    },
+
+    /**
+     * Get current sync status and metadata.
+     */
+    async getStatus() {
+      const data = await _getStorageValues([
+        KEYS.CONNECTED,
+        KEYS.LAST_SYNC,
+        KEYS.STATUS,
+        KEYS.USER_EMAIL,
+        KEYS.USER_NAME,
+        KEYS.DEVICE_ID,
+      ]);
+
+      return {
+        connected: !!data[KEYS.CONNECTED],
+        status: data[KEYS.STATUS] || _status,
+        lastSync: data[KEYS.LAST_SYNC] || null,
+        user: data[KEYS.CONNECTED]
+          ? { email: data[KEYS.USER_EMAIL], name: data[KEYS.USER_NAME] }
+          : null,
+        deviceId: data[KEYS.DEVICE_ID] || null,
+        online: _isOnline(),
+      };
+    },
+
+    /**
+     * Check if currently connected (synchronous, uses cached state).
+     */
+    isConnected() {
+      // This is a fast synchronous check based on in-memory state.
+      // For authoritative state, use getStatus().
+      return _status !== STATUS.ERROR && _cachedToken !== null;
+    },
+
+    /**
+     * Register a status change callback. Returns an unsubscribe function.
+     */
+    onStatusChange(callback) {
+      if (typeof callback !== 'function') {
+        throw new TypeError('onStatusChange requires a function callback');
+      }
+      _statusListeners.push(callback);
+      return () => {
+        _statusListeners = _statusListeners.filter(cb => cb !== callback);
+      };
+    },
+
+    /**
+     * Notify EasyCloud that a script was saved (triggers debounced sync).
+     */
+    notifyScriptSaved(scriptId) {
+      if (!_isOnline()) {
+        _enqueueOfflineChange({ type: 'save', scriptId, timestamp: Date.now() });
+        return;
+      }
+      _debouncedSync();
+    },
+
+    /**
+     * Notify EasyCloud that a script was deleted (triggers debounced sync).
+     */
+    notifyScriptDeleted(scriptId) {
+      if (!_isOnline()) {
+        _enqueueOfflineChange({ type: 'delete', scriptId, timestamp: Date.now() });
+        return;
+      }
+      _debouncedSync();
+    },
+  };
+
+  return api;
+})();
+
+// ---------------------------------------------------------------------------
+// Register as a CloudSyncProvider for integration with existing sync UI
+// ---------------------------------------------------------------------------
+
+if (typeof CloudSyncProviders !== 'undefined') {
+  CloudSyncProviders.easycloud = {
+    name: 'EasyCloud (Google)',
+    icon: '⚡',
+    requiresAuth: false,
+    requiresOAuth: false,
+    isZeroConfig: true,
+
+    async connect() {
+      return EasyCloudSync.connect();
+    },
+
+    async disconnect() {
+      return EasyCloudSync.disconnect();
+    },
+
+    async upload(data, settings) {
+      // EasyCloud manages its own upload via sync(); this is for compatibility
+      const result = await EasyCloudSync.sync();
+      if (result.error) throw new Error(result.error);
+      return { success: true, timestamp: Date.now() };
+    },
+
+    async download(settings) {
+      // For compatibility: trigger sync and return null (data is applied locally by sync)
+      await EasyCloudSync.sync();
+      return null;
+    },
+
+    async test() {
+      const status = await EasyCloudSync.getStatus();
+      return { success: status.connected && status.online };
+    },
+
+    async getStatus() {
+      const status = await EasyCloudSync.getStatus();
+      return {
+        connected: status.connected,
+        user: status.user,
+        status: status.status,
+        lastSync: status.lastSync,
+      };
+    },
+  };
+}
+
+// Export for service worker global scope
+if (typeof self !== 'undefined') {
+  self.EasyCloudSync = EasyCloudSync;
+}
+
+// ============================================================================
+// ScriptVault — Automated Backup Scheduler
+// Runs in the service worker (no DOM). Provides scheduled and on-change
+// backups using chrome.alarms, with configurable retention and recovery.
+// ============================================================================
+
+const BackupScheduler = (() => {
+  'use strict';
+
+  /* ------------------------------------------------------------------ */
+  /*  Constants                                                          */
+  /* ------------------------------------------------------------------ */
+
+  const STORAGE_KEY_BACKUPS = 'autoBackups';
+  const STORAGE_KEY_SETTINGS = 'backupSchedulerSettings';
+  const ALARM_NAME = 'sv_backup_scheduled';
+  const DEBOUNCE_ALARM = 'sv_backup_debounce';
+  const DEBOUNCE_MINUTES = 5;
+  const STORAGE_WARNING_BYTES = 8 * 1024 * 1024; // 8 MB
+
+  const DEFAULT_SETTINGS = {
+    enabled: false,
+    scheduleType: 'daily',    // 'daily' | 'weekly' | 'onChange' | 'manual'
+    hour: 3,                  // 0-23, default 3:00 AM
+    dayOfWeek: 0,             // 0=Sun .. 6=Sat (for weekly)
+    maxBackups: 5,            // retention limit
+    notifyOnSuccess: true,
+    notifyOnFailure: true,
+    warnOnStorageFull: true
+  };
+
+  /* ------------------------------------------------------------------ */
+  /*  Internal state                                                     */
+  /* ------------------------------------------------------------------ */
+
+  let _settings = null;
+  let _initialized = false;
+
+  /* ------------------------------------------------------------------ */
+  /*  Helpers                                                            */
+  /* ------------------------------------------------------------------ */
+
+  function _generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  function _formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(2) + ' MB';
+  }
+
+  /** Compute the next Date for a given hour (and optional dayOfWeek). */
+  function _nextScheduledTime(hour, dayOfWeek) {
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(hour, 0, 0, 0);
+
+    if (dayOfWeek !== undefined && dayOfWeek !== null) {
+      // Weekly — advance to the correct day
+      const currentDay = now.getDay();
+      let daysUntil = (dayOfWeek - currentDay + 7) % 7;
+      if (daysUntil === 0 && now >= target) daysUntil = 7;
+      target.setDate(target.getDate() + daysUntil);
+    } else {
+      // Daily — if the hour already passed today, schedule for tomorrow
+      if (now >= target) target.setDate(target.getDate() + 1);
+    }
+    return target;
+  }
+
+  /** Send a chrome notification (best-effort, no throw). */
+  function _notify(title, message, isError = false) {
+    try {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+        title: `ScriptVault — ${title}`,
+        message
+      });
+    } catch (_) { /* notifications permission may not exist */ }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Settings                                                           */
+  /* ------------------------------------------------------------------ */
+
+  async function _loadSettings() {
+    if (_settings) return _settings;
+    const data = await chrome.storage.local.get(STORAGE_KEY_SETTINGS);
+    _settings = { ...DEFAULT_SETTINGS, ...(data[STORAGE_KEY_SETTINGS] || {}) };
+    return _settings;
+  }
+
+  async function _saveSettings(settings) {
+    _settings = { ...DEFAULT_SETTINGS, ...settings };
+    await chrome.storage.local.set({ [STORAGE_KEY_SETTINGS]: _settings });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Backup data collection                                             */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Collect all data that should be in a backup and produce a base64 ZIP
+   * by reusing the same fflate-based pattern as exportToZip.
+   */
+  async function _collectBackupData() {
+    // Scripts — code + metadata + settings
+    const scripts = await ScriptStorage.getAll();
+    const files = {};
+    const usedNames = new Set();
+
+    for (const script of scripts) {
+      let safeName = (script.meta?.name || 'unnamed')
+        .replace(/[<>:"/\\|?*]/g, '_')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 100);
+
+      if (usedNames.has(safeName)) {
+        let counter = 2;
+        while (usedNames.has(`${safeName}_${counter}`)) counter++;
+        safeName = `${safeName}_${counter}`;
+      }
+      usedNames.add(safeName);
+
+      // Userscript code
+      files[`scripts/${safeName}.user.js`] = fflate.strToU8(script.code || '');
+
+      // Options / metadata
+      const options = {
+        settings: {
+          enabled: script.enabled,
+          'run-at': script.meta?.['run-at'] || 'document-idle'
+        },
+        meta: {
+          name: script.meta?.name,
+          namespace: script.meta?.namespace || '',
+          version: script.meta?.version || '1.0',
+          description: script.meta?.description || '',
+          author: script.meta?.author || '',
+          match: script.meta?.match || [],
+          include: script.meta?.include || [],
+          exclude: script.meta?.exclude || [],
+          grant: script.meta?.grant || [],
+          require: script.meta?.require || [],
+          resource: script.meta?.resource || {}
+        }
+      };
+      files[`scripts/${safeName}.options.json`] = fflate.strToU8(JSON.stringify(options, null, 2));
+
+      // Script values (GM_getValue data)
+      try {
+        const values = await ScriptValues.getAll(script.id);
+        if (values && Object.keys(values).length > 0) {
+          files[`scripts/${safeName}.storage.json`] = fflate.strToU8(JSON.stringify({ data: values }, null, 2));
+        }
+      } catch (_) { /* ScriptValues may not be available */ }
+    }
+
+    // Global settings
+    try {
+      const globalSettings = await SettingsManager.get();
+      files['global-settings.json'] = fflate.strToU8(JSON.stringify(globalSettings, null, 2));
+    } catch (_) {}
+
+    // Folder structure (if any)
+    try {
+      const folderData = await chrome.storage.local.get('scriptFolders');
+      if (folderData.scriptFolders) {
+        files['folders.json'] = fflate.strToU8(JSON.stringify(folderData.scriptFolders, null, 2));
+      }
+    } catch (_) {}
+
+    // Workspace snapshots
+    try {
+      const wsData = await chrome.storage.local.get('workspaces');
+      if (wsData.workspaces) {
+        files['workspaces.json'] = fflate.strToU8(JSON.stringify(wsData.workspaces, null, 2));
+      }
+    } catch (_) {}
+
+    // Compress
+    const zipData = fflate.zipSync(files, { level: 6 });
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < zipData.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, zipData.subarray(i, i + chunkSize));
+    }
+    return { base64: btoa(binary), scriptCount: scripts.length };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Storage helpers                                                    */
+  /* ------------------------------------------------------------------ */
+
+  async function _getBackupList() {
+    const data = await chrome.storage.local.get(STORAGE_KEY_BACKUPS);
+    return data[STORAGE_KEY_BACKUPS] || [];
+  }
+
+  async function _saveBackupList(list) {
+    await chrome.storage.local.set({ [STORAGE_KEY_BACKUPS]: list });
+  }
+
+  /** Estimate combined size of all stored backups (bytes). */
+  function _estimateBackupSize(backups) {
+    let total = 0;
+    for (const b of backups) {
+      // base64 string length is ~4/3 of binary; approximate storage cost
+      total += (b.data?.length || 0);
+    }
+    return total;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Alarm management                                                   */
+  /* ------------------------------------------------------------------ */
+
+  async function _registerAlarms() {
+    // Clear existing backup alarms
+    await chrome.alarms.clear(ALARM_NAME);
+    await chrome.alarms.clear(DEBOUNCE_ALARM);
+
+    const settings = await _loadSettings();
+    if (!settings.enabled) return;
+
+    if (settings.scheduleType === 'daily') {
+      const nextRun = _nextScheduledTime(settings.hour);
+      const delayMs = nextRun.getTime() - Date.now();
+      chrome.alarms.create(ALARM_NAME, {
+        when: nextRun.getTime(),
+        periodInMinutes: 24 * 60 // repeat every 24 hours
+      });
+    } else if (settings.scheduleType === 'weekly') {
+      const nextRun = _nextScheduledTime(settings.hour, settings.dayOfWeek);
+      chrome.alarms.create(ALARM_NAME, {
+        when: nextRun.getTime(),
+        periodInMinutes: 7 * 24 * 60 // repeat every 7 days
+      });
+    }
+    // 'onChange' and 'manual' don't need periodic alarms
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Public API                                                         */
+  /* ------------------------------------------------------------------ */
+
+  const api = {
+
+    /**
+     * Initialize the backup scheduler. Call once on service worker start.
+     * Re-registers alarms and attaches the alarm listener.
+     */
+    async init() {
+      if (_initialized) return;
+      _initialized = true;
+
+      await _loadSettings();
+      await _registerAlarms();
+
+      // Listen for backup-related alarms
+      chrome.alarms.onAlarm.addListener(async (alarm) => {
+        if (alarm.name === ALARM_NAME) {
+          await api.createBackup('scheduled');
+        } else if (alarm.name === DEBOUNCE_ALARM) {
+          await api.createBackup('onChange');
+        }
+      });
+    },
+
+    /**
+     * Trigger a backup.
+     * @param {string} reason - 'scheduled' | 'onChange' | 'manual'
+     * @returns {{ success: boolean, backupId?: string, error?: string }}
+     */
+    async createBackup(reason = 'manual') {
+      try {
+        const { base64, scriptCount } = await _collectBackupData();
+        const sizeBytes = Math.round(base64.length * 0.75); // approximate binary size
+        const settings = await _loadSettings();
+
+        const backup = {
+          id: _generateId(),
+          timestamp: Date.now(),
+          version: chrome.runtime.getManifest?.()?.version || '1.0',
+          reason,
+          scriptCount,
+          size: sizeBytes,
+          sizeFormatted: _formatBytes(sizeBytes),
+          data: base64
+        };
+
+        const backups = await _getBackupList();
+        backups.unshift(backup); // newest first
+        await _saveBackupList(backups);
+
+        // Prune old backups
+        await api.pruneOldBackups();
+
+        // Storage warning check
+        if (settings.warnOnStorageFull) {
+          const allBackups = await _getBackupList();
+          const totalSize = _estimateBackupSize(allBackups);
+          if (totalSize > STORAGE_WARNING_BYTES) {
+            _notify('Storage Warning',
+              `Backup storage is using ${_formatBytes(totalSize)}. Consider reducing the backup limit or deleting old backups.`,
+              true);
+          }
+        }
+
+        // Success notification
+        if (settings.notifyOnSuccess) {
+          _notify('Backup Complete',
+            `${reason.charAt(0).toUpperCase() + reason.slice(1)} backup created with ${scriptCount} scripts (${_formatBytes(sizeBytes)}).`);
+        }
+
+        return { success: true, backupId: backup.id };
+      } catch (err) {
+        const settings = await _loadSettings();
+        if (settings.notifyOnFailure) {
+          _notify('Backup Failed', `Error: ${err.message || err}`, true);
+        }
+        console.error('[BackupScheduler] createBackup error:', err);
+        return { success: false, error: err.message || String(err) };
+      }
+    },
+
+    /**
+     * Get all stored backups (without full data blobs to save memory).
+     * @returns {Array<{ id, timestamp, version, reason, scriptCount, size, sizeFormatted }>}
+     */
+    async getBackups() {
+      const backups = await _getBackupList();
+      return backups.map(b => ({
+        id: b.id,
+        timestamp: b.timestamp,
+        version: b.version,
+        reason: b.reason,
+        scriptCount: b.scriptCount,
+        size: b.size,
+        sizeFormatted: b.sizeFormatted
+      }));
+    },
+
+    /**
+     * Restore from a backup.
+     * @param {string} backupId
+     * @param {{ selective?: boolean, scriptIds?: string[] }} options
+     *   If selective = true, only restore scripts whose original IDs are in scriptIds.
+     *   Otherwise full restore (scripts, settings, folders, workspaces).
+     */
+    async restoreBackup(backupId, options = {}) {
+      const backups = await _getBackupList();
+      const backup = backups.find(b => b.id === backupId);
+      if (!backup) return { success: false, error: 'Backup not found' };
+
+      try {
+        const binaryString = atob(backup.data);
+        const zipBytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          zipBytes[i] = binaryString.charCodeAt(i);
+        }
+        const unzipped = fflate.unzipSync(zipBytes);
+        const fileNames = Object.keys(unzipped);
+        let restoredScripts = 0;
+
+        // --- Restore scripts ---
+        const userScripts = fileNames.filter(n => n.endsWith('.user.js'));
+        for (const filename of userScripts) {
+          const code = fflate.strFromU8(unzipped[filename]);
+          const baseName = filename.replace(/\.user\.js$/, '');
+
+          // Parse metadata to get script identity
+          let optionsMeta = {};
+          const optionsFile = `${baseName}.options.json`;
+          if (unzipped[optionsFile]) {
+            try { optionsMeta = JSON.parse(fflate.strFromU8(unzipped[optionsFile])); } catch (_) {}
+          }
+
+          // Selective filtering: match by name
+          if (options.selective && Array.isArray(options.scriptIds)) {
+            const scriptName = optionsMeta.meta?.name || baseName.replace(/^scripts\//, '');
+            if (!options.scriptIds.includes(scriptName)) continue;
+          }
+
+          // Use the existing importFromZip pipeline for each script
+          try {
+            await importFromZip(backup.data, { overwrite: true });
+            restoredScripts = userScripts.length;
+            break; // importFromZip handles all scripts at once
+          } catch (importErr) {
+            console.warn('[BackupScheduler] Script import error:', importErr);
+          }
+          break; // only call once
+        }
+
+        // --- Restore global settings (full restore only) ---
+        if (!options.selective) {
+          if (unzipped['global-settings.json']) {
+            try {
+              const settings = JSON.parse(fflate.strFromU8(unzipped['global-settings.json']));
+              await SettingsManager.set(settings);
+            } catch (_) {}
+          }
+
+          // Restore folders
+          if (unzipped['folders.json']) {
+            try {
+              const folders = JSON.parse(fflate.strFromU8(unzipped['folders.json']));
+              await chrome.storage.local.set({ scriptFolders: folders });
+            } catch (_) {}
+          }
+
+          // Restore workspaces
+          if (unzipped['workspaces.json']) {
+            try {
+              const workspaces = JSON.parse(fflate.strFromU8(unzipped['workspaces.json']));
+              await chrome.storage.local.set({ workspaces });
+            } catch (_) {}
+          }
+        }
+
+        return { success: true, restoredScripts };
+      } catch (err) {
+        console.error('[BackupScheduler] restoreBackup error:', err);
+        return { success: false, error: err.message || String(err) };
+      }
+    },
+
+    /**
+     * Delete a specific backup.
+     * @param {string} backupId
+     */
+    async deleteBackup(backupId) {
+      const backups = await _getBackupList();
+      const filtered = backups.filter(b => b.id !== backupId);
+      if (filtered.length === backups.length) return { success: false, error: 'Backup not found' };
+      await _saveBackupList(filtered);
+      return { success: true };
+    },
+
+    /**
+     * Export a backup as a downloadable object (base64 ZIP + suggested filename).
+     * @param {string} backupId
+     * @returns {{ zipData: string, filename: string } | null}
+     */
+    async exportBackup(backupId) {
+      const backups = await _getBackupList();
+      const backup = backups.find(b => b.id === backupId);
+      if (!backup) return null;
+
+      const dateStr = new Date(backup.timestamp).toISOString().replace(/[:.]/g, '-');
+      return {
+        zipData: backup.data,
+        filename: `scriptvault-autobackup-${dateStr}.zip`
+      };
+    },
+
+    /**
+     * Import a backup from externally provided base64 ZIP data.
+     * @param {string} data - base64-encoded ZIP
+     * @returns {{ success: boolean, backupId?: string, error?: string }}
+     */
+    async importBackup(data) {
+      try {
+        // Validate that the data is a valid ZIP
+        const binaryString = atob(data);
+        const zipBytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          zipBytes[i] = binaryString.charCodeAt(i);
+        }
+        const unzipped = fflate.unzipSync(zipBytes);
+        const scriptFiles = Object.keys(unzipped).filter(n => n.endsWith('.user.js'));
+
+        const sizeBytes = Math.round(data.length * 0.75);
+        const backup = {
+          id: _generateId(),
+          timestamp: Date.now(),
+          version: 'imported',
+          reason: 'imported',
+          scriptCount: scriptFiles.length,
+          size: sizeBytes,
+          sizeFormatted: _formatBytes(sizeBytes),
+          data
+        };
+
+        const backups = await _getBackupList();
+        backups.unshift(backup);
+        await _saveBackupList(backups);
+        await api.pruneOldBackups();
+
+        return { success: true, backupId: backup.id };
+      } catch (err) {
+        console.error('[BackupScheduler] importBackup error:', err);
+        return { success: false, error: err.message || String(err) };
+      }
+    },
+
+    /**
+     * Get current scheduler settings.
+     * @returns {object}
+     */
+    getSettings() {
+      return { ...(DEFAULT_SETTINGS), ...(_settings || {}) };
+    },
+
+    /**
+     * Update scheduler settings and re-register alarms.
+     * @param {object} settings - partial settings to merge
+     */
+    async setSettings(settings) {
+      const merged = { ...(await _loadSettings()), ...settings };
+      await _saveSettings(merged);
+      await _registerAlarms();
+      return { ..._settings };
+    },
+
+    /**
+     * Remove old backups exceeding the retention limit.
+     */
+    async pruneOldBackups() {
+      const settings = await _loadSettings();
+      const backups = await _getBackupList();
+      if (backups.length <= settings.maxBackups) return;
+
+      // Keep the newest N
+      const pruned = backups.slice(0, settings.maxBackups);
+      await _saveBackupList(pruned);
+    },
+
+    /**
+     * Called externally when a script is installed, updated, or deleted.
+     * If scheduleType is 'onChange', sets a debounce alarm.
+     */
+    async onScriptChanged() {
+      const settings = await _loadSettings();
+      if (!settings.enabled || settings.scheduleType !== 'onChange') return;
+
+      // Debounce: clear any pending alarm and set a new one
+      await chrome.alarms.clear(DEBOUNCE_ALARM);
+      chrome.alarms.create(DEBOUNCE_ALARM, {
+        delayInMinutes: DEBOUNCE_MINUTES
+      });
+    },
+
+    /**
+     * Get a detailed manifest of what's inside a specific backup
+     * (script names and sizes) without decompressing the whole thing to memory.
+     * @param {string} backupId
+     * @returns {Array<{ name: string, hasStorage: boolean }>}
+     */
+    async inspectBackup(backupId) {
+      const backups = await _getBackupList();
+      const backup = backups.find(b => b.id === backupId);
+      if (!backup) return null;
+
+      try {
+        const binaryString = atob(backup.data);
+        const zipBytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          zipBytes[i] = binaryString.charCodeAt(i);
+        }
+        const unzipped = fflate.unzipSync(zipBytes);
+        const fileNames = Object.keys(unzipped);
+
+        const scripts = fileNames
+          .filter(n => n.endsWith('.user.js'))
+          .map(n => {
+            const baseName = n.replace(/\.user\.js$/, '');
+            const displayName = baseName.replace(/^scripts\//, '');
+            return {
+              name: displayName,
+              hasStorage: !!unzipped[`${baseName}.storage.json`]
+            };
+          });
+
+        return scripts;
+      } catch (err) {
+        console.error('[BackupScheduler] inspectBackup error:', err);
+        return null;
+      }
+    }
+  };
+
+  return api;
+})();
+
+// ============================================================================
+// ScriptVault — UserStyles/CSS Engine
+// ============================================================================
+// Parses UserCSS (==UserStyle==) format, manages CSS style registration,
+// variable substitution, Stylus backup import, and userscript conversion.
+// Runs in service worker context (no DOM).
+
+const UserStylesEngine = (() => {
+  'use strict';
+
+  /* ------------------------------------------------------------------ */
+  /*  Constants                                                          */
+  /* ------------------------------------------------------------------ */
+
+  const STORAGE_KEY = 'sv_userstyles';
+  const VARS_STORAGE_KEY = 'sv_userstyle_vars';
+  const META_REGEX = /\/\*\s*==UserStyle==\s*([\s\S]*?)==\/UserStyle==\s*\*\//;
+  const VAR_TYPES = ['color', 'text', 'number', 'select', 'checkbox', 'range'];
+  const DIRECTIVE_REGEX = /^@(\S+)\s+(.*?)\s*$/;
+
+  /* ------------------------------------------------------------------ */
+  /*  Internal state                                                     */
+  /* ------------------------------------------------------------------ */
+
+  let _styles = {};       // { styleId: styleObject }
+  let _customVars = {};   // { styleId: { varName: value } }
+  let _initialized = false;
+  let _registeredTabs = new Map(); // tabId -> Set<styleId>
+
+  /* ------------------------------------------------------------------ */
+  /*  Storage helpers                                                    */
+  /* ------------------------------------------------------------------ */
+
+  async function _loadState() {
+    try {
+      const data = await chrome.storage.local.get([STORAGE_KEY, VARS_STORAGE_KEY]);
+      _styles = data[STORAGE_KEY] || {};
+      _customVars = data[VARS_STORAGE_KEY] || {};
+    } catch (e) {
+      console.error('[UserStylesEngine] Failed to load state:', e);
+      _styles = {};
+      _customVars = {};
+    }
+  }
+
+  async function _saveStyles() {
+    try {
+      await chrome.storage.local.set({ [STORAGE_KEY]: _styles });
+    } catch (e) {
+      console.error('[UserStylesEngine] Failed to save styles:', e);
+    }
+  }
+
+  async function _saveVars() {
+    try {
+      await chrome.storage.local.set({ [VARS_STORAGE_KEY]: _customVars });
+    } catch (e) {
+      console.error('[UserStylesEngine] Failed to save variables:', e);
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  @var parsing                                                       */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Parse a single @var directive.
+   * Formats:
+   *   @var color  my-color  "Label"  #ff0000
+   *   @var select my-select "Label"  {opt1:val1|opt2:val2}
+   *   @var range  my-range  "Label"  [0, 100, 1, 50]
+   *   @var number my-num    "Label"  42
+   *   @var text   my-text   "Label"  "default value"
+   *   @var checkbox my-chk  "Label"  0
+   */
+  function _parseVarDirective(type, rest) {
+    // Extract: varName "Label" defaultValue
+    const nameMatch = rest.match(/^(\S+)\s+"([^"]*?)"\s+([\s\S]*)$/);
+    if (!nameMatch) {
+      const simpleMatch = rest.match(/^(\S+)\s+(.*)$/);
+      if (!simpleMatch) return null;
+      return {
+        type,
+        name: simpleMatch[1],
+        label: simpleMatch[1],
+        default: simpleMatch[2].trim(),
+        options: null,
+      };
+    }
+
+    const varName = nameMatch[1];
+    const label = nameMatch[2];
+    let defaultVal = nameMatch[3].trim();
+    let options = null;
+
+    switch (type) {
+      case 'color':
+        // Default is a color value like #ff0000 or rgba(...)
+        break;
+
+      case 'text':
+        // Strip surrounding quotes if present
+        if (/^".*"$/.test(defaultVal)) {
+          defaultVal = defaultVal.slice(1, -1);
+        }
+        break;
+
+      case 'number':
+        defaultVal = parseFloat(defaultVal) || 0;
+        break;
+
+      case 'checkbox':
+        defaultVal = defaultVal === '1' || defaultVal === 'true';
+        break;
+
+      case 'select': {
+        // {opt1:"Label 1"|opt2:"Label 2"} or {"Label 1":"val1","Label 2":"val2"}
+        const braceMatch = defaultVal.match(/^\{([\s\S]*)\}$/);
+        if (braceMatch) {
+          options = {};
+          const inner = braceMatch[1];
+          // Try JSON-style first
+          try {
+            options = JSON.parse(`{${inner}}`);
+            defaultVal = Object.keys(options)[0] || '';
+          } catch {
+            // Pipe-separated: key:value|key:value or "label":value
+            const pairs = inner.split('|');
+            let firstKey = null;
+            for (const pair of pairs) {
+              const kv = pair.match(/^"?([^":]+)"?\s*:\s*"?([^"|]*)"?\s*$/);
+              if (kv) {
+                options[kv[1].trim()] = kv[2].trim();
+                if (!firstKey) firstKey = kv[1].trim();
+              }
+            }
+            defaultVal = firstKey || '';
+          }
+        }
+        break;
+      }
+
+      case 'range': {
+        // [min, max, step, default] e.g. [0, 100, 1, 50]
+        const arrMatch = defaultVal.match(/^\[([\s\S]*)\]$/);
+        if (arrMatch) {
+          const parts = arrMatch[1].split(',').map(s => parseFloat(s.trim()));
+          options = {
+            min: parts[0] ?? 0,
+            max: parts[1] ?? 100,
+            step: parts[2] ?? 1,
+          };
+          defaultVal = parts[3] ?? parts[0] ?? 0;
+        } else {
+          defaultVal = parseFloat(defaultVal) || 0;
+          options = { min: 0, max: 100, step: 1 };
+        }
+        break;
+      }
+    }
+
+    return { type, name: varName, label, default: defaultVal, options };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  UserCSS parser                                                     */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Parse UserCSS source code.
+   * @param {string} code - Full UserCSS file content
+   * @returns {{ meta: Object, variables: Object[], css: string, error?: string }}
+   */
+  function parseUserCSS(code) {
+    const metaMatch = code.match(META_REGEX);
+    if (!metaMatch) {
+      return { error: 'No ==UserStyle== metadata block found.' };
+    }
+
+    const meta = {
+      name: 'Unnamed Style',
+      namespace: 'scriptvault',
+      version: '1.0.0',
+      description: '',
+      author: '',
+      license: '',
+      preprocessor: 'default',
+      homepageURL: '',
+      supportURL: '',
+      updateURL: '',
+    };
+    const variables = [];
+
+    const metaBlock = metaMatch[1];
+    const lines = metaBlock.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.replace(/^\s*\*?\s*/, '').trim();
+      if (!trimmed || trimmed.startsWith('//')) continue;
+
+      const match = trimmed.match(DIRECTIVE_REGEX);
+      if (!match) continue;
+
+      const key = match[1];
+      const value = match[2];
+
+      if (key === 'var') {
+        // @var type name "label" default
+        const varTypeMatch = value.match(/^(\S+)\s+([\s\S]+)$/);
+        if (varTypeMatch && VAR_TYPES.includes(varTypeMatch[1])) {
+          const parsed = _parseVarDirective(varTypeMatch[1], varTypeMatch[2]);
+          if (parsed) variables.push(parsed);
+        }
+      } else if (key in meta) {
+        meta[key] = value;
+      }
+    }
+
+    // Extract CSS body (everything outside the meta block)
+    const metaEnd = code.indexOf('==/UserStyle==');
+    const afterMeta = code.indexOf('*/', metaEnd);
+    let css = '';
+    if (afterMeta !== -1) {
+      css = code.substring(afterMeta + 2).trim();
+    }
+
+    return { meta, variables, css };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Variable substitution                                              */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Apply variable values to CSS template.
+   * Replaces /*[[varName]]*​/ patterns (UserCSS convention)
+   * and var(--varName) custom property patterns.
+   */
+  function _substituteVariables(css, variables, customValues) {
+    let result = css;
+
+    for (const v of variables) {
+      const val = customValues && customValues[v.name] !== undefined
+        ? customValues[v.name]
+        : v.default;
+
+      // Replace /*[[varName]]*/ placeholders
+      const placeholder = new RegExp(
+        '/\\*\\[\\[' + _escapeRegex(v.name) + '\\]\\]\\*/', 'g'
+      );
+      result = result.replace(placeholder, String(val));
+
+      // Replace <<varName>> placeholders (less-style)
+      const anglePlaceholder = new RegExp(
+        '<<' + _escapeRegex(v.name) + '>>', 'g'
+      );
+      result = result.replace(anglePlaceholder, String(val));
+    }
+
+    return result;
+  }
+
+  function _escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Style registration via chrome.scripting                            */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Build the final CSS for a style, applying variable substitutions.
+   */
+  function _buildCSS(styleId) {
+    const style = _styles[styleId];
+    if (!style) return '';
+    const vars = style.variables || [];
+    const custom = _customVars[styleId] || {};
+    return _substituteVariables(style.css, vars, custom);
+  }
+
+  /**
+   * Register a style for injection.
+   * @param {Object} style - Parsed style object with meta, variables, css
+   * @returns {Promise<string>} The assigned style ID
+   */
+  async function registerStyle(style) {
+    if (!_initialized) await _loadState();
+
+    const id = style.id || `usercss_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const entry = {
+      id,
+      type: 'usercss',
+      meta: style.meta || {},
+      variables: style.variables || [],
+      css: style.css || '',
+      rawCode: style.rawCode || '',
+      enabled: style.enabled !== false,
+      match: style.match || ['*://*/*'],
+      installDate: style.installDate || Date.now(),
+      updateDate: Date.now(),
+    };
+
+    _styles[id] = entry;
+    await _saveStyles();
+
+    if (entry.enabled) {
+      await _injectStyleToMatchingTabs(id);
+    }
+
+    return id;
+  }
+
+  /**
+   * Unregister and remove a style.
+   */
+  async function unregisterStyle(styleId) {
+    if (!_initialized) await _loadState();
+
+    await _removeStyleFromAllTabs(styleId);
+
+    delete _styles[styleId];
+    delete _customVars[styleId];
+
+    await Promise.all([_saveStyles(), _saveVars()]);
+  }
+
+  /**
+   * Enable or disable a style.
+   */
+  async function toggleStyle(styleId, enabled) {
+    if (!_initialized) await _loadState();
+
+    const style = _styles[styleId];
+    if (!style) return;
+
+    style.enabled = enabled;
+    await _saveStyles();
+
+    if (enabled) {
+      await _injectStyleToMatchingTabs(styleId);
+    } else {
+      await _removeStyleFromAllTabs(styleId);
+    }
+  }
+
+  /**
+   * Inject a style's CSS into all matching tabs.
+   */
+  async function _injectStyleToMatchingTabs(styleId) {
+    const style = _styles[styleId];
+    if (!style || !style.enabled) return;
+
+    const css = _buildCSS(styleId);
+    if (!css) return;
+
+    try {
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        if (_urlMatchesPatterns(tab.url, style.match)) {
+          try {
+            await chrome.scripting.insertCSS({
+              target: { tabId: tab.id },
+              css,
+            });
+            if (!_registeredTabs.has(tab.id)) {
+              _registeredTabs.set(tab.id, new Set());
+            }
+            _registeredTabs.get(tab.id).add(styleId);
+          } catch {
+            // Tab may not be injectable (chrome://, etc.)
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[UserStylesEngine] Inject failed:', e);
+    }
+  }
+
+  /**
+   * Remove a style's CSS from all tabs.
+   */
+  async function _removeStyleFromAllTabs(styleId) {
+    const css = _buildCSS(styleId);
+    if (!css) return;
+
+    try {
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        const tabStyles = _registeredTabs.get(tab.id);
+        if (tabStyles && tabStyles.has(styleId)) {
+          try {
+            await chrome.scripting.removeCSS({
+              target: { tabId: tab.id },
+              css,
+            });
+            tabStyles.delete(styleId);
+          } catch {
+            // Tab may have been closed
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[UserStylesEngine] Remove failed:', e);
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  URL matching                                                       */
+  /* ------------------------------------------------------------------ */
+
+  function _urlMatchesPatterns(url, patterns) {
+    if (!url || !patterns || patterns.length === 0) return false;
+
+    for (const pattern of patterns) {
+      if (pattern === '*://*/*' || pattern === '<all_urls>') return true;
+
+      try {
+        const regex = _matchPatternToRegex(pattern);
+        if (regex.test(url)) return true;
+      } catch {
+        // Fallback: treat as glob
+        if (_globMatch(url, pattern)) return true;
+      }
+    }
+    return false;
+  }
+
+  function _matchPatternToRegex(pattern) {
+    // Chrome extension match pattern: scheme://host/path
+    const escaped = pattern
+      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\\\*/g, '.*');
+    return new RegExp('^' + escaped + '$');
+  }
+
+  function _globMatch(url, glob) {
+    const regex = glob
+      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\*/g, '.*');
+    return new RegExp('^' + regex + '$').test(url);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Variable management                                                */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Get variable definitions and current values for a style.
+   */
+  function getVariables(styleId) {
+    const style = _styles[styleId];
+    if (!style) return null;
+
+    const custom = _customVars[styleId] || {};
+    return (style.variables || []).map(v => ({
+      ...v,
+      current: custom[v.name] !== undefined ? custom[v.name] : v.default,
+    }));
+  }
+
+  /**
+   * Set variable values for a style and re-inject.
+   * @param {string} styleId
+   * @param {Object} values - { varName: value }
+   */
+  async function setVariables(styleId, values) {
+    if (!_initialized) await _loadState();
+
+    const style = _styles[styleId];
+    if (!style) return;
+
+    if (!_customVars[styleId]) _customVars[styleId] = {};
+
+    for (const [key, val] of Object.entries(values)) {
+      _customVars[styleId][key] = val;
+    }
+
+    await _saveVars();
+
+    // Re-inject with updated values
+    if (style.enabled) {
+      await _removeStyleFromAllTabs(styleId);
+      await _injectStyleToMatchingTabs(styleId);
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Conversion: UserCSS -> Userscript                                  */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Convert a UserCSS source to a regular userscript that uses GM_addStyle.
+   */
+  function convertToUserscript(usercssCode) {
+    const parsed = parseUserCSS(usercssCode);
+    if (parsed.error) return { error: parsed.error };
+
+    const { meta, variables, css } = parsed;
+
+    // Build the default variable values for substitution
+    const defaults = {};
+    for (const v of variables) {
+      defaults[v.name] = v.default;
+    }
+    const finalCSS = _substituteVariables(css, variables, defaults);
+
+    // Escape backticks and backslashes for template literal
+    const escapedCSS = finalCSS
+      .replace(/\\/g, '\\\\')
+      .replace(/`/g, '\\`')
+      .replace(/\$/g, '\\$');
+
+    const matchDirectives = '// @match        *://*/*';
+    const grantDirective = '// @grant        GM_addStyle';
+
+    const script = [
+      '// ==UserScript==',
+      `// @name         ${meta.name}`,
+      `// @namespace    ${meta.namespace}`,
+      `// @version      ${meta.version}`,
+      `// @description  ${meta.description}`,
+      `// @author       ${meta.author}`,
+      matchDirectives,
+      grantDirective,
+      '// @run-at       document-start',
+      '// ==/UserScript==',
+      '',
+      '(function () {',
+      '  \'use strict\';',
+      '',
+      '  const css = `',
+      escapedCSS,
+      '  `;',
+      '',
+      '  if (typeof GM_addStyle === \'function\') {',
+      '    GM_addStyle(css);',
+      '  } else {',
+      '    const style = document.createElement(\'style\');',
+      '    style.textContent = css;',
+      '    (document.head || document.documentElement).appendChild(style);',
+      '  }',
+      '})();',
+    ].join('\n');
+
+    return { script, meta };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Import from Stylus JSON backup                                     */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Import styles from a Stylus JSON backup.
+   * @param {string|Object} json - JSON string or parsed array of Stylus style objects
+   * @returns {Promise<{ imported: number, errors: string[] }>}
+   */
+  async function importStylusBackup(json) {
+    if (!_initialized) await _loadState();
+
+    let stylusStyles;
+    try {
+      stylusStyles = typeof json === 'string' ? JSON.parse(json) : json;
+    } catch (e) {
+      return { imported: 0, errors: ['Invalid JSON: ' + e.message] };
+    }
+
+    if (!Array.isArray(stylusStyles)) {
+      stylusStyles = [stylusStyles];
+    }
+
+    let imported = 0;
+    const errors = [];
+
+    for (const sStyle of stylusStyles) {
+      try {
+        const style = _convertStylusStyle(sStyle);
+        if (style) {
+          await registerStyle(style);
+          imported++;
+        } else {
+          errors.push(`Skipped style: ${sStyle.name || 'unknown'} (no usable sections)`);
+        }
+      } catch (e) {
+        errors.push(`Failed to import "${sStyle.name || 'unknown'}": ${e.message}`);
+      }
+    }
+
+    return { imported, errors };
+  }
+
+  /**
+   * Convert a single Stylus backup style object to our internal format.
+   */
+  function _convertStylusStyle(sStyle) {
+    if (!sStyle.sections || sStyle.sections.length === 0) return null;
+
+    // Build CSS from sections
+    const cssParts = [];
+    const matchPatterns = new Set();
+
+    for (const section of sStyle.sections) {
+      let sectionCSS = section.code || '';
+
+      // Build selector from urls/urlPrefixes/domains/regexps
+      if (section.urls && section.urls.length) {
+        for (const url of section.urls) {
+          matchPatterns.add(_urlToMatchPattern(url));
+        }
+      }
+      if (section.urlPrefixes && section.urlPrefixes.length) {
+        for (const prefix of section.urlPrefixes) {
+          matchPatterns.add(_urlPrefixToMatchPattern(prefix));
+        }
+      }
+      if (section.domains && section.domains.length) {
+        for (const domain of section.domains) {
+          matchPatterns.add(`*://${domain}/*`);
+          matchPatterns.add(`*://*.${domain}/*`);
+        }
+      }
+      if (section.regexps && section.regexps.length) {
+        // Can't convert regex to match pattern; use catch-all
+        matchPatterns.add('*://*/*');
+      }
+      if (!section.urls?.length && !section.urlPrefixes?.length &&
+          !section.domains?.length && !section.regexps?.length) {
+        matchPatterns.add('*://*/*');
+      }
+
+      cssParts.push(sectionCSS);
+    }
+
+    const match = [...matchPatterns];
+    if (match.length === 0) match.push('*://*/*');
+
+    return {
+      meta: {
+        name: sStyle.name || 'Imported Style',
+        namespace: 'stylus-import',
+        version: '1.0.0',
+        description: `Imported from Stylus on ${new Date().toISOString().split('T')[0]}`,
+        author: sStyle.author || '',
+        license: '',
+        preprocessor: 'default',
+      },
+      variables: [],
+      css: cssParts.join('\n\n'),
+      rawCode: '',
+      match,
+      enabled: sStyle.enabled !== false,
+      installDate: sStyle.installDate || Date.now(),
+    };
+  }
+
+  function _urlToMatchPattern(url) {
+    try {
+      const u = new URL(url);
+      return `${u.protocol}//${u.hostname}${u.pathname}`;
+    } catch {
+      return '*://*/*';
+    }
+  }
+
+  function _urlPrefixToMatchPattern(prefix) {
+    try {
+      const u = new URL(prefix);
+      return `${u.protocol}//${u.hostname}${u.pathname}*`;
+    } catch {
+      return '*://*/*';
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  .user.css URL detection                                            */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Check if a URL points to a UserCSS file.
+   */
+  function isUserCSSUrl(url) {
+    if (!url) return false;
+    try {
+      const pathname = new URL(url).pathname;
+      return pathname.endsWith('.user.css');
+    } catch {
+      return false;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Tab navigation handler                                             */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Handle tab navigation — inject matching styles into newly loaded pages.
+   * Call from background.js webNavigation.onCommitted or tabs.onUpdated.
+   */
+  async function onTabUpdated(tabId, url) {
+    if (!_initialized) await _loadState();
+    if (!url) return;
+
+    for (const [styleId, style] of Object.entries(_styles)) {
+      if (!style.enabled) continue;
+      if (!_urlMatchesPatterns(url, style.match)) continue;
+
+      const css = _buildCSS(styleId);
+      if (!css) continue;
+
+      try {
+        await chrome.scripting.insertCSS({
+          target: { tabId },
+          css,
+        });
+        if (!_registeredTabs.has(tabId)) {
+          _registeredTabs.set(tabId, new Set());
+        }
+        _registeredTabs.get(tabId).add(styleId);
+      } catch {
+        // Tab not injectable
+      }
+    }
+  }
+
+  /**
+   * Clean up when a tab is closed.
+   */
+  function onTabRemoved(tabId) {
+    _registeredTabs.delete(tabId);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Initialization                                                     */
+  /* ------------------------------------------------------------------ */
+
+  async function init() {
+    if (_initialized) return;
+    await _loadState();
+    _initialized = true;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Get all styles (for dashboard display)                             */
+  /* ------------------------------------------------------------------ */
+
+  function getStyles() {
+    return { ..._styles };
+  }
+
+  function getStyle(styleId) {
+    return _styles[styleId] || null;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Update raw CSS for a style                                         */
+  /* ------------------------------------------------------------------ */
+
+  async function updateCSS(styleId, newCSS) {
+    if (!_initialized) await _loadState();
+
+    const style = _styles[styleId];
+    if (!style) return;
+
+    // Re-parse if full UserCSS provided
+    if (META_REGEX.test(newCSS)) {
+      const parsed = parseUserCSS(newCSS);
+      if (!parsed.error) {
+        style.meta = parsed.meta;
+        style.variables = parsed.variables;
+        style.css = parsed.css;
+        style.rawCode = newCSS;
+      }
+    } else {
+      style.css = newCSS;
+    }
+
+    style.updateDate = Date.now();
+    await _saveStyles();
+
+    if (style.enabled) {
+      await _removeStyleFromAllTabs(styleId);
+      await _injectStyleToMatchingTabs(styleId);
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Public API                                                         */
+  /* ------------------------------------------------------------------ */
+
+  return {
+    init,
+    parseUserCSS,
+    registerStyle,
+    unregisterStyle,
+    toggleStyle,
+    getVariables,
+    setVariables,
+    getStyles,
+    getStyle,
+    updateCSS,
+    convertToUserscript,
+    importStylusBackup,
+    isUserCSSUrl,
+    onTabUpdated,
+    onTabRemoved,
+  };
+})();
+
+// Export for module environments (tests, bundlers)
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = UserStylesEngine;
+}
+
+// ScriptVault — Public Extension API
+// Allows other extensions and web pages to interact with ScriptVault.
+// Designed for service worker (no DOM dependencies).
+
+const PublicAPI = (() => {
+  'use strict';
+
+  /* ------------------------------------------------------------------ */
+  /*  Constants                                                          */
+  /* ------------------------------------------------------------------ */
+
+  const API_VERSION = '1.0.0';
+  const STORAGE_KEY_PERMS = 'publicapi_permissions';
+  const STORAGE_KEY_AUDIT = 'publicapi_audit';
+  const STORAGE_KEY_WEBHOOKS = 'publicapi_webhooks';
+  const STORAGE_KEY_ORIGINS = 'publicapi_trusted_origins';
+  const MAX_AUDIT_ENTRIES = 500;
+  const RATE_LIMIT_WINDOW = 1000; // ms
+  const RATE_LIMIT_MAX = 10;      // requests per window
+
+  /* ------------------------------------------------------------------ */
+  /*  State                                                              */
+  /* ------------------------------------------------------------------ */
+
+  let _permissions = null;    // { [apiName]: 'allow' | 'deny' | 'prompt' }
+  let _auditLog = [];
+  let _webhooks = {};         // { [eventType]: { url, enabled } }
+  let _trustedOrigins = [];
+  let _initialized = false;
+  let _rateLimitMap = new Map(); // senderId -> [timestamps]
+
+  /* ------------------------------------------------------------------ */
+  /*  Default Permissions                                                */
+  /* ------------------------------------------------------------------ */
+
+  const DEFAULT_PERMISSIONS = {
+    ping:                'allow',
+    getVersion:          'allow',
+    getAPISchema:        'allow',
+    getInstalledScripts: 'allow',
+    getScriptStatus:     'allow',
+    toggleScript:        'prompt',
+    installScript:       'prompt'
+  };
+
+  /* ------------------------------------------------------------------ */
+  /*  API Schema (self-documenting)                                      */
+  /* ------------------------------------------------------------------ */
+
+  const API_SCHEMA = {
+    version: API_VERSION,
+    endpoints: {
+      ping: {
+        description: 'Health check. Returns { ok: true, version }.',
+        params: null,
+        auth: 'none',
+        rateLimit: true
+      },
+      getVersion: {
+        description: 'Return the ScriptVault version string.',
+        params: null,
+        auth: 'none',
+        rateLimit: true
+      },
+      getInstalledScripts: {
+        description: 'List all installed scripts with name, version, and enabled status.',
+        params: null,
+        auth: 'basic',
+        rateLimit: true
+      },
+      getScriptStatus: {
+        description: 'Get detailed status for a single script.',
+        params: { scriptId: 'string — the script ID' },
+        auth: 'basic',
+        rateLimit: true
+      },
+      toggleScript: {
+        description: 'Enable or disable a script. Requires user approval.',
+        params: { scriptId: 'string', enabled: 'boolean' },
+        auth: 'prompt',
+        rateLimit: true
+      },
+      installScript: {
+        description: 'Install a new userscript. Requires user approval.',
+        params: { code: 'string — full userscript source' },
+        auth: 'prompt',
+        rateLimit: true
+      },
+      getAPISchema: {
+        description: 'Return the full API schema (this document).',
+        params: null,
+        auth: 'none',
+        rateLimit: false
+      }
+    },
+    webPageEndpoints: {
+      'scriptvault:getScripts': {
+        description: 'Returns list of scripts matching the current page.',
+        params: null
+      },
+      'scriptvault:isInstalled': {
+        description: 'Check if a script by name is installed.',
+        params: { name: 'string' }
+      },
+      'scriptvault:install': {
+        description: 'Trigger install flow for a script URL.',
+        params: { url: 'string' }
+      }
+    },
+    webhookEvents: ['script.installed', 'script.updated', 'script.error', 'script.toggled']
+  };
+
+  /* ------------------------------------------------------------------ */
+  /*  Storage Helpers                                                    */
+  /* ------------------------------------------------------------------ */
+
+  async function loadState() {
+    try {
+      const result = await chrome.storage.local.get([
+        STORAGE_KEY_PERMS,
+        STORAGE_KEY_AUDIT,
+        STORAGE_KEY_WEBHOOKS,
+        STORAGE_KEY_ORIGINS
+      ]);
+      _permissions = { ...DEFAULT_PERMISSIONS, ...(result[STORAGE_KEY_PERMS] || {}) };
+      _auditLog = result[STORAGE_KEY_AUDIT] || [];
+      _webhooks = result[STORAGE_KEY_WEBHOOKS] || {};
+      _trustedOrigins = result[STORAGE_KEY_ORIGINS] || [];
+    } catch {
+      _permissions = { ...DEFAULT_PERMISSIONS };
+      _auditLog = [];
+      _webhooks = {};
+      _trustedOrigins = [];
+    }
+  }
+
+  async function savePermissions() {
+    try {
+      await chrome.storage.local.set({ [STORAGE_KEY_PERMS]: _permissions });
+    } catch (e) {
+      console.warn('[PublicAPI] save permissions failed:', e);
+    }
+  }
+
+  async function saveAuditLog() {
+    try {
+      // Trim to max entries
+      if (_auditLog.length > MAX_AUDIT_ENTRIES) {
+        _auditLog = _auditLog.slice(-MAX_AUDIT_ENTRIES);
+      }
+      await chrome.storage.local.set({ [STORAGE_KEY_AUDIT]: _auditLog });
+    } catch (e) {
+      console.warn('[PublicAPI] save audit failed:', e);
+    }
+  }
+
+  async function saveWebhooks() {
+    try {
+      await chrome.storage.local.set({ [STORAGE_KEY_WEBHOOKS]: _webhooks });
+    } catch (e) {
+      console.warn('[PublicAPI] save webhooks failed:', e);
+    }
+  }
+
+  async function saveTrustedOrigins() {
+    try {
+      await chrome.storage.local.set({ [STORAGE_KEY_ORIGINS]: _trustedOrigins });
+    } catch (e) {
+      console.warn('[PublicAPI] save origins failed:', e);
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Audit Logging                                                      */
+  /* ------------------------------------------------------------------ */
+
+  function audit(action, sender, details, result) {
+    const entry = {
+      timestamp: Date.now(),
+      action,
+      sender: describeSender(sender),
+      details: details || null,
+      result: result || 'ok'
+    };
+    _auditLog.push(entry);
+    // Async save, don't await in hot path
+    saveAuditLog();
+    return entry;
+  }
+
+  function describeSender(sender) {
+    if (!sender) return 'unknown';
+    if (sender.id) return `extension:${sender.id}`;
+    if (sender.origin) return `origin:${sender.origin}`;
+    if (sender.url) return `url:${sender.url}`;
+    return 'unknown';
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Rate Limiting                                                      */
+  /* ------------------------------------------------------------------ */
+
+  function checkRateLimit(senderId) {
+    const now = Date.now();
+    let timestamps = _rateLimitMap.get(senderId);
+
+    if (!timestamps) {
+      timestamps = [];
+      _rateLimitMap.set(senderId, timestamps);
+    }
+
+    // Purge old timestamps outside the window
+    const cutoff = now - RATE_LIMIT_WINDOW;
+    while (timestamps.length > 0 && timestamps[0] < cutoff) {
+      timestamps.shift();
+    }
+
+    if (timestamps.length >= RATE_LIMIT_MAX) {
+      return false; // rate limited
+    }
+
+    timestamps.push(now);
+    return true;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Permission Checking                                                */
+  /* ------------------------------------------------------------------ */
+
+  function getPermission(apiName) {
+    return _permissions[apiName] || 'deny';
+  }
+
+  async function requestUserApproval(apiName, sender, details) {
+    // In a service worker we cannot show DOM prompts.
+    // Use chrome.notifications for approval, but for safety we deny by default
+    // and require pre-approval via setPermissions().
+    // If running in a context with chrome.notifications, send one.
+    try {
+      if (chrome.notifications) {
+        const notifId = `sv-api-approval-${Date.now()}`;
+        await chrome.notifications.create(notifId, {
+          type: 'basic',
+          iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+          title: 'ScriptVault API Request',
+          message: `External request: ${apiName} from ${describeSender(sender)}. Pre-approve via settings to allow.`,
+          priority: 2
+        });
+      }
+    } catch { /* notifications not available */ }
+
+    // Default: deny unless explicitly allowed
+    return false;
+  }
+
+  async function authorize(apiName, sender) {
+    const perm = getPermission(apiName);
+    if (perm === 'allow') return true;
+    if (perm === 'deny') return false;
+    if (perm === 'prompt') {
+      return requestUserApproval(apiName, sender);
+    }
+    return false;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Script Data Access                                                 */
+  /* ------------------------------------------------------------------ */
+
+  async function getScripts() {
+    try {
+      const result = await chrome.storage.local.get('scripts');
+      return result.scripts || [];
+    } catch {
+      return [];
+    }
+  }
+
+  async function getScriptById(scriptId) {
+    const scripts = await getScripts();
+    return scripts.find(s => s.id === scriptId || s.name === scriptId) || null;
+  }
+
+  async function getExtensionVersion() {
+    try {
+      const manifest = chrome.runtime.getManifest();
+      return manifest.version || '0.0.0';
+    } catch {
+      return '0.0.0';
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  API Handlers (External Messages)                                   */
+  /* ------------------------------------------------------------------ */
+
+  const HANDLERS = {
+    async ping(_msg, _sender) {
+      return { ok: true, version: await getExtensionVersion(), api: API_VERSION };
+    },
+
+    async getVersion(_msg, _sender) {
+      return { version: await getExtensionVersion(), api: API_VERSION };
+    },
+
+    async getInstalledScripts(_msg, _sender) {
+      const scripts = await getScripts();
+      return {
+        scripts: scripts.map(s => ({
+          id: s.id,
+          name: s.name || s.id,
+          version: s.version || '1.0',
+          enabled: s.enabled !== false,
+          matchUrls: s.matches || s.match || []
+        }))
+      };
+    },
+
+    async getScriptStatus(msg, _sender) {
+      const scriptId = msg.scriptId || msg.id;
+      if (!scriptId) return { error: 'Missing scriptId parameter' };
+
+      const script = await getScriptById(scriptId);
+      if (!script) return { error: 'Script not found', scriptId };
+
+      return {
+        id: script.id,
+        name: script.name || script.id,
+        version: script.version || '1.0',
+        enabled: script.enabled !== false,
+        matches: script.matches || script.match || [],
+        lastModified: script.lastModified || null,
+        runAt: script.runAt || 'document_idle'
+      };
+    },
+
+    async toggleScript(msg, sender) {
+      const scriptId = msg.scriptId || msg.id;
+      const enabled = !!msg.enabled;
+      if (!scriptId) return { error: 'Missing scriptId parameter' };
+
+      const allowed = await authorize('toggleScript', sender);
+      if (!allowed) return { error: 'Permission denied', action: 'toggleScript' };
+
+      try {
+        const result = await chrome.storage.local.get('scripts');
+        const scripts = result.scripts || [];
+        const idx = scripts.findIndex(s => s.id === scriptId || s.name === scriptId);
+        if (idx === -1) return { error: 'Script not found', scriptId };
+
+        scripts[idx].enabled = enabled;
+        await chrome.storage.local.set({ scripts });
+
+        fireWebhook('script.toggled', { scriptId, enabled });
+        return { ok: true, scriptId, enabled };
+      } catch (e) {
+        return { error: 'Failed to toggle script', detail: e.message };
+      }
+    },
+
+    async installScript(msg, sender) {
+      const code = msg.code;
+      if (!code || typeof code !== 'string') return { error: 'Missing or invalid code parameter' };
+
+      const allowed = await authorize('installScript', sender);
+      if (!allowed) return { error: 'Permission denied', action: 'installScript' };
+
+      try {
+        // Parse basic userscript metadata
+        const meta = parseUserscriptMeta(code);
+        const scriptId = meta.name
+          ? meta.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase()
+          : `ext_${Date.now()}`;
+
+        const newScript = {
+          id: scriptId,
+          name: meta.name || scriptId,
+          version: meta.version || '1.0',
+          description: meta.description || '',
+          matches: meta.match || ['*://*/*'],
+          code,
+          enabled: true,
+          installedAt: Date.now(),
+          installedBy: describeSender(sender),
+          runAt: meta.runAt || 'document_idle'
+        };
+
+        const result = await chrome.storage.local.get('scripts');
+        const scripts = result.scripts || [];
+
+        // Check for duplicate
+        const existing = scripts.findIndex(s => s.id === scriptId);
+        if (existing !== -1) {
+          scripts[existing] = { ...scripts[existing], ...newScript, updatedAt: Date.now() };
+        } else {
+          scripts.push(newScript);
+        }
+
+        await chrome.storage.local.set({ scripts });
+
+        fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
+        return { ok: true, scriptId, name: newScript.name };
+      } catch (e) {
+        return { error: 'Failed to install script', detail: e.message };
+      }
+    },
+
+    async getAPISchema(_msg, _sender) {
+      return { schema: API_SCHEMA };
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
+  /*  Userscript Metadata Parser (minimal)                               */
+  /* ------------------------------------------------------------------ */
+
+  function parseUserscriptMeta(code) {
+    const meta = {};
+    const headerMatch = code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/);
+    if (!headerMatch) return meta;
+
+    const lines = headerMatch[1].split('\n');
+    for (const line of lines) {
+      const m = line.match(/\/\/\s*@(\S+)\s+(.*)/);
+      if (!m) continue;
+      const key = m[1].trim();
+      const val = m[2].trim();
+
+      if (key === 'match' || key === 'include') {
+        if (!meta.match) meta.match = [];
+        meta.match.push(val);
+      } else if (key === 'run-at') {
+        meta.runAt = val.replace(/-/g, '_');
+      } else {
+        meta[key] = val;
+      }
+    }
+    return meta;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Web Page Message Handlers                                          */
+  /* ------------------------------------------------------------------ */
+
+  const WEB_HANDLERS = {
+    'scriptvault:getScripts': async (data, origin) => {
+      const scripts = await getScripts();
+      return {
+        type: 'scriptvault:getScripts:response',
+        scripts: scripts.map(s => ({
+          name: s.name || s.id,
+          version: s.version || '1.0',
+          enabled: s.enabled !== false
+        }))
+      };
+    },
+
+    'scriptvault:isInstalled': async (data, origin) => {
+      const name = data.name;
+      if (!name) return { type: 'scriptvault:isInstalled:response', error: 'Missing name' };
+
+      const scripts = await getScripts();
+      const found = scripts.find(s =>
+        (s.name || '').toLowerCase() === name.toLowerCase() ||
+        (s.id || '').toLowerCase() === name.toLowerCase()
+      );
+      return {
+        type: 'scriptvault:isInstalled:response',
+        installed: !!found,
+        name,
+        version: found ? (found.version || '1.0') : null
+      };
+    },
+
+    'scriptvault:install': async (data, origin) => {
+      const url = data.url;
+      if (!url || typeof url !== 'string') {
+        return { type: 'scriptvault:install:response', error: 'Missing or invalid url' };
+      }
+
+      // Fetch the script
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const code = await resp.text();
+
+        // Delegate to install handler with a synthetic sender
+        const result = await HANDLERS.installScript(
+          { action: 'installScript', code },
+          { origin }
+        );
+        return { type: 'scriptvault:install:response', ...result };
+      } catch (e) {
+        return { type: 'scriptvault:install:response', error: 'Fetch failed', detail: e.message };
+      }
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
+  /*  Webhook Support                                                    */
+  /* ------------------------------------------------------------------ */
+
+  async function fireWebhook(eventType, payload) {
+    const hook = _webhooks[eventType];
+    if (!hook || !hook.enabled || !hook.url) return;
+
+    const body = {
+      event: eventType,
+      timestamp: Date.now(),
+      version: API_VERSION,
+      data: payload
+    };
+
+    try {
+      await fetch(hook.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    } catch (e) {
+      console.warn(`[PublicAPI] webhook ${eventType} failed:`, e);
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Message Dispatchers                                                */
+  /* ------------------------------------------------------------------ */
+
+  async function dispatchExternal(message, sender) {
+    const action = message && message.action;
+    if (!action || typeof action !== 'string') {
+      return { error: 'Missing action field' };
+    }
+
+    const handler = HANDLERS[action];
+    if (!handler) {
+      return { error: `Unknown action: ${action}`, availableActions: Object.keys(HANDLERS) };
+    }
+
+    // Rate limit
+    const senderId = describeSender(sender);
+    if (API_SCHEMA.endpoints[action]?.rateLimit !== false) {
+      if (!checkRateLimit(senderId)) {
+        audit(action, sender, null, 'rate_limited');
+        return { error: 'Rate limited. Max 10 requests per second.' };
+      }
+    }
+
+    // Permission check (ping, getVersion, getAPISchema are always allowed)
+    const perm = getPermission(action);
+    if (perm === 'deny') {
+      audit(action, sender, null, 'denied');
+      return { error: 'Permission denied', action };
+    }
+
+    // Execute
+    try {
+      const result = await handler(message, sender);
+      audit(action, sender, message, result.error ? 'error' : 'ok');
+      return result;
+    } catch (e) {
+      audit(action, sender, message, 'exception');
+      return { error: 'Internal error', detail: e.message };
+    }
+  }
+
+  function dispatchWebMessage(event) {
+    // Validate origin
+    if (_trustedOrigins.length > 0 && !_trustedOrigins.includes(event.origin) && !_trustedOrigins.includes('*')) {
+      return; // ignore untrusted origins
+    }
+
+    const data = event.data;
+    if (!data || typeof data !== 'object' || !data.type) return;
+    if (!data.type.startsWith('scriptvault:')) return;
+
+    const senderId = `web:${event.origin}`;
+    if (!checkRateLimit(senderId)) {
+      // Silently drop rate-limited web messages
+      return;
+    }
+
+    const handler = WEB_HANDLERS[data.type];
+    if (!handler) return;
+
+    audit(data.type, { origin: event.origin }, data, 'processing');
+
+    handler(data, event.origin).then(response => {
+      if (response && event.source) {
+        try {
+          event.source.postMessage(response, event.origin === 'null' ? '*' : event.origin);
+        } catch { /* cross-origin post failed */ }
+      }
+    }).catch(e => {
+      console.warn('[PublicAPI] web handler error:', e);
+    });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Listener Management                                                */
+  /* ------------------------------------------------------------------ */
+
+  function onExternalMessage(message, sender, sendResponse) {
+    // chrome.runtime.onMessageExternal is async-capable via sendResponse
+    dispatchExternal(message, sender).then(result => {
+      try { sendResponse(result); } catch { /* port closed */ }
+    });
+    return true; // keep message channel open for async response
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Public Interface                                                   */
+  /* ------------------------------------------------------------------ */
+
+  return {
+    /**
+     * Initialize the Public API: load state, register listeners.
+     * Safe for service workers (no DOM).
+     */
+    async init() {
+      if (_initialized) return;
+
+      await loadState();
+
+      // Register external message listener
+      if (chrome.runtime.onMessageExternal) {
+        chrome.runtime.onMessageExternal.addListener(onExternalMessage);
+      }
+
+      // Register web page message listener (only in contexts that have window)
+      if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
+        self.addEventListener('message', dispatchWebMessage);
+      }
+
+      _initialized = true;
+      console.log('[PublicAPI] initialized, version', API_VERSION);
+    },
+
+    /**
+     * Handle an external message manually (if not using auto-listener).
+     * @param {object} message — { action, ...params }
+     * @param {object} sender  — chrome sender object
+     * @returns {Promise<object>} response
+     */
+    async handleExternalMessage(message, sender) {
+      if (!_initialized) await this.init();
+      return dispatchExternal(message, sender);
+    },
+
+    /**
+     * Handle a web page message event manually.
+     * @param {MessageEvent} event
+     */
+    handleWebMessage(event) {
+      dispatchWebMessage(event);
+    },
+
+    /**
+     * Return the full API schema.
+     * @returns {object}
+     */
+    getAPISchema() {
+      return { ...API_SCHEMA };
+    },
+
+    /**
+     * Return the audit log (most recent entries).
+     * @param {number} [limit=50]
+     * @returns {Array}
+     */
+    getAuditLog(limit = 50) {
+      const start = Math.max(0, _auditLog.length - limit);
+      return _auditLog.slice(start);
+    },
+
+    /**
+     * Set permissions for API actions.
+     * @param {object} perms — { [apiName]: 'allow' | 'deny' | 'prompt' }
+     */
+    async setPermissions(perms) {
+      if (!_permissions) await loadState();
+      for (const [key, val] of Object.entries(perms)) {
+        if (['allow', 'deny', 'prompt'].includes(val)) {
+          _permissions[key] = val;
+        }
+      }
+      await savePermissions();
+    },
+
+    /**
+     * Set trusted web page origins.
+     * @param {string[]} origins — array of origin strings (e.g., 'https://example.com')
+     */
+    async setTrustedOrigins(origins) {
+      _trustedOrigins = Array.isArray(origins) ? origins.slice() : [];
+      await saveTrustedOrigins();
+    },
+
+    /**
+     * Get trusted web page origins.
+     * @returns {string[]}
+     */
+    getTrustedOrigins() {
+      return _trustedOrigins.slice();
+    },
+
+    /**
+     * Configure a webhook for an event type.
+     * @param {string} eventType — one of API_SCHEMA.webhookEvents
+     * @param {object} config — { url: string, enabled: boolean }
+     */
+    async setWebhook(eventType, config) {
+      if (!API_SCHEMA.webhookEvents.includes(eventType)) {
+        throw new Error(`Unknown event type: ${eventType}`);
+      }
+      _webhooks[eventType] = {
+        url: config.url || '',
+        enabled: !!config.enabled
+      };
+      await saveWebhooks();
+    },
+
+    /**
+     * Get all configured webhooks.
+     * @returns {object}
+     */
+    getWebhooks() {
+      return { ..._webhooks };
+    },
+
+    /**
+     * Fire a webhook event programmatically (used by other modules).
+     * @param {string} eventType
+     * @param {object} payload
+     */
+    async fireEvent(eventType, payload) {
+      audit('fireEvent', { id: 'internal' }, { eventType, payload }, 'ok');
+      await fireWebhook(eventType, payload);
+    },
+
+    /**
+     * Clear the audit log.
+     */
+    async clearAuditLog() {
+      _auditLog = [];
+      await saveAuditLog();
+    }
+  };
+})();
+
+// ScriptVault v2.0.0 — Migration System
+// Handles data migration from v1.x to v2.0.0 on first run after update.
+// Runs in the service worker context (no DOM).
+
+const Migration = (() => {
+  'use strict';
+
+  const CURRENT_VERSION = '2.0.0';
+  const MIGRATION_KEY = 'sv_lastMigratedVersion';
+
+  /**
+   * Check if migration is needed and run it.
+   * Called on service worker startup.
+   */
+  async function run() {
+    try {
+      const data = await chrome.storage.local.get(MIGRATION_KEY);
+      const lastVersion = data[MIGRATION_KEY] || '0.0.0';
+
+      if (lastVersion === CURRENT_VERSION) return; // Already migrated
+
+      console.log(`[Migration] Migrating from ${lastVersion} to ${CURRENT_VERSION}`);
+
+      // Run migrations in order
+      if (compareVersions(lastVersion, '2.0.0') < 0) {
+        await migrateToV2();
+      }
+
+      // Mark migration complete
+      await chrome.storage.local.set({ [MIGRATION_KEY]: CURRENT_VERSION });
+      console.log('[Migration] Complete');
+    } catch (e) {
+      console.error('[Migration] Error:', e);
+    }
+  }
+
+  /**
+   * v1.x → v2.0.0 migration
+   */
+  async function migrateToV2() {
+    console.log('[Migration] Running v1.x → v2.0 migration...');
+
+    // 1. Set install date if not present (for CWS review prompt)
+    const installData = await chrome.storage.local.get('installDate');
+    if (!installData.installDate) {
+      await chrome.storage.local.set({ installDate: Date.now() });
+    }
+
+    // 2. Initialize notification preferences with defaults
+    const notifData = await chrome.storage.local.get('notificationPrefs');
+    if (!notifData.notificationPrefs) {
+      await chrome.storage.local.set({
+        notificationPrefs: {
+          updates: true,
+          errors: true,
+          digest: false,
+          security: true,
+          quietStart: null,
+          quietEnd: null
+        }
+      });
+    }
+
+    // 3. Initialize backup scheduler defaults
+    const backupData = await chrome.storage.local.get('backupSchedulerSettings');
+    if (!backupData.backupSchedulerSettings) {
+      await chrome.storage.local.set({
+        backupSchedulerSettings: {
+          enabled: true,
+          type: 'weekly',
+          hour: 3,
+          day: 0, // Sunday
+          maxBackups: 5,
+          onChange: true
+        }
+      });
+    }
+
+    // 4. Migrate script settings format if needed
+    // v1.x stored some settings differently
+    const scripts = await getAllScripts();
+    let migrated = 0;
+    for (const [id, script] of Object.entries(scripts)) {
+      let changed = false;
+
+      // Ensure settings object exists
+      if (!script.settings) {
+        script.settings = {};
+        changed = true;
+      }
+
+      // Ensure stats object exists
+      if (!script.stats) {
+        script.stats = { runs: 0, totalTime: 0, avgTime: 0, errors: 0 };
+        changed = true;
+      }
+
+      // Migrate old 'metadata' key to 'meta' if present
+      if (script.metadata && !script.meta) {
+        script.meta = script.metadata;
+        delete script.metadata;
+        changed = true;
+      }
+
+      // Ensure installedAt is set
+      if (!script.installedAt && script.createdAt) {
+        script.installedAt = script.createdAt;
+        changed = true;
+      }
+
+      if (changed) {
+        await chrome.storage.local.set({ [`script_${id}`]: script });
+        migrated++;
+      }
+    }
+
+    if (migrated > 0) {
+      console.log(`[Migration] Migrated ${migrated} script(s)`);
+    }
+
+    // 5. Clean up deprecated storage keys
+    const deprecatedKeys = [
+      'tm_settings', // Old Tampermonkey-named settings
+      'lastChecked',  // Replaced by lastUpdateCheck
+    ];
+    await chrome.storage.local.remove(deprecatedKeys).catch(() => {});
+
+    // 6. Set default gamification state
+    const gamData = await chrome.storage.local.get('gamification');
+    if (!gamData.gamification) {
+      await chrome.storage.local.set({
+        gamification: {
+          achievements: {},
+          streaks: { daily: { current: 0, longest: 0, lastDate: null }, creation: { current: 0, longest: 0, lastDate: null } },
+          points: 0,
+          level: 1,
+          firstSeen: Date.now()
+        }
+      });
+    }
+
+    // 7. Create initial performance snapshot
+    try {
+      const perfHistory = await chrome.storage.local.get('perfHistory');
+      if (!perfHistory.perfHistory || perfHistory.perfHistory.length === 0) {
+        const allScripts = Object.values(scripts);
+        const snapshot = {};
+        for (const s of allScripts) {
+          if (s.stats) {
+            snapshot[s.id] = { avgTime: s.stats.avgTime || 0, runs: s.stats.runs || 0, errors: s.stats.errors || 0 };
+          }
+        }
+        await chrome.storage.local.set({
+          perfHistory: [{ timestamp: Date.now(), data: snapshot }]
+        });
+      }
+    } catch {}
+
+    console.log('[Migration] v2.0 migration complete');
+  }
+
+  /**
+   * Get all scripts from storage (raw, without ScriptStorage cache)
+   */
+  async function getAllScripts() {
+    const all = await chrome.storage.local.get(null);
+    const scripts = {};
+    for (const [key, value] of Object.entries(all)) {
+      if (key.startsWith('script_') && value && typeof value === 'object' && value.code) {
+        scripts[key.replace('script_', '')] = value;
+      }
+    }
+    return scripts;
+  }
+
+  /**
+   * Simple version comparison
+   */
+  function compareVersions(v1, v2) {
+    const p1 = v1.split('.').map(Number);
+    const p2 = v2.split('.').map(Number);
+    for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+      const a = p1[i] || 0, b = p2[i] || 0;
+      if (a > b) return 1;
+      if (a < b) return -1;
+    }
+    return 0;
+  }
+
+  return { run };
+})();
+
+// ScriptVault v2.0.0 — Storage Quota Manager
+// Monitors chrome.storage.local usage and provides cleanup utilities.
+// Runs in service worker (no DOM).
+
+const QuotaManager = (() => {
+  'use strict';
+
+  const QUOTA_LIMIT = 10 * 1024 * 1024; // 10MB Chrome limit for storage.local
+  const WARNING_THRESHOLD = 0.85; // Warn at 85%
+  const CRITICAL_THRESHOLD = 0.95; // Critical at 95%
+
+  /**
+   * Get current storage usage.
+   * @returns {{ bytesUsed: number, quota: number, percentage: number, level: string }}
+   */
+  async function getUsage() {
+    const bytesUsed = await chrome.storage.local.getBytesInUse(null);
+    const percentage = bytesUsed / QUOTA_LIMIT;
+    const level = percentage >= CRITICAL_THRESHOLD ? 'critical'
+      : percentage >= WARNING_THRESHOLD ? 'warning'
+      : 'ok';
+    return { bytesUsed, quota: QUOTA_LIMIT, percentage, level };
+  }
+
+  /**
+   * Get storage breakdown by category.
+   */
+  async function getBreakdown() {
+    const all = await chrome.storage.local.get(null);
+    const categories = {
+      scripts: { count: 0, bytes: 0 },
+      scriptValues: { count: 0, bytes: 0 },
+      requireCache: { count: 0, bytes: 0 },
+      resourceCache: { count: 0, bytes: 0 },
+      backups: { count: 0, bytes: 0 },
+      analytics: { count: 0, bytes: 0 },
+      settings: { count: 0, bytes: 0 },
+      other: { count: 0, bytes: 0 }
+    };
+
+    for (const [key, value] of Object.entries(all)) {
+      const size = JSON.stringify(value).length;
+      if (key.startsWith('script_')) { categories.scripts.count++; categories.scripts.bytes += size; }
+      else if (key.startsWith('values_') || key.startsWith('SV_GM_')) { categories.scriptValues.count++; categories.scriptValues.bytes += size; }
+      else if (key.startsWith('require_cache_')) { categories.requireCache.count++; categories.requireCache.bytes += size; }
+      else if (key.startsWith('res_cache_')) { categories.resourceCache.count++; categories.resourceCache.bytes += size; }
+      else if (key.startsWith('autoBackup') || key === 'autoBackups') { categories.backups.count++; categories.backups.bytes += size; }
+      else if (key.startsWith('sv_analytics') || key === 'analytics' || key === 'perfHistory') { categories.analytics.count++; categories.analytics.bytes += size; }
+      else if (key === 'settings' || key.startsWith('sv_') || key.startsWith('notification') || key.startsWith('gamification')) { categories.settings.count++; categories.settings.bytes += size; }
+      else { categories.other.count++; categories.other.bytes += size; }
+    }
+
+    return categories;
+  }
+
+  /**
+   * Clean up storage to free space.
+   * @param {object} options - What to clean
+   * @returns {{ freedBytes: number, actions: string[] }}
+   */
+  async function cleanup(options = {}) {
+    const actions = [];
+    let freedBytes = 0;
+
+    // 1. Clear expired require cache (>7 days)
+    if (options.requireCache !== false) {
+      const all = await chrome.storage.local.get(null);
+      const expiredKeys = [];
+      const now = Date.now();
+      for (const [key, value] of Object.entries(all)) {
+        if (key.startsWith('require_cache_') && value.timestamp) {
+          if (now - value.timestamp > 7 * 24 * 60 * 60 * 1000) {
+            expiredKeys.push(key);
+            freedBytes += JSON.stringify(value).length;
+          }
+        }
+        if (key.startsWith('res_cache_') && value.timestamp) {
+          if (now - value.timestamp > 7 * 24 * 60 * 60 * 1000) {
+            expiredKeys.push(key);
+            freedBytes += JSON.stringify(value).length;
+          }
+        }
+      }
+      if (expiredKeys.length > 0) {
+        await chrome.storage.local.remove(expiredKeys);
+        actions.push(`Removed ${expiredKeys.length} expired cache entries`);
+      }
+    }
+
+    // 2. Trim analytics data to 30 days (from 90)
+    if (options.analytics !== false) {
+      const analyticsData = await chrome.storage.local.get('analytics');
+      if (analyticsData.analytics) {
+        const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const old = Object.keys(analyticsData.analytics).filter(d => d < cutoff);
+        if (old.length > 0) {
+          for (const date of old) delete analyticsData.analytics[date];
+          await chrome.storage.local.set({ analytics: analyticsData.analytics });
+          actions.push(`Pruned ${old.length} days of old analytics`);
+          freedBytes += old.length * 500; // Estimate
+        }
+      }
+    }
+
+    // 3. Trim performance history to 14 days
+    if (options.perfHistory !== false) {
+      const perfData = await chrome.storage.local.get('perfHistory');
+      if (perfData.perfHistory && perfData.perfHistory.length > 14) {
+        const trimmed = perfData.perfHistory.slice(-14);
+        const removed = perfData.perfHistory.length - trimmed.length;
+        await chrome.storage.local.set({ perfHistory: trimmed });
+        actions.push(`Pruned ${removed} perf history entries`);
+        freedBytes += removed * 200;
+      }
+    }
+
+    // 4. Trim error log to 200 entries
+    if (options.errorLog !== false) {
+      const errData = await chrome.storage.local.get('errorLog');
+      if (errData.errorLog && errData.errorLog.length > 200) {
+        const trimmed = errData.errorLog.slice(-200);
+        const removed = errData.errorLog.length - trimmed.length;
+        await chrome.storage.local.set({ errorLog: trimmed });
+        actions.push(`Pruned ${removed} error log entries`);
+        freedBytes += removed * 300;
+      }
+    }
+
+    // 5. Trim CSP reports to 100
+    if (options.cspReports !== false) {
+      const cspData = await chrome.storage.local.get('sv_csp_reports');
+      if (cspData.sv_csp_reports && cspData.sv_csp_reports.length > 100) {
+        const trimmed = cspData.sv_csp_reports.slice(-100);
+        await chrome.storage.local.set({ sv_csp_reports: trimmed });
+        actions.push('Pruned old CSP reports');
+      }
+    }
+
+    // 6. Clear old sync tombstones (>30 days)
+    if (options.tombstones !== false) {
+      const tombData = await chrome.storage.local.get('syncTombstones');
+      if (tombData.syncTombstones) {
+        const now = Date.now();
+        const cutoff = 30 * 24 * 60 * 60 * 1000;
+        let pruned = 0;
+        for (const [id, ts] of Object.entries(tombData.syncTombstones)) {
+          if (now - ts > cutoff) { delete tombData.syncTombstones[id]; pruned++; }
+        }
+        if (pruned > 0) {
+          await chrome.storage.local.set({ syncTombstones: tombData.syncTombstones });
+          actions.push(`Pruned ${pruned} sync tombstones`);
+        }
+      }
+    }
+
+    // 7. Remove npm cache if critical
+    if (options.npmCache) {
+      await chrome.storage.local.remove('npmCache');
+      actions.push('Cleared npm package cache');
+      freedBytes += 5000;
+    }
+
+    return { freedBytes, actions };
+  }
+
+  /**
+   * Auto-cleanup if storage is above warning threshold.
+   */
+  async function autoCleanup() {
+    const usage = await getUsage();
+    if (usage.level === 'ok') return null;
+
+    console.log(`[QuotaManager] Storage at ${(usage.percentage * 100).toFixed(1)}% — running cleanup`);
+    const result = await cleanup({
+      npmCache: usage.level === 'critical'
+    });
+
+    if (usage.level === 'critical' && result.freedBytes < 500000) {
+      // Still critical — try more aggressive cleanup
+      await cleanup({ analytics: true, perfHistory: true, errorLog: true, cspReports: true });
+    }
+
+    return result;
+  }
+
+  return { getUsage, getBreakdown, cleanup, autoCleanup };
+})();
+
+
 // ScriptVault - Static Analysis Engine v2
 // AST-based analysis via offscreen document (Acorn parser).
 // Falls back to regex patterns if offscreen is unavailable.
@@ -5168,9 +9870,39 @@ const WorkspaceManager = {
 console.log('[ScriptVault] Service worker starting...');
 
 // ============================================================================
+// Debug Logger — conditional logging based on settings
+// ============================================================================
+
+/**
+ * Log a debug message. Only outputs if debugMode is enabled in settings.
+ * Falls back to no-op in production to avoid Chrome DevTools spam.
+ * @param {...any} args - Arguments to log
+ */
+let _debugEnabled = false;
+function debugLog(...args) {
+  if (_debugEnabled) console.log('[ScriptVault]', ...args);
+}
+function debugWarn(...args) {
+  if (_debugEnabled) console.warn('[ScriptVault]', ...args);
+}
+
+// Load debug setting on startup (async — logs before this completes go to console.log)
+(async () => {
+  try {
+    const data = await chrome.storage.local.get('settings');
+    _debugEnabled = data.settings?.debugMode === true;
+  } catch {}
+})();
+
+// ============================================================================
 // Userscript Parser
 // ============================================================================
 
+/**
+ * Parse a userscript's metadata block and extract all supported directives.
+ * @param {string} code - The full userscript source code
+ * @returns {{ meta?: Object, code?: string, metaBlock?: string, error?: string }} Parsed result or error
+ */
 function parseUserscript(code) {
   const metaBlockMatch = code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/);
   if (!metaBlockMatch) {
@@ -5417,10 +10149,8 @@ const UpdateSystem = {
     script.code = newCode;
     script.meta = parsed.meta;
     script.updatedAt = Date.now();
-    
-    await ScriptStorage.set(scriptId, script);
 
-    // Re-register so updated code takes effect immediately
+    // Re-register FIRST so we can verify the new code works before persisting
     try {
       await unregisterScript(scriptId);
       if (script.enabled !== false) {
@@ -5428,7 +10158,14 @@ const UpdateSystem = {
       }
     } catch (regError) {
       console.error(`[ScriptVault] Failed to re-register ${script.meta.name} after update:`, regError);
+      // Registration failed — still save the updated code (user can manually fix)
+      // but mark the failure so the UI can show it
+      script.settings = script.settings || {};
+      script.settings._registrationError = regError.message || 'Registration failed after update';
     }
+
+    // Persist to storage after registration attempt
+    await ScriptStorage.set(scriptId, script);
 
     const settings = await SettingsManager.get();
     if (settings.notifyOnUpdate) {
@@ -5963,7 +10700,7 @@ if (chrome.runtime.onUserScriptMessage) {
       });
     return true;
   });
-  console.log('[ScriptVault] User script message listener registered');
+  debugLog('User script message listener registered');
 }
 
 async function handleMessage(message, sender) {
@@ -6018,12 +10755,26 @@ async function handleMessage(message, sender) {
         await updateBadge();
         await autoReloadMatchingTabs(script);
 
+        // v2.0: Live reload — also reload if script has live reload enabled
+        try {
+          const lrData = await chrome.storage.local.get('liveReloadScripts');
+          if (lrData.liveReloadScripts?.[id]) {
+            // Force reload all matching tabs immediately (bypass debounce)
+            const allTabs = await chrome.tabs.query({});
+            for (const tab of allTabs) {
+              if (tab.url && doesScriptMatchUrl(script, tab.url)) {
+                try { chrome.tabs.reload(tab.id); } catch {}
+              }
+            }
+          }
+        } catch {}
+
         // Re-register the script with userScripts API
         await unregisterScript(id);
         if (script.enabled !== false) {
           await registerScript(script);
         }
-        
+
         const settings = await SettingsManager.get();
         if (!existing && settings.notifyOnInstall) {
           chrome.notifications.create({
@@ -6395,8 +11146,17 @@ async function handleMessage(message, sender) {
         const parsed = parseUserscript(target.code);
         if (parsed.error) return parsed;
 
-        // Remove the rolled-back-to version and all after it from history
-        script.versionHistory = script.versionHistory.slice(0, targetIdx);
+        // Save current version before rolling back (so user can undo the rollback)
+        script.versionHistory.push({
+          version: script.meta.version,
+          code: script.code,
+          updatedAt: script.updatedAt || Date.now()
+        });
+        // Trim to last 5 versions (allow extra room for rollback undos)
+        if (script.versionHistory.length > 5) {
+          script.versionHistory = script.versionHistory.slice(-5);
+        }
+
         script.code = target.code;
         script.meta = parsed.meta;
         script.updatedAt = Date.now();
@@ -6664,6 +11424,281 @@ async function handleMessage(message, sender) {
           } catch (e) {
             results.errors.push({ error: e.message });
           }
+        }
+        await registerAllScripts();
+        await updateBadge();
+        return results;
+      }
+
+      // v2.0: Storage Quota
+      case 'getStorageUsage': {
+        if (typeof QuotaManager !== 'undefined') return await QuotaManager.getUsage();
+        return { bytesUsed: 0, quota: 10485760, percentage: 0, level: 'ok' };
+      }
+      case 'getStorageBreakdown': {
+        if (typeof QuotaManager !== 'undefined') return await QuotaManager.getBreakdown();
+        return {};
+      }
+      case 'cleanupStorage': {
+        if (typeof QuotaManager !== 'undefined') return await QuotaManager.cleanup(data.options || {});
+        return { freedBytes: 0, actions: [] };
+      }
+
+      // v2.0: Backup Scheduler
+      case 'createBackup': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.createBackup(data.reason || 'manual');
+        return { error: 'BackupScheduler not available' };
+      }
+      case 'getBackups': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.getBackups();
+        return { backups: [] };
+      }
+      case 'restoreBackup': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.restoreBackup(data.backupId, data.options);
+        return { error: 'BackupScheduler not available' };
+      }
+      case 'deleteBackup': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.deleteBackup(data.backupId);
+        return { error: 'BackupScheduler not available' };
+      }
+      case 'getBackupSettings': {
+        if (typeof BackupScheduler !== 'undefined') return BackupScheduler.getSettings();
+        return {};
+      }
+      case 'setBackupSettings': {
+        if (typeof BackupScheduler !== 'undefined') { await BackupScheduler.setSettings(data.settings); return { success: true }; }
+        return { error: 'BackupScheduler not available' };
+      }
+
+      // v2.0: Script Analytics
+      case 'recordAnalytics': {
+        const analyticsData = await chrome.storage.local.get('analytics');
+        const analytics = analyticsData.analytics || {};
+        const today = new Date().toISOString().slice(0, 10);
+        if (!analytics[today]) analytics[today] = {};
+        const sid = data.scriptId;
+        if (!analytics[today][sid]) analytics[today][sid] = { runs: 0, totalTime: 0, errors: 0, urls: [] };
+        analytics[today][sid].runs++;
+        analytics[today][sid].totalTime += data.duration || 0;
+        if (data.error) analytics[today][sid].errors++;
+        if (data.url && !analytics[today][sid].urls.includes(data.url)) {
+          analytics[today][sid].urls.push(data.url);
+          if (analytics[today][sid].urls.length > 50) analytics[today][sid].urls = analytics[today][sid].urls.slice(-50);
+        }
+        // Prune data older than 90 days
+        const cutoffDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        for (const date of Object.keys(analytics)) {
+          if (date < cutoffDate) delete analytics[date];
+        }
+        await chrome.storage.local.set({ analytics });
+        return { success: true };
+      }
+      case 'getAnalytics': {
+        const aData = await chrome.storage.local.get('analytics');
+        return { analytics: aData.analytics || {} };
+      }
+      case 'getAnalyticsForScript': {
+        const aData2 = await chrome.storage.local.get('analytics');
+        const analytics2 = aData2.analytics || {};
+        const scriptData = {};
+        for (const [date, scripts] of Object.entries(analytics2)) {
+          if (scripts[data.scriptId]) scriptData[date] = scripts[data.scriptId];
+        }
+        return { data: scriptData };
+      }
+
+      // v2.0: Profiles
+      case 'getProfiles': {
+        const pData = await chrome.storage.local.get(['profiles', 'activeProfileId']);
+        return { profiles: pData.profiles || [], activeProfileId: pData.activeProfileId || null };
+      }
+      case 'switchProfile': {
+        const pData2 = await chrome.storage.local.get('profiles');
+        const profiles = pData2.profiles || [];
+        const profile = profiles.find(p => p.id === data.profileId);
+        if (!profile) return { error: 'Profile not found' };
+        // Apply script states from profile
+        const scripts = await ScriptStorage.getAll();
+        for (const script of scripts) {
+          const newEnabled = profile.scriptStates?.[script.id] ?? script.enabled;
+          if (script.enabled !== newEnabled) {
+            script.enabled = newEnabled;
+            await ScriptStorage.set(script.id, script);
+          }
+        }
+        await chrome.storage.local.set({ activeProfileId: data.profileId });
+        await registerAllScripts();
+        await updateBadge();
+        return { success: true };
+      }
+      case 'saveProfile': {
+        const pData3 = await chrome.storage.local.get('profiles');
+        const profiles3 = pData3.profiles || [];
+        const idx = profiles3.findIndex(p => p.id === data.profile.id);
+        if (idx >= 0) profiles3[idx] = data.profile;
+        else profiles3.push(data.profile);
+        await chrome.storage.local.set({ profiles: profiles3 });
+        return { success: true };
+      }
+      case 'deleteProfile': {
+        const pData4 = await chrome.storage.local.get(['profiles', 'activeProfileId']);
+        const profiles4 = (pData4.profiles || []).filter(p => p.id !== data.profileId);
+        const updates = { profiles: profiles4 };
+        if (pData4.activeProfileId === data.profileId) updates.activeProfileId = null;
+        await chrome.storage.local.set(updates);
+        return { success: true };
+      }
+
+      // v2.0: Collections
+      case 'getCollections': {
+        const cData = await chrome.storage.local.get('scriptCollections');
+        return { collections: cData.scriptCollections || [] };
+      }
+      case 'saveCollection': {
+        const cData2 = await chrome.storage.local.get('scriptCollections');
+        const collections = cData2.scriptCollections || [];
+        const cidx = collections.findIndex(c => c.id === data.collection.id);
+        if (cidx >= 0) collections[cidx] = data.collection;
+        else collections.push(data.collection);
+        await chrome.storage.local.set({ scriptCollections: collections });
+        return { success: true };
+      }
+      case 'deleteCollection': {
+        const cData3 = await chrome.storage.local.get('scriptCollections');
+        const collections3 = (cData3.scriptCollections || []).filter(c => c.id !== data.collectionId);
+        await chrome.storage.local.set({ scriptCollections: collections3 });
+        return { success: true };
+      }
+
+      // v2.0: CSP Reports
+      case 'reportCSPFailure': {
+        const cspData = await chrome.storage.local.get('cspReports');
+        const reports = cspData.cspReports || [];
+        reports.push({ url: data.url, scriptId: data.scriptId, directive: data.directive, timestamp: Date.now() });
+        // Keep last 500 reports
+        if (reports.length > 500) reports.splice(0, reports.length - 500);
+        await chrome.storage.local.set({ cspReports: reports });
+        return { success: true };
+      }
+      case 'getCSPReports': {
+        const cspData2 = await chrome.storage.local.get('cspReports');
+        return { reports: cspData2.cspReports || [] };
+      }
+
+      // v2.0: Gist Integration
+      case 'getGistSettings': {
+        const gData = await chrome.storage.local.get('gistSettings');
+        return gData.gistSettings || {};
+      }
+      case 'saveGistSettings': {
+        await chrome.storage.local.set({ gistSettings: data.settings });
+        return { success: true };
+      }
+
+      // v2.0: Violentmonkey backup import
+      case 'importViolentmonkeyBackup': {
+        // VM exports as ZIP containing individual .user.js files + a violentmonkey JSON
+        // Or as individual .user.js files pasted as text
+        const text = data.text || '';
+        const results = { imported: 0, skipped: 0, errors: [] };
+
+        // Try JSON format first (VM settings export)
+        try {
+          const vmData = JSON.parse(text);
+          if (vmData.scripts && Array.isArray(vmData.scripts)) {
+            for (const vmScript of vmData.scripts) {
+              try {
+                const code = vmScript.code || vmScript.custom?.code || '';
+                if (!code) { results.skipped++; continue; }
+                const parsed = parseUserscript(code);
+                if (parsed.error) { results.errors.push({ name: vmScript.props?.name, error: parsed.error }); continue; }
+                const existing = (await ScriptStorage.getAll()).find(s =>
+                  s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
+                );
+                if (existing && !data.overwrite) { results.skipped++; continue; }
+                const id = existing?.id || generateId();
+                await ScriptStorage.set(id, {
+                  id, code, meta: parsed.meta,
+                  enabled: vmScript.config?.enabled !== false,
+                  position: existing?.position ?? (await ScriptStorage.getAll()).length,
+                  createdAt: existing?.createdAt || Date.now(),
+                  updatedAt: Date.now()
+                });
+                results.imported++;
+              } catch (e) {
+                results.errors.push({ error: e.message });
+              }
+            }
+            await registerAllScripts();
+            await updateBadge();
+            return results;
+          }
+        } catch { /* Not JSON — try text format */ }
+
+        // Fallback: same as Tampermonkey text format
+        const parts = text.split(/\n\s*\n(?=\/\/\s*==UserScript==)/);
+        for (const part of parts) {
+          const trimmed = part.trim();
+          if (trimmed.includes('==UserScript==') && trimmed.includes('==/UserScript==')) {
+            try {
+              const parsed = parseUserscript(trimmed);
+              if (parsed.error) { results.errors.push({ error: parsed.error }); continue; }
+              const existing = (await ScriptStorage.getAll()).find(s =>
+                s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
+              );
+              if (existing && !data.overwrite) { results.skipped++; continue; }
+              const id = existing?.id || generateId();
+              await ScriptStorage.set(id, {
+                id, code: trimmed, meta: parsed.meta,
+                enabled: true,
+                position: existing?.position ?? (await ScriptStorage.getAll()).length,
+                createdAt: existing?.createdAt || Date.now(),
+                updatedAt: Date.now()
+              });
+              results.imported++;
+            } catch (e) {
+              results.errors.push({ error: e.message });
+            }
+          }
+        }
+        await registerAllScripts();
+        await updateBadge();
+        return results;
+      }
+
+      // v2.0: Greasemonkey backup import (GM4 JSON format)
+      case 'importGreasemonkeyBackup': {
+        const text = data.text || '';
+        const results = { imported: 0, skipped: 0, errors: [] };
+        try {
+          const gmData = JSON.parse(text);
+          // GM4 exports as array of script objects
+          const scripts = Array.isArray(gmData) ? gmData : (gmData.scripts || []);
+          for (const gmScript of scripts) {
+            try {
+              const code = gmScript.source || gmScript.code || gmScript.content || '';
+              if (!code) { results.skipped++; continue; }
+              const parsed = parseUserscript(code);
+              if (parsed.error) { results.errors.push({ name: gmScript.name, error: parsed.error }); continue; }
+              const existing = (await ScriptStorage.getAll()).find(s =>
+                s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
+              );
+              if (existing && !data.overwrite) { results.skipped++; continue; }
+              const id = existing?.id || generateId();
+              await ScriptStorage.set(id, {
+                id, code, meta: parsed.meta,
+                enabled: gmScript.enabled !== false,
+                position: existing?.position ?? (await ScriptStorage.getAll()).length,
+                createdAt: existing?.createdAt || Date.now(),
+                updatedAt: Date.now()
+              });
+              results.imported++;
+            } catch (e) {
+              results.errors.push({ error: e.message });
+            }
+          }
+        } catch (e) {
+          return { error: 'Invalid Greasemonkey backup format: ' + e.message };
         }
         await registerAllScripts();
         await updateBadge();
@@ -7586,11 +12621,183 @@ async function handleMessage(message, sender) {
         return { success: true };
       }
 
+      // ── v2.0 Module Handlers ──────────────────────────────────────────────
+
+      // NPM Package Resolution
+      case 'npmResolve': {
+        if (typeof NpmResolver !== 'undefined') {
+          return await NpmResolver.resolve(data.spec);
+        }
+        return { error: 'NpmResolver not available' };
+      }
+
+      case 'npmResolveAll': {
+        if (typeof NpmResolver !== 'undefined') {
+          return await NpmResolver.resolveAll(data.requires);
+        }
+        return { error: 'NpmResolver not available' };
+      }
+
+      // Error Log
+      case 'logError': {
+        if (typeof ErrorLog !== 'undefined') {
+          await ErrorLog.log(data.entry || data);
+          return { success: true };
+        }
+        return { error: 'ErrorLog not available' };
+      }
+
+      case 'getErrorLog': {
+        if (typeof ErrorLog !== 'undefined') {
+          return await ErrorLog.getAll(data.filters);
+        }
+        return { log: [] };
+      }
+
+      case 'getErrorLogGrouped': {
+        if (typeof ErrorLog !== 'undefined') {
+          return await ErrorLog.getGrouped();
+        }
+        return { groups: [] };
+      }
+
+      case 'exportErrorLog': {
+        if (typeof ErrorLog !== 'undefined') {
+          const format = data.format || 'json';
+          if (format === 'csv') return { data: await ErrorLog.exportCSV() };
+          if (format === 'text') return { data: await ErrorLog.exportText() };
+          return { data: await ErrorLog.exportJSON() };
+        }
+        return { error: 'ErrorLog not available' };
+      }
+
+      case 'clearErrorLog': {
+        if (typeof ErrorLog !== 'undefined') {
+          await ErrorLog.clear();
+          return { success: true };
+        }
+        return { error: 'ErrorLog not available' };
+      }
+
+      // Notification System
+      case 'getNotificationPrefs': {
+        if (typeof NotificationSystem !== 'undefined') {
+          return await NotificationSystem.getPreferences();
+        }
+        return {};
+      }
+
+      case 'setNotificationPrefs': {
+        if (typeof NotificationSystem !== 'undefined') {
+          await NotificationSystem.setPreferences(data.prefs);
+          return { success: true };
+        }
+        return { error: 'NotificationSystem not available' };
+      }
+
+      case 'generateDigest': {
+        if (typeof NotificationSystem !== 'undefined') {
+          return await NotificationSystem.generateDigest();
+        }
+        return { error: 'NotificationSystem not available' };
+      }
+
+      // Performance History
+      case 'getPerfHistory': {
+        const histData = await chrome.storage.local.get('perfHistory');
+        return { history: histData.perfHistory || [] };
+      }
+
+      case 'savePerfSnapshot': {
+        const histData2 = await chrome.storage.local.get('perfHistory');
+        const history = histData2.perfHistory || [];
+        history.push({ timestamp: Date.now(), data: data.snapshot });
+        // Keep last 30 days
+        const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
+        const trimmed = history.filter(h => h.timestamp > cutoff);
+        await chrome.storage.local.set({ perfHistory: trimmed });
+        return { success: true };
+      }
+
+      // Easy Cloud Sync
+      case 'easyCloudConnect': {
+        if (typeof EasyCloudSync !== 'undefined') {
+          return await EasyCloudSync.connect();
+        }
+        return { error: 'EasyCloudSync not available' };
+      }
+
+      case 'easyCloudDisconnect': {
+        if (typeof EasyCloudSync !== 'undefined') {
+          return await EasyCloudSync.disconnect();
+        }
+        return { error: 'EasyCloudSync not available' };
+      }
+
+      case 'easyCloudSync': {
+        if (typeof EasyCloudSync !== 'undefined') {
+          return await EasyCloudSync.sync();
+        }
+        return { error: 'EasyCloudSync not available' };
+      }
+
+      case 'easyCloudStatus': {
+        if (typeof EasyCloudSync !== 'undefined') {
+          return await EasyCloudSync.getStatus();
+        }
+        return { connected: false };
+      }
+
+      // Script Console Capture (for debugger)
+      case 'scriptConsoleCapture': {
+        // Append captured console entries to session storage
+        const key = `console_${data.scriptId}`;
+        const existing = await chrome.storage.session.get(key);
+        const entries = existing[key] || [];
+        entries.push(...(data.entries || []));
+        // Keep last 200 entries per script
+        const trimmedEntries = entries.slice(-200);
+        await chrome.storage.session.set({ [key]: trimmedEntries });
+        return { success: true };
+      }
+
+      case 'getScriptConsole': {
+        const consoleData = await chrome.storage.session.get(`console_${data.scriptId}`);
+        return { entries: consoleData[`console_${data.scriptId}`] || [] };
+      }
+
+      case 'clearScriptConsole': {
+        await chrome.storage.session.remove(`console_${data.scriptId}`);
+        return { success: true };
+      }
+
+      // Live Reload toggle
+      case 'setLiveReload': {
+        const lrData = await chrome.storage.local.get('liveReloadScripts');
+        const lrScripts = lrData.liveReloadScripts || {};
+        if (data.enabled) {
+          lrScripts[data.scriptId] = true;
+        } else {
+          delete lrScripts[data.scriptId];
+        }
+        await chrome.storage.local.set({ liveReloadScripts: lrScripts });
+        return { success: true };
+      }
+
+      case 'getLiveReloadScripts': {
+        const lrData2 = await chrome.storage.local.get('liveReloadScripts');
+        return { scripts: lrData2.liveReloadScripts || {} };
+      }
+
       default:
         return { error: 'Unknown action: ' + action };
     }
   } catch (e) {
     console.error('[ScriptVault] Message handler error:', e);
+    // Log to error system if available
+    if (typeof ErrorLog !== 'undefined') {
+      try { ErrorLog.log({ timestamp: Date.now(), error: e.message, stack: e.stack, context: 'handleMessage', action: action }); } catch {}
+    }
     return { error: e.message };
   }
 }
@@ -7914,6 +13121,14 @@ async function setupContextMenus() {
     contexts: ['page']
   });
 
+  // v2.0: Install from link — right-click a .user.js link to install
+  chrome.contextMenus.create({
+    id: 'scriptvault-install-link',
+    title: 'Install userscript from link',
+    contexts: ['link'],
+    targetUrlPatterns: ['*://*/*.user.js', '*://*/*.user.js?*']
+  });
+
   // Add context menu entries for @run-at context-menu scripts
   const scripts = await ScriptStorage.getAll();
   const contextScripts = scripts.filter(s => s.enabled !== false && s.meta && s.meta['run-at'] === 'context-menu');
@@ -7933,8 +13148,26 @@ async function setupContextMenus() {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   setupContextMenus();
+
+  // v2.0: Initialize backup scheduler (needs alarm registration on install)
+  if (typeof BackupScheduler !== 'undefined') {
+    try { await BackupScheduler.init(); } catch (e) { console.error('[ScriptVault] BackupScheduler init error:', e); }
+  }
+
+  // v2.0: Schedule notification digest (needs alarm registration on install)
+  if (typeof NotificationSystem !== 'undefined') {
+    try { await NotificationSystem.scheduleDigest(); } catch (e) { console.error('[ScriptVault] Digest schedule error:', e); }
+  }
+
+  // v2.0: Register public API listeners
+  if (typeof PublicAPI !== 'undefined') {
+    try { PublicAPI.init(); } catch (e) { console.error('[ScriptVault] PublicAPI init error:', e); }
+  }
+
+  // Note: Migration.run() is called in the main init() function, not here,
+  // to avoid running it twice on install (onInstalled + init both fire).
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -7953,6 +13186,36 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       const settings = await SettingsManager.get();
       await SettingsManager.set('enabled', !settings.enabled);
       await updateBadge();
+      break;
+    }
+    case 'scriptvault-install-link': {
+      // v2.0: Install userscript from a right-clicked .user.js link
+      const linkUrl = info.linkUrl;
+      if (linkUrl) {
+        try {
+          const response = await fetch(linkUrl);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const code = await response.text();
+          if (code.includes('==UserScript==')) {
+            await chrome.storage.local.set({
+              pendingInstall: { code, url: linkUrl, timestamp: Date.now() }
+            });
+            chrome.tabs.create({ url: chrome.runtime.getURL('pages/install.html') });
+          } else {
+            chrome.notifications.create({
+              type: 'basic', iconUrl: 'images/icon128.png',
+              title: 'Not a Userscript',
+              message: 'The linked file does not contain a valid ==UserScript== block.'
+            });
+          }
+        } catch (e) {
+          chrome.notifications.create({
+            type: 'basic', iconUrl: 'images/icon128.png',
+            title: 'Install Failed',
+            message: `Could not fetch script: ${e.message}`
+          });
+        }
+      }
       break;
     }
     default: {
@@ -8245,13 +13508,30 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 // Handle direct script installation from URL
 async function installFromUrl(url) {
   try {
-    const response = await fetch(url);
+    // Timeout after 30 seconds
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    
+
+    // Size limit: 5MB (same as webNavigation handler)
+    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+    if (contentLength > MAX_SCRIPT_SIZE) {
+      throw new Error(`Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+    }
+
     const code = await response.text();
-    
+
+    // Post-read size check (content-length may be missing)
+    if (code.length > MAX_SCRIPT_SIZE) {
+      throw new Error(`Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+    }
+
     if (!code.includes('==UserScript==')) {
       throw new Error('Not a valid userscript');
     }
@@ -8317,6 +13597,21 @@ async function init() {
 
   // Clean up stale persistent caches (require_cache_, res_cache_)
   cleanupStaleCaches();
+
+  // v2.0: Run migration if needed
+  if (typeof Migration !== 'undefined') {
+    try { await Migration.run(); } catch (e) { console.error('[ScriptVault] Migration error:', e); }
+  }
+
+  // v2.0: Auto-cleanup storage if above threshold
+  if (typeof QuotaManager !== 'undefined') {
+    try { await QuotaManager.autoCleanup(); } catch (e) { console.error('[ScriptVault] Quota cleanup error:', e); }
+  }
+
+  // v2.0: Register global error handlers for ErrorLog
+  if (typeof ErrorLog !== 'undefined' && typeof ErrorLog.registerGlobalHandlers === 'function') {
+    ErrorLog.registerGlobalHandlers();
+  }
 
   console.log('[ScriptVault] Service worker ready');
 }
@@ -8413,7 +13708,7 @@ async function configureUserScriptsWorld() {
       messaging: true
     });
 
-    console.log('[ScriptVault] userScripts world configured (Chrome', _getChromeVersion(), ')');
+    debugLog('userScripts world configured (Chrome', _getChromeVersion(), ')');
   } catch (e) {
     console.error('[ScriptVault] Failed to configure userScripts world:', e);
   }
@@ -8434,7 +13729,7 @@ async function registerAllScripts() {
     const settings = await SettingsManager.get();
     
     if (!settings.enabled) {
-      console.log('[ScriptVault] Scripts globally disabled');
+      debugLog('Scripts globally disabled');
       return;
     }
     
@@ -8448,7 +13743,22 @@ async function registerAllScripts() {
       return (a.position || 0) - (b.position || 0);
     });
 
-    console.log(`[ScriptVault] Registering ${enabledScripts.length} scripts`);
+    debugLog(`Registering ${enabledScripts.length} scripts`);
+
+    // v2.0: Preload all @require dependencies in parallel before registration
+    // This prevents N sequential fetches during registration
+    const allRequires = new Set();
+    for (const script of enabledScripts) {
+      for (const req of (script.meta?.require || [])) {
+        allRequires.add(req);
+      }
+    }
+    if (allRequires.size > 0) {
+      debugLog(`Preloading ${allRequires.size} @require dependencies`);
+      const preloadStart = Date.now();
+      await Promise.allSettled([...allRequires].map(url => fetchRequireScript(url)));
+      debugLog(`Preloaded in ${Date.now() - preloadStart}ms`);
+    }
 
     // Register all scripts in parallel — significantly faster on large script collections
     const results = await Promise.allSettled(enabledScripts.map(script => registerScript(script)));
@@ -8618,7 +13928,7 @@ async function registerScript(script) {
     const isContextMenu = effectiveRunAt === 'context-menu';
     if (isContextMenu) {
       // Context-menu scripts are not auto-registered; they run on-demand via context menu click
-      console.log(`[ScriptVault] Skipping auto-register for context-menu script: ${meta.name}`);
+      debugLog(`Skipping auto-register for context-menu script: ${meta.name}`);
       return;
     }
     const runAt = runAtMap[effectiveRunAt] || 'document_idle';
@@ -8636,15 +13946,31 @@ async function registerScript(script) {
     const requireScripts = [];
     const requires = Array.isArray(meta.require) ? meta.require : (meta.require ? [meta.require] : []);
     
+    const failedRequires = [];
     for (const url of requires) {
       try {
         const code = await fetchRequireScript(url);
         if (code) {
           requireScripts.push({ url, code });
+        } else {
+          failedRequires.push(url);
         }
       } catch (e) {
         console.warn(`[ScriptVault] Failed to fetch @require ${url}:`, e.message);
+        failedRequires.push(url);
       }
+    }
+
+    // Track failed @require dependencies on the script for UI notification
+    if (failedRequires.length > 0) {
+      script.settings = script.settings || {};
+      script.settings._failedRequires = failedRequires;
+      await ScriptStorage.set(script.id, script);
+      debugWarn(`${meta.name}: ${failedRequires.length} @require dependency(s) failed to load`);
+    } else if (script.settings?._failedRequires) {
+      // Clear previous failures
+      delete script.settings._failedRequires;
+      await ScriptStorage.set(script.id, script);
     }
     
     // Pre-fetch @resource dependencies
@@ -8655,7 +13981,7 @@ async function registerScript(script) {
     
     // Build the script code with GM API wrapper, @require scripts, and pre-loaded storage
     if (injectIntoPage) {
-      console.log(`[ScriptVault] Note: @inject-into page / @sandbox raw not fully supported in MV3, running in USER_SCRIPT world: ${meta.name}`);
+      debugLog(`Note: @inject-into page / @sandbox raw not fully supported in MV3, running in USER_SCRIPT world: ${meta.name}`);
     }
     const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
     
@@ -8700,7 +14026,7 @@ async function registerScript(script) {
       }
     }
     
-    console.log(`[ScriptVault] Registered: ${meta.name} (${requires.length} @require, ${Object.keys(storedValues).length} stored values)`);
+    debugLog(`Registered: ${meta.name} (${requires.length} @require, ${Object.keys(storedValues).length} stored values)`);
 
     // Apply @webRequest declarativeNetRequest rules if defined
     if (meta.webRequest) {
@@ -8709,6 +14035,12 @@ async function registerScript(script) {
     }
   } catch (e) {
     console.error(`[ScriptVault] Failed to register ${script.meta.name}:`, e);
+    // Mark script with registration failure for UI display
+    try {
+      script.settings = script.settings || {};
+      script.settings._registrationError = e.message || 'Registration failed';
+      await ScriptStorage.set(script.id, script);
+    } catch {}
   }
 }
 
@@ -9137,6 +14469,34 @@ ${req.code}
 (function() {
   'use strict';
   
+  // ============ Console Capture (v2.0) ============
+  // Intercept console.log/warn/error for per-script debugging
+  {
+    const _origConsole = { log: console.log, warn: console.warn, error: console.error, info: console.info, debug: console.debug };
+    const _scriptId = ${JSON.stringify(script.id)};
+    const _captureLimit = 200;
+    let _captureBuffer = [];
+    function _captureConsole(level, args) {
+      try {
+        _captureBuffer.push({ level, args: Array.from(args).map(a => { try { return typeof a === 'object' ? JSON.stringify(a).slice(0, 500) : String(a); } catch { return String(a); } }), timestamp: Date.now() });
+        if (_captureBuffer.length > _captureLimit) _captureBuffer.shift();
+        // Batch-send every 2 seconds
+        if (!_captureConsole._timer) {
+          _captureConsole._timer = setTimeout(() => {
+            try { chrome.runtime.sendMessage({ action: 'scriptConsoleCapture', scriptId: _scriptId, entries: _captureBuffer.splice(0) }); } catch {}
+            _captureConsole._timer = null;
+          }, 2000);
+        }
+      } catch {}
+    }
+    console.log = function() { _captureConsole('log', arguments); return _origConsole.log.apply(console, arguments); };
+    console.warn = function() { _captureConsole('warn', arguments); return _origConsole.warn.apply(console, arguments); };
+    console.error = function() { _captureConsole('error', arguments); return _origConsole.error.apply(console, arguments); };
+    console.info = function() { _captureConsole('info', arguments); return _origConsole.info.apply(console, arguments); };
+    console.debug = function() { _captureConsole('debug', arguments); return _origConsole.debug.apply(console, arguments); };
+  }
+  // ============ End Console Capture ============
+
   // ============ Error Suppression ============
   // Suppress uncaught errors and unhandled rejections from userscripts
   // to prevent them from appearing on chrome://extensions error page.
@@ -9145,11 +14505,14 @@ ${req.code}
   window.addEventListener('error', function(event) {
     event.stopImmediatePropagation();
     event.preventDefault();
+    // Report to error log
+    try { chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.message || 'Unknown error', url: location.href, line: event.lineno, col: event.colno, timestamp: Date.now() } }); } catch {}
     return true;
   }, true);
   window.addEventListener('unhandledrejection', function(event) {
     event.stopImmediatePropagation();
     event.preventDefault();
+    try { chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.reason?.message || String(event.reason) || 'Unhandled rejection', url: location.href, timestamp: Date.now() } }); } catch {}
   }, true);
   // ============ End Error Suppression ============
 

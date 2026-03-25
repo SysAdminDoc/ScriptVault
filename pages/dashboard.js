@@ -1,4 +1,4 @@
-// ScriptVault Dashboard v1.7.8 - Full-Featured Controller
+// ScriptVault Dashboard v2.0.0 - Full-Featured Controller
 (function() {
     'use strict';
 
@@ -30,7 +30,11 @@
             settings: document.getElementById('settingsPanel'),
             utilities: document.getElementById('utilitiesPanel'),
             trash: document.getElementById('trashPanel'),
-            help: document.getElementById('helpPanel')
+            help: document.getElementById('helpPanel'),
+            store: document.getElementById('storePanel'),
+            performance: document.getElementById('performancePanel'),
+            analytics: document.getElementById('analyticsPanel'),
+            ai: document.getElementById('aiPanel')
         };
 
         // Scripts tab
@@ -362,6 +366,11 @@
         loadWorkspaces();
         await checkUserScriptsAvailability();
 
+        // v2.0 Module Initialization
+        initV2Modules();
+        // Lazy-init the scripts tab (default active tab) so CardView etc. are available
+        lazyInitTab('scripts');
+
         const hash = window.location.hash.slice(1);
         if (hash === 'new_script') {
             createNewScript();
@@ -369,6 +378,201 @@
             const scriptId = hash.startsWith('script_') ? hash.slice(7) : hash;
             openEditorForScript(scriptId);
         }
+    }
+
+    // Safe module initializer with error boundary
+    // Container ID mapping for multi-word module names
+    const _containerIds = {
+        'Store': 'storeContainer', 'Performance': 'performanceContainer',
+        'Analytics': 'analyticsContainer', 'AI': 'aiContainer',
+        'CardView': 'cardViewContainer', 'PatternBuilder': 'patternBuilderContainer',
+        'ThemeEditor': 'themeEditorContainer', 'DepGraph': 'depGraphContainer',
+        'OpenUserJS': 'oujsContainer',
+    };
+    function safeInit(name, fn) {
+        try { fn(); } catch (e) {
+            console.error(`[ScriptVault] Module ${name} init failed:`, e);
+            const containerId = _containerIds[name] || (name.toLowerCase() + 'Container');
+            const container = document.getElementById(containerId);
+            if (container) {
+                container.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted)">
+                    <div style="font-size:16px;margin-bottom:4px">Module Error</div>
+                    <div style="font-size:12px">${name} failed to load: ${escapeHtml(e.message)}</div>
+                </div>`;
+            }
+        }
+    }
+
+    // Initialize all v2.0 modules with individual error boundaries
+    // Uses LazyLoader to defer non-critical modules until needed
+    function initV2Modules() {
+        // Only init modules that are eagerly loaded (a11y, keyboard, firefox-compat, i18n)
+        // Store, Performance, Analytics, AI are lazy-loaded on tab switch
+        safeInit('Keyboard', () => { if (typeof KeyboardNav !== 'undefined') KeyboardNav.init(); });
+        safeInit('A11y', () => { if (typeof A11y !== 'undefined') A11y.init(); });
+        safeInit('FirefoxCompat', () => { if (typeof FirefoxCompat !== 'undefined') FirefoxCompat.polyfill(); });
+
+        // Onboarding and What's New are one-time modals — load on demand
+        safeInit('Onboarding', () => {
+            if (typeof LazyLoader !== 'undefined') {
+                LazyLoader.loadOnDemand('onboarding').then(() => {
+                    if (typeof OnboardingWizard !== 'undefined') {
+                        OnboardingWizard.shouldShow().then(show => { if (show) OnboardingWizard.show(); });
+                    }
+                });
+            }
+        });
+
+        safeInit('WhatsNew', () => {
+            if (typeof LazyLoader !== 'undefined') {
+                LazyLoader.loadOnDemand('whatsnew').then(() => {
+                    if (typeof WhatsNew !== 'undefined') WhatsNew.shouldShow().then(show => { if (show) WhatsNew.show(); });
+                });
+            }
+        });
+
+        // CWS Review Prompt
+        safeInit('ReviewPrompt', initReviewPrompt);
+
+        console.log('[ScriptVault] v2.0 modules initialized');
+    }
+
+    // ── Lazy Tab Init Helpers ──────────────────────────────────────────────
+    // These are called by switchTab when the user first visits a tab.
+    // Each checks _initialized to prevent double init.
+    const _tabInited = new Set();
+
+    async function lazyInitTab(tabName) {
+        if (_tabInited.has(tabName)) return;
+        if (typeof LazyLoader === 'undefined') return;
+
+        await LazyLoader.loadForTab(tabName);
+        _tabInited.add(tabName);
+
+        switch (tabName) {
+            case 'store':
+                safeInit('Store', () => {
+                    if (typeof ScriptStore !== 'undefined') {
+                        ScriptStore.init(document.getElementById('storeContainer'), {
+                            installedScripts: state.scripts,
+                            onInstall: (url) => chrome.runtime.sendMessage({ action: 'installFromUrl', url })
+                        });
+                    }
+                });
+                break;
+            case 'performance':
+                safeInit('Performance', () => {
+                    if (typeof PerformanceDashboard !== 'undefined') {
+                        PerformanceDashboard.init(document.getElementById('performanceContainer'));
+                    }
+                });
+                break;
+            case 'analytics':
+                safeInit('Analytics', () => {
+                    if (typeof ScriptAnalytics !== 'undefined') {
+                        ScriptAnalytics.init(document.getElementById('analyticsContainer'));
+                    }
+                });
+                break;
+            case 'ai':
+                safeInit('AI', () => {
+                    if (typeof AIAssistant !== 'undefined') {
+                        AIAssistant.init(document.getElementById('aiContainer'));
+                    }
+                });
+                break;
+            case 'settings':
+                // Theme editor loads with settings tab
+                await LazyLoader.loadOnDemand('scheduler').catch(() => {});
+                break;
+            case 'utilities':
+                // Collections, standalone, depgraph load with utilities tab
+                await LazyLoader.loadForTab('utilities');
+                break;
+            case 'scripts':
+                // Card view, linter, recommendations load with scripts tab
+                await LazyLoader.loadForTab('scripts');
+                safeInit('CardView', () => {
+                    if (typeof CardView !== 'undefined') {
+                        const cardContainer = document.createElement('div');
+                        cardContainer.id = 'cardViewContainer';
+                        cardContainer.style.display = 'none';
+                        const tableContainer = document.querySelector('.scripts-table-container');
+                        if (tableContainer) tableContainer.parentNode.insertBefore(cardContainer, tableContainer.nextSibling);
+                        CardView.init(cardContainer, {
+                            onEdit: (id) => openEditorForScript(id),
+                            onToggle: (id, enabled) => toggleScript(id, enabled),
+                            onDelete: (id) => deleteScript(id)
+                        });
+                        const viewBtn = document.getElementById('btnViewToggle');
+                        if (viewBtn) {
+                            viewBtn.addEventListener('click', () => {
+                                const mode = CardView.getViewMode() === 'table' ? 'card' : 'table';
+                                CardView.setViewMode(mode);
+                                const tc = document.querySelector('.scripts-table-container');
+                                const cc = document.getElementById('cardViewContainer');
+                                if (mode === 'card') { if (tc) tc.style.display = 'none'; if (cc) { cc.style.display = ''; CardView.render(getFilteredScripts()); } }
+                                else { if (tc) tc.style.display = ''; if (cc) cc.style.display = 'none'; }
+                            });
+                        }
+                    }
+                });
+                break;
+        }
+    }
+
+    // On-demand module loader — call from UI handlers when a specific feature is triggered
+    function initOnDemandModule(key, initFn) {
+        if (typeof LazyLoader !== 'undefined') {
+            return LazyLoader.loadOnDemand(key).then(() => { safeInit(key, initFn); });
+        }
+    }
+
+    // CWS Review Prompt - non-intrusive after 7 days of use
+    function initReviewPrompt() {
+        chrome.storage.local.get(['installDate', 'reviewDismissed', 'reviewCompleted'], (data) => {
+            if (data.reviewCompleted || data.reviewDismissed) return;
+            if (!data.installDate) {
+                chrome.storage.local.set({ installDate: Date.now() });
+                return;
+            }
+            const daysSinceInstall = (Date.now() - data.installDate) / (1000 * 60 * 60 * 24);
+            if (daysSinceInstall < 7) return;
+            // Only show if user has 3+ scripts (active user)
+            if (state.scripts.length < 3) return;
+
+            setTimeout(() => {
+                const banner = document.createElement('div');
+                banner.className = 'review-prompt';
+                banner.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(96,165,250,0.1));border:1px solid rgba(34,197,94,0.2);border-radius:8px;margin:8px 12px">
+                        <div style="flex:1">
+                            <div style="font-weight:600;color:var(--text-primary);margin-bottom:2px">Enjoying ScriptVault?</div>
+                            <div style="font-size:12px;color:var(--text-secondary)">A review on the Chrome Web Store helps others discover us!</div>
+                        </div>
+                        <button id="btnReviewYes" class="toolbar-btn primary" style="white-space:nowrap">Leave a Review</button>
+                        <button id="btnReviewLater" class="toolbar-btn" style="white-space:nowrap">Maybe Later</button>
+                        <button id="btnReviewDismiss" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px">&times;</button>
+                    </div>
+                `;
+                const panel = document.getElementById('scriptsPanel');
+                if (panel) panel.insertBefore(banner, panel.firstChild);
+
+                document.getElementById('btnReviewYes')?.addEventListener('click', () => {
+                    chrome.tabs.create({ url: 'https://chromewebstore.google.com/detail/scriptvault/' + chrome.runtime.id + '/reviews' });
+                    chrome.storage.local.set({ reviewCompleted: true });
+                    banner.remove();
+                });
+                document.getElementById('btnReviewLater')?.addEventListener('click', () => {
+                    chrome.storage.local.set({ installDate: Date.now() }); // Reset timer
+                    banner.remove();
+                });
+                document.getElementById('btnReviewDismiss')?.addEventListener('click', () => {
+                    chrome.storage.local.set({ reviewDismissed: true });
+                    banner.remove();
+                });
+            }, 3000); // Show after 3s delay to not interrupt initial load
+        });
     }
     
     // Check if userScripts API is available and enabled
@@ -1936,6 +2140,12 @@
         const script = state.scripts.find(s => s.id === scriptId);
         if (!script) return;
 
+        // Lazy-load editor modules (pattern builder, debugger, diff, snippets) on first editor open
+        if (typeof LazyLoader !== 'undefined' && !_tabInited.has('_editor')) {
+            _tabInited.add('_editor');
+            LazyLoader.loadForEditor();
+        }
+
         // Save current editor state before switching
         if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
             state.openTabs[state.currentScriptId].code = state.editor.getValue();
@@ -2482,14 +2692,18 @@
                 code = code.split('\n').map(line => line.replace(/\s+$/, '')).join('\n');
                 state.editor.setValue(code);
             }
-            await chrome.runtime.sendMessage({ action: 'saveScript', scriptId: state.currentScriptId, code, markModified: true });
+            const saveResult = await chrome.runtime.sendMessage({ action: 'saveScript', scriptId: state.currentScriptId, code, markModified: true });
+            if (saveResult?.error) throw new Error(saveResult.error);
+
+            // Reload script list FIRST, then mark as saved
+            await loadScripts();
+
+            // Only mark unsaved=false after everything succeeded
             state.unsavedChanges = false;
-            // Update open tab state
             if (state.openTabs[state.currentScriptId]) {
                 state.openTabs[state.currentScriptId].code = code;
                 state.openTabs[state.currentScriptId].unsaved = false;
             }
-            await loadScripts();
             const script = state.scripts.find(s => s.id === state.currentScriptId);
             if (script) {
                 loadScriptInfo(script);
@@ -4968,6 +5182,12 @@
             elements.mainPanels[name]?.classList.add('active');
         }
         if (name === 'trash') loadTrash();
+
+        // Lazy-load and initialize modules for this tab
+        lazyInitTab(name).then(() => {
+            if (name === 'performance' && typeof PerformanceDashboard !== 'undefined') PerformanceDashboard.refresh?.();
+            if (name === 'analytics' && typeof ScriptAnalytics !== 'undefined') ScriptAnalytics.refresh?.();
+        });
     }
 
     function showDropOverlay(show) {

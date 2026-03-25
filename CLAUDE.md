@@ -4,15 +4,60 @@
 Modern userscript manager built with Chrome Manifest V3. Tampermonkey-inspired functionality with cloud sync, auto-updates, a full dashboard, Monaco editor, DevTools panel, and a persistent side panel.
 
 ## Version
-v1.7.8
+v2.0.0
 
 ## Tech Stack
-- Chrome MV3 extension (JavaScript)
-- Background service worker (built from source modules via `build-background.sh`)
+- Chrome MV3 extension (JavaScript with JSDoc types)
+- Background service worker (built from source modules via `build-background.sh` or `esbuild.config.mjs`)
 - `chrome.userScripts` API for script injection (USER_SCRIPT world)
 - `chrome.storage.local` for persistence
-- **Monaco Editor** (v0.52.2, CDN-loaded in sandboxed iframe) — replaces CodeMirror as the main editor
-- Cloud sync: WebDAV, Google Drive (PKCE), Dropbox (PKCE), OneDrive (PKCE)
+- **Monaco Editor** (v0.52.2, CDN-loaded in sandboxed iframe; local bundling via esbuild planned)
+- Cloud sync: WebDAV, Google Drive (PKCE), Dropbox (PKCE), OneDrive (PKCE), Easy Cloud (chrome.identity)
+- Vitest test suite for unit testing (159 test cases)
+- background.js: 13,912 lines (built from 12+ source modules)
+
+## v2.0.0 New Modules
+
+### Dashboard Modules (pages/)
+- `dashboard-store.js` — Built-in Greasy Fork script store
+- `dashboard-onboarding.js` — 5-step welcome wizard
+- `dashboard-performance.js` — Performance dashboard with impact scores
+- `dashboard-pattern-builder.js` — Visual @match pattern builder
+- `dashboard-debugger.js` — Console capture, live reload, variable inspector
+- `dashboard-cardview.js` — Card view with favicons
+- `dashboard-keyboard.js` — Keyboard navigation with vim mode
+- `dashboard-a11y.js` — WCAG 2.1 AA accessibility
+- `dashboard-ai.js` — AI assistant (generate, explain, security, fix)
+- `dashboard-whatsnew.js` — Changelog modal per version
+- `dashboard-scheduler.js` — Time/day/date-based script scheduling
+- `dashboard-theme-editor.js` — Custom theme editor with 10 presets
+- `dashboard-depgraph.js` — Force-directed dependency graph
+- `dashboard-sharing.js` — QR code/data URL script sharing
+- `dashboard-i18n-v2.js` — i18n for all v2 modules (8 languages, 600 keys)
+- `dashboard-gist.js` — GitHub Gist import/export
+- `dashboard-templates.js` — Custom script template manager
+- `dashboard-profiles.js` — Multi-profile support
+- `dashboard-collections.js` — Script collections/bundles
+- `dashboard-csp.js` — CSP compatibility reporter
+- `dashboard-analytics.js` — Detailed script analytics with charts
+- `dashboard-snippets.js` — 30+ code snippet library
+- `dashboard-standalone.js` — Standalone HTML/bookmarklet export
+- `dashboard-firefox-compat.js` — Firefox compatibility polyfills
+- `devtools-panel-v2.js` — Waterfall timeline, console, body inspector
+
+### Background Modules (modules/)
+- `modules/npm-resolve.js` — npm package resolution via CDN
+- `modules/error-log.js` — Structured error log with export
+- `modules/notifications.js` — Smart notification system
+- `modules/sync-easycloud.js` — Zero-config Google Drive sync
+- `modules/backup-scheduler.js` — Automated backup scheduling
+
+### Tests (tests/)
+- `tests/utils.test.js` — 40 tests for shared utilities
+- `tests/parser.test.js` — 23 tests for userscript parser
+- `tests/versions.test.js` — 23 tests for version comparison
+- `tests/analyzer.test.js` — 45 tests for risk pattern detection
+- `tests/netlog.test.js` — 28 tests for network log
 - fflate for ZIP import/export
 - Acorn.js (v8.14.1) for AST-based static analysis (via offscreen document)
 - diff.js (v7.0.0) for 3-way text merge in sync conflict resolution
