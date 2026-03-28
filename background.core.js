@@ -5345,6 +5345,15 @@ ${req.code}
     ta.remove();
   }
   
+  // GM_head — convenience wrapper for HEAD requests
+  function GM_head(url, callback) {
+    if (!hasGrant('GM_xmlhttpRequest') && !hasGrant('GM.xmlHttpRequest')) {
+      if (typeof callback === 'function') callback({ error: 'Missing @grant GM_xmlhttpRequest' });
+      return;
+    }
+    GM_xmlhttpRequest({ method: 'HEAD', url, onload: callback, onerror: callback });
+  }
+
   // GM_notification (with onclick, ondone, timeout, tag, silent, highlight, url)
   const _notifCallbacks = new Map();
   function GM_notification(details, ondone) {
@@ -5729,6 +5738,7 @@ ${req.code}
   window.GM_deleteValues = GM_deleteValues;
   window.GM_addStyle = GM_addStyle;
   window.GM_xmlhttpRequest = GM_xmlhttpRequest;
+  window.GM_head = GM_head;
   window.GM_setClipboard = GM_setClipboard;
   window.GM_notification = GM_notification;
   window.GM_openInTab = GM_openInTab;

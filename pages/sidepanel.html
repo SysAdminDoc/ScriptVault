@@ -74,16 +74,16 @@
         .sp-item-desc { font-size: 10px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .sp-item-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
         .sp-timing { font-size: 10px; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
-        .sp-timing.fast { background: #14532d; color: #4ade80; }
-        .sp-timing.medium { background: #78350f; color: #fbbf24; }
-        .sp-timing.slow { background: #7f1d1d; color: #f87171; }
+        .sp-timing.fast { background: var(--timing-fast-bg, #14532d); color: var(--timing-fast, #4ade80); }
+        .sp-timing.medium { background: var(--timing-med-bg, #78350f); color: var(--timing-med, #fbbf24); }
+        .sp-timing.slow { background: var(--timing-slow-bg, #7f1d1d); color: var(--timing-slow, #f87171); }
         .sp-error-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); flex-shrink: 0; }
 
         /* Toggle */
         .sp-toggle { position: relative; width: 28px; height: 15px; flex-shrink: 0; }
         .sp-toggle input { opacity: 0; width: 0; height: 0; }
-        .sp-toggle-slider { position: absolute; inset: 0; background: #444; border-radius: 8px; cursor: pointer; transition: background 0.2s; }
-        .sp-toggle-slider::before { content: ''; position: absolute; left: 2px; top: 2px; width: 11px; height: 11px; background: #888; border-radius: 50%; transition: transform 0.2s, background 0.2s; }
+        .sp-toggle-slider { position: absolute; inset: 0; background: var(--toggle-off-bg, #444); border-radius: 8px; cursor: pointer; transition: background 0.2s; }
+        .sp-toggle-slider::before { content: ''; position: absolute; left: 2px; top: 2px; width: 11px; height: 11px; background: var(--toggle-off-knob, #888); border-radius: 50%; transition: transform 0.2s, background 0.2s; }
         .sp-toggle input:checked + .sp-toggle-slider { background: var(--accent-dim); }
         .sp-toggle input:checked + .sp-toggle-slider::before { background: var(--accent); transform: translateX(13px); }
 
@@ -153,10 +153,11 @@
     <div class="sp-search-bar">
         <input type="text" class="sp-search-input" id="spSearch" placeholder="Search scripts... (Ctrl+F)" aria-label="Search scripts">
         <select class="sp-sort-select" id="spSort" title="Sort scripts" aria-label="Sort scripts by">
-            <option value="default">A-Z</option>
-            <option value="alpha">Name</option>
+            <option value="default">Install Order</option>
+            <option value="alpha">A-Z</option>
             <option value="perf">Slowest</option>
             <option value="errors">Most Errors</option>
+            <option value="recent">Recently Updated</option>
             <option value="recent">Recently Updated</option>
         </select>
     </div>

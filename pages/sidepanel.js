@@ -171,13 +171,13 @@
         case 'alpha':
           return (a.meta?.name || '').localeCompare(b.meta?.name || '');
         case 'perf':
-          return (b.stats?.avgTime || 0) - (a.stats?.avgTime || 0);
+          return (b.stats?.avgTime || 0) - (a.stats?.avgTime || 0) || (a.meta?.name || '').localeCompare(b.meta?.name || '');
         case 'errors':
-          return (b.stats?.errors || 0) - (a.stats?.errors || 0);
+          return (b.stats?.errors || 0) - (a.stats?.errors || 0) || (a.meta?.name || '').localeCompare(b.meta?.name || '');
         case 'recent':
           return (b.updatedAt || 0) - (a.updatedAt || 0);
-        default:
-          return (a.meta?.name || '').localeCompare(b.meta?.name || '');
+        default: // install order (position)
+          return (a.position || 0) - (b.position || 0);
       }
     });
 

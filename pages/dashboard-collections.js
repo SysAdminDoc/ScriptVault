@@ -678,7 +678,7 @@ const CollectionManager = (() => {
         const isOn = tog.classList.contains('on');
         tog.classList.toggle('on', !isOn);
         chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId, settings: { enabled: !isOn } }, () => {
-          _renderCollectionDetail(_selectedCollection);
+          renderExpandedScripts(card, coll, installed);
         });
       });
     });
