@@ -366,17 +366,21 @@ const FirefoxCompat = (() => {
                     // Firefox: already returns a promise
                     browser.runtime.sendMessage(message).then(resolve).catch(reject);
                 } else if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-                    // Chrome: may use callback or promise depending on MV3
-                    const result = chrome.runtime.sendMessage(message, options, (response) => {
-                        if (chrome.runtime.lastError) {
-                            reject(new Error(chrome.runtime.lastError.message));
-                        } else {
-                            resolve(response);
-                        }
-                    });
-                    // MV3 Chrome also returns a promise
+                    // Chrome: MV3 returns a promise, MV2 uses callbacks only.
+                    // Try without callback first to detect promise support.
+                    const result = chrome.runtime.sendMessage(message, options);
                     if (result && typeof result.then === 'function') {
+                        // MV3: use the returned promise, skip callback to avoid double-resolve
                         result.then(resolve).catch(reject);
+                    } else {
+                        // MV2: no promise returned, use callback
+                        chrome.runtime.sendMessage(message, options, (response) => {
+                            if (chrome.runtime.lastError) {
+                                reject(new Error(chrome.runtime.lastError.message));
+                            } else {
+                                resolve(response);
+                            }
+                        });
                     }
                 } else {
                     reject(new Error('No runtime messaging API available'));
@@ -396,15 +400,17 @@ const FirefoxCompat = (() => {
                 if (_isFirefox && typeof browser !== 'undefined') {
                     browser.tabs.sendMessage(tabId, message, options).then(resolve).catch(reject);
                 } else if (typeof chrome !== 'undefined' && chrome.tabs?.sendMessage) {
-                    const result = chrome.tabs.sendMessage(tabId, message, options, (response) => {
-                        if (chrome.runtime.lastError) {
-                            reject(new Error(chrome.runtime.lastError.message));
-                        } else {
-                            resolve(response);
-                        }
-                    });
+                    const result = chrome.tabs.sendMessage(tabId, message, options);
                     if (result && typeof result.then === 'function') {
                         result.then(resolve).catch(reject);
+                    } else {
+                        chrome.tabs.sendMessage(tabId, message, options, (response) => {
+                            if (chrome.runtime.lastError) {
+                                reject(new Error(chrome.runtime.lastError.message));
+                            } else {
+                                resolve(response);
+                            }
+                        });
                     }
                 } else {
                     reject(new Error('No tabs messaging API available'));

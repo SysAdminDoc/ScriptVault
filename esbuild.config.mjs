@@ -24,6 +24,7 @@ const bgOnly = args.includes("--bg-only");
 const monacoOnly = args.includes("--monaco-only");
 const watchMode = args.includes("--watch");
 const production = args.includes("--prod");
+const typeCheck = args.includes("--typecheck");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -203,10 +204,30 @@ function debounce(fn, ms) {
 }
 
 // ---------------------------------------------------------------------------
+// TypeScript type-check (runs tsc --noEmit)
+// ---------------------------------------------------------------------------
+
+async function runTypeCheck() {
+  const { execSync } = await import("node:child_process");
+  console.log("Running TypeScript type-check...");
+  try {
+    execSync("npx tsc --noEmit", { cwd: ROOT, stdio: "inherit" });
+    console.log("Type-check passed.");
+  } catch {
+    console.error("Type-check failed.");
+    process.exit(1);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 async function main() {
+  if (typeCheck) {
+    await runTypeCheck();
+  }
+
   if (watchMode) {
     await startWatch();
     return;

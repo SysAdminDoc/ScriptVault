@@ -31,6 +31,11 @@ const GistIntegration = (() => {
     const CACHE_TTL = 5 * 60 * 1000; // 5 min
 
     // =========================================
+    // HTML escaping helper
+    // =========================================
+    function escapeHtml(str) { return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+    // =========================================
     // Encryption helpers (AES-GCM via WebCrypto)
     // =========================================
     async function getDerivedKey() {
@@ -935,7 +940,7 @@ const GistIntegration = (() => {
                 ['Status', script.installed ? 'Already installed' : 'Not installed']
             ];
             for (const [k, v] of fields) {
-                dl.innerHTML += `<dt>${k}</dt><dd>${v}</dd>`;
+                dl.innerHTML += `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`;
             }
             card.appendChild(dl);
 
@@ -1081,7 +1086,7 @@ const GistIntegration = (() => {
 
             container.appendChild(listEl);
         }).catch(e => {
-            container.innerHTML = `<div class="gi-empty"><p style="color:var(--accent-red)">${e.message}</p></div>`;
+            container.innerHTML = `<div class="gi-empty"><p style="color:var(--accent-red)">${escapeHtml(e.message)}</p></div>`;
         });
     }
 
@@ -1226,9 +1231,9 @@ const GistIntegration = (() => {
         body.className = 'gi-preview-body';
         body.innerHTML = `
             <dl class="gi-preview-meta">
-                <dt>Script</dt><dd>${meta.name || script.name || 'Untitled'}</dd>
-                <dt>Version</dt><dd>${meta.version || 'N/A'}</dd>
-                <dt>Filename</dt><dd>${makeFilename(meta.name || script.name)}</dd>
+                <dt>Script</dt><dd>${escapeHtml(meta.name || script.name || 'Untitled')}</dd>
+                <dt>Version</dt><dd>${escapeHtml(meta.version || 'N/A')}</dd>
+                <dt>Filename</dt><dd>${escapeHtml(makeFilename(meta.name || script.name))}</dd>
             </dl>
         `;
 

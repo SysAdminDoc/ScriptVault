@@ -477,6 +477,8 @@ const DependencyGraph = (() => {
     // =========================================
     function simulationStep() {
         const { nodes, edges } = _state;
+        // Build lookup map for O(1) node access by edge endpoints
+        const nodeMap = new Map(nodes.map(n => [n.id, n]));
         if (nodes.length === 0) return;
 
         const alpha = _state.simulationAlpha;
@@ -508,10 +510,10 @@ const DependencyGraph = (() => {
             }
         }
 
-        // Attraction along edges
+        // Attraction along edges (O(E) via nodeMap instead of O(N*E) via find)
         for (const edge of edges) {
-            const a = nodes.find(n => n.id === edge.source);
-            const b = nodes.find(n => n.id === edge.target);
+            const a = nodeMap.get(edge.source);
+            const b = nodeMap.get(edge.target);
             if (!a || !b) continue;
             const dx = b.x - a.x;
             const dy = b.y - a.y;
@@ -554,17 +556,20 @@ const DependencyGraph = (() => {
         const w = canvas.width;
         const h = canvas.height;
 
+        const dpr = window.devicePixelRatio || 1;
         ctx.clearRect(0, 0, w, h);
         ctx.save();
 
-        // Camera transform
-        ctx.translate(w / 2 + camera.x, h / 2 + camera.y);
+        // Apply DPR scale first, then camera transform
+        ctx.scale(dpr, dpr);
+        ctx.translate((w / dpr) / 2 + camera.x, (h / dpr) / 2 + camera.y);
         ctx.scale(camera.zoom, camera.zoom);
 
-        // Draw edges
+        // Draw edges (O(E) via Map lookup)
+        const nodeMap = new Map(nodes.map(n => [n.id, n]));
         for (const edge of edges) {
-            const a = nodes.find(n => n.id === edge.source);
-            const b = nodes.find(n => n.id === edge.target);
+            const a = nodeMap.get(edge.source);
+            const b = nodeMap.get(edge.target);
             if (!a || !b) continue;
 
             const isConflict = edge.type === 'match' && a.enabled && b.enabled;
@@ -1044,7 +1049,7 @@ const DependencyGraph = (() => {
         const dpr = window.devicePixelRatio || 1;
         canvas.width = rect.width * dpr;
         canvas.height = rect.height * dpr;
-        _state.ctx?.scale(dpr, dpr);
+        // DPR scale applied in render() since canvas resize resets transforms
         _state.width = rect.width;
         _state.height = rect.height;
     }
@@ -1125,7 +1130,7 @@ const DependencyGraph = (() => {
         link.download = 'scriptvault-dependency-graph.svg';
         link.href = URL.createObjectURL(blob);
         link.click();
-        URL.revokeObjectURL(link.href);
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 
         return svg;
     }

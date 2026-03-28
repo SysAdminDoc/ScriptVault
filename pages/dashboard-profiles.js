@@ -38,6 +38,8 @@ const ProfileManager = (() => {
   let _initialized = false;
   let _keydownHandler = null;
   let _comparisonEl = null;
+  let _onActivatedListener = null;
+  let _onUpdatedListener = null;
 
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
@@ -529,9 +531,13 @@ const ProfileManager = (() => {
       for (const rule of profile.urlRules) {
         try {
           if (rule.startsWith('/') && rule.endsWith('/')) {
-            // Regex rule
-            const regex = new RegExp(rule.slice(1, -1));
-            if (regex.test(url)) return profile;
+            // Regex rule — reject overly long patterns to mitigate ReDoS
+            const pattern = rule.slice(1, -1);
+            if (pattern.length > 200) continue;
+            const regex = new RegExp(pattern);
+            try {
+              if (regex.test(url)) return profile;
+            } catch (_) {}
           } else if (url.includes(rule)) {
             return profile;
           }
@@ -546,7 +552,7 @@ const ProfileManager = (() => {
     // (runs from the dashboard page, observes the current tab)
     if (!chrome.tabs) return;
 
-    chrome.tabs.onActivated?.addListener(async (activeInfo) => {
+    _onActivatedListener = async (activeInfo) => {
       try {
         const tab = await chrome.tabs.get(activeInfo.tabId);
         const match = _checkUrlRules(tab.url);
@@ -554,16 +560,18 @@ const ProfileManager = (() => {
           await _applyProfile(match);
         }
       } catch (_) {}
-    });
+    };
+    chrome.tabs.onActivated?.addListener(_onActivatedListener);
 
-    chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
+    _onUpdatedListener = (_tabId, changeInfo) => {
       if (changeInfo.url) {
         const match = _checkUrlRules(changeInfo.url);
         if (match && match.id !== _activeProfileId) {
           _applyProfile(match);
         }
       }
-    });
+    };
+    chrome.tabs.onUpdated?.addListener(_onUpdatedListener);
   }
 
   /* ------------------------------------------------------------------ */
@@ -1134,6 +1142,14 @@ const ProfileManager = (() => {
      */
     destroy() {
       _teardownKeyboardShortcuts();
+      if (_onActivatedListener) {
+        chrome.tabs.onActivated?.removeListener(_onActivatedListener);
+        _onActivatedListener = null;
+      }
+      if (_onUpdatedListener) {
+        chrome.tabs.onUpdated?.removeListener(_onUpdatedListener);
+        _onUpdatedListener = null;
+      }
       if (_profileBar) { _profileBar.remove(); _profileBar = null; }
       if (_modalEl) { _modalEl.remove(); _modalEl = null; }
       if (_comparisonEl) { _comparisonEl.remove(); _comparisonEl = null; }

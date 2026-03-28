@@ -713,6 +713,9 @@ const DevToolsV2 = (() => {
     state.entriesEl = entriesEl;
     state.scriptSelect = scriptSelect;
 
+    // Clean up previous console state if re-initializing
+    if (_consoleState?.refreshTimer) clearInterval(_consoleState.refreshTimer);
+
     // Auto-refresh
     fetchConsoleEntries(state);
     state.refreshTimer = setInterval(() => fetchConsoleEntries(state), 3000);

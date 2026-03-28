@@ -579,6 +579,14 @@ const ScriptSharing = (() => {
                 }
             }
 
+            // Track function pattern modules for masking
+            const isFunction = Array.from({ length: size }, () => new Uint8Array(size));
+            for (let r = 0; r < size; r++) {
+                for (let c = 0; c < size; c++) {
+                    isFunction[r][c] = reserved[r][c];
+                }
+            }
+
             // Place data bits
             let bitIdx = 0;
             const totalBits = interleaved.length * 8;
@@ -604,10 +612,10 @@ const ScriptSharing = (() => {
                 upward = !upward;
             }
 
-            // Apply mask (pattern 0: (row + col) % 2 === 0)
+            // Apply mask (pattern 0: (row + col) % 2 === 0) only to data modules
             for (let r = 0; r < size; r++) {
                 for (let c = 0; c < size; c++) {
-                    if (isDataModule(r, c, size, version)) {
+                    if (!isFunction[r][c]) {
                         if ((r + c) % 2 === 0) {
                             grid[r][c] ^= 1;
                         }
@@ -652,17 +660,7 @@ const ScriptSharing = (() => {
             }
         }
 
-        function isDataModule(r, c, size, version) {
-            // Not a finder pattern area
-            if (r <= 8 && c <= 8) return false;
-            if (r <= 8 && c >= size - 8) return false;
-            if (r >= size - 8 && c <= 8) return false;
-            // Not timing patterns
-            if (r === 6 || c === 6) return false;
-            // Not dark module
-            if (r === size - 8 && c === 8) return false;
-            return true;
-        }
+        // isDataModule removed — masking now uses isFunction array for accurate exclusion
 
         function placeFormatInfo(grid, size, bits) {
             // Around top-left
@@ -816,7 +814,7 @@ const ScriptSharing = (() => {
         a.href = url;
         a.download = filename;
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     // =========================================
@@ -1143,7 +1141,7 @@ const ScriptSharing = (() => {
         a.href = url;
         a.download = `scriptvault-export-${files.length}-scripts.zip`;
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
 
         // Increment share counts
         for (const id of scriptIds) {

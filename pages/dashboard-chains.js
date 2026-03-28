@@ -654,7 +654,7 @@ const ScriptChains = (() => {
       }, 30000);
 
       chrome.runtime.sendMessage(
-        { type: 'SV_EXECUTE_SCRIPT', scriptId: step.scriptId },
+        { action: 'executeScript', scriptId: step.scriptId },
         (response) => {
           clearTimeout(timeout);
           if (chrome.runtime.lastError) {

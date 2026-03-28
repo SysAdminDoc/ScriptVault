@@ -216,4 +216,44 @@ describe('formatBytes', () => {
   it('formats 1 byte', () => {
     expect(formatBytes(1)).toBe('1 B');
   });
+
+  it('produces broken output for TB-scale values (no Math.min clamping)', () => {
+    // The sizes array only has ['B', 'KB', 'MB', 'GB'] — index 4 is undefined
+    // This documents the current bug: 1 TB gives "1 undefined"
+    const oneTB = Math.pow(1024, 4);
+    expect(formatBytes(oneTB)).toBe('1 undefined');
+  });
+});
+
+// ── formatBytes with Math.min clamping ──────────────────────────────────────
+
+describe('formatBytes (clamped)', () => {
+  function formatBytesClamped(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  it('clamps TB-scale values to GB', () => {
+    const oneTB = Math.pow(1024, 4);
+    expect(formatBytesClamped(oneTB)).toBe('1024 GB');
+  });
+
+  it('clamps 5 TB to GB', () => {
+    const fiveTB = 5 * Math.pow(1024, 4);
+    expect(formatBytesClamped(fiveTB)).toBe('5120 GB');
+  });
+
+  it('does not affect values within range', () => {
+    expect(formatBytesClamped(1024)).toBe('1 KB');
+    expect(formatBytesClamped(1073741824)).toBe('1 GB');
+  });
+
+  it('still returns 0 B for zero/negative/null', () => {
+    expect(formatBytesClamped(0)).toBe('0 B');
+    expect(formatBytesClamped(-1)).toBe('0 B');
+    expect(formatBytesClamped(null)).toBe('0 B');
+  });
 });

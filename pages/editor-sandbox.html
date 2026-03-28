@@ -26,20 +26,30 @@
   let currentTheme = 'vs-dark';
   let ignoreNextChange = false;
 
-  // ── Load Monaco from CDN ──────────────────────────────────────────────────
-  // The sandbox CSP allows https://cdn.jsdelivr.net. Monaco runs here with
-  // eval permitted (sandboxed page — no extension CSP restriction).
+  // ── Load Monaco from local bundle ────────────────────────────────────────
+  // Monaco is bundled locally in lib/monaco/ (copied from node_modules at build time).
+  // Falls back to CDN if local files are missing.
+  const LOCAL_VS_PATH = '../lib/monaco/vs';
+  const CDN_VS_PATH = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs';
+
   const loaderScript = document.createElement('script');
-  loaderScript.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js';
-  loaderScript.onload = initMonaco;
+  loaderScript.src = LOCAL_VS_PATH + '/loader.js';
+  loaderScript.onload = () => initMonaco(LOCAL_VS_PATH);
   loaderScript.onerror = () => {
-    loading.textContent = 'Failed to load Monaco from CDN. Check your internet connection.';
+    // Fallback to CDN if local bundle is missing
+    const cdnScript = document.createElement('script');
+    cdnScript.src = CDN_VS_PATH + '/loader.js';
+    cdnScript.onload = () => initMonaco(CDN_VS_PATH);
+    cdnScript.onerror = () => {
+      loading.textContent = 'Failed to load Monaco editor. Rebuild with: node esbuild.config.mjs --monaco-only';
+    };
+    document.head.appendChild(cdnScript);
   };
   document.head.appendChild(loaderScript);
 
-  function initMonaco() {
+  function initMonaco(vsPath) {
     require.config({
-      paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' }
+      paths: { vs: vsPath }
     });
 
     require(['vs/editor/editor.main'], function (monaco) {

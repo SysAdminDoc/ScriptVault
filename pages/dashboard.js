@@ -431,19 +431,37 @@
         if (_tabInited.has(tabName)) return;
         if (typeof LazyLoader === 'undefined') return;
 
-        await LazyLoader.loadForTab(tabName);
+        // Mark as inited BEFORE the await to prevent duplicate concurrent inits
         _tabInited.add(tabName);
+
+        try {
+            await LazyLoader.loadForTab(tabName);
+        } catch (e) {
+            _tabInited.delete(tabName);
+            console.error(`[ScriptVault] Failed to init tab ${tabName}:`, e);
+            showToast(`Failed to load ${tabName} tab`, 'error');
+            return;
+        }
 
         switch (tabName) {
             case 'store':
-                safeInit('Store', () => {
-                    if (typeof ScriptStore !== 'undefined') {
+                if (typeof ScriptStore !== 'undefined') {
+                    safeInit('Store', () => {
                         ScriptStore.init(document.getElementById('storeContainer'), {
-                            installedScripts: state.scripts,
-                            onInstall: (url) => chrome.runtime.sendMessage({ action: 'installFromUrl', url })
+                            getInstalledScripts: async () => {
+                                const res = await chrome.runtime.sendMessage({ action: 'getScripts' });
+                                return res?.scripts || Object.values(res || {});
+                            },
+                            onInstalled: async () => {
+                                await loadScripts();
+                                renderScriptTable();
+                            }
                         });
-                    }
-                });
+                    });
+                } else {
+                    const c = document.getElementById('storeContainer');
+                    if (c) c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)"><div style="font-size:16px;margin-bottom:8px">Script Store failed to load</div><div style="font-size:12px">Check the browser console for errors. The module file may be missing.</div></div>';
+                }
                 break;
             case 'settings':
                 // Theme editor loads with settings tab
@@ -451,11 +469,11 @@
                 break;
             case 'utilities':
                 // Collections, standalone, depgraph load with utilities tab
-                await LazyLoader.loadForTab('utilities');
+                // (LazyLoader.loadForTab already called at line 438 above)
                 break;
             case 'scripts':
                 // Card view, linter, recommendations load with scripts tab
-                await LazyLoader.loadForTab('scripts');
+                // (LazyLoader.loadForTab already called at line 438 above)
                 safeInit('CardView', () => {
                     if (typeof CardView !== 'undefined') {
                         const cardContainer = document.createElement('div');
@@ -465,7 +483,7 @@
                         if (tableContainer) tableContainer.parentNode.insertBefore(cardContainer, tableContainer.nextSibling);
                         CardView.init(cardContainer, {
                             onEdit: (id) => openEditorForScript(id),
-                            onToggle: (id, enabled) => toggleScript(id, enabled),
+                            onToggle: (id, enabled) => toggleScriptEnabled(id, enabled),
                             onDelete: (id) => deleteScript(id)
                         });
                         const viewBtn = document.getElementById('btnViewToggle');
@@ -894,7 +912,7 @@
     async function syncWithProvider(provider) {
         showToast('Syncing...', 'info');
         try {
-            const response = await chrome.runtime.sendMessage({ action: 'syncNow' });
+            const response = await chrome.runtime.sendMessage({ action: 'syncNow', provider });
             if (response?.success) {
                 await loadScripts();
                 updateStats();
@@ -1147,7 +1165,7 @@
 
     function applyConfigMode() {
         const mode = state.settings.configMode || 'advanced';
-        document.querySelectorAll('#settingsTab .settings-section[data-config-level]').forEach(section => {
+        document.querySelectorAll('#settingsPanel .settings-section[data-config-level]').forEach(section => {
             const level = section.getAttribute('data-config-level');
             if (level === 'advanced' && mode !== 'advanced') {
                 section.style.display = 'none';
@@ -1165,13 +1183,20 @@
             const trash = response?.trash || [];
 
             if (trash.length === 0) {
-                elements.trashList.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:40px">Trash is empty</div>';
+                const trashMode = state.settings?.trashMode || '30';
+                const hint = trashMode === 'disabled'
+                    ? 'Trash is disabled in settings. Deleted scripts are permanently removed.'
+                    : `Trash is empty. Deleted scripts are kept for ${trashMode} day(s).`;
+                elements.trashList.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:40px">
+                    <div style="font-size:24px;margin-bottom:8px;opacity:0.5">🗑️</div>
+                    <div>${escapeHtml(hint)}</div>
+                </div>`;
                 return;
             }
 
             elements.trashList.innerHTML = '';
             const table = document.createElement('table');
-            table.className = 'script-table';
+            table.className = 'scripts-table';
             table.style.width = '100%';
             table.innerHTML = '<thead><tr><th>Name</th><th class="center">Version</th><th class="center">Deleted</th><th class="center">Actions</th></tr></thead>';
             const tbody = document.createElement('tbody');
@@ -1541,7 +1566,7 @@
                 a.href = url;
                 a.download = `scriptvault-export-${Date.now()}.json`;
                 a.click();
-                URL.revokeObjectURL(url);
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
                 showToast(`Exported ${ids.length} scripts`, 'success');
                 break;
 
@@ -1584,6 +1609,7 @@
                 break;
 
             case 'delete':
+                if (!await showConfirmModal('Delete Scripts', `Permanently delete ${ids.length} selected script(s)? This cannot be undone.`)) return;
                 showProgress(`Deleting ${ids.length} scripts...`);
                 for (let i = 0; i < ids.length; i++) {
                     const s = state.scripts.find(x => x.id === ids[i]);
@@ -2193,9 +2219,18 @@
         // Load editor content
         if (elements.editorTitle) elements.editorTitle.textContent = script.metadata?.name || 'Edit Script';
         if (state.editor) {
+            // Save current tab's undo history before switching
+            if (state.currentScriptId && state.openTabs[state.currentScriptId]) {
+                try { state.openTabs[state.currentScriptId]._editorHistory = state.editor.getHistory(); } catch {}
+            }
             if (state.editor.isMonaco) state.editor.setScriptId(script.id);
             state.editor.setValue(tabData?.code ?? script.code ?? '');
-            state.editor.clearHistory();
+            // Restore target tab's undo history if available, otherwise clear
+            if (tabData?._editorHistory) {
+                try { state.editor.setHistory(tabData._editorHistory); } catch { state.editor.clearHistory(); }
+            } else {
+                state.editor.clearHistory();
+            }
             setTimeout(() => state.editor.refresh(), 10);
             updateLineCount();
             updateCursorPos();
@@ -2422,42 +2457,69 @@
         const oldLines = oldCode.split('\n');
         const newLines = newCode.split('\n');
 
-        // Simple line-by-line diff
-        const maxLen = Math.max(oldLines.length, newLines.length);
+        // Myers-like O(ND) diff: compute edit script via LCS
+        const n = oldLines.length, m = newLines.length;
+        // For very large files, fall back to simple positional comparison
+        const useSimple = n + m > 10000;
+        const ops = []; // {type: 'eq'|'del'|'add', oldIdx, newIdx}
+        if (useSimple) {
+            const maxLen = Math.max(n, m);
+            for (let i = 0; i < maxLen; i++) {
+                if (i >= n) ops.push({ type: 'add', newIdx: i });
+                else if (i >= m) ops.push({ type: 'del', oldIdx: i });
+                else if (oldLines[i] !== newLines[i]) { ops.push({ type: 'del', oldIdx: i }); ops.push({ type: 'add', newIdx: i }); }
+                else ops.push({ type: 'eq', oldIdx: i, newIdx: i });
+            }
+        } else {
+            // Build LCS table
+            const dp = [];
+            for (let i = 0; i <= n; i++) { dp[i] = new Uint16Array(m + 1); }
+            for (let i = 1; i <= n; i++) {
+                for (let j = 1; j <= m; j++) {
+                    dp[i][j] = oldLines[i - 1] === newLines[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+                }
+            }
+            // Backtrack to produce edit script
+            let i = n, j = m;
+            const revOps = [];
+            while (i > 0 || j > 0) {
+                if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+                    revOps.push({ type: 'eq', oldIdx: i - 1, newIdx: j - 1 }); i--; j--;
+                } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+                    revOps.push({ type: 'add', newIdx: j - 1 }); j--;
+                } else {
+                    revOps.push({ type: 'del', oldIdx: i - 1 }); i--;
+                }
+            }
+            for (let k = revOps.length - 1; k >= 0; k--) ops.push(revOps[k]);
+        }
+
         let diffHtml = '';
         let additions = 0, deletions = 0, unchanged = 0;
+        let oldLn = 0, newLn = 0;
 
-        for (let i = 0; i < maxLen; i++) {
-            const oldLine = oldLines[i];
-            const newLine = newLines[i];
-            const lineNum = i + 1;
+        // Identify which ops are near a change for context display
+        const isChange = ops.map(o => o.type !== 'eq');
+        const nearChange = new Uint8Array(ops.length);
+        for (let i = 0; i < ops.length; i++) {
+            if (isChange[i]) { for (let j = Math.max(0, i - 3); j <= Math.min(ops.length - 1, i + 3); j++) nearChange[j] = 1; }
+        }
 
-            if (oldLine === undefined) {
-                // Added
-                diffHtml += `<div class="diff-line diff-add"><span class="diff-ln">${lineNum}</span><span class="diff-sign">+</span><span class="diff-text">${escapeHtml(newLine)}</span></div>`;
-                additions++;
-            } else if (newLine === undefined) {
-                // Deleted
-                diffHtml += `<div class="diff-line diff-del"><span class="diff-ln">${lineNum}</span><span class="diff-sign">-</span><span class="diff-text">${escapeHtml(oldLine)}</span></div>`;
+        for (let i = 0; i < ops.length; i++) {
+            const op = ops[i];
+            if (op.type === 'del') {
+                oldLn++;
+                diffHtml += `<div class="diff-line diff-del"><span class="diff-ln">${oldLn}</span><span class="diff-sign">-</span><span class="diff-text">${escapeHtml(oldLines[op.oldIdx] || '')}</span></div>`;
                 deletions++;
-            } else if (oldLine !== newLine) {
-                // Changed
-                diffHtml += `<div class="diff-line diff-del"><span class="diff-ln">${lineNum}</span><span class="diff-sign">-</span><span class="diff-text">${escapeHtml(oldLine)}</span></div>`;
-                diffHtml += `<div class="diff-line diff-add"><span class="diff-ln">${lineNum}</span><span class="diff-sign">+</span><span class="diff-text">${escapeHtml(newLine)}</span></div>`;
+            } else if (op.type === 'add') {
+                newLn++;
+                diffHtml += `<div class="diff-line diff-add"><span class="diff-ln">${newLn}</span><span class="diff-sign">+</span><span class="diff-text">${escapeHtml(newLines[op.newIdx] || '')}</span></div>`;
                 additions++;
-                deletions++;
             } else {
+                oldLn++; newLn++;
                 unchanged++;
-                // Only show context lines (3 before/after changes)
-                const hasNearbyChange = (i2) => {
-                    for (let j = Math.max(0, i2 - 3); j <= Math.min(maxLen - 1, i2 + 3); j++) {
-                        if (j === i2) continue;
-                        if ((oldLines[j] || '') !== (newLines[j] || '')) return true;
-                    }
-                    return false;
-                };
-                if (hasNearbyChange(i)) {
-                    diffHtml += `<div class="diff-line diff-ctx"><span class="diff-ln">${lineNum}</span><span class="diff-sign"> </span><span class="diff-text">${escapeHtml(newLine)}</span></div>`;
+                if (nearChange[i]) {
+                    diffHtml += `<div class="diff-line diff-ctx"><span class="diff-ln">${newLn}</span><span class="diff-sign"> </span><span class="diff-text">${escapeHtml(newLines[op.newIdx] || '')}</span></div>`;
                 }
             }
         }
@@ -2581,7 +2643,7 @@
     function createStorageItem(scriptId, key, value) {
         const item = document.createElement('div');
         item.className = 'storage-item';
-        const valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
+        const valStr = value == null ? '' : (typeof value === 'object' ? JSON.stringify(value) : String(value));
         let currentKey = key;
 
         item.innerHTML = `
@@ -2638,7 +2700,7 @@
             const script = state.scripts.find(s => s.id === scriptId);
             if (script) script.enabled = enabled;
             if (scriptId === state.currentScriptId) {
-                elements.btnEditorToggle.textContent = enabled ? 'Disable' : 'Enable';
+                if (elements.btnEditorToggle) elements.btnEditorToggle.textContent = enabled ? 'Disable' : 'Enable';
             }
             updateStats();
             showToast(enabled ? 'Enabled' : 'Disabled', 'success');
@@ -3015,9 +3077,8 @@
             currentIndent = Math.max(0, currentIndent + netBraces);
         }
 
-        const cursor = state.editor.getCursor();
         state.editor.setValue(beautified.join('\n'));
-        state.editor.setCursor(cursor);
+        state.editor.setCursor({ line: 0, ch: 0 });
         state.unsavedChanges = true;
         showToast('Code beautified', 'success');
     }
@@ -3155,7 +3216,7 @@
                 a.href = url;
                 a.download = `scriptvault-backup-${new Date().toISOString().split('T')[0]}.json`;
                 a.click();
-                URL.revokeObjectURL(url);
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
                 showToast('Exported', 'success');
             }
         } catch (e) {
@@ -3171,7 +3232,7 @@
         a.href = URL.createObjectURL(blob);
         a.download = `${name}.user.js`;
         a.click();
-        URL.revokeObjectURL(a.href);
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
         showToast(`Exported ${meta.name || 'script'}`, 'success');
     }
 
@@ -3188,7 +3249,7 @@
                 a.href = objUrl;
                 a.download = response.filename || `scriptvault-${new Date().toISOString().split('T')[0]}.zip`;
                 a.click();
-                URL.revokeObjectURL(objUrl);
+                setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
                 showToast('Exported ZIP', 'success');
             }
         } catch (e) {
@@ -3224,7 +3285,7 @@
         a.href = url;
         a.download = `scriptvault-stats-${new Date().toISOString().split('T')[0]}.csv`;
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
         showToast('Stats exported to CSV', 'success');
     }
 
@@ -3643,6 +3704,7 @@
                 tab.classList.add('active');
                 elements.mainPanels[id]?.classList.add('active');
                 if (tab.dataset.tab === 'trash') await loadTrash();
+                await lazyInitTab(id);
                 elements.btnHelpTab?.classList.remove('active');
             });
         });
@@ -3799,7 +3861,7 @@
             a.href = url;
             a.download = `scriptvault-export-${Date.now()}.json`;
             a.click();
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
             showToast(`Exported ${state.scripts.length} scripts`, 'success');
         });
 
@@ -3859,8 +3921,11 @@
                     if (libSearchResults) libSearchResults.innerHTML = '<div style="padding:8px;color:var(--text-muted)">No libraries found</div>';
                     return;
                 }
-                if (libSearchResults) libSearchResults.innerHTML = data.results.map(lib => {
-                    const cdnUrl = `https://cdnjs.cloudflare.com/ajax/libs/${lib.name}/${lib.version}/${lib.filename}`;
+                if (libSearchResults) libSearchResults.innerHTML = data.results.filter(lib =>
+                    lib.name && lib.version && lib.filename &&
+                    !/[\/\\]|\.\./.test(lib.name) && !/[\/\\]|\.\./.test(lib.version) && !/\.\./.test(lib.filename)
+                ).map(lib => {
+                    const cdnUrl = `https://cdnjs.cloudflare.com/ajax/libs/${encodeURIComponent(lib.name)}/${encodeURIComponent(lib.version)}/${lib.filename}`;
                     return `<div class="lib-result">
                         <div class="lib-result-info">
                             <span class="lib-result-name">${escapeHtml(lib.name)}</span>
@@ -4404,7 +4469,7 @@
             a.href = URL.createObjectURL(blob);
             a.download = `scriptvault-netlog-${new Date().toISOString().split('T')[0]}.har`;
             a.click();
-            URL.revokeObjectURL(a.href);
+            setTimeout(() => URL.revokeObjectURL(a.href), 1000);
             showToast('Exported as HAR', 'success');
         });
 
@@ -5004,7 +5069,7 @@
             overlay.innerHTML = `
                 <div class="cmd-backdrop"></div>
                 <div class="cmd-dialog">
-                    <input type="text" class="cmd-input" placeholder="Type a command, script name, or action..." autofocus>
+                    <input type="text" class="cmd-input" placeholder="Type a command, script name, or action..." autofocus aria-label="Command palette">
                     <div class="cmd-results"></div>
                 </div>
             `;
@@ -5122,7 +5187,7 @@
         });
     }
 
-    function switchTab(name) {
+    async function switchTab(name) {
         const editorActive = elements.editorOverlay?.classList.contains('active');
         if (editorActive) {
             if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
@@ -5148,7 +5213,7 @@
         if (name === 'trash') loadTrash();
 
         // Lazy-load and initialize modules for this tab
-        lazyInitTab(name);
+        await lazyInitTab(name);
     }
 
     function showDropOverlay(show) {

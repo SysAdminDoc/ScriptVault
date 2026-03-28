@@ -651,6 +651,7 @@ const ScriptScheduler = (() => {
     const slider = el('div', { className: 'sv-sched-time-slider', id: 'sv-sched-slider' });
     slider.innerHTML = `
       <div class="sv-sched-time-slider-fill" id="sv-sched-slider-fill"></div>
+      <div class="sv-sched-time-slider-fill" id="sv-sched-slider-fill2" style="display:none"></div>
       <div class="sv-sched-time-slider-handle" id="sv-sched-slider-start" style="left:37.5%"></div>
       <div class="sv-sched-time-slider-handle" id="sv-sched-slider-end" style="left:70.8%"></div>
       <div class="sv-sched-time-slider-labels">
@@ -856,6 +857,7 @@ const ScriptScheduler = (() => {
     const endPct = (endMins / 1440) * 100;
 
     const fill = _modalEl.querySelector('#sv-sched-slider-fill');
+    const fill2 = _modalEl.querySelector('#sv-sched-slider-fill2');
     const startHandle = _modalEl.querySelector('#sv-sched-slider-start');
     const endHandle = _modalEl.querySelector('#sv-sched-slider-end');
     const labelStart = _modalEl.querySelector('#sv-sched-slider-label-start');
@@ -864,10 +866,16 @@ const ScriptScheduler = (() => {
     if (startMins <= endMins) {
       fill.style.left = startPct + '%';
       fill.style.width = (endPct - startPct) + '%';
+      if (fill2) { fill2.style.display = 'none'; }
     } else {
-      // Wrapping range (e.g., 10pm - 6am)
-      fill.style.left = '0%';
-      fill.style.width = endPct + '%';
+      // Wrapping range (e.g., 10pm - 6am): show two segments
+      fill.style.left = startPct + '%';
+      fill.style.width = (100 - startPct) + '%';
+      if (fill2) {
+        fill2.style.display = '';
+        fill2.style.left = '0%';
+        fill2.style.width = endPct + '%';
+      }
     }
 
     startHandle.style.left = `calc(${startPct}% - 4px)`;
