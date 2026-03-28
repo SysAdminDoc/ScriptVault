@@ -97,6 +97,9 @@ var CloudSyncProviders = {
 
       if (!resp.ok) {
         console.warn('[CloudSync] Google token refresh failed:', resp.status);
+        if (resp.status === 400 || resp.status === 401) {
+          await SettingsManager.set({ googleDriveToken: '', googleDriveRefreshToken: '' });
+        }
         return null;
       }
       const data = await resp.json();
@@ -432,6 +435,10 @@ var CloudSyncProviders = {
 
       if (!resp.ok) {
         console.warn('[CloudSync] Dropbox token refresh failed:', resp.status);
+        // Clear stale token to prevent infinite retry loops
+        if (resp.status === 400 || resp.status === 401) {
+          await SettingsManager.set({ dropboxToken: '', dropboxRefreshToken: '' });
+        }
         return null;
       }
       const data = await resp.json();
@@ -643,7 +650,13 @@ var CloudSyncProviders = {
         })
       });
 
-      if (!resp.ok) return null;
+      if (!resp.ok) {
+        console.warn('[CloudSync] OneDrive token refresh failed:', resp.status);
+        if (resp.status === 400 || resp.status === 401) {
+          await SettingsManager.set({ onedriveToken: '', onedriveRefreshToken: '' });
+        }
+        return null;
+      }
       const data = await resp.json();
       if (data.access_token) {
         await SettingsManager.set({
