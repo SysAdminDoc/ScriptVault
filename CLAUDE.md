@@ -14,8 +14,8 @@ v2.0.2
 - `chrome.storage.local` for persistence (`unlimitedStorage` permission)
 - **Monaco Editor** (v0.52.2, bundled locally in `lib/monaco/`, CDN fallback in sandboxed iframe)
 - Cloud sync: WebDAV, Google Drive (PKCE), Dropbox (PKCE), OneDrive (PKCE), Easy Cloud (chrome.identity)
-- Vitest test suite (7 test files, 275 test cases)
-- background.js: ~16,174 lines (built from 19+ source modules)
+- Vitest test suite (9 test files, 307 test cases)
+- background.js: ~16,193 lines (built from 19+ source modules)
 - 37 TypeScript source files in `src/` (type-checked via `npm run typecheck`)
 
 ## Build
@@ -149,6 +149,8 @@ All 4 bg/ modules migrated:
 - `tests/parser.test.js` — 38 tests for userscript parser (includes locales, duplicates, CRLF)
 - `tests/versions.test.js` — 26 tests for version comparison
 - `tests/analyzer.test.js` — 62 tests for risk pattern detection + analyze() + entropy + comment stripping
+- `tests/storage.test.js` — 21 tests for SettingsManager, ScriptStorage, FolderStorage (rollback, init idempotency, bulk set)
+- `tests/error-log.test.js` — 11 tests for ErrorLog (FIFO cap, filters, grouping, JSON/text export)
 - `tests/netlog.test.js` — 31 tests for network log
 - `tests/core-flows.test.js` — 20 tests for install/toggle/update/rollback/save flows
 - `tests/url-matcher.test.js` — 77 tests for URL matching (match patterns, includes, excludes, regex, globs, IDN)
@@ -432,5 +434,24 @@ All 4 bg/ modules migrated:
 **Popup accessibility:**
 - Header toggle has `aria-pressed` for screen readers
 
+**GM API wrapper fixes (background.core.js):**
+- `sendToBackground` postMessage targetOrigin `'/'` → `'*'` (messages failed on opaque origins)
+- `GM_getTab/saveTab/getTabs`: added missing grant checks (security)
+- `GM_notification` highlight: clean up `_notifCallbacks` on early return (memory leak)
+- `GM_getMenuCommands`: returns `caption` field (was returning `id` twice)
+- `GM_registerMenuCommand`: stores `{callback, caption}` tuple
+- `GM_download`: delete callback entry after error (leak on failure)
+
+**Cloud sync token safety (sync-providers.js):**
+- Google Drive, Dropbox, OneDrive: clear stale tokens on 400/401 refresh failure (prevents infinite retry loops)
+- Merge conflict flag now set even when 3-way merge fails (was silent last-write-wins)
+
+**Tests:**
+- New `storage.test.js`: 21 tests (SettingsManager, ScriptStorage, FolderStorage + rollback)
+- New `error-log.test.js`: 11 tests (FIFO cap, filters, grouping, exports)
+- Fixed `chrome.storage.local.get()` mock to match real Chrome behavior
+- Added `__resetStorageMock()` helper, fixed notification mock return value
+- 307 total tests (was 275)
+
 **Version sync:** manifest.json, manifest-firefox.json, package.json all at 2.0.2
-- background.js: 16,174 lines
+- background.js: 16,193 lines
