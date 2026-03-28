@@ -427,9 +427,14 @@ const AdvancedLinter = (() => {
       },
       fix(code, fixData) {
         const lines = code.split('\n');
-        const line = lines[fixData.grantLine];
-        if (line && line.includes(`@grant`) && line.includes(fixData.grantValue)) {
-          lines.splice(fixData.grantLine, 1);
+        const removals = Array.isArray(fixData) ? fixData : [fixData];
+        // Sort by grantLine descending so splicing doesn't corrupt later indices
+        removals.sort((a, b) => b.grantLine - a.grantLine);
+        for (const fd of removals) {
+          const line = lines[fd.grantLine];
+          if (line && line.includes(`@grant`) && line.includes(fd.grantValue)) {
+            lines.splice(fd.grantLine, 1);
+          }
         }
         return lines.join('\n');
       },

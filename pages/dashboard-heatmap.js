@@ -299,7 +299,7 @@ const ActivityHeatmap = (() => {
 
     // Day labels
     _ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
-    _ctx.fillStyle = 'var(--text-muted, #707070)';
+    _ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#707070';
     _ctx.textAlign = 'right';
     _ctx.textBaseline = 'middle';
     const labelDays = [1, 3, 5]; // Mon, Wed, Fri
@@ -439,6 +439,11 @@ const ActivityHeatmap = (() => {
       }
       if (i >= midpoint) recentActivity += total;
       else olderActivity += total;
+    }
+
+    // If the last date in the grid is not today, the streak is broken
+    if (dates.length > 0 && _dateKey(dates[dates.length - 1]) !== _dateKey(new Date())) {
+      currentStreak = 0;
     }
 
     let trend = 'stable';

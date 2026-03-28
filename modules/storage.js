@@ -128,17 +128,32 @@ const ScriptStorage = {
   
   async set(id, script) {
     await this.init();
+    const prev = this.cache[id];
     this.cache[id] = script;
-    await this.save();
+    try {
+      await this.save();
+    } catch (e) {
+      // Rollback cache on persist failure (e.g., quota exceeded)
+      if (prev !== undefined) this.cache[id] = prev;
+      else delete this.cache[id];
+      throw e; // Re-throw so callers know the save failed
+    }
     return script;
   },
-  
+
   async delete(id) {
     await this.init();
+    const prev = this.cache[id];
     delete this.cache[id];
-    // Also delete associated values
-    await ScriptValues.deleteAll(id);
-    await this.save();
+    try {
+      // Also delete associated values
+      await ScriptValues.deleteAll(id);
+      await this.save();
+    } catch (e) {
+      // Rollback cache on failure
+      if (prev !== undefined) this.cache[id] = prev;
+      throw e;
+    }
   },
   
   async clear() {

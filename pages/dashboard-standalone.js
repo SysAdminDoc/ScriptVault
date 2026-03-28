@@ -118,13 +118,16 @@ const StandaloneExport = (() => {
     function minifyJS(code) {
         // Strip userscript header
         let js = code.replace(/\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==\s*/, '');
-        // Strip single-line comments (but not URLs)
+        // Strip single-line comments (careful not to match inside strings or URLs)
         js = js.replace(/(?<![:"'])\/\/.*$/gm, '');
         // Strip multi-line comments
         js = js.replace(/\/\*[\s\S]*?\*\//g, '');
-        // Collapse whitespace
-        js = js.replace(/\n\s*\n/g, '\n').replace(/\n/g, ';').replace(/;+/g, ';')
-            .replace(/\s+/g, ' ').trim();
+        // Collapse blank lines and leading/trailing whitespace per line
+        // Use newlines (not semicolons) to avoid breaking if/else, arrow functions, etc.
+        js = js.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .join('\n');
         return js;
     }
 
@@ -191,11 +194,15 @@ ${inlineJS ? `<script>${inlineJS}<\/script>` : ''}
     // =========================================
     function highlightJS(code) {
         const esc = escapeHTML(code);
-        return esc
-            .replace(/(\/\/.*?)$/gm, '<span style="color:#707070;font-style:italic">$1</span>')
-            .replace(/(["'`])(?:(?!\1|\\).|\\.)*?\1/g, '<span style="color:#4ade80">$&</span>')
+        // Extract strings and comments first to prevent double-wrapping keywords inside them
+        const tokens = [];
+        const placeholder = esc.replace(/(\/\/.*?)$/gm, (m) => { tokens.push('<span style="color:#707070;font-style:italic">' + m + '</span>'); return '\x00T' + (tokens.length - 1) + 'T\x00'; })
+            .replace(/(["'`])(?:(?!\1|\\).|\\.)*?\1/g, (m) => { tokens.push('<span style="color:#4ade80">' + m + '</span>'); return '\x00T' + (tokens.length - 1) + 'T\x00'; });
+        // Now highlight keywords and numbers in remaining (non-string, non-comment) text
+        return placeholder
             .replace(/\b(const|let|var|function|async|await|return|if|else|for|while|new|class|try|catch|throw|typeof|instanceof|import|export|from|of|in|this|null|undefined|true|false|void)\b/g, '<span style="color:#c084fc">$1</span>')
-            .replace(/\b(\d+\.?\d*)\b/g, '<span style="color:#fb923c">$1</span>');
+            .replace(/\b(\d+\.?\d*)\b/g, '<span style="color:#fb923c">$1</span>')
+            .replace(/\x00T(\d+)T\x00/g, (_, i) => tokens[i]);
     }
 
     // =========================================

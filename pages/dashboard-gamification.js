@@ -468,7 +468,7 @@ const Gamification = (() => {
     const el = document.createElement('div');
     el.className = 'sv-gam-toast';
     el.innerHTML = `
-      <span class="sv-gam-toast-icon">${a.icon}</span>
+      <span class="sv-gam-toast-icon">${esc(a.icon)}</span>
       <div class="sv-gam-toast-text">
         <div class="sv-gam-toast-title">Achievement Unlocked!</div>
         <div class="sv-gam-toast-desc">${esc(a.name)} &mdash; ${esc(a.desc)}</div>

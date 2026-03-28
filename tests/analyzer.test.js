@@ -262,3 +262,173 @@ describe('Analyzer: match counting', () => {
     expect(countMatches('fetch-call', 'fetch("/a"); fetch("/b")')).toBe(2);
   });
 });
+
+// ── Re-implement analyze() for testing (extracted from bg/analyzer.js) ────
+
+function calculateEntropy(str) {
+  const freq = {};
+  for (const ch of str) freq[ch] = (freq[ch] || 0) + 1;
+  let entropy = 0;
+  const len = str.length;
+  for (const count of Object.values(freq)) { const p = count / len; entropy -= p * Math.log2(p); }
+  return entropy;
+}
+
+function generateSummary(riskLevel, findings) {
+  if (!findings.length) return 'No suspicious patterns detected.';
+  const cats = [...new Set(findings.map(f => f.category))];
+  const catLabels = { execution: 'dynamic code execution', data: 'data access', network: 'network activity', fingerprint: 'device fingerprinting', obfuscation: 'code obfuscation', mining: 'potential mining', hijack: 'page manipulation' };
+  return `Found ${findings.length} pattern(s) involving ${cats.map(c => catLabels[c] || c).join(', ')}.`;
+}
+
+function analyze(code) {
+  const findings = [];
+  let totalRisk = 0;
+  const strippedCode = code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const pattern of patterns) {
+    pattern.regex.lastIndex = 0;
+    const matches = strippedCode.match(pattern.regex);
+    if (matches && matches.length > 0) {
+      const count = matches.length;
+      const adjustedRisk = Math.min(pattern.risk * Math.min(count, 3), pattern.risk * 3);
+      totalRisk += adjustedRisk;
+      findings.push({ id: pattern.id, label: pattern.label, category: pattern.category, risk: pattern.risk, count, adjustedRisk });
+    }
+  }
+  const longStrings = strippedCode.match(/['"][^'"]{80,}['"]/g);
+  if (longStrings && longStrings.length > 0) {
+    const entropy = calculateEntropy(longStrings[0]);
+    const threshold = longStrings[0].length >= 200 ? 4.5 : 5.2;
+    if (entropy > threshold) {
+      findings.push({ id: 'high-entropy', label: 'High-entropy string detected', category: 'obfuscation', risk: 20, count: longStrings.length, adjustedRisk: 20 });
+      totalRisk += 20;
+    }
+  }
+  const riskLevel = totalRisk >= 80 ? 'high' : totalRisk >= 40 ? 'medium' : totalRisk >= 15 ? 'low' : 'minimal';
+  const categories = {};
+  for (const f of findings) {
+    if (!categories[f.category]) categories[f.category] = [];
+    categories[f.category].push(f);
+  }
+  return { totalRisk: Math.min(totalRisk, 100), riskLevel, findings, categories, summary: generateSummary(riskLevel, findings), astAnalyzed: false };
+}
+
+// ── analyze() integration tests ───────────────────────────────────────────
+
+describe('Analyzer: analyze() function', () => {
+  it('returns minimal risk for clean code', () => {
+    const result = analyze('var x = 1 + 2;');
+    expect(result.riskLevel).toBe('minimal');
+    expect(result.totalRisk).toBe(0);
+    expect(result.findings).toHaveLength(0);
+    expect(result.astAnalyzed).toBe(false);
+  });
+
+  it('returns a summary string', () => {
+    const result = analyze('eval("code")');
+    expect(result.summary).toContain('pattern');
+    expect(result.summary).toContain('execution');
+  });
+
+  it('groups findings by category', () => {
+    const result = analyze('eval("a"); fetch("/b")');
+    expect(result.categories.execution).toBeDefined();
+    expect(result.categories.network).toBeDefined();
+    expect(result.categories.execution.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('caps totalRisk at 100', () => {
+    // Stack many high-risk patterns to exceed 100
+    const code = 'eval("a"); eval("b"); eval("c"); new Function("x"); new Function("y"); new Function("z"); document.cookie; document.cookie; document.cookie;';
+    const result = analyze(code);
+    expect(result.totalRisk).toBeLessThanOrEqual(100);
+  });
+});
+
+// ── Comment stripping tests ───────────────────────────────────────────────
+
+describe('Analyzer: comment stripping', () => {
+  it('does not match patterns inside single-line comments', () => {
+    const code = '// eval("this is a comment")\nvar x = 1;';
+    const result = analyze(code);
+    const evalFinding = result.findings.find(f => f.id === 'eval');
+    expect(evalFinding).toBeUndefined();
+  });
+
+  it('does not match patterns inside block comments', () => {
+    const code = '/* eval("commented out") */\nvar x = 1;';
+    const result = analyze(code);
+    const evalFinding = result.findings.find(f => f.id === 'eval');
+    expect(evalFinding).toBeUndefined();
+  });
+
+  it('does not match patterns inside multi-line block comments', () => {
+    const code = '/*\n  fetch("/api")\n  document.cookie\n*/\nvar x = 1;';
+    const result = analyze(code);
+    expect(result.findings).toHaveLength(0);
+  });
+
+  it('still detects patterns in real code alongside comments', () => {
+    const code = '// eval("comment")\neval("real code")';
+    const result = analyze(code);
+    const evalFinding = result.findings.find(f => f.id === 'eval');
+    expect(evalFinding).toBeDefined();
+    expect(evalFinding.count).toBe(1);
+  });
+});
+
+// ── High-entropy string detection ─────────────────────────────────────────
+
+describe('Analyzer: high-entropy string detection', () => {
+  it('detects a high-entropy long string (randomized)', () => {
+    // Generate a string with high randomness (many distinct characters)
+    const randomChars = 'aB3$xZ9!kL7@mN2#pQ5&rT8*uW1^yA4%cE6(fH0)jK';
+    const highEntropyStr = Array.from({ length: 120 }, (_, i) => randomChars[i % randomChars.length]).join('');
+    const code = `var s = "${highEntropyStr}";`;
+    const result = analyze(code);
+    const entropyFinding = result.findings.find(f => f.id === 'high-entropy');
+    expect(entropyFinding).toBeDefined();
+  });
+
+  it('does not flag a low-entropy long string (repeated chars)', () => {
+    const lowEntropyStr = 'a'.repeat(120);
+    const code = `var s = "${lowEntropyStr}";`;
+    const result = analyze(code);
+    const entropyFinding = result.findings.find(f => f.id === 'high-entropy');
+    expect(entropyFinding).toBeUndefined();
+  });
+});
+
+// ── Risk level thresholds ─────────────────────────────────────────────────
+
+describe('Analyzer: risk level thresholds', () => {
+  it('returns "minimal" for totalRisk < 15', () => {
+    // innerHTML assignment = risk 5
+    const result = analyze('el.innerHTML = "hi"');
+    expect(result.totalRisk).toBeLessThan(15);
+    expect(result.riskLevel).toBe('minimal');
+  });
+
+  it('returns "low" for totalRisk >= 15 and < 40', () => {
+    // eval = 30 risk → totalRisk = 30
+    const result = analyze('eval("x")');
+    expect(result.totalRisk).toBeGreaterThanOrEqual(15);
+    expect(result.totalRisk).toBeLessThan(40);
+    expect(result.riskLevel).toBe('low');
+  });
+
+  it('returns "medium" for totalRisk >= 40 and < 80', () => {
+    // eval(30) + new Function(30) = 60
+    const result = analyze('eval("x"); new Function("y")');
+    expect(result.totalRisk).toBeGreaterThanOrEqual(40);
+    expect(result.totalRisk).toBeLessThan(80);
+    expect(result.riskLevel).toBe('medium');
+  });
+
+  it('returns "high" for totalRisk >= 80', () => {
+    // eval(30) + new Function(30) + document.cookie(25) = 85
+    const result = analyze('eval("x"); new Function("y"); document.cookie;');
+    expect(result.totalRisk).toBeGreaterThanOrEqual(80);
+    expect(result.riskLevel).toBe('high');
+  });
+});

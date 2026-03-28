@@ -81,15 +81,17 @@ describe('applyUpdate order safety', () => {
     expect(script.meta.version).toBe('2.0');
   });
 
-  it('should trim version history to 3 entries', () => {
+  it('should trim version history to 5 entries', () => {
     const history = [
       { version: '1.0', code: 'v1', updatedAt: 1 },
       { version: '2.0', code: 'v2', updatedAt: 2 },
       { version: '3.0', code: 'v3', updatedAt: 3 },
+      { version: '4.0', code: 'v4', updatedAt: 4 },
+      { version: '5.0', code: 'v5', updatedAt: 5 },
     ];
-    history.push({ version: '4.0', code: 'v4', updatedAt: 4 });
-    const trimmed = history.length > 3 ? history.slice(-3) : history;
-    expect(trimmed).toHaveLength(3);
+    history.push({ version: '6.0', code: 'v6', updatedAt: 6 });
+    const trimmed = history.length > 5 ? history.slice(-5) : history;
+    expect(trimmed).toHaveLength(5);
     expect(trimmed[0].version).toBe('2.0');
   });
 });

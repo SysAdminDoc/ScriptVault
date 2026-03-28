@@ -314,4 +314,43 @@ describe('parseUserscript', () => {
     // Empty grant value is not pushed, so falls to default ['none']
     expect(meta.grant).toEqual(['none']);
   });
+
+  it('parses localized metadata with multi-segment locale like zh-Hans', () => {
+    // key.split(':') with "name:zh-Hans" yields ["name", "zh-Hans"] — locale should be "zh-Hans"
+    const code = '// ==UserScript==\n// @name Test\n// @name:zh-Hans 简体中文测试\n// ==/UserScript==\n';
+    const { meta } = parseUserscript(code);
+    // The current split(':') only splits into two parts, so "zh-Hans" stays intact
+    expect(meta.localized['zh-Hans']).toBeDefined();
+    expect(meta.localized['zh-Hans'].name).toBe('简体中文测试');
+  });
+
+  it('last @name wins when duplicated', () => {
+    const code = '// ==UserScript==\n// @name First\n// @name Second\n// ==/UserScript==\n';
+    const { meta } = parseUserscript(code);
+    expect(meta.name).toBe('Second');
+  });
+
+  it('handles Windows-style \\r\\n line endings', () => {
+    const code = '// ==UserScript==\r\n// @name WinScript\r\n// @version 1.2.3\r\n// @match https://example.com/*\r\n// ==/UserScript==\r\n';
+    const { meta } = parseUserscript(code);
+    expect(meta.name).toBe('WinScript');
+    expect(meta.version).toBe('1.2.3');
+    expect(meta.match.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('ignores @resource with malformed value (single word, no URL)', () => {
+    const code = makeScript({ name: 'BadRes', resource: 'onlyname' });
+    const { meta } = parseUserscript(code);
+    // resourceMatch regex requires "name URL" format — single word should not match
+    expect(Object.keys(meta.resource)).toHaveLength(0);
+  });
+
+  it('keeps @grant none alongside other grants in the array', () => {
+    const code = '// ==UserScript==\n// @name Mixed\n// @grant none\n// @grant GM_setValue\n// ==/UserScript==\n';
+    const { meta } = parseUserscript(code);
+    // Both values are pushed to the grant array
+    expect(meta.grant).toContain('none');
+    expect(meta.grant).toContain('GM_setValue');
+    expect(meta.grant).toHaveLength(2);
+  });
 });

@@ -17,6 +17,7 @@ const LazyLoader = (() => {
     'dashboard-keyboard.js',   // Keyboard nav must be immediate
     'dashboard-firefox-compat.js', // Polyfills must be immediate
     'dashboard-i18n-v2.js',    // Translations must be immediate
+    'dashboard-store.js',      // Script Store — primary feature, load eagerly
   ]);
 
   // Map: tab name → modules to load when that tab is activated

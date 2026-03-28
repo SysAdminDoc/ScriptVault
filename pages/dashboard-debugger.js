@@ -370,9 +370,9 @@ const ScriptDebugger = (() => {
       toggle.addEventListener('click', () => {
         _liveReload[id] = !_liveReload[id];
         if (_liveReload[id]) {
-          notifyBackground('liveReloadEnabled', id);
+          chrome.runtime.sendMessage({ action: 'liveReloadEnabled', scriptId: id });
         } else {
-          notifyBackground('liveReloadDisabled', id);
+          chrome.runtime.sendMessage({ action: 'liveReloadDisabled', scriptId: id });
         }
         render();
       });
@@ -821,6 +821,10 @@ const ScriptDebugger = (() => {
      * @param {Function} fn — receives (scriptId, lineNumber)
      */
     onJumpToLine(fn) {
+      _onJumpToLine = fn;
+    },
+
+    setOnJumpToLine(fn) {
       _onJumpToLine = fn;
     },
 

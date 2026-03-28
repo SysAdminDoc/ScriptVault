@@ -677,7 +677,9 @@ const CollectionManager = (() => {
         const scriptId = tog.dataset.toggleId;
         const isOn = tog.classList.contains('on');
         tog.classList.toggle('on', !isOn);
-        if (typeof _onToggle === 'function') _onToggle(scriptId, !isOn);
+        chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId, settings: { enabled: !isOn } }, () => {
+          _renderCollectionDetail(_selectedCollection);
+        });
       });
     });
 
@@ -1025,7 +1027,7 @@ const CollectionManager = (() => {
     a.href = url;
     a.download = `collection-${coll.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 
     showToast('Collection exported');
     return json;

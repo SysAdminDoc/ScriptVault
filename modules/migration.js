@@ -109,12 +109,13 @@ const Migration = (() => {
       }
 
       if (changed) {
-        await chrome.storage.local.set({ [`script_${id}`]: script });
+        scripts[id] = script;
         migrated++;
       }
     }
 
     if (migrated > 0) {
+      await chrome.storage.local.set({ userscripts: scripts });
       console.log(`[Migration] Migrated ${migrated} script(s)`);
     }
 
@@ -146,14 +147,8 @@ const Migration = (() => {
    * Get all scripts from storage (raw, without ScriptStorage cache)
    */
   async function getAllScripts() {
-    const all = await chrome.storage.local.get(null);
-    const scripts = {};
-    for (const [key, value] of Object.entries(all)) {
-      if (key.startsWith('script_') && value && typeof value === 'object' && value.code) {
-        scripts[key.replace('script_', '')] = value;
-      }
-    }
-    return scripts;
+    const data = await chrome.storage.local.get('userscripts');
+    return (data.userscripts && typeof data.userscripts === 'object') ? data.userscripts : {};
   }
 
   /**

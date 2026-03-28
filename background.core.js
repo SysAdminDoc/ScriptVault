@@ -153,12 +153,16 @@ function parseUserscript(code) {
         try { meta.webRequest = JSON.parse(value); } catch (e) {}
         break;
       default:
-        // Handle localized metadata like @name:ja
+        // Handle localized metadata like @name:ja or @name:zh-Hans
         if (key.includes(':')) {
-          const [baseKey, locale] = key.split(':');
-          if (!meta.localized) meta.localized = {};
-          if (!meta.localized[locale]) meta.localized[locale] = {};
-          meta.localized[locale][baseKey] = value;
+          const colonIdx = key.indexOf(':');
+          const baseKey = key.slice(0, colonIdx);
+          const locale = key.slice(colonIdx + 1);
+          if (baseKey && locale) {
+            if (!meta.localized) meta.localized = {};
+            if (!meta.localized[locale]) meta.localized[locale] = {};
+            meta.localized[locale][baseKey] = value;
+          }
         }
     }
   }
@@ -272,9 +276,9 @@ const UpdateSystem = {
       code: script.code,
       updatedAt: script.updatedAt || Date.now()
     });
-    // Trim to last 3 versions
-    if (script.versionHistory.length > 3) {
-      script.versionHistory = script.versionHistory.slice(-3);
+    // Trim to last 5 versions
+    if (script.versionHistory.length > 5) {
+      script.versionHistory = script.versionHistory.slice(-5);
     }
 
     script.code = newCode;
@@ -1048,20 +1052,41 @@ async function handleMessage(message, sender) {
         
       case 'toggleScript': {
         const scriptId = data.id || data.scriptId;
-        const script = await ScriptStorage.get(scriptId);
-        if (script) {
-          script.enabled = data.enabled;
-          script.updatedAt = Date.now();
-          await ScriptStorage.set(scriptId, script);
-          
-          // Update userScripts registration
-          await unregisterScript(scriptId);
-          if (script.enabled) {
-            await registerScript(script);
-          }
+        // Per-script chained lock to prevent rapid toggle race conditions
+        // Each toggle chains onto the previous one, ensuring serial execution
+        if (!self._toggleLocks) self._toggleLocks = new Map();
+        const prev = self._toggleLocks.get(scriptId) || Promise.resolve();
+        const togglePromise = prev.then(async () => {
+          const script = await ScriptStorage.get(scriptId);
+          if (script) {
+            script.enabled = data.enabled;
+            script.updatedAt = Date.now();
+            await ScriptStorage.set(scriptId, script);
 
-          await updateBadge();
-          await autoReloadMatchingTabs(script);
+            await unregisterScript(scriptId);
+            if (script.enabled) {
+              await registerScript(script);
+            }
+
+            await updateBadge();
+
+            try {
+              const tabs = await chrome.tabs.query({});
+              for (const tab of tabs) {
+                if (tab.url && doesScriptMatchUrl(script, tab.url)) {
+                  chrome.tabs.reload(tab.id);
+                }
+              }
+            } catch (e) {
+              debugLog('Toggle reload failed:', e.message);
+            }
+          }
+        }).catch(e => debugLog('Toggle error:', e));
+        self._toggleLocks.set(scriptId, togglePromise);
+        await togglePromise;
+        // Only delete if this is still the latest promise (not superseded by a newer toggle)
+        if (self._toggleLocks.get(scriptId) === togglePromise) {
+          self._toggleLocks.delete(scriptId);
         }
         return { success: true };
       }
@@ -1493,9 +1518,35 @@ async function handleMessage(message, sender) {
         if (!script) return { error: 'Script not found' };
 
         const oldSettings = script.settings || {};
+        const oldEnabled = script.enabled;
         script.settings = { ...oldSettings, ...data.settings };
         script.updatedAt = Date.now();
+
+        // Handle enabled change BEFORE saving (from sidepanel toggle)
+        if ('enabled' in data.settings) {
+          script.enabled = !!data.settings.enabled;
+        }
+
+        // Persist ALL changes including enabled state
         await ScriptStorage.set(data.scriptId, script);
+
+        // If enabled state changed, re-register and reload tabs
+        if ('enabled' in data.settings && script.enabled !== oldEnabled) {
+          await unregisterScript(data.scriptId);
+          if (script.enabled) {
+            await registerScript(script);
+          }
+          await updateBadge();
+          try {
+            const tabs = await chrome.tabs.query({});
+            for (const tab of tabs) {
+              if (tab.url && doesScriptMatchUrl(script, tab.url)) {
+                chrome.tabs.reload(tab.id);
+              }
+            }
+          } catch {}
+          return { success: true };
+        }
 
         // Only re-register if execution-affecting settings changed
         const EXEC_KEYS = ['runAt', 'injectInto', 'useOriginalMatches', 'useOriginalIncludes',
@@ -2394,6 +2445,7 @@ async function handleMessage(message, sender) {
         const tabId = sender.tab?.id;
         // Track notification for callbacks
         if (tabId && (data.hasOnclick || data.hasOndone)) {
+          if (!self._notifCallbacks) self._notifCallbacks = new Map();
           self._notifCallbacks.set(notifId, {
             tabId, scriptId: data.scriptId,
             hasOnclick: data.hasOnclick, hasOndone: data.hasOndone
@@ -2401,11 +2453,16 @@ async function handleMessage(message, sender) {
         }
         // Auto-close after timeout
         if (data.timeout && data.timeout > 0) {
-          setTimeout(() => {
-            chrome.notifications.clear(notifId).catch(() => {});
-            // Clean up callback tracker (onClosed listener may not fire on all platforms)
-            self._notifCallbacks.delete(notifId);
-          }, data.timeout);
+          if (data.timeout >= 30000) {
+            // Long timeouts use chrome.alarms to survive service worker shutdown
+            const alarmName = `notif_clear_${notifId}`;
+            chrome.alarms.create(alarmName, { delayInMinutes: data.timeout / 60000 });
+          } else {
+            setTimeout(() => {
+              chrome.notifications.clear(notifId).catch(() => {});
+              if (self._notifCallbacks) self._notifCallbacks.delete(notifId);
+            }, data.timeout);
+          }
         }
         return { success: true, id: notifId };
       }
@@ -2428,7 +2485,8 @@ async function handleMessage(message, sender) {
         // Track tab for onclose notification via shared listener
         const callerTabId = sender.tab?.id;
         if (callerTabId && data.trackClose) {
-          _openTabTrackers.set(tab.id, { callerTabId, scriptId: data.scriptId });
+          if (!self._openTabTrackers) self._openTabTrackers = new Map();
+          self._openTabTrackers.set(tab.id, { callerTabId, scriptId: data.scriptId });
         }
         return { success: true, tabId: tab.id };
       }
@@ -2929,20 +2987,30 @@ async function updateBadge(tabId = null) {
     return;
   }
 
-  // If no specific tab, update all tabs in parallel — fetch settings+scripts once and share
-  if (!tabId) {
+  if (tabId) {
+    // Update a specific tab
     try {
-      const [tabs, scripts] = await Promise.all([
-        chrome.tabs.query({}),
-        ScriptStorage.getAll()
-      ]);
-      await Promise.allSettled(
-        tabs.filter(t => t.id && t.url).map(t => updateBadgeForTab(t.id, t.url, settings, scripts))
-      );
+      const tab = await chrome.tabs.get(tabId);
+      if (tab && tab.url) {
+        await updateBadgeForTab(tabId, tab.url, settings);
+      }
     } catch (e) {
-      chrome.action.setBadgeText({ text: '' });
+      chrome.action.setBadgeText({ text: '', tabId });
     }
     return;
+  }
+
+  // No specific tab — update all tabs in parallel
+  try {
+    const [tabs, scripts] = await Promise.all([
+      chrome.tabs.query({}),
+      ScriptStorage.getAll()
+    ]);
+    await Promise.allSettled(
+      tabs.filter(t => t.id && t.url).map(t => updateBadgeForTab(t.id, t.url, settings, scripts))
+    );
+  } catch (e) {
+    chrome.action.setBadgeText({ text: '' });
   }
 }
 
@@ -3264,6 +3332,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     case 'scriptvault-toggle': {
       const settings = await SettingsManager.get();
       await SettingsManager.set('enabled', !settings.enabled);
+      await registerAllScripts();
       await updateBadge();
       break;
     }
@@ -3361,6 +3430,7 @@ chrome.commands.onCommand.addListener(async (command) => {
     case 'toggle_scripts': {
       const settings = await SettingsManager.get();
       await SettingsManager.set('enabled', !settings.enabled);
+      await registerAllScripts();
       await updateBadge();
       
       chrome.notifications.create({
@@ -3390,6 +3460,21 @@ function _debouncedStatsSave() {
 
 let _backgroundTaskRunning = false;
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  // Handle notification auto-close alarms
+  if (alarm.name.startsWith('notif_clear_')) {
+    const notifId = alarm.name.slice('notif_clear_'.length);
+    chrome.notifications.clear(notifId).catch(() => {});
+    if (self._notifCallbacks) self._notifCallbacks.delete(notifId);
+    return;
+  }
+
+  // Handle notification context cleanup alarms
+  if (alarm.name.startsWith('notifCtx_clean_')) {
+    const notifId = alarm.name.slice('notifCtx_clean_'.length);
+    chrome.storage.local.remove(`notifCtx_${notifId}`).catch(() => {});
+    return;
+  }
+
   // Mutual exclusion — don't run update and sync concurrently
   if (_backgroundTaskRunning) {
     debugLog('Skipping alarm', alarm.name, '- another task is running');
@@ -3475,6 +3560,40 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       self._audioWatchedTabs.delete(tabId);
     }
   }
+});
+
+// GM_openInTab onclose: fire callback when tracked tab closes
+chrome.tabs.onRemoved.addListener((tabId) => {
+  const tracker = self._openTabTrackers?.get(tabId);
+  if (tracker) {
+    chrome.tabs.sendMessage(tracker.callerTabId, {
+      action: 'tabClosed',
+      data: { closedTabId: tabId, scriptId: tracker.scriptId }
+    }).catch(() => {});
+    self._openTabTrackers.delete(tabId);
+  }
+});
+
+// GM_notification onclick/ondone: fire callbacks on notification interaction
+chrome.notifications.onClicked.addListener((notifId) => {
+  const cb = self._notifCallbacks?.get(notifId);
+  if (cb && cb.hasOnclick) {
+    chrome.tabs.sendMessage(cb.tabId, {
+      action: 'notificationEvent',
+      data: { notifId, scriptId: cb.scriptId, event: 'click' }
+    }).catch(() => {});
+  }
+});
+
+chrome.notifications.onClosed.addListener((notifId, byUser) => {
+  const cb = self._notifCallbacks?.get(notifId);
+  if (cb && cb.hasOndone) {
+    chrome.tabs.sendMessage(cb.tabId, {
+      action: 'notificationEvent',
+      data: { notifId, scriptId: cb.scriptId, event: 'done', byUser }
+    }).catch(() => {});
+  }
+  if (self._notifCallbacks) self._notifCallbacks.delete(notifId);
 });
 
 // Update badge when window focus changes
@@ -4398,10 +4517,12 @@ const _webRequestRuleMap = new Map();
 
 // Stable numeric rule ID from a string (scriptId + rule index)
 function _makeRuleId(scriptId, index) {
-  // Use a hash-like approach: sum char codes * position, mod safe range
+  // Use a hash-like approach: sum char codes * position, full 31-bit range
+  // Reserve low bits for rule index (up to 1000 rules per script)
   let h = 0;
   for (let i = 0; i < scriptId.length; i++) h = (h * 31 + scriptId.charCodeAt(i)) & 0x7fffffff;
-  return ((h % 100000) * 100 + (index % 100)) || (index + 1);
+  // Use upper 21 bits for script hash (2M buckets) + lower 10 bits for index (1024 rules)
+  return (((h & 0x1fffff) << 10) | (index & 0x3ff)) || 1;
 }
 
 // Translate GM_webRequest rule selector/action to declarativeNetRequest format
@@ -5997,8 +6118,11 @@ function isValidMatchPattern(pattern) {
 
 // Check if a pattern is a regex @include (wrapped in /regex/)
 function isRegexPattern(pattern) {
-  return pattern && pattern.startsWith('/') && pattern.length > 2 &&
-    (pattern.endsWith('/') || /\/[gimsuy]*$/.test(pattern));
+  if (!pattern || !pattern.startsWith('/') || pattern.length <= 2) return false;
+  const match = pattern.match(/^\/(.+?)\/([gimsuy]*)$/);
+  if (!match) return false;
+  // Require at least one regex metacharacter to distinguish from plain URL paths like /path/to/file/
+  return /[\\^$\[(+?{|]/.test(match[1]);
 }
 
 // Parse a regex @include pattern string into a RegExp object

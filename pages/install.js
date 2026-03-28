@@ -284,7 +284,7 @@ function renderInstallUI(sourceUrl) {
       <div class="script-header">
         <div class="script-icon-row">
           <div class="script-icon">
-            ${iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" data-icon-fallback="\uD83D\uDCDC">` : '<img src="../images/icon48.png" alt="ScriptVault">'}
+            ${iconUrl && sanitizeUrl(iconUrl) ? `<img src="${escapeHtml(sanitizeUrl(iconUrl))}" alt="" data-icon-fallback="\uD83D\uDCDC">` : '<img src="../images/icon48.png" alt="ScriptVault">'}
           </div>
           <div class="script-title-area">
             <div class="script-name">${escapeHtml(scriptMeta.name)}</div>
@@ -571,7 +571,7 @@ function renderInstallUI(sourceUrl) {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.defaultPrevented) {
+    if (e.key === 'Enter' && !e.defaultPrevented && document.activeElement === document.getElementById('btn-install')) {
       const btn = document.getElementById('btn-install');
       if (btn && !btn.disabled) btn.click();
     }
@@ -710,18 +710,11 @@ function showSuccess(name, action, scriptId) {
     </div>
   `;
 
-  const autoCloseTimer = setTimeout(() => {
-    if (history.length > 1) history.back();
-    else window.close();
-  }, 5000);
-
   document.getElementById('btnSuccessClose')?.addEventListener('click', () => {
-    clearTimeout(autoCloseTimer);
     if (history.length > 1) history.back();
     else window.close();
   });
   document.getElementById('btnOpenDashboard')?.addEventListener('click', () => {
-    clearTimeout(autoCloseTimer);
     const url = scriptId
       ? chrome.runtime.getURL(`pages/dashboard.html#script_${scriptId}`)
       : chrome.runtime.getURL('pages/dashboard.html');
@@ -774,27 +767,44 @@ function formatBytes(bytes) {
 
 // v2.0: Check @require dependency URLs
 async function checkDependencies(requires) {
-  let ok = 0, fail = 0;
+  let ok = 0, fail = 0, unverifiable = 0;
   for (const url of requires) {
     const tag = document.querySelector(`[data-dep-url="${CSS.escape(url)}"]`);
     try {
-      const resp = await fetch(url, { method: 'HEAD', mode: 'no-cors' });
-      // no-cors won't give us status, so any response = likely OK
-      if (tag) { tag.classList.add('safe'); tag.title = url + ' — OK'; }
-      ok++;
+      // Try CORS fetch first (most CDNs support it) to get real status
+      const resp = await fetch(url, { method: 'HEAD' });
+      if (resp.ok) {
+        if (tag) { tag.classList.add('safe'); tag.title = url + ' — OK (' + resp.status + ')'; }
+        ok++;
+      } else {
+        if (tag) { tag.classList.add('warning'); tag.title = url + ' — HTTP ' + resp.status; }
+        fail++;
+      }
     } catch {
-      if (tag) { tag.classList.add('warning'); tag.title = url + ' — UNREACHABLE'; }
-      fail++;
+      // CORS blocked or network error — try no-cors as fallback (can only detect total failure)
+      try {
+        await fetch(url, { method: 'HEAD', mode: 'no-cors' });
+        // Opaque response — server exists but we can't verify status
+        if (tag) { tag.style.opacity = '0.7'; tag.title = url + ' — server reachable (status unverifiable)'; }
+        unverifiable++;
+      } catch {
+        if (tag) { tag.classList.add('warning'); tag.title = url + ' — UNREACHABLE'; }
+        fail++;
+      }
     }
   }
   const statusEl = document.getElementById('dep-status');
   if (statusEl) {
-    if (fail === 0) {
+    if (fail === 0 && unverifiable === 0) {
       statusEl.textContent = 'All OK';
       statusEl.style.background = 'var(--accent)';
       statusEl.style.color = '#fff';
+    } else if (fail === 0) {
+      statusEl.textContent = `${ok} OK, ${unverifiable} unverified`;
+      statusEl.style.background = 'var(--accent)';
+      statusEl.style.color = '#fff';
     } else {
-      statusEl.textContent = `${fail} unreachable`;
+      statusEl.textContent = `${fail} failed`;
       statusEl.style.background = 'var(--warning)';
       statusEl.style.color = '#fff';
     }
@@ -803,10 +813,16 @@ async function checkDependencies(requires) {
 
 // v2.0: Save trusted author
 function saveTrustedAuthor(author) {
+  if (!author || typeof author !== 'string') return;
+  // Sanitize: limit length, strip control characters
+  const sanitized = author.trim().replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
+  if (!sanitized) return;
+
   chrome.storage.local.get('trustedAuthors', (data) => {
     const authors = data.trustedAuthors || [];
-    if (!authors.includes(author)) {
-      authors.push(author);
+    if (authors.length >= 100) return; // Limit total trusted authors
+    if (!authors.includes(sanitized)) {
+      authors.push(sanitized);
       chrome.storage.local.set({ trustedAuthors: authors });
     }
   });

@@ -338,7 +338,7 @@ tr.kn-focused td {
           const checkbox = rows[newIdx]?.querySelector('.script-checkbox, input[type="checkbox"]');
           if (checkbox && !checkbox.dataset.toggleId) {
             checkbox.checked = !checkbox.checked;
-            checkbox.dispatchEvent(new Event('click', { bubbles: true }));
+            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
           }
         }
         setFocusedIndex(newIdx);

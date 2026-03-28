@@ -456,12 +456,10 @@ const NotificationSystem = {
     const ctxKey = `notifCtx_${notifId}`;
     await chrome.storage.local.set({ [ctxKey]: context });
 
-    // Auto-clean after 5 minutes to avoid storage cruft
-    setTimeout(async () => {
-      try {
-        await chrome.storage.local.remove(ctxKey);
-      } catch (_) { /* ignore */ }
-    }, 5 * 60 * 1000);
+    // Auto-clean after 5 minutes via chrome.alarms (survives SW shutdown)
+    try {
+      chrome.alarms.create(`notifCtx_clean_${notifId}`, { delayInMinutes: 5 });
+    } catch (_) { /* alarms may not be available */ }
   },
 
   // ---------------------------------------------------------------------------

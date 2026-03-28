@@ -30,7 +30,7 @@
   }
 
   function applyTheme() {
-    document.documentElement.setAttribute('data-theme', settings.theme || 'dark');
+    document.documentElement.setAttribute('data-theme', settings.theme || settings.layout || 'dark');
   }
 
   async function refresh() {
@@ -80,16 +80,25 @@
     const meta = script.meta || {};
     const patterns = [...(meta.match || []), ...(meta.include || [])];
     if (!patterns.length) return false;
-    return patterns.some(p => matchPattern(p, url));
+    if (!patterns.some(p => matchPattern(p, url))) return false;
+    const excludes = [...(meta.exclude || []), ...(meta['exclude-match'] || [])];
+    if (excludes.length && excludes.some(p => matchPattern(p, url))) return false;
+    return true;
   }
 
   function matchPattern(pattern, url) {
+    if (pattern === '<all_urls>') return true;
+    // Guard against ReDoS: reject extremely long URLs entirely
+    if (url.length > 2048) return false;
     try {
+      let regex;
       if (pattern.startsWith('/') && pattern.endsWith('/')) {
-        return new RegExp(pattern.slice(1, -1)).test(url);
+        regex = new RegExp(pattern.slice(1, -1));
+      } else {
+        const re = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+        regex = new RegExp('^' + re + '$');
       }
-      const re = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
-      return new RegExp('^' + re + '$').test(url);
+      return regex.test(url);
     } catch { return false; }
   }
 

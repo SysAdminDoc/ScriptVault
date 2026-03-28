@@ -827,13 +827,16 @@ const CSPReporter = (() => {
     }
   }
 
+  // Track hostname → ruleId mapping to avoid hash collisions
+  const _hostnameRuleIds = new Map();
+  let _nextRuleId = 900000; // Start in a high range to avoid conflicts with DNR rules
+
   function hashCode(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = ((hash << 5) - hash) + str.charCodeAt(i);
-      hash = hash & 0x7FFFFFFF; // Keep positive, within rule ID limits
-    }
-    return hash || 1; // Must be positive non-zero
+    // Return a stable, unique rule ID per hostname
+    if (_hostnameRuleIds.has(str)) return _hostnameRuleIds.get(str);
+    const id = _nextRuleId++;
+    _hostnameRuleIds.set(str, id);
+    return id;
   }
 
   /* ------------------------------------------------------------------ */
@@ -887,7 +890,7 @@ const CSPReporter = (() => {
     a.href = url;
     a.download = `csp-report-${new Date().toISOString().slice(0, 10)}.${ext}`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     showToast(`Exported as ${ext.toUpperCase()}`);
   }
 

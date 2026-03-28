@@ -1008,7 +1008,7 @@ const TemplateManager = (() => {
             card.onclick = () => showCreateFromTemplate(tpl);
 
             card.innerHTML = `
-                <div class="tm-card-icon">${tpl.icon || '&#128196;'}</div>
+                <div class="tm-card-icon">${escHtml(tpl.icon || '\u{1F4C4}')}</div>
                 <div class="tm-card-name">${escHtml(tpl.name)}</div>
                 <div class="tm-card-desc">${escHtml(tpl.description || '')}</div>
             `;
@@ -1437,7 +1437,7 @@ const TemplateManager = (() => {
                 a.href = URL.createObjectURL(blob);
                 a.download = `${tpl.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.template.json`;
                 a.click();
-                URL.revokeObjectURL(a.href);
+                setTimeout(() => URL.revokeObjectURL(a.href), 1000);
                 toast('Template downloaded', 'success');
             };
             footer.appendChild(downloadBtn);

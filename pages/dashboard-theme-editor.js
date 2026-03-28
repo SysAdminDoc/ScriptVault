@@ -1271,7 +1271,7 @@ const ThemeEditor = (() => {
       a.href = url;
       a.download = 'scriptvault-theme.json';
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast('Theme exported as file');
     });
   }
