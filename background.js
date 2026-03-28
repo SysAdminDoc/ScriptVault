@@ -8595,7 +8595,8 @@ const PublicAPI = (() => {
   async function getScripts() {
     try {
       const result = await chrome.storage.local.get('userscripts');
-      return result.userscripts || [];
+      const data = result.userscripts || {};
+      return Array.isArray(data) ? data : Object.values(data);
     } catch {
       return [];
     }
@@ -8603,7 +8604,7 @@ const PublicAPI = (() => {
 
   async function getScriptById(scriptId) {
     const scripts = await getScripts();
-    return scripts.find(s => s.id === scriptId || s.name === scriptId) || null;
+    return scripts.find(s => s.id === scriptId || (s.meta?.name || s.name) === scriptId) || null;
   }
 
   async function getExtensionVersion() {
