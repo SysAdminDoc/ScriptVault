@@ -228,7 +228,7 @@ All 4 bg/ modules migrated:
 ## Known Remaining Issues (lower priority)
 - Stats mutations (reportExecTime/reportExecError) theoretically race-able if a handler constructs a new stats object (safe in practice due to reference semantics)
 - `dashboard-gist.js` encryption uses hardcoded key derivation (security theater — chrome.storage.local is already sandboxed)
-- Canvas `roundRect` not polyfilled for browsers < Chrome 112
+- Canvas `roundRect` used natively (safe: minimum_chrome_version is 120)
 - `BackupScheduler` stores full ZIP blobs in chrome.storage.local (inefficient for large collections)
 - `setTimeout` used in MV3 service worker for sync debounce (5s, acceptable given 30s worker lifetime)
 - `dashboard-pattern-builder.js` regex construction is fragile for edge-case patterns
@@ -398,5 +398,17 @@ All 4 bg/ modules migrated:
 - `_setClickContext` replaced 5-minute `setTimeout` with `chrome.alarms` (survives SW shutdown)
 - Added `notifCtx_clean_*` alarm handler in background.core.js
 
+**Popup improvements:**
+- Per-script menu commands in dropdown (fetches from chrome.storage.session, executes via tab message)
+- Blacklist domain toggle — shows "Remove from blacklist" if domain already blacklisted, one-click remove
+- Last-updated relative time in script tooltip (timeAgo helper)
+
+**Performance & data safety:**
+- `NetworkLog.add()`: O(1) push instead of O(N) unshift, reversed on read
+- `FolderStorage.addScript/removeScript`: cache rollback on persist failure
+
+**Misc:**
+- `content.js`: bridgeReady postMessage uses `'*'` consistently (was `'/'` which fails on opaque origins)
+
 **Version sync:** manifest.json, manifest-firefox.json, package.json all at 2.0.2
-- background.js: 16,152 lines
+- background.js: 16,164 lines

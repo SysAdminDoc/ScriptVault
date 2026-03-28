@@ -826,6 +826,28 @@
             chrome.tabs.create({ url: 'https://github.com/SysAdminDoc/ScriptVault/issues' });
             window.close();
         });
+
+        // Keyboard navigation for script list
+        document.addEventListener('keydown', (e) => {
+            const items = [...document.querySelectorAll('.script-item')];
+            if (!items.length) return;
+            const focused = document.activeElement?.closest('.script-item');
+            const idx = focused ? items.indexOf(focused) : -1;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const next = items[idx + 1] || items[0];
+                next.querySelector('input[type="checkbox"]')?.focus();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prev = items[idx - 1] || items[items.length - 1];
+                prev.querySelector('input[type="checkbox"]')?.focus();
+            } else if (e.key === 'Enter' && focused) {
+                e.preventDefault();
+                const sid = focused.dataset.scriptId;
+                if (sid) openDashboard(sid);
+            }
+        });
     }
 
     // Start
