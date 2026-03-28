@@ -200,11 +200,12 @@
       (!enabled ? ' not-running' : '');
     item.dataset.scriptId = script.id;
 
-    // Icon
-    if (meta.icon) {
+    // Icon (validate URL to prevent XSS via javascript: URIs)
+    const safeIcon = meta.icon && typeof sanitizeUrl === 'function' ? sanitizeUrl(meta.icon) : meta.icon;
+    if (safeIcon) {
       const img = document.createElement('img');
       img.className = 'sp-item-icon';
-      img.src = meta.icon;
+      img.src = safeIcon;
       img.alt = '';
       img.addEventListener('error', () => { img.style.display = 'none'; });
       item.appendChild(img);
