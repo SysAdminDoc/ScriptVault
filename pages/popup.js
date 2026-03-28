@@ -501,7 +501,7 @@
         const meta = script.metadata || script.meta || {};
         const iconUrl = meta.icon || meta.iconURL;
 
-        if (iconUrl) {
+        if (iconUrl && sanitizeUrl(iconUrl)) {
             return `<img src="${escapeHtml(iconUrl)}" data-favicon-fallback="📜">`;
         }
 
@@ -849,6 +849,14 @@
             }
         });
     }
+
+    // Keyboard support for role="button" elements (Enter/Space activates click)
+    document.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.getAttribute('role') === 'button') {
+            e.preventDefault();
+            e.target.click();
+        }
+    });
 
     // Start
     document.addEventListener('DOMContentLoaded', init);

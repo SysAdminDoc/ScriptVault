@@ -389,8 +389,16 @@ const ActivityHeatmap = (() => {
 
     _tooltip.innerHTML = html;
     _tooltip.style.display = 'block';
-    _tooltip.style.left = (clientX + 12) + 'px';
-    _tooltip.style.top = (clientY - 10) + 'px';
+    // Clamp to viewport bounds
+    let tx = clientX + 12;
+    let ty = clientY - 10;
+    const tw = _tooltip.offsetWidth || 180;
+    const th = _tooltip.offsetHeight || 100;
+    if (tx + tw > window.innerWidth) tx = clientX - tw - 8;
+    if (ty + th > window.innerHeight) ty = window.innerHeight - th - 4;
+    if (ty < 0) ty = 4;
+    _tooltip.style.left = tx + 'px';
+    _tooltip.style.top = ty + 'px';
   }
 
   function _hideTooltip() {
@@ -528,9 +536,8 @@ const ActivityHeatmap = (() => {
 
     _canvas.addEventListener('mousemove', (e) => {
       const rect = _canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      const mx = (e.clientX - rect.left);
-      const my = (e.clientY - rect.top);
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
       const cell = _findCellAtPos(mx, my);
       if (cell) {
         _showTooltip(cell, e.clientX, e.clientY);
