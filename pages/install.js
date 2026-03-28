@@ -517,7 +517,7 @@ function renderInstallUI(sourceUrl) {
     <div class="code-preview">
       <div class="code-preview-header">
         <span class="code-preview-title">Script Code <span style="color:var(--text-muted);font-weight:400;font-size:12px">(${lineCount.toLocaleString()} lines)</span></span>
-        <button class="code-preview-toggle" id="toggle-code">
+        <button class="code-preview-toggle" id="toggle-code" aria-expanded="false" aria-controls="code-container">
           <span id="toggle-icon">\u25BC</span>
           <span id="toggle-text">Show code</span>
         </button>
@@ -571,7 +571,10 @@ function renderInstallUI(sourceUrl) {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.defaultPrevented && document.activeElement === document.getElementById('btn-install')) {
+    if (e.key === 'Enter' && !e.defaultPrevented) {
+      const active = document.activeElement;
+      // Don't trigger on textarea, code editor, or toggle inputs
+      if (active?.tagName === 'TEXTAREA' || active?.closest('.CodeMirror') || active?.type === 'checkbox') return;
       const btn = document.getElementById('btn-install');
       if (btn && !btn.disabled) btn.click();
     }
@@ -603,10 +606,12 @@ function toggleCodePreview() {
   const container = document.getElementById('code-container');
   const icon = document.getElementById('toggle-icon');
   const text = document.getElementById('toggle-text');
+  const toggle = document.getElementById('toggle-code');
 
   container.classList.toggle('expanded');
+  const expanded = container.classList.contains('expanded');
 
-  if (container.classList.contains('expanded')) {
+  if (expanded) {
     icon.textContent = '\u25B2';
     text.textContent = 'Hide code';
     codeEditor?.refresh();
@@ -614,6 +619,7 @@ function toggleCodePreview() {
     icon.textContent = '\u25BC';
     text.textContent = 'Show code';
   }
+  if (toggle) toggle.setAttribute('aria-expanded', String(expanded));
 }
 
 function handleCancel() {

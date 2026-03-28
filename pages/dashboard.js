@@ -3122,7 +3122,15 @@
                 'Esc': closeEditor,
                 'Tab': cm => cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection(indentStr, 'end'),
                 'Ctrl-Space': 'autocomplete',
-                'Ctrl-/': () => document.getElementById('tbtnComment')?.click()
+                'Ctrl-/': () => document.getElementById('tbtnComment')?.click(),
+                'Ctrl-G': (cm) => {
+                    const line = prompt('Go to line:');
+                    if (line && !isNaN(line)) {
+                        const ln = Math.max(1, Math.min(parseInt(line), cm.lineCount()));
+                        cm.setCursor(ln - 1, 0);
+                        cm.scrollIntoView(null, cm.getScrollerElement().offsetHeight / 2);
+                    }
+                }
             }
         });
 
@@ -5126,6 +5134,7 @@
             { category: 'Actions', label: 'Export All (JSON)', desc: 'Export all scripts as JSON', action: () => { closeCommandPalette(); exportAllScripts(); } },
             { category: 'Actions', label: 'Export Stats CSV', desc: 'Export execution statistics', action: () => { closeCommandPalette(); exportStatsCSV(); } },
             { category: 'Actions', label: 'Find Scripts', desc: 'Search GreasyFork/OpenUserJS', action: () => { closeCommandPalette(); openFindScripts(); } },
+            { category: 'Editor', label: 'Go to Line (Ctrl+G)', desc: 'Jump to a specific line number', action: () => { closeCommandPalette(); if (state.editor) { const ln = prompt('Go to line:'); if (ln && !isNaN(ln)) { state.editor.setCursor(parseInt(ln) - 1, 0); } } } },
             // Navigation
             { category: 'Navigation', label: 'Scripts Tab', desc: 'Go to installed scripts', action: () => { closeCommandPalette(); switchTab('scripts'); } },
             { category: 'Navigation', label: 'Settings Tab', desc: 'Open settings', action: () => { closeCommandPalette(); switchTab('settings'); } },
