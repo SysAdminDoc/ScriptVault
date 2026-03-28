@@ -5,21 +5,49 @@
 const QuotaManager = (() => {
   'use strict';
 
-  const QUOTA_LIMIT = 10 * 1024 * 1024; // 10MB Chrome limit for storage.local
+  const QUOTA_FALLBACK = 10 * 1024 * 1024; // 10MB without unlimitedStorage
+  const QUOTA_UNLIMITED = 500 * 1024 * 1024; // 500MB with unlimitedStorage
   const WARNING_THRESHOLD = 0.85; // Warn at 85%
   const CRITICAL_THRESHOLD = 0.95; // Critical at 95%
+
+  /** Resolve the effective quota once and cache it. */
+  let _resolvedQuota = null;
+  async function _getQuotaLimit() {
+    if (_resolvedQuota !== null) return _resolvedQuota;
+    // Prefer navigator.storage.estimate() for the real quota
+    if (typeof navigator !== 'undefined' && navigator.storage?.estimate) {
+      try {
+        const est = await navigator.storage.estimate();
+        if (est.quota) {
+          _resolvedQuota = est.quota;
+          return _resolvedQuota;
+        }
+      } catch (_) { /* fall through */ }
+    }
+    // Check if unlimitedStorage permission is granted
+    try {
+      const perms = await chrome.permissions.getAll();
+      if (perms.permissions?.includes('unlimitedStorage')) {
+        _resolvedQuota = QUOTA_UNLIMITED;
+        return _resolvedQuota;
+      }
+    } catch (_) { /* fall through */ }
+    _resolvedQuota = QUOTA_FALLBACK;
+    return _resolvedQuota;
+  }
 
   /**
    * Get current storage usage.
    * @returns {{ bytesUsed: number, quota: number, percentage: number, level: string }}
    */
   async function getUsage() {
+    const quotaLimit = await _getQuotaLimit();
     const bytesUsed = await chrome.storage.local.getBytesInUse(null);
-    const percentage = bytesUsed / QUOTA_LIMIT;
+    const percentage = bytesUsed / quotaLimit;
     const level = percentage >= CRITICAL_THRESHOLD ? 'critical'
       : percentage >= WARNING_THRESHOLD ? 'warning'
       : 'ok';
-    return { bytesUsed, quota: QUOTA_LIMIT, percentage, level };
+    return { bytesUsed, quota: quotaLimit, percentage, level };
   }
 
   /**

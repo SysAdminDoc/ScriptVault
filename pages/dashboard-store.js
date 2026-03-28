@@ -556,8 +556,8 @@ const ScriptStore = (() => {
         }
     };
 
-    // Active sources (all enabled by default)
-    let _activeSources = new Set(['greasyfork', 'openuserjs', 'github']);
+    // Active sources (GitHub disabled by default — requires auth token for Code Search API)
+    let _activeSources = new Set(['greasyfork', 'openuserjs']);
 
     /**
      * Unified search across all active sources.
@@ -710,7 +710,8 @@ const ScriptStore = (() => {
             html += `<button class="ss-btn small" data-action="page" data-page="${page - 1}">Previous</button>`;
         }
         html += `<span class="ss-pagination-info">Page ${page}</span>`;
-        if (scripts.length >= 25) {
+        // Show "Next" only when we got a full page of results (at least 10 from any source)
+        if (scripts.length >= 10) {
             html += `<button class="ss-btn small" data-action="page" data-page="${page + 1}">Next</button>`;
         }
         html += '</div>';
@@ -927,7 +928,7 @@ const ScriptStore = (() => {
     </div>
     <div class="ss-footer">
         <span class="ss-footer-text">Ready</span>
-        <span>Greasy Fork &bull; OpenUserJS &bull; GitHub</span>
+        <span>Greasy Fork &bull; OpenUserJS</span>
     </div>
 </div>`;
     }

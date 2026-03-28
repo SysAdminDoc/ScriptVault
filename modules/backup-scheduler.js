@@ -368,32 +368,66 @@ const BackupScheduler = (() => {
 
         // --- Restore scripts ---
         const userScripts = fileNames.filter(n => n.endsWith('.user.js'));
-        for (const filename of userScripts) {
-          const code = fflate.strFromU8(unzipped[filename]);
-          const baseName = filename.replace(/\.user\.js$/, '');
 
-          // Parse metadata to get script identity
-          let optionsMeta = {};
-          const optionsFile = `${baseName}.options.json`;
-          if (unzipped[optionsFile]) {
-            try { optionsMeta = JSON.parse(fflate.strFromU8(unzipped[optionsFile])); } catch (_) {}
-          }
+        if (options.selective && Array.isArray(options.scriptIds)) {
+          // Selective restore: import matching scripts individually
+          for (const filename of userScripts) {
+            const code = fflate.strFromU8(unzipped[filename]);
+            const baseName = filename.replace(/\.user\.js$/, '');
 
-          // Selective filtering: match by name
-          if (options.selective && Array.isArray(options.scriptIds)) {
+            // Parse metadata to get script identity
+            let optionsMeta = {};
+            const optionsFile = `${baseName}.options.json`;
+            if (unzipped[optionsFile]) {
+              try { optionsMeta = JSON.parse(fflate.strFromU8(unzipped[optionsFile])); } catch (_) {}
+            }
+
             const scriptName = optionsMeta.meta?.name || baseName.replace(/^scripts\//, '');
             if (!options.scriptIds.includes(scriptName)) continue;
-          }
 
-          // Use the existing importFromZip pipeline for each script
+            try {
+              const meta = optionsMeta.meta || {};
+              const settings = optionsMeta.settings || {};
+
+              // Find existing script or generate new ID
+              const allScripts = await ScriptStorage.getAll();
+              const existing = allScripts.find(s => s.meta?.name === meta.name && s.meta?.namespace === meta.namespace);
+              const scriptId = existing ? existing.id : generateId();
+
+              await ScriptStorage.set(scriptId, {
+                id: scriptId,
+                code,
+                meta,
+                enabled: settings.enabled !== false,
+                settings: settings,
+                position: existing ? existing.position : allScripts.length,
+                createdAt: existing ? existing.createdAt : Date.now(),
+                updatedAt: Date.now()
+              });
+              restoredScripts++;
+
+              // Restore script values if present
+              const storageFile = `${baseName}.storage.json`;
+              if (unzipped[storageFile]) {
+                try {
+                  const storageData = JSON.parse(fflate.strFromU8(unzipped[storageFile]));
+                  if (storageData.data) {
+                    await ScriptValues.setAll(scriptId, storageData.data);
+                  }
+                } catch (_) {}
+              }
+            } catch (importErr) {
+              console.warn('[BackupScheduler] Script import error:', filename, importErr);
+            }
+          }
+        } else {
+          // Full restore: use importFromZip for all scripts at once
           try {
             await importFromZip(backup.data, { overwrite: true });
             restoredScripts = userScripts.length;
-            break; // importFromZip handles all scripts at once
           } catch (importErr) {
-            console.warn('[BackupScheduler] Script import error:', importErr);
+            console.warn('[BackupScheduler] Full import error:', importErr);
           }
-          break; // only call once
         }
 
         // --- Restore global settings (full restore only) ---

@@ -39,7 +39,8 @@
   }
 
   function startAutoRefresh() {
-    setInterval(refreshAll, 3000);
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(refreshAll, 3000);
   }
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
@@ -239,7 +240,7 @@
     a.href = url;
     a.download = 'scriptvault-network.har';
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

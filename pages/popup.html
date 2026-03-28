@@ -387,12 +387,27 @@
         }
 
         /* Focus styles for keyboard navigation */
+        :focus-visible {
+            outline: 2px solid var(--popup-accent);
+            outline-offset: 1px;
+        }
         .header:focus-visible,
         .menu-item:focus-visible,
         .footer:focus-visible {
             outline: 2px solid var(--popup-accent);
             outline-offset: -2px;
         }
+        .script-toggle:focus-visible,
+        .script-more:focus-visible,
+        .script-quick-edit:focus-visible,
+        .script-dropdown-item:focus-visible {
+            outline: 2px solid var(--popup-accent);
+            outline-offset: 1px;
+            border-radius: 4px;
+        }
+
+        /* Firefox scrollbar */
+        * { scrollbar-width: thin; scrollbar-color: var(--popup-scrollbar) transparent; }
 
         /* Scrollbar */
         ::-webkit-scrollbar {
@@ -716,7 +731,7 @@
         </div>
 
         <!-- Utilities submenu -->
-        <div class="menu-item" id="btnUtilities">
+        <div class="menu-item" id="btnUtilities" role="button" tabindex="0">
             <div class="menu-item-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
@@ -731,16 +746,16 @@
         </div>
 
         <div class="submenu" id="utilitiesSubmenu">
-            <div class="menu-item" id="btnCheckUpdates">
+            <div class="menu-item" id="btnCheckUpdates" role="button" tabindex="0">
                 <span class="menu-item-text">Update Userscripts</span>
             </div>
-            <div class="menu-item" id="btnBlacklistDomain">
+            <div class="menu-item" id="btnBlacklistDomain" role="button" tabindex="0">
                 <span class="menu-item-text">Do not run on this domain</span>
             </div>
-            <div class="menu-item" id="btnExportZip">
+            <div class="menu-item" id="btnExportZip" role="button" tabindex="0">
                 <span class="menu-item-text">Export to ZIP...</span>
             </div>
-            <div class="menu-item" id="btnImport">
+            <div class="menu-item" id="btnImport" role="button" tabindex="0">
                 <span class="menu-item-text">Import from file...</span>
             </div>
         </div>

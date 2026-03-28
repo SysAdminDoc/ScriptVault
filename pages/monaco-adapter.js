@@ -72,7 +72,11 @@
 
   function sendToFrame(msg) {
     if (_useFallback || !frame?.contentWindow) return;
-    frame.contentWindow.postMessage(msg, new URL(frame.src).origin || '*');
+    try {
+      frame.contentWindow.postMessage(msg, new URL(frame.src, location.href).origin || '*');
+    } catch {
+      frame.contentWindow.postMessage(msg, '*');
+    }
   }
 
   function whenReady(fn) {
