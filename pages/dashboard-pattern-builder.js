@@ -147,11 +147,12 @@ const PatternBuilder = (() => {
   /** Test a URL against a @match-style pattern (simplified) */
   function matchUrl(url, pattern) {
     try {
+      if (pattern.length > 500) return false; // ReDoS guard
       // Convert @match pattern to a regex
       let re = pattern
         .replace(/[.+?^${}()|[\]\\]/g, '\\$&')   // escape regex chars EXCEPT *
-        .replace(/\\\*/g, '.*');                    // un-escape our wildcards
-      re = '^' + re.replace(/\.\*:\/\//, '(https?|\\*?):\\/\\/') + '$';
+        .replace(/\\\*/g, '[^]*?');                 // non-greedy bounded wildcard
+      re = '^' + re.replace(/\[\^]\*\?:\/\//, '(https?|\\*?):\\/\\/') + '$';
       // Fix the protocol wildcard we just clobbered
       if (pattern.startsWith('*://')) {
         re = '^(https?|\\*):\\/\\/' + re.slice('^(https?|\\*?):\\/\\/'.length);

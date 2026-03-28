@@ -77,16 +77,12 @@ const GistIntegration = (() => {
     // Token storage
     // =========================================
     async function loadToken() {
-        return new Promise(resolve => {
-            chrome.storage.local.get([STORAGE_KEY_TOKEN, STORAGE_KEY_AUTOSYNC], async (data) => {
-                if (data[STORAGE_KEY_TOKEN]) {
-                    _state.token = await decryptToken(data[STORAGE_KEY_TOKEN]);
-                    _state.tokenVerified = !!_state.token;
-                }
-                _state.autoSync = !!data[STORAGE_KEY_AUTOSYNC];
-                resolve();
-            });
-        });
+        const data = await chrome.storage.local.get([STORAGE_KEY_TOKEN, STORAGE_KEY_AUTOSYNC]);
+        if (data[STORAGE_KEY_TOKEN]) {
+            _state.token = await decryptToken(data[STORAGE_KEY_TOKEN]);
+            _state.tokenVerified = !!_state.token;
+        }
+        _state.autoSync = !!data[STORAGE_KEY_AUTOSYNC];
     }
 
     async function saveToken(token) {
