@@ -171,5 +171,5 @@
     channel: CHANNEL_ID,
     direction: 'to-userscript',
     type: 'bridgeReady'
-  }, '/');
+  }, '*');
 })();

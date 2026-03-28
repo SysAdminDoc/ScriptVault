@@ -297,8 +297,10 @@
             // Error dot
             const errorDot = stats?.errors > 0 ? `<span class="script-error-dot" title="${stats.errors} error(s)"></span>` : '';
 
-            // Description tooltip
-            const descAttr = description ? ` title="${escapeHtml(description)}"` : '';
+            // Description + last updated tooltip
+            const updatedAgo = script.updatedAt ? timeAgo(script.updatedAt) : '';
+            const tooltipParts = [description, updatedAgo ? `Updated ${updatedAgo}` : ''].filter(Boolean).join('\n');
+            const descAttr = tooltipParts ? ` title="${escapeHtml(tooltipParts)}"` : '';
 
             // Stagger animation delay
             const animDelay = `style="animation-delay: ${i * 30}ms"`;
@@ -378,6 +380,7 @@
                     return;
                 }
                 activeDropdownScriptId = scriptId;
+                populateMenuCommands(scriptId);
                 const rect = moreBtn.getBoundingClientRect();
                 dropdown.style.top = rect.bottom + 2 + 'px';
                 dropdown.style.right = (document.documentElement.clientWidth - rect.right) + 'px';
@@ -462,6 +465,35 @@
                 }
             });
         }
+    }
+
+    // Populate per-script menu commands in the dropdown
+    async function populateMenuCommands(scriptId) {
+        const container = document.getElementById('dropdownMenuCmds');
+        if (!container) return;
+        container.innerHTML = '';
+        try {
+            const data = await chrome.storage.session.get('menuCommands');
+            const cmds = data?.menuCommands?.[scriptId] || [];
+            for (const cmd of cmds) {
+                const el = document.createElement('div');
+                el.className = 'script-dropdown-cmd';
+                el.textContent = cmd.caption || cmd.name || 'Command';
+                el.setAttribute('role', 'button');
+                el.setAttribute('tabindex', '0');
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.getElementById('scriptDropdown')?.classList.remove('open');
+                    if (currentTab?.id) {
+                        chrome.tabs.sendMessage(currentTab.id, {
+                            action: 'executeMenuCommand',
+                            data: { scriptId, commandId: cmd.id }
+                        }).catch(() => {});
+                    }
+                });
+                container.appendChild(el);
+            }
+        } catch {}
     }
 
     // Get favicon icon HTML for script (matches dashboard style)
@@ -689,6 +721,16 @@
         }
     }
 
+    // Relative time helper
+    function timeAgo(ts) {
+        const diff = Date.now() - ts;
+        if (diff < 60000) return 'just now';
+        if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+        if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+        if (diff < 2592000000) return `${Math.floor(diff / 86400000)}d ago`;
+        return new Date(ts).toLocaleDateString();
+    }
+
     // Toast notification
     function showPopupToast(msg, type = 'success') {
         let toast = document.querySelector('.popup-toast');
@@ -717,15 +759,20 @@
         elements.btnNewScript?.addEventListener('click', createNewScript);
 
         // Utilities submenu toggle
-        elements.btnUtilities?.addEventListener('click', () => {
+        elements.btnUtilities?.addEventListener('click', async () => {
             elements.utilitiesSubmenu?.classList.toggle('open');
-            // Update blacklist item with current domain
+            // Update blacklist item with current domain (show toggle state)
             if (elements.btnBlacklistDomain && currentUrl) {
                 try {
                     const domain = new URL(currentUrl).hostname;
                     if (domain) {
                         const menuText = elements.btnBlacklistDomain.querySelector('.menu-item-text');
-                        if (menuText) menuText.textContent = `Do not run on ${domain}`;
+                        if (menuText) {
+                            const res = await chrome.runtime.sendMessage({ action: 'getSettings' });
+                            const bl = (res?.settings || res || {}).blacklist || [];
+                            const isBlacklisted = bl.some(p => p === `*://${domain}/*` || p === `*://*.${domain}/*`);
+                            menuText.textContent = isBlacklisted ? `Remove ${domain} from blacklist` : `Do not run on ${domain}`;
+                        }
                     }
                 } catch (e) {}
             }
@@ -736,7 +783,7 @@
         elements.btnImport?.addEventListener('click', importFromFile);
         elements.btnCheckUpdates?.addEventListener('click', checkForUpdates);
 
-        // Blacklist domain
+        // Blacklist domain (toggle)
         elements.btnBlacklistDomain?.addEventListener('click', async () => {
             if (!currentUrl) return;
             try {
@@ -745,13 +792,20 @@
                 const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
                 const freshSettings = response?.settings || response || {};
                 const blacklist = freshSettings.blacklist || [];
-                if (blacklist.some(p => p === pattern || p === `*://*.${domain}/*` || p === `*://${domain}/*`)) {
-                    showPopupToast(`${domain} is already blacklisted`);
+                const existingIdx = blacklist.findIndex(p => p === pattern || p === `*://*.${domain}/*`);
+                if (existingIdx !== -1) {
+                    blacklist.splice(existingIdx, 1);
+                    await chrome.runtime.sendMessage({ action: 'setSettings', settings: { blacklist } });
+                    showPopupToast(`${domain} removed from blacklist`);
+                    const menuText = elements.btnBlacklistDomain.querySelector('.menu-item-text');
+                    if (menuText) menuText.textContent = `Do not run on ${domain}`;
                     return;
                 }
                 blacklist.push(pattern);
                 await chrome.runtime.sendMessage({ action: 'setSettings', settings: { blacklist } });
                 showPopupToast(`${domain} blacklisted`);
+                const menuText = elements.btnBlacklistDomain.querySelector('.menu-item-text');
+                if (menuText) menuText.textContent = `Remove ${domain} from blacklist`;
             } catch (e) {
                 console.error('Failed to blacklist:', e);
             }
