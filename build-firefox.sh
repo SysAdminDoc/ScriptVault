@@ -11,8 +11,11 @@ ZIP_NAME="ScriptVault-firefox-v${VERSION}.zip"
 
 echo "Building ScriptVault for Firefox v$VERSION..."
 
-# Build background.js first if source modules exist
-if [ -f "$SCRIPT_DIR/build-background.sh" ]; then
+# Build background.js using the same esbuild pipeline as Chrome
+if [ -f "$SCRIPT_DIR/esbuild.config.mjs" ]; then
+  echo "Building background.js via esbuild..."
+  node "$SCRIPT_DIR/esbuild.config.mjs" --bg-only
+elif [ -f "$SCRIPT_DIR/build-background.sh" ]; then
   echo "Building background.js from source modules..."
   bash "$SCRIPT_DIR/build-background.sh"
 fi
