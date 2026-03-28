@@ -226,6 +226,9 @@
     function updateEnabledState() {
         const enabled = settings.enabled !== false;
 
+        if (elements.headerToggle) {
+            elements.headerToggle.setAttribute('aria-pressed', String(enabled));
+        }
         if (elements.headerCheckIcon) {
             elements.headerCheckIcon.classList.toggle('disabled', !enabled);
         }
