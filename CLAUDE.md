@@ -14,7 +14,7 @@ v2.0.2
 - `chrome.storage.local` for persistence (`unlimitedStorage` permission)
 - **Monaco Editor** (v0.52.2, bundled locally in `lib/monaco/`, CDN fallback in sandboxed iframe)
 - Cloud sync: WebDAV, Google Drive (PKCE), Dropbox (PKCE), OneDrive (PKCE), Easy Cloud (chrome.identity)
-- Vitest test suite (10 test files, 323 test cases)
+- Vitest test suite (12 test files, 342 test cases)
 - background.js: ~16,193 lines (built from 19+ source modules)
 - 37 TypeScript source files in `src/` (type-checked via `npm run typecheck`)
 
@@ -152,6 +152,8 @@ All 4 bg/ modules migrated:
 - `tests/storage.test.js` — 21 tests for SettingsManager, ScriptStorage, FolderStorage (rollback, init idempotency, bulk set)
 - `tests/error-log.test.js` — 11 tests for ErrorLog (FIFO cap, filters, grouping, JSON/text export)
 - `tests/public-api.test.js` — 16 tests for PublicAPI (ping, permissions, rate limiting, webhooks, trusted origins, audit)
+- `tests/signing.test.js` — 8 tests for ScriptSigning (trust store, extraction, verify guards)
+- `tests/workspaces.test.js` — 11 tests for WorkspaceManager (create, activate, snapshot, delete)
 - `tests/netlog.test.js` — 31 tests for network log
 - `tests/core-flows.test.js` — 20 tests for install/toggle/update/rollback/save flows
 - `tests/url-matcher.test.js` — 77 tests for URL matching (match patterns, includes, excludes, regex, globs, IDN)
