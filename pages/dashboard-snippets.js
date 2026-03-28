@@ -1203,13 +1203,14 @@ $CURSOR$`
         // Search
         const searchInput = panel.querySelector('.snip-search');
         searchInput?.addEventListener('input', (e) => {
+            const cursorPos = e.target.selectionStart;
             _state.searchQuery = e.target.value;
             render();
-            // Re-focus search and restore cursor
+            // Re-focus search and restore cursor position
             const newInput = _state.container.querySelector('.snip-search');
             if (newInput) {
                 newInput.focus();
-                newInput.setSelectionRange(newInput.value.length, newInput.value.length);
+                newInput.setSelectionRange(cursorPos, cursorPos);
             }
         });
 

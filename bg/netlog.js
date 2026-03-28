@@ -55,7 +55,8 @@ const NetworkLog = {
       const sid = entry.scriptId || 'unknown';
       if (!byScript[sid]) byScript[sid] = { count: 0, errors: 0, bytes: 0, scriptName: entry.scriptName || sid };
       byScript[sid].count++;
-      if (entry.error) byScript[sid].errors++;
+      const isError = !!(entry.error || (entry.status && entry.status >= 400));
+      if (isError) byScript[sid].errors++;
       byScript[sid].bytes += entry.responseSize || 0;
 
       // By domain
@@ -63,7 +64,7 @@ const NetworkLog = {
         const domain = new URL(entry.url).hostname;
         if (!byDomain[domain]) byDomain[domain] = { count: 0, errors: 0, bytes: 0 };
         byDomain[domain].count++;
-        if (entry.error) byDomain[domain].errors++;
+        if (isError) byDomain[domain].errors++;
         byDomain[domain].bytes += entry.responseSize || 0;
       } catch {}
     }

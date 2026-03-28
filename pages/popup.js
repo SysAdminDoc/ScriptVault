@@ -206,15 +206,18 @@
             const emptyState = document.getElementById('emptyState');
             if (emptyState) {
                 emptyState.style.display = 'block';
-                emptyState.innerHTML = `
-                    <div style="font-size:24px;margin-bottom:8px;opacity:0.6">&#x26A0;</div>
-                    <div style="font-size:13px;font-weight:500;color:var(--popup-text);margin-bottom:4px">
-                        ${error.message === 'timeout' ? 'ScriptVault is loading...' : 'Connection error'}
-                    </div>
-                    <div style="font-size:12px;color:var(--popup-text-muted)">
-                        ${error.message === 'timeout' ? 'The background service is still starting up. Try again in a moment.' : 'Could not connect to ScriptVault background service.'}
-                    </div>
-                `;
+                const isTimeout = error.message === 'timeout';
+                emptyState.textContent = '';
+                const icon = document.createElement('div');
+                icon.style.cssText = 'font-size:24px;margin-bottom:8px;opacity:0.6';
+                icon.textContent = '\u26A0';
+                const title = document.createElement('div');
+                title.style.cssText = 'font-size:13px;font-weight:500;color:var(--popup-text);margin-bottom:4px';
+                title.textContent = isTimeout ? 'ScriptVault is loading...' : 'Connection error';
+                const desc = document.createElement('div');
+                desc.style.cssText = 'font-size:12px;color:var(--popup-text-muted)';
+                desc.textContent = isTimeout ? 'The background service is still starting up. Try again in a moment.' : 'Could not connect to ScriptVault background service.';
+                emptyState.append(icon, title, desc);
             }
         }
     }
@@ -498,15 +501,16 @@
                 enabled: enabled
             });
 
-            // Update local state
+            // Update local state in both arrays
             const script = pageScripts.find(s => s.id === scriptId);
-            if (script) {
-                script.enabled = enabled;
-            }
+            if (script) script.enabled = enabled;
+            const allScript = allScripts.find(s => s.id === scriptId);
+            if (allScript) allScript.enabled = enabled;
 
             // Re-render so enabled sort + visual state updates
             renderScriptList();
             updateEnabledState();
+            updateFooterCount();
             updateBadgeForTab();
         } catch (error) {
             console.error('Failed to toggle script:', error);
@@ -521,10 +525,12 @@
                 scriptId: scriptId
             });
 
-            // Remove from local state and re-render
+            // Remove from both local arrays and re-render
             pageScripts = pageScripts.filter(s => s.id !== scriptId);
+            allScripts = allScripts.filter(s => s.id !== scriptId);
             renderScriptList();
             updateEnabledState();
+            updateFooterCount();
             updateBadgeForTab();
         } catch (error) {
             console.error('Failed to delete script:', error);
@@ -618,8 +624,8 @@
                 a.href = url;
                 a.download = response.filename || `scriptvault-backup-${new Date().toISOString().split('T')[0]}.zip`;
                 a.click();
-                URL.revokeObjectURL(url);
-                
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+
                 window.close();
             }
         } catch (error) {

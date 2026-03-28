@@ -33,6 +33,16 @@
             --accent-error: #ef4444;
             --text-on-accent: #fff;
             --toggle-dot: #fff;
+            --toggle-on: #22c55e;
+            --toggle-off: #555;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --accent-yellow: #eab308;
+            --accent-blue: #60a5fa;
+            --accent-orange: #f97316;
+            --accent-purple: #a78bfa;
+            --bg-row: #242424;
+            --bg-row-selected: #2a3a2a;
             --scrollbar-thumb: rgba(255,255,255,0.15);
             --scrollbar-thumb-hover: rgba(255,255,255,0.25);
         }
@@ -57,6 +67,16 @@
             --accent-error: #dc2626;
             --text-on-accent: #fff;
             --toggle-dot: #fff;
+            --toggle-on: #16a34a;
+            --toggle-off: #ccc;
+            --accent-green: #16a34a;
+            --accent-red: #dc2626;
+            --accent-yellow: #ca8a04;
+            --accent-blue: #2563eb;
+            --accent-orange: #ea580c;
+            --accent-purple: #7c3aed;
+            --bg-row: #fff;
+            --bg-row-selected: #e8f5e9;
             --scrollbar-thumb: rgba(0,0,0,0.2);
             --scrollbar-thumb-hover: rgba(0,0,0,0.35);
         }
@@ -81,6 +101,16 @@
             --accent-error: #f38ba8;
             --text-on-accent: #1e1e2e;
             --toggle-dot: #1e1e2e;
+            --toggle-on: #a6e3a1;
+            --toggle-off: #585b70;
+            --accent-green: #a6e3a1;
+            --accent-red: #f38ba8;
+            --accent-yellow: #f9e2af;
+            --accent-blue: #89b4fa;
+            --accent-orange: #fab387;
+            --accent-purple: #cba6f7;
+            --bg-row: #252536;
+            --bg-row-selected: #2a3a2a;
             --scrollbar-thumb: rgba(205,214,244,0.15);
             --scrollbar-thumb-hover: rgba(205,214,244,0.25);
         }
@@ -105,15 +135,39 @@
             --accent-error: #ef4444;
             --text-on-accent: #fff;
             --toggle-dot: #fff;
+            --toggle-on: #22c55e;
+            --toggle-off: #444;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --accent-yellow: #eab308;
+            --accent-blue: #60a5fa;
+            --accent-orange: #f97316;
+            --accent-purple: #a78bfa;
+            --bg-row: #0a0a0a;
+            --bg-row-selected: #1a2a1a;
             --scrollbar-thumb: rgba(255,255,255,0.1);
             --scrollbar-thumb-hover: rgba(255,255,255,0.2);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        /* ============================================
+           UI Scale (user-adjustable via View Settings)
+           ============================================ */
+        :root {
+            --ui-scale: 1;
+            --base-font: 13px;
+        }
+        [data-ui-scale="0.85"] { --ui-scale: 0.85; --base-font: 11px; }
+        [data-ui-scale="0.9"]  { --ui-scale: 0.9;  --base-font: 12px; }
+        [data-ui-scale="1"]    { --ui-scale: 1;     --base-font: 13px; }
+        [data-ui-scale="1.1"]  { --ui-scale: 1.1;   --base-font: 14px; }
+        [data-ui-scale="1.25"] { --ui-scale: 1.25;  --base-font: 16px; }
+        [data-ui-scale="1.5"]  { --ui-scale: 1.5;   --base-font: 19px; }
+
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            font-size: 13px;
+            font-size: var(--base-font);
             background: var(--bg-body);
             color: var(--text-primary);
             min-height: 100vh;
@@ -124,6 +178,42 @@
 
         a { color: var(--accent-secondary); text-decoration: none; transition: color 0.2s; }
         a:hover { text-decoration: underline; }
+
+        /* ============================================
+           Global Focus Styles (WCAG 2.1 AA)
+           ============================================ */
+        :focus-visible {
+            outline: 2px solid var(--accent-primary);
+            outline-offset: 2px;
+        }
+        button:focus-visible, .toolbar-btn:focus-visible, .btn:focus-visible,
+        .header-icon-btn:focus-visible, .tm-tab:focus-visible, .editor-tab:focus-visible,
+        .action-icon:focus-visible, .toggle-switch:focus-visible, select:focus-visible {
+            outline: 2px solid var(--accent-primary);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+        input:focus-visible, textarea:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px var(--accent-primary);
+        }
+
+        /* ============================================
+           Firefox Scrollbar Support
+           ============================================ */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--scrollbar-thumb) transparent;
+        }
+
+        /* ============================================
+           Max-Width Container (prevents ultra-wide stretch)
+           ============================================ */
+        .tm-panel {
+            max-width: 1600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
 
         /* Row entrance animation */
         @keyframes rowSlideIn {
@@ -324,9 +414,9 @@
         }
 
         .tm-tab[data-tab="newscript"] {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: bold;
-            padding: 2px 12px;
+            padding: 5px 12px;
             color: var(--accent-primary);
             text-transform: none;
         }
@@ -427,7 +517,7 @@
         .scripts-toolbar-left {
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 6px;
         }
 
         .scripts-toolbar-right {
@@ -972,7 +1062,7 @@
         .editor-overlay {
             display: none;
             position: fixed;
-            top: var(--header-height, 90px); left: 0; right: 0; bottom: 0;
+            top: var(--header-height, 35px); left: 0; right: 0; bottom: 0;
             background: var(--bg-body);
             z-index: 50;
             flex-direction: column;
@@ -1120,7 +1210,7 @@
         .find-scripts-overlay {
             display: none;
             position: fixed;
-            top: var(--header-height, 90px);
+            top: var(--header-height, 35px);
             left: 0; right: 0; bottom: 0;
             background: var(--bg-body);
             z-index: 55;
@@ -1535,6 +1625,111 @@
         @media (prefers-reduced-motion: reduce) {
             .lazy-spinner { animation: none; border-top-color: var(--text-muted); }
         }
+
+        /* ============================================
+           Responsive Breakpoints
+           ============================================ */
+
+        /* Tablet landscape / small laptop */
+        @media (max-width: 1280px) {
+            .scripts-table .col-perf,
+            .scripts-table .col-lines,
+            .scripts-table .col-size { display: none; }
+            .search-box input { width: 140px; }
+        }
+
+        /* Tablet */
+        @media (max-width: 1024px) {
+            .scripts-table .col-updated,
+            .scripts-table .col-version { display: none; }
+            .scripts-toolbar { flex-wrap: wrap; gap: 6px; }
+            .scripts-toolbar-left, .scripts-toolbar-right { flex-wrap: wrap; }
+            .tm-logo { margin-right: 8px; }
+            .tm-logo-text h1 sup { display: none; }
+        }
+
+        /* Small tablet / large phone */
+        @media (max-width: 768px) {
+            .tm-header { padding: 6px 10px 2px 10px; }
+            .tm-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .tm-tab { padding: 4px 10px; font-size: 11px; }
+            .scripts-toolbar { padding: 6px 10px; }
+            .scripts-table .col-source,
+            .scripts-table .col-runs { display: none; }
+            .search-box input { width: 120px; }
+            .input-field.wide { width: 100%; max-width: 300px; }
+            .settings-row .label-text { min-width: 140px; }
+            .editor-header { padding: 8px 12px; }
+            .editor-toolbar { flex-wrap: wrap; gap: 4px; }
+            .about-stats { gap: 20px; }
+            .shortcuts-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Phone */
+        @media (max-width: 600px) {
+            .tm-header { padding: 4px 8px 2px 8px; }
+            .tm-logo img { width: 20px; height: 20px; }
+            .tm-logo-text h1 { font-size: 13px; }
+            .scripts-table { font-size: 12px; }
+            .scripts-table .col-actions { min-width: 70px; }
+            .scripts-table .col-name { min-width: 120px; }
+            .modal-content { min-width: 90vw; max-width: 95vw; }
+            .find-scripts-panel { width: 100%; left: 0; }
+            .settings-row { flex-direction: column; }
+            .settings-row .label-text { min-width: unset; width: 100%; }
+            .info-grid { grid-template-columns: 1fr; }
+            .storage-item { grid-template-columns: 1fr; }
+        }
+
+        /* ============================================
+           View Settings Scale Controls
+           ============================================ */
+        .view-settings-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 12px;
+            background: var(--bg-section-header);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .view-settings-bar label { font-weight: 500; white-space: nowrap; }
+        .view-settings-bar select {
+            padding: 2px 6px;
+            font-size: 11px;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+        .view-settings-bar .density-btn {
+            padding: 2px 8px;
+            font-size: 10px;
+            background: var(--bg-button);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .view-settings-bar .density-btn:hover,
+        .view-settings-bar .density-btn.active {
+            background: var(--accent-primary);
+            color: var(--text-on-accent);
+            border-color: var(--accent-primary);
+        }
+        /* Compact density */
+        [data-density="compact"] .scripts-table td { padding: 3px 8px; }
+        [data-density="compact"] .scripts-table th { padding: 4px 8px; }
+        [data-density="compact"] .tm-tab { padding: 3px 10px; }
+        /* Comfortable density (default) */
+        [data-density="comfortable"] .scripts-table td { padding: 5px 8px; }
+        [data-density="comfortable"] .scripts-table th { padding: 6px 8px; }
+        /* Spacious density */
+        [data-density="spacious"] .scripts-table td { padding: 8px 10px; }
+        [data-density="spacious"] .scripts-table th { padding: 8px 10px; }
+        [data-density="spacious"] .tm-tab { padding: 7px 16px; }
     </style>
 </head>
 <body>
@@ -1577,7 +1772,25 @@
             </div>
         </nav>
     </header>
-    
+
+    <!-- View Settings Bar -->
+    <div class="view-settings-bar" id="viewSettingsBar">
+        <label>Zoom:</label>
+        <select id="uiScaleSelect" title="UI Scale">
+            <option value="0.85">85%</option>
+            <option value="0.9">90%</option>
+            <option value="1" selected>100%</option>
+            <option value="1.1">110%</option>
+            <option value="1.25">125%</option>
+            <option value="1.5">150%</option>
+        </select>
+        <span style="margin:0 4px;opacity:0.3">|</span>
+        <label>Density:</label>
+        <button class="density-btn" data-density="compact" title="Compact spacing">Compact</button>
+        <button class="density-btn active" data-density="comfortable" title="Default spacing">Comfortable</button>
+        <button class="density-btn" data-density="spacious" title="Extra spacing">Spacious</button>
+    </div>
+
     <!-- Setup Warning Banner (Chrome 138+ / Developer Mode) -->
     <div class="setup-warning-banner" id="setupWarningBanner" style="display: none;">
         <div class="setup-warning-content">
@@ -3176,6 +3389,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <script src="dashboard-firefox-compat.js"></script>
     <script src="dashboard-a11y.js"></script>
     <script src="dashboard-keyboard.js"></script>
+    <script src="dashboard-store.js"></script>
     <script src="monaco-adapter.js"></script>
     <script src="dashboard.js"></script>
 
@@ -3193,5 +3407,50 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="progress-status" id="progressStatus"></div>
         </div>
     </div>
+
+    <!-- View Settings Controller -->
+    <script>
+    (function() {
+        'use strict';
+        const scaleSelect = document.getElementById('uiScaleSelect');
+        const densityBtns = document.querySelectorAll('.density-btn');
+
+        // Restore saved preferences
+        const saved = JSON.parse(localStorage.getItem('sv_viewSettings') || '{}');
+        if (saved.scale) {
+            document.documentElement.setAttribute('data-ui-scale', saved.scale);
+            if (scaleSelect) scaleSelect.value = saved.scale;
+        }
+        if (saved.density) {
+            document.documentElement.setAttribute('data-density', saved.density);
+            densityBtns.forEach(b => b.classList.toggle('active', b.dataset.density === saved.density));
+        } else {
+            document.documentElement.setAttribute('data-density', 'comfortable');
+        }
+
+        // Scale change
+        if (scaleSelect) {
+            scaleSelect.addEventListener('change', () => {
+                const v = scaleSelect.value;
+                document.documentElement.setAttribute('data-ui-scale', v);
+                const s = JSON.parse(localStorage.getItem('sv_viewSettings') || '{}');
+                s.scale = v;
+                localStorage.setItem('sv_viewSettings', JSON.stringify(s));
+            });
+        }
+
+        // Density buttons
+        densityBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const d = btn.dataset.density;
+                document.documentElement.setAttribute('data-density', d);
+                densityBtns.forEach(b => b.classList.toggle('active', b.dataset.density === d));
+                const s = JSON.parse(localStorage.getItem('sv_viewSettings') || '{}');
+                s.density = d;
+                localStorage.setItem('sv_viewSettings', JSON.stringify(s));
+            });
+        });
+    })();
+    </script>
 </body>
 </html>

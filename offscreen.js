@@ -221,10 +221,10 @@ function handleAnalyze(code) {
 function analyzeAST(code) {
   let ast;
   try {
-    ast = acorn.parse(code, { ecmaVersion: 2022, sourceType: 'script', allowHashBang: true });
+    ast = acorn.parse(code, { ecmaVersion: 2022, sourceType: 'script', allowHashBang: true, locations: true });
   } catch (e) {
     // Try module mode
-    ast = acorn.parse(code, { ecmaVersion: 2022, sourceType: 'module', allowHashBang: true });
+    ast = acorn.parse(code, { ecmaVersion: 2022, sourceType: 'module', allowHashBang: true, locations: true });
   }
 
   const hits = new Map(); // pattern.id → count
@@ -314,15 +314,21 @@ function checkHighEntropyStrings(ast) {
     }
   });
   if (!longStrings.length) return null;
-  const entropy = calculateEntropy(longStrings[0]);
+  // Check ALL long strings, not just the first — find the highest-entropy one
+  let maxEntropy = 0;
+  let maxStr = longStrings[0];
+  for (const s of longStrings) {
+    const e = calculateEntropy(s);
+    if (e > maxEntropy) { maxEntropy = e; maxStr = s; }
+  }
   // Shorter strings need higher entropy to flag; longer strings are suspicious at lower entropy
-  const threshold = longStrings[0].length >= 200 ? 4.5 : 5.2;
-  if (entropy <= threshold) return null;
+  const threshold = maxStr.length >= 200 ? 4.5 : 5.2;
+  if (maxEntropy <= threshold) return null;
   return {
     id: 'high-entropy',
     label: 'High-entropy string detected',
     category: 'obfuscation',
-    desc: `Found ${longStrings.length} long string(s) with high randomness (entropy: ${entropy.toFixed(1)})`,
+    desc: `Found ${longStrings.length} long string(s) with high randomness (entropy: ${maxEntropy.toFixed(1)})`,
     risk: 20,
     count: longStrings.length,
     adjustedRisk: 20

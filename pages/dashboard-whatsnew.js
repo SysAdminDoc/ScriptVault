@@ -4,9 +4,31 @@
 const WhatsNew = (() => {
   'use strict';
 
-  const CURRENT_VERSION = '2.0.0';
+  const CURRENT_VERSION = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
+    ? chrome.runtime.getManifest().version
+    : '2.0.0';
 
   const CHANGELOG = {
+    '2.0.2': {
+      title: 'ScriptVault 2.0.2 — Bug Fixes & Quality',
+      date: '2026-03-27',
+      highlights: [
+        { icon: '🔧', title: 'Editor History Fix', desc: 'Undo/redo history now properly saves and restores when switching tabs (was silently broken).' },
+        { icon: '📱', title: 'Scannable QR Codes', desc: 'QR code generator fixed — alignment patterns no longer corrupted by masking. Codes now scan correctly.' },
+        { icon: '💾', title: 'Download Reliability', desc: 'All file downloads (export, backup, HAR, CSV) now reliably complete before blob URLs are released.' },
+        { icon: '⏰', title: 'Service Worker Safety', desc: 'Long notification timeouts use chrome.alarms to survive service worker shutdown.' }
+      ],
+      improvements: [
+        'Time range scheduler shows both segments for wrapping ranges (10PM-6AM)',
+        'Snippet search preserves cursor position when typing mid-string',
+        'Standalone export syntax highlighting no longer double-wraps keywords in strings',
+        'CDN library URLs validated against path traversal attacks',
+        'Failed tab loads show error toast instead of blank panel',
+        'Command palette has proper ARIA label for screen readers',
+        'Storage viewer handles null values cleanly',
+        'Removed broken ESLint npm script, synced all version strings'
+      ]
+    },
     '2.0.0': {
       title: 'ScriptVault 2.0 — The Complete Userscript Platform',
       date: '2026-03-24',
@@ -75,7 +97,13 @@ const WhatsNew = (() => {
     async shouldShow() {
       try {
         const data = await chrome.storage.local.get('lastSeenVersion');
-        return data.lastSeenVersion !== CURRENT_VERSION;
+        const lastSeen = data.lastSeenVersion || '0.0.0';
+        // Only show for major/minor version changes (not patch bumps)
+        const lastMajorMinor = lastSeen.split('.').slice(0, 2).join('.');
+        const currentMajorMinor = CURRENT_VERSION.split('.').slice(0, 2).join('.');
+        // Also check if there's actually a changelog entry for the current major.minor
+        const hasEntry = Object.keys(CHANGELOG).some(v => v.startsWith(currentMajorMinor));
+        return lastMajorMinor !== currentMajorMinor && hasEntry;
       } catch { return false; }
     },
 
@@ -121,17 +149,20 @@ const WhatsNew = (() => {
 
       document.body.appendChild(overlay);
 
+      const escHandler = (e) => {
+        if (e.key === 'Escape') dismiss();
+      };
+
       const dismiss = () => {
         chrome.storage.local.set({ lastSeenVersion: CURRENT_VERSION });
+        document.removeEventListener('keydown', escHandler);
         overlay.remove();
       };
 
       overlay.querySelector('#svWnDismiss').addEventListener('click', dismiss);
       overlay.querySelector('#svWnSkip').addEventListener('click', dismiss);
       overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
-      document.addEventListener('keydown', function handler(e) {
-        if (e.key === 'Escape') { dismiss(); document.removeEventListener('keydown', handler); }
-      });
+      document.addEventListener('keydown', escHandler);
     }
   };
 })();

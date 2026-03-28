@@ -3,6 +3,8 @@
 *.crx
 build/
 dist/
+background.js
+lib/monaco/
 
 # Signing keys
 scriptvault.pem

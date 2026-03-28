@@ -269,8 +269,8 @@ const PublicAPI = (() => {
 
   async function getScripts() {
     try {
-      const result = await chrome.storage.local.get('scripts');
-      return result.scripts || [];
+      const result = await chrome.storage.local.get('userscripts');
+      return result.userscripts || [];
     } catch {
       return [];
     }
@@ -343,13 +343,13 @@ const PublicAPI = (() => {
       if (!allowed) return { error: 'Permission denied', action: 'toggleScript' };
 
       try {
-        const result = await chrome.storage.local.get('scripts');
-        const scripts = result.scripts || [];
+        const result = await chrome.storage.local.get('userscripts');
+        const scripts = result.userscripts || [];
         const idx = scripts.findIndex(s => s.id === scriptId || s.name === scriptId);
         if (idx === -1) return { error: 'Script not found', scriptId };
 
         scripts[idx].enabled = enabled;
-        await chrome.storage.local.set({ scripts });
+        await chrome.storage.local.set({ userscripts: scripts });
 
         fireWebhook('script.toggled', { scriptId, enabled });
         return { ok: true, scriptId, enabled };
@@ -385,8 +385,8 @@ const PublicAPI = (() => {
           runAt: meta.runAt || 'document_idle'
         };
 
-        const result = await chrome.storage.local.get('scripts');
-        const scripts = result.scripts || [];
+        const result = await chrome.storage.local.get('userscripts');
+        const scripts = result.userscripts || [];
 
         // Check for duplicate
         const existing = scripts.findIndex(s => s.id === scriptId);
@@ -396,7 +396,7 @@ const PublicAPI = (() => {
           scripts.push(newScript);
         }
 
-        await chrome.storage.local.set({ scripts });
+        await chrome.storage.local.set({ userscripts: scripts });
 
         fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
         return { ok: true, scriptId, name: newScript.name };
@@ -478,18 +478,51 @@ const PublicAPI = (() => {
         return { type: 'scriptvault:install:response', error: 'Missing or invalid url' };
       }
 
-      // Fetch the script
+      // Authorize before fetching to prevent SSRF
+      const allowed = await authorize('installScript', { origin });
+      if (!allowed) {
+        return { type: 'scriptvault:install:response', error: 'Permission denied', action: 'installScript' };
+      }
+
+      // Fetch the script only after authorization
       try {
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const code = await resp.text();
 
-        // Delegate to install handler with a synthetic sender
-        const result = await HANDLERS.installScript(
-          { action: 'installScript', code },
-          { origin }
-        );
-        return { type: 'scriptvault:install:response', ...result };
+        // Parse and install directly (authorization already checked above)
+        const meta = parseUserscriptMeta(code);
+        const scriptId = meta.name
+          ? meta.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase()
+          : `ext_${Date.now()}`;
+
+        const newScript = {
+          id: scriptId,
+          name: meta.name || scriptId,
+          version: meta.version || '1.0',
+          description: meta.description || '',
+          matches: meta.match || ['*://*/*'],
+          code,
+          enabled: true,
+          installedAt: Date.now(),
+          installedBy: `origin:${origin}`,
+          runAt: meta.runAt || 'document_idle'
+        };
+
+        const result = await chrome.storage.local.get('userscripts');
+        const scripts = result.userscripts || [];
+
+        const existing = scripts.findIndex(s => s.id === scriptId);
+        if (existing !== -1) {
+          scripts[existing] = { ...scripts[existing], ...newScript, updatedAt: Date.now() };
+        } else {
+          scripts.push(newScript);
+        }
+
+        await chrome.storage.local.set({ userscripts: scripts });
+
+        fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
+        return { type: 'scriptvault:install:response', ok: true, scriptId, name: newScript.name };
       } catch (e) {
         return { type: 'scriptvault:install:response', error: 'Fetch failed', detail: e.message };
       }
@@ -565,8 +598,8 @@ const PublicAPI = (() => {
   }
 
   function dispatchWebMessage(event) {
-    // Validate origin
-    if (_trustedOrigins.length > 0 && !_trustedOrigins.includes(event.origin) && !_trustedOrigins.includes('*')) {
+    // Validate origin — deny-by-default when no trusted origins are configured
+    if (_trustedOrigins.length === 0 || (!_trustedOrigins.includes(event.origin) && !_trustedOrigins.includes('*'))) {
       return; // ignore untrusted origins
     }
 
@@ -713,8 +746,12 @@ const PublicAPI = (() => {
       if (!API_SCHEMA.webhookEvents.includes(eventType)) {
         throw new Error(`Unknown event type: ${eventType}`);
       }
+      const url = config.url || '';
+      if (url && !url.startsWith('https://')) {
+        throw new Error('Webhook URL must use https://');
+      }
       _webhooks[eventType] = {
-        url: config.url || '',
+        url,
         enabled: !!config.enabled
       };
       await saveWebhooks();
