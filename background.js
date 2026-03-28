@@ -2854,6 +2854,9 @@ var CloudSyncProviders = {
 
       if (!resp.ok) {
         console.warn('[CloudSync] Google token refresh failed:', resp.status);
+        if (resp.status === 400 || resp.status === 401) {
+          await SettingsManager.set({ googleDriveToken: '', googleDriveRefreshToken: '' });
+        }
         return null;
       }
       const data = await resp.json();
@@ -3189,6 +3192,10 @@ var CloudSyncProviders = {
 
       if (!resp.ok) {
         console.warn('[CloudSync] Dropbox token refresh failed:', resp.status);
+        // Clear stale token to prevent infinite retry loops
+        if (resp.status === 400 || resp.status === 401) {
+          await SettingsManager.set({ dropboxToken: '', dropboxRefreshToken: '' });
+        }
         return null;
       }
       const data = await resp.json();
@@ -3400,7 +3407,13 @@ var CloudSyncProviders = {
         })
       });
 
-      if (!resp.ok) return null;
+      if (!resp.ok) {
+        console.warn('[CloudSync] OneDrive token refresh failed:', resp.status);
+        if (resp.status === 400 || resp.status === 401) {
+          await SettingsManager.set({ onedriveToken: '', onedriveRefreshToken: '' });
+        }
+        return null;
+      }
       const data = await resp.json();
       if (data.access_token) {
         await SettingsManager.set({
@@ -10381,7 +10394,8 @@ const CloudSync = {
               }
             } catch (e) {
               debugLog('[CloudSync] 3-way merge failed, using timestamp winner:', e.message);
-              // Fall back to last-write-wins (already set via merged.scripts)
+              // Fall back to last-write-wins but flag as potential conflict
+              mergeConflict = true;
             }
           }
         }
@@ -14779,8 +14793,8 @@ ${req.code}
     
     // Handle menu command execution
     if (msg.type === 'menuCommand' && msg.scriptId === scriptId) {
-      const cb = _menuCmds.get(msg.commandId);
-      if (cb) try { cb(); } catch(err) { /* silently ignore menu command errors */ }
+      const cmd = _menuCmds.get(msg.commandId);
+      if (cmd?.callback) try { cmd.callback(); } catch(err) { /* silently ignore menu command errors */ }
     }
     
     // Handle value change notifications (cross-tab sync)
@@ -14985,7 +14999,7 @@ ${req.code}
         id: id,
         action: action,
         data: data
-      }, '/');
+      }, '*');
     });
   }
 
@@ -15321,6 +15335,7 @@ ${req.code}
     if (opts.highlight) {
       sendToBackground('GM_focusTab', {}).catch(() => {});
       if (opts.ondone) { try { opts.ondone(); } catch(e) {} }
+      _notifCallbacks.delete(notifTag); // Clean up — no notification created
       return;
     }
     sendToBackground('GM_notification', {
@@ -15380,8 +15395,9 @@ ${req.code}
       if (result && result.downloadId) {
         _downloadCallbacks.set(result.downloadId, callbacks);
       }
-      if (result && result.error && callbacks.onerror) {
-        try { callbacks.onerror({ error: result.error }); } catch(e) {}
+      if (result && result.error) {
+        if (callbacks.onerror) try { callbacks.onerror({ error: result.error }); } catch(e) {}
+        if (result.downloadId) _downloadCallbacks.delete(result.downloadId);
       }
     }).catch(e => {
       if (callbacks.onerror) try { callbacks.onerror({ error: e.message || 'Download failed' }); } catch(ex) {}
@@ -15404,7 +15420,7 @@ ${req.code}
       opts = accessKeyOrOptions;
     }
     const id = opts.id || Math.random().toString(36).substring(2);
-    _menuCmds.set(id, callback);
+    _menuCmds.set(id, { callback, caption });
     sendToBackground('GM_registerMenuCommand', {
       scriptId, commandId: id, caption,
       accessKey: opts.accessKey || '',
@@ -15423,7 +15439,7 @@ ${req.code}
 
   function GM_getMenuCommands() {
     if (!hasGrant('GM_registerMenuCommand') && !hasGrant('GM.registerMenuCommand')) return [];
-    return Array.from(_menuCmds.entries()).map(([id, cb]) => ({ id, name: id }));
+    return Array.from(_menuCmds.entries()).map(([id, entry]) => ({ id, name: entry.caption || id, caption: entry.caption || id }));
   }
   
   // GM_getResourceText / GM_getResourceURL
@@ -15505,6 +15521,7 @@ ${req.code}
   // GM_getTab / GM_saveTab / GM_getTabs (real implementations via background)
   let _tabData = {};
   function GM_getTab(callback) {
+    if (!hasGrant('GM_getTab') && !hasGrant('GM.getTab')) { if (callback) callback(_tabData); return _tabData; }
     sendToBackground('GM_getTab', { scriptId }).then(data => {
       _tabData = data || {};
       if (callback) callback(_tabData);
@@ -15512,10 +15529,12 @@ ${req.code}
     return _tabData;
   }
   function GM_saveTab(tab) {
+    if (!hasGrant('GM_saveTab') && !hasGrant('GM.saveTab')) return;
     _tabData = tab || {};
     sendToBackground('GM_saveTab', { scriptId, data: _tabData }).catch(() => {});
   }
   function GM_getTabs(callback) {
+    if (!hasGrant('GM_getTabs') && !hasGrant('GM.getTabs')) { if (callback) callback({}); return; }
     sendToBackground('GM_getTabs', { scriptId }).then(data => {
       if (callback) callback(data || {});
     }).catch(() => { if (callback) callback({}); });
