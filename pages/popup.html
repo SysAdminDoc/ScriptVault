@@ -326,6 +326,25 @@
             background: rgba(239, 68, 68, 0.1);
         }
 
+        .script-dropdown-cmds:empty { display: none; }
+        .script-dropdown-cmds {
+            border-bottom: 1px solid var(--popup-border-subtle);
+            padding-bottom: 2px;
+            margin-bottom: 2px;
+        }
+        .script-dropdown-cmd {
+            padding: 5px 12px;
+            font-size: 11px;
+            cursor: pointer;
+            color: var(--popup-accent);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .script-dropdown-cmd:hover {
+            background: var(--popup-bg-hover);
+        }
+
         /* Menu items */
         .menu-section {
             border-top: 1px solid var(--popup-border);
@@ -781,6 +800,7 @@
 
     <!-- Shared dropdown (positioned at body level to avoid overflow clipping) -->
     <div class="script-dropdown" id="scriptDropdown">
+        <div class="script-dropdown-cmds" id="dropdownMenuCmds"></div>
         <div class="script-dropdown-item" data-action="edit">Edit in Dashboard</div>
         <div class="script-dropdown-item" data-action="update">Check for Update</div>
         <div class="script-dropdown-item" data-action="copyUrl">Copy Install URL</div>
