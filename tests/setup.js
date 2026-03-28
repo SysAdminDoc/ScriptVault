@@ -20,13 +20,25 @@ globalThis.chrome = {
   storage: {
     local: {
       get: vi.fn((keys) => {
-        if (typeof keys === 'string') return Promise.resolve({ [keys]: storageMock[keys] });
+        if (keys === null || keys === undefined) return Promise.resolve({ ...storageMock });
+        if (typeof keys === 'string') {
+          // Real Chrome returns {} if key doesn't exist, {key: value} if it does
+          return Promise.resolve(storageMock[keys] !== undefined ? { [keys]: storageMock[keys] } : {});
+        }
         if (Array.isArray(keys)) {
           const result = {};
           keys.forEach(k => { if (storageMock[k] !== undefined) result[k] = storageMock[k]; });
           return Promise.resolve(result);
         }
-        return Promise.resolve({ ...storageMock });
+        // Object with defaults
+        if (typeof keys === 'object') {
+          const result = { ...keys };
+          for (const k of Object.keys(keys)) {
+            if (storageMock[k] !== undefined) result[k] = storageMock[k];
+          }
+          return Promise.resolve(result);
+        }
+        return Promise.resolve({});
       }),
       set: vi.fn((items) => {
         Object.assign(storageMock, items);
@@ -57,8 +69,11 @@ globalThis.chrome = {
     onRemoved: { addListener: vi.fn() },
   },
   notifications: {
-    create: vi.fn(),
-    clear: vi.fn(),
+    create: vi.fn().mockImplementation((...args) => {
+      const id = typeof args[0] === 'string' ? args[0] : 'notif_' + Date.now();
+      return Promise.resolve(id);
+    }),
+    clear: vi.fn().mockResolvedValue(true),
     onClicked: { addListener: vi.fn() },
     onClosed: { addListener: vi.fn() },
   },
@@ -105,6 +120,11 @@ globalThis.chrome = {
   declarativeNetRequest: {
     updateDynamicRules: vi.fn().mockResolvedValue(),
   },
+};
+
+// Helper to reset storage mock between tests
+globalThis.__resetStorageMock = () => {
+  for (const key of Object.keys(storageMock)) delete storageMock[key];
 };
 
 // Mock crypto.randomUUID
