@@ -15,7 +15,7 @@ v2.0.2
 - **Monaco Editor** (v0.52.2, bundled locally in `lib/monaco/`, CDN fallback in sandboxed iframe)
 - Cloud sync: WebDAV, Google Drive (PKCE), Dropbox (PKCE), OneDrive (PKCE), Easy Cloud (chrome.identity)
 - Vitest test suite (7 test files, 275 test cases)
-- background.js: ~16,152 lines (built from 19+ source modules)
+- background.js: ~16,174 lines (built from 19+ source modules)
 - 37 TypeScript source files in `src/` (type-checked via `npm run typecheck`)
 
 ## Build
@@ -410,5 +410,27 @@ All 4 bg/ modules migrated:
 **Misc:**
 - `content.js`: bridgeReady postMessage uses `'*'` consistently (was `'/'` which fails on opaque origins)
 
+**New APIs & editor features:**
+- `GM_head(url, callback)` — convenience wrapper for HEAD requests (requires `@grant GM_xmlhttpRequest`)
+- Ctrl+G Go to Line in editor (CodeMirror + Monaco) + command palette entry
+- Added `GM_head` to linter known globals
+
+**Crash fix:**
+- `dashboard-collections.js` line 681: called undefined `_renderCollectionDetail` → fixed to `renderExpandedScripts(card, coll, installed)`
+
+**Install page UX:**
+- Enter key now works from anywhere (was restricted to focused install button only)
+- Code preview toggle has `aria-expanded` + `aria-controls`
+- Downgrade button: improved font-weight for OLED readability
+
+**Sidepanel UX:**
+- Sort options deduplicated: "default" is now install order, added "Recently Updated" option
+- Perf/errors sort has secondary tiebreaker by name
+- Timing badge colors and toggle slider use CSS variables (theme-aware)
+- `aria-label` on search input and sort select
+
+**Popup accessibility:**
+- Header toggle has `aria-pressed` for screen readers
+
 **Version sync:** manifest.json, manifest-firefox.json, package.json all at 2.0.2
-- background.js: 16,164 lines
+- background.js: 16,174 lines

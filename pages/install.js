@@ -10,6 +10,33 @@ const DANGEROUS_PERMISSIONS = [
   'GM_cookie'
 ];
 
+// Permission descriptions for install page tooltips
+const GRANT_DESCRIPTIONS = {
+  'GM_xmlhttpRequest': 'Can make network requests to any server (bypasses CORS)',
+  'GM.xmlHttpRequest': 'Can make network requests to any server (bypasses CORS)',
+  'GM_download': 'Can download files to your computer',
+  'GM_setClipboard': 'Can write to your clipboard',
+  'GM_cookie': 'Can read and modify browser cookies',
+  'unsafeWindow': 'Direct access to the page\'s JavaScript environment',
+  'GM_getValue': 'Can store and retrieve persistent data',
+  'GM_setValue': 'Can store and retrieve persistent data',
+  'GM_deleteValue': 'Can delete stored data',
+  'GM_listValues': 'Can list all stored data keys',
+  'GM_notification': 'Can show desktop notifications',
+  'GM_openInTab': 'Can open new browser tabs',
+  'GM_registerMenuCommand': 'Can add items to the extension menu',
+  'GM_addStyle': 'Can inject CSS styles into the page',
+  'GM_getResourceText': 'Can access bundled text resources',
+  'GM_getResourceURL': 'Can access bundled resource URLs',
+  'GM_addValueChangeListener': 'Can listen for storage value changes',
+  'GM_webRequest': 'Can intercept and modify network requests',
+  'GM_head': 'Can make HEAD requests to any server',
+  'window.close': 'Can close the current tab',
+  'window.focus': 'Can focus the current tab',
+  'window.onurlchange': 'Can detect URL changes (SPA navigation)',
+  'none': 'No special permissions required',
+};
+
 // Safe/benign permissions
 const SAFE_PERMISSIONS = [
   'none',
@@ -385,7 +412,8 @@ function renderInstallUI(sourceUrl) {
             ? scriptMeta.grant.map(g => {
                 const isDangerous = DANGEROUS_PERMISSIONS.includes(g);
                 const isSafe = SAFE_PERMISSIONS.includes(g);
-                return `<span class="tag ${isDangerous ? 'warning' : isSafe ? 'safe' : ''}">${escapeHtml(g)}</span>`;
+                const desc = GRANT_DESCRIPTIONS[g] || '';
+                return `<span class="tag ${isDangerous ? 'warning' : isSafe ? 'safe' : ''}" ${desc ? `title="${escapeHtml(desc)}"` : ''}>${escapeHtml(g)}</span>`;
               }).join('')
             : '<span class="tag safe">none</span>'
           }
