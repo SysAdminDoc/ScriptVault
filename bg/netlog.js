@@ -6,18 +6,19 @@ const NetworkLog = {
   _maxEntries: 2000,
 
   add(entry) {
-    this._log.unshift({
+    this._log.push({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       timestamp: Date.now(),
       ...entry
     });
     if (this._log.length > this._maxEntries) {
-      this._log = this._log.slice(0, this._maxEntries);
+      this._log = this._log.slice(-this._maxEntries);
     }
   },
 
   getAll(filters = {}) {
-    let results = this._log;
+    // Newest first (log stored oldest-first for O(1) push)
+    let results = [...this._log].reverse();
     if (filters.scriptId) {
       results = results.filter(e => e.scriptId === filters.scriptId);
     }

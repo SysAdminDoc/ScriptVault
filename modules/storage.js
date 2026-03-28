@@ -481,7 +481,12 @@ const FolderStorage = {
     const folder = this.cache.find(f => f.id === folderId);
     if (folder && !folder.scriptIds.includes(scriptId)) {
       folder.scriptIds.push(scriptId);
-      await this.save();
+      try {
+        await this.save();
+      } catch (e) {
+        folder.scriptIds.pop();
+        throw e;
+      }
     }
   },
 
@@ -489,8 +494,14 @@ const FolderStorage = {
     await this.init();
     const folder = this.cache.find(f => f.id === folderId);
     if (folder) {
-      folder.scriptIds = folder.scriptIds.filter(id => id !== scriptId);
-      await this.save();
+      const prev = folder.scriptIds;
+      folder.scriptIds = prev.filter(id => id !== scriptId);
+      try {
+        await this.save();
+      } catch (e) {
+        folder.scriptIds = prev;
+        throw e;
+      }
     }
   },
 
