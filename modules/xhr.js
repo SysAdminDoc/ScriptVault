@@ -21,6 +21,8 @@ const XhrManager = {
     };
     
     this.requests.set(requestId, request);
+    // Auto-cleanup after 5 minutes to prevent leaks from abandoned requests
+    request._cleanupTimer = setTimeout(() => this.remove(requestId), 300000);
     return request;
   },
   
@@ -48,6 +50,8 @@ const XhrManager = {
   
   // Remove a completed/aborted request
   remove(requestId) {
+    const req = this.requests.get(requestId);
+    if (req?._cleanupTimer) clearTimeout(req._cleanupTimer);
     this.requests.delete(requestId);
   },
   
