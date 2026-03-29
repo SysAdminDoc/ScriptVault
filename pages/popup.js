@@ -41,11 +41,17 @@
 
     // Initialize
     async function init() {
+        // Show loading state immediately
+        if (elements.scriptList) {
+            elements.scriptList.style.opacity = '0.5';
+            elements.scriptList.style.transition = 'opacity 0.2s';
+        }
         await checkUserScriptsAvailability();
         await loadSettings();
         await getCurrentTab();
         await loadAllScripts();
         await loadPageScripts();
+        if (elements.scriptList) elements.scriptList.style.opacity = '1';
         setupEventListeners();
         updateEnabledState();
         updateUrlBar();
