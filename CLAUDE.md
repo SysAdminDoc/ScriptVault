@@ -14,8 +14,8 @@ v2.0.2
 - `chrome.storage.local` for persistence (`unlimitedStorage` permission)
 - **Monaco Editor** (v0.52.2, bundled locally in `lib/monaco/`, CDN fallback in sandboxed iframe)
 - Cloud sync: WebDAV, Google Drive (PKCE), Dropbox (PKCE), OneDrive (PKCE), Easy Cloud (chrome.identity)
-- Vitest test suite (12 test files, 342 test cases)
-- background.js: ~16,193 lines (built from 19+ source modules)
+- Vitest test suite (12 test files, 336 test cases)
+- background.js: ~16,206 lines (built from 19+ source modules)
 - 37 TypeScript source files in `src/` (type-checked via `npm run typecheck`)
 
 ## Build
@@ -456,5 +456,23 @@ All 4 bg/ modules migrated:
 - Added `__resetStorageMock()` helper, fixed notification mock return value
 - 307 total tests (was 275)
 
+**New metadata directives:**
+- `@nodownload` — prevents automatic updates for the script
+- `@delay <ms>` — postpones script execution by N milliseconds (wraps in setTimeout)
+
+**Additional tests:**
+- `signing.test.js`: 8 tests (trust store, signature extraction)
+- `workspaces.test.js`: 11 tests (create, activate, snapshot, delete)
+- `public-api.test.js`: 16 tests (ping, permissions, rate limiting, webhooks)
+- Netlog tests rewritten to import actual source (was stale copy with unshift)
+- @nodownload and @delay parser tests added
+- 336 total tests across 12 files
+
+**Bug fixes (round 4 continued):**
+- Public API `getScripts()` returned object not array — `.find()` was broken
+- Gist `loadToken()` race: callback-wrapped Promise → direct await
+- Pattern builder ReDoS: 500-char length cap + bounded wildcard
+- Firefox build now uses esbuild pipeline
+
 **Version sync:** manifest.json, manifest-firefox.json, package.json all at 2.0.2
-- background.js: 16,193 lines
+- background.js: 16,206 lines
