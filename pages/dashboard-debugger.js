@@ -643,6 +643,7 @@ const ScriptDebugger = (() => {
   }
 
   function setVariable(scriptId, key, value) {
+    if (!scriptId) return;
     const storeKey = `SV_GM_${scriptId}_${key}`;
     try {
       localStorage.setItem(storeKey, JSON.stringify(value));
