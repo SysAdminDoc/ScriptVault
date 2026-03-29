@@ -23,6 +23,7 @@ function parseUserscript(code) {
     resource: {},
     'run-at': 'document-idle',
     noframes: false,
+    nodownload: false,
     icon: '',
     icon64: '',
     homepage: '',
@@ -109,6 +110,9 @@ function parseUserscript(code) {
       }
       case 'noframes':
         meta.noframes = true;
+        break;
+      case 'nodownload':
+        meta.nodownload = true;
         break;
       case 'unwrap':
         meta.unwrap = true;
@@ -233,6 +237,18 @@ describe('parseUserscript', () => {
     const code = makeScript({ name: 'Framed' });
     const { meta } = parseUserscript(code);
     expect(meta.noframes).toBe(false);
+  });
+
+  it('parses @nodownload as boolean true', () => {
+    const code = '// ==UserScript==\n// @name ND\n// @nodownload\n// ==/UserScript==\n';
+    const { meta } = parseUserscript(code);
+    expect(meta.nodownload).toBe(true);
+  });
+
+  it('defaults nodownload to false', () => {
+    const code = makeScript({ name: 'Downloadable' });
+    const { meta } = parseUserscript(code);
+    expect(meta.nodownload).toBe(false);
   });
 
   it('parses @unwrap as boolean true', () => {
