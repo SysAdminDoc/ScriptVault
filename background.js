@@ -10103,6 +10103,9 @@ function parseUserscript(code) {
       case 'nodownload':
         meta.nodownload = true;
         break;
+      case 'delay':
+        meta.delay = Math.max(0, parseInt(value, 10) || 0);
+        break;
       case 'top-level-await':
         meta['top-level-await'] = true;
         break;
@@ -16076,9 +16079,14 @@ ${libraryExports}
 `;
 
   // @top-level-await: wrap user code in async IIFE so top-level await works
-  const userCode = meta['top-level-await']
+  let userCode = meta['top-level-await']
     ? `(async () => {\n${script.code}\n})();`
     : script.code;
+
+  // @delay: postpone script execution by N milliseconds
+  if (meta.delay > 0) {
+    userCode = `setTimeout(() => {\n${userCode}\n}, ${meta.delay});`;
+  }
 
   return apiInit + userCode + apiClose;
 }
