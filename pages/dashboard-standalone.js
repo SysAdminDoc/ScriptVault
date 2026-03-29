@@ -116,6 +116,8 @@ const StandaloneExport = (() => {
     }
 
     function minifyJS(code) {
+        // Skip minification for very large scripts to avoid perf issues
+        if (code.length > 500000) return code;
         // Strip userscript header
         let js = code.replace(/\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==\s*/, '');
         // Strip single-line comments (careful not to match inside strings or URLs)
@@ -184,7 +186,7 @@ ${inlineCSS}
 </head>
 <body>
 ${bodyContent}
-${inlineJS ? `<script>${inlineJS}<\/script>` : ''}
+${inlineJS ? `<script>${inlineJS.replace(/<\/(script)/gi, '<\\/$1')}<\/script>` : ''}
 </body>
 </html>`;
     }
@@ -209,7 +211,7 @@ ${inlineJS ? `<script>${inlineJS}<\/script>` : ''}
     // Module 1: Single Script HTML Export
     // =========================================
     function exportAsHTML(scriptOrId) {
-        const script = typeof scriptOrId === 'object' ? scriptOrId : _state.getScript?.(scriptOrId);
+        const script = (scriptOrId && typeof scriptOrId === 'object') ? scriptOrId : _state.getScript?.(scriptOrId);
         if (!script) throw new Error('Script not found');
 
         const meta = parseMetadata(script.code || '');
@@ -430,7 +432,7 @@ function filterScripts() {
     const BOOKMARKLET_SIZE_LIMIT = 2000; // characters — browser URL bar limit varies
 
     function generateBookmarklet(scriptOrId) {
-        const script = typeof scriptOrId === 'object' ? scriptOrId : _state.getScript?.(scriptOrId);
+        const script = (scriptOrId && typeof scriptOrId === 'object') ? scriptOrId : _state.getScript?.(scriptOrId);
         if (!script) throw new Error('Script not found');
 
         const meta = parseMetadata(script.code || '');
@@ -494,7 +496,7 @@ function filterScripts() {
     // Module 4: Install Page Generator
     // =========================================
     function generateInstallPage(scriptOrId) {
-        const script = typeof scriptOrId === 'object' ? scriptOrId : _state.getScript?.(scriptOrId);
+        const script = (scriptOrId && typeof scriptOrId === 'object') ? scriptOrId : _state.getScript?.(scriptOrId);
         if (!script) throw new Error('Script not found');
 
         const meta = parseMetadata(script.code || '');

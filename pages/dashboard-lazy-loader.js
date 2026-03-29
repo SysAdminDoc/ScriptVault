@@ -74,7 +74,7 @@ const LazyLoader = (() => {
         console.warn(`[LazyLoader] Failed to load: ${src}`);
         resolve(); // Don't reject — module is optional
       };
-      document.body.appendChild(script);
+      (document.body || document.head || document.documentElement).appendChild(script);
     });
 
     _loading.set(src, promise);
