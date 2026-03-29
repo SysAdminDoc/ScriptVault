@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.0.0-22c55e?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-2.0.2-22c55e?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/manifest-v3-60a5fa?style=flat-square" alt="Manifest V3">
   <img src="https://img.shields.io/badge/license-MIT-orange?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/chrome-120%2B-blue?style=flat-square" alt="Chrome 120+">
@@ -40,11 +40,11 @@ Full Greasemonkey/Tampermonkey API compatibility with promise-based `GM.*` async
 | `GM_listValues` | | `GM_unregisterMenuCommand` | `GM_openInTab` |
 | `GM_getValues` | | `GM_getMenuCommands` | `GM_getResourceText` |
 | `GM_setValues` | | `GM_addElement` | `GM_getResourceURL` |
-| `GM_deleteValues` | | `GM_loadScript` | `GM_cookie` |
+| `GM_deleteValues` | `GM_head` | `GM_loadScript` | `GM_cookie` |
 | `GM_addValueChangeListener` | | `GM_audio` | `GM_focusTab` |
 | `GM_removeValueChangeListener` | | | `GM_closeTab` |
 
-Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state, `window.close`, `window.focus`, `window.onurlchange` grants, and `@top-level-await` support.
+Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state, `window.close`, `window.focus`, `window.onurlchange` grants, `@top-level-await`, `@delay`, and `@nodownload` support.
 
 ### Script Management
 
