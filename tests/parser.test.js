@@ -114,6 +114,9 @@ function parseUserscript(code) {
       case 'nodownload':
         meta.nodownload = true;
         break;
+      case 'delay':
+        meta.delay = Math.max(0, parseInt(value, 10) || 0);
+        break;
       case 'unwrap':
         meta.unwrap = true;
         break;
@@ -249,6 +252,18 @@ describe('parseUserscript', () => {
     const code = makeScript({ name: 'Downloadable' });
     const { meta } = parseUserscript(code);
     expect(meta.nodownload).toBe(false);
+  });
+
+  it('parses @delay as integer milliseconds', () => {
+    const code = '// ==UserScript==\n// @name Delayed\n// @delay 500\n// ==/UserScript==\n';
+    const { meta } = parseUserscript(code);
+    expect(meta.delay).toBe(500);
+  });
+
+  it('@delay clamps negative values to 0', () => {
+    const code = '// ==UserScript==\n// @name Delayed\n// @delay -100\n// ==/UserScript==\n';
+    const { meta } = parseUserscript(code);
+    expect(meta.delay).toBe(0);
   });
 
   it('parses @unwrap as boolean true', () => {
