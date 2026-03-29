@@ -67,8 +67,10 @@ const NpmResolver = {
     const cached = await this._getCache(cacheKey);
     if (cached) return cached;
 
-    // Resolve version if not pinned
-    const version = requestedVersion || await this._resolveLatestVersion(name);
+    // Resolve version if not pinned (treat 'latest' as unresolved)
+    const version = (requestedVersion && requestedVersion !== 'latest')
+      ? requestedVersion
+      : await this._resolveLatestVersion(name);
     if (!version) {
       throw new Error(`Failed to resolve version for package: ${name}`);
     }

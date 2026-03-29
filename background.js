@@ -4569,6 +4569,8 @@ const XhrManager = {
     };
     
     this.requests.set(requestId, request);
+    // Auto-cleanup after 5 minutes to prevent leaks from abandoned requests
+    request._cleanupTimer = setTimeout(() => this.remove(requestId), 300000);
     return request;
   },
   
@@ -4596,6 +4598,8 @@ const XhrManager = {
   
   // Remove a completed/aborted request
   remove(requestId) {
+    const req = this.requests.get(requestId);
+    if (req?._cleanupTimer) clearTimeout(req._cleanupTimer);
     this.requests.delete(requestId);
   },
   
@@ -4669,8 +4673,16 @@ const ResourceCache = {
     const cached = await this.get(url);
     if (cached) return cached.text;
 
+    // Validate URL protocol
+    if (url && !url.startsWith('https://') && !url.startsWith('http://')) {
+      throw new Error('Only HTTP(S) URLs allowed for @resource/@require');
+    }
+
     try {
-      const response = await fetch(url);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const contentType = response.headers.get('content-type') || 'text/plain';
       const buffer = await response.arrayBuffer();
@@ -4797,8 +4809,10 @@ const NpmResolver = {
     const cached = await this._getCache(cacheKey);
     if (cached) return cached;
 
-    // Resolve version if not pinned
-    const version = requestedVersion || await this._resolveLatestVersion(name);
+    // Resolve version if not pinned (treat 'latest' as unresolved)
+    const version = (requestedVersion && requestedVersion !== 'latest')
+      ? requestedVersion
+      : await this._resolveLatestVersion(name);
     if (!version) {
       throw new Error(`Failed to resolve version for package: ${name}`);
     }
