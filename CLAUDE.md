@@ -15,7 +15,7 @@ v2.0.2
 - **Monaco Editor** (v0.52.2, bundled locally in `lib/monaco/`, CDN fallback in sandboxed iframe)
 - Cloud sync: WebDAV, Google Drive (PKCE), Dropbox (PKCE), OneDrive (PKCE), Easy Cloud (chrome.identity)
 - Vitest test suite (14 test files, 355 test cases)
-- background.js: ~16,220 lines (built from 19+ source modules)
+- background.js: ~16,228 lines (built from 19+ source modules)
 - 37 TypeScript source files in `src/` (type-checked via `npm run typecheck`)
 
 ## Build
@@ -477,4 +477,4 @@ All 4 bg/ modules migrated:
 - Firefox build now uses esbuild pipeline
 
 **Version sync:** manifest.json, manifest-firefox.json, package.json all at 2.0.2
-- background.js: 16,220 lines
+- background.js: 16,228 lines
