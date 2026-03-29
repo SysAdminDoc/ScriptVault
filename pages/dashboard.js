@@ -3117,8 +3117,8 @@
             extraKeys: {
                 'Ctrl-S': saveCurrentScript,
                 'Cmd-S': saveCurrentScript,
-                'Ctrl-F': 'findPersistent',
-                'Ctrl-H': 'replace',
+                'Ctrl-F': (cm) => { try { cm.execCommand('findPersistent'); } catch { showToast('Search requires Monaco editor', 'info'); } },
+                'Ctrl-H': (cm) => { try { cm.execCommand('replace'); } catch { showToast('Replace requires Monaco editor', 'info'); } },
                 'Esc': closeEditor,
                 'Tab': cm => cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection(indentStr, 'end'),
                 'Ctrl-Space': 'autocomplete',
@@ -3980,8 +3980,20 @@
         // Editor toolbar buttons
         elements.tbtnUndo?.addEventListener('click', () => state.editor?.undo());
         elements.tbtnRedo?.addEventListener('click', () => state.editor?.redo());
-        elements.tbtnSearch?.addEventListener('click', () => state.editor?.execCommand('findPersistent'));
-        elements.tbtnReplace?.addEventListener('click', () => state.editor?.execCommand('replace'));
+        elements.tbtnSearch?.addEventListener('click', () => {
+            if (state.editor?.isMonaco) {
+                state.editor.execCommand('actions.find');
+            } else if (state.editor) {
+                try { state.editor.execCommand('findPersistent'); } catch { state.editor.execCommand('find'); }
+            }
+        });
+        elements.tbtnReplace?.addEventListener('click', () => {
+            if (state.editor?.isMonaco) {
+                state.editor.execCommand('editor.action.startFindReplaceAction');
+            } else if (state.editor) {
+                try { state.editor.execCommand('replace'); } catch {}
+            }
+        });
         elements.tbtnBeautify?.addEventListener('click', beautifyCode);
         elements.tbtnLint?.addEventListener('click', () => {
             if (state.editor) {
