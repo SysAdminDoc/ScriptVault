@@ -696,29 +696,37 @@ const UserStylesEngine = (() => {
    * Handle tab navigation — inject matching styles into newly loaded pages.
    * Call from background.js webNavigation.onCommitted or tabs.onUpdated.
    */
+  const _injectingTabs = new Set();
   async function onTabUpdated(tabId, url) {
     if (!_initialized) await _loadState();
     if (!url) return;
+    // Prevent concurrent injection for the same tab
+    if (_injectingTabs.has(tabId)) return;
+    _injectingTabs.add(tabId);
 
-    for (const [styleId, style] of Object.entries(_styles)) {
-      if (!style.enabled) continue;
-      if (!_urlMatchesPatterns(url, style.match)) continue;
+    try {
+      for (const [styleId, style] of Object.entries(_styles)) {
+        if (!style.enabled) continue;
+        if (!_urlMatchesPatterns(url, style.match)) continue;
 
-      const css = _buildCSS(styleId);
-      if (!css) continue;
+        const css = _buildCSS(styleId);
+        if (!css) continue;
 
-      try {
-        await chrome.scripting.insertCSS({
-          target: { tabId },
-          css,
-        });
-        if (!_registeredTabs.has(tabId)) {
-          _registeredTabs.set(tabId, new Set());
+        try {
+          await chrome.scripting.insertCSS({
+            target: { tabId },
+            css,
+          });
+          if (!_registeredTabs.has(tabId)) {
+            _registeredTabs.set(tabId, new Set());
+          }
+          _registeredTabs.get(tabId).add(styleId);
+        } catch {
+          // Tab not injectable
         }
-        _registeredTabs.get(tabId).add(styleId);
-      } catch {
-        // Tab not injectable
       }
+    } finally {
+      _injectingTabs.delete(tabId);
     }
   }
 

@@ -344,6 +344,7 @@ const DependencyGraph = (() => {
         }
 
         const ids = [...metaMap.keys()];
+        const nodeById = new Map(nodes.map(n => [n.id, n]));
 
         // Compare every pair
         for (let i = 0; i < ids.length; i++) {
@@ -373,8 +374,8 @@ const DependencyGraph = (() => {
                     });
                     // Mark conflict if both enabled
                     if (a.enabled && b.enabled) {
-                        const nodeA = nodes.find(n => n.id === ids[i]);
-                        const nodeB = nodes.find(n => n.id === ids[j]);
+                        const nodeA = nodeById.get(ids[i]);
+                        const nodeB = nodeById.get(ids[j]);
                         if (nodeA && nodeB) {
                             nodeA.conflicts.push(ids[j]);
                             nodeB.conflicts.push(ids[i]);
