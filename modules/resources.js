@@ -42,8 +42,16 @@ const ResourceCache = {
     const cached = await this.get(url);
     if (cached) return cached.text;
 
+    // Validate URL protocol
+    if (url && !url.startsWith('https://') && !url.startsWith('http://')) {
+      throw new Error('Only HTTP(S) URLs allowed for @resource/@require');
+    }
+
     try {
-      const response = await fetch(url);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const contentType = response.headers.get('content-type') || 'text/plain';
       const buffer = await response.arrayBuffer();
