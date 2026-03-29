@@ -10100,6 +10100,9 @@ function parseUserscript(code) {
       case 'unwrap':
         meta.unwrap = true;
         break;
+      case 'nodownload':
+        meta.nodownload = true;
+        break;
       case 'top-level-await':
         meta['top-level-await'] = true;
         break;
@@ -10149,6 +10152,7 @@ const UpdateSystem = {
     const updates = [];
     
     for (const script of scripts) {
+      if (script.meta.nodownload) continue; // @nodownload prevents auto-updates
       if (!script.meta.updateURL && !script.meta.downloadURL) continue;
       
       try {
