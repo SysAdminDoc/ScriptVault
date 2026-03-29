@@ -190,8 +190,10 @@ function parseMetadata(code) {
     const [, key, value] = m;
     const val = (value || '').trim();
 
-    if (key === 'noframes' || key === 'unwrap') {
+    if (key === 'noframes' || key === 'unwrap' || key === 'nodownload') {
       meta[key] = true;
+    } else if (key === 'delay') {
+      meta.delay = Math.max(0, parseInt(val, 10) || 0);
     } else if (key === 'top-level-await') {
       meta['top-level-await'] = true;
     } else if (key === 'resource') {
@@ -363,7 +365,7 @@ function renderInstallUI(sourceUrl) {
 
           <div class="meta-item">
             <span class="meta-label">Runs at</span>
-            <span class="meta-value">${escapeHtml(scriptMeta['run-at'])}${scriptMeta.noframes ? ' (no iframes)' : ''}</span>
+            <span class="meta-value">${escapeHtml(scriptMeta['run-at'])}${scriptMeta.noframes ? ' (no iframes)' : ''}${scriptMeta.delay ? ` (delayed ${scriptMeta.delay}ms)` : ''}${scriptMeta.nodownload ? ' (no auto-update)' : ''}</span>
           </div>
 
           <div class="meta-item full-width">
