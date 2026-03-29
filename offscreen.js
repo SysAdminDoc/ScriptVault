@@ -211,6 +211,10 @@ function isMember(node, obj, prop) {
 
 function handleAnalyze(code) {
   try {
+    // Skip AST analysis for very large scripts (>2MB) to prevent OOM
+    if (code && code.length > 2000000) {
+      return { totalRisk: 0, riskLevel: 'unknown', findings: [], categories: {}, summary: 'Script too large for AST analysis', skipped: true };
+    }
     return analyzeAST(code);
   } catch (e) {
     // AST parse failed — fall back to basic info
