@@ -196,7 +196,7 @@
         try {
             const response = await Promise.race([
                 chrome.runtime.sendMessage({ action: 'getScriptsForUrl', url: currentUrl }),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
             ]);
 
             pageScripts = response || [];
