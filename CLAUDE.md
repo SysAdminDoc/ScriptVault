@@ -14,7 +14,7 @@ v2.0.2
 - `chrome.storage.local` for persistence (`unlimitedStorage` permission)
 - **Monaco Editor** (v0.52.2, bundled locally in `lib/monaco/`, CDN fallback in sandboxed iframe)
 - Cloud sync: WebDAV, Google Drive (PKCE), Dropbox (PKCE), OneDrive (PKCE), Easy Cloud (chrome.identity)
-- Vitest test suite (12 test files, 336 test cases)
+- Vitest test suite (14 test files, 355 test cases)
 - background.js: ~16,206 lines (built from 19+ source modules)
 - 37 TypeScript source files in `src/` (type-checked via `npm run typecheck`)
 
@@ -154,6 +154,8 @@ All 4 bg/ modules migrated:
 - `tests/public-api.test.js` — 16 tests for PublicAPI (ping, permissions, rate limiting, webhooks, trusted origins, audit)
 - `tests/signing.test.js` — 8 tests for ScriptSigning (trust store, extraction, verify guards)
 - `tests/workspaces.test.js` — 11 tests for WorkspaceManager (create, activate, snapshot, delete)
+- `tests/resources.test.js` — 8 tests for ResourceCache (get/set, expiration, persistence, clear, prefetch)
+- `tests/xhr.test.js` — 11 tests for XhrManager (create, abort, controller, bulk abort, count)
 - `tests/netlog.test.js` — 31 tests for network log
 - `tests/core-flows.test.js` — 20 tests for install/toggle/update/rollback/save flows
 - `tests/url-matcher.test.js` — 77 tests for URL matching (match patterns, includes, excludes, regex, globs, IDN)
@@ -466,7 +468,7 @@ All 4 bg/ modules migrated:
 - `public-api.test.js`: 16 tests (ping, permissions, rate limiting, webhooks)
 - Netlog tests rewritten to import actual source (was stale copy with unshift)
 - @nodownload and @delay parser tests added
-- 336 total tests across 12 files
+- 355 total tests across 14 files
 
 **Bug fixes (round 4 continued):**
 - Public API `getScripts()` returned object not array — `.find()` was broken
