@@ -509,7 +509,8 @@ const CloudSync = {
     return {
       version: 1,
       timestamp: Date.now(),
-      scripts: Array.from(scriptsMap.values())
+      scripts: Array.from(scriptsMap.values()),
+      tombstones: { ...(local.tombstones || {}), ...(remote.tombstones || {}) }
     };
   }
 };
@@ -518,28 +519,56 @@ const CloudSync = {
 // Import/Export
 // ============================================================================
 
-async function exportAllScripts() {
+async function exportAllScripts(options = {}) {
+  const {
+    includeSettings = true,
+    includeStorage = false
+  } = options;
   const scripts = await ScriptStorage.getAll();
-  const settings = await SettingsManager.get();
-  
-  return {
-    version: 2,
-    exportedAt: new Date().toISOString(),
-    settings: settings,
-    scripts: scripts.map(s => ({
+  const settings = includeSettings ? await SettingsManager.get() : null;
+
+  const exportedScripts = await Promise.all(scripts.map(async s => {
+    const entry = {
       id: s.id,
       code: s.code,
       enabled: s.enabled,
       position: s.position,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt
-    }))
+    };
+    if (includeSettings && s.settings && typeof s.settings === 'object') {
+      entry.settings = { ...s.settings };
+    }
+    if (includeStorage) {
+      const values = await ScriptValues.getAll(s.id);
+      if (values && Object.keys(values).length > 0) {
+        entry.storage = values;
+      }
+    }
+    return entry;
+  }));
+  
+  return {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    ...(includeSettings ? { settings } : {}),
+    scripts: exportedScripts
   };
 }
 
 async function importScripts(data, options = {}) {
-  const { overwrite = false } = options;
-  const results = { imported: 0, skipped: 0, errors: [] };
+  const {
+    overwrite = false,
+    importSettings = false,
+    importStorage = false
+  } = options;
+  const results = {
+    imported: 0,
+    skipped: 0,
+    errors: [],
+    settingsImported: false,
+    storageImported: 0
+  };
 
   if (!data.scripts || !Array.isArray(data.scripts)) {
     return { error: 'Invalid import format' };
@@ -562,15 +591,30 @@ async function importScripts(data, options = {}) {
         continue;
       }
 
+      const nextSettings = importSettings && script.settings && typeof script.settings === 'object'
+        ? { ...script.settings }
+        : { ...(existing?.settings || {}) };
+
       await ScriptStorage.set(script.id, {
         id: script.id,
         code: script.code,
         meta: parsed.meta,
         enabled: script.enabled ?? true,
+        settings: nextSettings,
         position: script.position ?? _importPosition++,
         createdAt: script.createdAt || Date.now(),
         updatedAt: script.updatedAt || Date.now()
       });
+      if (importStorage) {
+        const storedValues = script.storage && typeof script.storage === 'object' ? script.storage : {};
+        if (Object.keys(storedValues).length > 0) {
+          await ScriptValues.deleteAll(script.id);
+          await ScriptValues.setAll(script.id, storedValues);
+          results.storageImported++;
+        } else if (existing) {
+          await ScriptValues.deleteAll(script.id);
+        }
+      }
       results.imported++;
     } catch (e) {
       results.errors.push({ name: script.id, error: e.message });
@@ -578,8 +622,9 @@ async function importScripts(data, options = {}) {
   }
   
   // Import settings if present
-  if (data.settings && options.importSettings) {
+  if (data.settings && importSettings) {
     await SettingsManager.set(data.settings);
+    results.settingsImported = true;
   }
   
   // Re-register all scripts after import
@@ -589,7 +634,8 @@ async function importScripts(data, options = {}) {
 }
 
 // Export to ZIP (Tampermonkey-compatible format)
-async function exportToZip() {
+async function exportToZip(options = {}) {
+  const { includeStorage = true } = options;
   const scripts = await ScriptStorage.getAll();
   const files = {}; // fflate uses { filename: Uint8Array } format
   const usedNames = new Set();
@@ -645,7 +691,7 @@ async function exportToZip() {
     files[`${safeName}.options.json`] = fflate.strToU8(JSON.stringify(options, null, 2));
     
     // Add storage.json if script has stored values
-    const values = await ScriptValues.getAll(script.id);
+    const values = includeStorage ? await ScriptValues.getAll(script.id) : null;
     if (values && Object.keys(values).length > 0) {
       const storage = { data: values };
       files[`${safeName}.storage.json`] = fflate.strToU8(JSON.stringify(storage, null, 2));
@@ -660,7 +706,7 @@ async function exportToZip() {
     binary += String.fromCharCode.apply(null, zipData.subarray(i, i + chunkSize));
   }
   const base64 = btoa(binary);
-  return { zipData: base64, filename: `scriptvault-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip` };
+  return { zipData: base64, filename: `scriptvault-archive-${new Date().toISOString().replace(/[:.]/g, '-')}.zip` };
 }
 
 // Import from ZIP (supports Tampermonkey and other formats)
@@ -879,6 +925,7 @@ async function handleMessage(message, sender) {
         const existing = await ScriptStorage.get(id);
         
         const scriptSettings = { ...(existing?.settings || {}) };
+        delete scriptSettings.mergeConflict;
         // Mark as locally modified when saved from editor — prevents sync from overwriting
         if (data.markModified) scriptSettings.userModified = true;
 
@@ -971,18 +1018,17 @@ async function handleMessage(message, sender) {
       case 'deleteScript': {
         const scriptId = data.id || data.scriptId;
         if (!scriptId) return { error: 'No script ID provided' };
+        const script = await ScriptStorage.get(scriptId);
+        if (!script) return { error: 'Script not found' };
         const settings = await SettingsManager.get();
         const trashMode = settings.trashMode || '30';
 
         if (trashMode !== 'disabled') {
           // Move to trash instead of permanent delete
-          const script = await ScriptStorage.get(scriptId);
-          if (script) {
-            const trashData = await chrome.storage.local.get('trash');
-            const trash = trashData.trash || [];
-            trash.push({ ...script, trashedAt: Date.now() });
-            await chrome.storage.local.set({ trash });
-          }
+          const trashData = await chrome.storage.local.get('trash');
+          const trash = trashData.trash || [];
+          trash.push({ ...script, trashedAt: Date.now() });
+          await chrome.storage.local.set({ trash });
         }
 
         await unregisterScript(scriptId);
@@ -1004,7 +1050,11 @@ async function handleMessage(message, sender) {
         await chrome.storage.local.set({ syncTombstones: tombstones });
 
         await updateBadge();
-        return { success: true };
+        return {
+          success: true,
+          scriptId,
+          scriptName: script.meta?.name || scriptId
+        };
       }
 
       case 'getTrash': {
@@ -1066,37 +1116,50 @@ async function handleMessage(message, sender) {
         const prev = self._toggleLocks.get(scriptId) || Promise.resolve();
         const togglePromise = prev.then(async () => {
           const script = await ScriptStorage.get(scriptId);
-          if (script) {
-            script.enabled = data.enabled;
-            script.updatedAt = Date.now();
-            await ScriptStorage.set(scriptId, script);
-
-            await unregisterScript(scriptId);
-            if (script.enabled) {
-              await registerScript(script);
-            }
-
-            await updateBadge();
-
-            try {
-              const tabs = await chrome.tabs.query({});
-              for (const tab of tabs) {
-                if (tab.url && doesScriptMatchUrl(script, tab.url)) {
-                  chrome.tabs.reload(tab.id);
-                }
-              }
-            } catch (e) {
-              debugLog('Toggle reload failed:', e.message);
-            }
+          if (!script) {
+            return { error: 'Script not found' };
           }
-        }).catch(e => debugLog('Toggle error:', e));
+
+          script.enabled = data.enabled !== undefined ? !!data.enabled : !script.enabled;
+          script.updatedAt = Date.now();
+          await ScriptStorage.set(scriptId, script);
+
+          await unregisterScript(scriptId);
+          if (script.enabled) {
+            await registerScript(script);
+          }
+
+          await updateBadge();
+
+          try {
+            const tabs = await chrome.tabs.query({});
+            for (const tab of tabs) {
+              if (tab.url && doesScriptMatchUrl(script, tab.url)) {
+                chrome.tabs.reload(tab.id);
+              }
+            }
+          } catch (e) {
+            debugLog('Toggle reload failed:', e.message);
+          }
+
+          return {
+            success: true,
+            script: {
+              id: script.id,
+              enabled: script.enabled
+            }
+          };
+        }).catch(e => {
+          debugLog('Toggle error:', e);
+          return { error: e?.message || 'Failed to update script' };
+        }).finally(() => {
+          // Clean up if this is still the latest promise (not superseded by a newer toggle)
+          if (self._toggleLocks.get(scriptId) === togglePromise) {
+            self._toggleLocks.delete(scriptId);
+          }
+        });
         self._toggleLocks.set(scriptId, togglePromise);
-        await togglePromise;
-        // Only delete if this is still the latest promise (not superseded by a newer toggle)
-        if (self._toggleLocks.get(scriptId) === togglePromise) {
-          self._toggleLocks.delete(scriptId);
-        }
-        return { success: true };
+        return await togglePromise;
       }
 
       case 'importScript': {
@@ -1220,6 +1283,35 @@ async function handleMessage(message, sender) {
         }
         return { userScriptsAvailable, setupRequired, setupMessage, chromeVersion: ver };
       }
+
+      case 'repairRuntimeState': {
+        try {
+          await configureUserScriptsWorld();
+          await setupContextMenus();
+          await registerAllScripts();
+          await updateBadge();
+          await setupAlarms();
+
+          const settings = await SettingsManager.get();
+          const ver = settings._chromeVersion || _getChromeVersion();
+          const userScriptsAvailable = settings._userScriptsAvailable !== false && !!chrome.userScripts;
+          let setupRequired = false;
+          let setupMessage = '';
+          if (!userScriptsAvailable) {
+            setupRequired = true;
+            if (ver >= 138) {
+              setupMessage = 'Enable "Allow User Scripts" for ScriptVault in chrome://extensions';
+            } else if (ver >= 120) {
+              setupMessage = 'Enable Developer Mode in chrome://extensions to run userscripts';
+            } else {
+              setupMessage = 'Chrome 120 or newer is required';
+            }
+          }
+          return { success: true, userScriptsAvailable, setupRequired, setupMessage, chromeVersion: ver };
+        } catch (error) {
+          return { success: false, error: error?.message || 'Runtime repair failed' };
+        }
+      }
         
       case 'getSetting':
         return await SettingsManager.get(data.key);
@@ -1316,7 +1408,9 @@ async function handleMessage(message, sender) {
           code: script.code,
           updatedAt: script.updatedAt || Date.now()
         });
-        // Trim to last 5 versions (allow extra room for rollback undos)
+        // Remove the target entry we're rolling back to (prevents duplicates)
+        script.versionHistory.splice(targetIdx, 1);
+        // Trim to last 5 versions
         if (script.versionHistory.length > 5) {
           script.versionHistory = script.versionHistory.slice(-5);
         }
@@ -1430,10 +1524,17 @@ async function handleMessage(message, sender) {
         if (!provider) return { success: false, error: 'Unknown provider: ' + providerName };
 
         try {
-          const exportData = await exportAllScripts();
+          const includeSettings = data?.includeSettings !== false;
+          const includeStorage = data?.includeStorage !== false;
+          const exportData = await exportAllScripts({ includeSettings, includeStorage });
           const settings = await SettingsManager.get();
           await provider.upload(exportData, settings);
-          return { success: true };
+          return {
+            success: true,
+            exported: exportData.scripts?.length || 0,
+            settingsIncluded: includeSettings,
+            storageIncluded: includeStorage
+          };
         } catch (e) {
           return { success: false, error: e.message };
         }
@@ -1448,8 +1549,12 @@ async function handleMessage(message, sender) {
           const settings = await SettingsManager.get();
           const remoteData = await provider.download(settings);
           if (!remoteData) return { success: false, error: 'No backup found on ' + providerName };
-          const result = await importScripts(remoteData, { overwrite: true });
-          return { success: true, imported: result.imported };
+          const result = await importScripts(remoteData, {
+            overwrite: true,
+            importSettings: data?.importSettings === true,
+            importStorage: data?.importStorage !== false
+          });
+          return { success: !result.error, ...result };
         } catch (e) {
           return { success: false, error: e.message };
         }
@@ -1572,7 +1677,7 @@ async function handleMessage(message, sender) {
       
       // Import/Export
       case 'exportAll':
-        return await exportAllScripts();
+        return await exportAllScripts(data?.options || {});
         
       case 'importAll':
         return await importScripts(data.data, data.options);
@@ -1594,11 +1699,13 @@ async function handleMessage(message, sender) {
           return { error: 'No valid userscripts found in backup file' };
         }
         const results = { imported: 0, skipped: 0, errors: [] };
+        const allExisting = await ScriptStorage.getAll();
+        let nextPosition = allExisting.length;
         for (const code of scriptBlocks) {
           try {
             const parsed = parseUserscript(code);
             if (parsed.error) { results.errors.push({ error: parsed.error }); continue; }
-            const existing = (await ScriptStorage.getAll()).find(s =>
+            const existing = allExisting.find(s =>
               s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
             );
             if (existing && !data.overwrite) { results.skipped++; continue; }
@@ -1606,7 +1713,7 @@ async function handleMessage(message, sender) {
             await ScriptStorage.set(id, {
               id, code, meta: parsed.meta,
               enabled: true,
-              position: existing?.position ?? (await ScriptStorage.getAll()).length,
+              position: existing?.position ?? nextPosition++,
               createdAt: existing?.createdAt || Date.now(),
               updatedAt: Date.now()
             });
@@ -1651,12 +1758,27 @@ async function handleMessage(message, sender) {
         if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.deleteBackup(data.backupId);
         return { error: 'BackupScheduler not available' };
       }
+      case 'importBackup': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.importBackup(data.zipData);
+        return { error: 'BackupScheduler not available' };
+      }
+      case 'exportBackup': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.exportBackup(data.backupId);
+        return { error: 'BackupScheduler not available' };
+      }
+      case 'inspectBackup': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.inspectBackup(data.backupId);
+        return { error: 'BackupScheduler not available' };
+      }
       case 'getBackupSettings': {
         if (typeof BackupScheduler !== 'undefined') return BackupScheduler.getSettings();
         return {};
       }
       case 'setBackupSettings': {
-        if (typeof BackupScheduler !== 'undefined') { await BackupScheduler.setSettings(data.settings); return { success: true }; }
+        if (typeof BackupScheduler !== 'undefined') {
+          const settings = await BackupScheduler.setSettings(data.settings);
+          return { success: true, settings };
+        }
         return { error: 'BackupScheduler not available' };
       }
 
@@ -1760,13 +1882,15 @@ async function handleMessage(message, sender) {
         try {
           const vmData = JSON.parse(text);
           if (vmData.scripts && Array.isArray(vmData.scripts)) {
+            const allExistingVM = await ScriptStorage.getAll();
+            let nextPosVM = allExistingVM.length;
             for (const vmScript of vmData.scripts) {
               try {
                 const code = vmScript.code || vmScript.custom?.code || '';
                 if (!code) { results.skipped++; continue; }
                 const parsed = parseUserscript(code);
                 if (parsed.error) { results.errors.push({ name: vmScript.props?.name, error: parsed.error }); continue; }
-                const existing = (await ScriptStorage.getAll()).find(s =>
+                const existing = allExistingVM.find(s =>
                   s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
                 );
                 if (existing && !data.overwrite) { results.skipped++; continue; }
@@ -1774,7 +1898,7 @@ async function handleMessage(message, sender) {
                 await ScriptStorage.set(id, {
                   id, code, meta: parsed.meta,
                   enabled: vmScript.config?.enabled !== false,
-                  position: existing?.position ?? (await ScriptStorage.getAll()).length,
+                  position: existing?.position ?? nextPosVM++,
                   createdAt: existing?.createdAt || Date.now(),
                   updatedAt: Date.now()
                 });
@@ -1790,6 +1914,8 @@ async function handleMessage(message, sender) {
         } catch { /* Not JSON — try text format */ }
 
         // Fallback: same as Tampermonkey text format
+        const allExistingVMFB = await ScriptStorage.getAll();
+        let nextPosVMFB = allExistingVMFB.length;
         const parts = text.split(/\n\s*\n(?=\/\/\s*==UserScript==)/);
         for (const part of parts) {
           const trimmed = part.trim();
@@ -1797,7 +1923,7 @@ async function handleMessage(message, sender) {
             try {
               const parsed = parseUserscript(trimmed);
               if (parsed.error) { results.errors.push({ error: parsed.error }); continue; }
-              const existing = (await ScriptStorage.getAll()).find(s =>
+              const existing = allExistingVMFB.find(s =>
                 s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
               );
               if (existing && !data.overwrite) { results.skipped++; continue; }
@@ -1805,7 +1931,7 @@ async function handleMessage(message, sender) {
               await ScriptStorage.set(id, {
                 id, code: trimmed, meta: parsed.meta,
                 enabled: true,
-                position: existing?.position ?? (await ScriptStorage.getAll()).length,
+                position: existing?.position ?? nextPosVMFB++,
                 createdAt: existing?.createdAt || Date.now(),
                 updatedAt: Date.now()
               });
@@ -1828,13 +1954,15 @@ async function handleMessage(message, sender) {
           const gmData = JSON.parse(text);
           // GM4 exports as array of script objects
           const scripts = Array.isArray(gmData) ? gmData : (gmData.scripts || []);
+          const allExistingGM = await ScriptStorage.getAll();
+          let nextPosGM = allExistingGM.length;
           for (const gmScript of scripts) {
             try {
               const code = gmScript.source || gmScript.code || gmScript.content || '';
               if (!code) { results.skipped++; continue; }
               const parsed = parseUserscript(code);
               if (parsed.error) { results.errors.push({ name: gmScript.name, error: parsed.error }); continue; }
-              const existing = (await ScriptStorage.getAll()).find(s =>
+              const existing = allExistingGM.find(s =>
                 s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
               );
               if (existing && !data.overwrite) { results.skipped++; continue; }
@@ -1842,7 +1970,7 @@ async function handleMessage(message, sender) {
               await ScriptStorage.set(id, {
                 id, code, meta: parsed.meta,
                 enabled: gmScript.enabled !== false,
-                position: existing?.position ?? (await ScriptStorage.getAll()).length,
+                position: existing?.position ?? nextPosGM++,
                 createdAt: existing?.createdAt || Date.now(),
                 updatedAt: Date.now()
               });
@@ -1860,7 +1988,7 @@ async function handleMessage(message, sender) {
       }
 
       case 'exportZip':
-        return await exportToZip();
+        return await exportToZip(data?.options || {});
 
       // Folders
       // Workspaces
@@ -1870,8 +1998,12 @@ async function handleMessage(message, sender) {
       case 'createWorkspace':
         return { workspace: await WorkspaceManager.create(data.name) };
 
-      case 'saveWorkspace':
-        return { workspace: await WorkspaceManager.save(data.id) };
+      case 'saveWorkspace': {
+        const workspace = await WorkspaceManager.save(data.id);
+        return workspace
+          ? { success: true, workspace }
+          : { error: 'Workspace not found' };
+      }
 
       case 'activateWorkspace':
         return await WorkspaceManager.activate(data.id);
@@ -1879,9 +2011,12 @@ async function handleMessage(message, sender) {
       case 'updateWorkspace':
         return { workspace: await WorkspaceManager.update(data.id, data.updates) };
 
-      case 'deleteWorkspace':
-        await WorkspaceManager.delete(data.id);
-        return { success: true };
+      case 'deleteWorkspace': {
+        const workspace = await WorkspaceManager.delete(data.id);
+        return workspace
+          ? { success: true, workspace }
+          : { error: 'Workspace not found' };
+      }
 
       // Network Log — returns flat array (limit optional) + stats
       case 'getNetworkLog': {
@@ -1954,6 +2089,28 @@ async function handleMessage(message, sender) {
       case 'signing_getTrustedKeys':
         return { keys: await ScriptSigning.getTrustedKeys() };
 
+      case 'publicApi_getTrustedOrigins':
+        if (typeof PublicAPI === 'undefined') return { origins: [] };
+        return { origins: PublicAPI.getTrustedOrigins() };
+
+      case 'publicApi_setTrustedOrigins':
+        if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
+        await PublicAPI.setTrustedOrigins(Array.isArray(data.origins) ? data.origins : []);
+        return { success: true, origins: PublicAPI.getTrustedOrigins() };
+
+      case 'publicApi_getPermissions':
+        if (typeof PublicAPI === 'undefined') return { permissions: {} };
+        return { permissions: PublicAPI.getPermissions() };
+
+      case 'publicApi_getAuditLog':
+        if (typeof PublicAPI === 'undefined') return { entries: [] };
+        return { entries: PublicAPI.getAuditLog(data.limit || 50) };
+
+      case 'publicApi_clearAuditLog':
+        if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
+        await PublicAPI.clearAuditLog();
+        return { success: true };
+
       case 'signing_generateNewKeypair':
         return ScriptSigning.generateAndStoreKeypair();
 
@@ -2021,6 +2178,29 @@ async function handleMessage(message, sender) {
       case 'GM_loadScript': {
         try {
           if (!data.url) return { error: 'No URL provided' };
+          // Enforce @connect for GM_loadScript (same rules as GM_xmlhttpRequest)
+          if (data.scriptId) {
+            const lsScript = await ScriptStorage.get(data.scriptId);
+            if (lsScript && lsScript.meta.connect && lsScript.meta.connect.length > 0) {
+              const lsConnectList = lsScript.meta.connect;
+              if (!lsConnectList.includes('*')) {
+                try {
+                  const lsHostname = new URL(data.url).hostname;
+                  const lsAllowed = lsConnectList.some(p => {
+                    if (p === 'self') {
+                      const mDomains = (lsScript.meta.match || []).map(m => {
+                        try { return new URL(m.replace(/\*/g, 'x')).hostname.replace(/^x\./, ''); } catch { return null; }
+                      }).filter(Boolean);
+                      return mDomains.some(d => lsHostname === d || lsHostname.endsWith('.' + d));
+                    }
+                    if (p === 'localhost') return lsHostname === 'localhost' || lsHostname === '127.0.0.1' || lsHostname === '::1';
+                    return lsHostname === p || lsHostname.endsWith('.' + p);
+                  });
+                  if (!lsAllowed) return { error: `Connection to ${lsHostname} blocked by @connect policy` };
+                } catch (e) {}
+              }
+            }
+          }
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), data.timeout || 30000);
           const response = await fetch(data.url, { signal: controller.signal });
@@ -2055,7 +2235,10 @@ async function handleMessage(message, sender) {
                   const isAllowed = connectList.some(pattern => {
                     if (pattern === 'self') {
                       // @connect self - allow same origin as script match domains
-                      return true;
+                      const matchDomains = (xhrScript.meta.match || []).map(m => {
+                        try { return new URL(m.replace(/\*/g, 'x')).hostname.replace(/^x\./, ''); } catch { return null; }
+                      }).filter(Boolean);
+                      return matchDomains.some(d => hostname === d || hostname.endsWith('.' + d));
                     }
                     if (pattern === 'localhost') {
                       return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
@@ -2067,7 +2250,9 @@ async function handleMessage(message, sender) {
                     console.warn(`[ScriptVault] @connect blocked: ${hostname} not in allowed list for ${xhrScript.meta.name}`);
                     return { error: `Connection to ${hostname} blocked by @connect policy`, type: 'error' };
                   }
-                } catch (e) {}
+                } catch (e) {
+                  return { error: 'Invalid URL', type: 'error' };
+                }
               }
             }
           }
@@ -2118,15 +2303,16 @@ async function handleMessage(message, sender) {
           // No 'mode' override — Chrome extensions with <all_urls> host permissions
           // bypass CORS automatically. Forcing mode:'cors' breaks requests to servers
           // that don't echo the extension origin (e.g. localhost with null CORS).
+          const method = (data.method || 'GET').toUpperCase();
           const fetchOptions = {
-            method: data.method || 'GET',
+            method,
             headers: data.headers || {},
             signal: controller.signal,
             credentials: data.anonymous ? 'omit' : 'include'
           };
-          
+
           // Add body for non-GET/HEAD requests
-          if (data.data && data.method !== 'GET' && data.method !== 'HEAD') {
+          if (data.data && method !== 'GET' && method !== 'HEAD') {
             fetchOptions.body = data.data;
           }
           
@@ -2518,6 +2704,10 @@ async function handleMessage(message, sender) {
         const allScripts = await ScriptStorage.getAll();
         const settings = await SettingsManager.get();
         const url = data.url || data;
+
+        if (isUrlBlockedByGlobalSettings(url, settings)) {
+          return [];
+        }
         
         // Filter scripts that match this URL (both enabled and disabled for popup display)
         const filtered = allScripts.filter(script => 
@@ -2899,7 +3089,8 @@ async function handleMessage(message, sender) {
         const key = `console_${data.scriptId}`;
         const existing = await chrome.storage.session.get(key);
         const entries = existing[key] || [];
-        entries.push(...(data.entries || []));
+        const incoming = (data.entries || []).slice(-200);
+        entries.push(...incoming);
         // Keep last 200 entries per script
         const trimmedEntries = entries.slice(-200);
         await chrome.storage.session.set({ [key]: trimmedEntries });
@@ -3233,8 +3424,9 @@ function matchIncludePattern(pattern, url, urlObj) {
       return re ? re.test(url) : false;
     }
 
-    // Convert glob to regex
+    // Convert glob to regex — collapse consecutive wildcards to prevent ReDoS
     let regex = pattern
+      .replace(/\*{2,}/g, '*')                // Collapse consecutive * to single
       .replace(/[.+^${}()|[\]\\]/g, '\\$&')  // Escape special chars
       .replace(/\*/g, '.*')                   // * -> .*
       .replace(/\?/g, '.');                   // ? -> .
@@ -3328,10 +3520,13 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   switch (info.menuItemId) {
     case 'scriptvault-new': {
-      const url = new URL(tab.url);
-      chrome.tabs.create({
-        url: `pages/dashboard.html?new=1&host=${encodeURIComponent(url.hostname)}`
-      });
+      if (!tab?.url) break;
+      try {
+        const url = new URL(tab.url);
+        chrome.tabs.create({
+          url: `pages/dashboard.html?new=1&host=${encodeURIComponent(url.hostname)}`
+        });
+      } catch { chrome.tabs.create({ url: 'pages/dashboard.html?new=1' }); }
       break;
     }
     case 'scriptvault-dashboard':
@@ -3489,6 +3684,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
   _backgroundTaskRunning = true;
+  // Safety timeout: release mutex after 5 minutes even if task hangs
+  const safetyTimer = setTimeout(() => { _backgroundTaskRunning = false; }, 300000);
   try {
     if (alarm.name === 'autoUpdate') {
       await UpdateSystem.autoUpdate();
@@ -3498,6 +3695,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   } catch (e) {
     console.error('[ScriptVault] Alarm handler error:', e);
   } finally {
+    clearTimeout(safetyTimer);
     _backgroundTaskRunning = false;
   }
 });
@@ -3505,8 +3703,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 async function setupAlarms() {
   const settings = await SettingsManager.get();
   
-  // Clear existing alarms
-  await chrome.alarms.clearAll();
+  // Clear only the alarms we manage here (preserve notification/backup alarms)
+  await chrome.alarms.clear('autoUpdate').catch(() => {});
+  await chrome.alarms.clear('autoSync').catch(() => {});
   
   // Setup auto-update alarm
   // checkInterval is hours from dashboard, updateInterval is ms legacy
@@ -3575,11 +3774,13 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   const tracker = self._openTabTrackers?.get(tabId);
   if (tracker) {
     chrome.tabs.sendMessage(tracker.callerTabId, {
-      action: 'tabClosed',
-      data: { closedTabId: tabId, scriptId: tracker.scriptId }
+      action: 'openedTabClosed',
+      data: { tabId, scriptId: tracker.scriptId }
     }).catch(() => {});
     self._openTabTrackers.delete(tabId);
   }
+  // Clean up audio watch tracking for closed tabs
+  if (self._audioWatchedTabs) self._audioWatchedTabs.delete(tabId);
 });
 
 // GM_notification onclick/ondone: fire callbacks on notification interaction
@@ -3588,7 +3789,7 @@ chrome.notifications.onClicked.addListener((notifId) => {
   if (cb && cb.hasOnclick) {
     chrome.tabs.sendMessage(cb.tabId, {
       action: 'notificationEvent',
-      data: { notifId, scriptId: cb.scriptId, event: 'click' }
+      data: { notifId, scriptId: cb.scriptId, type: 'click' }
     }).catch(() => {});
   }
 });
@@ -3598,7 +3799,7 @@ chrome.notifications.onClosed.addListener((notifId, byUser) => {
   if (cb && cb.hasOndone) {
     chrome.tabs.sendMessage(cb.tabId, {
       action: 'notificationEvent',
-      data: { notifId, scriptId: cb.scriptId, event: 'done', byUser }
+      data: { notifId, scriptId: cb.scriptId, type: 'done', byUser }
     }).catch(() => {});
   }
   if (self._notifCallbacks) self._notifCallbacks.delete(notifId);
@@ -3671,6 +3872,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
     if (!code.includes('==UserScript==')) {
       debugLog('Not a valid userscript, allowing normal navigation');
       _pendingFetches.delete(url);
+      await chrome.storage.local.remove('pendingInstall');
       return;
     }
     
@@ -4405,7 +4607,7 @@ async function fetchRequireScript(url) {
       const age = Date.now() - (cached[cacheKey].timestamp || 0);
       if (age < 7 * 24 * 60 * 60 * 1000) {
         debugLog('Using persistent cached @require:', url);
-        requireCache.set(url, cached[cacheKey].code);
+        requireCache.set(fetchUrl, cached[cacheKey].code);
         return cached[cacheKey].code;
       }
     }
@@ -4530,7 +4732,7 @@ function _makeRuleId(scriptId, index) {
   let h = 0;
   for (let i = 0; i < scriptId.length; i++) h = (h * 31 + scriptId.charCodeAt(i)) & 0x7fffffff;
   // Use upper 21 bits for script hash (2M buckets) + lower 10 bits for index (1024 rules)
-  return (((h & 0x1fffff) << 10) | (index & 0x3ff)) || 1;
+  return (((h & 0x1fffff) << 10) | (index & 0x3ff)) + 1;
 }
 
 // Translate GM_webRequest rule selector/action to declarativeNetRequest format
@@ -4768,11 +4970,10 @@ ${req.code}
   
   // console.log('[ScriptVault] Script initializing:', meta.name, 'Channel:', CHANNEL_ID);
   
-  // Grant checking - @grant none means NO APIs except GM_info
+  // Grant checking - @grant none or empty grants means NO APIs except GM_info
   const hasNone = grantSet.has('none');
   const hasGrant = (n) => {
-    if (hasNone) return false;
-    if (grants.length === 0) return true;
+    if (hasNone || grants.length === 0) return false;
     return grantSet.has(n) || grantSet.has('*');
   };
   
@@ -5504,7 +5705,7 @@ ${req.code}
     const dataUri = await sendToBackground('GM_getResourceURL', { scriptId, name });
     if (!dataUri) return null;
     // Return data URI by default, or convert to blob URL if requested
-    if (isBlobUrl === false) return dataUri;
+    if (isBlobUrl !== true) return dataUri;
     try {
       const resp = await fetch(dataUri);
       const blob = await resp.blob();
@@ -5531,7 +5732,22 @@ ${req.code}
     if (attrs) {
       Object.entries(attrs).forEach(([k, v]) => {
         if (k === 'textContent') el.textContent = v;
-        else if (k === 'innerHTML') el.innerHTML = v;
+        else if (k === 'innerHTML') {
+          // Sanitize: strip event handlers and script tags to prevent XSS
+          const temp = document.createElement('template');
+          temp.innerHTML = v;
+          temp.content.querySelectorAll('script').forEach(s => s.remove());
+          temp.content.querySelectorAll('*').forEach(node => {
+            for (const attr of [...node.attributes]) {
+              const lowerName = attr.name.toLowerCase();
+              const lowerValue = attr.value.trim().toLowerCase();
+              if (lowerName.startsWith('on') || lowerValue.startsWith('javascript:') || lowerValue.startsWith('vbscript:')) {
+                node.removeAttribute(attr.name);
+              }
+            }
+          });
+          el.innerHTML = temp.innerHTML;
+        }
         else el.setAttribute(k, v);
       });
     }
@@ -5550,7 +5766,7 @@ ${req.code}
     if (!url) throw new Error('GM_loadScript: No URL provided');
     if (!options.force && _loadedScripts.has(url)) return;
     const result = await sendToBackground('GM_loadScript', { url, timeout: options.timeout });
-    if (result.error) throw new Error('GM_loadScript: ' + result.error);
+    if (!result || result.error) throw new Error('GM_loadScript: ' + (result?.error || 'request timed out'));
     // Temporarily mask module systems so UMD scripts create window globals
     const _savedModule = window.module;
     const _savedExports = window.exports;
@@ -5621,7 +5837,7 @@ ${req.code}
         return;
       }
       sendToBackground('GM_cookie_list', details || {}).then(r => {
-        if (callback) callback(r.cookies || [], r.error ? new Error(r.error) : undefined);
+        if (callback) callback(r?.cookies || [], r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback([], e); });
     },
     set: (details, callback) => {
@@ -5630,7 +5846,7 @@ ${req.code}
         return;
       }
       sendToBackground('GM_cookie_set', details || {}).then(r => {
-        if (callback) callback(r.error ? new Error(r.error) : undefined);
+        if (callback) callback(r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback(e); });
     },
     delete: (details, callback) => {
@@ -5639,7 +5855,7 @@ ${req.code}
         return;
       }
       sendToBackground('GM_cookie_delete', details || {}).then(r => {
-        if (callback) callback(r.error ? new Error(r.error) : undefined);
+        if (callback) callback(r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback(e); });
     }
   };
@@ -5830,7 +6046,9 @@ ${req.code}
     window.addEventListener = new Proxy(window.addEventListener, {
       apply(target, thisArg, args) {
         if (args[0] === 'urlchange') {
-          _urlChangeHandlers.push(args[1]);
+          if (!_urlChangeHandlers.includes(args[1])) {
+            _urlChangeHandlers.push(args[1]);
+          }
           return;
         }
         return Reflect.apply(target, thisArg, args);

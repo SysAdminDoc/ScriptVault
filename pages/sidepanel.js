@@ -4,6 +4,8 @@
 (function () {
   'use strict';
 
+  const numberFormatter = new Intl.NumberFormat();
+
   let currentTab = null;
   let allScripts = [];
   let pageScripts = [];
@@ -12,8 +14,97 @@
   let refreshTimer = null;
   let searchQuery = '';
   let sortMode = 'default'; // default, alpha, perf, errors
+  let noticeTimer = null;
+  let searchRenderTimer = null;
+  const SEARCH_RENDER_DEBOUNCE_MS = 90;
 
   const $ = id => document.getElementById(id) || document.createElement('div'); // null-safe
+
+  function showPanelNotice(message, type = 'success') {
+    const notice = document.getElementById('statusMessage');
+    if (!notice) return;
+    notice.textContent = message;
+    notice.hidden = false;
+    notice.classList.remove('error');
+    if (type === 'error') notice.classList.add('error');
+    notice.classList.add('show');
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => {
+      notice.classList.remove('show', 'error');
+      notice.hidden = true;
+    }, 3600);
+  }
+
+  function getRuntimeError(result, fallback = 'Action failed') {
+    if (!result) return fallback;
+    if (result.error) return result.error;
+    if (result.success === false) return fallback;
+    return '';
+  }
+
+  function updateLocalScriptState(scriptId, enabled) {
+    const script = allScripts.find(s => s.id === scriptId);
+    if (script) script.enabled = enabled;
+    const pageScript = pageScripts.find(s => s.id === scriptId);
+    if (pageScript) pageScript.enabled = enabled;
+  }
+
+  function queueAllScriptsRender(immediate = false) {
+    clearTimeout(searchRenderTimer);
+    if (immediate) {
+      renderAllScripts();
+      return;
+    }
+    searchRenderTimer = setTimeout(() => {
+      searchRenderTimer = null;
+      renderAllScripts();
+    }, SEARCH_RENDER_DEBOUNCE_MS);
+  }
+
+  function hashMarkerSeed(seed) {
+    let hash = 0;
+    const input = String(seed || 'scriptvault');
+    for (let i = 0; i < input.length; i++) {
+      hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash) % 360;
+  }
+
+  function getDomainRoot(domain) {
+    const parts = String(domain || '')
+      .replace(/^www\./, '')
+      .split('.')
+      .filter(Boolean);
+    return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
+  }
+
+  function getBadgeLabel(domain, name) {
+    const root = getDomainRoot(domain).replace(/[^a-z0-9]/gi, '');
+    if (root) return root.slice(0, 2).toUpperCase();
+    const words = String(name || 'Script').trim().split(/\s+/).filter(Boolean);
+    if (words.length > 1) return words.slice(0, 2).map(word => word[0]).join('').toUpperCase();
+    return words[0]?.replace(/[^a-z0-9]/gi, '').slice(0, 2).toUpperCase() || 'SV';
+  }
+
+  function getPrimaryDomain(meta) {
+    const patterns = [...(meta.match || []), ...(meta.include || [])];
+    for (const pattern of patterns) {
+      const match = pattern.match(/^(?:\*|https?|file):\/\/(?:\*\.)?([^\/\*]+)/);
+      if (match) {
+        const domain = match[1].replace(/^\*\./, '').replace(/^www\./, '').toLowerCase();
+        if (domain && domain !== '*' && !domain.includes('*')) return domain;
+      }
+    }
+    return '';
+  }
+
+  function createScriptBadge(domain, name) {
+    const badge = document.createElement('span');
+    badge.className = 'sp-item-icon-badge';
+    badge.style.setProperty('--sp-icon-hue', String(hashMarkerSeed(domain || name)));
+    badge.textContent = getBadgeLabel(domain, name);
+    return badge;
+  }
 
   // ── Init ────────────────────────────────────────────────────────────────
   async function init() {
@@ -38,9 +129,18 @@
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       currentTab = tab;
       updateUrlBar();
-      const res = await chrome.runtime.sendMessage({ action: 'getScripts' });
-      allScripts = res?.scripts || Object.values(res || {});
-      computePageScripts();
+      const currentUrl = currentTab?.url || '';
+      const canMatchScripts = currentUrl &&
+        !currentUrl.startsWith('chrome://') &&
+        !currentUrl.startsWith('chrome-extension://');
+      const [allRes, matchedRes] = await Promise.all([
+        chrome.runtime.sendMessage({ action: 'getScripts' }),
+        canMatchScripts
+          ? chrome.runtime.sendMessage({ action: 'getScriptsForUrl', url: currentUrl })
+          : Promise.resolve([])
+      ]);
+      allScripts = allRes?.scripts || Object.values(allRes || {});
+      pageScripts = Array.isArray(matchedRes) ? matchedRes : [];
       renderPageScripts();
       renderAllScripts();
     } catch (e) {
@@ -61,51 +161,21 @@
   function updateUrlBar() {
     const url = currentTab?.url || '';
     let hostname = '';
-    try { hostname = new URL(url).hostname; } catch {}
-    $('urlHostname').textContent = hostname || '(no page)';
-    $('urlBar').title = url;
-  }
-
-  // ── Script matching ──────────────────────────────────────────────────────
-  function computePageScripts() {
-    const url = currentTab?.url || '';
-    if (!url || url.startsWith('chrome://') || url.startsWith('chrome-extension://')) {
-      pageScripts = [];
-      return;
-    }
-    pageScripts = allScripts.filter(s => scriptMatchesUrl(s, url));
-  }
-
-  function scriptMatchesUrl(script, url) {
-    const meta = script.meta || {};
-    const patterns = [...(meta.match || []), ...(meta.include || [])];
-    if (!patterns.length) return false;
-    if (!patterns.some(p => matchPattern(p, url))) return false;
-    const excludes = [...(meta.exclude || []), ...(meta['exclude-match'] || [])];
-    if (excludes.length && excludes.some(p => matchPattern(p, url))) return false;
-    return true;
-  }
-
-  function matchPattern(pattern, url) {
-    if (pattern === '<all_urls>') return true;
-    // Guard against ReDoS: reject extremely long URLs entirely
-    if (url.length > 2048) return false;
+    let path = '';
     try {
-      let regex;
-      if (pattern.startsWith('/') && pattern.endsWith('/')) {
-        regex = new RegExp(pattern.slice(1, -1));
-      } else {
-        const re = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
-        regex = new RegExp('^' + re + '$');
-      }
-      return regex.test(url);
-    } catch { return false; }
+      const parsedUrl = new URL(url);
+      hostname = parsedUrl.hostname;
+      path = (parsedUrl.pathname || '/') + (parsedUrl.search || '');
+    } catch {}
+    $('urlHostname').textContent = hostname || '(no page)';
+    $('urlPath').textContent = hostname ? path : '';
+    $('urlBar').title = url;
   }
 
   // ── Render page scripts ──────────────────────────────────────────────────
   function renderPageScripts() {
     const list = $('pageScriptList');
-    $('pageScriptCount').textContent = pageScripts.length;
+    $('pageScriptCount').textContent = numberFormatter.format(pageScripts.length);
 
     if (!pageScripts.length) {
       const url = currentTab?.url || '';
@@ -122,8 +192,9 @@
       const link = document.createElement('div');
       link.style.marginTop = '4px';
       if (hostname) {
-        const a = document.createElement('span');
+        const a = document.createElement('button');
         a.className = 'sp-empty-link';
+        a.type = 'button';
         a.textContent = 'Find scripts for ' + hostname;
         a.addEventListener('click', () => {
           chrome.tabs.create({ url: 'https://greasyfork.org/en/scripts/by-site/' + encodeURIComponent(hostname) + '?filter_locale=0' });
@@ -133,14 +204,15 @@
       empty.appendChild(icon);
       empty.appendChild(msg);
       empty.appendChild(link);
-      list.appendChild(empty);
+      list.replaceChildren(empty);
       return;
     }
 
-    list.innerHTML = '';
+    const fragment = document.createDocumentFragment();
     for (const script of pageScripts) {
-      list.appendChild(buildScriptItem(script, true));
+      fragment.appendChild(buildScriptItem(script, true));
     }
+    list.replaceChildren(fragment);
   }
 
   // ── Render all scripts ────────────────────────────────────────────────────
@@ -159,9 +231,7 @@
       });
     }
 
-    $('allScriptCount').textContent = filtered.length + (filtered.length !== allScripts.length ? '/' + allScripts.length : '');
-
-    list.innerHTML = '';
+    $('allScriptCount').textContent = numberFormatter.format(filtered.length) + (filtered.length !== allScripts.length ? '/' + numberFormatter.format(allScripts.length) : '');
 
     // Sort based on current mode
     const sorted = filtered.sort((a, b) => {
@@ -181,9 +251,11 @@
       }
     });
 
+    const fragment = document.createDocumentFragment();
     for (const script of sorted) {
-      list.appendChild(buildScriptItem(script, false));
+      fragment.appendChild(buildScriptItem(script, false));
     }
+    list.replaceChildren(fragment);
     if (allCollapsed) list.classList.add('collapsed');
   }
 
@@ -202,22 +274,34 @@
 
     // Icon (validate URL to prevent XSS via javascript: URIs)
     const safeIcon = meta.icon && typeof sanitizeUrl === 'function' ? sanitizeUrl(meta.icon) : meta.icon;
+    const iconWrap = document.createElement('span');
+    iconWrap.className = 'sp-item-icon';
+    const primaryDomain = getPrimaryDomain(meta);
     if (safeIcon) {
       const img = document.createElement('img');
-      img.className = 'sp-item-icon';
       img.src = safeIcon;
       img.alt = '';
-      img.addEventListener('error', () => { img.style.display = 'none'; });
-      item.appendChild(img);
+      img.width = 18;
+      img.height = 18;
+      img.loading = 'lazy';
+      img.addEventListener('error', () => {
+        iconWrap.replaceChildren(createScriptBadge(primaryDomain, meta.name || script.id));
+      });
+      iconWrap.appendChild(img);
+    } else {
+      iconWrap.appendChild(createScriptBadge(primaryDomain, meta.name || script.id));
     }
+    item.appendChild(iconWrap);
 
     // Name + desc column
     const col = document.createElement('div');
     col.style.cssText = 'flex:1;min-width:0;';
-    const name = document.createElement('div');
-    name.className = 'sp-item-name';
+    const name = document.createElement('button');
+    name.type = 'button';
+    name.className = 'sp-item-name-btn';
     name.textContent = meta.name || script.id;
     name.title = meta.description || '';
+    name.setAttribute('aria-label', `Open ${meta.name || script.id} in editor`);
     name.addEventListener('click', () => openInEditor(script.id));
     col.appendChild(name);
     if (meta.description && !isPageScript) {
@@ -264,25 +348,74 @@
 
   // ── Actions ──────────────────────────────────────────────────────────────
   async function toggleScript(id, enabled) {
-    await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: id, settings: { enabled } });
-    // Optimistic update
-    const script = allScripts.find(s => s.id === id);
-    if (script) script.enabled = enabled;
-    computePageScripts();
-    renderPageScripts();
-    renderAllScripts();
+    try {
+      const result = await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId: id, enabled });
+      const error = getRuntimeError(result, 'Failed to update script');
+      if (error) throw new Error(error);
+      updateLocalScriptState(id, enabled);
+      renderPageScripts();
+      renderAllScripts();
+    } catch (error) {
+      showPanelNotice(error.message || 'Failed to update script', 'error');
+      await refresh();
+    }
   }
 
   async function toggleAll() {
+    const toggleButton = document.getElementById('btnToggleAll');
+    if (toggleButton) toggleButton.disabled = true;
     const anyEnabled = pageScripts.some(s => s.enabled !== false);
     const newState = !anyEnabled;
-    await Promise.allSettled(pageScripts.map(s =>
-      chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: s.id, settings: { enabled: newState } })
-    ));
-    for (const s of pageScripts) s.enabled = newState;
-    computePageScripts();
-    renderPageScripts();
-    renderAllScripts();
+    try {
+      const outcomes = await Promise.allSettled(pageScripts.map(async s => ({
+        id: s.id,
+        result: await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId: s.id, enabled: newState })
+      })));
+
+      let updated = 0;
+      let failed = 0;
+      let needsRefresh = false;
+
+      for (const outcome of outcomes) {
+        if (outcome.status === 'fulfilled') {
+          const error = getRuntimeError(outcome.value.result, 'Failed to update script');
+          if (!error) {
+            updated++;
+            updateLocalScriptState(outcome.value.id, newState);
+          } else {
+            failed++;
+            if (/not found/i.test(error)) needsRefresh = true;
+          }
+        } else {
+          failed++;
+          needsRefresh = true;
+        }
+      }
+
+      if (updated > 0) {
+        renderPageScripts();
+        renderAllScripts();
+      }
+
+      if (failed > 0) {
+        showPanelNotice(
+          updated > 0
+            ? `Updated ${numberFormatter.format(updated)} script${updated === 1 ? '' : 's'}, but ${numberFormatter.format(failed)} failed.`
+            : 'Failed to update scripts on this page.',
+          'error'
+        );
+        if (needsRefresh || updated === 0) {
+          await refresh();
+        }
+        return;
+      }
+
+      showPanelNotice(
+        `${newState ? 'Enabled' : 'Disabled'} ${numberFormatter.format(updated)} script${updated === 1 ? '' : 's'} on this page.`
+      );
+    } finally {
+      if (toggleButton) toggleButton.disabled = false;
+    }
   }
 
   function openInEditor(id) {
@@ -312,19 +445,34 @@
     if (searchEl) {
       searchEl.addEventListener('input', (e) => {
         searchQuery = e.target.value.trim();
-        renderAllScripts();
+        queueAllScriptsRender();
+      });
+      searchEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          queueAllScriptsRender(true);
+          return;
+        }
+        if (e.key === 'Escape' && searchEl.value) {
+          e.preventDefault();
+          searchEl.value = '';
+          searchQuery = '';
+          queueAllScriptsRender(true);
+          searchEl.blur();
+        }
       });
       // Ctrl+F focuses search
       document.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
           e.preventDefault();
           searchEl.focus();
+          searchEl.select?.();
         }
         if (e.key === 'Escape' && document.activeElement === searchEl) {
           searchEl.value = '';
           searchQuery = '';
           searchEl.blur();
-          renderAllScripts();
+          queueAllScriptsRender(true);
         }
       });
     }
@@ -334,7 +482,7 @@
     if (sortEl) {
       sortEl.addEventListener('change', (e) => {
         sortMode = e.target.value;
-        renderAllScripts();
+        queueAllScriptsRender(true);
       });
     }
   }

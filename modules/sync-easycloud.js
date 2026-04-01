@@ -573,13 +573,11 @@ var EasyCloudSync = (() => {
   // ---------------------------------------------------------------------------
 
   function _debouncedSync() {
-    if (_debounceTimer) {
-      clearTimeout(_debounceTimer);
-    }
-    _debounceTimer = setTimeout(() => {
-      _debounceTimer = null;
-      _performSync().catch(e => warn('Debounced sync error:', e));
-    }, DEBOUNCE_MS);
+    // Use chrome.alarms for debounce to survive SW shutdown (DEBOUNCE_MS = 5s)
+    // chrome.alarms minimum is 1 minute for periodInMinutes, but delayInMinutes accepts fractional
+    const DEBOUNCE_ALARM = 'easycloud-debounce-sync';
+    chrome.alarms.create(DEBOUNCE_ALARM, { delayInMinutes: DEBOUNCE_MS / 60000 });
+    // The alarm handler in handleAlarm() will call _performSync()
   }
 
   // ---------------------------------------------------------------------------
@@ -604,6 +602,10 @@ var EasyCloudSync = (() => {
   }
 
   function _handleAlarm(alarm) {
+    if (alarm.name === 'easycloud-debounce-sync') {
+      _performSync().catch(e => warn('Debounced sync error:', e));
+      return;
+    }
     if (alarm.name !== ALARM_NAME) return;
     _performSync().catch(e => warn('Periodic sync error:', e));
   }

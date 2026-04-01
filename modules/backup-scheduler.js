@@ -110,6 +110,7 @@ const BackupScheduler = (() => {
     const scripts = await ScriptStorage.getAll();
     const files = {};
     const usedNames = new Set();
+    let hasScriptStorage = false;
 
     for (const script of scripts) {
       let safeName = (script.meta?.name || 'unnamed')
@@ -155,29 +156,36 @@ const BackupScheduler = (() => {
         const values = await ScriptValues.getAll(script.id);
         if (values && Object.keys(values).length > 0) {
           files[`scripts/${safeName}.storage.json`] = fflate.strToU8(JSON.stringify({ data: values }, null, 2));
+          hasScriptStorage = true;
         }
       } catch (_) { /* ScriptValues may not be available */ }
     }
 
     // Global settings
+    let hasGlobalSettings = false;
     try {
       const globalSettings = await SettingsManager.get();
       files['global-settings.json'] = fflate.strToU8(JSON.stringify(globalSettings, null, 2));
+      hasGlobalSettings = true;
     } catch (_) {}
 
     // Folder structure (if any)
+    let hasFolders = false;
     try {
       const folderData = await chrome.storage.local.get('scriptFolders');
       if (folderData.scriptFolders) {
         files['folders.json'] = fflate.strToU8(JSON.stringify(folderData.scriptFolders, null, 2));
+        hasFolders = true;
       }
     } catch (_) {}
 
     // Workspace snapshots
+    let hasWorkspaces = false;
     try {
       const wsData = await chrome.storage.local.get('workspaces');
       if (wsData.workspaces) {
         files['workspaces.json'] = fflate.strToU8(JSON.stringify(wsData.workspaces, null, 2));
+        hasWorkspaces = true;
       }
     } catch (_) {}
 
@@ -188,7 +196,14 @@ const BackupScheduler = (() => {
     for (let i = 0; i < zipData.length; i += chunkSize) {
       binary += String.fromCharCode.apply(null, zipData.subarray(i, i + chunkSize));
     }
-    return { base64: btoa(binary), scriptCount: scripts.length };
+    return {
+      base64: btoa(binary),
+      scriptCount: scripts.length,
+      hasGlobalSettings,
+      hasFolders,
+      hasWorkspaces,
+      hasScriptStorage
+    };
   }
 
   /* ------------------------------------------------------------------ */
@@ -277,7 +292,14 @@ const BackupScheduler = (() => {
      */
     async createBackup(reason = 'manual') {
       try {
-        const { base64, scriptCount } = await _collectBackupData();
+        const {
+          base64,
+          scriptCount,
+          hasGlobalSettings,
+          hasFolders,
+          hasWorkspaces,
+          hasScriptStorage
+        } = await _collectBackupData();
         const sizeBytes = Math.round(base64.length * 0.75); // approximate binary size
         const settings = await _loadSettings();
 
@@ -287,6 +309,10 @@ const BackupScheduler = (() => {
           version: chrome.runtime.getManifest?.()?.version || '1.0',
           reason,
           scriptCount,
+          hasGlobalSettings,
+          hasFolders,
+          hasWorkspaces,
+          hasScriptStorage,
           size: sizeBytes,
           sizeFormatted: _formatBytes(sizeBytes),
           data: base64
@@ -339,6 +365,10 @@ const BackupScheduler = (() => {
         version: b.version,
         reason: b.reason,
         scriptCount: b.scriptCount,
+        hasGlobalSettings: !!b.hasGlobalSettings,
+        hasFolders: !!b.hasFolders,
+        hasWorkspaces: !!b.hasWorkspaces,
+        hasScriptStorage: !!b.hasScriptStorage,
         size: b.size,
         sizeFormatted: b.sizeFormatted
       }));
@@ -365,6 +395,11 @@ const BackupScheduler = (() => {
         const unzipped = fflate.unzipSync(zipBytes);
         const fileNames = Object.keys(unzipped);
         let restoredScripts = 0;
+        let skippedScripts = 0;
+        let restoredSettings = false;
+        let restoredFolders = false;
+        let restoredWorkspaces = false;
+        const errors = [];
 
         // --- Restore scripts ---
         const userScripts = fileNames.filter(n => n.endsWith('.user.js'));
@@ -383,7 +418,9 @@ const BackupScheduler = (() => {
             }
 
             const scriptName = optionsMeta.meta?.name || baseName.replace(/^scripts\//, '');
-            if (!options.scriptIds.includes(scriptName)) continue;
+            const scriptNs = optionsMeta.meta?.namespace || '';
+            const scriptKey = scriptNs ? `${scriptName}::${scriptNs}` : scriptName;
+            if (!options.scriptIds.includes(scriptName) && !options.scriptIds.includes(scriptKey)) continue;
 
             try {
               const meta = optionsMeta.meta || {};
@@ -414,19 +451,30 @@ const BackupScheduler = (() => {
                   if (storageData.data) {
                     await ScriptValues.setAll(scriptId, storageData.data);
                   }
-                } catch (_) {}
+                } catch (storageErr) {
+                  errors.push({ name: scriptName, error: storageErr.message || String(storageErr) });
+                }
               }
             } catch (importErr) {
               console.warn('[BackupScheduler] Script import error:', filename, importErr);
+              errors.push({ name: filename, error: importErr.message || String(importErr) });
             }
           }
         } else {
           // Full restore: use importFromZip for all scripts at once
           try {
-            await importFromZip(backup.data, { overwrite: true });
-            restoredScripts = userScripts.length;
+            const importResult = await importFromZip(backup.data, { overwrite: true });
+            if (importResult?.error) {
+              errors.push({ name: 'archive', error: importResult.error });
+            }
+            restoredScripts = importResult?.imported || 0;
+            skippedScripts = importResult?.skipped || 0;
+            if (Array.isArray(importResult?.errors)) {
+              errors.push(...importResult.errors);
+            }
           } catch (importErr) {
             console.warn('[BackupScheduler] Full import error:', importErr);
+            errors.push({ name: 'archive', error: importErr.message || String(importErr) });
           }
         }
 
@@ -436,7 +484,10 @@ const BackupScheduler = (() => {
             try {
               const settings = JSON.parse(fflate.strFromU8(unzipped['global-settings.json']));
               await SettingsManager.set(settings);
-            } catch (_) {}
+              restoredSettings = true;
+            } catch (settingsErr) {
+              errors.push({ name: 'global-settings.json', error: settingsErr.message || String(settingsErr) });
+            }
           }
 
           // Restore folders
@@ -444,7 +495,10 @@ const BackupScheduler = (() => {
             try {
               const folders = JSON.parse(fflate.strFromU8(unzipped['folders.json']));
               await chrome.storage.local.set({ scriptFolders: folders });
-            } catch (_) {}
+              restoredFolders = true;
+            } catch (foldersErr) {
+              errors.push({ name: 'folders.json', error: foldersErr.message || String(foldersErr) });
+            }
           }
 
           // Restore workspaces
@@ -452,11 +506,27 @@ const BackupScheduler = (() => {
             try {
               const workspaces = JSON.parse(fflate.strFromU8(unzipped['workspaces.json']));
               await chrome.storage.local.set({ workspaces });
-            } catch (_) {}
+              restoredWorkspaces = true;
+            } catch (workspacesErr) {
+              errors.push({ name: 'workspaces.json', error: workspacesErr.message || String(workspacesErr) });
+            }
           }
         }
 
-        return { success: true, restoredScripts };
+        const success = errors.length === 0
+          || restoredScripts > 0
+          || restoredSettings
+          || restoredFolders
+          || restoredWorkspaces;
+        return {
+          success,
+          restoredScripts,
+          skippedScripts,
+          restoredSettings,
+          restoredFolders,
+          restoredWorkspaces,
+          errors
+        };
       } catch (err) {
         console.error('[BackupScheduler] restoreBackup error:', err);
         return { success: false, error: err.message || String(err) };
@@ -506,7 +576,15 @@ const BackupScheduler = (() => {
           zipBytes[i] = binaryString.charCodeAt(i);
         }
         const unzipped = fflate.unzipSync(zipBytes);
-        const scriptFiles = Object.keys(unzipped).filter(n => n.endsWith('.user.js'));
+        const fileNames = Object.keys(unzipped);
+        const scriptFiles = fileNames.filter(n => n.endsWith('.user.js'));
+        const hasGlobalSettings = fileNames.includes('global-settings.json');
+        const hasFolders = fileNames.includes('folders.json');
+        const hasWorkspaces = fileNames.includes('workspaces.json');
+        const hasScriptStorage = fileNames.some(name => name.endsWith('.storage.json'));
+        if (scriptFiles.length === 0 && !hasGlobalSettings && !hasFolders && !hasWorkspaces) {
+          return { success: false, error: 'This ZIP does not look like a ScriptVault backup archive.' };
+        }
 
         const sizeBytes = Math.round(data.length * 0.75);
         const backup = {
@@ -515,6 +593,10 @@ const BackupScheduler = (() => {
           version: 'imported',
           reason: 'imported',
           scriptCount: scriptFiles.length,
+          hasGlobalSettings,
+          hasFolders,
+          hasWorkspaces,
+          hasScriptStorage,
           size: sizeBytes,
           sizeFormatted: _formatBytes(sizeBytes),
           data
@@ -548,7 +630,8 @@ const BackupScheduler = (() => {
       const merged = { ...(await _loadSettings()), ...settings };
       await _saveSettings(merged);
       await _registerAlarms();
-      return { ..._settings };
+      const prunedCount = await api.pruneOldBackups();
+      return { ..._settings, prunedCount };
     },
 
     /**
@@ -557,11 +640,12 @@ const BackupScheduler = (() => {
     async pruneOldBackups() {
       const settings = await _loadSettings();
       const backups = await _getBackupList();
-      if (backups.length <= settings.maxBackups) return;
+      if (backups.length <= settings.maxBackups) return 0;
 
       // Keep the newest N
       const pruned = backups.slice(0, settings.maxBackups);
       await _saveBackupList(pruned);
+      return Math.max(0, backups.length - pruned.length);
     },
 
     /**
@@ -598,19 +682,75 @@ const BackupScheduler = (() => {
         }
         const unzipped = fflate.unzipSync(zipBytes);
         const fileNames = Object.keys(unzipped);
+        const parseJsonFile = (fileName) => {
+          if (!unzipped[fileName]) return null;
+          try {
+            return JSON.parse(fflate.strFromU8(unzipped[fileName]));
+          } catch (_) {
+            return null;
+          }
+        };
+        const countEntries = (value) => {
+          if (Array.isArray(value)) return value.length;
+          if (value && typeof value === 'object') return Object.keys(value).length;
+          return 0;
+        };
+        const globalSettings = parseJsonFile('global-settings.json');
+        const folderData = parseJsonFile('folders.json');
+        const workspaceData = parseJsonFile('workspaces.json');
+        const folderList = Array.isArray(folderData) ? folderData : [];
+        const workspaceList = Array.isArray(workspaceData?.list)
+          ? workspaceData.list
+          : (Array.isArray(workspaceData) ? workspaceData : []);
 
         const scripts = fileNames
           .filter(n => n.endsWith('.user.js'))
           .map(n => {
             const baseName = n.replace(/\.user\.js$/, '');
             const displayName = baseName.replace(/^scripts\//, '');
+            let meta = {};
+            const optionsFile = `${baseName}.options.json`;
+            if (unzipped[optionsFile]) {
+              try {
+                meta = JSON.parse(fflate.strFromU8(unzipped[optionsFile]))?.meta || {};
+              } catch (_) {}
+            }
+            const name = meta.name || displayName;
+            const namespace = meta.namespace || '';
             return {
-              name: displayName,
+              id: namespace ? `${name}::${namespace}` : name,
+              name,
+              namespace,
               hasStorage: !!unzipped[`${baseName}.storage.json`]
             };
           });
+        const scriptsWithStorageCount = scripts.filter(script => script.hasStorage).length;
 
-        return scripts;
+        return {
+          scriptCount: scripts.length,
+          scripts,
+          scriptsWithStorageCount,
+          hasGlobalSettings: !!unzipped['global-settings.json'],
+          settingsKeyCount: countEntries(globalSettings),
+          hasFolders: !!unzipped['folders.json'],
+          folderCount: countEntries(folderData),
+          folders: folderList.map(folder => ({
+            id: folder?.id || '',
+            name: folder?.name || 'Unnamed folder',
+            scriptCount: Array.isArray(folder?.scriptIds) ? folder.scriptIds.length : 0
+          })),
+          hasWorkspaces: !!unzipped['workspaces.json'],
+          workspaceCount: workspaceList.length,
+          workspaces: workspaceList.map(workspace => ({
+            id: workspace?.id || '',
+            name: workspace?.name || 'Unnamed workspace',
+            scriptCount: workspace?.snapshot && typeof workspace.snapshot === 'object'
+              ? Object.keys(workspace.snapshot).length
+              : 0,
+            active: workspaceData?.active === workspace?.id
+          })),
+          activeWorkspaceId: workspaceData?.active || null
+        };
       } catch (err) {
         console.error('[BackupScheduler] inspectBackup error:', err);
         return null;

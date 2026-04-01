@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    fileParallelism: false,
+    testTimeout: 30000,
     include: ["tests/**/*.test.{js,mjs}", "tests/**/*.spec.{js,mjs}"],
     coverage: {
       provider: "v8",

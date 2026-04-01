@@ -791,9 +791,12 @@ const ScriptChains = (() => {
         const delBtn = document.createElement('button');
         delBtn.className = 'sv-chains-btn danger';
         delBtn.textContent = 'Delete';
-        delBtn.addEventListener('click', (e) => {
+        delBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
-          if (confirm(`Delete chain "${chain.name}"?`)) {
+          const confirmed = typeof window.ScriptVaultDashboardUI?.confirm === 'function'
+            ? await window.ScriptVaultDashboardUI.confirm('Delete Chain', `Delete chain "${chain.name}"?`)
+            : confirm(`Delete chain "${chain.name}"?`);
+          if (confirmed) {
             deleteChain(chain.id);
           }
         });
@@ -809,7 +812,7 @@ const ScriptChains = (() => {
   /* ------------------------------------------------------------------ */
 
   function _openEditor(chainId) {
-    const chain = chainId ? { ..._chains[chainId], steps: [...(_chains[chainId]?.steps || [])] } : {
+    const chain = chainId ? { ..._chains[chainId], steps: (_chains[chainId]?.steps || []).map(s => ({ ...s })) } : {
       id: null,
       name: '',
       trigger: { type: 'manual', value: '' },

@@ -109,7 +109,11 @@ const WhatsNew = (() => {
 
     show() {
       const entry = CHANGELOG[CURRENT_VERSION];
-      if (!entry) return;
+      if (!entry) {
+        // Mark as seen even without a matching entry to prevent infinite re-check
+        chrome.storage.local.set({ lastSeenVersion: CURRENT_VERSION });
+        return;
+      }
 
       _injectStyles();
 

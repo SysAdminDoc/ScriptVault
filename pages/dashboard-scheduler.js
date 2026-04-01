@@ -448,8 +448,10 @@ const ScriptScheduler = (() => {
   async function persistSchedules() {
     try {
       await chrome.storage.local.set({ [STORAGE_KEY]: _schedules });
+      return true;
     } catch (e) {
       console.error('[ScriptScheduler] Failed to persist schedules:', e);
+      return false;
     }
   }
 
@@ -1014,8 +1016,19 @@ const ScriptScheduler = (() => {
   async function saveAndClose() {
     if (!_activeScriptId) return;
     const sched = collectScheduleFromModal();
+    const previous = _schedules[_activeScriptId]
+      ? cloneSchedule(_schedules[_activeScriptId])
+      : null;
     _schedules[_activeScriptId] = sched;
-    await persistSchedules();
+    const persisted = await persistSchedules();
+    if (!persisted) {
+      if (previous) _schedules[_activeScriptId] = previous;
+      else delete _schedules[_activeScriptId];
+      if (typeof showToast === 'function') {
+        showToast('Failed to save schedule', 'error');
+      }
+      return;
+    }
     await syncAlarms();
     updateScriptRowIndicators();
     closeModal();
@@ -1028,8 +1041,18 @@ const ScriptScheduler = (() => {
 
   async function clearAndClose() {
     if (!_activeScriptId) return;
+    const previous = _schedules[_activeScriptId]
+      ? cloneSchedule(_schedules[_activeScriptId])
+      : null;
     delete _schedules[_activeScriptId];
-    await persistSchedules();
+    const persisted = await persistSchedules();
+    if (!persisted) {
+      if (previous) _schedules[_activeScriptId] = previous;
+      if (typeof showToast === 'function') {
+        showToast('Failed to clear schedule', 'error');
+      }
+      return;
+    }
     await syncAlarms();
     updateScriptRowIndicators();
     closeModal();
@@ -1192,7 +1215,10 @@ const ScriptScheduler = (() => {
      */
     async setSchedule(scriptId, schedule) {
       _schedules[scriptId] = { ...DEFAULT_SCHEDULE, ...schedule };
-      await persistSchedules();
+      const persisted = await persistSchedules();
+      if (!persisted) {
+        throw new Error('Failed to save schedule');
+      }
       await syncAlarms();
       updateScriptRowIndicators();
     },

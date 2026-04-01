@@ -64,9 +64,31 @@ globalThis.chrome = {
     create: vi.fn().mockResolvedValue({}),
     update: vi.fn().mockResolvedValue({}),
     reload: vi.fn().mockResolvedValue(),
+    get: vi.fn().mockResolvedValue({ id: 1, url: 'https://example.com' }),
+    sendMessage: vi.fn().mockResolvedValue({}),
     onActivated: { addListener: vi.fn() },
     onUpdated: { addListener: vi.fn() },
     onRemoved: { addListener: vi.fn() },
+  },
+  action: {
+    setBadgeText: vi.fn().mockResolvedValue(),
+    setBadgeBackgroundColor: vi.fn().mockResolvedValue(),
+    onClicked: { addListener: vi.fn() },
+  },
+  webNavigation: {
+    onBeforeNavigate: { addListener: vi.fn() },
+    onCommitted: { addListener: vi.fn() },
+  },
+  cookies: {
+    getAll: vi.fn().mockResolvedValue([]),
+    set: vi.fn().mockResolvedValue({}),
+    remove: vi.fn().mockResolvedValue({}),
+  },
+  sidePanel: {
+    setOptions: vi.fn().mockResolvedValue(),
+  },
+  commands: {
+    onCommand: { addListener: vi.fn() },
   },
   notifications: {
     create: vi.fn().mockImplementation((...args) => {
@@ -98,6 +120,7 @@ globalThis.chrome = {
   scripting: {
     insertCSS: vi.fn().mockResolvedValue(),
     removeCSS: vi.fn().mockResolvedValue(),
+    executeScript: vi.fn().mockResolvedValue([]),
   },
   offscreen: {
     hasDocument: vi.fn().mockResolvedValue(false),

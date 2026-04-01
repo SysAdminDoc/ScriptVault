@@ -719,6 +719,10 @@ const ScriptDebugger = (() => {
      * @param {Function} [options.onJumpToLine] — callback(scriptId, lineNumber)
      */
     init(containerEl, options = {}) {
+      // Guard against double-init (prevents duplicate interval timers)
+      if (_container) {
+        if (_variableRefreshTimer) clearInterval(_variableRefreshTimer);
+      }
       _container = containerEl;
       _onJumpToLine = options.onJumpToLine || null;
       _activeTab = 'console';

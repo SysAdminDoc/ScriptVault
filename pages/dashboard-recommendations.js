@@ -290,16 +290,17 @@ const Recommendations = (() => {
   /*  Data Helpers                                                       */
   /* ------------------------------------------------------------------ */
 
-  function _loadDismissed() {
+  async function _loadDismissed() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY_DISMISSED);
-      _dismissed = raw ? new Set(JSON.parse(raw)) : new Set();
+      const result = await chrome.storage.local.get(STORAGE_KEY_DISMISSED);
+      const raw = result[STORAGE_KEY_DISMISSED];
+      _dismissed = raw ? new Set(Array.isArray(raw) ? raw : JSON.parse(raw)) : new Set();
     } catch { _dismissed = new Set(); }
   }
 
   function _saveDismissed() {
     try {
-      localStorage.setItem(STORAGE_KEY_DISMISSED, JSON.stringify([..._dismissed]));
+      chrome.storage.local.set({ [STORAGE_KEY_DISMISSED]: [..._dismissed] });
     } catch {}
   }
 
@@ -349,7 +350,7 @@ const Recommendations = (() => {
   /*  Recommendation Engine                                              */
   /* ------------------------------------------------------------------ */
 
-  function _generateRecommendations() {
+  async function _generateRecommendations() {
     const scripts = _getInstalledScripts();
     const installedIds = _getInstalledIds();
     const domains = _extractDomains(scripts);
@@ -466,7 +467,8 @@ const Recommendations = (() => {
 
     // Check for scripts with errors
     try {
-      const analyticsData = JSON.parse(localStorage.getItem('sv_analytics') || '{}');
+      const analyticsResult = await chrome.storage.local.get('sv_analytics');
+      const analyticsData = analyticsResult['sv_analytics'] || {};
       for (const [scriptId, data] of Object.entries(analyticsData)) {
         if (data && data.days) {
           const recentDays = Object.entries(data.days).slice(-7);
@@ -712,13 +714,13 @@ const Recommendations = (() => {
   /*  Public API                                                         */
   /* ------------------------------------------------------------------ */
 
-  function init(containerEl, options = {}) {
+  async function init(containerEl, options = {}) {
     _container = containerEl;
     _onInstall = options.onInstall || null;
     _getScripts = options.getScripts || (() => []);
     _injectStyles();
-    _loadDismissed();
-    _recommendations = _generateRecommendations();
+    await _loadDismissed();
+    _recommendations = await _generateRecommendations();
     _buildUI();
     _initialized = true;
   }

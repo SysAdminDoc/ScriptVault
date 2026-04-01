@@ -348,7 +348,7 @@ const AdvancedLinter = (() => {
         const issues = [];
         for (let i = 0; i < lines.length; i++) {
           for (const [api, info] of Object.entries(DEPRECATED_APIS)) {
-            const re = new RegExp(`\\b${api.replace('.', '\\.')}\\b`, 'g');
+            const re = new RegExp(`\\b${api.replace(/\./g, '\\.')}\\b`, 'g');
             if (re.test(lines[i])) {
               issues.push({
                 line: bodyStart + i + 1,
@@ -363,7 +363,7 @@ const AdvancedLinter = (() => {
       fix(code, fixData) {
         const { api, replacement } = fixData;
         if (replacement.includes('(keep')) return code;
-        const re = new RegExp(`\\b${api.replace('.', '\\.')}\\b`, 'g');
+        const re = new RegExp(`\\b${api.replace(/\./g, '\\.')}\\b`, 'g');
         return code.replace(re, replacement);
       },
     },
@@ -914,7 +914,7 @@ const AdvancedLinter = (() => {
     const result = [];
     const n = a.length, m = b.length;
     // Build LCS table
-    const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+    const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
     for (let i = 1; i <= n; i++) {
       for (let j = 1; j <= m; j++) {
         dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);

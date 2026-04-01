@@ -95,6 +95,14 @@ describe('PublicAPI', () => {
       );
       expect(result.ok).toBe(true);
     });
+
+    it('getPermissions returns a defensive copy', async () => {
+      await PublicAPI.init();
+      const permissions = PublicAPI.getPermissions();
+      expect(permissions.ping).toBeTruthy();
+      permissions.ping = 'deny';
+      expect(PublicAPI.getPermissions().ping).not.toBe('deny');
+    });
   });
 
   describe('setWebhook', () => {

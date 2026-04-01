@@ -121,6 +121,9 @@ const ScriptSigning = {
   // ── Trust management ──────────────────────────────────────────────────────
 
   async trustKey(publicKey, name) {
+    if (['__proto__', 'constructor', 'prototype'].includes(publicKey)) {
+      return { error: 'Invalid key' };
+    }
     const settings = await SettingsManager.get();
     const trustedKeys = settings.trustedSigningKeys || {};
     trustedKeys[publicKey] = { name: name || publicKey.slice(0, 12) + '…', addedAt: Date.now() };
@@ -147,19 +150,19 @@ const ScriptSigning = {
 
   async signAndEmbedInCode(code) {
     // Strip any existing signature tag
-    const stripped = code.replace(/\/\/\s*@signature\s+[^\n]+\n/g, '');
+    const stripped = code.replace(/\/\/\s*@signature\s+[^\r\n]+\r?\n?/g, '');
     const sig = await this.signScript(stripped);
     const sigLine = `// @signature ${sig.signature}|${sig.publicKey}|${sig.timestamp}`;
 
     // Insert just before ==/UserScript==
     if (stripped.includes('==/UserScript==')) {
-      return stripped.replace('// ==/UserScript==', sigLine + '\n// ==/UserScript==');
+      return stripped.replace(/(\/\/\s*==\/UserScript==)/, sigLine + '\n$1');
     }
     return sigLine + '\n' + stripped;
   },
 
   extractSignatureFromCode(code) {
-    const match = code.match(/\/\/\s*@signature\s+([^\n]+)/);
+    const match = code.match(/\/\/\s*@signature\s+([^\r\n]+)/);
     if (!match) return null;
     const parts = match[1].trim().split('|');
     if (parts.length < 2) return null;
@@ -174,7 +177,7 @@ const ScriptSigning = {
     const sigInfo = this.extractSignatureFromCode(code);
     if (!sigInfo) return { valid: false, reason: 'No signature found in script' };
     // Strip the signature line before verifying (we signed the code without it)
-    const strippedCode = code.replace(/\/\/\s*@signature\s+[^\n]+\n?/g, '');
+    const strippedCode = code.replace(/\/\/\s*@signature\s+[^\r\n]+\r?\n?/g, '');
     return this.verifyScript(strippedCode, sigInfo);
   }
 };

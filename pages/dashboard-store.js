@@ -19,6 +19,10 @@ const ScriptStore = (() => {
         siteHostname: null,
         loading: false,
         installedNames: new Set(),
+        lastResultsCount: 0,
+        lastContextLabel: 'Ready',
+        lastSourceStats: null,
+        requestToken: 0,
         getInstalledScripts: null, // fn supplied by caller
         onInstalled: null,         // callback after successful install
     };
@@ -158,6 +162,7 @@ const ScriptStore = (() => {
     margin-right: 4px;
 }
 .ss-chip {
+    appearance: none;
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -179,6 +184,10 @@ const ScriptStore = (() => {
     color: var(--text-on-accent, #fff);
     border-color: var(--accent-primary);
 }
+.ss-chip:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
 .ss-nav-sep {
     width: 1px;
     height: 18px;
@@ -191,6 +200,7 @@ const ScriptStore = (() => {
     flex: 1;
     overflow-y: auto;
     padding: 8px 16px;
+    overscroll-behavior: contain;
 }
 .ss-results::-webkit-scrollbar { width: 6px; }
 .ss-results::-webkit-scrollbar-thumb {
@@ -395,6 +405,373 @@ const ScriptStore = (() => {
     color: var(--text-muted);
     flex-shrink: 0;
 }
+
+/* Premium overrides */
+.ss-panel {
+    display: block;
+    background: transparent;
+    font-family: inherit;
+    font-size: 13px;
+}
+.ss-shell {
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+.ss-hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding: 22px 24px;
+    border: 1px solid rgba(127, 127, 127, 0.16);
+    border-radius: 20px;
+    background:
+        radial-gradient(circle at top right, rgba(96, 165, 250, 0.14), transparent 16rem),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+        var(--bg-section-header);
+    box-shadow: 0 18px 32px rgba(0, 0, 0, 0.14);
+}
+.ss-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent-secondary);
+}
+.ss-hero-copy h2 {
+    margin-top: 10px;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--text-primary);
+}
+.ss-hero-copy p {
+    margin-top: 8px;
+    max-width: 620px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+.ss-overview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.ss-summary {
+    min-width: 118px;
+    padding: 12px 14px;
+    border: 1px solid rgba(127, 127, 127, 0.14);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.04);
+}
+.ss-summary-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.ss-summary strong {
+    display: block;
+    margin-top: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+}
+.ss-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.ss-search-bar {
+    flex: 1 1 320px;
+    min-width: 0;
+    align-items: center;
+    padding: 0 14px;
+    gap: 10px;
+    border: 1px solid rgba(127, 127, 127, 0.16);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+}
+.ss-search-label {
+    color: var(--text-muted);
+    font-size: 13px;
+    white-space: nowrap;
+}
+.ss-search-input {
+    min-width: 0;
+    border: none;
+    background: transparent;
+    padding: 12px 0;
+    font-size: 13px;
+}
+.ss-toolbar-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.ss-btn {
+    padding: 8px 13px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    gap: 6px;
+}
+.ss-btn.small {
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 10px;
+}
+.ss-btn.ghost {
+    background: rgba(255, 255, 255, 0.03);
+}
+.ss-btn.ghost.active {
+    background: rgba(96, 165, 250, 0.16);
+    border-color: rgba(96, 165, 250, 0.34);
+    color: #dbeafe;
+    box-shadow: 0 10px 18px rgba(96, 165, 250, 0.14);
+}
+.ss-nav {
+    padding: 14px 16px;
+    border: 1px solid rgba(127, 127, 127, 0.16);
+    border-radius: 18px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+        var(--bg-content);
+}
+.ss-nav-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.ss-chip {
+    padding: 7px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.ss-nav-sep {
+    height: 20px;
+    background: rgba(127, 127, 127, 0.16);
+}
+.ss-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 0 2px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+.ss-status strong {
+    color: var(--text-primary);
+}
+.ss-results {
+    padding: 8px 0 0;
+    overflow: visible;
+}
+.ss-results-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.ss-empty,
+.ss-error,
+.ss-loading {
+    padding: 28px 20px;
+    border: 1px solid rgba(127, 127, 127, 0.14);
+    border-radius: 18px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+        var(--bg-content);
+}
+.ss-empty strong,
+.ss-error strong,
+.ss-loading strong {
+    display: block;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+.ss-empty span,
+.ss-error span,
+.ss-loading span {
+    display: block;
+}
+.ss-result-count {
+    padding: 0 2px;
+    text-align: left;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+.ss-source-bar {
+    gap: 8px;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+.ss-source-stat {
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 11px;
+}
+.ss-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    padding: 16px;
+    margin-bottom: 0;
+    border-radius: 18px;
+    border: 1px solid rgba(127, 127, 127, 0.16);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+        var(--bg-content);
+    box-shadow: 0 14px 24px rgba(0, 0, 0, 0.12);
+    content-visibility: auto;
+    contain-intrinsic-size: 188px;
+    contain: layout style paint;
+}
+.ss-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(96, 165, 250, 0.24);
+    box-shadow: 0 18px 30px rgba(0, 0, 0, 0.16);
+}
+.ss-results-inner {
+    content-visibility: auto;
+    contain-intrinsic-size: 960px;
+}
+.ss-results[data-list-size="large"] .ss-card,
+.ss-results[data-list-size="huge"] .ss-card {
+    transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+.ss-results[data-list-size="huge"] .ss-card:hover {
+    transform: none;
+}
+.ss-card.installed {
+    border-left: 1px solid rgba(127, 127, 127, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.16), 0 14px 24px rgba(0, 0, 0, 0.12);
+}
+.ss-card-name {
+    margin-bottom: 6px;
+    gap: 8px;
+}
+.ss-card-name a {
+    color: var(--text-primary);
+    font-size: 15px;
+}
+.ss-card-version,
+.ss-installed-badge,
+.ss-source-badge {
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.ss-card-version {
+    background: rgba(255, 255, 255, 0.04);
+}
+.ss-installed-badge {
+    color: #d1fae5;
+    background: rgba(52, 211, 153, 0.14);
+}
+.ss-card-desc {
+    margin-bottom: 10px;
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.ss-card-meta {
+    gap: 8px;
+    font-size: 11px;
+}
+.ss-card-meta span {
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+}
+.ss-card-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.ss-card-preview {
+    max-height: 360px;
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(127, 127, 127, 0.16);
+    background: rgba(0, 0, 0, 0.22);
+    font-family: Consolas, 'Cascadia Code', monospace;
+    font-size: 11px;
+    line-height: 1.55;
+}
+.ss-pagination {
+    padding: 4px 0 0;
+}
+.ss-pagination-info {
+    font-size: 12px;
+}
+.ss-footer {
+    padding: 4px 2px 0;
+    border-top: none;
+    background: transparent;
+    font-size: 11px;
+}
+@media (max-width: 900px) {
+    .ss-shell {
+        padding: 16px;
+    }
+    .ss-hero {
+        padding: 18px;
+    }
+    .ss-toolbar,
+    .ss-status {
+        align-items: stretch;
+    }
+    .ss-search-bar {
+        width: 100%;
+    }
+    .ss-card {
+        grid-template-columns: 1fr;
+    }
+    .ss-card-actions {
+        justify-content: flex-start;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ss-btn,
+    .ss-chip,
+    .ss-card {
+        transition: none;
+    }
+    .ss-card:hover,
+    .ss-btn:hover {
+        transform: none;
+    }
+    .ss-loading::after {
+        animation: none;
+        border-top-color: var(--text-muted);
+    }
+}
 `;
         document.head.appendChild(style);
         _state.styleEl = style;
@@ -433,20 +810,92 @@ const ScriptStore = (() => {
         }
     }
 
+    function getResultListSize(count) {
+        if (count <= 0) return 'empty';
+        if (count >= 80) return 'huge';
+        if (count >= 36) return 'large';
+        if (count >= 12) return 'medium';
+        return 'small';
+    }
+
+    function setStatus(message, hint = '') {
+        const status = _state.container?.querySelector('.ss-status-text');
+        const helper = _state.container?.querySelector('.ss-status-hint');
+        if (status) status.textContent = message;
+        if (helper) helper.textContent = hint;
+    }
+
+    function getViewLabel() {
+        if (_state.siteHostname) return `Site: ${_state.siteHostname}`;
+        if (_state.category) return CATEGORIES[_state.category]?.label || 'Category';
+        if (_state.sortMode === 'daily_installs') return 'Trending';
+        if (_state.sortMode === 'total_installs') return 'Popular';
+        if (_state.query) return 'Search';
+        return 'Ready';
+    }
+
+    function isGreasyForkOnlyMode() {
+        return !!_state.siteHostname || (!!_state.sortMode && !_state.query && !_state.category);
+    }
+
+    function getActiveSourceSummary() {
+        return isGreasyForkOnlyMode() ? 'Greasy Fork only' : `${_activeSources.size} active`;
+    }
+
+    function normalizeIdentityPart(value) {
+        return (value || '').trim().toLowerCase();
+    }
+
+    function getInstallIdentity(scriptLike = {}) {
+        const name = normalizeIdentityPart(scriptLike.name || scriptLike.metadata?.name);
+        const author = normalizeIdentityPart(scriptLike.author || scriptLike.metadata?.author);
+        return author ? `${name}::${author}` : name;
+    }
+
+    function updateOverview() {
+        const resultsEl = _state.container?.querySelector('[data-summary="results"]');
+        const sourcesEl = _state.container?.querySelector('[data-summary="sources"]');
+        const viewEl = _state.container?.querySelector('[data-summary="view"]');
+        const installedEl = _state.container?.querySelector('[data-summary="installed"]');
+
+        if (resultsEl) {
+            resultsEl.textContent = _state.lastResultsCount
+                ? `${_state.lastResultsCount} loaded`
+                : 'Ready';
+        }
+        if (sourcesEl) {
+            sourcesEl.textContent = getActiveSourceSummary();
+        }
+        if (viewEl) {
+            viewEl.textContent = getViewLabel();
+        }
+        if (installedEl) {
+            installedEl.textContent = `${_state.installedNames.size} known`;
+        }
+    }
+
     // =========================================
     // Installed scripts tracking
     // =========================================
     async function refreshInstalledNames() {
         if (typeof _state.getInstalledScripts === 'function') {
-            const scripts = await _state.getInstalledScripts();
-            _state.installedNames = new Set(
-                scripts.map(s => (s.metadata?.name || s.name || '').toLowerCase())
-            );
+            try {
+                const scripts = await _state.getInstalledScripts();
+                _state.installedNames = new Set(
+                    scripts
+                        .map(script => getInstallIdentity(script))
+                        .filter(Boolean)
+                );
+            } catch {
+                _state.installedNames = new Set();
+            }
+            updateOverview();
         }
     }
 
-    function isInstalled(name) {
-        return _state.installedNames.has((name || '').toLowerCase());
+    function isInstalled(scriptLike) {
+        const identity = getInstallIdentity(scriptLike);
+        return identity ? _state.installedNames.has(identity) : false;
     }
 
     // =========================================
@@ -574,11 +1023,13 @@ const ScriptStore = (() => {
         const results = await Promise.allSettled(promises);
         let allScripts = [];
         const sourceStats = {};
+        let hasMore = false;
 
         results.forEach((result, i) => {
             const key = sourceKeys[i];
             const scripts = result.status === 'fulfilled' ? result.value : [];
             sourceStats[key] = scripts.length;
+            if (scripts.length >= 10) hasMore = true;
             allScripts.push(...scripts);
         });
 
@@ -595,7 +1046,7 @@ const ScriptStore = (() => {
         // Sort by total installs descending (most popular first)
         deduped.sort((a, b) => b.totalInstalls - a.totalInstalls);
 
-        return { scripts: deduped, sourceStats };
+        return { scripts: deduped, sourceStats, hasMore };
     }
 
     // Keep backward-compatible single-source fetch for site-specific search
@@ -612,17 +1063,35 @@ const ScriptStore = (() => {
 
     function showLoading(message = 'Searching') {
         const el = getResultsEl();
-        if (el) el.innerHTML = `<div class="ss-loading">${escapeHtml(message)}</div>`;
+        _state.lastResultsCount = 0;
+        updateOverview();
+        setStatus(message, 'Preview and install stay in the same view.');
+        if (el) {
+            el.dataset.listSize = 'empty';
+            el.innerHTML = `<div class="ss-loading"><strong>${escapeHtml(message)}</strong><span>Fetching scripts from the active discovery sources.</span></div>`;
+        }
     }
 
     function showEmpty(message = 'No scripts found') {
         const el = getResultsEl();
-        if (el) el.innerHTML = `<div class="ss-empty">${escapeHtml(message)}</div>`;
+        _state.lastResultsCount = 0;
+        updateOverview();
+        setStatus('No scripts matched this view.', 'Try another query, category, or source mix.');
+        if (el) {
+            el.dataset.listSize = 'empty';
+            el.innerHTML = `<div class="ss-empty"><strong>No scripts matched</strong><span>${escapeHtml(message)}</span></div>`;
+        }
     }
 
     function showError(message) {
         const el = getResultsEl();
-        if (el) el.innerHTML = `<div class="ss-error">${escapeHtml(message)}</div>`;
+        _state.lastResultsCount = 0;
+        updateOverview();
+        setStatus('Store search failed.', 'Check the active sources or try again in a moment.');
+        if (el) {
+            el.dataset.listSize = 'empty';
+            el.innerHTML = `<div class="ss-error"><strong>Search failed</strong><span>${escapeHtml(message)}</span></div>`;
+        }
     }
 
     function updateFooter(text) {
@@ -630,7 +1099,7 @@ const ScriptStore = (() => {
         if (footer) footer.textContent = text;
     }
 
-    function renderCards(scripts, page, contextLabel, sourceStats) {
+    function renderCards(scripts, page, contextLabel, sourceStats, hasMore = false) {
         const el = getResultsEl();
         if (!el) return;
 
@@ -639,7 +1108,14 @@ const ScriptStore = (() => {
             return;
         }
 
-        let html = '';
+        _state.lastResultsCount = scripts.length;
+        _state.lastContextLabel = contextLabel || getViewLabel();
+        _state.lastSourceStats = sourceStats || null;
+        el.dataset.listSize = getResultListSize(scripts.length);
+        updateOverview();
+        setStatus(_state.lastContextLabel, `${scripts.length} script${scripts.length === 1 ? '' : 's'} ready to preview or install.`);
+
+        let html = '<div class="ss-results-inner">';
 
         // Source stats bar (shows how many results came from each source)
         if (sourceStats) {
@@ -650,14 +1126,14 @@ const ScriptStore = (() => {
                     return `<span class="ss-source-stat" style="border-left:3px solid ${src?.color || '#666'};padding-left:6px">${src?.label || key}: ${count}</span>`;
                 }).join('');
             if (statsHtml) {
-                html += `<div class="ss-source-bar">${statsHtml}<span class="ss-source-stat" style="font-weight:600">${scripts.length} total (deduplicated)</span></div>`;
+                html += `<div class="ss-source-bar">${statsHtml}<span class="ss-source-stat" style="font-weight:600">${scripts.length} total deduplicated</span></div>`;
             }
         }
 
         if (contextLabel) {
-            html += `<div class="ss-result-count">${contextLabel} - Page ${page}</div>`;
+            html += `<div class="ss-result-count">${contextLabel} · Page ${page}</div>`;
         } else {
-            html += `<div class="ss-result-count">Page ${page} - ${scripts.length} results</div>`;
+            html += `<div class="ss-result-count">Page ${page} · ${scripts.length} results</div>`;
         }
 
         scripts.forEach(s => {
@@ -670,7 +1146,7 @@ const ScriptStore = (() => {
             const dailyInstalls = s.dailyInstalls ?? s.daily_installs ?? 0;
             const rating = s.rating || (s.fan_score ? parseFloat(s.fan_score).toFixed(0) + '%' : '--');
             const updated = formatDate(s.updatedAt || s.code_updated_at);
-            const installed = isInstalled(name);
+            const installed = isInstalled({ name, author });
             const codeUrl = s.codeUrl || s.code_url || '';
             const pageUrl = s.pageUrl || s.url || '';
             const source = s.source || 'greasyfork';
@@ -697,8 +1173,8 @@ const ScriptStore = (() => {
     </div>
     <div class="ss-card-actions">
         <button class="ss-btn primary small" data-action="install" data-url="${escapeHtml(codeUrl)}">${installed ? 'Reinstall' : 'Install'}</button>
-        <button class="ss-btn small" data-action="preview" data-url="${escapeHtml(codeUrl)}">Preview</button>
-        <button class="ss-btn small" data-action="view" data-url="${escapeHtml(pageUrl)}">View</button>
+        <button class="ss-btn small" data-action="preview" data-url="${escapeHtml(codeUrl)}">Preview Code</button>
+        <button class="ss-btn small" data-action="view" data-url="${escapeHtml(pageUrl)}">Open Page</button>
     </div>
     <div class="ss-card-preview"></div>
 </div>`;
@@ -711,20 +1187,23 @@ const ScriptStore = (() => {
         }
         html += `<span class="ss-pagination-info">Page ${page}</span>`;
         // Show "Next" only when we got a full page of results (at least 10 from any source)
-        if (scripts.length >= 10) {
+        if (hasMore) {
             html += `<button class="ss-btn small" data-action="page" data-page="${page + 1}">Next</button>`;
         }
+        html += '</div>';
         html += '</div>';
 
         el.innerHTML = html;
         bindCardActions(el);
-        updateFooter(`${scripts.length} scripts loaded`);
+        updateFooter(`${scripts.length} scripts loaded · ${getActiveSourceSummary()}`);
     }
 
     // =========================================
     // Card action handlers
     // =========================================
     function bindCardActions(container) {
+        if (container.dataset.boundCardActions === 'true') return;
+        container.dataset.boundCardActions = 'true';
         container.addEventListener('click', async (e) => {
             const btn = e.target.closest('[data-action]');
             if (!btn) return;
@@ -762,6 +1241,8 @@ const ScriptStore = (() => {
                 btn.classList.remove('primary');
                 // Update installed set
                 await refreshInstalledNames();
+                updateOverview();
+                setStatus('Script installed.', 'The dashboard list will refresh in place.');
                 // Mark the card
                 const card = btn.closest('.ss-card');
                 if (card) {
@@ -777,10 +1258,12 @@ const ScriptStore = (() => {
                 if (typeof _state.onInstalled === 'function') _state.onInstalled();
             } else {
                 btn.textContent = 'Failed';
+                setStatus('Install failed.', 'The source may be unavailable or rejected the request.');
                 setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2000);
             }
         } catch (e) {
             btn.textContent = 'Error';
+            setStatus('Install failed.', 'Check the source URL or try again in a moment.');
             setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2000);
         }
     }
@@ -793,7 +1276,8 @@ const ScriptStore = (() => {
 
         if (preview.classList.contains('open')) {
             preview.classList.remove('open');
-            btn.textContent = 'Preview';
+            btn.textContent = 'Preview Code';
+            setStatus(_state.lastContextLabel, `${_state.lastResultsCount} script${_state.lastResultsCount === 1 ? '' : 's'} ready to preview or install.`);
             return;
         }
 
@@ -805,10 +1289,12 @@ const ScriptStore = (() => {
             preview.textContent = code;
             preview.classList.add('open');
             btn.textContent = 'Hide';
+            setStatus('Inline code preview open.', 'You can inspect the source without leaving the store.');
         } catch {
             preview.textContent = 'Failed to load script code.';
             preview.classList.add('open');
-            btn.textContent = 'Preview';
+            btn.textContent = 'Preview Code';
+            setStatus('Preview failed.', 'The source script could not be fetched right now.');
         }
         btn.disabled = false;
     }
@@ -817,38 +1303,54 @@ const ScriptStore = (() => {
     // Navigation / loading
     // =========================================
     async function navigatePage(page) {
-        if (_state.loading) return;
         _state.page = page;
         await executeSearch();
     }
 
     async function executeSearch() {
-        if (_state.loading) return;
+        const requestToken = ++_state.requestToken;
         _state.loading = true;
-        showLoading('Searching across ' + _activeSources.size + ' sources...');
+        const loadingLabel = _state.siteHostname
+            ? `Finding scripts for ${_state.siteHostname}`
+            : _state.sortMode === 'daily_installs'
+                ? 'Loading trending scripts'
+                : _state.sortMode === 'total_installs'
+                    ? 'Loading popular scripts'
+                    : _state.category
+                        ? `Searching ${CATEGORIES[_state.category]?.label || 'category'}`
+                        : _state.query
+                            ? `Searching for "${_state.query}"`
+                            : 'Loading store results';
+        showLoading(loadingLabel);
 
         try {
             await refreshInstalledNames();
+            if (requestToken !== _state.requestToken) return;
 
             let scripts;
             let contextLabel = null;
             let sourceStats = null;
+            let hasMore = false;
 
             if (_state.siteHostname) {
                 // Site-specific uses Greasy Fork only (it has the by-site API)
                 scripts = await fetchGreasyFork({ site: _state.siteHostname, page: _state.page });
                 contextLabel = `Scripts for ${_state.siteHostname}`;
+                hasMore = scripts.length >= 10;
             } else if (_state.sortMode && !_state.query && !_state.category) {
                 // Popular/Trending uses Greasy Fork only
                 scripts = await fetchGreasyFork({ sort: _state.sortMode, page: _state.page });
                 const sortLabel = _state.sortMode === 'daily_installs' ? 'Trending' : 'Popular';
                 contextLabel = sortLabel + ' scripts';
+                hasMore = scripts.length >= 10;
             } else {
                 // Keyword/category search — use ALL sources
                 const query = _state.query || (_state.category ? CATEGORIES[_state.category]?.query : '');
                 if (!query) {
-                    showEmpty('Enter a search term or select a category to browse scripts.');
-                    _state.loading = false;
+                    _state.sortMode = 'daily_installs';
+                    const scripts = await fetchGreasyFork({ sort: _state.sortMode, page: 1 });
+                    if (requestToken !== _state.requestToken) return;
+                    renderCards(scripts, 1, 'Trending scripts', null, scripts.length >= 10);
                     return;
                 }
                 const result = await fetchAllSources({
@@ -856,18 +1358,24 @@ const ScriptStore = (() => {
                     page: _state.page,
                     sort: _state.sortMode || undefined,
                 });
+                if (requestToken !== _state.requestToken) return;
                 scripts = result.scripts;
                 sourceStats = result.sourceStats;
+                hasMore = result.hasMore;
                 if (_state.category) {
                     contextLabel = CATEGORIES[_state.category]?.label;
                 }
             }
 
-            renderCards(scripts, _state.page, contextLabel, sourceStats);
+            if (requestToken !== _state.requestToken) return;
+            renderCards(scripts, _state.page, contextLabel, sourceStats, hasMore);
         } catch (e) {
+            if (requestToken !== _state.requestToken) return;
             showError('Search failed: ' + e.message);
         } finally {
-            _state.loading = false;
+            if (requestToken === _state.requestToken) {
+                _state.loading = false;
+            }
         }
     }
 
@@ -886,14 +1394,22 @@ const ScriptStore = (() => {
             const cat = chip.dataset.category;
             const sort = chip.dataset.sort;
             const isSite = chip.dataset.site;
+            const source = chip.dataset.source;
 
             let active = false;
             if (cat) active = _state.category === cat && !_state.sortMode && !_state.siteHostname;
             if (sort) active = _state.sortMode === sort && !_state.category && !_state.siteHostname;
             if (isSite) active = !!_state.siteHostname;
+            if (source) active = _activeSources.has(source);
 
             chip.classList.toggle('active', active);
+            chip.setAttribute('aria-pressed', String(active));
         });
+
+        const trendingBtn = _state.container?.querySelector('[data-action="discover-trending"]');
+        const popularBtn = _state.container?.querySelector('[data-action="discover-popular"]');
+        trendingBtn?.classList.toggle('active', _state.sortMode === 'daily_installs' && !_state.category && !_state.siteHostname);
+        popularBtn?.classList.toggle('active', _state.sortMode === 'total_installs' && !_state.category && !_state.siteHostname);
     }
 
     // =========================================
@@ -902,33 +1418,65 @@ const ScriptStore = (() => {
     function buildPanel(container) {
         container.innerHTML = `
 <div class="ss-panel">
-    <div class="ss-header">
-        <div class="ss-header-title">Script Store</div>
+    <div class="ss-shell">
+    <div class="ss-hero">
+        <div class="ss-hero-copy">
+            <div class="ss-eyebrow">Discover</div>
+            <h2>Install high-signal userscripts fast.</h2>
+            <p>Browse trending and popular scripts, search by task or site, preview code inline, and install without losing your place in the dashboard.</p>
+        </div>
+        <div class="ss-overview" aria-label="Store overview">
+            <div class="ss-summary">
+                <span class="ss-summary-label">Results</span>
+                <strong data-summary="results">Ready</strong>
+            </div>
+            <div class="ss-summary">
+                <span class="ss-summary-label">Sources</span>
+                <strong data-summary="sources">${_activeSources.size} active</strong>
+            </div>
+            <div class="ss-summary">
+                <span class="ss-summary-label">View</span>
+                <strong data-summary="view">Trending</strong>
+            </div>
+            <div class="ss-summary">
+                <span class="ss-summary-label">Installed</span>
+                <strong data-summary="installed">0 known</strong>
+            </div>
+        </div>
     </div>
+    <div class="ss-toolbar">
     <div class="ss-search-bar">
-        <input type="text" class="ss-search-input" placeholder="Search scripts by name, keyword, or domain (e.g. youtube.com)..." />
+        <span class="ss-search-label">Search</span>
+        <input type="search" class="ss-search-input" name="store_search" autocomplete="off" spellcheck="false" aria-label="Search script store" placeholder="Search by name, task, or domain like youtube.com…" />
+    </div>
+    <div class="ss-toolbar-actions">
         <button class="ss-btn primary" data-action="search">Search</button>
+        <button class="ss-btn ghost" data-action="discover-trending">Trending</button>
+        <button class="ss-btn ghost" data-action="discover-popular">Popular</button>
+    </div>
+    </div>
+    <div class="ss-status">
+        <strong class="ss-status-text">Trending scripts ready.</strong>
+        <span class="ss-status-hint">Search by keyword or domain, then preview or install inline.</span>
     </div>
     <div class="ss-nav">
         <span class="ss-nav-label">Browse:</span>
         ${Object.entries(CATEGORIES).map(([key, val]) =>
-            `<span class="ss-chip" data-category="${key}">${val.label}</span>`
+            `<button type="button" class="ss-chip" data-category="${key}" aria-pressed="false">${val.label}</button>`
         ).join('')}
-        <span class="ss-nav-sep"></span>
-        <span class="ss-chip" data-sort="total_installs">Popular</span>
-        <span class="ss-chip" data-sort="daily_installs">Trending</span>
         <span class="ss-nav-sep"></span>
         <span class="ss-nav-label">Sources:</span>
         ${Object.entries(SOURCES).map(([key, src]) =>
-            `<span class="ss-chip active ss-source-chip" data-source="${key}" style="border-left:3px solid ${src.color}">${src.label}</span>`
+            `<button type="button" class="ss-chip ss-source-chip${_activeSources.has(key) ? ' active' : ''}" data-source="${key}" data-label="${src.label}" aria-pressed="${_activeSources.has(key) ? 'true' : 'false'}" style="border-left:3px solid ${src.color}">${src.label}</button>`
         ).join('')}
     </div>
     <div class="ss-results">
-        <div class="ss-empty">Search for userscripts or browse categories above to discover scripts.</div>
+        <div class="ss-loading"><strong>Loading discovery feed</strong><span>Fetching trending scripts from the store sources.</span></div>
     </div>
     <div class="ss-footer">
-        <span class="ss-footer-text">Ready</span>
+        <span class="ss-footer-text">Loading trending scripts…</span>
         <span>Greasy Fork &bull; OpenUserJS</span>
+    </div>
     </div>
 </div>`;
     }
@@ -940,16 +1488,31 @@ const ScriptStore = (() => {
         // Search
         const searchInput = container.querySelector('.ss-search-input');
         const searchBtn = container.querySelector('[data-action="search"]');
+        const trendingBtn = container.querySelector('[data-action="discover-trending"]');
+        const popularBtn = container.querySelector('[data-action="discover-popular"]');
 
         searchBtn?.addEventListener('click', () => {
             const q = searchInput?.value?.trim();
-            if (!q) return;
             resetState();
+            if (!q) {
+                _state.sortMode = 'daily_installs';
+                updateActiveChips();
+                executeSearch();
+                return;
+            }
             _state.query = q;
-            // Detect domain-like queries
-            if (/^[a-zA-Z0-9]([a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}$/.test(q)) {
-                _state.siteHostname = q;
+            let hostname = '';
+            if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(q)) {
+                try {
+                    hostname = new URL(q).hostname;
+                } catch {}
+            } else if (/^[a-zA-Z0-9]([a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}$/.test(q)) {
+                hostname = q;
+            }
+            if (hostname) {
+                _state.siteHostname = hostname;
                 _state.query = '';
+                if (searchInput) searchInput.value = hostname;
             }
             updateActiveChips();
             executeSearch();
@@ -959,6 +1522,22 @@ const ScriptStore = (() => {
             if (e.key === 'Enter') {
                 searchBtn?.click();
             }
+        });
+
+        trendingBtn?.addEventListener('click', () => {
+            resetState();
+            _state.sortMode = 'daily_installs';
+            if (searchInput) searchInput.value = '';
+            updateActiveChips();
+            executeSearch();
+        });
+
+        popularBtn?.addEventListener('click', () => {
+            resetState();
+            _state.sortMode = 'total_installs';
+            if (searchInput) searchInput.value = '';
+            updateActiveChips();
+            executeSearch();
         });
 
         // Category chips
@@ -990,9 +1569,17 @@ const ScriptStore = (() => {
                     if (_activeSources.size <= 1) return;
                     _activeSources.delete(src);
                     chip.classList.remove('active');
+                    chip.setAttribute('aria-pressed', 'false');
                 } else {
                     _activeSources.add(src);
                     chip.classList.add('active');
+                    chip.setAttribute('aria-pressed', 'true');
+                }
+                updateOverview();
+                if (_state.query || _state.category) {
+                    executeSearch();
+                } else {
+                    setStatus(getViewLabel(), `${_activeSources.size} source${_activeSources.size === 1 ? '' : 's'} active for the next search.`);
                 }
             });
         });
@@ -1024,9 +1611,14 @@ const ScriptStore = (() => {
             injectStyles();
             buildPanel(containerEl);
             bindPanelEvents();
+            updateOverview();
 
             // Pre-populate installed names
             refreshInstalledNames();
+            resetState();
+            _state.sortMode = 'daily_installs';
+            updateActiveChips();
+            executeSearch();
         },
 
         /**

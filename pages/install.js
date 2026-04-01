@@ -65,6 +65,83 @@ let existingScript = null;
 let codeEditor = null;
 let autoUpdate = true;
 let enableOnInstall = true;
+let installSourceUrl = '';
+let signatureVerification = null;
+const numberFormatter = new Intl.NumberFormat();
+const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit'
+});
+let analysisDecisionState = {
+  label: 'Scanning',
+  tone: 'neutral',
+  detail: 'Static analysis is running in the background.'
+};
+let dependencyDecisionState = {
+  label: 'Pending',
+  tone: 'neutral',
+  detail: 'Dependency checks have not started yet.'
+};
+let signatureDecisionState = {
+  label: 'Reviewing',
+  tone: 'neutral',
+  detail: 'Checking embedded signature and signer trust.'
+};
+let cancelReviewArmed = false;
+let cancelReviewTimer = null;
+
+function getDecisionToneClass(tone) {
+  if (tone === 'good') return 'status-good';
+  if (tone === 'warn') return 'status-warn';
+  return 'status-neutral';
+}
+
+function updateDecisionBadge(id, state) {
+  const badge = document.getElementById(id);
+  if (!badge) return;
+  badge.textContent = state.label;
+  badge.className = `count ${getDecisionToneClass(state.tone)}`;
+  if (state.detail) {
+    badge.title = state.detail;
+  } else {
+    badge.removeAttribute('title');
+  }
+}
+
+function updateDecisionHint() {
+  const presentation = getInstallPresentation();
+  const hint = document.getElementById('decisionHint');
+  if (!hint) return;
+  hint.textContent = cancelReviewArmed
+    ? 'Press Cancel again to discard this review, or wait a few seconds to keep reviewing.'
+    : `Press Enter to ${presentation.isUpdate ? 'update' : presentation.isDowngrade ? 'downgrade' : presentation.isReinstall ? 'reinstall' : 'install'} when the install button is focused. Press Esc to arm cancel.`;
+}
+
+function setCancelReviewArmed(armed) {
+  cancelReviewArmed = armed;
+  if (cancelReviewTimer) {
+    clearTimeout(cancelReviewTimer);
+    cancelReviewTimer = null;
+  }
+  const cancelButton = document.getElementById('btn-cancel');
+  if (cancelButton) {
+    cancelButton.textContent = armed ? 'Discard Review' : 'Cancel';
+    cancelButton.classList.toggle('is-armed', armed);
+  }
+  updateDecisionHint();
+  if (armed) {
+    cancelReviewTimer = setTimeout(() => setCancelReviewArmed(false), 5000);
+  }
+}
+
+function updateDecisionStates() {
+  updateDecisionBadge('decisionRiskState', analysisDecisionState);
+  updateDecisionBadge('decisionDependencyState', dependencyDecisionState);
+  updateDecisionBadge('decisionSignatureState', signatureDecisionState);
+}
 
 async function init() {
   // Event delegation for icon error handling (CSP-compliant)
@@ -111,6 +188,7 @@ async function init() {
 
     scriptCode = data.pendingInstall.code;
     const sourceUrl = data.pendingInstall.url || '';
+    installSourceUrl = sourceUrl;
 
     if (!scriptCode) {
       showError('Empty script', 'The downloaded script was empty.');
@@ -198,7 +276,7 @@ function parseMetadata(code) {
       meta['top-level-await'] = true;
     } else if (key === 'resource') {
       const resourceMatch = val.match(/^(\S+)\s+(.+)$/);
-      if (resourceMatch) {
+      if (resourceMatch && !['__proto__', 'constructor', 'prototype'].includes(resourceMatch[1])) {
         meta.resource[resourceMatch[1]] = resourceMatch[2];
       }
     } else if (Array.isArray(meta[key])) {
@@ -214,102 +292,474 @@ function parseMetadata(code) {
   return meta;
 }
 
+function getInstallPresentation() {
+  const currentVersion = existingScript?.meta?.version || '0.0.0';
+  const incomingVersion = scriptMeta?.version || '0.0.0';
+  const comparison = existingScript ? compareVersions(incomingVersion, currentVersion) : 0;
+  const isUpdate = existingScript ? comparison > 0 : false;
+  const isDowngrade = existingScript ? comparison < 0 : false;
+  const isReinstall = existingScript ? comparison === 0 : false;
+  const versionChange = existingScript ? `${currentVersion} \u2192 ${incomingVersion}` : '';
+
+  if (isUpdate) {
+    return {
+      isUpdate,
+      isDowngrade,
+      isReinstall,
+      currentVersion,
+      incomingVersion,
+      versionChange,
+      badgeHtml: '<span class="update-badge">Update Available</span>',
+      installLabel: 'Update Script',
+      installClass: 'btn-update',
+      modeLabel: 'Update',
+      summaryLabel: versionChange
+    };
+  }
+
+  if (isDowngrade) {
+    return {
+      isUpdate,
+      isDowngrade,
+      isReinstall,
+      currentVersion,
+      incomingVersion,
+      versionChange,
+      badgeHtml: '<span class="downgrade-badge">Downgrade</span>',
+      installLabel: 'Downgrade Script',
+      installClass: 'btn-downgrade',
+      modeLabel: 'Downgrade',
+      summaryLabel: versionChange
+    };
+  }
+
+  if (isReinstall) {
+    return {
+      isUpdate,
+      isDowngrade,
+      isReinstall,
+      currentVersion,
+      incomingVersion,
+      versionChange,
+      badgeHtml: '<span class="reinstall-badge">Reinstall</span>',
+      installLabel: 'Reinstall Script',
+      installClass: 'btn-primary',
+      modeLabel: 'Reinstall',
+      summaryLabel: `v${incomingVersion}`
+    };
+  }
+
+  return {
+    isUpdate,
+    isDowngrade,
+    isReinstall,
+    currentVersion,
+    incomingVersion,
+    versionChange,
+    badgeHtml: '',
+    installLabel: 'Install Script',
+    installClass: 'btn-primary',
+    modeLabel: 'New Install',
+    summaryLabel: `v${incomingVersion}`
+  };
+}
+
+function getSourceSummary(sourceUrl) {
+  if (!sourceUrl) {
+    return { host: 'Local file', label: 'Local file', shortLabel: 'Opened from a local file', safeUrl: '' };
+  }
+
+  try {
+    const url = new URL(sourceUrl);
+    const shortPath = url.pathname.length > 28 ? `${url.pathname.slice(0, 28)}...` : url.pathname;
+    return {
+      host: url.host,
+      label: url.toString(),
+      shortLabel: `${url.host}${shortPath || ''}`,
+      safeUrl: sanitizeUrl(url.toString()) || ''
+    };
+  } catch {
+    return {
+      host: 'Remote source',
+      label: sourceUrl,
+      shortLabel: truncateUrl(sourceUrl),
+      safeUrl: sanitizeUrl(sourceUrl) || ''
+    };
+  }
+}
+
+function renderExternalLink(url, label = truncateUrl(url)) {
+  const safeUrl = sanitizeUrl(url);
+  if (!url) return '-';
+  return safeUrl
+    ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`
+    : escapeHtml(url);
+}
+
+function extractSignatureInfo(code) {
+  const match = code.match(/\/\/\s*@signature\s+([^\n]+)/);
+  if (!match) return null;
+  const parts = match[1].trim().split('|');
+  if (parts.length < 2) return null;
+  return {
+    signature: parts[0],
+    publicKey: parts[1],
+    timestamp: parts[2] ? parseInt(parts[2], 10) : null
+  };
+}
+
+function getProvenanceSummary(sourceUrl, meta) {
+  const installSource = getSourceSummary(sourceUrl);
+  const updateUrl = meta.updateURL || '';
+  const downloadUrl = meta.downloadURL || '';
+  const homepageUrl = meta.homepage || meta.homepageURL || '';
+  const comparisonUrl = updateUrl || downloadUrl || installSource.label;
+  let label = installSource.host;
+  let detail = sourceUrl
+    ? 'Review the install source and update channel before trusting future updates.'
+    : 'This review started from a local file rather than a remote install page.';
+
+  if (/greasyfork\.org/i.test(comparisonUrl)) {
+    label = 'Greasy Fork';
+    detail = 'Install and update provenance points at a Greasy Fork listing or payload.';
+  } else if (/openuserjs\.org/i.test(comparisonUrl)) {
+    label = 'OpenUserJS';
+    detail = 'Install and update provenance points at OpenUserJS.';
+  } else if (/(github\.com|raw\.githubusercontent\.com)/i.test(comparisonUrl)) {
+    label = 'GitHub';
+    detail = 'Install or update metadata points at GitHub-hosted source.';
+  } else if (/gitlab\.com/i.test(comparisonUrl)) {
+    label = 'GitLab';
+    detail = 'Install or update metadata points at GitLab-hosted source.';
+  }
+
+  if (sourceUrl && updateUrl) {
+    try {
+      const installHost = new URL(sourceUrl).host;
+      const updateHost = new URL(updateUrl).host;
+      if (installHost !== updateHost) {
+        detail = `Installed from ${installHost}, but future updates come from ${updateHost}.`;
+      }
+    } catch {}
+  }
+
+  if (!sourceUrl && (updateUrl || downloadUrl)) {
+    detail = 'Local install with a remote update channel declared in metadata.';
+  }
+
+  return {
+    label,
+    detail,
+    installSource,
+    updateUrl,
+    downloadUrl,
+    homepageUrl
+  };
+}
+
+function renderTrustCard(sourceUrl) {
+  const mount = document.getElementById('trustMount');
+  if (!mount || !scriptMeta) return;
+  const provenance = getProvenanceSummary(sourceUrl, scriptMeta);
+  const verification = signatureVerification;
+  const signatureState = verification?.valid
+    ? verification.trusted
+      ? {
+          label: verification.trustedName ? `Trusted as ${verification.trustedName}` : 'Trusted signer',
+          badge: 'Trusted',
+          tone: 'status-good',
+          detail: verification.timestamp ? `Signed ${dateTimeFormatter.format(new Date(verification.timestamp))}.` : 'Signature is valid and the signing key is trusted.'
+        }
+      : {
+          label: 'Valid signature',
+          badge: 'Review signer',
+          tone: 'status-neutral',
+          detail: 'This script is signed, but the signing key is not yet trusted in ScriptVault.'
+        }
+    : verification
+      ? {
+          label: verification.reason === 'No signature found in script' ? 'Unsigned script' : 'Signature warning',
+          badge: verification.reason === 'No signature found in script' ? 'Unsigned' : 'Warning',
+          tone: verification.reason === 'No signature found in script' ? 'status-neutral' : 'status-warn',
+          detail: verification.reason || 'Signature verification did not complete cleanly.'
+        }
+      : {
+          label: 'Checking signature',
+          badge: 'Scanning',
+          tone: 'status-neutral',
+          detail: 'ScriptVault is checking the embedded signature and signer trust.'
+        };
+
+  mount.innerHTML = `
+    <div class="install-card-header">
+      <div>
+        <div class="install-card-title">Source & Trust</div>
+        <div class="install-card-subtitle">Review where this script came from and whether its signer is already trusted.</div>
+      </div>
+      <span class="count ${signatureState.tone}">${escapeHtml(signatureState.badge)}</span>
+    </div>
+    <div class="trust-grid">
+      <div class="trust-row">
+        <div class="trust-copy">
+          <strong>Provenance</strong>
+          <span>${escapeHtml(provenance.detail)}</span>
+        </div>
+        <span class="count status-neutral">${escapeHtml(provenance.label)}</span>
+      </div>
+      <div class="trust-row">
+        <div class="trust-copy">
+          <strong>Install source</strong>
+          <span>${provenance.installSource.shortLabel ? escapeHtml(provenance.installSource.shortLabel) : 'Local file'}</span>
+        </div>
+        <span class="trust-link">${provenance.installSource.safeUrl ? renderExternalLink(provenance.installSource.label, 'Open') : 'Local'}</span>
+      </div>
+      ${provenance.updateUrl ? `
+        <div class="trust-row">
+          <div class="trust-copy">
+            <strong>Update channel</strong>
+            <span>${escapeHtml(truncateUrl(provenance.updateUrl))}</span>
+          </div>
+          <span class="trust-link">${renderExternalLink(provenance.updateUrl, 'Open')}</span>
+        </div>
+      ` : ''}
+      ${provenance.downloadUrl && provenance.downloadUrl !== provenance.updateUrl ? `
+        <div class="trust-row">
+          <div class="trust-copy">
+            <strong>Download channel</strong>
+            <span>${escapeHtml(truncateUrl(provenance.downloadUrl))}</span>
+          </div>
+          <span class="trust-link">${renderExternalLink(provenance.downloadUrl, 'Open')}</span>
+        </div>
+      ` : ''}
+      ${provenance.homepageUrl ? `
+        <div class="trust-row">
+          <div class="trust-copy">
+            <strong>Homepage</strong>
+            <span>${escapeHtml(truncateUrl(provenance.homepageUrl))}</span>
+          </div>
+          <span class="trust-link">${renderExternalLink(provenance.homepageUrl, 'Open')}</span>
+        </div>
+      ` : ''}
+      <div class="trust-row">
+        <div class="trust-copy">
+          <strong>Signature status</strong>
+          <span>${escapeHtml(signatureState.label)}</span>
+        </div>
+        <span class="count ${signatureState.tone}">${escapeHtml(signatureVerification?.publicKey ? `${signatureVerification.publicKey.slice(0, 10)}…` : signatureState.badge)}</span>
+      </div>
+    </div>
+    ${signatureState.detail ? `<div class="analysis-summary" style="margin-top:14px">${escapeHtml(signatureState.detail)}</div>` : ''}
+    ${verification?.valid && !verification.trusted && verification.publicKey ? `
+      <div class="trust-actions">
+        <button class="btn btn-secondary" id="btnTrustSigner">Trust signer</button>
+      </div>
+    ` : ''}
+  `;
+
+  document.getElementById('btnTrustSigner')?.addEventListener('click', async () => {
+    const trustName = scriptMeta.author || scriptMeta.name || provenance.label;
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'signing_trustKey',
+        data: { publicKey: verification.publicKey, name: trustName }
+      });
+      if (response?.error) {
+        showInstallError(response.error);
+        return;
+      }
+      await runSignatureVerification(sourceUrl);
+    } catch (error) {
+      showInstallError(error?.message || 'Failed to trust signer');
+    }
+  });
+}
+
+function formatRunTiming(meta) {
+  const parts = [meta['run-at'] || 'document-idle'];
+  if (meta.noframes) parts.push('top frame only');
+  if (meta.delay) parts.push(`delay ${numberFormatter.format(meta.delay)}ms`);
+  if (meta.nodownload) parts.push('manual updates only');
+  return parts.join(' • ');
+}
+
+function buildInstallAlert(tone, title, body) {
+  return `
+    <div class="install-alert ${tone}">
+      <div class="install-alert-header">
+        <span>${tone === 'is-danger' ? '!' : tone === 'is-warning' ? '!' : 'i'}</span>
+        <span>${escapeHtml(title)}</span>
+      </div>
+      <div class="install-alert-body">${body}</div>
+    </div>
+  `;
+}
+
+function updateDecisionSummary() {
+  const decisionEnableState = document.getElementById('decisionEnableState');
+  if (decisionEnableState) {
+    decisionEnableState.textContent = enableOnInstall ? 'Enabled immediately' : 'Installed disabled';
+  }
+
+  const decisionUpdateState = document.getElementById('decisionUpdateState');
+  if (decisionUpdateState) {
+    decisionUpdateState.textContent = autoUpdate ? 'Automatic' : 'Manual only';
+  }
+
+  updateDecisionStates();
+  updateDecisionHint();
+}
+
 function renderInstallUI(sourceUrl) {
   const content = document.getElementById('content');
   const badge = document.getElementById('install-type-badge');
+  const presentation = getInstallPresentation();
+  badge.innerHTML = presentation.badgeHtml;
 
-  // Determine install type
-  let isUpdate = false;
-  let isReinstall = false;
-  let isDowngrade = false;
-  let versionChange = '';
-
-  if (existingScript) {
-    const existingVersion = existingScript.meta.version || '0.0.0';
-    const newVersion = scriptMeta.version || '0.0.0';
-    const cmp = compareVersions(newVersion, existingVersion);
-
-    if (cmp > 0) {
-      isUpdate = true;
-      versionChange = `${existingVersion} \u2192 ${newVersion}`;
-      badge.innerHTML = `<span class="update-badge">\u2B06\uFE0F Update Available</span>`;
-    } else if (cmp < 0) {
-      isDowngrade = true;
-      versionChange = `${existingVersion} \u2192 ${newVersion}`;
-      badge.innerHTML = `<span class="downgrade-badge">\u26A0\uFE0F Downgrade</span>`;
-    } else {
-      isReinstall = true;
-      badge.innerHTML = `<span class="reinstall-badge">\uD83D\uDD04 Reinstall</span>`;
-    }
-  }
-
-  // Check for dangerous permissions
-  const hasDangerousPerms = scriptMeta.grant.some(g => DANGEROUS_PERMISSIONS.includes(g));
-
-  // Build matches list
   const matches = [...scriptMeta.match, ...scriptMeta.include];
   const excludes = [...scriptMeta.exclude, ...scriptMeta['exclude-match']];
-
-  // Script stats
+  const grants = scriptMeta.grant.length > 0 ? scriptMeta.grant : ['none'];
+  const dangerousPermissions = scriptMeta.grant.filter(g => DANGEROUS_PERMISSIONS.includes(g));
+  const hasDangerousPerms = dangerousPermissions.length > 0;
+  const resourceCount = scriptMeta.require.length + Object.keys(scriptMeta.resource).length;
   const lineCount = scriptCode.split('\n').length;
   const codeSize = scriptCode.length;
-
-  // Get icon URL
   const iconUrl = scriptMeta.icon64 || scriptMeta.icon;
+  const source = getSourceSummary(sourceUrl);
+  const dependencyCount = scriptMeta.require.length;
+  const hasUpdater = Boolean(scriptMeta.updateURL || scriptMeta.downloadURL);
+  const hasSignature = Boolean(extractSignatureInfo(scriptCode));
+  analysisDecisionState = {
+    label: 'Scanning',
+    tone: 'neutral',
+    detail: 'Static analysis is still running.'
+  };
+  dependencyDecisionState = dependencyCount > 0
+    ? {
+        label: `Checking ${numberFormatter.format(dependencyCount)}`,
+        tone: 'neutral',
+        detail: 'Verifying each @require URL before install.'
+      }
+    : {
+        label: 'None declared',
+        tone: 'good',
+        detail: 'No external @require dependencies were declared.'
+      };
+  signatureDecisionState = hasSignature
+    ? {
+        label: 'Verifying',
+        tone: 'neutral',
+        detail: 'Checking the embedded signature and signer trust.'
+      }
+    : {
+        label: 'Unsigned',
+        tone: 'neutral',
+        detail: 'No embedded @signature metadata was found.'
+      };
+  signatureVerification = null;
+  const summaryCards = [
+    {
+      label: 'Source',
+      value: source.host,
+      meta: source.shortLabel
+    },
+    {
+      label: 'Permissions',
+      value: scriptMeta.grant.length > 0 ? `${numberFormatter.format(scriptMeta.grant.length)} requested` : 'No special grants',
+      meta: hasDangerousPerms
+        ? `${numberFormatter.format(dangerousPermissions.length)} elevated permission${dangerousPermissions.length === 1 ? '' : 's'} need review`
+        : 'Metadata only asks for low-risk userscript APIs'
+    },
+    {
+      label: 'Scope',
+      value: matches.length > 0 ? `${numberFormatter.format(matches.length)} run rule${matches.length === 1 ? '' : 's'}` : 'No explicit match rules',
+      meta: excludes.length > 0
+        ? `${numberFormatter.format(excludes.length)} exclusion${excludes.length === 1 ? '' : 's'} applied`
+        : 'No extra exclusions declared'
+    },
+    {
+      label: 'Payload',
+      value: formatBytes(codeSize),
+      meta: `${numberFormatter.format(lineCount)} lines • ${numberFormatter.format(resourceCount)} external asset${resourceCount === 1 ? '' : 's'}`
+    }
+  ];
 
-  let html = '';
-
-  // Downgrade warning
-  if (isDowngrade) {
-    html += `
-      <div class="security-warning" style="border-color: var(--warning); background: var(--warning-bg);">
-        <div class="security-warning-header" style="color: var(--warning);">
-          <span>\u26A0\uFE0F</span>
-          <span>Version Downgrade</span>
-        </div>
-        <div class="security-warning-text">
-          You are installing an <strong>older version</strong> (${escapeHtml(versionChange)}).
-          This will replace your current version.
-        </div>
-      </div>
-    `;
+  const alerts = [];
+  if (presentation.isDowngrade) {
+    alerts.push(buildInstallAlert(
+      'is-warning',
+      'Version Downgrade',
+      `This replaces your current version with an older build (${escapeHtml(presentation.versionChange)}).`
+    ));
   }
-
-  // Security warning if dangerous permissions
   if (hasDangerousPerms) {
-    html += `
-      <div class="security-warning">
-        <div class="security-warning-header">
-          <span>\u26A0\uFE0F</span>
-          <span>Security Notice</span>
-        </div>
-        <div class="security-warning-text">
-          This script requests powerful permissions that could access data across websites or make network requests.
-          Only install if you trust the source.
-        </div>
-      </div>
-    `;
+    alerts.push(buildInstallAlert(
+      'is-danger',
+      'Elevated Browser Access',
+      `This script requests ${numberFormatter.format(dangerousPermissions.length)} high-trust permission${dangerousPermissions.length === 1 ? '' : 's'}, including ${dangerousPermissions.slice(0, 3).map(escapeHtml).join(', ')}.`
+    ));
   }
-
-  // Antifeature warnings
   if (scriptMeta.antifeature.length > 0) {
     const afLabels = { ads: 'Contains advertising', tracking: 'Includes tracking', miner: 'Contains cryptocurrency miner' };
-    html += `
-      <div class="security-warning" style="border-color: var(--warning); background: var(--warning-bg);">
-        <div class="security-warning-header" style="color: var(--warning);">
-          <span>\u26A0\uFE0F</span>
-          <span>Anti-Features Declared</span>
-        </div>
-        <div class="security-warning-text">
-          ${scriptMeta.antifeature.map(af => `<div>\u2022 ${escapeHtml(afLabels[af] || af)}</div>`).join('')}
-        </div>
-      </div>
-    `;
+    alerts.push(buildInstallAlert(
+      'is-warning',
+      'Anti-Features Declared',
+      `<div class="install-alert-list">${scriptMeta.antifeature.map(af => `<div class="install-alert-list-item">• ${escapeHtml(afLabels[af] || af)}</div>`).join('')}</div>`
+    ));
+  }
+  if (codeSize > 500000) {
+    alerts.push(buildInstallAlert(
+      'is-info',
+      'Large Payload',
+      `This script is ${formatBytes(codeSize)} across ${numberFormatter.format(lineCount)} lines, so first-run parsing may take longer than usual.`
+    ));
   }
 
-  // Script card
-  html += `
-    <div class="script-card">
+  const installTitle = presentation.isUpdate
+    ? 'Update this script'
+    : presentation.isDowngrade
+      ? 'Review the downgrade'
+      : presentation.isReinstall
+        ? 'Reinstall this script'
+        : 'Install into ScriptVault';
+
+  const installCopy = presentation.isUpdate
+    ? `ScriptVault will replace your current copy with ${escapeHtml(presentation.summaryLabel)} and preserve its script ID.`
+    : presentation.isDowngrade
+      ? `This will intentionally roll the script back to an older version from ${escapeHtml(source.host)}.`
+      : presentation.isReinstall
+        ? 'This installs the same version again, which is useful when you want a clean replacement from the original source.'
+        : `ScriptVault will add this as a new userscript from ${escapeHtml(source.host)}.`;
+
+  const dependencyCard = dependencyCount > 0 ? `
+    <div class="surface-card analysis-card">
+      <div class="install-card-header">
+        <div>
+          <div class="install-card-title">Dependency Reachability</div>
+          <div class="install-card-subtitle">Check whether each @require URL can still be reached before install.</div>
+        </div>
+        <span class="count status-neutral" id="dep-status">Checking...</span>
+      </div>
+      <div class="tag-list" id="dep-list">
+        ${scriptMeta.require.map(url => `<span class="tag" data-dep-url="${escapeHtml(url)}" title="${escapeHtml(url)}">${escapeHtml(getUrlFilename(url))}</span>`).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  const html = `
+    <div class="install-layout">
+      <div class="install-main stack">
+        ${alerts.length > 0 ? `<div class="install-alert-stack">${alerts.join('')}</div>` : ''}
+        <div class="summary-grid">
+          ${summaryCards.map(card => `
+            <div class="surface-card summary-card">
+              <div class="summary-label">${escapeHtml(card.label)}</div>
+              <div class="summary-value">${escapeHtml(card.value)}</div>
+              <div class="summary-meta">${escapeHtml(card.meta)}</div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="script-card surface-card">
       <div class="script-header">
         <div class="script-icon-row">
           <div class="script-icon">
@@ -318,8 +768,8 @@ function renderInstallUI(sourceUrl) {
           <div class="script-title-area">
             <div class="script-name">${escapeHtml(scriptMeta.name)}</div>
             <div class="script-version">
-              ${isUpdate || isDowngrade
-                ? `<span class="version-change">${escapeHtml(versionChange)}</span>`
+              ${presentation.isUpdate || presentation.isDowngrade
+                ? `<span class="version-change">${escapeHtml(presentation.versionChange)}</span>`
                 : `v${escapeHtml(scriptMeta.version)}`
               }
             </div>
@@ -354,28 +804,39 @@ function renderInstallUI(sourceUrl) {
           ${scriptMeta.homepage ? `
             <div class="meta-item">
               <span class="meta-label">Homepage</span>
-              <span class="meta-value">${sanitizeUrl(scriptMeta.homepage) ? `<a href="${escapeHtml(sanitizeUrl(scriptMeta.homepage))}" target="_blank">${escapeHtml(truncateUrl(scriptMeta.homepage))}</a>` : escapeHtml(scriptMeta.homepage)}</span>
+              <span class="meta-value">${renderExternalLink(scriptMeta.homepage)}</span>
             </div>
           ` : ''}
 
           <div class="meta-item">
             <span class="meta-label">Size</span>
-            <span class="meta-value">${formatBytes(codeSize)} (${lineCount.toLocaleString()} lines)</span>
+            <span class="meta-value">${formatBytes(codeSize)} (${numberFormatter.format(lineCount)} lines)</span>
           </div>
 
           <div class="meta-item">
             <span class="meta-label">Runs at</span>
-            <span class="meta-value">${escapeHtml(scriptMeta['run-at'])}${scriptMeta.noframes ? ' (no iframes)' : ''}${scriptMeta.delay ? ` (delayed ${scriptMeta.delay}ms)` : ''}${scriptMeta.nodownload ? ' (no auto-update)' : ''}</span>
+            <span class="meta-value">${escapeHtml(formatRunTiming(scriptMeta))}</span>
           </div>
 
           <div class="meta-item full-width">
-            <span class="meta-label">Source</span>
-            <span class="meta-value">${escapeHtml(sourceUrl || 'Local file')}</span>
+            <span class="meta-label">Install Source</span>
+            <span class="meta-value">${source.safeUrl ? renderExternalLink(source.label) : escapeHtml(source.label)}</span>
           </div>
+          ${scriptMeta.updateURL ? `
+            <div class="meta-item full-width">
+              <span class="meta-label">Update Channel</span>
+              <span class="meta-value">${renderExternalLink(scriptMeta.updateURL)}</span>
+            </div>
+          ` : ''}
+          ${scriptMeta.downloadURL && scriptMeta.downloadURL !== scriptMeta.updateURL ? `
+            <div class="meta-item full-width">
+              <span class="meta-label">Download Channel</span>
+              <span class="meta-value">${renderExternalLink(scriptMeta.downloadURL)}</span>
+            </div>
+          ` : ''}
         </div>
       </div>
 
-      <!-- URL Patterns -->
       ${matches.length > 0 ? `
         <div class="section">
           <div class="section-title">
@@ -384,12 +845,11 @@ function renderInstallUI(sourceUrl) {
           </div>
           <div class="match-list">
             ${matches.slice(0, 8).map(m => `<div class="match-item">${escapeHtml(m)}</div>`).join('')}
-            ${matches.length > 8 ? `<div class="match-item" style="color: var(--text-muted)">...and ${matches.length - 8} more</div>` : ''}
+            ${matches.length > 8 ? `<div class="match-item neutral">...and ${matches.length - 8} more</div>` : ''}
           </div>
         </div>
       ` : ''}
 
-      <!-- Excludes -->
       ${excludes.length > 0 ? `
         <div class="section">
           <div class="section-title">
@@ -398,31 +858,26 @@ function renderInstallUI(sourceUrl) {
           </div>
           <div class="match-list">
             ${excludes.slice(0, 3).map(m => `<div class="match-item">${escapeHtml(m)}</div>`).join('')}
-            ${excludes.length > 3 ? `<div class="match-item" style="color: var(--text-muted)">...and ${excludes.length - 3} more</div>` : ''}
+            ${excludes.length > 3 ? `<div class="match-item neutral">...and ${excludes.length - 3} more</div>` : ''}
           </div>
         </div>
       ` : ''}
 
-      <!-- Permissions -->
       <div class="section">
         <div class="section-title">
           <span>Permissions</span>
-          <span class="count">${scriptMeta.grant.length || 1}</span>
+          <span class="count">${grants.length}</span>
         </div>
         <div class="tag-list">
-          ${scriptMeta.grant.length > 0
-            ? scriptMeta.grant.map(g => {
+          ${grants.map(g => {
                 const isDangerous = DANGEROUS_PERMISSIONS.includes(g);
                 const isSafe = SAFE_PERMISSIONS.includes(g);
                 const desc = GRANT_DESCRIPTIONS[g] || '';
                 return `<span class="tag ${isDangerous ? 'warning' : isSafe ? 'safe' : ''}" ${desc ? `title="${escapeHtml(desc)}"` : ''}>${escapeHtml(g)}</span>`;
-              }).join('')
-            : '<span class="tag safe">none</span>'
-          }
+              }).join('')}
         </div>
       </div>
 
-      <!-- Connect domains -->
       ${scriptMeta.connect.length > 0 ? `
         <div class="section">
           <div class="section-title">
@@ -435,12 +890,11 @@ function renderInstallUI(sourceUrl) {
         </div>
       ` : ''}
 
-      <!-- Resources -->
-      ${scriptMeta.require.length > 0 || Object.keys(scriptMeta.resource).length > 0 ? `
+      ${resourceCount > 0 ? `
         <div class="section">
           <div class="section-title">
             <span>External Resources</span>
-            <span class="count">${scriptMeta.require.length + Object.keys(scriptMeta.resource).length}</span>
+            <span class="count">${resourceCount}</span>
           </div>
           <div class="tag-list">
             ${scriptMeta.require.map(r => `<span class="tag" title="${escapeHtml(r)}">${escapeHtml(getUrlFilename(r))}</span>`).join('')}
@@ -451,7 +905,6 @@ function renderInstallUI(sourceUrl) {
         </div>
       ` : ''}
 
-      <!-- Tags -->
       ${scriptMeta.tag.length > 0 ? `
         <div class="section">
           <div class="section-title">
@@ -462,91 +915,35 @@ function renderInstallUI(sourceUrl) {
           </div>
         </div>
       ` : ''}
-    </div>
-  `;
-
-  // Large script warning
-  if (codeSize > 500000) {
-    html += `
-      <div class="security-warning" style="border-color: var(--warning); background: var(--warning-bg);">
-        <div class="security-warning-header" style="color: var(--warning);">
-          <span>\u26A0\uFE0F</span>
-          <span>Large Script</span>
         </div>
-        <div class="security-warning-text">
-          This script is ${formatBytes(codeSize)} (${lineCount.toLocaleString()} lines). Large scripts may impact page load performance.
-        </div>
-      </div>
-    `;
-  }
 
-  // Options
-  html += `
-    <div class="options">
-      <div class="options-title">Installation Options</div>
-
-      <div class="option-row">
-        <div class="option-info">
-          <span class="option-label">Enable on install</span>
-          <span class="option-description">Start running the script immediately after installation</span>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="enable-install" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      ${scriptMeta.updateURL || scriptMeta.downloadURL ? `
-        <div class="option-row">
-          <div class="option-info">
-            <span class="option-label">Auto-update</span>
-            <span class="option-description">Automatically check for and install updates</span>
+        <div class="surface-card analysis-card" id="analysisMount">
+          <div class="install-card-header">
+            <div>
+              <div class="install-card-title">Security Analysis</div>
+              <div class="install-card-subtitle">Scanning the script metadata and source for risky patterns.</div>
+            </div>
+            <span class="count status-neutral" id="analysisStatus">Scanning</span>
           </div>
-          <label class="toggle">
-            <input type="checkbox" id="auto-update" checked>
-            <span class="toggle-slider"></span>
-          </label>
+          <div class="analysis-summary">Static analysis runs in the background so you can keep reviewing while ScriptVault checks the script.</div>
         </div>
-      ` : ''}
 
-      ${scriptMeta.author ? `
-        <div class="option-row">
-          <div class="option-info">
-            <span class="option-label">Trust this author</span>
-            <span class="option-description">Auto-install future scripts from <strong>${escapeHtml(scriptMeta.author)}</strong> without review</span>
+      ${dependencyCard}
+
+        <div class="surface-card trust-card" id="trustMount">
+          <div class="install-card-header">
+            <div>
+              <div class="install-card-title">Source & Trust</div>
+              <div class="install-card-subtitle">Review where this script came from and whether its signer is already trusted.</div>
+            </div>
+            <span class="count status-neutral">${hasSignature ? 'Verifying' : 'Unsigned'}</span>
           </div>
-          <label class="toggle">
-            <input type="checkbox" id="trust-author">
-            <span class="toggle-slider"></span>
-          </label>
+          <div class="analysis-summary">${hasSignature ? 'ScriptVault is checking the embedded signature and signer trust.' : 'This script does not declare an embedded signature.'}</div>
         </div>
-      ` : ''}
-    </div>
-  `;
 
-  // v2.0: Dependency check — verify @require URLs are reachable
-  if (scriptMeta.require.length > 0) {
-    const depTags = scriptMeta.require.map(url =>
-      '<span class="tag" data-dep-url="' + escapeHtml(url) + '" title="' + escapeHtml(url) + '">' + escapeHtml(getUrlFilename(url)) + '</span>'
-    ).join('');
-    html += `
-      <div class="section" style="margin:0 0 12px">
-        <div class="section-title" style="font-size:12px">
-          <span>Dependencies (${scriptMeta.require.length})</span>
-          <span class="count" id="dep-status" style="background:var(--text-muted)">Checking...</span>
-        </div>
-        <div class="tag-list" id="dep-list">${depTags}</div>
-      </div>
-    `;
-    // Check dependencies asynchronously after render
-    setTimeout(() => checkDependencies(scriptMeta.require), 100);
-  }
-
-  // Code preview
-  html += `
-    <div class="code-preview">
-      <div class="code-preview-header">
-        <span class="code-preview-title">Script Code <span style="color:var(--text-muted);font-weight:400;font-size:12px">(${lineCount.toLocaleString()} lines)</span></span>
+        <div class="code-preview surface-card">
+          <div class="code-preview-header">
+            <span class="code-preview-title">Script Code <span class="install-card-subtitle">(${numberFormatter.format(lineCount)} lines)</span></span>
         <button class="code-preview-toggle" id="toggle-code" aria-expanded="false" aria-controls="code-container">
           <span id="toggle-icon">\u25BC</span>
           <span id="toggle-text">Show code</span>
@@ -556,19 +953,85 @@ function renderInstallUI(sourceUrl) {
         <textarea id="code-editor"></textarea>
       </div>
     </div>
-  `;
+      </div>
 
-  // Actions
-  const installLabel = isUpdate ? '\u2B06\uFE0F Update Script'
-    : isDowngrade ? '\u26A0\uFE0F Downgrade Script'
-    : isReinstall ? '\uD83D\uDD04 Reinstall Script'
-    : '\uD83D\uDCE5 Install Script';
-  const installClass = isUpdate ? 'btn-update' : isDowngrade ? 'btn-downgrade' : 'btn-primary';
+      <aside class="install-sidebar">
+        <div class="surface-card decision-card">
+          <div class="decision-eyebrow">${escapeHtml(presentation.modeLabel)} • ${escapeHtml(source.host)}</div>
+          <div class="decision-title">${escapeHtml(installTitle)}</div>
+          <div class="decision-copy">${installCopy}</div>
 
-  html += `
-    <div class="actions">
-      <button class="btn btn-secondary" id="btn-cancel">Cancel</button>
-      <button class="btn ${installClass}" id="btn-install">${installLabel}</button>
+          <div class="decision-list">
+            <div class="decision-row">
+              <span>Version</span>
+              <strong>${escapeHtml(presentation.summaryLabel)}</strong>
+            </div>
+            <div class="decision-row">
+              <span>After install</span>
+              <strong id="decisionEnableState">${enableOnInstall ? 'Enabled immediately' : 'Installed disabled'}</strong>
+            </div>
+            ${hasUpdater ? `
+              <div class="decision-row">
+                <span>Update policy</span>
+                <strong id="decisionUpdateState">${autoUpdate ? 'Automatic' : 'Manual only'}</strong>
+              </div>
+            ` : ''}
+            <div class="decision-row">
+              <span>Risk review</span>
+              <span class="count status-neutral" id="decisionRiskState" title="Static analysis is still running.">Scanning</span>
+            </div>
+            <div class="decision-row">
+              <span>Dependencies</span>
+              <span class="count status-neutral" id="decisionDependencyState" title="${escapeHtml(dependencyCount > 0 ? 'Verifying external @require URLs.' : 'No external @require dependencies were declared.')}">${dependencyCount > 0 ? `Checking ${numberFormatter.format(dependencyCount)}` : 'None declared'}</span>
+            </div>
+            <div class="decision-row">
+              <span>Signature</span>
+              <span class="count status-neutral" id="decisionSignatureState" title="${escapeHtml(hasSignature ? 'Checking the embedded signature and signer trust.' : 'No embedded @signature metadata was found.')}">${hasSignature ? 'Verifying' : 'Unsigned'}</span>
+            </div>
+            <div class="decision-row">
+              <span>Network access</span>
+              <strong>${scriptMeta.connect.length > 0 ? numberFormatter.format(scriptMeta.connect.length) : 'None declared'}</strong>
+            </div>
+          </div>
+
+          <div class="options">
+            <div class="options-title">Installation Options</div>
+
+            <div class="option-row">
+              <div class="option-info">
+                <span class="option-label">Enable on install</span>
+                <span class="option-description">Start running the script immediately after installation.</span>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="enable-install" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            ${hasUpdater ? `
+              <div class="option-row">
+                <div class="option-info">
+                  <span class="option-label">Auto-update</span>
+                  <span class="option-description">Keep checking the published source for newer versions.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="auto-update" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+            </div>
+            ` : ''}
+          </div>
+
+          <div class="install-error" id="installError" role="alert"></div>
+
+          <div class="actions">
+            <button class="btn ${presentation.installClass}" id="btn-install">${escapeHtml(presentation.installLabel)}</button>
+            <button class="btn btn-secondary" id="btn-cancel">Cancel</button>
+          </div>
+
+          <div class="decision-hint" id="decisionHint">Press Enter to ${presentation.isUpdate ? 'update' : presentation.isDowngrade ? 'downgrade' : presentation.isReinstall ? 'reinstall' : 'install'} when the install button is focused. Press Esc to arm cancel.</div>
+        </div>
+      </aside>
     </div>
   `;
 
@@ -585,31 +1048,52 @@ function renderInstallUI(sourceUrl) {
 
   // Setup code preview
   setupCodePreview();
+  renderTrustCard(sourceUrl);
+  runSignatureVerification(sourceUrl);
 
   // Setup event listeners
-  document.getElementById('btn-cancel')?.addEventListener('click', handleCancel);
+  setCancelReviewArmed(false);
+  updateDecisionSummary();
+  document.getElementById('btn-cancel')?.addEventListener('click', requestCancelReview);
   document.getElementById('btn-install')?.addEventListener('click', handleInstall);
   document.getElementById('toggle-code')?.addEventListener('click', toggleCodePreview);
 
   document.getElementById('enable-install')?.addEventListener('change', (e) => {
     enableOnInstall = e.target.checked;
+    setCancelReviewArmed(false);
+    updateDecisionSummary();
   });
 
   document.getElementById('auto-update')?.addEventListener('change', (e) => {
     autoUpdate = e.target.checked;
+    setCancelReviewArmed(false);
+    updateDecisionSummary();
   });
+
+  if (dependencyCount > 0) {
+    setTimeout(() => checkDependencies(scriptMeta.require), 100);
+  }
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
+    const installButton = document.getElementById('btn-install');
+    const cancelButton = document.getElementById('btn-cancel');
+    if (!installButton && !cancelButton) return;
+
     if (e.key === 'Enter' && !e.defaultPrevented) {
       const active = document.activeElement;
-      // Don't trigger on textarea, code editor, or toggle inputs
-      if (active?.tagName === 'TEXTAREA' || active?.closest('.CodeMirror') || active?.type === 'checkbox') return;
-      const btn = document.getElementById('btn-install');
-      if (btn && !btn.disabled) btn.click();
+      const safeFocus = !active
+        || active === document.body
+        || active === document.documentElement
+        || active === installButton;
+      if (safeFocus && installButton && !installButton.disabled) {
+        e.preventDefault();
+        installButton.click();
+      }
     }
-    if (e.key === 'Escape') {
-      handleCancel();
+    if (e.key === 'Escape' && !e.defaultPrevented) {
+      e.preventDefault();
+      requestCancelReview();
     }
   });
 }
@@ -650,9 +1134,11 @@ function toggleCodePreview() {
     text.textContent = 'Show code';
   }
   if (toggle) toggle.setAttribute('aria-expanded', String(expanded));
+  setCancelReviewArmed(false);
 }
 
 function handleCancel() {
+  setCancelReviewArmed(false);
   chrome.storage.local.remove('pendingInstall');
   if (history.length > 1) {
     history.back();
@@ -661,10 +1147,21 @@ function handleCancel() {
   }
 }
 
+function requestCancelReview() {
+  if (!cancelReviewArmed) {
+    setCancelReviewArmed(true);
+    document.getElementById('btn-cancel')?.focus();
+    return;
+  }
+  handleCancel();
+}
+
 async function handleInstall() {
   const btn = document.getElementById('btn-install');
+  const presentation = getInstallPresentation();
+  setCancelReviewArmed(false);
   btn.disabled = true;
-  btn.innerHTML = '<span class="loading-spinner" style="width: 16px; height: 16px; border-width: 2px; margin: 0;"></span> Installing...';
+  btn.innerHTML = '<span class="loading-spinner install-inline-spinner"></span> Installing...';
 
   try {
     const scriptId = existingScript?.id || null;
@@ -685,25 +1182,25 @@ async function handleInstall() {
 
     await chrome.storage.local.remove('pendingInstall');
 
-    // v2.0: Save trusted author if checked
-    const trustCheck = document.getElementById('trust-author');
-    if (trustCheck?.checked && scriptMeta.author) {
-      saveTrustedAuthor(scriptMeta.author);
-    }
-
-    showSuccess(scriptMeta.name, existingScript ? 'updated' : 'installed', result.scriptId);
+    const successAction = presentation.isDowngrade
+      ? 'downgraded'
+      : presentation.isReinstall
+        ? 'reinstalled'
+        : existingScript
+          ? 'updated'
+          : 'installed';
+    showSuccess(scriptMeta.name, successAction, result.scriptId);
 
   } catch (e) {
     console.error('Install failed:', e);
     btn.disabled = false;
-    btn.innerHTML = '\uD83D\uDCE5 Install Script';
-    // Show inline error instead of alert()
+    btn.textContent = presentation.installLabel;
     showInstallError(e.message);
   }
 }
 
 function showInstallError(message) {
-  let errorEl = document.querySelector('.install-error');
+  let errorEl = document.getElementById('installError') || document.querySelector('.install-error');
   if (!errorEl) {
     errorEl = document.createElement('div');
     errorEl.className = 'install-error';
@@ -734,10 +1231,16 @@ function showError(title, message) {
 
 function showSuccess(name, action, scriptId) {
   const content = document.getElementById('content');
+  const titleMap = {
+    installed: 'Script Installed',
+    updated: 'Script Updated',
+    downgraded: 'Script Downgraded',
+    reinstalled: 'Script Reinstalled'
+  };
   content.innerHTML = `
     <div class="success">
       <div class="success-icon">\u2705</div>
-      <div class="success-title">Script ${action === 'updated' ? 'Updated' : 'Installed'}!</div>
+      <div class="success-title">${escapeHtml(titleMap[action] || 'Script Installed')}!</div>
       <div class="success-message">${escapeHtml(name)} is now ${enableOnInstall ? 'active' : 'installed but disabled'}.</div>
       <div class="success-actions">
         <button class="btn btn-secondary" id="btnSuccessClose" style="flex:none">Close</button>
@@ -801,102 +1304,246 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-// v2.0: Check @require dependency URLs
-async function checkDependencies(requires) {
-  let ok = 0, fail = 0, unverifiable = 0;
-  for (const url of requires) {
-    const tag = document.querySelector(`[data-dep-url="${CSS.escape(url)}"]`);
-    try {
-      // Try CORS fetch first (most CDNs support it) to get real status
-      const resp = await fetch(url, { method: 'HEAD' });
-      if (resp.ok) {
-        if (tag) { tag.classList.add('safe'); tag.title = url + ' — OK (' + resp.status + ')'; }
-        ok++;
-      } else {
-        if (tag) { tag.classList.add('warning'); tag.title = url + ' — HTTP ' + resp.status; }
-        fail++;
-      }
-    } catch {
-      // CORS blocked or network error — try no-cors as fallback (can only detect total failure)
-      try {
-        await fetch(url, { method: 'HEAD', mode: 'no-cors' });
-        // Opaque response — server exists but we can't verify status
-        if (tag) { tag.style.opacity = '0.7'; tag.title = url + ' — server reachable (status unverifiable)'; }
-        unverifiable++;
-      } catch {
-        if (tag) { tag.classList.add('warning'); tag.title = url + ' — UNREACHABLE'; }
-        fail++;
-      }
-    }
+async function runSignatureVerification(sourceUrl) {
+  const signatureInfo = extractSignatureInfo(scriptCode);
+  if (!signatureInfo) {
+    signatureVerification = { valid: false, reason: 'No signature found in script' };
+    signatureDecisionState = {
+      label: 'Unsigned',
+      tone: 'neutral',
+      detail: 'No embedded @signature metadata was found.'
+    };
+    updateDecisionStates();
+    renderTrustCard(sourceUrl);
+    return;
   }
-  const statusEl = document.getElementById('dep-status');
-  if (statusEl) {
-    if (fail === 0 && unverifiable === 0) {
-      statusEl.textContent = 'All OK';
-      statusEl.style.background = 'var(--accent)';
-      statusEl.style.color = '#fff';
-    } else if (fail === 0) {
-      statusEl.textContent = `${ok} OK, ${unverifiable} unverified`;
-      statusEl.style.background = 'var(--accent)';
-      statusEl.style.color = '#fff';
+
+  signatureDecisionState = {
+    label: 'Verifying',
+    tone: 'neutral',
+    detail: 'Checking the embedded signature and signer trust.'
+  };
+  updateDecisionStates();
+  renderTrustCard(sourceUrl);
+
+  try {
+    const result = await chrome.runtime.sendMessage({
+      action: 'signing_verify',
+      data: { code: scriptCode }
+    });
+    signatureVerification = result || { valid: false, reason: 'Verification unavailable' };
+    if (result?.valid && result?.trusted) {
+      signatureDecisionState = {
+        label: 'Trusted',
+        tone: 'good',
+        detail: result.trustedName
+          ? `Signed by trusted key "${result.trustedName}".`
+          : 'Signed by a trusted key.'
+      };
+    } else if (result?.valid) {
+      signatureDecisionState = {
+        label: 'Valid',
+        tone: 'neutral',
+        detail: 'Signature is valid, but this signer is not trusted yet.'
+      };
     } else {
-      statusEl.textContent = `${fail} failed`;
-      statusEl.style.background = 'var(--warning)';
-      statusEl.style.color = '#fff';
+      signatureDecisionState = {
+        label: result?.reason === 'No signature found in script' ? 'Unsigned' : 'Warning',
+        tone: result?.reason === 'No signature found in script' ? 'neutral' : 'warn',
+        detail: result?.reason || 'Signature verification failed.'
+      };
     }
+  } catch (error) {
+    signatureVerification = { valid: false, reason: error?.message || 'Verification failed' };
+    signatureDecisionState = {
+      label: 'Unavailable',
+      tone: 'warn',
+      detail: error?.message || 'Signature verification failed.'
+    };
   }
+
+  updateDecisionStates();
+  renderTrustCard(sourceUrl);
 }
 
-// v2.0: Save trusted author
-function saveTrustedAuthor(author) {
-  if (!author || typeof author !== 'string') return;
-  // Sanitize: limit length, strip control characters
-  const sanitized = author.trim().replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
-  if (!sanitized) return;
+// v2.0: Check @require dependency URLs
+async function checkDependencies(requires) {
+  const counters = {
+    ok: 0,
+    fail: 0,
+    unverifiable: 0,
+    pending: requires.length
+  };
+  const statusEl = document.getElementById('dep-status');
 
-  chrome.storage.local.get('trustedAuthors', (data) => {
-    const authors = data.trustedAuthors || [];
-    if (authors.length >= 100) return; // Limit total trusted authors
-    if (!authors.includes(sanitized)) {
-      authors.push(sanitized);
-      chrome.storage.local.set({ trustedAuthors: authors });
+  const refreshDependencyState = () => {
+    if (counters.pending > 0) {
+      dependencyDecisionState = {
+        label: `${numberFormatter.format(requires.length - counters.pending)}/${numberFormatter.format(requires.length)} checked`,
+        tone: 'neutral',
+        detail: `Verified ${numberFormatter.format(counters.ok)} reachable, ${numberFormatter.format(counters.unverifiable)} unverified, ${numberFormatter.format(counters.fail)} failed.`
+      };
+    } else if (counters.fail === 0 && counters.unverifiable === 0) {
+      dependencyDecisionState = {
+        label: 'All reachable',
+        tone: 'good',
+        detail: `${numberFormatter.format(counters.ok)} dependency URL${counters.ok === 1 ? ' is' : 's are'} reachable.`
+      };
+    } else if (counters.fail === 0) {
+      dependencyDecisionState = {
+        label: `${numberFormatter.format(counters.unverifiable)} unverified`,
+        tone: 'neutral',
+        detail: `${numberFormatter.format(counters.ok)} reachable, ${numberFormatter.format(counters.unverifiable)} reachable but status could not be verified.`
+      };
+    } else {
+      dependencyDecisionState = {
+        label: `${numberFormatter.format(counters.fail)} failed`,
+        tone: 'warn',
+        detail: `${numberFormatter.format(counters.fail)} dependency URL${counters.fail === 1 ? '' : 's'} failed to respond cleanly.`
+      };
     }
+
+    updateDecisionStates();
+
+    if (!statusEl) return;
+    statusEl.textContent = dependencyDecisionState.label;
+    statusEl.className = `count ${getDecisionToneClass(dependencyDecisionState.tone)}`;
+    if (dependencyDecisionState.detail) {
+      statusEl.title = dependencyDecisionState.detail;
+    } else {
+      statusEl.removeAttribute('title');
+    }
+  };
+
+  refreshDependencyState();
+
+  const checks = requires.map(async (url) => {
+    const tag = document.querySelector(`[data-dep-url="${CSS.escape(url)}"]`);
+    let outcome = 'fail';
+    let detail = `${url} — unreachable`;
+
+    try {
+      const resp = await fetch(url, { method: 'HEAD' });
+      if (resp.ok) {
+        outcome = 'ok';
+        detail = `${url} — OK (${resp.status})`;
+      } else {
+        detail = `${url} — HTTP ${resp.status}`;
+      }
+    } catch {
+      try {
+        await fetch(url, { method: 'HEAD', mode: 'no-cors' });
+        outcome = 'unverifiable';
+        detail = `${url} — server reachable (status unverifiable)`;
+      } catch {
+        detail = `${url} — unreachable`;
+      }
+    }
+
+    if (tag) {
+      tag.classList.remove('safe', 'warning', 'neutral');
+      if (outcome === 'ok') tag.classList.add('safe');
+      if (outcome === 'unverifiable') tag.classList.add('neutral');
+      if (outcome === 'fail') tag.classList.add('warning');
+      tag.title = detail;
+    }
+
+    counters[outcome] += 1;
+    counters.pending -= 1;
+    refreshDependencyState();
   });
+
+  await Promise.all(checks);
 }
 
 // Static analysis
 async function runStaticAnalysis(code) {
   try {
     const result = await chrome.runtime.sendMessage({ action: 'analyzeScript', code });
-    if (!result || result.findings?.length === 0) return;
+    const mount = document.getElementById('analysisMount');
+    const status = document.getElementById('analysisStatus');
+    if (!mount || !status) return;
 
-    const container = document.querySelector('.script-card');
-    if (!container) return;
+    if (!result) {
+      status.textContent = 'Unavailable';
+      status.className = 'count status-neutral';
+      analysisDecisionState = {
+        label: 'Unavailable',
+        tone: 'neutral',
+        detail: 'ScriptVault could not complete the static scan for this install.'
+      };
+      updateDecisionStates();
+      mount.innerHTML = `
+        <div class="install-card-header">
+          <div>
+            <div class="install-card-title">Security Analysis</div>
+            <div class="install-card-subtitle">ScriptVault could not complete the static scan for this install.</div>
+          </div>
+          <span class="count status-neutral">Unavailable</span>
+        </div>
+        <div class="analysis-summary">You can still review permissions, scope, and source details before deciding.</div>
+      `;
+      return;
+    }
 
-    const riskColors = { minimal: 'var(--accent)', low: 'var(--accent)', medium: 'var(--warning)', high: 'var(--danger)' };
-    const riskColor = riskColors[result.riskLevel] || 'var(--text-muted)';
+    const riskClass = result.riskLevel === 'high' || result.riskLevel === 'medium'
+      ? 'status-warn'
+      : result.riskLevel === 'low' || result.riskLevel === 'minimal'
+        ? 'status-good'
+        : 'status-neutral';
+    const findings = result.findings || [];
+    analysisDecisionState = {
+      label: result.riskLevel ? `${String(result.riskLevel).toUpperCase()} (${numberFormatter.format(result.totalRisk || 0)})` : 'Unknown',
+      tone: result.riskLevel === 'high' || result.riskLevel === 'medium'
+        ? 'warn'
+        : result.riskLevel === 'low' || result.riskLevel === 'minimal'
+          ? 'good'
+          : 'neutral',
+      detail: result.summary || 'Static analysis completed.'
+    };
+    updateDecisionStates();
 
-    const section = document.createElement('div');
-    section.className = 'section';
-    section.innerHTML = `
-      <div class="section-title">
-        <span>Security Analysis</span>
-        <span class="count" style="background: ${riskColor}; color: ${result.riskLevel === 'high' || result.riskLevel === 'medium' ? '#fff' : 'inherit'}">
-          ${result.riskLevel.toUpperCase()} (${result.totalRisk}/100)
-        </span>
+    mount.innerHTML = `
+      <div class="install-card-header">
+        <div>
+          <div class="install-card-title">Security Analysis</div>
+          <div class="install-card-subtitle">Static scan results for this specific install payload.</div>
+        </div>
+        <span class="count ${riskClass}">${escapeHtml(String(result.riskLevel || 'unknown').toUpperCase())} (${numberFormatter.format(result.totalRisk || 0)}/100)</span>
       </div>
-      <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 10px;">${escapeHtml(result.summary)}</div>
+      <div class="analysis-summary">${escapeHtml(result.summary || 'No notable findings returned from static analysis.')}</div>
       <div class="tag-list">
-        ${result.findings.slice(0, 10).map(f => {
-          const cls = f.risk >= 20 ? 'warning' : f.risk >= 10 ? '' : 'safe';
-          return `<span class="tag ${cls}" title="${escapeHtml(f.desc)}${f.count > 1 ? ` (${f.count}x)` : ''}">${escapeHtml(f.label)}</span>`;
-        }).join('')}
-        ${result.findings.length > 10 ? `<span class="tag" style="opacity:0.6">+${result.findings.length - 10} more</span>` : ''}
+        ${findings.length > 0
+          ? findings.slice(0, 10).map(f => {
+              const cls = f.risk >= 20 ? 'warning' : f.risk >= 10 ? '' : 'safe';
+              return `<span class="tag ${cls}" title="${escapeHtml(f.desc)}${f.count > 1 ? ` (${f.count}x)` : ''}">${escapeHtml(f.label)}</span>`;
+            }).join('')
+          : '<span class="tag safe">No notable findings</span>'
+        }
+        ${findings.length > 10 ? `<span class="tag neutral">+${findings.length - 10} more</span>` : ''}
       </div>
     `;
-    container.appendChild(section);
   } catch (e) {
     console.warn('Static analysis failed:', e);
+    analysisDecisionState = {
+      label: 'Unavailable',
+      tone: 'neutral',
+      detail: 'The scanner ran into an error while processing this script.'
+    };
+    updateDecisionStates();
+    const mount = document.getElementById('analysisMount');
+    if (mount) {
+      mount.innerHTML = `
+        <div class="install-card-header">
+          <div>
+            <div class="install-card-title">Security Analysis</div>
+            <div class="install-card-subtitle">The scanner ran into an error while processing this script.</div>
+          </div>
+          <span class="count status-neutral">Unavailable</span>
+        </div>
+        <div class="analysis-summary">Review the install details manually and open the code preview if the source is unfamiliar.</div>
+      `;
+    }
   }
 }
 

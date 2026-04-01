@@ -527,6 +527,58 @@ const CollectionManager = (() => {
     return _scripts;
   }
 
+  function markLocalInstalled(script, scriptId, resultScript) {
+    if (!scriptId) return;
+    script.scriptId = scriptId;
+    Object.defineProperty(script, '_localInstalled', {
+      value: {
+        id: scriptId,
+        enabled: resultScript?.enabled !== false,
+        code: resultScript?.code || ''
+      },
+      configurable: true,
+      writable: true,
+      enumerable: false
+    });
+  }
+
+  async function fetchGreasyForkCodeUrl(greasyForkId) {
+    if (!greasyForkId) throw new Error('Missing Greasy Fork ID');
+    const resp = await fetch(`https://api.greasyfork.org/en/scripts/${encodeURIComponent(greasyForkId)}.json`);
+    if (!resp.ok) throw new Error(`Greasy Fork lookup failed (${resp.status})`);
+    const data = await resp.json();
+    if (!data?.code_url) throw new Error('Install URL unavailable for this script');
+    return data.code_url;
+  }
+
+  async function installCollectionScript(script, coll) {
+    if (script.scriptId && typeof _onInstall === 'function') {
+      const result = await Promise.resolve(_onInstall(script.scriptId, script));
+      if (result?.success === false || result?.error) {
+        throw new Error(result.error || 'Install failed');
+      }
+      const resolvedId = result?.scriptId || result?.script?.id || script.scriptId;
+      if (resolvedId) markLocalInstalled(script, resolvedId, result?.script);
+      return { scriptId: resolvedId, script: result?.script || null };
+    }
+
+    const installUrl = script.installUrl || await fetchGreasyForkCodeUrl(script.greasyForkId);
+    const result = await chrome.runtime.sendMessage({ action: 'installFromUrl', url: installUrl });
+    if (!result?.success) {
+      throw new Error(result?.error || 'Install failed');
+    }
+
+    const resolvedId = result?.scriptId || result?.script?.id || null;
+    if (resolvedId) {
+      markLocalInstalled(script, resolvedId, result.script);
+      if (!coll?.builtIn) {
+        await saveCollections();
+      }
+    }
+
+    return { scriptId: resolvedId, script: result?.script || null };
+  }
+
   /* ------------------------------------------------------------------ */
   /*  Rendering                                                          */
   /* ------------------------------------------------------------------ */
@@ -641,7 +693,7 @@ const CollectionManager = (() => {
 
     let html = '';
     for (const s of scripts) {
-      const inst = s.scriptId ? (installed || []).find(i => i.id === s.scriptId) : null;
+      const inst = (s.scriptId ? (installed || []).find(i => i.id === s.scriptId) : null) || s._localInstalled || null;
       const isInstalled = !!inst;
       const isEnabled = inst ? inst.enabled !== false : false;
 
@@ -685,20 +737,40 @@ const CollectionManager = (() => {
 
     // Install individual
     container.querySelectorAll('[data-install-gf]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const gfId = btn.dataset.installGf;
-        if (gfId) {
-          window.open(`https://greasyfork.org/scripts/${gfId}`, '_blank');
-          showToast(`Opening Greasy Fork page for "${btn.dataset.installName}"...`);
+        const script = scripts.find(s => String(s.greasyForkId || '') === String(btn.dataset.installGf || ''));
+        if (!script) return;
+
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Installing…';
+
+        try {
+          const result = await installCollectionScript(script, coll);
+          renderExpandedScripts(card, coll, getInstalledScripts());
+          showToast(`Installed "${result?.script?.meta?.name || result?.script?.metadata?.name || btn.dataset.installName || script.name || 'script'}"`);
+        } catch (error) {
+          btn.disabled = false;
+          btn.textContent = originalText;
+          showToast(`Install failed: ${error.message}`);
         }
       });
     });
 
     // Bulk actions
-    container.querySelector('[data-action="install-all"]').addEventListener('click', (e) => {
+    container.querySelector('[data-action="install-all"]').addEventListener('click', async (e) => {
       e.stopPropagation();
-      handleInstallAll(coll);
+      const btn = e.currentTarget;
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Installing…';
+      try {
+        await handleInstallAll(coll, card);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
     });
 
     container.querySelector('[data-action="enable-all"]').addEventListener('click', (e) => {
@@ -734,20 +806,44 @@ const CollectionManager = (() => {
   /*  Bulk actions                                                       */
   /* ------------------------------------------------------------------ */
 
-  function handleInstallAll(coll) {
+  async function handleInstallAll(coll, card = null) {
     const scripts = coll.scripts || [];
-    const gfScripts = scripts.filter(s => s.greasyForkId);
-    if (gfScripts.length > 0) {
-      for (const s of gfScripts) {
-        window.open(`https://greasyfork.org/scripts/${s.greasyForkId}`, '_blank');
+    let installedCount = 0;
+    let skippedCount = 0;
+    let failedCount = 0;
+
+    for (const script of scripts) {
+      const installed = getInstalledScripts() || [];
+      if (script.scriptId && installed.some(s => s.id === script.scriptId)) {
+        skippedCount++;
+        continue;
       }
-      showToast(`Opened ${gfScripts.length} Greasy Fork page(s)`);
-    } else if (typeof _onInstall === 'function') {
-      scripts.forEach(s => {
-        if (s.scriptId) _onInstall(s.scriptId);
-      });
-      showToast('Installed collection scripts');
+
+      try {
+        await installCollectionScript(script, coll);
+        installedCount++;
+      } catch (error) {
+        failedCount++;
+      }
     }
+
+    if (card) {
+      renderExpandedScripts(card, coll, getInstalledScripts());
+    }
+
+    if (installedCount === 0 && skippedCount === 0 && failedCount > 0) {
+      showToast(`Install failed for ${failedCount} script${failedCount === 1 ? '' : 's'}`);
+      return { success: false, installed: 0, skipped: 0, failed: failedCount };
+    }
+
+    const summary = [
+      installedCount > 0 ? `${installedCount} installed` : '',
+      skippedCount > 0 ? `${skippedCount} already installed` : '',
+      failedCount > 0 ? `${failedCount} failed` : ''
+    ].filter(Boolean).join(', ');
+
+    showToast(summary || 'Nothing to install');
+    return { success: failedCount === 0, installed: installedCount, skipped: skippedCount, failed: failedCount };
   }
 
   let _onToggle = null;
@@ -1095,7 +1191,7 @@ const CollectionManager = (() => {
      * @param {HTMLElement} containerEl - element to render into
      * @param {Object} [opts]
      * @param {Function} [opts.getScripts] - () => script[]
-     * @param {Function} [opts.onInstall]  - (scriptId) => void
+     * @param {Function} [opts.onInstall]  - async (scriptId, script) => result
      * @param {Function} [opts.onToggle]   - (scriptId, enable) => void
      */
     async init(containerEl, opts = {}) {
@@ -1159,12 +1255,12 @@ const CollectionManager = (() => {
     /**
      * Install all scripts in a collection.
      */
-    installCollection(collectionId) {
+    async installCollection(collectionId) {
       const all = [...BUILT_IN_COLLECTIONS, ..._collections];
       const coll = all.find(c => c.id === collectionId);
       if (!coll) return { success: false, error: 'Collection not found' };
-      handleInstallAll(coll);
-      return { success: true, name: coll.name, scriptCount: (coll.scripts || []).length };
+      const result = await handleInstallAll(coll);
+      return { ...result, name: coll.name, scriptCount: (coll.scripts || []).length };
     },
 
     /**

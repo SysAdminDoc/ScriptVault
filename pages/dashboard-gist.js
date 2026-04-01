@@ -951,12 +951,35 @@ const GistIntegration = (() => {
             const installBtn = document.createElement('button');
             installBtn.className = `gi-btn ${script.installed ? 'gi-btn-secondary' : 'gi-btn-primary'} gi-btn-sm`;
             installBtn.textContent = script.installed ? 'Reinstall' : 'Install';
-            installBtn.onclick = () => {
-                if (_state.onInstallScript) {
-                    _state.onInstallScript(script.code);
-                    toast(`Installed: ${meta.name || script.filename}`, 'success');
+            installBtn.onclick = async () => {
+                if (!_state.onInstallScript) {
+                    toast('Install integration is unavailable right now', 'error');
+                    return;
+                }
+
+                const originalText = installBtn.textContent;
+                installBtn.disabled = true;
+                installBtn.innerHTML = '<span class="gi-spinner"></span>Installing…';
+
+                try {
+                    const result = await Promise.resolve(_state.onInstallScript(script.code, {
+                        meta: script.meta,
+                        gistId: script.gistId,
+                        gistUrl: script.gistUrl
+                    }));
+                    if (result?.success === false || result?.error) {
+                        throw new Error(result.error || 'Install failed');
+                    }
+
+                    script.installed = true;
                     installBtn.textContent = 'Installed';
-                    installBtn.disabled = true;
+                    const statusField = dl.querySelector('dd:last-child');
+                    if (statusField) statusField.textContent = 'Installed';
+                    toast(`Installed: ${meta.name || script.filename}`, 'success');
+                } catch (e) {
+                    installBtn.disabled = false;
+                    installBtn.textContent = originalText;
+                    toast(e.message || 'Install failed', 'error');
                 }
             };
             actions.appendChild(installBtn);

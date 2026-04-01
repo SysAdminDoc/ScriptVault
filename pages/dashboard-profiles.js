@@ -547,10 +547,12 @@ const ProfileManager = (() => {
     return null;
   }
 
+  let _urlWatcherStarted = false;
   function _startUrlWatcher() {
     // Periodically check the current tab URL for auto-switch rules
     // (runs from the dashboard page, observes the current tab)
-    if (!chrome.tabs) return;
+    if (!chrome.tabs || _urlWatcherStarted) return;
+    _urlWatcherStarted = true;
 
     _onActivatedListener = async (activeInfo) => {
       try {
@@ -887,7 +889,10 @@ const ProfileManager = (() => {
     const deleteBtn = overlay.querySelector('#svProfileDelete');
     if (deleteBtn) {
       deleteBtn.addEventListener('click', async () => {
-        if (!confirm(`Delete profile "${editing.name}"?`)) return;
+        const confirmed = typeof window.ScriptVaultDashboardUI?.confirm === 'function'
+          ? await window.ScriptVaultDashboardUI.confirm('Delete Profile', `Delete profile "${editing.name}"?`)
+          : confirm(`Delete profile "${editing.name}"?`);
+        if (!confirmed) return;
         _profiles = _profiles.filter(p => p.id !== editing.id);
         if (_activeProfileId === editing.id) _activeProfileId = DEFAULT_PROFILE_ID;
         await _saveProfiles();
@@ -1154,6 +1159,7 @@ const ProfileManager = (() => {
       if (_modalEl) { _modalEl.remove(); _modalEl = null; }
       if (_comparisonEl) { _comparisonEl.remove(); _comparisonEl = null; }
       if (_styleEl) { _styleEl.remove(); _styleEl = null; }
+      _urlWatcherStarted = false;
       _initialized = false;
       _container = null;
       _profiles = [];

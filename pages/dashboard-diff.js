@@ -308,7 +308,7 @@ const DiffTool = (() => {
     const n = a.length, m = b.length;
     // For very large files, use a simpler approach
     if (n * m > 5000000) return _computeSimpleDiff(a, b);
-    const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+    const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
     for (let i = 1; i <= n; i++) {
       for (let j = 1; j <= m; j++) {
         dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
