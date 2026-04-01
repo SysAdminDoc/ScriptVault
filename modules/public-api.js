@@ -309,10 +309,10 @@ const PublicAPI = (() => {
       return {
         scripts: scripts.map(s => ({
           id: s.id,
-          name: s.name || s.id,
-          version: s.version || '1.0',
+          name: s.meta?.name || s.name || s.id,
+          version: s.meta?.version || s.version || '1.0',
           enabled: s.enabled !== false,
-          matchUrls: s.matches || s.match || []
+          matchUrls: s.meta?.match || s.matches || s.match || []
         }))
       };
     },
@@ -345,12 +345,22 @@ const PublicAPI = (() => {
 
       try {
         const result = await chrome.storage.local.get('userscripts');
-        const scripts = result.userscripts || [];
-        const idx = scripts.findIndex(s => s.id === scriptId || s.name === scriptId);
-        if (idx === -1) return { error: 'Script not found', scriptId };
-
-        scripts[idx].enabled = enabled;
-        await chrome.storage.local.set({ userscripts: scripts });
+        const data = result.userscripts || {};
+        const scripts = Array.isArray(data) ? data : Object.entries(data);
+        let found = false;
+        if (Array.isArray(data)) {
+          const idx = data.findIndex(s => s.id === scriptId || s.meta?.name === scriptId);
+          if (idx === -1) return { error: 'Script not found', scriptId };
+          data[idx].enabled = enabled;
+          found = true;
+        } else {
+          const entry = Object.entries(data).find(([k, s]) => k === scriptId || s.id === scriptId || s.meta?.name === scriptId);
+          if (!entry) return { error: 'Script not found', scriptId };
+          data[entry[0]].enabled = enabled;
+          found = true;
+        }
+        if (!found) return { error: 'Script not found', scriptId };
+        await chrome.storage.local.set({ userscripts: data });
 
         fireWebhook('script.toggled', { scriptId, enabled });
         return { ok: true, scriptId, enabled };
@@ -387,14 +397,23 @@ const PublicAPI = (() => {
         };
 
         const result = await chrome.storage.local.get('userscripts');
-        const scripts = result.userscripts || [];
+        const data = result.userscripts || {};
+        const scripts = Array.isArray(data) ? data : data;
 
-        // Check for duplicate
-        const existing = scripts.findIndex(s => s.id === scriptId);
-        if (existing !== -1) {
-          scripts[existing] = { ...scripts[existing], ...newScript, updatedAt: Date.now() };
+        // Check for duplicate — support both object and array formats
+        if (Array.isArray(scripts)) {
+          const existing = scripts.findIndex(s => s.id === scriptId);
+          if (existing !== -1) {
+            scripts[existing] = { ...scripts[existing], ...newScript, updatedAt: Date.now() };
+          } else {
+            scripts.push(newScript);
+          }
         } else {
-          scripts.push(newScript);
+          if (scripts[scriptId]) {
+            scripts[scriptId] = { ...scripts[scriptId], ...newScript, updatedAt: Date.now() };
+          } else {
+            scripts[scriptId] = newScript;
+          }
         }
 
         await chrome.storage.local.set({ userscripts: scripts });
@@ -485,7 +504,21 @@ const PublicAPI = (() => {
         return { type: 'scriptvault:install:response', error: 'Permission denied', action: 'installScript' };
       }
 
-      // Fetch the script only after authorization
+      // Validate URL - only allow https:// from known userscript hosts
+      try {
+        const parsedUrl = new URL(url);
+        if (parsedUrl.protocol !== 'https:') {
+          return { type: 'scriptvault:install:response', error: 'Only HTTPS URLs are allowed' };
+        }
+        const h = parsedUrl.hostname;
+        if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.startsWith('192.168.') || h.startsWith('10.') || h.startsWith('172.')) {
+          return { type: 'scriptvault:install:response', error: 'Internal URLs are not allowed' };
+        }
+      } catch {
+        return { type: 'scriptvault:install:response', error: 'Invalid URL' };
+      }
+
+      // Fetch the script only after authorization and URL validation
       try {
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -719,6 +752,14 @@ const PublicAPI = (() => {
         }
       }
       await savePermissions();
+    },
+
+    /**
+     * Get current API action permissions.
+     * @returns {object}
+     */
+    getPermissions() {
+      return { ...(_permissions || DEFAULT_PERMISSIONS) };
     },
 
     /**

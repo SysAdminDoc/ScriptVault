@@ -478,12 +478,12 @@ const ScriptSharing = (() => {
             const ecBlocks = [];
             let offset = 0;
 
+            const remainder = totalData % numBlocks;
             for (let b = 0; b < numBlocks; b++) {
-                // Last block may be 1 byte longer
-                const bLen = b < numBlocks - (totalData % numBlocks || numBlocks) ? blockSize : blockSize + (totalData % numBlocks ? 1 : 0);
-                const actualLen = b < numBlocks ? Math.ceil(totalData / numBlocks) : blockSize;
-                const blockData = dataBytes.slice(offset, offset + (b === numBlocks - 1 ? totalData - offset : Math.floor(totalData / numBlocks)));
-                offset += blockData.length;
+                // First (numBlocks - remainder) blocks get blockSize bytes, rest get blockSize + 1
+                const bLen = b < (numBlocks - remainder) ? blockSize : blockSize + 1;
+                const blockData = dataBytes.slice(offset, offset + bLen);
+                offset += bLen;
                 blocks.push(blockData);
                 ecBlocks.push(rsEncode(blockData, ecPerBlock));
             }

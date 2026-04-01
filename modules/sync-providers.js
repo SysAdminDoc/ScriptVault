@@ -477,11 +477,14 @@ var CloudSyncProviders = {
 
     async upload(data, settings) {
       if (!settings.dropboxToken) throw new Error('Not authenticated with Dropbox');
-      
+
+      // Ensure token is fresh before upload
+      const token = await this.getValidToken(settings);
+
       const response = await fetch('https://content.dropboxapi.com/2/files/upload', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${settings.dropboxToken}`,
+          'Authorization': `Bearer ${token}`,
           'Dropbox-API-Arg': JSON.stringify({
             path: this.fileName,
             mode: 'overwrite',
@@ -585,13 +588,15 @@ var CloudSyncProviders = {
       const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
+      const state = crypto.randomUUID();
       const authUrl = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?' + new URLSearchParams({
         client_id: clientId,
         redirect_uri: redirectUri,
         response_type: 'code',
         scope: scopes,
         code_challenge: codeChallenge,
-        code_challenge_method: 'S256'
+        code_challenge_method: 'S256',
+        state
       }).toString();
 
       const responseUrl = await chrome.identity.launchWebAuthFlow({
@@ -599,6 +604,8 @@ var CloudSyncProviders = {
       });
 
       const url = new URL(responseUrl);
+      const returnedState = url.searchParams.get('state');
+      if (returnedState !== state) throw new Error('CSRF state mismatch');
       const code = url.searchParams.get('code');
       if (!code) throw new Error('No authorization code received');
 

@@ -25,7 +25,10 @@ const CardView = (() => {
   let _scripts = [];
   let _options = {};
   let _toggleBtn = null;
+  let _ownsToggleBtn = false;
+  let _toggleClickHandler = null;
   let _activeMenuId = null;
+  let _tableContainer = null;
 
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
@@ -61,15 +64,30 @@ const CardView = (() => {
   flex-direction: column;
   gap: 8px;
   min-height: 140px;
+  overflow: hidden;
+  content-visibility: auto;
+  contain-intrinsic-size: 190px;
+  contain: layout style paint;
+}
+.cv-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(90, 140, 255, 0), rgba(90, 140, 255, 0.55), rgba(90, 140, 255, 0));
+  pointer-events: none;
 }
 .cv-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0,0,0,.35);
   border-color: var(--accent-blue);
 }
-.cv-card:focus-visible {
-  outline: 2px solid var(--accent-blue);
-  outline-offset: 2px;
+.cv-grid[data-list-size="large"] .cv-card,
+.cv-grid[data-list-size="huge"] .cv-card {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+.cv-grid[data-list-size="huge"] .cv-card:hover {
+  transform: none;
 }
 
 /* Status borders */
@@ -98,9 +116,37 @@ const CardView = (() => {
 /* Header row: icon + name */
 .cv-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   min-width: 0;
+}
+.cv-name-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+.cv-name-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  color: var(--text-primary);
+  font: inherit;
+  min-width: 0;
+  cursor: pointer;
+}
+.cv-name-btn:hover .cv-name,
+.cv-name-btn:focus-visible .cv-name {
+  color: var(--accent-blue);
+}
+.cv-name-btn:focus-visible {
+  outline: 2px solid rgba(90, 140, 255, 0.45);
+  outline-offset: 3px;
+  border-radius: 8px;
 }
 
 /* Favicon / letter avatar */
@@ -134,6 +180,21 @@ const CardView = (() => {
   flex: 1;
   min-width: 0;
 }
+.cv-domain {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: fit-content;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(90, 140, 255, 0.12);
+  border: 1px solid rgba(90, 140, 255, 0.18);
+}
 
 /* Meta row */
 .cv-meta {
@@ -142,6 +203,7 @@ const CardView = (() => {
   gap: 6px 12px;
   font-size: 11px;
   color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 .cv-meta-item {
   display: flex;
@@ -149,6 +211,28 @@ const CardView = (() => {
   gap: 3px;
 }
 .cv-meta-label { color: var(--text-muted); }
+.cv-meta-button {
+  appearance: none;
+  background: rgba(90, 140, 255, 0.08);
+  border: 1px solid rgba(90, 140, 255, 0.15);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.cv-meta-button:hover,
+.cv-meta-button:focus-visible {
+  color: var(--text-primary);
+  border-color: rgba(90, 140, 255, 0.45);
+  background: rgba(90, 140, 255, 0.14);
+}
+.cv-meta-button:focus-visible {
+  outline: 2px solid rgba(90, 140, 255, 0.35);
+  outline-offset: 2px;
+}
 
 /* Description */
 .cv-desc {
@@ -182,6 +266,18 @@ const CardView = (() => {
   margin-top: auto;
   padding-top: 8px;
   border-top: 1px solid var(--border-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cv-grid,
+  .cv-card,
+  .cv-meta-button,
+  .cv-view-toggle {
+    transition: none;
+  }
+  .cv-card:hover {
+    transform: none;
+  }
 }
 
 /* Toggle switch (reuses dashboard toggle) */
@@ -254,6 +350,31 @@ const CardView = (() => {
 }
 .cv-menu-item:hover { background: var(--bg-row-hover); }
 .cv-menu-item.danger { color: var(--accent-red); }
+
+.cv-empty {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  padding: 28px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top, rgba(90, 140, 255, 0.12), transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+  text-align: center;
+}
+.cv-empty h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+.cv-empty p {
+  margin: 0;
+  max-width: 440px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
 
 /* View toggle button */
 .cv-view-toggle {
@@ -343,6 +464,24 @@ const CardView = (() => {
     return `${months}mo ago`;
   }
 
+  function getCardListSize(count) {
+    if (count <= 0) return 'empty';
+    if (count >= 80) return 'huge';
+    if (count >= 36) return 'large';
+    if (count >= 12) return 'medium';
+    return 'small';
+  }
+
+  function buildEmptyState() {
+    const empty = document.createElement('div');
+    const hasScripts = typeof _options.hasScripts === 'function' ? _options.hasScripts() : _scripts.length > 0;
+    empty.className = 'cv-empty';
+    empty.innerHTML = hasScripts
+      ? '<div><h3>Nothing matches this view</h3><p>Adjust the current search or filter to bring scripts back into focus.</p></div>'
+      : '<div><h3>No scripts yet</h3><p>Create or import a script to start building out the vault.</p></div>';
+    return empty;
+  }
+
   /* ------------------------------------------------------------------ */
   /*  Style injection                                                    */
   /* ------------------------------------------------------------------ */
@@ -383,12 +522,11 @@ const CardView = (() => {
   /* ------------------------------------------------------------------ */
 
   function buildCard(script) {
-    const card = document.createElement('div');
+    const card = document.createElement('article');
+    const cardTitleId = `cv-title-${script.id}`;
     card.className = `cv-card ${script.enabled !== false ? 'cv-enabled' : 'cv-disabled'}`;
     card.dataset.scriptId = script.id;
-    card.tabIndex = 0;
-    card.setAttribute('role', 'article');
-    card.setAttribute('aria-label', script.metadata?.name || 'Unnamed Script');
+    card.setAttribute('aria-labelledby', cardTitleId);
 
     const name = script.metadata?.name || 'Unnamed Script';
     const version = script.metadata?.version || '1.0';
@@ -416,10 +554,6 @@ const CardView = (() => {
     if (iconUrl) {
       iconHtml = `<img class="cv-icon" src="${escapeHtml(iconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
         <span class="cv-icon-letter" style="display:none;background:${nameToColor(name)}">${escapeHtml(name.charAt(0).toUpperCase())}</span>`;
-    } else if (domain) {
-      const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
-      iconHtml = `<img class="cv-icon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <span class="cv-icon-letter" style="display:none;background:${nameToColor(name)}">${escapeHtml(name.charAt(0).toUpperCase())}</span>`;
     } else {
       iconHtml = `<span class="cv-icon-letter" style="background:${nameToColor(name)}">${escapeHtml(name.charAt(0).toUpperCase())}</span>`;
     }
@@ -436,23 +570,28 @@ const CardView = (() => {
       <div class="cv-status-dots">${dots.join('')}</div>
       <div class="cv-header">
         ${iconHtml}
-        <span class="cv-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+        <div class="cv-name-stack">
+          <button type="button" class="cv-name-btn" data-open-id="${script.id}" aria-label="Open ${escapeHtml(name)} in the editor">
+            <span class="cv-name" id="${cardTitleId}" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+          </button>
+          ${domain ? `<span class="cv-domain" title="${escapeHtml(domain)}">${escapeHtml(domain)}</span>` : ''}
+        </div>
       </div>
       ${desc ? `<div class="cv-desc" title="${escapeHtml(desc)}">${escapeHtml(truncate(desc, DESCRIPTION_MAX))}</div>` : ''}
       <div class="cv-meta">
         <span class="cv-meta-item"><span class="cv-meta-label">v</span>${escapeHtml(version)}</span>
         ${author ? `<span class="cv-meta-item"><span class="cv-meta-label">by</span>${escapeHtml(author)}</span>` : ''}
         <span class="cv-meta-item"><span class="cv-meta-label">matches</span>${matches.length}</span>
-        <span class="cv-meta-item"><span class="cv-meta-label">updated</span>${formatRelativeTime(script.updatedAt)}</span>
+        <button type="button" class="cv-meta-button" data-update-id="${script.id}" aria-label="Check for updates for ${escapeHtml(name)}" title="Check for updates">${formatRelativeTime(script.updatedAt)}</button>
         ${perfHtml}
       </div>
       <div class="cv-footer">
         <label class="cv-toggle" title="${enabled ? 'Enabled' : 'Disabled'}">
-          <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${script.id}">
+          <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${script.id}" aria-label="${enabled ? 'Disable' : 'Enable'} ${escapeHtml(name)}">
           <span class="cv-toggle-slider"></span>
         </label>
-        <button class="cv-menu-btn" data-menu-id="${script.id}" title="Actions" aria-label="Script actions">\u22EF</button>
-        <div class="cv-menu cv-hidden" data-menu-for="${script.id}">
+        <button class="cv-menu-btn" data-menu-id="${script.id}" title="Actions" aria-label="Script actions for ${escapeHtml(name)}" aria-haspopup="menu" aria-expanded="false">\u22EF</button>
+        <div class="cv-menu cv-hidden" data-menu-for="${script.id}" role="menu" aria-label="Actions for ${escapeHtml(name)}">
           <button class="cv-menu-item" data-action="edit" data-id="${script.id}">Edit</button>
           <button class="cv-menu-item" data-action="toggle" data-id="${script.id}">${enabled ? 'Disable' : 'Enable'}</button>
           <button class="cv-menu-item" data-action="update" data-id="${script.id}">Check Update</button>
@@ -470,12 +609,16 @@ const CardView = (() => {
       _options.onEdit?.(script.id);
     });
 
-    // Enter/Space on focused card
-    card.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        _options.onEdit?.(script.id);
-      }
+    const openBtn = card.querySelector(`[data-open-id="${script.id}"]`);
+    openBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _options.onEdit?.(script.id);
+    });
+
+    const updateBtn = card.querySelector(`[data-update-id="${script.id}"]`);
+    updateBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _options.onUpdate?.(script.id);
     });
 
     // Toggle switch
@@ -491,6 +634,14 @@ const CardView = (() => {
     menuBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       toggleCardMenu(script.id);
+    });
+    const menu = card.querySelector(`[data-menu-for="${script.id}"]`);
+    menu?.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeAllMenus();
+        menuBtn?.focus();
+      }
     });
 
     // Menu actions
@@ -522,15 +673,18 @@ const CardView = (() => {
     closeAllMenus();
     if (wasOpen) return;
     const menu = _cardGrid?.querySelector(`[data-menu-for="${id}"]`);
+    const menuBtn = _cardGrid?.querySelector(`[data-menu-id="${id}"]`);
     if (menu) {
       menu.classList.remove('cv-hidden');
       _activeMenuId = id;
+      menuBtn?.setAttribute('aria-expanded', 'true');
     }
   }
 
   function closeAllMenus() {
     _activeMenuId = null;
     _cardGrid?.querySelectorAll('.cv-menu').forEach(m => m.classList.add('cv-hidden'));
+    _cardGrid?.querySelectorAll('.cv-menu-btn').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
   }
 
   /* ------------------------------------------------------------------ */
@@ -540,73 +694,57 @@ const CardView = (() => {
   function createToggleButton() {
     const btn = document.createElement('button');
     btn.className = 'cv-view-toggle';
-    btn.title = 'Switch view';
-    btn.setAttribute('aria-label', 'Toggle between table and card view');
     updateToggleIcon(btn);
-    btn.addEventListener('click', () => {
-      api.setViewMode(_viewMode === 'table' ? 'card' : 'table');
-    });
     return btn;
+  }
+
+  function getToggleSvg(mode) {
+    if (mode === 'table') {
+      return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
+    }
+    return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
   }
 
   function updateToggleIcon(btn) {
     if (!btn) return;
-    if (_viewMode === 'table') {
-      // Show grid icon (to switch to card)
-      btn.innerHTML = `<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Cards`;
-    } else {
-      // Show list icon (to switch to table)
-      btn.innerHTML = `<svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Table`;
-    }
+    const nextMode = _viewMode === 'table' ? 'card' : 'table';
+    const compact = btn.id === 'btnViewToggle' || btn.classList.contains('compact');
+    const label = nextMode === 'card' ? 'Switch to card view' : 'Switch to table view';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-pressed', _viewMode === 'card' ? 'true' : 'false');
+    btn.innerHTML = compact ? getToggleSvg(nextMode) : `${getToggleSvg(nextMode)} ${nextMode === 'card' ? 'Cards' : 'Table'}`;
   }
 
   /* ------------------------------------------------------------------ */
   /*  View switching                                                     */
   /* ------------------------------------------------------------------ */
 
+  function syncLayout() {
+    const showCards = _viewMode === 'card';
+    if (_tableContainer) {
+      _tableContainer.style.display = showCards ? 'none' : '';
+    }
+    if (_container) {
+      _container.style.display = showCards ? '' : 'none';
+    }
+    if (_cardGrid) {
+      _cardGrid.classList.toggle('cv-hidden', !showCards);
+      _cardGrid.classList.remove('cv-fade-out');
+    }
+    updateToggleIcon(_toggleBtn);
+  }
+
   function applyViewMode(mode, animate = true) {
     _viewMode = mode;
     saveViewMode(mode);
-    updateToggleIcon(_toggleBtn);
-
-    // Find the table element in the container
-    const table = _container?.querySelector('table, .script-table, #scriptTableBody')?.closest('table')
-                || _container?.querySelector('table');
-    const tableWrapper = table?.parentElement;
-
-    if (mode === 'card') {
-      // Hide table, show grid
-      if (animate && tableWrapper) {
-        tableWrapper.classList.add('cv-table-fade-out');
-        setTimeout(() => {
-          tableWrapper.style.display = 'none';
-          tableWrapper.classList.remove('cv-table-fade-out');
-          if (_cardGrid) {
-            _cardGrid.classList.remove('cv-hidden');
-            _cardGrid.classList.remove('cv-fade-out');
-          }
-        }, TRANSITION_MS);
-      } else {
-        if (tableWrapper) tableWrapper.style.display = 'none';
-        if (_cardGrid) {
-          _cardGrid.classList.remove('cv-hidden');
-          _cardGrid.classList.remove('cv-fade-out');
-        }
-      }
-    } else {
-      // Show table, hide grid
-      if (animate && _cardGrid) {
-        _cardGrid.classList.add('cv-fade-out');
-        setTimeout(() => {
-          _cardGrid.classList.add('cv-hidden');
-          _cardGrid.classList.remove('cv-fade-out');
-          if (tableWrapper) tableWrapper.style.display = '';
-        }, TRANSITION_MS);
-      } else {
-        if (_cardGrid) _cardGrid.classList.add('cv-hidden');
-        if (tableWrapper) tableWrapper.style.display = '';
-      }
+    if (_cardGrid && animate && mode === 'card') {
+      _cardGrid.classList.add('cv-fade-out');
+      syncLayout();
+      requestAnimationFrame(() => _cardGrid?.classList.remove('cv-fade-out'));
+      return;
     }
+    syncLayout();
   }
 
   /* ------------------------------------------------------------------ */
@@ -634,12 +772,15 @@ const CardView = (() => {
      * @param {Function} options.onUpdate   - Called with scriptId.
      * @param {Function} options.onExport   - Called with scriptId.
      * @param {Function} options.onDelete   - Called with scriptId.
+     * @param {HTMLElement} [options.tableContainer] - The table wrapper to hide in card mode.
+     * @param {HTMLElement} [options.toggleButton] - Existing toggle button to bind.
      * @param {HTMLElement} [options.toggleTarget] - Element to append the view toggle button into.
      */
     init(containerEl, options = {}) {
       if (!containerEl) return;
       _container = containerEl;
       _options = options;
+      _tableContainer = options.tableContainer || null;
 
       injectStyles();
 
@@ -653,14 +794,23 @@ const CardView = (() => {
       _cardGrid.setAttribute('aria-label', 'Script cards');
       _container.appendChild(_cardGrid);
 
-      // Create toggle button
-      _toggleBtn = createToggleButton();
-      if (options.toggleTarget) {
+      _toggleBtn = options.toggleButton || null;
+      _ownsToggleBtn = !_toggleBtn;
+      if (!_toggleBtn) {
+        _toggleBtn = createToggleButton();
+      }
+      updateToggleIcon(_toggleBtn);
+      _toggleClickHandler = () => {
+        api.setViewMode(_viewMode === 'table' ? 'card' : 'table');
+      };
+      _toggleBtn.addEventListener('click', _toggleClickHandler);
+      if (_ownsToggleBtn && options.toggleTarget) {
         options.toggleTarget.appendChild(_toggleBtn);
       }
 
       // Listen for outside clicks to close menus
       document.addEventListener('click', onDocumentClick);
+      syncLayout();
     },
 
     /**
@@ -672,21 +822,22 @@ const CardView = (() => {
       if (!_cardGrid) return;
 
       _cardGrid.innerHTML = '';
+      _cardGrid.dataset.listSize = getCardListSize(_scripts.length);
       closeAllMenus();
 
-      for (const script of _scripts) {
-        const card = buildCard(script);
-        card.setAttribute('role', 'listitem');
-        _cardGrid.appendChild(card);
+      if (_scripts.length === 0) {
+        _cardGrid.appendChild(buildEmptyState());
+      } else {
+        const fragment = document.createDocumentFragment();
+        for (const script of _scripts) {
+          const card = buildCard(script);
+          card.setAttribute('role', 'listitem');
+          fragment.appendChild(card);
+        }
+        _cardGrid.appendChild(fragment);
       }
 
-      // Apply current mode (no animation on re-render)
-      if (_viewMode === 'card') {
-        const table = _container?.querySelector('table');
-        const tableWrapper = table?.parentElement;
-        if (tableWrapper) tableWrapper.style.display = 'none';
-        _cardGrid.classList.remove('cv-hidden');
-      }
+      syncLayout();
     },
 
     /**
@@ -713,15 +864,21 @@ const CardView = (() => {
     destroy() {
       document.removeEventListener('click', onDocumentClick);
       removeStyles();
+      if (_toggleBtn && _toggleClickHandler) {
+        _toggleBtn.removeEventListener('click', _toggleClickHandler);
+      }
       if (_cardGrid) {
         _cardGrid.remove();
         _cardGrid = null;
       }
-      if (_toggleBtn) {
+      if (_toggleBtn && _ownsToggleBtn) {
         _toggleBtn.remove();
-        _toggleBtn = null;
       }
+      _toggleBtn = null;
+      _toggleClickHandler = null;
+      _ownsToggleBtn = false;
       _container = null;
+      _tableContainer = null;
       _scripts = [];
       _options = {};
       _activeMenuId = null;

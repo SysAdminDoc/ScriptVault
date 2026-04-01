@@ -6,9 +6,6 @@
     <title>ScriptVault Dashboard</title>
     <!-- CodeMirror minimal (lint CSS only — editor is now Monaco via sandboxed iframe) -->
     <link rel="stylesheet" href="../lib/codemirror/addon/lint/lint.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         /* ============================================
            Tampermonkey-Style Dark Theme
@@ -165,19 +162,40 @@
         [data-ui-scale="1.25"] { --ui-scale: 1.25;  --base-font: 16px; }
         [data-ui-scale="1.5"]  { --ui-scale: 1.5;   --base-font: 19px; }
 
+        html[data-theme="dark"],
+        html[data-theme="catppuccin"],
+        html[data-theme="oled"] {
+            color-scheme: dark;
+        }
+
+        html[data-theme="light"] {
+            color-scheme: light;
+        }
+
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             font-size: var(--base-font);
-            background: var(--bg-body);
+            background:
+                radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 26%),
+                radial-gradient(circle at top right, rgba(96, 165, 250, 0.1), transparent 24%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
+                var(--bg-body);
+            background-attachment: fixed;
             color: var(--text-primary);
             min-height: 100vh;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
             letter-spacing: 0.01em;
+            overflow-x: hidden;
         }
 
         a { color: var(--accent-secondary); text-decoration: none; transition: color 0.2s; }
         a:hover { text-decoration: underline; }
+        button, a, input, select, textarea {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
 
         /* ============================================
            Global Focus Styles (WCAG 2.1 AA)
@@ -196,6 +214,23 @@
         input:focus-visible, textarea:focus-visible {
             outline: none;
             box-shadow: 0 0 0 2px var(--accent-primary);
+        }
+
+        .skip-link {
+            position: absolute;
+            top: -48px;
+            left: 0;
+            background: var(--accent-primary);
+            color: #fff;
+            padding: 8px 16px;
+            z-index: 9999;
+            font-size: 14px;
+            border-radius: 0 0 8px 0;
+            transition: top 0.2s ease;
+        }
+
+        .skip-link:focus {
+            top: 0;
         }
 
         /* ============================================
@@ -230,13 +265,15 @@
            Header
            ============================================ */
         .tm-header {
-            background: var(--bg-header);
-            border-bottom: 1px solid var(--border-color);
-            padding: 8px 16px 2px 16px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+                var(--bg-header);
+            border-bottom: 1px solid rgba(127, 127, 127, 0.22);
+            padding: 10px 20px 4px 20px;
             position: sticky;
             top: 0;
             z-index: 100;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
             -webkit-backdrop-filter: blur(12px);
             backdrop-filter: blur(12px);
         }
@@ -286,23 +323,25 @@
         }
 
         .header-icon-btn {
-            background: none;
-            border: 1px solid transparent;
-            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(127, 127, 127, 0.18);
+            border-radius: 10px;
             color: var(--text-muted);
             cursor: pointer;
-            padding: 4px;
+            padding: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s ease;
+            transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
             text-decoration: none;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
         }
 
         .header-icon-btn:hover {
             color: var(--text-primary);
-            background: rgba(255, 255, 255, 0.06);
-            border-color: var(--border-color);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(127, 127, 127, 0.32);
+            transform: translateY(-1px);
         }
 
         .header-icon-btn.active {
@@ -372,45 +411,50 @@
         .tm-tabs-bar {
             display: flex;
             align-items: center;
-            gap: 0;
+            gap: 14px;
+            max-width: 1600px;
+            margin: 0 auto;
         }
 
         .tm-tabs-scripts {
             display: flex;
-            gap: 2px;
+            gap: 6px;
             overflow-x: auto;
             overflow-y: hidden;
             flex-shrink: 1;
             min-width: 0;
             align-self: flex-end;
+            padding-bottom: 2px;
         }
 
         .tm-tabs {
             display: flex;
-            gap: 2px;
+            gap: 6px;
             margin-left: auto;
             flex-shrink: 0;
             align-self: flex-end;
+            padding-bottom: 2px;
         }
 
         .tm-tab {
-            padding: 5px 14px;
-            background: transparent;
+            padding: 7px 14px;
+            background: rgba(255, 255, 255, 0.02);
             border: 1px solid transparent;
             border-bottom: none;
-            border-radius: 6px 6px 0 0;
+            border-radius: 10px 10px 0 0;
             color: var(--text-muted);
             font-size: 11px;
             font-weight: 500;
             letter-spacing: 0.02em;
             text-transform: uppercase;
             cursor: pointer;
-            transition: all 0.25s ease;
+            transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .tm-tab:hover {
-            background: rgba(255, 255, 255, 0.04);
+            background: rgba(255, 255, 255, 0.07);
             color: var(--text-primary);
+            transform: translateY(-1px);
         }
 
         .tm-tab[data-tab="newscript"] {
@@ -430,11 +474,12 @@
         .tm-tab.active {
             background: var(--bg-content);
             color: var(--accent-primary);
-            border-color: var(--border-color);
+            border-color: rgba(127, 127, 127, 0.28);
             border-bottom: 1px solid var(--bg-content);
             margin-bottom: -1px;
             position: relative;
             z-index: 1;
+            box-shadow: 0 -12px 30px rgba(34, 197, 94, 0.08);
         }
 
         .tm-tab.script-tab {
@@ -500,14 +545,101 @@
         /* ============================================
            Scripts Table
            ============================================ */
+        #scriptsPanel {
+            padding: 20px 20px 0;
+        }
+
+        .scripts-shell-header {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 18px;
+            flex-wrap: wrap;
+            margin-bottom: 2px;
+        }
+
+        .scripts-shell-copy {
+            max-width: 720px;
+        }
+
+        .scripts-shell-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            background: rgba(34, 197, 94, 0.08);
+            color: var(--accent-primary);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .scripts-shell-copy h2 {
+            margin-top: 12px;
+            font-size: clamp(24px, 3vw, 32px);
+            font-weight: 750;
+            letter-spacing: -0.04em;
+            text-wrap: balance;
+        }
+
+        .scripts-shell-copy p {
+            margin-top: 8px;
+            max-width: 620px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .scripts-shell-stats {
+            display: flex;
+            align-items: stretch;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .scripts-shell-stat {
+            min-width: 122px;
+            padding: 12px 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(127, 127, 127, 0.2);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+                var(--bg-section-header);
+            box-shadow: 0 16px 30px rgba(0, 0, 0, 0.16);
+        }
+
+        .scripts-shell-stat span {
+            display: block;
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .scripts-shell-stat strong {
+            display: block;
+            margin-top: 6px;
+            color: var(--text-primary);
+            font-size: 18px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
         .scripts-toolbar {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 5px 12px;
-            background: var(--bg-section-header);
-            border-bottom: 1px solid var(--border-color);
-            gap: 8px;
+            padding: 12px 14px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+                var(--bg-section-header);
+            border: 1px solid rgba(127, 127, 127, 0.2);
+            border-radius: 20px;
+            box-shadow: 0 18px 36px rgba(0, 0, 0, 0.18);
+            gap: 12px;
             flex-wrap: wrap;
             position: sticky;
             top: var(--header-height, 35px);
@@ -517,13 +649,26 @@
         .scripts-toolbar-left {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            flex: 1 1 760px;
+            flex-wrap: wrap;
+            padding: 10px 12px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 16px;
+            background: rgba(0, 0, 0, 0.08);
         }
 
         .scripts-toolbar-right {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            flex: 1 1 380px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            padding: 10px 12px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 16px;
+            background: rgba(0, 0, 0, 0.08);
         }
 
         .toolbar-divider {
@@ -554,47 +699,59 @@
             color: var(--accent-primary);
             font-size: 11px;
             font-weight: 600;
-            padding: 3px 8px;
-            background: rgba(34, 197, 94, 0.08);
-            border: 1px solid rgba(34, 197, 94, 0.15);
-            border-radius: 20px;
+            padding: 7px 11px;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.16);
+            border-radius: 999px;
             white-space: nowrap;
+            font-variant-numeric: tabular-nums;
         }
 
         .toolbar-btn {
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            padding: 4px 10px;
-            background: var(--bg-button);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
+            min-height: 36px;
+            padding: 0 12px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent),
+                var(--bg-button);
+            border: 1px solid rgba(127, 127, 127, 0.22);
+            border-radius: 12px;
             color: var(--text-primary);
             font-size: 12px;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .toolbar-btn:hover { background: var(--bg-button-hover); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
+        .toolbar-btn:hover { background: var(--bg-button-hover); border-color: rgba(127, 127, 127, 0.34); transform: translateY(-1px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18); }
         .toolbar-btn:active { transform: translateY(0); box-shadow: none; }
         .toolbar-btn.primary { background: var(--accent-primary); border-color: var(--accent-primary); color: #fff; }
         .toolbar-btn.primary:hover { background: #1ea34f; box-shadow: 0 2px 12px rgba(34, 197, 94, 0.3); }
         .toolbar-btn svg { width: 14px; height: 14px; }
+        .toolbar-btn.compact {
+            min-width: 38px;
+            padding: 0 10px;
+            justify-content: center;
+        }
 
         .search-box {
             position: relative;
+            flex: 1 1 240px;
+            max-width: 280px;
         }
 
         .search-box input {
-            width: 160px;
-            padding: 4px 10px 4px 28px;
+            width: 100%;
+            min-height: 38px;
+            padding: 0 12px 0 34px;
             background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
+            border: 1px solid rgba(127, 127, 127, 0.24);
+            border-radius: 12px;
             color: var(--text-primary);
             font-size: 12px;
-            transition: all 0.2s ease;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
         }
 
         .search-box input:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1); }
@@ -609,10 +766,22 @@
             color: var(--text-muted);
         }
 
+        .scripts-table-container {
+            margin-top: 14px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120px),
+                var(--bg-content);
+            border: 1px solid rgba(127, 127, 127, 0.18);
+            border-radius: 24px;
+            box-shadow: 0 22px 44px rgba(0, 0, 0, 0.18);
+            overflow: hidden;
+        }
+
         /* Table */
         .scripts-table {
             width: 100%;
             border-collapse: collapse;
+            background: transparent;
         }
 
         .scripts-table thead {
@@ -623,7 +792,7 @@
 
         .scripts-table th {
             background: var(--bg-section-header);
-            padding: 6px 8px;
+            padding: 10px 10px;
             text-align: left;
             font-weight: 600;
             font-size: 11px;
@@ -631,6 +800,7 @@
             letter-spacing: 0.05em;
             color: var(--text-muted);
             border-bottom: 2px solid var(--border-section);
+            font-variant-numeric: tabular-nums;
         }
 
         .scripts-table th.sortable {
@@ -655,20 +825,33 @@
 
         .scripts-table th.center,
         .scripts-table td.center { text-align: center; }
+        .scripts-table td.center { font-variant-numeric: tabular-nums; }
 
         .scripts-table td {
-            padding: 5px 8px;
-            border-bottom: 1px solid var(--border-color);
+            padding: 9px 10px;
+            border-bottom: 1px solid rgba(127, 127, 127, 0.12);
             font-size: 12px;
             vertical-align: middle;
         }
 
         .scripts-table tbody tr {
-            transition: all 0.2s ease;
-            animation: rowSlideIn 0.3s ease backwards;
+            transition: background 0.18s ease, box-shadow 0.18s ease;
+            animation: rowSlideIn 0.24s ease backwards;
+        }
+        .scripts-table tbody[data-list-size="large"] tr,
+        .scripts-table tbody[data-list-size="huge"] tr {
+            animation: none;
+        }
+        .scripts-table tbody[data-list-size="huge"] tr {
+            transition-duration: 0.12s;
         }
         .scripts-table tbody tr:nth-child(even) { background: var(--bg-row-alt); }
-        .scripts-table tbody tr:hover { background: var(--bg-row-hover); box-shadow: inset 3px 0 0 var(--accent-primary); }
+        .scripts-table tbody tr:hover {
+            background:
+                linear-gradient(90deg, rgba(34, 197, 94, 0.12), transparent 35%),
+                var(--bg-row-hover);
+            box-shadow: inset 3px 0 0 var(--accent-primary);
+        }
 
         .scripts-table tbody tr.drag-over {
             border-top: 2px solid var(--accent-primary);
@@ -752,17 +935,29 @@
             border-radius: 5px;
             transition: all 0.2s ease;
         }
-        .action-icon:hover { color: var(--text-primary); background: var(--bg-button); transform: scale(1.1); }
+        .action-icon:hover { color: var(--text-primary); background: var(--bg-button); transform: translateY(-1px); }
         .action-icon svg { width: 14px; height: 14px; }
 
         /* Empty State */
         .empty-state {
             text-align: center;
-            padding: 60px 20px;
+            padding: 72px 24px 80px;
             color: var(--text-muted);
+            background:
+                radial-gradient(circle at top center, rgba(34, 197, 94, 0.08), transparent 42%),
+                transparent;
         }
         .empty-state svg { width: 64px; height: 64px; margin-bottom: 15px; opacity: 0.3; color: var(--accent-primary); }
-        .empty-state h3 { font-size: 16px; margin-bottom: 8px; color: var(--text-secondary); font-weight: 600; }
+        .empty-state h3 { font-size: 20px; margin-bottom: 10px; color: var(--text-primary); font-weight: 650; text-wrap: balance; }
+        .empty-state p { max-width: 460px; margin: 0 auto; line-height: 1.55; }
+        .empty-state-actions {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
 
         /* Form Controls */
         .input-field, .select-field {
@@ -830,7 +1025,7 @@
             transition: all 0.2s ease;
         }
 
-        .btn:hover { background: var(--bg-button-hover); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
+        .btn:hover { background: var(--bg-button-hover); transform: translateY(-1px); box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18); }
         .btn:active { transform: translateY(0); }
         .btn-primary { background: var(--accent-primary); border-color: var(--accent-primary); color: #fff; }
         .btn-primary:hover { background: #1ea34f; box-shadow: 0 2px 12px rgba(34, 197, 94, 0.3); }
@@ -846,6 +1041,168 @@
         }
 
         /* Enhanced Settings Styles */
+        .settings-shell {
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .settings-hero {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+            padding: 22px 24px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 20px;
+            background:
+                radial-gradient(circle at top right, rgba(34, 197, 94, 0.12), transparent 14rem),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+                var(--bg-section-header);
+            box-shadow: 0 18px 32px rgba(0, 0, 0, 0.14);
+        }
+
+        .settings-eyebrow {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--accent-primary);
+        }
+
+        .settings-hero-copy h2 {
+            margin-top: 10px;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+            color: var(--text-primary);
+        }
+
+        .settings-hero-copy p {
+            margin-top: 8px;
+            max-width: 640px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .settings-overview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .settings-summary {
+            min-width: 116px;
+            padding: 12px 14px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .settings-summary-label {
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .settings-summary strong {
+            display: block;
+            margin-top: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text-primary);
+        }
+
+        .settings-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .settings-search {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1 1 280px;
+            min-width: 0;
+            padding: 0 14px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .settings-search-icon {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .settings-search-input {
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: none;
+            padding: 12px 0;
+            color: var(--text-primary);
+        }
+
+        .settings-search-input:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
+        .settings-filter-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .settings-filter {
+            appearance: none;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .settings-filter:hover {
+            border-color: rgba(34, 197, 94, 0.24);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        .settings-filter.active {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: #fff;
+            box-shadow: 0 10px 18px rgba(34, 197, 94, 0.24);
+        }
+
+        .settings-filter-status {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .settings-sections {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
         .settings-section {
             display: flex;
             border-bottom: 1px solid var(--border-color);
@@ -905,9 +1262,669 @@
             color: var(--text-secondary);
         }
 
+        #settingsPanel .settings-section {
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 18px;
+            overflow: hidden;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+                var(--bg-content);
+            box-shadow: 0 14px 24px rgba(0, 0, 0, 0.12);
+            content-visibility: auto;
+            contain-intrinsic-size: 280px;
+        }
+
+        #settingsPanel .settings-section:hover {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 140%),
+                var(--bg-content);
+            transform: translateY(-1px);
+        }
+
+        #settingsPanel .settings-section:last-child {
+            border-bottom: 1px solid rgba(127, 127, 127, 0.16);
+        }
+
+        #settingsPanel .settings-section[hidden] {
+            display: none !important;
+        }
+
+        #settingsPanel .section-label {
+            width: 210px;
+            min-width: 210px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 18px 20px;
+            font-style: normal;
+            letter-spacing: -0.02em;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+                var(--bg-section-header);
+        }
+
+        #settingsPanel .settings-section[data-config-level="advanced"] .section-label::after {
+            content: 'Advanced';
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(96, 165, 250, 0.24);
+            background: rgba(96, 165, 250, 0.12);
+            color: var(--accent-secondary);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        #settingsPanel .section-content {
+            padding: 18px 20px;
+            background: transparent;
+        }
+
+        #settingsPanel .setting-row {
+            margin-bottom: 12px;
+        }
+
+        #settingsPanel .setting-row .label-text {
+            min-width: 220px;
+        }
+
+        .utilities-shell {
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .utilities-hero {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+            padding: 22px 24px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 20px;
+            background:
+                radial-gradient(circle at top right, rgba(96, 165, 250, 0.12), transparent 14rem),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+                var(--bg-section-header);
+            box-shadow: 0 18px 32px rgba(0, 0, 0, 0.14);
+        }
+
+        .utilities-eyebrow {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--accent-secondary);
+        }
+
+        .utilities-hero-copy h2 {
+            margin-top: 10px;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+            color: var(--text-primary);
+        }
+
+        .utilities-hero-copy p {
+            margin-top: 8px;
+            max-width: 640px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .utilities-overview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .utilities-summary {
+            min-width: 116px;
+            padding: 12px 14px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .utilities-summary-label {
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .utilities-summary strong {
+            display: block;
+            margin-top: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text-primary);
+        }
+
+        .utilities-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .utilities-search {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1 1 280px;
+            min-width: 0;
+            padding: 0 14px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .utilities-search-icon {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .utilities-search-input {
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: none;
+            padding: 12px 0;
+            color: var(--text-primary);
+        }
+
+        .utilities-search-input:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
+        .utilities-filter-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .utilities-filter {
+            appearance: none;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .utilities-filter:hover {
+            border-color: rgba(96, 165, 250, 0.24);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        .utilities-filter.active {
+            background: var(--accent-secondary);
+            border-color: var(--accent-secondary);
+            color: #fff;
+            box-shadow: 0 10px 18px rgba(96, 165, 250, 0.24);
+        }
+
+        .utilities-filter-status {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .utilities-sections {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        #utilitiesPanel .settings-section {
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 18px;
+            overflow: hidden;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+                var(--bg-content);
+            box-shadow: 0 14px 24px rgba(0, 0, 0, 0.12);
+            content-visibility: auto;
+            contain-intrinsic-size: 280px;
+        }
+
+        #utilitiesPanel .settings-section:hover {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 140%),
+                var(--bg-content);
+            transform: translateY(-1px);
+        }
+
+        #utilitiesPanel .settings-section:last-child {
+            border-bottom: 1px solid rgba(127, 127, 127, 0.16);
+        }
+
+        #utilitiesPanel .settings-section[hidden] {
+            display: none !important;
+        }
+
+        #utilitiesPanel .section-label {
+            width: 210px;
+            min-width: 210px;
+            padding: 18px 20px;
+            font-style: normal;
+            letter-spacing: -0.02em;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+                var(--bg-section-header);
+        }
+
+        #utilitiesPanel .section-content {
+            padding: 18px 20px;
+            background: transparent;
+        }
+
+        #utilitiesPanel .setting-row {
+            margin-bottom: 12px;
+        }
+
+        .utility-note {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .utility-inline-status {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .utility-surface {
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            background: rgba(255, 255, 255, 0.03);
+            content-visibility: auto;
+            contain-intrinsic-size: 220px;
+        }
+
+        .backup-browser-list,
+        .restore-preview-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .backup-browser-groups {
+            display: grid;
+            gap: 14px;
+        }
+
+        .backup-browser-group {
+            display: grid;
+            gap: 10px;
+        }
+
+        .backup-browser-group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 0 2px;
+        }
+
+        .backup-browser-group-header strong {
+            color: var(--text-primary);
+            font-size: 12px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .backup-browser-item,
+        .restore-preview-item {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(127, 127, 127, 0.12);
+            background: rgba(255, 255, 255, 0.02);
+            content-visibility: auto;
+            contain-intrinsic-size: 88px;
+        }
+
+        .backup-browser-copy,
+        .restore-preview-copy {
+            display: grid;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .backup-browser-meta,
+        .restore-preview-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 11px;
+        }
+
+        .backup-browser-actions,
+        .restore-preview-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .restore-preview-shell {
+            display: grid;
+            gap: 16px;
+        }
+
+        .restore-preview-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+        }
+
+        .restore-preview-card {
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(127, 127, 127, 0.12);
+            background: rgba(255, 255, 255, 0.03);
+            display: grid;
+            gap: 4px;
+        }
+
+        .restore-preview-card strong {
+            color: var(--text-primary);
+            font-size: 18px;
+            line-height: 1.2;
+        }
+
+        .restore-preview-item input[type="checkbox"] {
+            margin-top: 2px;
+        }
+
+        .trash-shell {
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .trash-hero {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+            padding: 22px 24px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 20px;
+            background:
+                radial-gradient(circle at top right, rgba(251, 191, 36, 0.14), transparent 16rem),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+                var(--bg-section-header);
+            box-shadow: 0 18px 32px rgba(0, 0, 0, 0.14);
+        }
+
+        .trash-eyebrow {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #fbbf24;
+        }
+
+        .trash-hero-copy h2 {
+            margin-top: 10px;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+            color: var(--text-primary);
+        }
+
+        .trash-hero-copy p {
+            margin-top: 8px;
+            max-width: 620px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .trash-overview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .trash-summary {
+            min-width: 116px;
+            padding: 12px 14px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .trash-summary-label {
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .trash-summary strong {
+            display: block;
+            margin-top: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text-primary);
+        }
+
+        .trash-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .trash-search {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1 1 280px;
+            min-width: 0;
+            padding: 0 14px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .trash-search-icon {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .trash-search input {
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: none;
+            padding: 12px 0;
+            color: var(--text-primary);
+        }
+
+        .trash-search input:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
+        .trash-toolbar-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .trash-filter-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .trash-filter {
+            appearance: none;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .trash-filter:hover {
+            border-color: rgba(251, 191, 36, 0.28);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        .trash-filter.active {
+            background: rgba(251, 191, 36, 0.16);
+            border-color: rgba(251, 191, 36, 0.36);
+            color: #fde68a;
+            box-shadow: 0 10px 18px rgba(251, 191, 36, 0.14);
+        }
+
+        .trash-filter-status {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .trash-surface {
+            padding: 8px;
+            border-radius: 18px;
+        }
+
+        .trash-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .trash-item {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 16px;
+            align-items: center;
+            padding: 16px 14px;
+            border-bottom: 1px solid rgba(127, 127, 127, 0.1);
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
+
+        .trash-item:last-child {
+            border-bottom: none;
+        }
+
+        .trash-item:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .trash-item-main {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .trash-item-heading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .trash-item-name {
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+        }
+
+        .trash-item-version {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .trash-item-description {
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .trash-item-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .trash-item-meta span {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+
+        .trash-item-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
         /* URL Override Patterns */
         .url-overrides-section .url-override-group {
             transition: opacity 0.2s;
+            margin-bottom: 15px;
+        }
+
+        .url-overrides-section .url-override-group:last-child {
+            margin-bottom: 0;
         }
         
         .url-override-group.disabled {
@@ -973,6 +1990,9 @@
         
         .url-pattern-input {
             display: none;
+            margin-top: 8px;
+            font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+            font-size: 12px;
         }
         
         .url-pattern-input.visible {
@@ -986,6 +2006,116 @@
         }
 
         @media (max-width: 900px) {
+            .settings-shell {
+                padding: 16px;
+            }
+
+            .settings-hero {
+                padding: 18px;
+            }
+
+            .settings-toolbar {
+                align-items: stretch;
+            }
+
+            .settings-search {
+                width: 100%;
+            }
+
+            .utilities-shell {
+                padding: 16px;
+            }
+
+            .utilities-hero {
+                padding: 18px;
+            }
+
+            .utilities-toolbar {
+                align-items: stretch;
+            }
+
+            .utilities-search {
+                width: 100%;
+            }
+
+            .trash-shell {
+                padding: 16px;
+            }
+
+            .trash-hero {
+                padding: 18px;
+            }
+
+            .trash-toolbar,
+            .trash-toolbar-actions {
+                align-items: stretch;
+            }
+
+            .trash-search {
+                width: 100%;
+            }
+
+            .trash-item {
+                grid-template-columns: 1fr;
+            }
+
+            .trash-item-actions {
+                justify-content: flex-start;
+            }
+
+            .help-shell {
+                padding: 16px;
+            }
+
+            .help-hero {
+                padding: 18px;
+            }
+
+            .help-toolbar {
+                align-items: stretch;
+            }
+
+            .help-search {
+                width: 100%;
+            }
+
+            .shortcuts-grid {
+                grid-template-columns: 1fr;
+                gap: 4px;
+            }
+
+            .shortcut-key {
+                text-align: left;
+            }
+
+            .help-pattern-row {
+                flex-direction: column;
+            }
+
+            .about-shell {
+                flex-direction: column;
+            }
+
+            .editor-panel-head {
+                padding: 16px 16px 0;
+            }
+
+            .editor-panel-scroll {
+                padding: 16px;
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .storage-item {
+                grid-template-columns: 1fr;
+            }
+
+            .storage-item-actions {
+                justify-content: flex-start;
+            }
+
             .settings-section {
                 flex-direction: column;
             }
@@ -994,6 +2124,16 @@
                 width: 100%;
                 border-bottom: 2px solid var(--border-section);
             }
+
+            #settingsPanel .section-label {
+                width: 100%;
+                min-width: 0;
+            }
+
+            #utilitiesPanel .section-label {
+                width: 100%;
+                min-width: 0;
+            }
             
             .setting-row .label-text {
                 min-width: 180px;
@@ -1001,60 +2141,505 @@
         }
 
         /* ============================================
-           Help Tab - Editor Shortcuts
+           Help Tab
            ============================================ */
-        .shortcuts-container {
-            padding: 20px;
+        .help-shell {
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .help-hero {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+            padding: 22px 24px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 20px;
+            background:
+                radial-gradient(circle at top right, rgba(52, 211, 153, 0.14), transparent 16rem),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+                var(--bg-section-header);
+            box-shadow: 0 18px 32px rgba(0, 0, 0, 0.14);
+        }
+
+        .help-eyebrow {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #6ee7b7;
+        }
+
+        .help-hero-copy h2 {
+            margin-top: 10px;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+            color: var(--text-primary);
+        }
+
+        .help-hero-copy p {
+            margin-top: 8px;
+            max-width: 640px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .help-overview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .help-summary {
+            min-width: 116px;
+            padding: 12px 14px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .help-summary-label {
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .help-summary strong {
+            display: block;
+            margin-top: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text-primary);
+        }
+
+        .help-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .help-search {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1 1 280px;
+            min-width: 0;
+            padding: 0 14px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .help-search-icon {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .help-search-input {
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: none;
+            padding: 12px 0;
+            color: var(--text-primary);
+        }
+
+        .help-search-input:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
+        .help-filter-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .help-filter {
+            appearance: none;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .help-filter:hover {
+            border-color: rgba(52, 211, 153, 0.26);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        .help-filter.active {
+            background: rgba(52, 211, 153, 0.18);
+            border-color: rgba(52, 211, 153, 0.34);
+            color: #d1fae5;
+            box-shadow: 0 10px 18px rgba(52, 211, 153, 0.14);
+        }
+
+        .help-filter-status {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .help-sections {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .help-section {
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 18px;
+            overflow: hidden;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+                var(--bg-content);
+            box-shadow: 0 14px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        .help-section[hidden] {
+            display: none !important;
+        }
+
+        .help-section-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding: 18px 20px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+                var(--bg-section-header);
+            border-bottom: 1px solid rgba(127, 127, 127, 0.12);
+        }
+
+        .help-section-eyebrow {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--accent-secondary);
+        }
+
+        .help-section-head h3 {
+            margin-top: 8px;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text-primary);
+        }
+
+        .help-section-head p {
+            margin-top: 6px;
+            max-width: 720px;
+            font-size: 13px;
+            line-height: 1.55;
+            color: var(--text-secondary);
+        }
+
+        .help-section-body {
+            padding: 18px 20px;
         }
 
         .shortcuts-title {
+            padding: 18px 20px;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+                var(--bg-section-header);
+            border-bottom: 1px solid rgba(127, 127, 127, 0.12);
+        }
+
+        .help-content,
+        .shortcuts-container .shortcuts-grid,
+        .help-section > .shortcuts-grid,
+        .help-section > .help-api-grid {
+            padding: 18px 20px;
+        }
+
+        .help-step {
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(127, 127, 127, 0.12);
+            background: rgba(255, 255, 255, 0.03);
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .help-content {
+            display: grid;
+            gap: 10px;
+        }
+
+        .help-action-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+
+        .help-action-card {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-primary);
+            text-align: left;
+            cursor: pointer;
+            transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+            content-visibility: auto;
+            contain-intrinsic-size: 120px;
+        }
+
+        .help-action-card:hover {
+            transform: translateY(-1px);
+            border-color: rgba(52, 211, 153, 0.24);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .help-action-card strong {
             font-size: 14px;
-            font-weight: bold;
-            color: var(--accent-primary);
-            margin-bottom: 20px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .help-action-card span {
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--text-muted);
+        }
+
+        .help-note-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .help-note-item {
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(127, 127, 127, 0.12);
+            background: rgba(255, 255, 255, 0.03);
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .help-note-item strong {
+            color: var(--text-primary);
         }
 
         .shortcuts-grid {
             display: grid;
-            grid-template-columns: 180px 1fr;
-            gap: 8px 30px;
-            max-width: 600px;
+            grid-template-columns: minmax(110px, 180px) 1fr;
+            gap: 8px 24px;
         }
 
         .shortcut-key {
             text-align: right;
-            font-weight: bold;
+            font-weight: 700;
             color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
         }
 
         .shortcut-desc {
             color: var(--text-muted);
         }
 
-        /* About Section */
-        .about-section {
-            padding: 40px;
-            text-align: center;
-            border-top: 1px solid var(--border-color);
-            margin-top: 30px;
+        .help-api-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
         }
 
-        .about-section img { width: 64px; height: 64px; margin-bottom: 15px; }
-        .about-section h2 { font-size: 20px; margin-bottom: 5px; }
-        .about-section .version { color: var(--text-muted); margin-bottom: 20px; }
+        .help-api-group {
+            display: grid;
+            gap: 8px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(127, 127, 127, 0.12);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .help-api-group code {
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .help-api-category {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .help-inline-note {
+            padding: 0 20px 18px;
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .help-pattern-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .help-pattern-results {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .about-section {
+            padding: 20px;
+        }
+
+        .about-shell {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+
+        .about-brand {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .about-brand-copy {
+            min-width: 0;
+        }
+
+        .about-brand img {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+        }
+
+        .about-brand h2 {
+            font-size: 20px;
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .about-brand-copy p {
+            margin-top: 6px;
+            max-width: 420px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .about-section .version {
+            margin-top: 4px;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
 
         .about-stats {
             display: flex;
-            justify-content: center;
-            gap: 50px;
-            margin: 25px 0;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 18px;
         }
 
-        .stat-item { text-align: center; }
-        .stat-value { font-size: 28px; font-weight: 700; color: var(--accent-primary); text-shadow: 0 0 20px rgba(34, 197, 94, 0.2); }
-        .stat-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        .stat-item {
+            min-width: 120px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(127, 127, 127, 0.12);
+            background: rgba(255, 255, 255, 0.03);
+            text-align: left;
+        }
 
-        .about-links { display: flex; justify-content: center; gap: 20px; }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.03em;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .quota-bar-container {
+            margin-top: 18px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .quota-bar-track {
+            position: relative;
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.06);
+            overflow: hidden;
+        }
+
+        .quota-bar-fill {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 0;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #34d399, #10b981);
+            transition: width 0.25s ease;
+        }
+
+        .quota-bar-fill.warning {
+            background: linear-gradient(90deg, #fbbf24, #f59e0b);
+        }
+
+        .quota-bar-fill.danger {
+            background: linear-gradient(90deg, #f87171, #ef4444);
+        }
+
+        .quota-bar-text {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .about-links {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 18px;
+        }
 
         /* ============================================
            Editor Overlay
@@ -1063,33 +2648,181 @@
             display: none;
             position: fixed;
             top: var(--header-height, 35px); left: 0; right: 0; bottom: 0;
-            background: var(--bg-body);
+            background:
+                radial-gradient(circle at top right, rgba(34, 197, 94, 0.08), transparent 28%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
+                var(--bg-body);
             z-index: 50;
             flex-direction: column;
+            overscroll-behavior: contain;
         }
 
         .editor-overlay.active { display: flex; }
 
         .editor-header {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: space-between;
-            padding: 10px 20px;
-            background: var(--bg-header);
-            border-bottom: 1px solid var(--border-color);
+            gap: 16px;
+            flex-wrap: wrap;
+            padding: 14px 20px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 140%),
+                var(--bg-header);
+            border-bottom: 1px solid rgba(127, 127, 127, 0.2);
+            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.18);
         }
 
-        .editor-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
-        .editor-line-count { font-size: 11px; color: var(--text-muted); margin-left: 12px; font-weight: 400; }
-        .editor-cursor-pos { font-size: 11px; color: var(--text-muted); margin-left: 8px; font-weight: 400; font-family: 'Courier New', monospace; }
+        .editor-header-main {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            flex: 1 1 480px;
+            min-width: 0;
+            flex-wrap: wrap;
+        }
 
-        .editor-actions { display: flex; gap: 8px; }
+        .editor-heading {
+            min-width: 0;
+        }
+
+        .editor-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 9px;
+            border-radius: 999px;
+            border: 1px solid rgba(34, 197, 94, 0.18);
+            background: rgba(34, 197, 94, 0.08);
+            color: var(--accent-primary);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .editor-title-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .editor-title {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            text-wrap: balance;
+        }
+
+        .editor-save-state {
+            display: inline-flex;
+            align-items: center;
+            min-height: 28px;
+            padding: 0 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(127, 127, 127, 0.22);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .editor-save-state[data-state="clean"] {
+            color: var(--accent-primary);
+            border-color: rgba(34, 197, 94, 0.22);
+            background: rgba(34, 197, 94, 0.08);
+        }
+
+        .editor-save-state[data-state="dirty"] {
+            color: #fbbf24;
+            border-color: rgba(251, 191, 36, 0.22);
+            background: rgba(251, 191, 36, 0.08);
+        }
+
+        .editor-save-state[data-state="saving"] {
+            color: var(--accent-secondary);
+            border-color: rgba(96, 165, 250, 0.22);
+            background: rgba(96, 165, 250, 0.08);
+        }
+
+        .editor-save-state[data-state="error"] {
+            color: #fda4af;
+            border-color: rgba(239, 68, 68, 0.22);
+            background: rgba(239, 68, 68, 0.08);
+        }
+
+        .editor-subtitle {
+            display: block;
+            margin-top: 8px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .editor-metrics {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            margin-left: auto;
+        }
+
+        .editor-metric {
+            display: inline-flex;
+            align-items: center;
+            min-height: 30px;
+            padding: 0 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(127, 127, 127, 0.18);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .editor-cursor-pos {
+            font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+        }
+
+        .editor-actions {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .editor-actions .btn {
+            min-height: 38px;
+            padding: 0 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .editor-actions .btn svg {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+        }
+
+        .editor-actions .btn[data-save-state="saving"] svg {
+            animation: lazySpin 0.8s linear infinite;
+        }
 
         .editor-tabs {
             display: flex;
             padding: 0 20px;
-            background: var(--bg-section-header);
-            border-bottom: 1px solid var(--border-color);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
+                var(--bg-section-header);
+            border-bottom: 1px solid rgba(127, 127, 127, 0.16);
         }
 
         .editor-tab {
@@ -1111,31 +2844,41 @@
             display: flex;
             align-items: center;
             gap: 2px;
-            padding: 4px 20px;
-            background: var(--bg-section-header);
-            border-bottom: 1px solid var(--border-color);
+            padding: 8px 20px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
+                var(--bg-section-header);
+            border-bottom: 1px solid rgba(127, 127, 127, 0.16);
         }
 
         .editor-toolbar .toolbar-btn {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 5px 8px;
-            background: transparent;
-            border: 1px solid transparent;
-            border-radius: 3px;
+            min-height: 34px;
+            padding: 0 10px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 10px;
             color: var(--text-secondary);
             font-size: 11px;
             cursor: pointer;
             gap: 4px;
-            transition: all 0.15s;
+            transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
             white-space: nowrap;
         }
 
         .editor-toolbar .toolbar-btn:hover {
             background: var(--bg-button);
-            border-color: var(--border-color);
+            border-color: rgba(127, 127, 127, 0.28);
             color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        .editor-toolbar .toolbar-btn.active {
+            background: rgba(34, 197, 94, 0.1);
+            border-color: rgba(34, 197, 94, 0.24);
+            color: var(--accent-primary);
         }
 
         .editor-toolbar .toolbar-btn:active {
@@ -1164,45 +2907,497 @@
         .code-editor-wrapper { flex: 1; overflow: hidden; }
         .CodeMirror { height: 100% !important; font-family: 'Cascadia Code', 'Fira Code', Consolas, Monaco, monospace; font-size: 13px; }
 
+        .editor-panel-shell {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .editor-panel-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding: 20px 20px 0;
+        }
+
+        .editor-panel-headline h3 {
+            font-size: 19px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+        }
+
+        .editor-panel-headline p {
+            margin-top: 8px;
+            max-width: 720px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .editor-panel-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .editor-panel-scroll {
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+        }
+
+        .panel-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+            padding: 16px 18px;
+            border: 1px dashed rgba(127, 127, 127, 0.24);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--text-muted);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .panel-empty strong {
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .panel-empty-inline {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
         /* Script Info Panel */
-        .info-panel { padding: 20px; }
+        .info-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
         .info-grid {
             display: grid;
-            grid-template-columns: 120px 1fr;
-            gap: 10px 20px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
         }
-        .info-label { color: var(--text-muted); font-weight: bold; }
-        .info-value { color: var(--text-primary); word-break: break-word; }
-        .info-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+
+        .info-item {
+            padding: 14px 16px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 16px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+                var(--bg-section-header);
+            box-shadow: 0 12px 22px rgba(0, 0, 0, 0.12);
+            min-width: 0;
+        }
+
+        .info-item-wide {
+            grid-column: 1 / -1;
+        }
+
+        .info-label {
+            display: block;
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .info-value {
+            display: block;
+            margin-top: 8px;
+            color: var(--text-primary);
+            word-break: break-word;
+            line-height: 1.55;
+        }
+
+        .info-value a {
+            color: var(--accent-secondary);
+        }
+
+        .info-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
         .info-tag {
-            display: inline-block;
-            padding: 3px 10px;
-            background: var(--bg-section-header);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(127, 127, 127, 0.18);
+            border-radius: 999px;
             font-size: 11px;
             font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
         }
-        .info-tag.grant { background: var(--accent-primary); border-color: var(--accent-primary); color: #fff; }
+
+        .info-tag.grant {
+            background: rgba(34, 197, 94, 0.14);
+            border-color: rgba(34, 197, 94, 0.24);
+            color: var(--accent-primary);
+        }
+
+        .info-tag.success {
+            background: rgba(34, 197, 94, 0.14);
+            border-color: rgba(34, 197, 94, 0.24);
+            color: #86efac;
+        }
+
+        .info-tag.error {
+            background: rgba(239, 68, 68, 0.14);
+            border-color: rgba(239, 68, 68, 0.24);
+            color: #fda4af;
+        }
+
+        .info-tag.warning {
+            background: rgba(245, 158, 11, 0.14);
+            border-color: rgba(245, 158, 11, 0.24);
+            color: #fcd34d;
+        }
+
+        .info-resource-list,
+        .conflict-list,
+        .version-history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .info-resource-row,
+        .conflict-list-item,
+        .version-history-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 10px 12px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .info-resource-row {
+            justify-content: flex-start;
+            font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+            font-size: 11px;
+            word-break: break-all;
+        }
+
+        .conflict-list-item {
+            color: var(--text-primary);
+            line-height: 1.55;
+        }
+
+        .version-history-ver {
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .version-history-date {
+            color: var(--text-muted);
+            font-size: 11px;
+            font-variant-numeric: tabular-nums;
+            margin-right: auto;
+        }
+
+        .perf-stats-grid {
+            display: grid;
+            grid-template-columns: max-content minmax(0, 1fr);
+            gap: 8px 12px;
+            margin-top: 8px;
+        }
+
+        .perf-label {
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .perf-value {
+            color: var(--text-primary);
+            font-size: 12px;
+            word-break: break-word;
+        }
 
         /* Storage Panel */
-        .storage-panel { padding: 20px; }
-        .storage-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .storage-list { display: flex; flex-direction: column; gap: 8px; }
+        .storage-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .storage-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .storage-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .storage-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
         .storage-item {
             display: grid;
-            grid-template-columns: 180px 1fr auto;
-            gap: 10px;
-            padding: 12px;
-            background: var(--bg-section-header);
-            border-radius: 8px;
+            grid-template-columns: minmax(0, 180px) minmax(0, 1fr) auto;
+            gap: 12px;
+            padding: 14px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+                var(--bg-section-header);
+            border-radius: 14px;
             align-items: center;
-            border: 1px solid var(--border-color);
-            transition: all 0.2s ease;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
         }
-        .storage-item:hover { border-color: var(--accent-primary); box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.1); }
-        .storage-key { font-family: monospace; font-weight: bold; color: var(--accent-secondary); }
-        .storage-value { font-family: monospace; color: var(--text-primary); }
+
+        .storage-item:hover {
+            border-color: rgba(34, 197, 94, 0.24);
+            transform: translateY(-1px);
+            box-shadow: 0 14px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        .storage-key {
+            font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+            font-weight: 700;
+            color: var(--accent-secondary);
+            word-break: break-word;
+        }
+
+        .storage-key-button {
+            appearance: none;
+            border: none;
+            background: none;
+            padding: 0;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .storage-key-button:hover,
+        .storage-key-button:focus-visible {
+            color: var(--accent-primary);
+            outline: none;
+        }
+
+        .storage-input {
+            width: 100%;
+        }
+
+        .storage-item-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .storage-item-actions .btn {
+            min-width: 72px;
+            justify-content: center;
+            white-space: nowrap;
+        }
+
+        /* Per-script settings and externals */
+        .script-settings-panel,
+        .externals-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .script-settings-panel #scriptRunAt,
+        .script-settings-panel #scriptInjectInto {
+            min-width: 180px;
+        }
+
+        .editor-panel-note {
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.6;
+            max-width: 760px;
+        }
+
+        .url-overrides-section .editor-panel-note {
+            margin-bottom: 15px;
+        }
+
+        .panel-status-inline {
+            padding-left: 22px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .editor-panel-footer {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .script-settings-panel .settings-section {
+            margin-bottom: 0;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 18px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .script-settings-panel .section-label {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .url-override-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .url-override-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        .original-patterns {
+            background: var(--bg-input);
+            border: 1px solid rgba(127, 127, 127, 0.18);
+            border-radius: 12px;
+            padding: 10px;
+            max-height: 110px;
+            overflow-y: auto;
+            font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .url-override-divider {
+            border: none;
+            border-top: 1px solid rgba(127, 127, 127, 0.16);
+            margin: 20px 0;
+        }
+
+        .url-override-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .url-override-title {
+            font-weight: 500;
+        }
+
+        .url-override-title.accent {
+            color: var(--accent-primary);
+        }
+
+        .url-override-title.danger {
+            color: var(--accent-error);
+        }
+
+        .editor-inline-search {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .editor-inline-search .input-field {
+            flex: 1 1 280px;
+        }
+
+        .lib-result {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.02);
+            margin-top: 10px;
+        }
+
+        .lib-result-info {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .lib-result-name {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .lib-result-version {
+            color: var(--text-muted);
+            font-size: 11px;
+            margin-left: 8px;
+        }
+
+        .lib-result-desc {
+            margin-top: 4px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .external-item {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .external-item + .external-item {
+            margin-top: 10px;
+        }
+
+        .external-item-meta {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .external-item-name {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .external-item-url {
+            margin-top: 4px;
+            color: var(--text-secondary);
+            font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.55;
+            word-break: break-all;
+        }
 
         /* ============================================
            Find Scripts
@@ -1216,6 +3411,7 @@
             z-index: 55;
             flex-direction: column;
             animation: modalSlideIn 0.2s ease;
+            overscroll-behavior: contain;
         }
         .find-scripts-overlay.active { display: flex; }
         .find-scripts-header {
@@ -1388,6 +3584,7 @@
             z-index: 300;
             align-items: center;
             justify-content: center;
+            overscroll-behavior: contain;
         }
 
         .modal-overlay.show { display: flex; }
@@ -1490,56 +3687,102 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-wrap: wrap;
         }
         .script-favicon {
             width: 16px;
             height: 16px;
-            border-radius: 3px;
+            border-radius: 5px;
             flex-shrink: 0;
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow: hidden;
         }
         .script-favicon img {
             width: 16px;
             height: 16px;
-            border-radius: 2px;
+            border-radius: 4px;
+            object-fit: cover;
         }
-        .script-favicon.favicon-fallback {
-            background: var(--bg-input);
+        .script-favicon.marker-badge,
+        .site-icon.marker-badge {
+            background:
+                linear-gradient(135deg,
+                    hsla(var(--marker-hue, 145), 72%, 56%, 0.24),
+                    hsla(calc(var(--marker-hue, 145) + 34), 72%, 60%, 0.12));
+            border: 1px solid hsla(var(--marker-hue, 145), 72%, 58%, 0.24);
+            color: hsl(var(--marker-hue, 145), 88%, 78%);
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+            font-variant-numeric: tabular-nums;
         }
-        .script-favicon.favicon-fallback::before {
+        .script-favicon.compact,
+        .site-icon.compact {
+            font-size: 9px;
+            letter-spacing: 0;
+        }
+        .script-favicon.minimal,
+        .site-icon.minimal {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: transparent;
+        }
+        .script-favicon.minimal::before,
+        .site-icon.minimal::before {
             content: '';
-            width: 12px;
-            height: 12px;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23666'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 12h8v2H8v-2zm0 4h8v2H8v-2z'/%3E%3C/svg%3E");
-            background-size: contain;
-            background-repeat: no-repeat;
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: var(--text-muted);
+        }
+
+        .conflict-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(245, 158, 11, 0.24);
+            background: rgba(245, 158, 11, 0.14);
+            color: #fcd34d;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .conflict-badge.sync-conflict {
+            border-color: rgba(239, 68, 68, 0.24);
+            background: rgba(239, 68, 68, 0.14);
+            color: #fda4af;
         }
 
         /* Site Icons */
         .site-icons {
             display: flex;
             align-items: center;
-            gap: 2px;
+            gap: 4px;
             flex-wrap: nowrap;
         }
         .site-icon {
-            width: 16px;
-            height: 16px;
-            border-radius: 2px;
+            width: 18px;
+            height: 18px;
+            border-radius: 6px;
             flex-shrink: 0;
-        }
-        .site-icon img {
-            width: 16px;
-            height: 16px;
-            border-radius: 2px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
         .site-icon-more {
             width: 18px;
-            height: 16px;
+            height: 18px;
             background: var(--bg-input);
-            border-radius: 2px;
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1562,6 +3805,7 @@
             justify-content: center;
             -webkit-backdrop-filter: blur(2px);
             backdrop-filter: blur(2px);
+            overscroll-behavior: contain;
         }
         .progress-overlay.active { display: flex; }
         .progress-card {
@@ -1624,6 +3868,8 @@
         }
         @media (prefers-reduced-motion: reduce) {
             .lazy-spinner { animation: none; border-top-color: var(--text-muted); }
+            .editor-actions .btn[data-save-state="saving"] svg { animation: none; }
+            .scripts-table tbody tr { animation: none; transition: none; }
         }
 
         /* ============================================
@@ -1635,7 +3881,7 @@
             .scripts-table .col-perf,
             .scripts-table .col-lines,
             .scripts-table .col-size { display: none; }
-            .search-box input { width: 140px; }
+            .search-box { max-width: 220px; }
         }
 
         /* Tablet */
@@ -1644,6 +3890,8 @@
             .scripts-table .col-version { display: none; }
             .scripts-toolbar { flex-wrap: wrap; gap: 6px; }
             .scripts-toolbar-left, .scripts-toolbar-right { flex-wrap: wrap; }
+            .scripts-shell-header { align-items: stretch; }
+            .scripts-shell-stats { width: 100%; }
             .tm-logo { margin-right: 8px; }
             .tm-logo-text h1 sup { display: none; }
         }
@@ -1653,14 +3901,19 @@
             .tm-header { padding: 6px 10px 2px 10px; }
             .tm-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
             .tm-tab { padding: 4px 10px; font-size: 11px; }
-            .scripts-toolbar { padding: 6px 10px; }
+            #scriptsPanel { padding: 16px 10px 0; }
+            .scripts-shell-copy h2 { font-size: 24px; }
+            .scripts-toolbar { padding: 10px; border-radius: 18px; }
+            .scripts-table-container { border-radius: 20px; }
             .scripts-table .col-source,
             .scripts-table .col-runs { display: none; }
-            .search-box input { width: 120px; }
+            .search-box { max-width: none; flex-basis: 100%; }
             .input-field.wide { width: 100%; max-width: 300px; }
             .settings-row .label-text { min-width: 140px; }
-            .editor-header { padding: 8px 12px; }
-            .editor-toolbar { flex-wrap: wrap; gap: 4px; }
+        .editor-header { padding: 12px; }
+        .editor-header-main { width: 100%; }
+        .editor-metrics { justify-content: flex-start; }
+        .editor-toolbar { flex-wrap: wrap; gap: 4px; }
             .about-stats { gap: 20px; }
             .shortcuts-grid { grid-template-columns: 1fr; }
         }
@@ -1671,6 +3924,7 @@
             .tm-logo img { width: 20px; height: 20px; }
             .tm-logo-text h1 { font-size: 13px; }
             .scripts-table { font-size: 12px; }
+            .scripts-shell-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); width: 100%; }
             .scripts-table .col-actions { min-width: 70px; }
             .scripts-table .col-name { min-width: 120px; }
             .modal-content { min-width: 90vw; max-width: 95vw; }
@@ -1687,31 +3941,36 @@
         .view-settings-bar {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 4px 12px;
-            background: var(--bg-section-header);
-            border-bottom: 1px solid var(--border-color);
+            gap: 10px;
+            flex-wrap: wrap;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 10px 20px 0;
+            background: transparent;
+            border-bottom: none;
             font-size: 11px;
             color: var(--text-muted);
         }
         .view-settings-bar label { font-weight: 500; white-space: nowrap; }
         .view-settings-bar select {
-            padding: 2px 6px;
+            min-height: 30px;
+            padding: 0 10px;
             font-size: 11px;
             background: var(--bg-input);
             color: var(--text-primary);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
+            border: 1px solid rgba(127, 127, 127, 0.24);
+            border-radius: 999px;
         }
         .view-settings-bar .density-btn {
-            padding: 2px 8px;
+            min-height: 30px;
+            padding: 0 12px;
             font-size: 10px;
             background: var(--bg-button);
             color: var(--text-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
+            border: 1px solid rgba(127, 127, 127, 0.22);
+            border-radius: 999px;
             cursor: pointer;
-            transition: all 0.15s;
+            transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
         }
         .view-settings-bar .density-btn:hover,
         .view-settings-bar .density-btn.active {
@@ -1720,21 +3979,21 @@
             border-color: var(--accent-primary);
         }
         /* Compact density */
-        [data-density="compact"] .scripts-table td { padding: 3px 8px; }
-        [data-density="compact"] .scripts-table th { padding: 4px 8px; }
+        [data-density="compact"] .scripts-table td { padding: 6px 8px; }
+        [data-density="compact"] .scripts-table th { padding: 7px 8px; }
         [data-density="compact"] .tm-tab { padding: 3px 10px; }
         /* Comfortable density (default) */
-        [data-density="comfortable"] .scripts-table td { padding: 5px 8px; }
-        [data-density="comfortable"] .scripts-table th { padding: 6px 8px; }
+        [data-density="comfortable"] .scripts-table td { padding: 9px 10px; }
+        [data-density="comfortable"] .scripts-table th { padding: 10px 10px; }
         /* Spacious density */
-        [data-density="spacious"] .scripts-table td { padding: 8px 10px; }
-        [data-density="spacious"] .scripts-table th { padding: 8px 10px; }
+        [data-density="spacious"] .scripts-table td { padding: 12px 12px; }
+        [data-density="spacious"] .scripts-table th { padding: 12px 12px; }
         [data-density="spacious"] .tm-tab { padding: 7px 16px; }
     </style>
 </head>
 <body>
     <!-- Accessibility: Skip to main content -->
-    <a href="#scriptsPanel" class="skip-link" style="position:absolute;top:-40px;left:0;background:var(--accent-primary);color:#fff;padding:8px 16px;z-index:9999;font-size:14px;transition:top 0.2s;border-radius:0 0 4px 0" onfocus="this.style.top='0'" onblur="this.style.top='-40px'">Skip to main content</a>
+    <a href="#scriptsPanel" class="skip-link">Skip to main content</a>
     <!-- Live region for screen reader announcements -->
     <div id="a11yAnnouncer" role="status" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap"></div>
     <!-- Header -->
@@ -1745,17 +4004,17 @@
                 <div class="tm-logo-text">
                     <h1>ScriptVault<sup id="headerVersion"></sup></h1>
                 </div>
-                <a class="header-icon-btn" href="https://github.com/SysAdminDoc/ScriptVault" target="_blank" title="GitHub" rel="noopener">
+                <a class="header-icon-btn" href="https://github.com/SysAdminDoc/ScriptVault" target="_blank" title="GitHub" rel="noopener" aria-label="Open ScriptVault on GitHub">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                     </svg>
                 </a>
-                <button class="header-icon-btn" id="btnHelpTab" title="Help">
+                <button class="header-icon-btn" id="btnHelpTab" title="Help" aria-label="Open Help">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                     </svg>
                 </button>
-                <button class="header-icon-btn" id="btnCycleTheme" title="Theme: Dark">
+                <button class="header-icon-btn" id="btnCycleTheme" title="Theme: Dark" aria-label="Cycle theme">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
                     </svg>
@@ -1763,7 +4022,7 @@
             </div>
             <div class="tm-tabs-scripts" id="scriptTabsGroup"></div>
             <div class="tm-tabs">
-                <button class="tm-tab" data-tab="newscript" id="tabNewScript" title="Create a new script">+</button>
+                <button class="tm-tab" data-tab="newscript" id="tabNewScript" title="Create a new script" aria-label="Create a new script">+</button>
                 <button class="tm-tab active" data-tab="scripts">Installed Userscripts</button>
                 <button class="tm-tab" data-tab="settings">Settings</button>
                 <button class="tm-tab" data-tab="utilities">Utilities</button>
@@ -1776,7 +4035,7 @@
     <!-- View Settings Bar -->
     <div class="view-settings-bar" id="viewSettingsBar">
         <label>Zoom:</label>
-        <select id="uiScaleSelect" title="UI Scale">
+        <select id="uiScaleSelect" title="UI Scale" aria-label="UI Scale">
             <option value="0.85">85%</option>
             <option value="0.9">90%</option>
             <option value="1" selected>100%</option>
@@ -1801,7 +4060,7 @@
                 For older Chrome versions, enable <strong>Developer Mode</strong> in chrome://extensions.
             </div>
             <button class="btn btn-warning" id="btnSetupHelp">How to Enable</button>
-            <button class="setup-warning-dismiss" id="btnDismissWarning" title="Dismiss">×</button>
+            <button class="setup-warning-dismiss" id="btnDismissWarning" title="Dismiss" aria-label="Dismiss setup warning">×</button>
         </div>
     </div>
 
@@ -1809,8 +4068,29 @@
     <main class="tm-content" role="main" id="mainContent">
         <!-- Scripts Panel -->
         <div id="scriptsPanel" class="tm-panel active">
+            <div class="scripts-shell-header">
+                <div class="scripts-shell-copy">
+                    <span class="scripts-shell-kicker">Workspace</span>
+                    <h2>Installed Userscripts</h2>
+                    <p>Install, organize, and inspect scripts without slowing down the control surface.</p>
+                </div>
+                <div class="scripts-shell-stats" aria-label="Workspace stats">
+                    <div class="scripts-shell-stat">
+                        <span>Installed</span>
+                        <strong id="workspaceInstalledStat">0</strong>
+                    </div>
+                    <div class="scripts-shell-stat">
+                        <span>Active</span>
+                        <strong id="workspaceActiveStat">0</strong>
+                    </div>
+                    <div class="scripts-shell-stat">
+                        <span>Storage</span>
+                        <strong id="workspaceStorageStat">0 B</strong>
+                    </div>
+                </div>
+            </div>
             <!-- Combined Toolbar -->
-            <div class="scripts-toolbar">
+            <div class="scripts-toolbar" role="toolbar" aria-label="Script controls">
                 <div class="scripts-toolbar-left">
                     <button class="toolbar-btn primary" id="btnNewScript">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1837,8 +4117,8 @@
                         Find
                     </button>
                     <div class="toolbar-divider"></div>
-                    <input type="checkbox" id="bulkSelectAll" class="bulk-checkbox" title="Select all visible scripts">
-                    <select id="bulkActionSelect" class="select-field bulk-select" title="Bulk action">
+                    <input type="checkbox" id="bulkSelectAll" class="bulk-checkbox" title="Select all visible scripts" aria-label="Select all visible scripts">
+                    <select id="bulkActionSelect" class="select-field bulk-select" title="Bulk action" aria-label="Bulk action">
                         <option value="">Bulk...</option>
                         <option value="enable">Enable</option>
                         <option value="disable">Disable</option>
@@ -1850,7 +4130,7 @@
                     <button class="btn bulk-btn" id="btnBulkApply">Go</button>
                 </div>
                 <div class="scripts-toolbar-right">
-                    <select id="filterSelect" class="select-field bulk-select" title="Filter scripts">
+                    <select id="filterSelect" class="select-field bulk-select" title="Filter scripts" aria-label="Filter scripts">
                         <option value="all">All</option>
                         <option value="enabled">Enabled</option>
                         <option value="disabled">Disabled</option>
@@ -1870,12 +4150,12 @@
                     <span class="script-counter" id="scriptCounter">0 scripts</span>
                     <div class="search-box">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="text" id="scriptSearch" placeholder="Search... (code: to search in code)">
+                        <input type="text" id="scriptSearch" name="script_search" placeholder="Search scripts or code:fetch…" aria-label="Search scripts" autocomplete="off" spellcheck="false">
                     </div>
-                    <button class="toolbar-btn" id="btnViewToggle" title="Toggle table/card view" style="margin-left:4px;padding:4px 8px">
+                    <button class="toolbar-btn compact" id="btnViewToggle" title="Toggle table/card view" aria-label="Toggle table or card view" aria-pressed="false">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px" id="viewToggleIcon"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
                     </button>
-                    <button class="toolbar-btn" id="btnColumnToggle" title="Show/hide columns" style="margin-left:4px;padding:4px 8px">
+                    <button class="toolbar-btn compact" id="btnColumnToggle" title="Show/hide columns" aria-label="Show or hide columns" aria-haspopup="dialog">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M12 3v18M3 12h18M3 6h18M3 18h18"/></svg>
                     </button>
                 </div>
@@ -1884,7 +4164,7 @@
                 <table class="scripts-table">
                     <thead>
                         <tr>
-                            <th class="center" style="width:30px"><input type="checkbox" id="selectAllScripts"></th>
+                            <th class="center" style="width:30px"><input type="checkbox" id="selectAllScripts" aria-label="Select all scripts in table"></th>
                             <th class="center sortable" style="width:40px" data-sort="order"># <span class="sort-indicator"></span></th>
                             <th class="center sortable" style="width:50px" data-sort="enabled">Enabled <span class="sort-indicator"></span></th>
                             <th class="sortable" style="min-width:200px" data-sort="name">Name <span class="sort-indicator"></span></th>
@@ -1903,8 +4183,12 @@
                 </table>
                 <div id="emptyState" class="empty-state" style="display:none">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-                    <h3>No userscripts installed</h3>
-                    <p>Create a new script or import one to get started.</p>
+                    <h3 id="emptyStateTitle">No Userscripts Yet</h3>
+                    <p id="emptyStateDescription">Create a new script or import one to get started.</p>
+                    <div class="empty-state-actions">
+                        <button class="btn btn-primary" id="emptyStatePrimaryAction" type="button">Create Script</button>
+                        <button class="btn" id="emptyStateSecondaryAction" type="button">Import Script</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1912,6 +4196,44 @@
         <!-- Settings Panel -->
         <!-- Settings Panel - Comprehensive Tampermonkey-style -->
         <div id="settingsPanel" class="tm-panel">
+            <div class="settings-shell">
+            <div class="settings-hero">
+                <div class="settings-hero-copy">
+                    <div class="settings-eyebrow">Preferences</div>
+                    <h2>Settings</h2>
+                    <p>Autosaved controls for ScriptVault itself. Filter the workspace to focus on interface, automation, security, or recovery without losing the advanced depth underneath.</p>
+                </div>
+                <div class="settings-overview">
+                    <div class="settings-summary">
+                        <span class="settings-summary-label">Mode</span>
+                        <strong id="settingsModeSummary">Advanced</strong>
+                    </div>
+                    <div class="settings-summary">
+                        <span class="settings-summary-label">Visible</span>
+                        <strong id="settingsVisibleSummary">0 sections</strong>
+                    </div>
+                    <div class="settings-summary">
+                        <span class="settings-summary-label">Advanced</span>
+                        <strong id="settingsAdvancedSummary">0 shown</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-toolbar">
+                <label class="settings-search" for="settingsQuickFilter">
+                    <span class="settings-search-icon">⌕</span>
+                    <input type="search" class="settings-search-input" id="settingsQuickFilter" name="settings_search" placeholder="Search settings, sync, editor, CSP…" autocomplete="off" spellcheck="false">
+                </label>
+                <div class="settings-filter-row" id="settingsCategoryFilters">
+                    <button type="button" class="settings-filter active" data-settings-filter="all">All</button>
+                    <button type="button" class="settings-filter" data-settings-filter="core">Core</button>
+                    <button type="button" class="settings-filter" data-settings-filter="workspace">Workspace</button>
+                    <button type="button" class="settings-filter" data-settings-filter="automation">Automation</button>
+                    <button type="button" class="settings-filter" data-settings-filter="security">Security</button>
+                    <button type="button" class="settings-filter" data-settings-filter="recovery">Recovery</button>
+                </div>
+            </div>
+            <div class="settings-filter-status" id="settingsFilterStatus">Showing all sections</div>
+            <div class="settings-sections" id="settingsSections">
             <!-- General Section -->
             <div class="settings-section">
                 <div class="section-label">General</div>
@@ -2004,11 +4326,11 @@
                         </select>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Favicon Service:</span>
+                        <span class="label-text">Site Marker Style:</span>
                         <select class="select-field" id="settingsFaviconService">
-                            <option value="google" selected>Google</option>
-                            <option value="duckduckgo">DuckDuckGo</option>
-                            <option value="none">None</option>
+                            <option value="google" selected>Rich Badge</option>
+                            <option value="duckduckgo">Compact Badge</option>
+                            <option value="none">Minimal</option>
                         </select>
                     </div>
                     <div class="setting-row">
@@ -2157,9 +4479,9 @@
                         <span class="help-icon" title="Sync scripts across devices">?</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Type:</span>
+                        <span class="label-text">Provider:</span>
                         <select class="select-field" id="settingsSyncType">
-                            <option value="browser" selected>Browser Sync</option>
+                            <option value="none" selected>Not configured</option>
                             <option value="webdav">WebDAV</option>
                             <option value="googledrive">Google Drive</option>
                             <option value="dropbox">Dropbox</option>
@@ -2204,8 +4526,8 @@
                         <span id="lastSyncTime" style="color:var(--text-secondary)">Never</span>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnSyncNow">Run now</button>
-                        <button class="btn" id="btnSyncReset">Reset</button>
+                        <button class="btn" id="btnSyncNow">Sync Now</button>
+                        <button class="btn" id="btnSyncReset">Clear Log</button>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Recent Sync Log:</span>
@@ -2214,7 +4536,7 @@
                         <textarea class="textarea-field" id="syncLog" readonly style="min-height: 80px; font-family: monospace; font-size: 11px;"></textarea>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnSaveSync">Save</button>
+                        <button class="btn" id="btnSaveSync">Save Provider Settings</button>
                     </div>
                 </div>
             </div>
@@ -2597,20 +4919,67 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                 </div>
             </div>
+            </div>
+            <div class="panel-empty" id="settingsEmptyState" hidden>
+                <strong>No settings matched</strong>
+                <span>Adjust the category filter or clear the search input to bring sections back into view.</span>
+            </div>
+            </div>
         </div>
         <!-- Utilities Panel -->
         <div id="utilitiesPanel" class="tm-panel">
+            <div class="utilities-shell">
+            <div class="utilities-hero">
+                <div class="utilities-hero-copy">
+                    <div class="utilities-eyebrow">Operations</div>
+                    <h2>Utilities</h2>
+                    <p>Export scripts, restore archives, connect cloud backups, and inspect runtime behavior. Restores can overwrite matching scripts, and app settings only come back when the source contains them and you opt in below.</p>
+                </div>
+                <div class="utilities-overview">
+                    <div class="utilities-summary">
+                        <span class="utilities-summary-label">Cloud</span>
+                        <strong id="utilitiesCloudSummary">Not connected</strong>
+                    </div>
+                    <div class="utilities-summary">
+                        <span class="utilities-summary-label">Imports</span>
+                        <strong id="utilitiesImportSummary">4 sources</strong>
+                    </div>
+                    <div class="utilities-summary">
+                        <span class="utilities-summary-label">Workspaces</span>
+                        <strong id="utilitiesWorkspaceSummary">0 saved</strong>
+                    </div>
+                    <div class="utilities-summary">
+                        <span class="utilities-summary-label">Visible</span>
+                        <strong id="utilitiesVisibleSummary">0 sections</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="utilities-toolbar">
+                <label class="utilities-search" for="utilitiesQuickFilter">
+                    <span class="utilities-search-icon">⌕</span>
+                    <input type="search" class="utilities-search-input" id="utilitiesQuickFilter" name="utilities_search" placeholder="Search zip, cloud, import, network log…" autocomplete="off" spellcheck="false">
+                </label>
+                <div class="utilities-filter-row" id="utilitiesCategoryFilters">
+                    <button type="button" class="utilities-filter active" data-utilities-filter="all">All</button>
+                    <button type="button" class="utilities-filter" data-utilities-filter="backup">Backup</button>
+                    <button type="button" class="utilities-filter" data-utilities-filter="import">Import</button>
+                    <button type="button" class="utilities-filter" data-utilities-filter="cloud">Cloud</button>
+                    <button type="button" class="utilities-filter" data-utilities-filter="diagnostics">Diagnostics</button>
+                </div>
+            </div>
+            <div class="utilities-filter-status" id="utilitiesFilterStatus">Showing all utilities</div>
+            <div class="utilities-sections" id="utilitiesSections">
             <div class="settings-section">
                 <div class="section-label">General</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <label><input type="checkbox" id="exportIncludeStorage" checked> Include script storage</label>
+                        <label><input type="checkbox" id="exportIncludeStorage" checked> Include stored values in JSON, ZIP, and cloud backups, then restore them when present</label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="exportIncludeSettings"> Include ScriptVault settings</label>
+                        <label><input type="checkbox" id="exportIncludeSettings"> Include ScriptVault settings in JSON and cloud backups, then restore them when present</label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="exportIncludeResources" checked> Include external script resources</label>
+                        <span class="utility-inline-status">ZIP archives already preserve each script's declared <code>@require</code> and <code>@resource</code> metadata.</span>
                     </div>
                 </div>
             </div>
@@ -2621,6 +4990,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="setting-row">
                         <span class="label-text">Provider:</span>
                         <select class="select-field" id="cloudProvider">
+                            <option value="none">Not configured</option>
                             <option value="googledrive">Google Drive</option>
                             <option value="dropbox">Dropbox</option>
                             <option value="onedrive">OneDrive</option>
@@ -2629,8 +4999,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                     <div class="setting-row" id="cloudStatusRow">
                         <span class="label-text">Status:</span>
-                        <span id="cloudStatusText" style="color:var(--text-muted)">Not connected</span>
-                        <span id="cloudUserInfo" style="color:var(--text-muted);margin-left:8px"></span>
+                        <span id="cloudStatusText" class="utility-inline-status">Not connected</span>
+                        <span id="cloudUserInfo" class="utility-inline-status" style="margin-left:8px"></span>
                     </div>
                     <div class="setting-row">
                         <div class="btn-group">
@@ -2640,38 +5010,144 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                     <div class="setting-row" id="cloudActionsRow" style="display:none">
                         <div class="btn-group">
-                            <button class="btn" id="btnCloudExport">Export to Cloud</button>
-                            <button class="btn" id="btnCloudImport">Import from Cloud</button>
+                            <button class="btn" id="btnCloudExport">Backup to Cloud</button>
+                            <button class="btn" id="btnCloudImport">Restore from Cloud</button>
                         </div>
+                    </div>
+                    <div class="setting-row">
+                        <span class="utility-inline-status">Cloud backups can restore scripts and stored values. App settings only come back when enabled above.</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Import from file</div>
+                <div class="section-label">Restore from file</div>
                 <div class="section-content">
                     <div class="setting-row">
                         <input type="file" id="importFileInput" accept=".json,.zip,.user.js,.js" style="display:none">
                         <button class="btn" id="btnChooseFile">Choose File</button>
-                        <span id="importFileName" style="margin-left:10px;color:var(--text-muted)">No file chosen</span>
+                        <span id="importFileName" class="utility-inline-status" style="margin-left:10px">No file chosen</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Zip</div>
+                <div class="section-label">ZIP archive</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button class="btn" id="btnExportZip">Export</button>
+                        <button class="btn" id="btnExportZip">Download ZIP</button>
+                        <span class="utility-inline-status" style="margin-left:8px">Portable script archive. App-wide settings are not included.</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">File</div>
+                <div class="section-label">Vault JSON</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button class="btn" id="btnExportFile">Export</button>
+                        <button class="btn" id="btnExportFile">Download JSON</button>
+                        <span class="utility-inline-status" style="margin-left:8px">Exports scripts plus the options enabled above.</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Backup Schedule</div>
+                <div class="section-content">
+                    <div class="utility-note" style="margin-bottom:8px">Control automatic backup cadence and retention for the managed backup vault.</div>
+                    <div class="setting-row" style="justify-content:space-between;align-items:center;gap:12px">
+                        <span class="script-counter" id="backupScheduleSummary">Loading...</span>
+                        <span class="utility-inline-status" id="backupScheduleStatus">Loading backup schedule...</span>
+                    </div>
+                    <div class="setting-row">
+                        <span class="utility-inline-status" id="backupNextRunStatus">Calculating next run...</span>
+                    </div>
+                    <div class="setting-row">
+                        <label><input type="checkbox" id="backupEnabled"> Enable automatic backups</label>
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Schedule:</span>
+                        <select class="select-field" id="backupScheduleType">
+                            <option value="manual">Manual only</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="onChange">After script changes</option>
+                        </select>
+                    </div>
+                    <div class="setting-row" id="backupHourRow">
+                        <span class="label-text">Hour:</span>
+                        <input type="number" class="input-field" id="backupHour" min="0" max="23" style="width:80px">
+                        <span class="utility-inline-status">24-hour local time</span>
+                    </div>
+                    <div class="setting-row" id="backupDayRow">
+                        <span class="label-text">Day:</span>
+                        <select class="select-field" id="backupDayOfWeek">
+                            <option value="0">Sunday</option>
+                            <option value="1">Monday</option>
+                            <option value="2">Tuesday</option>
+                            <option value="3">Wednesday</option>
+                            <option value="4">Thursday</option>
+                            <option value="5">Friday</option>
+                            <option value="6">Saturday</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Keep:</span>
+                        <input type="number" class="input-field" id="backupMaxBackups" min="1" max="50" style="width:80px">
+                        <span class="utility-inline-status">stored backups</span>
+                    </div>
+                    <div class="setting-row">
+                        <label><input type="checkbox" id="backupNotifyOnSuccess" checked> Notify when a scheduled backup succeeds</label>
+                    </div>
+                    <div class="setting-row">
+                        <label><input type="checkbox" id="backupNotifyOnFailure" checked> Notify if a scheduled backup fails</label>
+                    </div>
+                    <div class="setting-row">
+                        <label><input type="checkbox" id="backupWarnOnStorageFull" checked> Warn when backup storage gets too large</label>
+                    </div>
+                    <div class="setting-row">
+                        <button class="btn" id="btnSaveBackupSettings">Save Backup Schedule</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Backup Browser</div>
+                <div class="section-content">
+                    <div class="utility-note" style="margin-bottom:8px">Review stored backups, export them, or restore the full vault or selected scripts with a preview first.</div>
+                    <div class="setting-row" style="justify-content:space-between;align-items:center;gap:12px">
+                        <span class="script-counter" id="backupBrowserSummary">0 backups</span>
+                        <div class="btn-group">
+                            <button class="btn" id="btnCreateBackup">Create Backup</button>
+                            <button class="btn" id="btnImportBackupArchive">Import ZIP</button>
+                            <button class="btn" id="btnRefreshBackups">Refresh</button>
+                        </div>
+                    </div>
+                    <div class="utilities-toolbar" style="padding:0;margin-top:12px">
+                        <label class="utilities-search" for="backupBrowserQuickFilter">
+                            <span class="utilities-search-icon">⌕</span>
+                            <input type="search" class="utilities-search-input" id="backupBrowserQuickFilter" name="backup_browser_search" placeholder="Search manual, scheduled, vault snapshot…" autocomplete="off" spellcheck="false">
+                        </label>
+                        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end">
+                            <div class="utilities-filter-row" aria-label="Backup browser filters">
+                                <button type="button" class="utilities-filter active" data-backup-browser-filter="all">All</button>
+                                <button type="button" class="utilities-filter" data-backup-browser-filter="vault">Vault</button>
+                                <button type="button" class="utilities-filter" data-backup-browser-filter="scripts">Scripts</button>
+                                <button type="button" class="utilities-filter" data-backup-browser-filter="values">Values</button>
+                            </div>
+                            <select class="select-field" id="backupBrowserSort" style="min-width:170px">
+                                <option value="newest">Newest First</option>
+                                <option value="oldest">Oldest First</option>
+                                <option value="largest">Largest Archives</option>
+                                <option value="scripts">Most Scripts</option>
+                            </select>
+                            <button type="button" class="btn" id="btnResetBackupBrowser">Reset View</button>
+                        </div>
+                    </div>
+                    <div class="utilities-filter-status" id="backupBrowserStatus">Showing all backups.</div>
+                    <input type="file" id="backupArchiveInput" accept=".zip" style="display:none">
+                    <div id="backupList" class="utility-surface">
+                        <div class="panel-empty-inline">No backups saved yet.</div>
                     </div>
                 </div>
             </div>
@@ -2681,7 +5157,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div class="setting-row">
                         <button class="btn" id="btnExportStats">Export CSV</button>
-                        <span style="font-size:11px;color:var(--text-muted);margin-left:8px">Export execution stats for all scripts</span>
+                        <span class="utility-inline-status" style="margin-left:8px">Export execution stats for all scripts</span>
                     </div>
                 </div>
             </div>
@@ -2690,8 +5166,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Tampermonkey Import</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button class="btn" id="btnImportTampermonkey">Import .txt Backup</button>
-                        <span style="font-size:11px;color:var(--text-muted);margin-left:8px">Import from Tampermonkey's text backup format</span>
+                        <button class="btn" id="btnImportTampermonkey">Import .txt Export</button>
+                        <span class="utility-inline-status" style="margin-left:8px">Import from Tampermonkey's text backup format</span>
                     </div>
                 </div>
             </div>
@@ -2729,7 +5205,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                     <div class="setting-row">
                         <button class="btn" id="btnBatchInstall">Install All</button>
-                        <span style="font-size:11px;color:var(--text-muted);margin-left:8px">One URL per line</span>
+                        <span class="utility-inline-status" style="margin-left:8px">One URL per line</span>
                     </div>
                 </div>
             </div>
@@ -2737,7 +5213,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="settings-section">
                 <div class="section-label">Workspaces</div>
                 <div class="section-content">
-                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Save and switch between different sets of enabled/disabled scripts</div>
+                    <div class="utility-note" style="margin-bottom:8px">Save and switch between different sets of enabled and disabled scripts.</div>
                     <div id="workspaceList" style="margin-bottom:8px"></div>
                     <div class="setting-row">
                         <button class="btn" id="btnCreateWorkspace">Save Current as Workspace</button>
@@ -2748,7 +5224,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="settings-section">
                 <div class="section-label">Network Request Log</div>
                 <div class="section-content">
-                    <div id="networkLogContainer" style="max-height:250px;overflow-y:auto;font-size:12px">
+                    <div id="networkLogContainer" class="utility-surface" style="max-height:250px;overflow-y:auto;font-size:12px">
                         <div style="color:var(--text-muted)">No network requests logged yet. GM_xmlhttpRequest calls will appear here.</div>
                     </div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
@@ -2762,7 +5238,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="settings-section">
                 <div class="section-label">Performance Budgets</div>
                 <div class="section-content">
-                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Set execution time limits per script. Scripts exceeding budget are highlighted.</div>
+                    <div class="utility-note" style="margin-bottom:8px">Set execution time limits per script. Scripts exceeding budget are highlighted.</div>
                     <div class="setting-row">
                         <span class="label-text">Default budget (ms):</span>
                         <input type="number" class="input-field" id="perfBudgetDefault" value="200" style="width:80px" min="10" max="10000">
@@ -2773,32 +5249,143 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
 
             <div class="settings-section">
+                <div class="section-label">Runtime Repair</div>
+                <div class="section-content">
+                    <div class="utility-note" style="margin-bottom:8px">Inspect setup state and repair userScripts registrations, alarms, and menus without restarting the whole extension.</div>
+                    <div id="runtimeRepairDetails" class="utility-surface" style="display:grid;gap:10px">
+                        <div class="setting-row" style="margin:0;display:flex;justify-content:space-between;align-items:center;gap:12px">
+                            <span class="label-text">Runtime status</span>
+                            <span class="script-counter" id="runtimeStatusSummary">Checking...</span>
+                        </div>
+                        <div class="utility-note" id="runtimeStatusDetails">Loading runtime diagnostics...</div>
+                    </div>
+                    <div class="setting-row" style="margin-top:8px;gap:8px">
+                        <button class="btn" id="btnRefreshRuntimeStatus">Refresh Status</button>
+                        <button class="btn" id="btnRepairRuntime">Repair Runtime</button>
+                        <button class="btn" id="btnShowSetupGuide">Setup Guide</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Support Snapshot</div>
+                <div class="section-content">
+                    <div class="utility-note" style="margin-bottom:8px">Export a support bundle with runtime setup, trust state, sync summary, recovery inventory, script inventory, and recent diagnostics.</div>
+                    <div id="supportSnapshotSummary" class="utility-surface">Bundle includes runtime status, trusted origins, signing keys, backup inventory, recent errors, and script counts.</div>
+                    <div class="setting-row" style="margin-top:8px;gap:8px">
+                        <button class="btn" id="btnExportSupportSnapshot">Export Snapshot</button>
+                        <span class="utility-inline-status" id="supportSnapshotStatus">Ready</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Public API Trust</div>
+                <div class="section-content">
+                    <div class="utility-note" style="margin-bottom:8px">Review which web origins are trusted to call the public API and inspect the recent external audit trail.</div>
+                    <div class="setting-row">
+                        <span class="label-text">Trusted origins</span>
+                    </div>
+                    <textarea class="textarea-field" id="publicApiTrustedOrigins" rows="4" placeholder="https://example.com" style="width:100%;font-size:12px;resize:vertical"></textarea>
+                    <div class="utility-inline-status" id="publicApiPermissionsSummary" style="display:block;margin-top:8px">Loading permission policy...</div>
+                    <div class="utility-inline-status" id="publicApiTrustStatus" style="display:block;margin-top:4px">Loading trusted origins...</div>
+                    <div class="setting-row" style="margin-top:8px;gap:8px">
+                        <button class="btn" id="btnRefreshPublicApiTrust">Refresh</button>
+                        <button class="btn" id="btnSavePublicApiOrigins">Save Origins</button>
+                        <button class="btn" id="btnClearPublicApiAudit">Clear Audit</button>
+                    </div>
+                    <div id="publicApiAuditLog" class="utility-surface" style="margin-top:8px;max-height:220px;overflow-y:auto;font-size:12px">
+                        <div class="panel-empty-inline">No external API activity yet.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Signing Trust</div>
+                <div class="section-content">
+                    <div class="utility-note" style="margin-bottom:8px">Manage the trusted signing keys used during install and verification flows.</div>
+                    <div class="utility-inline-status" id="signingTrustSummary" style="display:block;margin-bottom:8px">Loading trusted signing keys...</div>
+                    <div id="signingKeysList" class="utility-surface" style="max-height:220px;overflow-y:auto;font-size:12px">
+                        <div class="panel-empty-inline">No trusted signing keys saved.</div>
+                    </div>
+                    <div class="setting-row" style="margin-top:8px;gap:8px">
+                        <button class="btn" id="btnRefreshSigningTrust">Refresh</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
                 <div class="section-label">Activity Log</div>
                 <div class="section-content">
-                    <div id="activityLog" class="activity-log" style="max-height:200px;overflow-y:auto;font-size:12px;color:var(--text-muted)">No activity yet</div>
+                    <div id="activityLog" class="activity-log utility-surface" style="max-height:200px;overflow-y:auto;font-size:12px;color:var(--text-muted)">No activity yet</div>
                     <div class="setting-row" style="margin-top:8px">
                         <button class="btn" id="btnClearLog">Clear Log</button>
                     </div>
                 </div>
             </div>
+            </div>
+            <div class="panel-empty" id="utilitiesEmptyState" hidden>
+                <strong>No utilities matched</strong>
+                <span>Adjust the category filter or clear the search input to bring the tools back into view.</span>
+            </div>
+            </div>
         </div>
 
         <!-- Trash Panel -->
         <div id="trashPanel" class="tm-panel">
-            <div style="padding: 20px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
-                    <h3 style="color:var(--text-primary)">Trash</h3>
-                    <button class="btn btn-danger" id="btnEmptyTrash">Empty Trash</button>
+            <div class="trash-shell">
+                <div class="trash-hero">
+                    <div class="trash-hero-copy">
+                        <div class="trash-eyebrow">Recovery</div>
+                        <h2>Restore deleted scripts without guesswork.</h2>
+                        <p>Everything removed from the vault lands here first, with clear retention policy, quick search, and permanent-delete actions that stay explicit.</p>
+                    </div>
+                    <div class="trash-overview" aria-label="Trash overview">
+                        <div class="trash-summary">
+                            <span class="trash-summary-label">Recoverable</span>
+                            <strong id="trashCountSummary">0 scripts</strong>
+                        </div>
+                        <div class="trash-summary">
+                            <span class="trash-summary-label">Retention</span>
+                            <strong id="trashRetentionSummary">Disabled</strong>
+                        </div>
+                        <div class="trash-summary">
+                            <span class="trash-summary-label">Latest Removal</span>
+                            <strong id="trashLatestSummary">Never</strong>
+                        </div>
+                    </div>
                 </div>
-                <div id="trashList" style="color:var(--text-muted);text-align:center;padding:20px">
-                    Trash is empty
+
+                <div class="trash-toolbar">
+                    <label class="trash-search" for="trashQuickFilter">
+                        <span class="trash-search-icon" aria-hidden="true">Search</span>
+                        <input id="trashQuickFilter" name="trash_search" type="search" placeholder="Filter deleted scripts by name, author, or version" autocomplete="off" spellcheck="false">
+                    </label>
+                    <div class="trash-toolbar-actions">
+                        <div class="trash-filter-row" id="trashCategoryFilters">
+                            <button type="button" class="trash-filter active" data-trash-filter="all">All</button>
+                            <button type="button" class="trash-filter" data-trash-filter="recent">Last 7 Days</button>
+                            <button type="button" class="trash-filter" data-trash-filter="older">Older</button>
+                        </div>
+                        <button type="button" class="btn btn-danger" id="btnEmptyTrash">Empty Trash</button>
+                    </div>
+                </div>
+
+                <div class="trash-filter-status" id="trashFilterStatus" aria-live="polite">Showing all deleted scripts.</div>
+
+                <div class="utility-surface trash-surface">
+                    <div id="trashList" class="trash-list" aria-live="polite"></div>
+                    <div class="panel-empty" id="trashEmptyState" hidden>
+                        <strong id="trashEmptyTitle">Trash is empty</strong>
+                        <span id="trashEmptyDescription">Deleted scripts will appear here when recovery is available.</span>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Script Store Panel -->
         <div id="storePanel" class="tm-panel">
-            <div id="storeContainer" style="padding: 20px;">
+            <div id="storeContainer" style="min-height:calc(100vh - 120px);">
                 <div class="lazy-loading-state"><div class="lazy-spinner"></div><div>Loading Script Store...</div></div>
             </div>
         </div>
@@ -2806,9 +5393,91 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
 
         <!-- Help Panel -->
         <div id="helpPanel" class="tm-panel">
-            <!-- Getting Started -->
-            <div class="help-section">
-                <div class="shortcuts-title">Getting Started</div>
+            <div class="help-shell">
+                <div class="help-hero">
+                    <div class="help-hero-copy">
+                        <div class="help-eyebrow">Reference</div>
+                        <h2>Command desk for the whole vault.</h2>
+                        <p>Search the control surface, launch common flows, and keep API or shortcut details one step away while you work.</p>
+                    </div>
+                    <div class="help-overview">
+                        <div class="help-summary">
+                            <span class="help-summary-label">Actions</span>
+                            <strong id="helpActionSummary">0 launches</strong>
+                        </div>
+                        <div class="help-summary">
+                            <span class="help-summary-label">Visible</span>
+                            <strong id="helpVisibleSummary">0 sections</strong>
+                        </div>
+                        <div class="help-summary">
+                            <span class="help-summary-label">Theme</span>
+                            <strong id="helpThemeSummary">Dark</strong>
+                        </div>
+                        <div class="help-summary">
+                            <span class="help-summary-label">Scripts</span>
+                            <strong id="helpScriptSummary">0 installed</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="help-toolbar">
+                    <label class="help-search" for="helpQuickFilter">
+                        <span class="help-search-icon">Search</span>
+                        <input type="search" class="help-search-input" id="helpQuickFilter" name="help_search" placeholder="Search commands, shortcuts, APIs, & matching tools" autocomplete="off" spellcheck="false">
+                    </label>
+                    <div class="help-filter-row" id="helpCategoryFilters">
+                        <button type="button" class="help-filter active" data-help-filter="all">All</button>
+                        <button type="button" class="help-filter" data-help-filter="actions">Actions</button>
+                        <button type="button" class="help-filter" data-help-filter="shortcuts">Shortcuts</button>
+                        <button type="button" class="help-filter" data-help-filter="reference">Reference</button>
+                    </div>
+                </div>
+
+                <div class="help-filter-status" id="helpFilterStatus">Showing all references.</div>
+
+                <div class="help-sections" id="helpSections">
+            <div class="help-section" data-help-group="actions">
+                <div class="shortcuts-title">Quick Actions</div>
+                <div class="help-section-body">
+                    <div class="help-action-grid" id="helpActionGrid">
+                        <button type="button" class="help-action-card" data-help-action="new-script">
+                            <strong>New Script</strong>
+                            <span>Create a fresh userscript from the dashboard.</span>
+                        </button>
+                        <button type="button" class="help-action-card" data-help-action="import-script">
+                            <strong>Import Script</strong>
+                            <span>Pull in a local `.user.js` or archive file.</span>
+                        </button>
+                        <button type="button" class="help-action-card" data-help-action="find-scripts">
+                            <strong>Find Scripts</strong>
+                            <span>Search GreasyFork and OpenUserJS without leaving the app.</span>
+                        </button>
+                        <button type="button" class="help-action-card" data-help-action="command-palette">
+                            <strong>Command Palette</strong>
+                            <span>Jump to commands, scripts, and tools from one keyboard surface.</span>
+                        </button>
+                        <button type="button" class="help-action-card" data-help-action="open-settings">
+                            <strong>Open Settings</strong>
+                            <span>Adjust runtime, editor, and sync preferences.</span>
+                        </button>
+                        <button type="button" class="help-action-card" data-help-action="open-utilities">
+                            <strong>Open Utilities</strong>
+                            <span>Go straight to backup, import, cloud, and diagnostics.</span>
+                        </button>
+                        <button type="button" class="help-action-card" data-help-action="open-trash">
+                            <strong>Open Trash</strong>
+                            <span>Review deleted scripts and restore them if needed.</span>
+                        </button>
+                        <button type="button" class="help-action-card" data-help-action="check-updates">
+                            <strong>Check Updates</strong>
+                            <span>Run an immediate update sweep across installed scripts.</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="help-section" data-help-group="actions">
+                <div class="shortcuts-title">Operational Notes</div>
                 <div class="help-content">
                     <div class="help-step"><strong>Install scripts:</strong> Navigate to any <code>.user.js</code> URL, use Find Scripts, or drag files onto this dashboard.</div>
                     <div class="help-step"><strong>Manage scripts:</strong> Toggle on/off, click name to edit, right-click update icon to force-update.</div>
@@ -2819,7 +5488,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
 
             <!-- Dashboard Shortcuts -->
-            <div class="help-section">
+            <div class="help-section" data-help-group="shortcuts">
                 <div class="shortcuts-title">Dashboard Shortcuts</div>
                 <div class="shortcuts-grid">
                     <span class="shortcut-key">Ctrl+N</span>
@@ -2828,7 +5497,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <span class="shortcut-desc">Import Script</span>
                     <span class="shortcut-key">Ctrl+/</span>
                     <span class="shortcut-desc">Focus Search</span>
-                    <span class="shortcut-key">Alt+1-5</span>
+                    <span class="shortcut-key">Alt+1-6</span>
                     <span class="shortcut-desc">Switch Tabs</span>
                     <span class="shortcut-key">Ctrl+W</span>
                     <span class="shortcut-desc">Close Script Tab</span>
@@ -2840,7 +5509,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
 
             <!-- GM API Reference -->
-            <div class="help-section">
+            <div class="help-section" data-help-group="reference">
                 <div class="shortcuts-title">GM API Quick Reference</div>
                 <div class="help-api-grid">
                     <div class="help-api-group">
@@ -2871,26 +5540,24 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <code>GM_getResourceText(name)</code>
                     </div>
                 </div>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:8px">All functions also available as promise-based <code>GM.*</code> variants (e.g., <code>await GM.getValue()</code>)</div>
+                <div class="help-inline-note">All functions also available as promise-based <code>GM.*</code> variants, such as <code>await GM.getValue()</code>.</div>
             </div>
 
             <!-- Pattern Tester -->
-            <div class="help-section">
-                <div class="shortcuts-title">@match Pattern Tester</div>
+            <div class="help-section" data-help-group="reference">
+                <div class="shortcuts-title">Pattern Tester</div>
                 <div class="help-content">
-                    <div style="display:flex;gap:8px;margin-bottom:8px">
+                    <div class="help-pattern-row">
                         <input type="text" class="input-field" id="patternTestUrl" placeholder="Enter a URL to test (e.g., https://example.com/page)" style="flex:1">
                         <button class="btn btn-primary" id="btnTestPattern">Test</button>
                     </div>
-                    <div id="patternTestResults" style="font-size:12px;color:var(--text-muted)">Enter a URL to see which scripts would run on it</div>
+                    <div id="patternTestResults" class="help-pattern-results">Enter a URL to see which scripts would run on it.</div>
                 </div>
             </div>
 
-            <div class="shortcuts-container">
+            <div class="help-section shortcuts-container" data-help-group="shortcuts">
                 <div class="shortcuts-title">Editor Shortcuts</div>
                 <div class="shortcuts-grid">
-                    <span class="shortcut-key">Key Mapping</span>
-                    <span class="shortcut-desc"><em>windows</em></span>
                     <span class="shortcut-key">Alt-Up</span>
                     <span class="shortcut-desc">Move Line Up</span>
                     <span class="shortcut-key">Alt-Down</span>
@@ -2958,11 +5625,22 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 </div>
             </div>
 
-            <div class="about-section">
-                <img src="../images/icon128.png" alt="ScriptVault">
-                <h2>ScriptVault</h2>
-                <p class="version" id="aboutVersion"></p>
-                <p>A lightweight userscript manager for Chrome.</p>
+            <div class="help-section about-section" data-help-group="reference">
+                <div class="about-shell">
+                    <div class="about-brand">
+                        <img src="../images/icon128.png" alt="ScriptVault">
+                        <div class="about-brand-copy">
+                            <h2>ScriptVault</h2>
+                            <p class="version" id="aboutVersion"></p>
+                            <p>A lightweight userscript manager for Chrome with a fast local control surface and a deliberate editing workspace.</p>
+                        </div>
+                    </div>
+                    <div class="about-links">
+                        <a href="https://github.com/SysAdminDoc/ScriptVault" target="_blank">GitHub</a>
+                        <a href="https://greasyfork.org" target="_blank">GreasyFork</a>
+                        <a href="https://openuserjs.org" target="_blank">OpenUserJS</a>
+                    </div>
+                </div>
                 <div class="about-stats">
                     <div class="stat-item">
                         <div class="stat-value" id="statTotalScripts">0</div>
@@ -2983,10 +5661,11 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                     <div class="quota-bar-text" id="storageQuotaText">-- / 10 MB</div>
                 </div>
-                <div class="about-links">
-                    <a href="https://github.com/SysAdminDoc/ScriptVault" target="_blank">GitHub</a>
-                    <a href="https://greasyfork.org" target="_blank">GreasyFork</a>
-                    <a href="https://openuserjs.org" target="_blank">OpenUserJS</a>
+            </div>
+                </div>
+                <div class="panel-empty" id="helpEmptyState" hidden>
+                    <strong>No help sections matched</strong>
+                    <span>Clear the search or switch categories to bring the reference surface back into view.</span>
                 </div>
             </div>
         </div>
@@ -2995,15 +5674,43 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <!-- Editor Overlay -->
     <div class="editor-overlay" id="editorOverlay">
         <div class="editor-header">
-            <span class="editor-title" id="editorTitle">Edit Script</span>
-            <span class="editor-line-count" id="editorLineCount"></span>
-            <span class="editor-cursor-pos" id="editorCursorPos"></span>
+            <div class="editor-header-main">
+                <div class="editor-heading">
+                    <span class="editor-eyebrow" id="editorEyebrow">Userscript Editor</span>
+                    <div class="editor-title-row">
+                        <span class="editor-title" id="editorTitle">Edit Script</span>
+                        <span class="editor-save-state" id="editorSaveState" data-state="clean" role="status" aria-live="polite" aria-atomic="true">Saved</span>
+                    </div>
+                    <span class="editor-subtitle" id="editorSubtitle">Ready to edit.</span>
+                </div>
+                <div class="editor-metrics" aria-label="Editor metrics">
+                    <span class="editor-metric editor-line-count" id="editorLineCount"></span>
+                    <span class="editor-metric" id="editorCharCount"></span>
+                    <span class="editor-metric editor-cursor-pos" id="editorCursorPos"></span>
+                    <span class="editor-metric" id="editorSavedAt"></span>
+                </div>
+            </div>
             <div class="editor-actions">
-                <button class="btn" id="btnEditorSave">💾 Save</button>
-                <button class="btn" id="btnEditorExport">📤 Export</button>
-                <button class="btn" id="btnEditorToggle">Disable</button>
-                <button class="btn" id="btnEditorDuplicate">Duplicate</button>
-                <button class="btn btn-danger" id="btnEditorDelete">Delete</button>
+                <button class="btn" id="btnEditorSave" type="button" data-save-state="clean" title="Save (Ctrl+S)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+                    <span id="btnEditorSaveLabel">Save</span>
+                </button>
+                <button class="btn" id="btnEditorExport" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span>Export</span>
+                </button>
+                <button class="btn" id="btnEditorToggle" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M6.34 6.34a8 8 0 1 0 11.32 0"/></svg>
+                    <span id="btnEditorToggleLabel">Disable</span>
+                </button>
+                <button class="btn" id="btnEditorDuplicate" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Duplicate</span>
+                </button>
+                <button class="btn btn-danger" id="btnEditorDelete" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    <span>Delete</span>
+                </button>
             </div>
         </div>
         <div class="editor-tabs">
@@ -3083,61 +5790,122 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                 </div>
                 <div id="infoPanel" class="editor-panel">
-                    <div class="info-panel">
-                        <div class="info-grid">
-                            <span class="info-label">Name:</span>
-                            <span class="info-value" id="infoName">-</span>
-                            <span class="info-label">Version:</span>
-                            <span class="info-value" id="infoVersion">-</span>
-                            <span class="info-label">Author:</span>
-                            <span class="info-value" id="infoAuthor">-</span>
-                            <span class="info-label">Description:</span>
-                            <span class="info-value" id="infoDescription">-</span>
-                            <span class="info-label">Homepage:</span>
-                            <span class="info-value" id="infoHomepage">-</span>
-                            <span class="info-label">Update URL:</span>
-                            <span class="info-value" id="infoUpdateUrl">-</span>
-                            <span class="info-label">License:</span>
-                            <span class="info-value" id="infoLicense">-</span>
-                            <span class="info-label">Contribution:</span>
-                            <span class="info-value" id="infoContributionURL">-</span>
-                            <span class="info-label">Compatible:</span>
-                            <div class="info-tags" id="infoCompatible"><span style="color:var(--text-muted)">Not specified</span></div>
-                            <span class="info-label">Grants:</span>
-                            <div class="info-tags" id="infoGrants">-</div>
-                            <span class="info-label">Matches:</span>
-                            <div class="info-tags" id="infoMatches">-</div>
-                            <span class="info-label">Resources:</span>
-                            <div class="info-value" id="infoResources">-</div>
-                            <span class="info-label">Performance:</span>
-                            <div class="info-value" id="infoPerf">
-                                <div id="infoPerfStats" class="perf-stats-grid">-</div>
-                                <button class="btn btn-sm btn-danger" id="btnResetStats" style="margin-top:6px;display:none">Reset Stats</button>
+                    <div class="editor-panel-shell">
+                        <div class="editor-panel-head">
+                            <div class="editor-panel-headline">
+                                <h3>Script Info</h3>
+                                <p>Metadata, runtime health, and update history for the current script.</p>
                             </div>
-                            <span class="info-label">Conflicts:</span>
-                            <div class="info-value" id="infoConflicts">-</div>
-                            <span class="info-label">Version History:</span>
-                            <div class="info-value" id="infoVersionHistory">No previous versions</div>
+                        </div>
+                        <div class="editor-panel-scroll">
+                            <div class="info-panel">
+                                <div class="info-grid">
+                                    <div class="info-item">
+                                        <span class="info-label">Name</span>
+                                        <span class="info-value" id="infoName">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Version</span>
+                                        <span class="info-value" id="infoVersion">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Author</span>
+                                        <span class="info-value" id="infoAuthor">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">License</span>
+                                        <span class="info-value" id="infoLicense">-</span>
+                                    </div>
+                                    <div class="info-item info-item-wide">
+                                        <span class="info-label">Description</span>
+                                        <span class="info-value" id="infoDescription">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Homepage</span>
+                                        <span class="info-value" id="infoHomepage">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Update URL</span>
+                                        <span class="info-value" id="infoUpdateUrl">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Download URL</span>
+                                        <span class="info-value" id="infoDownloadUrl">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Provenance</span>
+                                        <span class="info-value" id="infoProvenance">-</span>
+                                    </div>
+                                    <div class="info-item info-item-wide">
+                                        <span class="info-label">Contribution</span>
+                                        <span class="info-value" id="infoContributionURL">-</span>
+                                    </div>
+                                    <div class="info-item info-item-wide">
+                                        <span class="info-label">Compatible</span>
+                                        <div class="info-tags" id="infoCompatible"><span class="panel-empty-inline">Not specified</span></div>
+                                    </div>
+                                    <div class="info-item info-item-wide">
+                                        <span class="info-label">Grants</span>
+                                        <div class="info-tags" id="infoGrants">-</div>
+                                    </div>
+                                    <div class="info-item info-item-wide">
+                                        <span class="info-label">Matches</span>
+                                        <div class="info-tags" id="infoMatches">-</div>
+                                    </div>
+                                    <div class="info-item info-item-wide">
+                                        <span class="info-label">Resources</span>
+                                        <div class="info-value" id="infoResources">-</div>
+                                    </div>
+                                    <div class="info-item info-item-wide">
+                                        <span class="info-label">Performance</span>
+                                        <div class="info-value" id="infoPerf">
+                                            <div id="infoPerfStats" class="perf-stats-grid">-</div>
+                                            <button class="btn btn-sm btn-danger" id="btnResetStats" style="margin-top:10px;display:none">Reset Stats</button>
+                                        </div>
+                                    </div>
+                                    <div class="info-item info-item-wide">
+                                        <span class="info-label">Conflicts</span>
+                                        <div class="info-value" id="infoConflicts">-</div>
+                                    </div>
+                                    <div class="info-item info-item-wide">
+                                        <span class="info-label">Version History</span>
+                                        <div class="info-value" id="infoVersionHistory">No previous versions</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div id="storagePanel" class="editor-panel">
-                    <div class="storage-panel">
-                        <div class="storage-header">
-                            <span>Script Storage</span>
-                            <div style="display:flex;align-items:center;gap:15px">
-                                <span id="storageSizeInfo" style="color:var(--text-muted);font-size:12px">0 B used</span>
+                    <div class="editor-panel-shell">
+                        <div class="editor-panel-head">
+                            <div class="editor-panel-headline">
+                                <h3>Script Storage</h3>
+                                <p>Inspect and edit the values this script persists through the GM storage APIs.</p>
+                            </div>
+                            <div class="editor-panel-actions">
+                                <span id="storageSizeInfo" class="script-counter">0 B used</span>
                                 <button class="btn" id="btnAddStorage">+ Add Value</button>
                             </div>
                         </div>
-                        <div class="storage-list" id="storageList"></div>
+                        <div class="editor-panel-scroll">
+                            <div class="storage-panel">
+                                <div class="storage-list" id="storageList"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div id="scriptsettingsPanel" class="editor-panel">
-                    <div class="script-settings-panel" style="padding: 20px; overflow-y: auto; max-height: calc(100vh - 200px);">
-                        <h3 style="margin-bottom: 20px; color: var(--text-primary);">Per-Script Settings</h3>
-                        
-                        <div class="settings-section" style="margin-bottom: 20px;">
+                    <div class="editor-panel-shell">
+                        <div class="editor-panel-head">
+                            <div class="editor-panel-headline">
+                                <h3>Per-Script Settings</h3>
+                                <p>Override updates, execution behavior, sync protection, and URL matching without touching the source code.</p>
+                            </div>
+                        </div>
+                        <div class="editor-panel-scroll">
+                            <div class="script-settings-panel">
+                                <div class="settings-section">
                             <div class="section-label">Updates</div>
                             <div class="section-content">
                                 <div class="setting-row">
@@ -3149,24 +5917,24 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             </div>
                         </div>
 
-                        <div class="settings-section" style="margin-bottom: 20px;">
+                                <div class="settings-section">
                             <div class="section-label">Sync</div>
                             <div class="section-content">
                                 <div class="setting-row">
                                     <label title="When enabled, cloud sync will not overwrite this script's local changes"><input type="checkbox" id="scriptSyncLock"> Lock from cloud sync (protect local edits)</label>
                                 </div>
-                                <div class="setting-row" id="syncLockStatus" style="font-size:12px;color:var(--text-muted);padding-left:22px;display:none">
+                                <div class="setting-row panel-status-inline" id="syncLockStatus" style="display:none">
                                     Script was manually edited — sync will not overwrite. Uncheck to allow sync.
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="settings-section" style="margin-bottom: 20px;">
+                                <div class="settings-section">
                             <div class="section-label">Execution</div>
                             <div class="section-content">
                                 <div class="setting-row">
                                     <span class="label-text">Run at:</span>
-                                    <select class="select-field" id="scriptRunAt" style="width: 180px;">
+                                    <select class="select-field" id="scriptRunAt">
                                         <option value="default">Default (from metadata)</option>
                                         <option value="document-start">Document Start</option>
                                         <option value="document-end">Document End</option>
@@ -3175,7 +5943,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                 </div>
                                 <div class="setting-row">
                                     <span class="label-text">Inject into:</span>
-                                    <select class="select-field" id="scriptInjectInto" style="width: 180px;">
+                                    <select class="select-field" id="scriptInjectInto">
                                         <option value="auto">Auto</option>
                                         <option value="page">Page context</option>
                                         <option value="content">Content script context</option>
@@ -3184,7 +5952,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             </div>
                         </div>
                         
-                        <div class="settings-section" style="margin-bottom: 20px;">
+                                <div class="settings-section">
                             <div class="section-label">Notifications</div>
                             <div class="section-content">
                                 <div class="setting-row">
@@ -3193,143 +5961,154 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             </div>
                         </div>
 
-                        <div class="settings-section" style="margin-bottom: 20px;">
+                                <div class="settings-section">
                             <div class="section-label">Notes</div>
                             <div class="section-content">
                                 <div class="setting-row">
-                                    <textarea class="textarea-field" id="scriptNotes" rows="3" placeholder="Personal notes about this script..." style="width:100%;resize:vertical;font-size:12px"></textarea>
+                                    <textarea class="textarea-field" id="scriptNotes" rows="3" placeholder="Personal notes about this script..."></textarea>
                                 </div>
                             </div>
                         </div>
 
                         <!-- URL Overrides - Tampermonkey-style -->
-                        <div class="settings-section url-overrides-section" style="margin-bottom: 20px;">
+                                <div class="settings-section url-overrides-section">
                             <div class="section-label">URL Overrides</div>
                             <div class="section-content">
-                                <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 15px;">
+                                <p class="editor-panel-note">
                                     Override where this script runs without editing its code. Uncheck "Original" sections to disable them entirely.
                                 </p>
                                 
                                 <!-- Original Includes -->
-                                <div class="url-override-group" style="margin-bottom: 15px;">
-                                    <div class="url-override-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <div class="url-override-group">
+                                    <div class="url-override-header">
+                                        <label class="url-override-toggle">
                                             <input type="checkbox" id="useOriginalIncludes" checked>
-                                            <span class="label-text" style="font-weight: 500;">Original @include</span>
+                                            <span class="label-text url-override-title">Original @include</span>
                                         </label>
                                         <span class="help-icon" title="Glob patterns from the script's metadata">?</span>
                                     </div>
-                                    <div class="url-pattern-list original-patterns" id="originalIncludesList" style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px; max-height: 100px; overflow-y: auto; font-family: monospace; font-size: 11px; color: var(--text-secondary);">
+                                    <div class="url-pattern-list original-patterns" id="originalIncludesList">
                                         <em>None defined</em>
                                     </div>
                                 </div>
                                 
                                 <!-- Original Matches -->
-                                <div class="url-override-group" style="margin-bottom: 15px;">
-                                    <div class="url-override-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <div class="url-override-group">
+                                    <div class="url-override-header">
+                                        <label class="url-override-toggle">
                                             <input type="checkbox" id="useOriginalMatches" checked>
-                                            <span class="label-text" style="font-weight: 500;">Original @match</span>
+                                            <span class="label-text url-override-title">Original @match</span>
                                         </label>
                                         <span class="help-icon" title="Match patterns from the script's metadata">?</span>
                                     </div>
-                                    <div class="url-pattern-list original-patterns" id="originalMatchesList" style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px; max-height: 100px; overflow-y: auto; font-family: monospace; font-size: 11px; color: var(--text-secondary);">
+                                    <div class="url-pattern-list original-patterns" id="originalMatchesList">
                                         <em>None defined</em>
                                     </div>
                                 </div>
                                 
                                 <!-- Original Excludes -->
-                                <div class="url-override-group" style="margin-bottom: 15px;">
-                                    <div class="url-override-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <div class="url-override-group">
+                                    <div class="url-override-header">
+                                        <label class="url-override-toggle">
                                             <input type="checkbox" id="useOriginalExcludes" checked>
-                                            <span class="label-text" style="font-weight: 500;">Original @exclude</span>
+                                            <span class="label-text url-override-title">Original @exclude</span>
                                         </label>
                                         <span class="help-icon" title="Exclude patterns from the script's metadata">?</span>
                                     </div>
-                                    <div class="url-pattern-list original-patterns" id="originalExcludesList" style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px; max-height: 100px; overflow-y: auto; font-family: monospace; font-size: 11px; color: var(--text-secondary);">
+                                    <div class="url-pattern-list original-patterns" id="originalExcludesList">
                                         <em>None defined</em>
                                     </div>
                                 </div>
                                 
-                                <hr style="border: none; border-top: 1px solid var(--border-color); margin: 20px 0;">
+                                <hr class="url-override-divider">
                                 
                                 <!-- User Includes -->
-                                <div class="url-override-group" style="margin-bottom: 15px;">
-                                    <div class="url-override-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                                        <span class="label-text" style="font-weight: 500; color: var(--accent-primary);">User @include</span>
-                                        <div class="url-override-actions" style="display: flex; gap: 4px;">
+                                <div class="url-override-group">
+                                    <div class="url-override-header">
+                                        <span class="label-text url-override-title accent">User @include</span>
+                                        <div class="url-override-actions">
                                             <button class="btn btn-sm" id="btnAddUserInclude" title="Add pattern">+ Add</button>
                                         </div>
                                     </div>
-                                    <div class="url-pattern-editable" id="userIncludesList" style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; min-height: 60px;">
+                                    <div class="url-pattern-editable" id="userIncludesList">
                                         <!-- Populated dynamically -->
                                     </div>
-                                    <input type="text" class="input-field url-pattern-input" id="userIncludeInput" placeholder="*://example.com/* (press Enter to add)" style="width: 100%; margin-top: 8px; font-family: monospace; font-size: 12px; display: none;">
+                                    <input type="text" class="input-field url-pattern-input" id="userIncludeInput" placeholder="*://example.com/* (press Enter to add)">
                                 </div>
                                 
                                 <!-- User Matches -->
-                                <div class="url-override-group" style="margin-bottom: 15px;">
-                                    <div class="url-override-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                                        <span class="label-text" style="font-weight: 500; color: var(--accent-primary);">User @match</span>
-                                        <div class="url-override-actions" style="display: flex; gap: 4px;">
+                                <div class="url-override-group">
+                                    <div class="url-override-header">
+                                        <span class="label-text url-override-title accent">User @match</span>
+                                        <div class="url-override-actions">
                                             <button class="btn btn-sm" id="btnAddUserMatch" title="Add pattern">+ Add</button>
                                         </div>
                                     </div>
-                                    <div class="url-pattern-editable" id="userMatchesList" style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; min-height: 60px;">
+                                    <div class="url-pattern-editable" id="userMatchesList">
                                         <!-- Populated dynamically -->
                                     </div>
-                                    <input type="text" class="input-field url-pattern-input" id="userMatchInput" placeholder="*://*.example.com/* (press Enter to add)" style="width: 100%; margin-top: 8px; font-family: monospace; font-size: 12px; display: none;">
+                                    <input type="text" class="input-field url-pattern-input" id="userMatchInput" placeholder="*://*.example.com/* (press Enter to add)">
                                 </div>
                                 
                                 <!-- User Excludes -->
-                                <div class="url-override-group" style="margin-bottom: 15px;">
-                                    <div class="url-override-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                                        <span class="label-text" style="font-weight: 500; color: var(--accent-error);">User @exclude</span>
-                                        <div class="url-override-actions" style="display: flex; gap: 4px;">
+                                <div class="url-override-group">
+                                    <div class="url-override-header">
+                                        <span class="label-text url-override-title danger">User @exclude</span>
+                                        <div class="url-override-actions">
                                             <button class="btn btn-sm" id="btnAddUserExclude" title="Add pattern">+ Add</button>
                                         </div>
                                     </div>
-                                    <div class="url-pattern-editable" id="userExcludesList" style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; min-height: 60px;">
+                                    <div class="url-pattern-editable" id="userExcludesList">
                                         <!-- Populated dynamically -->
                                     </div>
-                                    <input type="text" class="input-field url-pattern-input" id="userExcludeInput" placeholder="*://m.example.com/* (press Enter to add)" style="width: 100%; margin-top: 8px; font-family: monospace; font-size: 12px; display: none;">
+                                    <input type="text" class="input-field url-pattern-input" id="userExcludeInput" placeholder="*://m.example.com/* (press Enter to add)">
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="btn-group">
+                                <div class="btn-group editor-panel-footer">
                             <button class="btn btn-primary" id="btnSaveScriptSettings">Save Settings</button>
                             <button class="btn" id="btnResetScriptSettings">Reset to Defaults</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div id="externalsPanel" class="editor-panel">
-                    <div style="padding: 20px; overflow-y: auto; max-height: calc(100vh - 200px);">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-                            <h3 style="color: var(--text-primary);">External Resources</h3>
-                            <button class="btn" id="btnRefreshExternals" title="Re-fetch all external resources">Refresh All</button>
+                    <div class="editor-panel-shell">
+                        <div class="editor-panel-head">
+                            <div class="editor-panel-headline">
+                                <h3>External Resources</h3>
+                                <p>Review `@require` and `@resource` dependencies, then pull in library URLs without leaving the editor.</p>
+                            </div>
+                            <div class="editor-panel-actions">
+                                <button class="btn" id="btnRefreshExternals" title="Re-fetch all external resources">Refresh All</button>
+                            </div>
                         </div>
-                        <div class="settings-section" style="margin-bottom: 20px;">
+                        <div class="editor-panel-scroll">
+                            <div class="externals-panel">
+                                <div class="settings-section">
                             <div class="section-label">Find Libraries</div>
                             <div class="section-content">
-                                <div style="display:flex;gap:8px;margin-bottom:10px">
-                                    <input type="text" class="input-field" id="libSearchInput" placeholder="Search CDN libraries (e.g. jquery, lodash, react)" style="flex:1">
+                                <div class="editor-inline-search">
+                                    <input type="text" class="input-field" id="libSearchInput" placeholder="Search CDN libraries (e.g. jquery, lodash, react)">
                                     <button class="btn btn-primary" id="btnLibSearch">Search</button>
                                 </div>
-                                <div id="libSearchResults" style="font-size:12px;color:var(--text-muted)">Search cdnjs for popular libraries to add as @require</div>
+                                <div id="libSearchResults" class="panel-empty-inline">Search cdnjs for popular libraries to add as @require</div>
                             </div>
                         </div>
-                        <div class="settings-section" style="margin-bottom: 20px;">
+                                <div class="settings-section">
                             <div class="section-label">@require</div>
                             <div class="section-content">
-                                <div id="externalRequireList" style="color:var(--text-muted);font-size:12px">No @require directives</div>
+                                <div id="externalRequireList" class="panel-empty-inline">No @require directives</div>
                             </div>
                         </div>
-                        <div class="settings-section" style="margin-bottom: 20px;">
+                                <div class="settings-section">
                             <div class="section-label">@resource</div>
                             <div class="section-content">
-                                <div id="externalResourceList" style="color:var(--text-muted);font-size:12px">No @resource directives</div>
+                                <div id="externalResourceList" class="panel-empty-inline">No @resource directives</div>
+                            </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -3362,11 +6141,11 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     </div>
 
     <!-- Modal -->
-    <div class="modal-overlay" id="modal">
-        <div class="modal-content">
+    <div class="modal-overlay" id="modal" hidden aria-hidden="true">
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
             <div class="modal-header">
                 <span class="modal-title" id="modalTitle">Modal</span>
-                <button class="modal-close">&times;</button>
+                <button class="modal-close" type="button" aria-label="Close dialog">&times;</button>
             </div>
             <div class="modal-body" id="modalBody"></div>
             <div class="modal-footer" id="modalActions"></div>
@@ -3398,10 +6177,10 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <!-- See LazyLoader.TAB_MODULES, EDITOR_MODULES, ON_DEMAND_MODULES for the full map -->
 
     <!-- Progress Overlay -->
-    <div class="progress-overlay" id="progressOverlay">
+    <div class="progress-overlay" id="progressOverlay" hidden aria-hidden="true">
         <div class="progress-card">
             <div class="progress-title" id="progressTitle">Working...</div>
-            <div class="progress-bar-track">
+            <div class="progress-bar-track" id="progressBar" role="progressbar" aria-labelledby="progressTitle" aria-describedby="progressStatus" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                 <div class="progress-bar-fill" id="progressFill"></div>
             </div>
             <div class="progress-status" id="progressStatus"></div>

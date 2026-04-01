@@ -18,16 +18,25 @@ const ScriptAnalyzer = {
     return ScriptAnalyzer.analyze(code);
   },
 
+  _offscreenPromise: null,
   async _ensureOffscreen() {
     if (!chrome.offscreen) throw new Error('Offscreen API not available');
-    const existing = await chrome.offscreen.hasDocument().catch(() => false);
-    if (!existing) {
-      await chrome.offscreen.createDocument({
-        url: chrome.runtime.getURL('offscreen.html'),
-        reasons: ['DOM_SCRAPING'],
-        justification: 'AST-based script analysis with Acorn parser'
+    if (!this._offscreenPromise) {
+      this._offscreenPromise = (async () => {
+        const existing = await chrome.offscreen.hasDocument().catch(() => false);
+        if (!existing) {
+          await chrome.offscreen.createDocument({
+            url: chrome.runtime.getURL('offscreen.html'),
+            reasons: ['DOM_SCRAPING'],
+            justification: 'AST-based script analysis with Acorn parser'
+          });
+        }
+      })().catch(e => {
+        this._offscreenPromise = null;
+        throw e;
       });
     }
+    return this._offscreenPromise;
   },
 
   // ── Regex fallback (kept for parity & offline use) ─────────────────────────

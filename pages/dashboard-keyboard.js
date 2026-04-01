@@ -20,6 +20,8 @@ const KeyboardNav = (() => {
   let _vimMode = false;
   let _focusedIndex = -1;
   let _helpOverlay = null;
+  let _helpReturnFocus = null;
+  let _helpFocusManaged = false;
   let _styleEl = null;
   let _lastGTime = 0;    // for gg detection
   let _boundKeydown = null;
@@ -528,7 +530,7 @@ tr.kn-focused td {
       {
         title: 'Tab Navigation',
         shortcuts: [
-          ['Alt + 1\u20135', 'Switch dashboard tabs'],
+          ['Alt + 1\u20136', 'Switch dashboard tabs'],
           ['Ctrl + Tab', 'Cycle editor tabs'],
           ['Tab / Shift+Tab', 'Move focus between toolbar buttons'],
         ]
@@ -582,6 +584,7 @@ tr.kn-focused td {
 
   function openHelp() {
     if (_helpOverlay) return;
+    _helpReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
     _helpOverlay = document.createElement('div');
     _helpOverlay.className = 'kn-overlay';
@@ -612,16 +615,29 @@ tr.kn-focused td {
 
     document.body.appendChild(_helpOverlay);
 
-    // Focus trap: focus the close button
+    if (typeof A11y !== 'undefined' && typeof A11y.trapFocus === 'function') {
+      A11y.trapFocus(_helpOverlay.querySelector('.kn-help'));
+      _helpFocusManaged = true;
+    }
+
     _helpOverlay.querySelector('.kn-help-close')?.focus();
   }
 
   function closeHelp() {
     if (!_helpOverlay) return;
+    if (_helpFocusManaged && typeof A11y !== 'undefined' && typeof A11y.releaseFocus === 'function') {
+      A11y.releaseFocus();
+      _helpFocusManaged = false;
+    }
+    const returnFocus = _helpReturnFocus;
     _helpOverlay.classList.add('kn-closing');
     setTimeout(() => {
       _helpOverlay?.remove();
       _helpOverlay = null;
+      if (returnFocus?.isConnected) {
+        returnFocus.focus();
+      }
+      _helpReturnFocus = null;
     }, 150);
   }
 

@@ -68,7 +68,7 @@ const QuotaManager = (() => {
 
     for (const [key, value] of Object.entries(all)) {
       const size = JSON.stringify(value).length;
-      if (key.startsWith('script_')) { categories.scripts.count++; categories.scripts.bytes += size; }
+      if (key === 'userscripts' || key.startsWith('script_')) { categories.scripts.count++; categories.scripts.bytes += size; }
       else if (key.startsWith('values_') || key.startsWith('SV_GM_')) { categories.scriptValues.count++; categories.scriptValues.bytes += size; }
       else if (key.startsWith('require_cache_')) { categories.requireCache.count++; categories.requireCache.bytes += size; }
       else if (key.startsWith('res_cache_')) { categories.resourceCache.count++; categories.resourceCache.bytes += size; }

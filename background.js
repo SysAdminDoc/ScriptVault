@@ -1,4 +1,4 @@
-// ScriptVault v2.0.2 - Background Service Worker
+// ScriptVault v2.0.3 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -61,6 +61,68 @@ function formatBytes(bytes) {
   const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
+
+// ============================================================================
+// SHARED SETTINGS DEFAULTS
+// Generated from src/config/settings-defaults.json
+// ============================================================================
+const SCRIPTVAULT_SETTINGS_DEFAULTS = {
+  "enabled": true,
+  "showBadge": true,
+  "badgeColor": "#22c55e",
+  "theme": "dark",
+  "layout": "dark",
+  "notifyOnInstall": true,
+  "notifyOnUpdate": true,
+  "notifyOnError": false,
+  "editorTheme": "material-darker",
+  "editorFontSize": 13,
+  "editorTabSize": 2,
+  "editorLineWrapping": false,
+  "editorAutoComplete": true,
+  "editorMatchBrackets": true,
+  "editorAutoCloseBrackets": true,
+  "editorHighlightActiveLine": true,
+  "editorShowInvisibles": false,
+  "editorKeyMap": "default",
+  "autoUpdate": true,
+  "updateInterval": 86400000,
+  "lastUpdateCheck": 0,
+  "syncEnabled": false,
+  "syncProvider": "none",
+  "syncInterval": 3600000,
+  "lastSync": 0,
+  "webdavUrl": "",
+  "webdavUsername": "",
+  "webdavPassword": "",
+  "googleDriveConnected": false,
+  "googleDriveToken": "",
+  "googleDriveRefreshToken": "",
+  "googleClientId": "",
+  "googleDriveUser": null,
+  "dropboxToken": "",
+  "dropboxRefreshToken": "",
+  "dropboxUser": null,
+  "dropboxClientId": "",
+  "onedriveToken": "",
+  "onedriveRefreshToken": "",
+  "onedriveClientId": "",
+  "onedriveConnected": false,
+  "onedriveUser": null,
+  "language": "auto",
+  "debugMode": false,
+  "injectIntoFrames": true,
+  "xhrTimeout": 30000,
+  "blacklist": [],
+  "badgeInfo": "running",
+  "autoReload": false,
+  "pageFilterMode": "blacklist",
+  "blacklistedPages": "",
+  "whitelistedPages": "",
+  "deniedHosts": [],
+  "trustedSigningKeys": {},
+  "trashMode": "30"
+};
 
 // ============================================================================
 // INLINED: fflate v0.8.2 - Browser-only ZIP library
@@ -3234,11 +3296,14 @@ var CloudSyncProviders = {
 
     async upload(data, settings) {
       if (!settings.dropboxToken) throw new Error('Not authenticated with Dropbox');
-      
+
+      // Ensure token is fresh before upload
+      const token = await this.getValidToken(settings);
+
       const response = await fetch('https://content.dropboxapi.com/2/files/upload', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${settings.dropboxToken}`,
+          'Authorization': `Bearer ${token}`,
           'Dropbox-API-Arg': JSON.stringify({
             path: this.fileName,
             mode: 'overwrite',
@@ -3342,13 +3407,15 @@ var CloudSyncProviders = {
       const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
+      const state = crypto.randomUUID();
       const authUrl = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?' + new URLSearchParams({
         client_id: clientId,
         redirect_uri: redirectUri,
         response_type: 'code',
         scope: scopes,
         code_challenge: codeChallenge,
-        code_challenge_method: 'S256'
+        code_challenge_method: 'S256',
+        state
       }).toString();
 
       const responseUrl = await chrome.identity.launchWebAuthFlow({
@@ -3356,6 +3423,8 @@ var CloudSyncProviders = {
       });
 
       const url = new URL(responseUrl);
+      const returnedState = url.searchParams.get('state');
+      if (returnedState !== state) throw new Error('CSRF state mismatch');
       const code = url.searchParams.get('code');
       if (!code) throw new Error('No authorization code received');
 
@@ -3939,7 +4008,8 @@ var I18n = (function() {
     
     // Replace placeholders like {count}, {name}, etc.
     Object.keys(placeholders).forEach(placeholder => {
-      message = message.replace(new RegExp(`\{${placeholder}\}`, 'g'), placeholders[placeholder]);
+      const escaped = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      message = message.replace(new RegExp(`\\{${escaped}\\}`, 'g'), placeholders[placeholder]);
     });
     
     return message;
@@ -4011,69 +4081,22 @@ if (typeof self !== 'undefined') {
 // Settings Manager
 // ============================================================================
 
+function cloneDefaultSettings() {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(SCRIPTVAULT_SETTINGS_DEFAULTS);
+  }
+  return JSON.parse(JSON.stringify(SCRIPTVAULT_SETTINGS_DEFAULTS));
+}
+
 const SettingsManager = {
-  defaults: {
-    // General
-    enabled: true,
-    showBadge: true,
-    badgeColor: '#22c55e',
-    theme: 'dark',
-    
-    // Notifications
-    notifyOnInstall: true,
-    notifyOnUpdate: true,
-    notifyOnError: false,
-    
-    // Editor
-    editorTheme: 'material-darker',
-    editorFontSize: 13,
-    editorTabSize: 2,
-    editorLineWrapping: false,
-    editorAutoComplete: true,
-    editorMatchBrackets: true,
-    editorAutoCloseBrackets: true,
-    editorHighlightActiveLine: true,
-    editorShowInvisibles: false,
-    editorKeyMap: 'default',
-    
-    // Updates
-    autoUpdate: true,
-    updateInterval: 86400000, // 24 hours
-    lastUpdateCheck: 0,
-    
-    // Sync
-    syncEnabled: false,
-    syncProvider: 'none',
-    syncInterval: 3600000, // 1 hour
-    lastSync: 0,
-    webdavUrl: '',
-    webdavUsername: '',
-    webdavPassword: '',
-    // Google Drive (uses chrome.identity)
-    googleDriveConnected: false,
-    googleDriveUser: null,
-    // Dropbox
-    dropboxToken: '',
-    dropboxUser: null,
-    dropboxClientId: '',
-    // Language
-    language: 'auto',
-    
-    // Advanced
-    debugMode: false,
-    injectIntoFrames: true,
-    xhrTimeout: 30000,
-    
-    // Global Blacklist
-    blacklist: []
-  },
+  defaults: cloneDefaultSettings(),
   
   cache: null,
   
   async init() {
     if (this.cache !== null) return;
     const data = await chrome.storage.local.get('settings');
-    this.cache = { ...this.defaults, ...data.settings };
+    this.cache = { ...cloneDefaultSettings(), ...data.settings };
     console.log('[ScriptVault] Settings loaded');
   },
   
@@ -4094,7 +4117,8 @@ const SettingsManager = {
   },
   
   async reset() {
-    this.cache = { ...this.defaults };
+    this.defaults = cloneDefaultSettings();
+    this.cache = cloneDefaultSettings();
     await chrome.storage.local.set({ settings: this.cache });
     return this.cache;
   }
@@ -4173,16 +4197,16 @@ const ScriptStorage = {
   async search(query) {
     await this.init();
     const q = query.toLowerCase();
-    return Object.values(this.cache).filter(s => 
-      s.meta.name.toLowerCase().includes(q) ||
-      s.meta.description?.toLowerCase().includes(q) ||
-      s.meta.author?.toLowerCase().includes(q)
+    return Object.values(this.cache).filter(s =>
+      (s.meta?.name || '').toLowerCase().includes(q) ||
+      (s.meta?.description || '').toLowerCase().includes(q) ||
+      (s.meta?.author || '').toLowerCase().includes(q)
     );
   },
   
   async getByNamespace(namespace) {
     await this.init();
-    return Object.values(this.cache).filter(s => s.meta.namespace === namespace);
+    return Object.values(this.cache).filter(s => s.meta?.namespace === namespace);
   },
   
   async reorder(orderedIds) {
@@ -4206,7 +4230,7 @@ const ScriptStorage = {
       id: newId,
       meta: {
         ...original.meta,
-        name: original.meta.name + ' (Copy)'
+        name: (original.meta?.name || 'Unnamed') + ' (Copy)'
       },
       createdAt: Date.now(),
       updatedAt: Date.now()
@@ -4697,11 +4721,11 @@ const ResourceCache = {
       }
 
       // Generate data URI for binary resources (images, fonts, etc.)
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
+      const chunks = [];
+      for (let i = 0; i < bytes.length; i += 8192) {
+        chunks.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)));
       }
-      const base64 = btoa(binary);
+      const base64 = btoa(chunks.join(''));
       const dataUri = `data:${contentType};base64,${base64}`;
 
       await this.set(url, text, dataUri);
@@ -5657,9 +5681,13 @@ const NotificationSystem = {
       console.error('[ScriptVault] Failed to create error notification:', e);
     }
 
-    // Update rate limit
+    // Reset error count after notification and update rate limit
+    this._errorCounts[scriptId] = 0;
     this._rateLimits[scriptId] = Date.now();
-    await chrome.storage.local.set({ [this.STORAGE_KEY_RATE_LIMITS]: this._rateLimits });
+    await chrome.storage.local.set({
+      [this.STORAGE_KEY_ERROR_COUNTS]: this._errorCounts,
+      [this.STORAGE_KEY_RATE_LIMITS]: this._rateLimits
+    });
 
     await this._setClickContext(notifId, {
       action: 'openScript',
@@ -5741,9 +5769,8 @@ const NotificationSystem = {
     const prefs = await this.getPreferences();
     if (!prefs.digest) return;
 
-    // Check if alarm already exists
-    const existing = await chrome.alarms.get(this.ALARM_WEEKLY_DIGEST);
-    if (existing) return;
+    // Clear and recreate the alarm to ensure correct schedule
+    await chrome.alarms.clear(this.ALARM_WEEKLY_DIGEST).catch(() => {});
 
     // Schedule to fire in 7 days, repeating weekly
     const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -5931,6 +5958,13 @@ const NotificationSystem = {
   async handleAlarm(alarm) {
     if (alarm.name === this.ALARM_WEEKLY_DIGEST) {
       await this.generateDigest();
+      return true;
+    }
+    // Handle notification context cleanup alarms
+    if (alarm.name.startsWith('notifCtx_clean_')) {
+      const notifId = alarm.name.replace('notifCtx_clean_', '');
+      const ctxKey = `notifCtx_${notifId}`;
+      await chrome.storage.local.remove(ctxKey).catch(() => {});
       return true;
     }
     return false;
@@ -6528,13 +6562,11 @@ var EasyCloudSync = (() => {
   // ---------------------------------------------------------------------------
 
   function _debouncedSync() {
-    if (_debounceTimer) {
-      clearTimeout(_debounceTimer);
-    }
-    _debounceTimer = setTimeout(() => {
-      _debounceTimer = null;
-      _performSync().catch(e => warn('Debounced sync error:', e));
-    }, DEBOUNCE_MS);
+    // Use chrome.alarms for debounce to survive SW shutdown (DEBOUNCE_MS = 5s)
+    // chrome.alarms minimum is 1 minute for periodInMinutes, but delayInMinutes accepts fractional
+    const DEBOUNCE_ALARM = 'easycloud-debounce-sync';
+    chrome.alarms.create(DEBOUNCE_ALARM, { delayInMinutes: DEBOUNCE_MS / 60000 });
+    // The alarm handler in handleAlarm() will call _performSync()
   }
 
   // ---------------------------------------------------------------------------
@@ -6559,6 +6591,10 @@ var EasyCloudSync = (() => {
   }
 
   function _handleAlarm(alarm) {
+    if (alarm.name === 'easycloud-debounce-sync') {
+      _performSync().catch(e => warn('Debounced sync error:', e));
+      return;
+    }
     if (alarm.name !== ALARM_NAME) return;
     _performSync().catch(e => warn('Periodic sync error:', e));
   }
@@ -7013,6 +7049,7 @@ const BackupScheduler = (() => {
     const scripts = await ScriptStorage.getAll();
     const files = {};
     const usedNames = new Set();
+    let hasScriptStorage = false;
 
     for (const script of scripts) {
       let safeName = (script.meta?.name || 'unnamed')
@@ -7058,29 +7095,36 @@ const BackupScheduler = (() => {
         const values = await ScriptValues.getAll(script.id);
         if (values && Object.keys(values).length > 0) {
           files[`scripts/${safeName}.storage.json`] = fflate.strToU8(JSON.stringify({ data: values }, null, 2));
+          hasScriptStorage = true;
         }
       } catch (_) { /* ScriptValues may not be available */ }
     }
 
     // Global settings
+    let hasGlobalSettings = false;
     try {
       const globalSettings = await SettingsManager.get();
       files['global-settings.json'] = fflate.strToU8(JSON.stringify(globalSettings, null, 2));
+      hasGlobalSettings = true;
     } catch (_) {}
 
     // Folder structure (if any)
+    let hasFolders = false;
     try {
       const folderData = await chrome.storage.local.get('scriptFolders');
       if (folderData.scriptFolders) {
         files['folders.json'] = fflate.strToU8(JSON.stringify(folderData.scriptFolders, null, 2));
+        hasFolders = true;
       }
     } catch (_) {}
 
     // Workspace snapshots
+    let hasWorkspaces = false;
     try {
       const wsData = await chrome.storage.local.get('workspaces');
       if (wsData.workspaces) {
         files['workspaces.json'] = fflate.strToU8(JSON.stringify(wsData.workspaces, null, 2));
+        hasWorkspaces = true;
       }
     } catch (_) {}
 
@@ -7091,7 +7135,14 @@ const BackupScheduler = (() => {
     for (let i = 0; i < zipData.length; i += chunkSize) {
       binary += String.fromCharCode.apply(null, zipData.subarray(i, i + chunkSize));
     }
-    return { base64: btoa(binary), scriptCount: scripts.length };
+    return {
+      base64: btoa(binary),
+      scriptCount: scripts.length,
+      hasGlobalSettings,
+      hasFolders,
+      hasWorkspaces,
+      hasScriptStorage
+    };
   }
 
   /* ------------------------------------------------------------------ */
@@ -7180,7 +7231,14 @@ const BackupScheduler = (() => {
      */
     async createBackup(reason = 'manual') {
       try {
-        const { base64, scriptCount } = await _collectBackupData();
+        const {
+          base64,
+          scriptCount,
+          hasGlobalSettings,
+          hasFolders,
+          hasWorkspaces,
+          hasScriptStorage
+        } = await _collectBackupData();
         const sizeBytes = Math.round(base64.length * 0.75); // approximate binary size
         const settings = await _loadSettings();
 
@@ -7190,6 +7248,10 @@ const BackupScheduler = (() => {
           version: chrome.runtime.getManifest?.()?.version || '1.0',
           reason,
           scriptCount,
+          hasGlobalSettings,
+          hasFolders,
+          hasWorkspaces,
+          hasScriptStorage,
           size: sizeBytes,
           sizeFormatted: _formatBytes(sizeBytes),
           data: base64
@@ -7242,6 +7304,10 @@ const BackupScheduler = (() => {
         version: b.version,
         reason: b.reason,
         scriptCount: b.scriptCount,
+        hasGlobalSettings: !!b.hasGlobalSettings,
+        hasFolders: !!b.hasFolders,
+        hasWorkspaces: !!b.hasWorkspaces,
+        hasScriptStorage: !!b.hasScriptStorage,
         size: b.size,
         sizeFormatted: b.sizeFormatted
       }));
@@ -7268,6 +7334,11 @@ const BackupScheduler = (() => {
         const unzipped = fflate.unzipSync(zipBytes);
         const fileNames = Object.keys(unzipped);
         let restoredScripts = 0;
+        let skippedScripts = 0;
+        let restoredSettings = false;
+        let restoredFolders = false;
+        let restoredWorkspaces = false;
+        const errors = [];
 
         // --- Restore scripts ---
         const userScripts = fileNames.filter(n => n.endsWith('.user.js'));
@@ -7286,7 +7357,9 @@ const BackupScheduler = (() => {
             }
 
             const scriptName = optionsMeta.meta?.name || baseName.replace(/^scripts\//, '');
-            if (!options.scriptIds.includes(scriptName)) continue;
+            const scriptNs = optionsMeta.meta?.namespace || '';
+            const scriptKey = scriptNs ? `${scriptName}::${scriptNs}` : scriptName;
+            if (!options.scriptIds.includes(scriptName) && !options.scriptIds.includes(scriptKey)) continue;
 
             try {
               const meta = optionsMeta.meta || {};
@@ -7317,19 +7390,30 @@ const BackupScheduler = (() => {
                   if (storageData.data) {
                     await ScriptValues.setAll(scriptId, storageData.data);
                   }
-                } catch (_) {}
+                } catch (storageErr) {
+                  errors.push({ name: scriptName, error: storageErr.message || String(storageErr) });
+                }
               }
             } catch (importErr) {
               console.warn('[BackupScheduler] Script import error:', filename, importErr);
+              errors.push({ name: filename, error: importErr.message || String(importErr) });
             }
           }
         } else {
           // Full restore: use importFromZip for all scripts at once
           try {
-            await importFromZip(backup.data, { overwrite: true });
-            restoredScripts = userScripts.length;
+            const importResult = await importFromZip(backup.data, { overwrite: true });
+            if (importResult?.error) {
+              errors.push({ name: 'archive', error: importResult.error });
+            }
+            restoredScripts = importResult?.imported || 0;
+            skippedScripts = importResult?.skipped || 0;
+            if (Array.isArray(importResult?.errors)) {
+              errors.push(...importResult.errors);
+            }
           } catch (importErr) {
             console.warn('[BackupScheduler] Full import error:', importErr);
+            errors.push({ name: 'archive', error: importErr.message || String(importErr) });
           }
         }
 
@@ -7339,7 +7423,10 @@ const BackupScheduler = (() => {
             try {
               const settings = JSON.parse(fflate.strFromU8(unzipped['global-settings.json']));
               await SettingsManager.set(settings);
-            } catch (_) {}
+              restoredSettings = true;
+            } catch (settingsErr) {
+              errors.push({ name: 'global-settings.json', error: settingsErr.message || String(settingsErr) });
+            }
           }
 
           // Restore folders
@@ -7347,7 +7434,10 @@ const BackupScheduler = (() => {
             try {
               const folders = JSON.parse(fflate.strFromU8(unzipped['folders.json']));
               await chrome.storage.local.set({ scriptFolders: folders });
-            } catch (_) {}
+              restoredFolders = true;
+            } catch (foldersErr) {
+              errors.push({ name: 'folders.json', error: foldersErr.message || String(foldersErr) });
+            }
           }
 
           // Restore workspaces
@@ -7355,11 +7445,27 @@ const BackupScheduler = (() => {
             try {
               const workspaces = JSON.parse(fflate.strFromU8(unzipped['workspaces.json']));
               await chrome.storage.local.set({ workspaces });
-            } catch (_) {}
+              restoredWorkspaces = true;
+            } catch (workspacesErr) {
+              errors.push({ name: 'workspaces.json', error: workspacesErr.message || String(workspacesErr) });
+            }
           }
         }
 
-        return { success: true, restoredScripts };
+        const success = errors.length === 0
+          || restoredScripts > 0
+          || restoredSettings
+          || restoredFolders
+          || restoredWorkspaces;
+        return {
+          success,
+          restoredScripts,
+          skippedScripts,
+          restoredSettings,
+          restoredFolders,
+          restoredWorkspaces,
+          errors
+        };
       } catch (err) {
         console.error('[BackupScheduler] restoreBackup error:', err);
         return { success: false, error: err.message || String(err) };
@@ -7409,7 +7515,15 @@ const BackupScheduler = (() => {
           zipBytes[i] = binaryString.charCodeAt(i);
         }
         const unzipped = fflate.unzipSync(zipBytes);
-        const scriptFiles = Object.keys(unzipped).filter(n => n.endsWith('.user.js'));
+        const fileNames = Object.keys(unzipped);
+        const scriptFiles = fileNames.filter(n => n.endsWith('.user.js'));
+        const hasGlobalSettings = fileNames.includes('global-settings.json');
+        const hasFolders = fileNames.includes('folders.json');
+        const hasWorkspaces = fileNames.includes('workspaces.json');
+        const hasScriptStorage = fileNames.some(name => name.endsWith('.storage.json'));
+        if (scriptFiles.length === 0 && !hasGlobalSettings && !hasFolders && !hasWorkspaces) {
+          return { success: false, error: 'This ZIP does not look like a ScriptVault backup archive.' };
+        }
 
         const sizeBytes = Math.round(data.length * 0.75);
         const backup = {
@@ -7418,6 +7532,10 @@ const BackupScheduler = (() => {
           version: 'imported',
           reason: 'imported',
           scriptCount: scriptFiles.length,
+          hasGlobalSettings,
+          hasFolders,
+          hasWorkspaces,
+          hasScriptStorage,
           size: sizeBytes,
           sizeFormatted: _formatBytes(sizeBytes),
           data
@@ -7451,7 +7569,8 @@ const BackupScheduler = (() => {
       const merged = { ...(await _loadSettings()), ...settings };
       await _saveSettings(merged);
       await _registerAlarms();
-      return { ..._settings };
+      const prunedCount = await api.pruneOldBackups();
+      return { ..._settings, prunedCount };
     },
 
     /**
@@ -7460,11 +7579,12 @@ const BackupScheduler = (() => {
     async pruneOldBackups() {
       const settings = await _loadSettings();
       const backups = await _getBackupList();
-      if (backups.length <= settings.maxBackups) return;
+      if (backups.length <= settings.maxBackups) return 0;
 
       // Keep the newest N
       const pruned = backups.slice(0, settings.maxBackups);
       await _saveBackupList(pruned);
+      return Math.max(0, backups.length - pruned.length);
     },
 
     /**
@@ -7501,19 +7621,75 @@ const BackupScheduler = (() => {
         }
         const unzipped = fflate.unzipSync(zipBytes);
         const fileNames = Object.keys(unzipped);
+        const parseJsonFile = (fileName) => {
+          if (!unzipped[fileName]) return null;
+          try {
+            return JSON.parse(fflate.strFromU8(unzipped[fileName]));
+          } catch (_) {
+            return null;
+          }
+        };
+        const countEntries = (value) => {
+          if (Array.isArray(value)) return value.length;
+          if (value && typeof value === 'object') return Object.keys(value).length;
+          return 0;
+        };
+        const globalSettings = parseJsonFile('global-settings.json');
+        const folderData = parseJsonFile('folders.json');
+        const workspaceData = parseJsonFile('workspaces.json');
+        const folderList = Array.isArray(folderData) ? folderData : [];
+        const workspaceList = Array.isArray(workspaceData?.list)
+          ? workspaceData.list
+          : (Array.isArray(workspaceData) ? workspaceData : []);
 
         const scripts = fileNames
           .filter(n => n.endsWith('.user.js'))
           .map(n => {
             const baseName = n.replace(/\.user\.js$/, '');
             const displayName = baseName.replace(/^scripts\//, '');
+            let meta = {};
+            const optionsFile = `${baseName}.options.json`;
+            if (unzipped[optionsFile]) {
+              try {
+                meta = JSON.parse(fflate.strFromU8(unzipped[optionsFile]))?.meta || {};
+              } catch (_) {}
+            }
+            const name = meta.name || displayName;
+            const namespace = meta.namespace || '';
             return {
-              name: displayName,
+              id: namespace ? `${name}::${namespace}` : name,
+              name,
+              namespace,
               hasStorage: !!unzipped[`${baseName}.storage.json`]
             };
           });
+        const scriptsWithStorageCount = scripts.filter(script => script.hasStorage).length;
 
-        return scripts;
+        return {
+          scriptCount: scripts.length,
+          scripts,
+          scriptsWithStorageCount,
+          hasGlobalSettings: !!unzipped['global-settings.json'],
+          settingsKeyCount: countEntries(globalSettings),
+          hasFolders: !!unzipped['folders.json'],
+          folderCount: countEntries(folderData),
+          folders: folderList.map(folder => ({
+            id: folder?.id || '',
+            name: folder?.name || 'Unnamed folder',
+            scriptCount: Array.isArray(folder?.scriptIds) ? folder.scriptIds.length : 0
+          })),
+          hasWorkspaces: !!unzipped['workspaces.json'],
+          workspaceCount: workspaceList.length,
+          workspaces: workspaceList.map(workspace => ({
+            id: workspace?.id || '',
+            name: workspace?.name || 'Unnamed workspace',
+            scriptCount: workspace?.snapshot && typeof workspace.snapshot === 'object'
+              ? Object.keys(workspace.snapshot).length
+              : 0,
+            active: workspaceData?.active === workspace?.id
+          })),
+          activeWorkspaceId: workspaceData?.active || null
+        };
       } catch (err) {
         console.error('[BackupScheduler] inspectBackup error:', err);
         return null;
@@ -8656,10 +8832,10 @@ const PublicAPI = (() => {
       return {
         scripts: scripts.map(s => ({
           id: s.id,
-          name: s.name || s.id,
-          version: s.version || '1.0',
+          name: s.meta?.name || s.name || s.id,
+          version: s.meta?.version || s.version || '1.0',
           enabled: s.enabled !== false,
-          matchUrls: s.matches || s.match || []
+          matchUrls: s.meta?.match || s.matches || s.match || []
         }))
       };
     },
@@ -8692,12 +8868,22 @@ const PublicAPI = (() => {
 
       try {
         const result = await chrome.storage.local.get('userscripts');
-        const scripts = result.userscripts || [];
-        const idx = scripts.findIndex(s => s.id === scriptId || s.name === scriptId);
-        if (idx === -1) return { error: 'Script not found', scriptId };
-
-        scripts[idx].enabled = enabled;
-        await chrome.storage.local.set({ userscripts: scripts });
+        const data = result.userscripts || {};
+        const scripts = Array.isArray(data) ? data : Object.entries(data);
+        let found = false;
+        if (Array.isArray(data)) {
+          const idx = data.findIndex(s => s.id === scriptId || s.meta?.name === scriptId);
+          if (idx === -1) return { error: 'Script not found', scriptId };
+          data[idx].enabled = enabled;
+          found = true;
+        } else {
+          const entry = Object.entries(data).find(([k, s]) => k === scriptId || s.id === scriptId || s.meta?.name === scriptId);
+          if (!entry) return { error: 'Script not found', scriptId };
+          data[entry[0]].enabled = enabled;
+          found = true;
+        }
+        if (!found) return { error: 'Script not found', scriptId };
+        await chrome.storage.local.set({ userscripts: data });
 
         fireWebhook('script.toggled', { scriptId, enabled });
         return { ok: true, scriptId, enabled };
@@ -8734,14 +8920,23 @@ const PublicAPI = (() => {
         };
 
         const result = await chrome.storage.local.get('userscripts');
-        const scripts = result.userscripts || [];
+        const data = result.userscripts || {};
+        const scripts = Array.isArray(data) ? data : data;
 
-        // Check for duplicate
-        const existing = scripts.findIndex(s => s.id === scriptId);
-        if (existing !== -1) {
-          scripts[existing] = { ...scripts[existing], ...newScript, updatedAt: Date.now() };
+        // Check for duplicate — support both object and array formats
+        if (Array.isArray(scripts)) {
+          const existing = scripts.findIndex(s => s.id === scriptId);
+          if (existing !== -1) {
+            scripts[existing] = { ...scripts[existing], ...newScript, updatedAt: Date.now() };
+          } else {
+            scripts.push(newScript);
+          }
         } else {
-          scripts.push(newScript);
+          if (scripts[scriptId]) {
+            scripts[scriptId] = { ...scripts[scriptId], ...newScript, updatedAt: Date.now() };
+          } else {
+            scripts[scriptId] = newScript;
+          }
         }
 
         await chrome.storage.local.set({ userscripts: scripts });
@@ -8832,7 +9027,21 @@ const PublicAPI = (() => {
         return { type: 'scriptvault:install:response', error: 'Permission denied', action: 'installScript' };
       }
 
-      // Fetch the script only after authorization
+      // Validate URL - only allow https:// from known userscript hosts
+      try {
+        const parsedUrl = new URL(url);
+        if (parsedUrl.protocol !== 'https:') {
+          return { type: 'scriptvault:install:response', error: 'Only HTTPS URLs are allowed' };
+        }
+        const h = parsedUrl.hostname;
+        if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.startsWith('192.168.') || h.startsWith('10.') || h.startsWith('172.')) {
+          return { type: 'scriptvault:install:response', error: 'Internal URLs are not allowed' };
+        }
+      } catch {
+        return { type: 'scriptvault:install:response', error: 'Invalid URL' };
+      }
+
+      // Fetch the script only after authorization and URL validation
       try {
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -9066,6 +9275,14 @@ const PublicAPI = (() => {
         }
       }
       await savePermissions();
+    },
+
+    /**
+     * Get current API action permissions.
+     * @returns {object}
+     */
+    getPermissions() {
+      return { ...(_permissions || DEFAULT_PERMISSIONS) };
     },
 
     /**
@@ -9373,7 +9590,7 @@ const QuotaManager = (() => {
 
     for (const [key, value] of Object.entries(all)) {
       const size = JSON.stringify(value).length;
-      if (key.startsWith('script_')) { categories.scripts.count++; categories.scripts.bytes += size; }
+      if (key === 'userscripts' || key.startsWith('script_')) { categories.scripts.count++; categories.scripts.bytes += size; }
       else if (key.startsWith('values_') || key.startsWith('SV_GM_')) { categories.scriptValues.count++; categories.scriptValues.bytes += size; }
       else if (key.startsWith('require_cache_')) { categories.requireCache.count++; categories.requireCache.bytes += size; }
       else if (key.startsWith('res_cache_')) { categories.resourceCache.count++; categories.resourceCache.bytes += size; }
@@ -9512,16 +9729,25 @@ const ScriptAnalyzer = {
     return ScriptAnalyzer.analyze(code);
   },
 
+  _offscreenPromise: null,
   async _ensureOffscreen() {
     if (!chrome.offscreen) throw new Error('Offscreen API not available');
-    const existing = await chrome.offscreen.hasDocument().catch(() => false);
-    if (!existing) {
-      await chrome.offscreen.createDocument({
-        url: chrome.runtime.getURL('offscreen.html'),
-        reasons: ['DOM_SCRAPING'],
-        justification: 'AST-based script analysis with Acorn parser'
+    if (!this._offscreenPromise) {
+      this._offscreenPromise = (async () => {
+        const existing = await chrome.offscreen.hasDocument().catch(() => false);
+        if (!existing) {
+          await chrome.offscreen.createDocument({
+            url: chrome.runtime.getURL('offscreen.html'),
+            reasons: ['DOM_SCRAPING'],
+            justification: 'AST-based script analysis with Acorn parser'
+          });
+        }
+      })().catch(e => {
+        this._offscreenPromise = null;
+        throw e;
       });
     }
+    return this._offscreenPromise;
   },
 
   // ── Regex fallback (kept for parity & offline use) ─────────────────────────
@@ -9815,6 +10041,9 @@ const ScriptSigning = {
   // ── Trust management ──────────────────────────────────────────────────────
 
   async trustKey(publicKey, name) {
+    if (['__proto__', 'constructor', 'prototype'].includes(publicKey)) {
+      return { error: 'Invalid key' };
+    }
     const settings = await SettingsManager.get();
     const trustedKeys = settings.trustedSigningKeys || {};
     trustedKeys[publicKey] = { name: name || publicKey.slice(0, 12) + '…', addedAt: Date.now() };
@@ -9841,19 +10070,19 @@ const ScriptSigning = {
 
   async signAndEmbedInCode(code) {
     // Strip any existing signature tag
-    const stripped = code.replace(/\/\/\s*@signature\s+[^\n]+\n/g, '');
+    const stripped = code.replace(/\/\/\s*@signature\s+[^\r\n]+\r?\n?/g, '');
     const sig = await this.signScript(stripped);
     const sigLine = `// @signature ${sig.signature}|${sig.publicKey}|${sig.timestamp}`;
 
     // Insert just before ==/UserScript==
     if (stripped.includes('==/UserScript==')) {
-      return stripped.replace('// ==/UserScript==', sigLine + '\n// ==/UserScript==');
+      return stripped.replace(/(\/\/\s*==\/UserScript==)/, sigLine + '\n$1');
     }
     return sigLine + '\n' + stripped;
   },
 
   extractSignatureFromCode(code) {
-    const match = code.match(/\/\/\s*@signature\s+([^\n]+)/);
+    const match = code.match(/\/\/\s*@signature\s+([^\r\n]+)/);
     if (!match) return null;
     const parts = match[1].trim().split('|');
     if (parts.length < 2) return null;
@@ -9868,7 +10097,7 @@ const ScriptSigning = {
     const sigInfo = this.extractSignatureFromCode(code);
     if (!sigInfo) return { valid: false, reason: 'No signature found in script' };
     // Strip the signature line before verifying (we signed the code without it)
-    const strippedCode = code.replace(/\/\/\s*@signature\s+[^\n]+\n?/g, '');
+    const strippedCode = code.replace(/\/\/\s*@signature\s+[^\r\n]+\r?\n?/g, '');
     return this.verifyScript(strippedCode, sigInfo);
   }
 };
@@ -9944,20 +10173,15 @@ const WorkspaceManager = {
     const ws = this._cache.list.find(w => w.id === id);
     if (!ws) return { error: 'Workspace not found' };
 
-    // Apply snapshot — mutate cache directly, then flush once to avoid N storage writes
+    // Apply snapshot — use ScriptStorage.set() for each changed script for rollback safety
     const scripts = await ScriptStorage.getAll();
-    let changed = false;
     const now = Date.now();
     for (const s of scripts) {
       const shouldBeEnabled = ws.snapshot[s.id];
       if (shouldBeEnabled !== undefined && (s.enabled !== false) !== shouldBeEnabled) {
-        s.enabled = shouldBeEnabled;
-        s.updatedAt = now;
-        ScriptStorage.cache[s.id] = s;
-        changed = true;
+        await ScriptStorage.set(s.id, { ...s, enabled: shouldBeEnabled, updatedAt: now });
       }
     }
-    if (changed) await ScriptStorage.save();
 
     this._cache.active = id;
     await this._save();
@@ -9971,9 +10195,12 @@ const WorkspaceManager = {
 
   async delete(id) {
     await this._init();
-    this._cache.list = this._cache.list.filter(w => w.id !== id);
+    const index = this._cache.list.findIndex(w => w.id === id);
+    if (index === -1) return null;
+    const [removed] = this._cache.list.splice(index, 1);
     if (this._cache.active === id) this._cache.active = null;
     await this._save();
+    return removed;
   }
 };
 
@@ -10488,7 +10715,8 @@ const CloudSync = {
     return {
       version: 1,
       timestamp: Date.now(),
-      scripts: Array.from(scriptsMap.values())
+      scripts: Array.from(scriptsMap.values()),
+      tombstones: { ...(local.tombstones || {}), ...(remote.tombstones || {}) }
     };
   }
 };
@@ -10497,28 +10725,56 @@ const CloudSync = {
 // Import/Export
 // ============================================================================
 
-async function exportAllScripts() {
+async function exportAllScripts(options = {}) {
+  const {
+    includeSettings = true,
+    includeStorage = false
+  } = options;
   const scripts = await ScriptStorage.getAll();
-  const settings = await SettingsManager.get();
-  
-  return {
-    version: 2,
-    exportedAt: new Date().toISOString(),
-    settings: settings,
-    scripts: scripts.map(s => ({
+  const settings = includeSettings ? await SettingsManager.get() : null;
+
+  const exportedScripts = await Promise.all(scripts.map(async s => {
+    const entry = {
       id: s.id,
       code: s.code,
       enabled: s.enabled,
       position: s.position,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt
-    }))
+    };
+    if (includeSettings && s.settings && typeof s.settings === 'object') {
+      entry.settings = { ...s.settings };
+    }
+    if (includeStorage) {
+      const values = await ScriptValues.getAll(s.id);
+      if (values && Object.keys(values).length > 0) {
+        entry.storage = values;
+      }
+    }
+    return entry;
+  }));
+  
+  return {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    ...(includeSettings ? { settings } : {}),
+    scripts: exportedScripts
   };
 }
 
 async function importScripts(data, options = {}) {
-  const { overwrite = false } = options;
-  const results = { imported: 0, skipped: 0, errors: [] };
+  const {
+    overwrite = false,
+    importSettings = false,
+    importStorage = false
+  } = options;
+  const results = {
+    imported: 0,
+    skipped: 0,
+    errors: [],
+    settingsImported: false,
+    storageImported: 0
+  };
 
   if (!data.scripts || !Array.isArray(data.scripts)) {
     return { error: 'Invalid import format' };
@@ -10541,15 +10797,30 @@ async function importScripts(data, options = {}) {
         continue;
       }
 
+      const nextSettings = importSettings && script.settings && typeof script.settings === 'object'
+        ? { ...script.settings }
+        : { ...(existing?.settings || {}) };
+
       await ScriptStorage.set(script.id, {
         id: script.id,
         code: script.code,
         meta: parsed.meta,
         enabled: script.enabled ?? true,
+        settings: nextSettings,
         position: script.position ?? _importPosition++,
         createdAt: script.createdAt || Date.now(),
         updatedAt: script.updatedAt || Date.now()
       });
+      if (importStorage) {
+        const storedValues = script.storage && typeof script.storage === 'object' ? script.storage : {};
+        if (Object.keys(storedValues).length > 0) {
+          await ScriptValues.deleteAll(script.id);
+          await ScriptValues.setAll(script.id, storedValues);
+          results.storageImported++;
+        } else if (existing) {
+          await ScriptValues.deleteAll(script.id);
+        }
+      }
       results.imported++;
     } catch (e) {
       results.errors.push({ name: script.id, error: e.message });
@@ -10557,8 +10828,9 @@ async function importScripts(data, options = {}) {
   }
   
   // Import settings if present
-  if (data.settings && options.importSettings) {
+  if (data.settings && importSettings) {
     await SettingsManager.set(data.settings);
+    results.settingsImported = true;
   }
   
   // Re-register all scripts after import
@@ -10568,7 +10840,8 @@ async function importScripts(data, options = {}) {
 }
 
 // Export to ZIP (Tampermonkey-compatible format)
-async function exportToZip() {
+async function exportToZip(options = {}) {
+  const { includeStorage = true } = options;
   const scripts = await ScriptStorage.getAll();
   const files = {}; // fflate uses { filename: Uint8Array } format
   const usedNames = new Set();
@@ -10624,7 +10897,7 @@ async function exportToZip() {
     files[`${safeName}.options.json`] = fflate.strToU8(JSON.stringify(options, null, 2));
     
     // Add storage.json if script has stored values
-    const values = await ScriptValues.getAll(script.id);
+    const values = includeStorage ? await ScriptValues.getAll(script.id) : null;
     if (values && Object.keys(values).length > 0) {
       const storage = { data: values };
       files[`${safeName}.storage.json`] = fflate.strToU8(JSON.stringify(storage, null, 2));
@@ -10639,7 +10912,7 @@ async function exportToZip() {
     binary += String.fromCharCode.apply(null, zipData.subarray(i, i + chunkSize));
   }
   const base64 = btoa(binary);
-  return { zipData: base64, filename: `scriptvault-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip` };
+  return { zipData: base64, filename: `scriptvault-archive-${new Date().toISOString().replace(/[:.]/g, '-')}.zip` };
 }
 
 // Import from ZIP (supports Tampermonkey and other formats)
@@ -10858,6 +11131,7 @@ async function handleMessage(message, sender) {
         const existing = await ScriptStorage.get(id);
         
         const scriptSettings = { ...(existing?.settings || {}) };
+        delete scriptSettings.mergeConflict;
         // Mark as locally modified when saved from editor — prevents sync from overwriting
         if (data.markModified) scriptSettings.userModified = true;
 
@@ -10950,18 +11224,17 @@ async function handleMessage(message, sender) {
       case 'deleteScript': {
         const scriptId = data.id || data.scriptId;
         if (!scriptId) return { error: 'No script ID provided' };
+        const script = await ScriptStorage.get(scriptId);
+        if (!script) return { error: 'Script not found' };
         const settings = await SettingsManager.get();
         const trashMode = settings.trashMode || '30';
 
         if (trashMode !== 'disabled') {
           // Move to trash instead of permanent delete
-          const script = await ScriptStorage.get(scriptId);
-          if (script) {
-            const trashData = await chrome.storage.local.get('trash');
-            const trash = trashData.trash || [];
-            trash.push({ ...script, trashedAt: Date.now() });
-            await chrome.storage.local.set({ trash });
-          }
+          const trashData = await chrome.storage.local.get('trash');
+          const trash = trashData.trash || [];
+          trash.push({ ...script, trashedAt: Date.now() });
+          await chrome.storage.local.set({ trash });
         }
 
         await unregisterScript(scriptId);
@@ -10983,7 +11256,11 @@ async function handleMessage(message, sender) {
         await chrome.storage.local.set({ syncTombstones: tombstones });
 
         await updateBadge();
-        return { success: true };
+        return {
+          success: true,
+          scriptId,
+          scriptName: script.meta?.name || scriptId
+        };
       }
 
       case 'getTrash': {
@@ -11045,37 +11322,50 @@ async function handleMessage(message, sender) {
         const prev = self._toggleLocks.get(scriptId) || Promise.resolve();
         const togglePromise = prev.then(async () => {
           const script = await ScriptStorage.get(scriptId);
-          if (script) {
-            script.enabled = data.enabled;
-            script.updatedAt = Date.now();
-            await ScriptStorage.set(scriptId, script);
-
-            await unregisterScript(scriptId);
-            if (script.enabled) {
-              await registerScript(script);
-            }
-
-            await updateBadge();
-
-            try {
-              const tabs = await chrome.tabs.query({});
-              for (const tab of tabs) {
-                if (tab.url && doesScriptMatchUrl(script, tab.url)) {
-                  chrome.tabs.reload(tab.id);
-                }
-              }
-            } catch (e) {
-              debugLog('Toggle reload failed:', e.message);
-            }
+          if (!script) {
+            return { error: 'Script not found' };
           }
-        }).catch(e => debugLog('Toggle error:', e));
+
+          script.enabled = data.enabled !== undefined ? !!data.enabled : !script.enabled;
+          script.updatedAt = Date.now();
+          await ScriptStorage.set(scriptId, script);
+
+          await unregisterScript(scriptId);
+          if (script.enabled) {
+            await registerScript(script);
+          }
+
+          await updateBadge();
+
+          try {
+            const tabs = await chrome.tabs.query({});
+            for (const tab of tabs) {
+              if (tab.url && doesScriptMatchUrl(script, tab.url)) {
+                chrome.tabs.reload(tab.id);
+              }
+            }
+          } catch (e) {
+            debugLog('Toggle reload failed:', e.message);
+          }
+
+          return {
+            success: true,
+            script: {
+              id: script.id,
+              enabled: script.enabled
+            }
+          };
+        }).catch(e => {
+          debugLog('Toggle error:', e);
+          return { error: e?.message || 'Failed to update script' };
+        }).finally(() => {
+          // Clean up if this is still the latest promise (not superseded by a newer toggle)
+          if (self._toggleLocks.get(scriptId) === togglePromise) {
+            self._toggleLocks.delete(scriptId);
+          }
+        });
         self._toggleLocks.set(scriptId, togglePromise);
-        await togglePromise;
-        // Only delete if this is still the latest promise (not superseded by a newer toggle)
-        if (self._toggleLocks.get(scriptId) === togglePromise) {
-          self._toggleLocks.delete(scriptId);
-        }
-        return { success: true };
+        return await togglePromise;
       }
 
       case 'importScript': {
@@ -11199,6 +11489,35 @@ async function handleMessage(message, sender) {
         }
         return { userScriptsAvailable, setupRequired, setupMessage, chromeVersion: ver };
       }
+
+      case 'repairRuntimeState': {
+        try {
+          await configureUserScriptsWorld();
+          await setupContextMenus();
+          await registerAllScripts();
+          await updateBadge();
+          await setupAlarms();
+
+          const settings = await SettingsManager.get();
+          const ver = settings._chromeVersion || _getChromeVersion();
+          const userScriptsAvailable = settings._userScriptsAvailable !== false && !!chrome.userScripts;
+          let setupRequired = false;
+          let setupMessage = '';
+          if (!userScriptsAvailable) {
+            setupRequired = true;
+            if (ver >= 138) {
+              setupMessage = 'Enable "Allow User Scripts" for ScriptVault in chrome://extensions';
+            } else if (ver >= 120) {
+              setupMessage = 'Enable Developer Mode in chrome://extensions to run userscripts';
+            } else {
+              setupMessage = 'Chrome 120 or newer is required';
+            }
+          }
+          return { success: true, userScriptsAvailable, setupRequired, setupMessage, chromeVersion: ver };
+        } catch (error) {
+          return { success: false, error: error?.message || 'Runtime repair failed' };
+        }
+      }
         
       case 'getSetting':
         return await SettingsManager.get(data.key);
@@ -11295,7 +11614,9 @@ async function handleMessage(message, sender) {
           code: script.code,
           updatedAt: script.updatedAt || Date.now()
         });
-        // Trim to last 5 versions (allow extra room for rollback undos)
+        // Remove the target entry we're rolling back to (prevents duplicates)
+        script.versionHistory.splice(targetIdx, 1);
+        // Trim to last 5 versions
         if (script.versionHistory.length > 5) {
           script.versionHistory = script.versionHistory.slice(-5);
         }
@@ -11409,10 +11730,17 @@ async function handleMessage(message, sender) {
         if (!provider) return { success: false, error: 'Unknown provider: ' + providerName };
 
         try {
-          const exportData = await exportAllScripts();
+          const includeSettings = data?.includeSettings !== false;
+          const includeStorage = data?.includeStorage !== false;
+          const exportData = await exportAllScripts({ includeSettings, includeStorage });
           const settings = await SettingsManager.get();
           await provider.upload(exportData, settings);
-          return { success: true };
+          return {
+            success: true,
+            exported: exportData.scripts?.length || 0,
+            settingsIncluded: includeSettings,
+            storageIncluded: includeStorage
+          };
         } catch (e) {
           return { success: false, error: e.message };
         }
@@ -11427,8 +11755,12 @@ async function handleMessage(message, sender) {
           const settings = await SettingsManager.get();
           const remoteData = await provider.download(settings);
           if (!remoteData) return { success: false, error: 'No backup found on ' + providerName };
-          const result = await importScripts(remoteData, { overwrite: true });
-          return { success: true, imported: result.imported };
+          const result = await importScripts(remoteData, {
+            overwrite: true,
+            importSettings: data?.importSettings === true,
+            importStorage: data?.importStorage !== false
+          });
+          return { success: !result.error, ...result };
         } catch (e) {
           return { success: false, error: e.message };
         }
@@ -11551,7 +11883,7 @@ async function handleMessage(message, sender) {
       
       // Import/Export
       case 'exportAll':
-        return await exportAllScripts();
+        return await exportAllScripts(data?.options || {});
         
       case 'importAll':
         return await importScripts(data.data, data.options);
@@ -11573,11 +11905,13 @@ async function handleMessage(message, sender) {
           return { error: 'No valid userscripts found in backup file' };
         }
         const results = { imported: 0, skipped: 0, errors: [] };
+        const allExisting = await ScriptStorage.getAll();
+        let nextPosition = allExisting.length;
         for (const code of scriptBlocks) {
           try {
             const parsed = parseUserscript(code);
             if (parsed.error) { results.errors.push({ error: parsed.error }); continue; }
-            const existing = (await ScriptStorage.getAll()).find(s =>
+            const existing = allExisting.find(s =>
               s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
             );
             if (existing && !data.overwrite) { results.skipped++; continue; }
@@ -11585,7 +11919,7 @@ async function handleMessage(message, sender) {
             await ScriptStorage.set(id, {
               id, code, meta: parsed.meta,
               enabled: true,
-              position: existing?.position ?? (await ScriptStorage.getAll()).length,
+              position: existing?.position ?? nextPosition++,
               createdAt: existing?.createdAt || Date.now(),
               updatedAt: Date.now()
             });
@@ -11630,12 +11964,27 @@ async function handleMessage(message, sender) {
         if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.deleteBackup(data.backupId);
         return { error: 'BackupScheduler not available' };
       }
+      case 'importBackup': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.importBackup(data.zipData);
+        return { error: 'BackupScheduler not available' };
+      }
+      case 'exportBackup': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.exportBackup(data.backupId);
+        return { error: 'BackupScheduler not available' };
+      }
+      case 'inspectBackup': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.inspectBackup(data.backupId);
+        return { error: 'BackupScheduler not available' };
+      }
       case 'getBackupSettings': {
         if (typeof BackupScheduler !== 'undefined') return BackupScheduler.getSettings();
         return {};
       }
       case 'setBackupSettings': {
-        if (typeof BackupScheduler !== 'undefined') { await BackupScheduler.setSettings(data.settings); return { success: true }; }
+        if (typeof BackupScheduler !== 'undefined') {
+          const settings = await BackupScheduler.setSettings(data.settings);
+          return { success: true, settings };
+        }
         return { error: 'BackupScheduler not available' };
       }
 
@@ -11739,13 +12088,15 @@ async function handleMessage(message, sender) {
         try {
           const vmData = JSON.parse(text);
           if (vmData.scripts && Array.isArray(vmData.scripts)) {
+            const allExistingVM = await ScriptStorage.getAll();
+            let nextPosVM = allExistingVM.length;
             for (const vmScript of vmData.scripts) {
               try {
                 const code = vmScript.code || vmScript.custom?.code || '';
                 if (!code) { results.skipped++; continue; }
                 const parsed = parseUserscript(code);
                 if (parsed.error) { results.errors.push({ name: vmScript.props?.name, error: parsed.error }); continue; }
-                const existing = (await ScriptStorage.getAll()).find(s =>
+                const existing = allExistingVM.find(s =>
                   s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
                 );
                 if (existing && !data.overwrite) { results.skipped++; continue; }
@@ -11753,7 +12104,7 @@ async function handleMessage(message, sender) {
                 await ScriptStorage.set(id, {
                   id, code, meta: parsed.meta,
                   enabled: vmScript.config?.enabled !== false,
-                  position: existing?.position ?? (await ScriptStorage.getAll()).length,
+                  position: existing?.position ?? nextPosVM++,
                   createdAt: existing?.createdAt || Date.now(),
                   updatedAt: Date.now()
                 });
@@ -11769,6 +12120,8 @@ async function handleMessage(message, sender) {
         } catch { /* Not JSON — try text format */ }
 
         // Fallback: same as Tampermonkey text format
+        const allExistingVMFB = await ScriptStorage.getAll();
+        let nextPosVMFB = allExistingVMFB.length;
         const parts = text.split(/\n\s*\n(?=\/\/\s*==UserScript==)/);
         for (const part of parts) {
           const trimmed = part.trim();
@@ -11776,7 +12129,7 @@ async function handleMessage(message, sender) {
             try {
               const parsed = parseUserscript(trimmed);
               if (parsed.error) { results.errors.push({ error: parsed.error }); continue; }
-              const existing = (await ScriptStorage.getAll()).find(s =>
+              const existing = allExistingVMFB.find(s =>
                 s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
               );
               if (existing && !data.overwrite) { results.skipped++; continue; }
@@ -11784,7 +12137,7 @@ async function handleMessage(message, sender) {
               await ScriptStorage.set(id, {
                 id, code: trimmed, meta: parsed.meta,
                 enabled: true,
-                position: existing?.position ?? (await ScriptStorage.getAll()).length,
+                position: existing?.position ?? nextPosVMFB++,
                 createdAt: existing?.createdAt || Date.now(),
                 updatedAt: Date.now()
               });
@@ -11807,13 +12160,15 @@ async function handleMessage(message, sender) {
           const gmData = JSON.parse(text);
           // GM4 exports as array of script objects
           const scripts = Array.isArray(gmData) ? gmData : (gmData.scripts || []);
+          const allExistingGM = await ScriptStorage.getAll();
+          let nextPosGM = allExistingGM.length;
           for (const gmScript of scripts) {
             try {
               const code = gmScript.source || gmScript.code || gmScript.content || '';
               if (!code) { results.skipped++; continue; }
               const parsed = parseUserscript(code);
               if (parsed.error) { results.errors.push({ name: gmScript.name, error: parsed.error }); continue; }
-              const existing = (await ScriptStorage.getAll()).find(s =>
+              const existing = allExistingGM.find(s =>
                 s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
               );
               if (existing && !data.overwrite) { results.skipped++; continue; }
@@ -11821,7 +12176,7 @@ async function handleMessage(message, sender) {
               await ScriptStorage.set(id, {
                 id, code, meta: parsed.meta,
                 enabled: gmScript.enabled !== false,
-                position: existing?.position ?? (await ScriptStorage.getAll()).length,
+                position: existing?.position ?? nextPosGM++,
                 createdAt: existing?.createdAt || Date.now(),
                 updatedAt: Date.now()
               });
@@ -11839,7 +12194,7 @@ async function handleMessage(message, sender) {
       }
 
       case 'exportZip':
-        return await exportToZip();
+        return await exportToZip(data?.options || {});
 
       // Folders
       // Workspaces
@@ -11849,8 +12204,12 @@ async function handleMessage(message, sender) {
       case 'createWorkspace':
         return { workspace: await WorkspaceManager.create(data.name) };
 
-      case 'saveWorkspace':
-        return { workspace: await WorkspaceManager.save(data.id) };
+      case 'saveWorkspace': {
+        const workspace = await WorkspaceManager.save(data.id);
+        return workspace
+          ? { success: true, workspace }
+          : { error: 'Workspace not found' };
+      }
 
       case 'activateWorkspace':
         return await WorkspaceManager.activate(data.id);
@@ -11858,9 +12217,12 @@ async function handleMessage(message, sender) {
       case 'updateWorkspace':
         return { workspace: await WorkspaceManager.update(data.id, data.updates) };
 
-      case 'deleteWorkspace':
-        await WorkspaceManager.delete(data.id);
-        return { success: true };
+      case 'deleteWorkspace': {
+        const workspace = await WorkspaceManager.delete(data.id);
+        return workspace
+          ? { success: true, workspace }
+          : { error: 'Workspace not found' };
+      }
 
       // Network Log — returns flat array (limit optional) + stats
       case 'getNetworkLog': {
@@ -11933,6 +12295,28 @@ async function handleMessage(message, sender) {
       case 'signing_getTrustedKeys':
         return { keys: await ScriptSigning.getTrustedKeys() };
 
+      case 'publicApi_getTrustedOrigins':
+        if (typeof PublicAPI === 'undefined') return { origins: [] };
+        return { origins: PublicAPI.getTrustedOrigins() };
+
+      case 'publicApi_setTrustedOrigins':
+        if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
+        await PublicAPI.setTrustedOrigins(Array.isArray(data.origins) ? data.origins : []);
+        return { success: true, origins: PublicAPI.getTrustedOrigins() };
+
+      case 'publicApi_getPermissions':
+        if (typeof PublicAPI === 'undefined') return { permissions: {} };
+        return { permissions: PublicAPI.getPermissions() };
+
+      case 'publicApi_getAuditLog':
+        if (typeof PublicAPI === 'undefined') return { entries: [] };
+        return { entries: PublicAPI.getAuditLog(data.limit || 50) };
+
+      case 'publicApi_clearAuditLog':
+        if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
+        await PublicAPI.clearAuditLog();
+        return { success: true };
+
       case 'signing_generateNewKeypair':
         return ScriptSigning.generateAndStoreKeypair();
 
@@ -12000,6 +12384,29 @@ async function handleMessage(message, sender) {
       case 'GM_loadScript': {
         try {
           if (!data.url) return { error: 'No URL provided' };
+          // Enforce @connect for GM_loadScript (same rules as GM_xmlhttpRequest)
+          if (data.scriptId) {
+            const lsScript = await ScriptStorage.get(data.scriptId);
+            if (lsScript && lsScript.meta.connect && lsScript.meta.connect.length > 0) {
+              const lsConnectList = lsScript.meta.connect;
+              if (!lsConnectList.includes('*')) {
+                try {
+                  const lsHostname = new URL(data.url).hostname;
+                  const lsAllowed = lsConnectList.some(p => {
+                    if (p === 'self') {
+                      const mDomains = (lsScript.meta.match || []).map(m => {
+                        try { return new URL(m.replace(/\*/g, 'x')).hostname.replace(/^x\./, ''); } catch { return null; }
+                      }).filter(Boolean);
+                      return mDomains.some(d => lsHostname === d || lsHostname.endsWith('.' + d));
+                    }
+                    if (p === 'localhost') return lsHostname === 'localhost' || lsHostname === '127.0.0.1' || lsHostname === '::1';
+                    return lsHostname === p || lsHostname.endsWith('.' + p);
+                  });
+                  if (!lsAllowed) return { error: `Connection to ${lsHostname} blocked by @connect policy` };
+                } catch (e) {}
+              }
+            }
+          }
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), data.timeout || 30000);
           const response = await fetch(data.url, { signal: controller.signal });
@@ -12034,7 +12441,10 @@ async function handleMessage(message, sender) {
                   const isAllowed = connectList.some(pattern => {
                     if (pattern === 'self') {
                       // @connect self - allow same origin as script match domains
-                      return true;
+                      const matchDomains = (xhrScript.meta.match || []).map(m => {
+                        try { return new URL(m.replace(/\*/g, 'x')).hostname.replace(/^x\./, ''); } catch { return null; }
+                      }).filter(Boolean);
+                      return matchDomains.some(d => hostname === d || hostname.endsWith('.' + d));
                     }
                     if (pattern === 'localhost') {
                       return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
@@ -12046,7 +12456,9 @@ async function handleMessage(message, sender) {
                     console.warn(`[ScriptVault] @connect blocked: ${hostname} not in allowed list for ${xhrScript.meta.name}`);
                     return { error: `Connection to ${hostname} blocked by @connect policy`, type: 'error' };
                   }
-                } catch (e) {}
+                } catch (e) {
+                  return { error: 'Invalid URL', type: 'error' };
+                }
               }
             }
           }
@@ -12097,15 +12509,16 @@ async function handleMessage(message, sender) {
           // No 'mode' override — Chrome extensions with <all_urls> host permissions
           // bypass CORS automatically. Forcing mode:'cors' breaks requests to servers
           // that don't echo the extension origin (e.g. localhost with null CORS).
+          const method = (data.method || 'GET').toUpperCase();
           const fetchOptions = {
-            method: data.method || 'GET',
+            method,
             headers: data.headers || {},
             signal: controller.signal,
             credentials: data.anonymous ? 'omit' : 'include'
           };
-          
+
           // Add body for non-GET/HEAD requests
-          if (data.data && data.method !== 'GET' && data.method !== 'HEAD') {
+          if (data.data && method !== 'GET' && method !== 'HEAD') {
             fetchOptions.body = data.data;
           }
           
@@ -12497,6 +12910,10 @@ async function handleMessage(message, sender) {
         const allScripts = await ScriptStorage.getAll();
         const settings = await SettingsManager.get();
         const url = data.url || data;
+
+        if (isUrlBlockedByGlobalSettings(url, settings)) {
+          return [];
+        }
         
         // Filter scripts that match this URL (both enabled and disabled for popup display)
         const filtered = allScripts.filter(script => 
@@ -12878,7 +13295,8 @@ async function handleMessage(message, sender) {
         const key = `console_${data.scriptId}`;
         const existing = await chrome.storage.session.get(key);
         const entries = existing[key] || [];
-        entries.push(...(data.entries || []));
+        const incoming = (data.entries || []).slice(-200);
+        entries.push(...incoming);
         // Keep last 200 entries per script
         const trimmedEntries = entries.slice(-200);
         await chrome.storage.session.set({ [key]: trimmedEntries });
@@ -13212,8 +13630,9 @@ function matchIncludePattern(pattern, url, urlObj) {
       return re ? re.test(url) : false;
     }
 
-    // Convert glob to regex
+    // Convert glob to regex — collapse consecutive wildcards to prevent ReDoS
     let regex = pattern
+      .replace(/\*{2,}/g, '*')                // Collapse consecutive * to single
       .replace(/[.+^${}()|[\]\\]/g, '\\$&')  // Escape special chars
       .replace(/\*/g, '.*')                   // * -> .*
       .replace(/\?/g, '.');                   // ? -> .
@@ -13307,10 +13726,13 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   switch (info.menuItemId) {
     case 'scriptvault-new': {
-      const url = new URL(tab.url);
-      chrome.tabs.create({
-        url: `pages/dashboard.html?new=1&host=${encodeURIComponent(url.hostname)}`
-      });
+      if (!tab?.url) break;
+      try {
+        const url = new URL(tab.url);
+        chrome.tabs.create({
+          url: `pages/dashboard.html?new=1&host=${encodeURIComponent(url.hostname)}`
+        });
+      } catch { chrome.tabs.create({ url: 'pages/dashboard.html?new=1' }); }
       break;
     }
     case 'scriptvault-dashboard':
@@ -13468,6 +13890,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
   _backgroundTaskRunning = true;
+  // Safety timeout: release mutex after 5 minutes even if task hangs
+  const safetyTimer = setTimeout(() => { _backgroundTaskRunning = false; }, 300000);
   try {
     if (alarm.name === 'autoUpdate') {
       await UpdateSystem.autoUpdate();
@@ -13477,6 +13901,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   } catch (e) {
     console.error('[ScriptVault] Alarm handler error:', e);
   } finally {
+    clearTimeout(safetyTimer);
     _backgroundTaskRunning = false;
   }
 });
@@ -13484,8 +13909,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 async function setupAlarms() {
   const settings = await SettingsManager.get();
   
-  // Clear existing alarms
-  await chrome.alarms.clearAll();
+  // Clear only the alarms we manage here (preserve notification/backup alarms)
+  await chrome.alarms.clear('autoUpdate').catch(() => {});
+  await chrome.alarms.clear('autoSync').catch(() => {});
   
   // Setup auto-update alarm
   // checkInterval is hours from dashboard, updateInterval is ms legacy
@@ -13554,11 +13980,13 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   const tracker = self._openTabTrackers?.get(tabId);
   if (tracker) {
     chrome.tabs.sendMessage(tracker.callerTabId, {
-      action: 'tabClosed',
-      data: { closedTabId: tabId, scriptId: tracker.scriptId }
+      action: 'openedTabClosed',
+      data: { tabId, scriptId: tracker.scriptId }
     }).catch(() => {});
     self._openTabTrackers.delete(tabId);
   }
+  // Clean up audio watch tracking for closed tabs
+  if (self._audioWatchedTabs) self._audioWatchedTabs.delete(tabId);
 });
 
 // GM_notification onclick/ondone: fire callbacks on notification interaction
@@ -13567,7 +13995,7 @@ chrome.notifications.onClicked.addListener((notifId) => {
   if (cb && cb.hasOnclick) {
     chrome.tabs.sendMessage(cb.tabId, {
       action: 'notificationEvent',
-      data: { notifId, scriptId: cb.scriptId, event: 'click' }
+      data: { notifId, scriptId: cb.scriptId, type: 'click' }
     }).catch(() => {});
   }
 });
@@ -13577,7 +14005,7 @@ chrome.notifications.onClosed.addListener((notifId, byUser) => {
   if (cb && cb.hasOndone) {
     chrome.tabs.sendMessage(cb.tabId, {
       action: 'notificationEvent',
-      data: { notifId, scriptId: cb.scriptId, event: 'done', byUser }
+      data: { notifId, scriptId: cb.scriptId, type: 'done', byUser }
     }).catch(() => {});
   }
   if (self._notifCallbacks) self._notifCallbacks.delete(notifId);
@@ -13650,6 +14078,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
     if (!code.includes('==UserScript==')) {
       debugLog('Not a valid userscript, allowing normal navigation');
       _pendingFetches.delete(url);
+      await chrome.storage.local.remove('pendingInstall');
       return;
     }
     
@@ -14384,7 +14813,7 @@ async function fetchRequireScript(url) {
       const age = Date.now() - (cached[cacheKey].timestamp || 0);
       if (age < 7 * 24 * 60 * 60 * 1000) {
         debugLog('Using persistent cached @require:', url);
-        requireCache.set(url, cached[cacheKey].code);
+        requireCache.set(fetchUrl, cached[cacheKey].code);
         return cached[cacheKey].code;
       }
     }
@@ -14509,7 +14938,7 @@ function _makeRuleId(scriptId, index) {
   let h = 0;
   for (let i = 0; i < scriptId.length; i++) h = (h * 31 + scriptId.charCodeAt(i)) & 0x7fffffff;
   // Use upper 21 bits for script hash (2M buckets) + lower 10 bits for index (1024 rules)
-  return (((h & 0x1fffff) << 10) | (index & 0x3ff)) || 1;
+  return (((h & 0x1fffff) << 10) | (index & 0x3ff)) + 1;
 }
 
 // Translate GM_webRequest rule selector/action to declarativeNetRequest format
@@ -14747,11 +15176,10 @@ ${req.code}
   
   // console.log('[ScriptVault] Script initializing:', meta.name, 'Channel:', CHANNEL_ID);
   
-  // Grant checking - @grant none means NO APIs except GM_info
+  // Grant checking - @grant none or empty grants means NO APIs except GM_info
   const hasNone = grantSet.has('none');
   const hasGrant = (n) => {
-    if (hasNone) return false;
-    if (grants.length === 0) return true;
+    if (hasNone || grants.length === 0) return false;
     return grantSet.has(n) || grantSet.has('*');
   };
   
@@ -15483,7 +15911,7 @@ ${req.code}
     const dataUri = await sendToBackground('GM_getResourceURL', { scriptId, name });
     if (!dataUri) return null;
     // Return data URI by default, or convert to blob URL if requested
-    if (isBlobUrl === false) return dataUri;
+    if (isBlobUrl !== true) return dataUri;
     try {
       const resp = await fetch(dataUri);
       const blob = await resp.blob();
@@ -15510,7 +15938,22 @@ ${req.code}
     if (attrs) {
       Object.entries(attrs).forEach(([k, v]) => {
         if (k === 'textContent') el.textContent = v;
-        else if (k === 'innerHTML') el.innerHTML = v;
+        else if (k === 'innerHTML') {
+          // Sanitize: strip event handlers and script tags to prevent XSS
+          const temp = document.createElement('template');
+          temp.innerHTML = v;
+          temp.content.querySelectorAll('script').forEach(s => s.remove());
+          temp.content.querySelectorAll('*').forEach(node => {
+            for (const attr of [...node.attributes]) {
+              const lowerName = attr.name.toLowerCase();
+              const lowerValue = attr.value.trim().toLowerCase();
+              if (lowerName.startsWith('on') || lowerValue.startsWith('javascript:') || lowerValue.startsWith('vbscript:')) {
+                node.removeAttribute(attr.name);
+              }
+            }
+          });
+          el.innerHTML = temp.innerHTML;
+        }
         else el.setAttribute(k, v);
       });
     }
@@ -15529,7 +15972,7 @@ ${req.code}
     if (!url) throw new Error('GM_loadScript: No URL provided');
     if (!options.force && _loadedScripts.has(url)) return;
     const result = await sendToBackground('GM_loadScript', { url, timeout: options.timeout });
-    if (result.error) throw new Error('GM_loadScript: ' + result.error);
+    if (!result || result.error) throw new Error('GM_loadScript: ' + (result?.error || 'request timed out'));
     // Temporarily mask module systems so UMD scripts create window globals
     const _savedModule = window.module;
     const _savedExports = window.exports;
@@ -15600,7 +16043,7 @@ ${req.code}
         return;
       }
       sendToBackground('GM_cookie_list', details || {}).then(r => {
-        if (callback) callback(r.cookies || [], r.error ? new Error(r.error) : undefined);
+        if (callback) callback(r?.cookies || [], r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback([], e); });
     },
     set: (details, callback) => {
@@ -15609,7 +16052,7 @@ ${req.code}
         return;
       }
       sendToBackground('GM_cookie_set', details || {}).then(r => {
-        if (callback) callback(r.error ? new Error(r.error) : undefined);
+        if (callback) callback(r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback(e); });
     },
     delete: (details, callback) => {
@@ -15618,7 +16061,7 @@ ${req.code}
         return;
       }
       sendToBackground('GM_cookie_delete', details || {}).then(r => {
-        if (callback) callback(r.error ? new Error(r.error) : undefined);
+        if (callback) callback(r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback(e); });
     }
   };
@@ -15809,7 +16252,9 @@ ${req.code}
     window.addEventListener = new Proxy(window.addEventListener, {
       apply(target, thisArg, args) {
         if (args[0] === 'urlchange') {
-          _urlChangeHandlers.push(args[1]);
+          if (!_urlChangeHandlers.includes(args[1])) {
+            _urlChangeHandlers.push(args[1]);
+          }
           return;
         }
         return Reflect.apply(target, thisArg, args);

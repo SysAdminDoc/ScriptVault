@@ -164,8 +164,8 @@
   });
   
   // Expose channel ID for userscripts and signal ready
-  window.__ScriptVault_ChannelID__ = CHANNEL_ID;
-  window.__ScriptVault_BridgeReady__ = true;
+  Object.defineProperty(window, '__ScriptVault_ChannelID__', { value: CHANNEL_ID, writable: false, configurable: false });
+  Object.defineProperty(window, '__ScriptVault_BridgeReady__', { value: true, writable: false, configurable: false });
   
   window.postMessage({
     channel: CHANNEL_ID,

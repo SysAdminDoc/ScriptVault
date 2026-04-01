@@ -25,6 +25,7 @@
   // ── Message listener ────────────────────────────────────────────────────────
   window.addEventListener('message', function (e) {
     if (!e.data || typeof e.data !== 'object') return;
+    if (frame && e.source !== frame.contentWindow) return;
     const msg = e.data;
 
     switch (msg.type) {
@@ -73,7 +74,8 @@
   function sendToFrame(msg) {
     if (_useFallback || !frame?.contentWindow) return;
     try {
-      frame.contentWindow.postMessage(msg, new URL(frame.src, location.href).origin || '*');
+      const origin = new URL(frame.src, location.href).origin;
+      frame.contentWindow.postMessage(msg, (origin && origin !== 'null') ? origin : '*');
     } catch {
       frame.contentWindow.postMessage(msg, '*');
     }
@@ -219,10 +221,19 @@
       return lines[n] || '';
     },
     replaceRange(text, from, to) {
-      // Minimal line-level replace for comment toggle
       const lines = _value.split('\n');
-      if (from && to && from.line === to.line) {
-        lines[from.line] = text;
+      if (from && to) {
+        if (from.line === to.line) {
+          // Single-line replace: splice within the line
+          const line = lines[from.line] || '';
+          lines[from.line] = line.slice(0, from.ch) + text + line.slice(to.ch);
+        } else {
+          // Multi-line replace: stitch first line prefix + text + last line suffix
+          const prefix = (lines[from.line] || '').slice(0, from.ch);
+          const suffix = (lines[to.line] || '').slice(to.ch);
+          const replacement = prefix + text + suffix;
+          lines.splice(from.line, to.line - from.line + 1, replacement);
+        }
         const newVal = lines.join('\n');
         _value = newVal;
         this.setValue(newVal);
@@ -236,7 +247,20 @@
 
     // No-op CodeMirror methods not applicable to Monaco
     clearHistory() {},
-    setCursor() {},
+    setCursor(line = 0, ch = 0) {
+      if (_useFallback && fallbackTextarea) {
+        const lines = (fallbackTextarea.value || '').split('\n');
+        const targetLine = Math.max(0, Math.min(line, lines.length - 1));
+        const targetCh = Math.max(0, Math.min(ch, (lines[targetLine] || '').length));
+        let offset = 0;
+        for (let i = 0; i < targetLine; i++) offset += (lines[i]?.length || 0) + 1;
+        const pos = offset + targetCh;
+        fallbackTextarea.focus();
+        fallbackTextarea.setSelectionRange(pos, pos);
+        return;
+      }
+      sendToFrame({ type: 'set-position', line: line + 1, col: ch + 1 });
+    },
     markText() { return { clear() {} }; },
     getSearchCursor() { return { findNext() { return false; }, from() {}, to() {} }; },
     showHint() { /* Monaco handles completions internally */ },

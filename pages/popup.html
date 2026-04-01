@@ -73,6 +73,16 @@
             --popup-danger: #ef4444;
         }
 
+        html[data-theme="dark"],
+        html[data-theme="catppuccin"],
+        html[data-theme="oled"] {
+            color-scheme: dark;
+        }
+
+        html[data-theme="light"] {
+            color-scheme: light;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -80,27 +90,63 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--popup-bg);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(180deg, var(--popup-bg-raised) 0%, var(--popup-bg) 30%, var(--popup-bg) 100%);
             color: var(--popup-text);
             width: 360px;
             min-height: 100px;
             font-size: 14px;
+            padding: 10px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        button, input, select, a {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at top right, rgba(76, 175, 80, 0.14), transparent 34%),
+                linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 38%);
+            opacity: 0.9;
         }
 
         /* Header with enabled toggle */
         .header {
             display: flex;
             align-items: center;
-            padding: 8px 12px;
+            width: 100%;
+            padding: 10px 12px;
             background: var(--popup-bg-raised);
-            border-bottom: 1px solid var(--popup-border);
+            border: 1px solid var(--popup-border);
+            border-radius: 16px;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
             cursor: pointer;
             user-select: none;
+            text-align: left;
+            color: inherit;
+            font: inherit;
+            transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
         }
 
         .header:hover {
             background: var(--popup-bg-hover);
+            border-color: rgba(76, 175, 80, 0.35);
+            transform: translateY(-1px);
+            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
         }
 
         .header-check {
@@ -116,18 +162,21 @@
 
         .header-text {
             flex: 1;
-            font-weight: 500;
+            font-weight: 600;
+            letter-spacing: 0.01em;
         }
 
         .header-count {
-            background: var(--popup-accent);
+            background: linear-gradient(135deg, var(--popup-accent), rgba(96, 165, 250, 0.92));
             color: #fff;
             font-size: 11px;
             font-weight: 600;
-            padding: 2px 7px;
-            border-radius: 10px;
-            min-width: 20px;
+            font-variant-numeric: tabular-nums;
+            padding: 3px 8px;
+            border-radius: 999px;
+            min-width: 24px;
             text-align: center;
+            box-shadow: 0 8px 18px rgba(76, 175, 80, 0.25);
         }
 
         .header-count:empty {
@@ -142,20 +191,36 @@
         .script-list {
             max-height: 300px;
             overflow-y: auto;
+            overscroll-behavior: contain;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--popup-border);
+            border-radius: 18px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
         }
 
         .script-item {
             display: flex;
             align-items: center;
-            padding: 8px 12px;
-            border-bottom: 1px solid var(--popup-border-subtle);
+            padding: 10px 12px;
+            border: 1px solid var(--popup-border-subtle);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.03);
             cursor: pointer;
-            transition: background 0.15s;
+            transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+            content-visibility: auto;
+            contain-intrinsic-size: 56px;
         }
 
         .script-item:hover,
         .script-item:focus-within {
             background: var(--popup-bg-hover);
+            border-color: rgba(76, 175, 80, 0.28);
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
         }
 
         .script-toggle {
@@ -203,15 +268,14 @@
         }
 
         .script-icon {
-            width: 20px;
-            height: 20px;
+            width: 22px;
+            height: 22px;
             margin-right: 8px;
-            border-radius: 4px;
+            border-radius: 7px;
             display: flex;
             align-items: center;
             justify-content: center;
             background: var(--popup-bg-hover);
-            font-size: 12px;
             flex-shrink: 0;
             overflow: hidden;
         }
@@ -219,21 +283,85 @@
         .script-icon img {
             width: 16px;
             height: 16px;
-            border-radius: 2px;
-            object-fit: contain;
+            border-radius: 4px;
+            object-fit: cover;
         }
 
-        .script-name {
+        .script-icon-badge {
+            width: 100%;
+            height: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: inherit;
+            background:
+                linear-gradient(135deg,
+                    hsla(var(--script-icon-hue, 145), 72%, 56%, 0.24),
+                    hsla(calc(var(--script-icon-hue, 145) + 34), 72%, 60%, 0.12));
+            border: 1px solid hsla(var(--script-icon-hue, 145), 72%, 58%, 0.24);
+            color: hsl(var(--script-icon-hue, 145), 88%, 80%);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+
+        .script-icon-badge.compact {
+            font-size: 11px;
+            letter-spacing: 0;
+        }
+
+        .script-icon-badge.minimal {
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(255,255,255,0.08);
+            color: transparent;
+        }
+
+        .script-icon-badge.minimal::before {
+            content: '';
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: var(--popup-text-muted);
+        }
+
+        .script-name-btn {
             flex: 1;
+            min-width: 0;
+            display: inline-flex;
+            align-items: baseline;
+            gap: 6px;
+            padding: 0;
+            border: none;
+            background: none;
+            color: inherit;
+            font: inherit;
+            text-align: left;
+            cursor: pointer;
+            transition: color 0.18s ease;
+        }
+
+        .script-name-label {
+            min-width: 0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             font-size: 13px;
         }
 
-        .script-name .script-version {
+        .script-name-btn:hover .script-name-label,
+        .script-name-btn:focus-visible .script-name-label {
+            color: var(--popup-accent);
+            text-decoration: underline;
+            text-decoration-color: rgba(76, 175, 80, 0.45);
+            text-underline-offset: 2px;
+        }
+
+        .script-name-btn .script-version {
             color: var(--popup-text-muted);
             font-size: 11px;
+            flex-shrink: 0;
         }
 
         .script-perf {
@@ -265,7 +393,10 @@
             margin-left: 8px;
             flex-shrink: 0;
             padding: 4px;
+            border: none;
             border-radius: 4px;
+            background: none;
+            font: inherit;
             transition: color 0.15s, background 0.15s;
             display: flex;
             align-items: center;
@@ -279,11 +410,11 @@
         }
 
         .script-item.not-running {
-            opacity: 0.55;
+            opacity: 0.72;
         }
 
         .script-item.not-running:hover {
-            opacity: 0.8;
+            opacity: 0.92;
         }
 
         .script-more svg {
@@ -308,7 +439,13 @@
         }
 
         .script-dropdown-item {
+            display: block;
+            width: 100%;
             padding: 6px 12px;
+            border: none;
+            background: none;
+            text-align: left;
+            font: inherit;
             font-size: 12px;
             cursor: pointer;
             transition: background 0.15s;
@@ -327,6 +464,11 @@
             background: rgba(239, 68, 68, 0.1);
         }
 
+        .script-dropdown-item.danger.confirming {
+            background: rgba(239, 68, 68, 0.14);
+            color: #fecaca;
+        }
+
         .script-dropdown-cmds:empty { display: none; }
         .script-dropdown-cmds {
             border-bottom: 1px solid var(--popup-border-subtle);
@@ -334,7 +476,13 @@
             margin-bottom: 2px;
         }
         .script-dropdown-cmd {
+            display: block;
+            width: 100%;
             padding: 5px 12px;
+            border: none;
+            background: none;
+            text-align: left;
+            font: inherit;
             font-size: 11px;
             cursor: pointer;
             color: var(--popup-accent);
@@ -348,15 +496,29 @@
 
         /* Menu items */
         .menu-section {
-            border-top: 1px solid var(--popup-border);
+            border: 1px solid var(--popup-border);
+            border-radius: 16px;
+            overflow: hidden;
+            background: var(--popup-bg-raised);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
         }
 
         .menu-item {
             display: flex;
             align-items: center;
-            padding: 6px 12px;
+            width: 100%;
+            padding: 9px 12px;
+            border: none;
+            background: none;
+            text-align: left;
+            color: inherit;
+            font: inherit;
             cursor: pointer;
-            transition: background 0.15s;
+            transition: background 0.18s ease, color 0.18s ease;
+        }
+
+        .menu-item + .menu-item {
+            border-top: 1px solid var(--popup-border-subtle);
         }
 
         .menu-item:hover {
@@ -394,7 +556,7 @@
 
         /* Submenu */
         .submenu {
-            background: var(--popup-bg);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
             display: none;
         }
 
@@ -418,9 +580,11 @@
             outline-offset: -2px;
         }
         .script-toggle:focus-visible,
+        .script-name-btn:focus-visible,
         .script-more:focus-visible,
         .script-quick-edit:focus-visible,
-        .script-dropdown-item:focus-visible {
+        .script-dropdown-item:focus-visible,
+        .script-dropdown-cmd:focus-visible {
             outline: 2px solid var(--popup-accent);
             outline-offset: 1px;
             border-radius: 4px;
@@ -451,10 +615,17 @@
         .footer {
             display: flex;
             align-items: center;
-            padding: 6px 12px;
-            background: var(--popup-bg-raised);
-            border-top: 1px solid var(--popup-border);
+            width: 100%;
+            padding: 10px 12px;
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.16), rgba(96, 165, 250, 0.12) 120%);
+            border: 1px solid rgba(76, 175, 80, 0.32);
+            border-radius: 16px;
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2);
             cursor: pointer;
+            color: inherit;
+            font: inherit;
+            text-align: left;
+            transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
         }
 
         /* Setup Warning Banner */
@@ -465,6 +636,8 @@
             color: white;
             font-size: 12px;
             line-height: 1.4;
+            border-radius: 16px;
+            box-shadow: 0 14px 28px rgba(127, 29, 29, 0.28);
         }
 
         .setup-warning.visible {
@@ -488,8 +661,10 @@
             display: inline-block;
             padding: 4px 10px;
             background: rgba(255,255,255,0.2);
+            border: none;
             border-radius: 4px;
             color: white;
+            font: inherit;
             text-decoration: none;
             font-weight: 500;
             cursor: pointer;
@@ -500,7 +675,10 @@
         }
 
         .footer:hover {
-            background: var(--popup-bg-hover);
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.22), rgba(96, 165, 250, 0.16) 120%);
+            border-color: rgba(76, 175, 80, 0.45);
+            transform: translateY(-1px);
+            box-shadow: 0 16px 34px rgba(0, 0, 0, 0.24);
         }
 
         .footer-icon {
@@ -520,25 +698,31 @@
 
         .footer-text {
             font-size: 13px;
+            font-weight: 600;
         }
 
         /* Toast notification */
         .popup-toast {
             position: fixed;
-            bottom: 8px;
+            bottom: 14px;
             left: 50%;
             transform: translateX(-50%) translateY(40px);
             background: var(--popup-accent);
             color: #fff;
             font-size: 12px;
             font-weight: 500;
-            padding: 5px 14px;
-            border-radius: 6px;
+            padding: 7px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
             opacity: 0;
             transition: opacity 0.2s, transform 0.2s;
             z-index: 2000;
             pointer-events: none;
             white-space: nowrap;
+            font-variant-numeric: tabular-nums;
         }
 
         .popup-toast.show {
@@ -548,26 +732,53 @@
 
         /* URL bar */
         .url-bar {
-            padding: 4px 12px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
             font-size: 11px;
             color: var(--popup-text-dim);
-            background: var(--popup-bg);
-            border-bottom: 1px solid var(--popup-border-subtle);
-            white-space: nowrap;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--popup-border);
+            border-radius: 14px;
             overflow: hidden;
-            text-overflow: ellipsis;
-            display: none;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
         }
 
-        .url-bar:not(:empty) {
-            display: block;
+        .url-bar.has-url {
+            display: flex;
+        }
+
+        .url-host {
+            flex-shrink: 0;
+            max-width: 45%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--popup-text);
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: rgba(76, 175, 80, 0.12);
+        }
+
+        .url-path {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--popup-text-muted);
         }
 
         /* Footer total count */
         .footer-count {
             margin-left: auto;
             font-size: 11px;
-            color: var(--popup-text-dim);
+            font-variant-numeric: tabular-nums;
+            color: var(--popup-text-muted);
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.06);
         }
 
         /* Error indicator on script item */
@@ -596,7 +807,10 @@
             margin-left: 4px;
             flex-shrink: 0;
             padding: 3px;
+            border: none;
             border-radius: 4px;
+            background: none;
+            font: inherit;
             transition: color 0.15s, background 0.15s;
             display: flex;
             align-items: center;
@@ -605,7 +819,9 @@
             opacity: 0;
         }
 
-        .script-item:hover .script-quick-edit {
+        .script-item:hover .script-quick-edit,
+        .script-item:focus-within .script-quick-edit,
+        .script-quick-edit:focus-visible {
             opacity: 1;
         }
 
@@ -679,9 +895,9 @@
 
         /* High contrast mode support */
         @media (prefers-contrast: high) {
-            .script-item { border-bottom: 2px solid var(--popup-border); }
-            .script-name { font-weight: 600; }
-            .header { border-bottom: 2px solid var(--popup-accent); }
+            .script-item { border-width: 2px; }
+            .script-name-label { font-weight: 600; }
+            .header { border-width: 2px; border-color: var(--popup-accent); }
         }
 
         /* Reduced motion support */
@@ -690,19 +906,51 @@
             .script-status.running { animation: none; }
             .script-toggle .slider, .script-toggle .slider::before { transition: none; }
         }
+
+        .feedback-link {
+            background: none;
+            border: none;
+            color: var(--popup-text-muted);
+            cursor: pointer;
+            font: inherit;
+            transition: color 0.15s;
+        }
+
+        .feedback-link:hover {
+            color: var(--popup-accent);
+        }
+
+        .popup-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 4px;
+            font-size: 10px;
+            color: var(--popup-text-dim);
+        }
+
+        #emptyState {
+            border: 1px dashed var(--popup-border);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.03);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        }
     </style>
 </head>
 <body>
     <!-- Header with branding + toggle -->
-    <div class="header" id="headerToggle" role="button" tabindex="0" title="Toggle all scripts on/off">
+    <button class="header" id="headerToggle" type="button" title="Toggle all scripts on/off">
         <svg class="header-check" id="headerCheckIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12"/>
         </svg>
         <span class="header-text">ScriptVault</span>
         <span class="header-count" id="headerCount"></span>
-    </div>
+    </button>
     <!-- Current URL bar -->
-    <div class="url-bar" id="urlBar"></div>
+    <div class="url-bar" id="urlBar">
+        <span class="url-host" id="urlHost"></span>
+        <span class="url-path" id="urlPath"></span>
+    </div>
     
     <!-- Setup Warning Banner (Chrome 138+) -->
     <div class="setup-warning" id="setupWarning">
@@ -713,7 +961,7 @@
         <div class="setup-warning-text">
             User scripts are not enabled. Enable <strong>"Allow User Scripts"</strong> in extension settings or enable <strong>Developer Mode</strong>.
         </div>
-        <span class="setup-warning-link" id="btnOpenExtSettings">Open Extension Settings</span>
+        <button class="setup-warning-link" id="btnOpenExtSettings" type="button">Open Extension Settings</button>
     </div>
 
     <!-- Scripts for this page -->
@@ -728,17 +976,17 @@
 
     <!-- Menu items -->
     <div class="menu-section">
-        <div class="menu-item" id="btnFindScripts" role="button" tabindex="0">
+        <button class="menu-item" id="btnFindScripts" type="button">
             <div class="menu-item-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="11" cy="11" r="8"/>
                     <path d="M21 21l-4.35-4.35"/>
                 </svg>
             </div>
-            <span class="menu-item-text">Find new scripts...</span>
-        </div>
+            <span class="menu-item-text">Find New Scripts…</span>
+        </button>
 
-        <div class="menu-item" id="btnNewScript" role="button" tabindex="0">
+        <button class="menu-item" id="btnNewScript" type="button">
             <div class="menu-item-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -746,11 +994,11 @@
                     <line x1="8" y1="12" x2="16" y2="12"/>
                 </svg>
             </div>
-            <span class="menu-item-text">Create a new script...</span>
-        </div>
+            <span class="menu-item-text">Create New Script…</span>
+        </button>
 
         <!-- Utilities submenu -->
-        <div class="menu-item" id="btnUtilities" role="button" tabindex="0">
+        <button class="menu-item" id="btnUtilities" type="button">
             <div class="menu-item-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
@@ -762,26 +1010,26 @@
                     <polyline points="9 18 15 12 9 6"/>
                 </svg>
             </div>
-        </div>
+        </button>
 
         <div class="submenu" id="utilitiesSubmenu">
-            <div class="menu-item" id="btnCheckUpdates" role="button" tabindex="0">
+            <button class="menu-item" id="btnCheckUpdates" type="button">
                 <span class="menu-item-text">Update Userscripts</span>
-            </div>
-            <div class="menu-item" id="btnBlacklistDomain" role="button" tabindex="0">
+            </button>
+            <button class="menu-item" id="btnBlacklistDomain" type="button">
                 <span class="menu-item-text">Do not run on this domain</span>
-            </div>
-            <div class="menu-item" id="btnExportZip" role="button" tabindex="0">
-                <span class="menu-item-text">Export to ZIP...</span>
-            </div>
-            <div class="menu-item" id="btnImport" role="button" tabindex="0">
-                <span class="menu-item-text">Import from file...</span>
-            </div>
+            </button>
+            <button class="menu-item" id="btnExportZip" type="button">
+                <span class="menu-item-text">Export to ZIP…</span>
+            </button>
+            <button class="menu-item" id="btnImport" type="button">
+                <span class="menu-item-text">Import from File…</span>
+            </button>
         </div>
     </div>
 
     <!-- Dashboard link -->
-    <div class="footer" id="btnDashboard" role="button" tabindex="0">
+    <button class="footer" id="btnDashboard" type="button">
         <div class="footer-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"/>
@@ -790,22 +1038,22 @@
         </div>
         <span class="footer-text">Dashboard</span>
         <span class="footer-count" id="footerTotalCount"></span>
-    </div>
+    </button>
 
     <!-- Shortcut hint & feedback -->
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 12px;font-size:10px;color:var(--popup-text-dim);border-top:1px solid var(--popup-border-subtle)">
+    <div class="popup-meta">
         <span>Alt+Shift+D Dashboard</span>
-        <span id="btnFeedback" style="cursor:pointer;color:var(--popup-text-muted);transition:color 0.15s" onmouseover="this.style.color='var(--popup-accent)'" onmouseout="this.style.color='var(--popup-text-muted)'">Feedback</span>
+        <button id="btnFeedback" class="feedback-link" type="button">Feedback</button>
     </div>
 
     <!-- Shared dropdown (positioned at body level to avoid overflow clipping) -->
     <div class="script-dropdown" id="scriptDropdown">
         <div class="script-dropdown-cmds" id="dropdownMenuCmds"></div>
-        <div class="script-dropdown-item" data-action="edit">Edit in Dashboard</div>
-        <div class="script-dropdown-item" data-action="update">Check for Update</div>
-        <div class="script-dropdown-item" data-action="copyUrl">Copy Install URL</div>
-        <div class="script-dropdown-item" data-action="pin">Pin / Unpin</div>
-        <div class="script-dropdown-item danger" data-action="delete">Delete</div>
+        <button class="script-dropdown-item" data-action="edit" type="button">Edit in Dashboard</button>
+        <button class="script-dropdown-item" data-action="update" type="button">Check for Update</button>
+        <button class="script-dropdown-item" data-action="copyUrl" type="button">Copy Install URL</button>
+        <button class="script-dropdown-item" data-action="pin" type="button">Pin / Unpin</button>
+        <button class="script-dropdown-item danger" data-action="delete" type="button">Delete</button>
     </div>
 
     <script src="../shared/utils.js"></script>

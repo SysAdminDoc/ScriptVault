@@ -1055,8 +1055,11 @@ const TemplateManager = (() => {
                 delBtn.className = 'tm-btn-icon';
                 delBtn.title = 'Delete';
                 delBtn.innerHTML = '&#10005;';
-                delBtn.onclick = () => {
-                    if (confirm(`Delete template "${tpl.name}"?`)) {
+                delBtn.onclick = async () => {
+                    const confirmed = typeof window.ScriptVaultDashboardUI?.confirm === 'function'
+                        ? await window.ScriptVaultDashboardUI.confirm('Delete Template', `Delete template "${tpl.name}"?`)
+                        : confirm(`Delete template "${tpl.name}"?`);
+                    if (confirmed) {
                         deleteTemplateById(tpl.id);
                         toast('Template deleted', 'info');
                         render();

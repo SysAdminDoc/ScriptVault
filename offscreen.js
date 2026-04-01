@@ -183,7 +183,7 @@ const RISK_PATTERNS = [
   {
     id: 'proto-pollution', label: 'Prototype manipulation', risk: 25, category: 'hijack',
     desc: 'Modifying object prototypes can corrupt global state',
-    match: node => (node.type === 'MemberExpression' && node.property?.name === '__proto__') || (node.type === 'CallExpression' && isMember(node.callee, 'Object', 'setPrototypeOf')) || (node.type === 'MemberExpression' && node.property?.name === 'prototype' && node.parent?.type === 'MemberExpression')
+    match: node => (node.type === 'MemberExpression' && node.property?.name === '__proto__') || (node.type === 'CallExpression' && isMember(node.callee, 'Object', 'setPrototypeOf')) || (node.type === 'MemberExpression' && node.property?.name === 'prototype' && node._parent?.type === 'MemberExpression')
   },
   {
     id: 'document-domain', label: 'document.domain assignment', risk: 20, category: 'hijack',
@@ -296,11 +296,12 @@ function analyzeAST(code) {
 function walkAST(node, visitor, parent = null) {
   if (!node || typeof node !== 'object') return;
   if (node.type) {
-    node.parent = parent;
+    node._parent = parent;
     visitor(node);
+    delete node._parent;
   }
   for (const key of Object.keys(node)) {
-    if (key === 'parent') continue;
+    if (key === '_parent') continue;
     const child = node[key];
     if (Array.isArray(child)) {
       for (const c of child) { if (c && typeof c === 'object' && c.type) walkAST(c, visitor, node); }
@@ -395,10 +396,6 @@ function handleMerge(base, local, remote) {
 }
 
 function resolveWithMarkers(base, local, remote) {
-  // Line-level diff to find where they diverge
-  const localDiff = Diff.diffLines(base, local);
-  const remoteDiff = Diff.diffLines(base, remote);
-
   // Simple approach: mark the whole thing as conflicted for user resolution
   return [
     '<<<<<<< LOCAL (your device)',
