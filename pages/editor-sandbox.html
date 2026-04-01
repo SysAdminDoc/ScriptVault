@@ -6,13 +6,41 @@
 <title>ScriptVault Monaco Editor</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; color-scheme: dark; }
   #container { width: 100%; height: 100%; }
-  #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #888; font-family: sans-serif; font-size: 13px; background: #1e1e1e; z-index: 10; }
+  #loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a0a0a0;
+    font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+    font-size: 13px;
+    background:
+      radial-gradient(circle at top right, rgba(34, 197, 94, 0.12), transparent 32%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
+      #1e1e1e;
+    z-index: 10;
+    text-align: center;
+    padding: 24px;
+  }
+  #loading strong {
+    display: block;
+    color: #e0e0e0;
+    font-size: 15px;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+  #loading small {
+    display: block;
+    color: #7a7a7a;
+    line-height: 1.5;
+  }
 </style>
 </head>
 <body>
-<div id="loading">Loading editor…</div>
+<div id="loading" role="status" aria-live="polite" aria-atomic="true"><div><strong>Loading Editor…</strong><small>Preparing the local Monaco bundle.</small></div></div>
 <div id="container"></div>
 <script>
 (function () {
@@ -28,22 +56,14 @@
 
   // ── Load Monaco from local bundle ────────────────────────────────────────
   // Monaco is bundled locally in lib/monaco/ (copied from node_modules at build time).
-  // Falls back to CDN if local files are missing.
+  // Keep the editor fully self-contained so installs and edits remain reliable offline.
   const LOCAL_VS_PATH = '../lib/monaco/vs';
-  const CDN_VS_PATH = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs';
 
   const loaderScript = document.createElement('script');
   loaderScript.src = LOCAL_VS_PATH + '/loader.js';
   loaderScript.onload = () => initMonaco(LOCAL_VS_PATH);
   loaderScript.onerror = () => {
-    // Fallback to CDN if local bundle is missing
-    const cdnScript = document.createElement('script');
-    cdnScript.src = CDN_VS_PATH + '/loader.js';
-    cdnScript.onload = () => initMonaco(CDN_VS_PATH);
-    cdnScript.onerror = () => {
-      loading.textContent = 'Failed to load Monaco editor. Rebuild with: node esbuild.config.mjs --monaco-only';
-    };
-    document.head.appendChild(cdnScript);
+    loading.innerHTML = '<div><strong>Editor Bundle Missing</strong><small>Rebuild the local Monaco assets with:<br>node esbuild.config.mjs --monaco-only</small></div>';
   };
   document.head.appendChild(loaderScript);
 
@@ -326,6 +346,15 @@
         break;
       case 'set-font-size':
         if (editor) editor.updateOptions({ fontSize: msg.size || 13 });
+        break;
+      case 'set-position':
+        if (editor && Number.isFinite(msg.line)) {
+          const lineNumber = Math.max(1, Math.floor(msg.line));
+          const column = Math.max(1, Math.floor(msg.col || 1));
+          editor.setPosition({ lineNumber, column });
+          editor.revealLineInCenter(lineNumber);
+          editor.focus();
+        }
         break;
       case 'insert-text':
         if (editor) {

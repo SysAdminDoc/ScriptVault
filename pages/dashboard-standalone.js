@@ -86,7 +86,7 @@ const StandaloneExport = (() => {
         a.download = filename;
         document.body.appendChild(a);
         a.click();
-        setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+        setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
     }
 
     function slugify(str) {
@@ -120,8 +120,8 @@ const StandaloneExport = (() => {
         if (code.length > 500000) return code;
         // Strip userscript header
         let js = code.replace(/\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==\s*/, '');
-        // Strip single-line comments (careful not to match inside strings or URLs)
-        js = js.replace(/(?<![:"'])\/\/.*$/gm, '');
+        // Strip single-line comments (skip inside strings, URLs, and template literals)
+        js = js.replace(/(?<![:"'`])\/\/.*$/gm, '');
         // Strip multi-line comments
         js = js.replace(/\/\*[\s\S]*?\*\//g, '');
         // Collapse blank lines and leading/trailing whitespace per line
@@ -298,7 +298,7 @@ function downloadScript() {
     a.href = URL.createObjectURL(blob);
     a.download = ${JSON.stringify(slugify(name) + '.user.js')};
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
 }`;
 
         const html = baseHTMLTemplate({
@@ -399,7 +399,7 @@ function downloadOne(idx) {
     var blob = new Blob([s.code], {type:'text/javascript'});
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = s.name.toLowerCase().replace(/[^a-z0-9]+/g,'-') + '.user.js';
-    a.click(); URL.revokeObjectURL(a.href);
+    a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
 }
 function showToast() {
     var t = document.getElementById('copyToast'); t.classList.add('show');
@@ -568,7 +568,7 @@ function installScript() {
     a.href = url;
     a.download = _scriptName + '.user.js';
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 function toggleSource() {
     var el = document.getElementById('sourceCode');
@@ -585,7 +585,7 @@ function copyCode() {
 function downloadScript() {
     var blob = new Blob([_rawCode], {type:'text/javascript'});
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = _scriptName + '.user.js'; a.click(); URL.revokeObjectURL(a.href);
+    a.download = _scriptName + '.user.js'; a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
 }
 function showToast() {
     var t = document.getElementById('copyToast'); t.classList.add('show');

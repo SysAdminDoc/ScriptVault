@@ -10,6 +10,7 @@ const preamble = `
   const ScriptStorage = {
     cache: {},
     async getAll() { return Object.values(this.cache); },
+    async set(id, data) { this.cache[id] = data; },
     async save() {}
   };
   async function registerAllScripts() {}
@@ -62,9 +63,15 @@ describe('WorkspaceManager', () => {
   it('delete removes workspace', async () => {
     mods.ScriptStorage.cache = { s1: { id: 's1', enabled: true } };
     const ws = await WorkspaceManager.create('ToDelete');
-    await WorkspaceManager.delete(ws.id);
+    const deleted = await WorkspaceManager.delete(ws.id);
+    expect(deleted.name).toBe('ToDelete');
     const { list } = await WorkspaceManager.getAll();
     expect(list).toHaveLength(0);
+  });
+
+  it('delete returns null for missing workspace', async () => {
+    const result = await WorkspaceManager.delete('nonexistent');
+    expect(result).toBeNull();
   });
 
   it('update renames workspace', async () => {

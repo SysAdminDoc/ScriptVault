@@ -1,6 +1,6 @@
 {
   "name": "scriptvault",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:cov": "vitest run --coverage",
     "check": "tsc --noEmit && vitest run",
-    "clean": "rm -f background.js && rm -rf lib/monaco"
+    "clean": "node -e \"const fs=require('fs'); fs.rmSync('background.js',{force:true}); fs.rmSync('lib/monaco',{recursive:true,force:true});\""
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

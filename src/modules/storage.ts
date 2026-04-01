@@ -4,6 +4,7 @@
 
 import type { Script, Settings } from '../types/index';
 import { generateId } from '../shared/utils';
+import settingsDefaultsData from '../config/settings-defaults.json';
 
 // ============================================================================
 // Folder type (local — no shared definition yet)
@@ -55,94 +56,22 @@ declare const self: typeof globalThis & {
 // Settings Manager
 // ============================================================================
 
-const defaultSettings: Settings = {
-  // General
-  enabled: true,
-  showBadge: true,
-  badgeColor: '#22c55e',
-  theme: 'dark',
-
-  // Notifications
-  notifyOnInstall: true,
-  notifyOnUpdate: true,
-  notifyOnError: false,
-
-  // Editor
-  editorTheme: 'material-darker',
-  editorFontSize: 13,
-  editorTabSize: 2,
-  editorLineWrapping: false,
-  editorAutoComplete: true,
-  editorMatchBrackets: true,
-  editorAutoCloseBrackets: true,
-  editorHighlightActiveLine: true,
-  editorShowInvisibles: false,
-  editorKeyMap: 'default',
-
-  // Updates
-  autoUpdate: true,
-  updateInterval: 86400000, // 24 hours
-  lastUpdateCheck: 0,
-
-  // Sync
-  syncEnabled: false,
-  syncProvider: 'none',
-  syncInterval: 3600000, // 1 hour
-  lastSync: 0,
-  webdavUrl: '',
-  webdavUsername: '',
-  webdavPassword: '',
-  // Google Drive (uses chrome.identity)
-  googleDriveConnected: false,
-  googleDriveToken: '',
-  googleDriveRefreshToken: '',
-  googleClientId: '',
-  googleDriveUser: null,
-  // Dropbox
-  dropboxToken: '',
-  dropboxRefreshToken: '',
-  dropboxUser: null,
-  dropboxClientId: '',
-  // OneDrive
-  onedriveToken: '',
-  onedriveRefreshToken: '',
-  onedriveClientId: '',
-  onedriveConnected: false,
-  onedriveUser: null,
-  // Language
-  language: 'auto',
-
-  // Advanced
-  debugMode: false,
-  injectIntoFrames: true,
-  xhrTimeout: 30000,
-
-  // Global Blacklist
-  blacklist: [],
-
-  // Badge
-  badgeInfo: 'running',
-
-  // Auto-reload
-  autoReload: false,
-
-  // Page filtering
-  pageFilterMode: 'blacklist',
-  blacklistedPages: '',
-  whitelistedPages: '',
-  deniedHosts: [],
-  trustedSigningKeys: {},
-};
+function cloneDefaultSettings(): Settings {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(settingsDefaultsData) as Settings;
+  }
+  return JSON.parse(JSON.stringify(settingsDefaultsData)) as Settings;
+}
 
 export const SettingsManager = {
-  defaults: { ...defaultSettings } as Settings,
+  defaults: cloneDefaultSettings(),
 
   cache: null as Settings | null,
 
   async init(): Promise<void> {
     if (this.cache !== null) return;
     const data = await chrome.storage.local.get('settings');
-    this.cache = { ...this.defaults, ...(data['settings'] as Partial<Settings> | undefined) };
+    this.cache = { ...cloneDefaultSettings(), ...(data['settings'] as Partial<Settings> | undefined) };
     console.log('[ScriptVault] Settings loaded');
   },
 
@@ -167,7 +96,8 @@ export const SettingsManager = {
   },
 
   async reset(): Promise<Settings> {
-    this.cache = { ...this.defaults };
+    this.defaults = cloneDefaultSettings();
+    this.cache = cloneDefaultSettings();
     await chrome.storage.local.set({ settings: this.cache });
     return this.cache;
   },

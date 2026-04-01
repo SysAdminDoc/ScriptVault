@@ -66,11 +66,11 @@ const ResourceCache = {
       }
 
       // Generate data URI for binary resources (images, fonts, etc.)
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
+      const chunks = [];
+      for (let i = 0; i < bytes.length; i += 8192) {
+        chunks.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)));
       }
-      const base64 = btoa(binary);
+      const base64 = btoa(chunks.join(''));
       const dataUri = `data:${contentType};base64,${base64}`;
 
       await this.set(url, text, dataUri);

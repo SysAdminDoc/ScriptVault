@@ -7,6 +7,7 @@
         scripts: [],
         settings: {},
         folders: [],
+        workspaces: [],
         currentScriptId: null,
         editor: null,
         unsavedChanges: false,
@@ -16,11 +17,590 @@
         openTabs: {},  // { scriptId: { code, unsaved } }
         _collapsedFolders: new Set(),
         _lastCheckedId: null,
-        _quotaWarned: false
+        _quotaWarned: false,
+        settingsPanelFilter: 'all',
+        utilitiesPanelFilter: 'all',
+        backupBrowserFilter: 'all',
+        backupBrowserSort: 'newest',
+        backupBrowserQuery: '',
+        helpPanelFilter: 'all',
+        trashPanelFilter: 'all',
+        trashItems: [],
+        trustCenter: {
+            runtimeStatus: null,
+            publicApiOrigins: [],
+            publicApiPermissions: {},
+            publicApiAudit: [],
+            signingKeys: {},
+            lastRuntimeRepairAt: 0
+        },
+        backups: [],
+        backupSettings: null
     };
 
     // DOM Elements
     const elements = {};
+    const numberFormatter = new Intl.NumberFormat();
+    const bytesFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
+    const fullDateFormatter = new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
+    const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+    const relativeTimeFormatter = typeof Intl.RelativeTimeFormat === 'function'
+        ? new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+        : null;
+    const timeOnlyFormatter = new Intl.DateTimeFormat(undefined, {
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+    const THEME_LABELS = {
+        dark: 'Dark',
+        light: 'Light',
+        catppuccin: 'Catppuccin',
+        oled: 'OLED'
+    };
+    const SETTINGS_FILTER_LABELS = {
+        all: 'all sections',
+        core: 'core settings',
+        workspace: 'workspace settings',
+        automation: 'automation settings',
+        security: 'security settings',
+        recovery: 'recovery settings'
+    };
+    const UTILITIES_FILTER_LABELS = {
+        all: 'all utilities',
+        backup: 'backup utilities',
+        import: 'import utilities',
+        cloud: 'cloud utilities',
+        diagnostics: 'diagnostic utilities'
+    };
+    const BACKUP_BROWSER_FILTER_LABELS = {
+        all: 'all backups',
+        vault: 'vault snapshots',
+        scripts: 'scripts-only backups',
+        values: 'backups with stored values'
+    };
+    const BACKUP_BROWSER_SORT_LABELS = {
+        newest: 'newest first',
+        oldest: 'oldest first',
+        largest: 'largest archives first',
+        scripts: 'most scripts first'
+    };
+    const TRASH_FILTER_LABELS = {
+        all: 'all deleted scripts',
+        recent: 'deletions from the last 7 days',
+        older: 'older deletions'
+    };
+    const HELP_FILTER_LABELS = {
+        all: 'all references',
+        actions: 'action references',
+        shortcuts: 'shortcut references',
+        reference: 'API and matcher references'
+    };
+    const BACKUP_DAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const SETTINGS_SECTION_GROUPS = {
+        general: 'core',
+        appearance: 'workspace',
+        tags: 'workspace',
+        'action menu': 'workspace',
+        'context menu': 'workspace',
+        'userscript search': 'automation',
+        'userscript update': 'automation',
+        externals: 'automation',
+        'userscript sync': 'automation',
+        editor: 'workspace',
+        security: 'security',
+        'runtime host permissions': 'security',
+        blackcheck: 'security',
+        'downloads beta': 'security',
+        experimental: 'security',
+        reset: 'recovery'
+    };
+    const UTILITIES_SECTION_GROUPS = {
+        general: 'backup',
+        cloud: 'cloud',
+        'import from file': 'import',
+        zip: 'backup',
+        file: 'backup',
+        'backup schedule': 'backup',
+        'backup browser': 'backup',
+        'script stats': 'diagnostics',
+        'tampermonkey import': 'import',
+        textarea: 'import',
+        'import from url': 'import',
+        'batch install from urls': 'import',
+        workspaces: 'backup',
+        'network request log': 'diagnostics',
+        'performance budgets': 'diagnostics',
+        'runtime repair': 'diagnostics',
+        'support snapshot': 'diagnostics',
+        'public api trust': 'diagnostics',
+        'signing trust': 'diagnostics',
+        'activity log': 'diagnostics'
+    };
+    const SCRIPT_SEARCH_DEBOUNCE_MS = 90;
+    const DASHBOARD_TABS = ['scripts', 'settings', 'utilities', 'trash', 'store', 'help'];
+    const OAUTH_SYNC_PROVIDERS = ['googledrive', 'dropbox', 'onedrive'];
+    let modalLastFocusedElement = null;
+    let modalFocusManaged = false;
+    let scriptSearchTimer = null;
+    let commandPaletteReturnFocus = null;
+
+    function normalizeSyncProvider(settings = {}) {
+        const provider = settings.syncProvider || settings.syncType || 'none';
+        return provider === 'browser' ? 'none' : provider;
+    }
+
+    function normalizeSyncEnabled(settings = {}) {
+        return settings.syncEnabled ?? settings.enableSync ?? false;
+    }
+
+    function formatSyncTimestamp(timestamp) {
+        return timestamp ? dateTimeFormatter.format(new Date(timestamp)) : 'Never';
+    }
+
+    function syncSettingsProviderSelection(provider) {
+        if (!elements.settingsSyncType) return;
+        const options = Array.from(elements.settingsSyncType.options || []);
+        const nextProvider = options.some(option => option.value === provider) ? provider : 'none';
+        elements.settingsSyncType.value = nextProvider;
+    }
+
+    function syncCloudProviderSelection(provider, { triggerChange = true } = {}) {
+        if (!elements.cloudProvider) return;
+        const options = Array.from(elements.cloudProvider.options || []);
+        const nextProvider = options.some(option => option.value === provider) ? provider : 'none';
+        elements.cloudProvider.value = nextProvider;
+        if (triggerChange) {
+            elements.cloudProvider.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    function setDashboardHash(fragment) {
+        const base = `${window.location.pathname}${window.location.search}`;
+        history.replaceState(null, '', fragment ? `${base}#${fragment}` : base);
+    }
+
+    function getDashboardRoute() {
+        const hash = window.location.hash.slice(1);
+        if (!hash) return { type: 'tab', tab: 'scripts' };
+        if (hash === 'new_script') return { type: 'new' };
+        if (hash.startsWith('tab=')) {
+            const tab = hash.slice(4);
+            return { type: 'tab', tab: DASHBOARD_TABS.includes(tab) ? tab : 'scripts' };
+        }
+        if (hash.startsWith('script_')) {
+            return { type: 'script', scriptId: hash.slice(7) };
+        }
+        return { type: 'script', scriptId: hash };
+    }
+
+    function getTransferPreferences() {
+        return {
+            includeStorage: elements.exportIncludeStorage?.checked !== false,
+            includeSettings: !!elements.exportIncludeSettings?.checked
+        };
+    }
+
+    function formatBackupReason(reason = 'backup') {
+        const normalized = String(reason || 'backup')
+            .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+            .replace(/[-_]+/g, ' ')
+            .trim()
+            .replace(/\s+/g, ' ');
+        return normalized ? normalized.replace(/\b\w/g, char => char.toUpperCase()) : 'Backup';
+    }
+
+    function getLatestBackup() {
+        return Array.isArray(state.backups) && state.backups.length ? state.backups[0] : null;
+    }
+
+    function describeBackupScope(backup = {}) {
+        const scopeParts = [];
+        if (backup.hasGlobalSettings || backup.hasFolders || backup.hasWorkspaces) {
+            scopeParts.push('vault snapshot');
+        } else {
+            scopeParts.push('scripts only');
+        }
+        if (backup.hasScriptStorage) {
+            scopeParts.push('stored values');
+        }
+        return scopeParts.join(' + ');
+    }
+
+    function formatBackupBrowserSummary(backups = []) {
+        if (!Array.isArray(backups) || backups.length === 0) {
+            return '0 backups · no recovery snapshots yet';
+        }
+        const totalSize = backups.reduce((sum, entry) => sum + Number(entry.size || 0), 0);
+        const latestBackup = backups[0];
+        const latestLabel = latestBackup?.timestamp
+            ? `latest ${formatBackupReason(latestBackup.reason).toLowerCase()} backup ${dateTimeFormatter.format(new Date(latestBackup.timestamp))}`
+            : 'latest backup time unknown';
+        return `${numberFormatter.format(backups.length)} backups · ${formatBytes(totalSize)} · ${latestLabel}`;
+    }
+
+    function formatRelativeBackupTime(timestamp) {
+        if (!timestamp) return 'time unknown';
+        const deltaMs = timestamp - Date.now();
+        const minute = 60 * 1000;
+        const hour = 60 * minute;
+        const day = 24 * hour;
+        const week = 7 * day;
+        const month = 30 * day;
+        const year = 365 * day;
+        if (!relativeTimeFormatter) {
+            return dateTimeFormatter.format(new Date(timestamp));
+        }
+        const absDelta = Math.abs(deltaMs);
+        if (absDelta < hour) {
+            return relativeTimeFormatter.format(Math.round(deltaMs / minute), 'minute');
+        }
+        if (absDelta < day) {
+            return relativeTimeFormatter.format(Math.round(deltaMs / hour), 'hour');
+        }
+        if (absDelta < week) {
+            return relativeTimeFormatter.format(Math.round(deltaMs / day), 'day');
+        }
+        if (absDelta < month) {
+            return relativeTimeFormatter.format(Math.round(deltaMs / week), 'week');
+        }
+        if (absDelta < year) {
+            return relativeTimeFormatter.format(Math.round(deltaMs / month), 'month');
+        }
+        return relativeTimeFormatter.format(Math.round(deltaMs / year), 'year');
+    }
+
+    function getBackupAgeGroup(timestamp) {
+        if (!timestamp) return 'Older';
+        const now = new Date();
+        const backupDate = new Date(timestamp);
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const startOfWeek = startOfToday - (6 * 24 * 60 * 60 * 1000);
+        if (timestamp >= startOfToday) return 'Today';
+        if (timestamp >= startOfWeek) return 'Last 7 Days';
+        if (backupDate.getFullYear() === now.getFullYear() && backupDate.getMonth() === now.getMonth()) {
+            return 'Earlier This Month';
+        }
+        return 'Older';
+    }
+
+    function groupBackupsForDisplay(backups = [], groupOrder = ['Today', 'Last 7 Days', 'Earlier This Month', 'Older']) {
+        const map = new Map();
+        backups.forEach(backup => {
+            const label = getBackupAgeGroup(backup.timestamp);
+            if (!map.has(label)) {
+                map.set(label, []);
+            }
+            map.get(label).push(backup);
+        });
+        const groups = [];
+        groupOrder.forEach(label => {
+            if (map.has(label)) {
+                groups.push({ label, backups: map.get(label) });
+                map.delete(label);
+            }
+        });
+        map.forEach((groupBackups, label) => {
+            groups.push({ label, backups: groupBackups });
+        });
+        return groups;
+    }
+
+    function sortBackupsForDisplay(backups = [], sort = state.backupBrowserSort) {
+        const orderedBackups = Array.isArray(backups) ? backups.slice() : [];
+        const byNewest = (a, b) => Number(b?.timestamp || 0) - Number(a?.timestamp || 0);
+        switch (sort) {
+            case 'oldest':
+                return orderedBackups.sort((a, b) => Number(a?.timestamp || 0) - Number(b?.timestamp || 0));
+            case 'largest':
+                return orderedBackups.sort((a, b) => Number(b?.size || 0) - Number(a?.size || 0) || byNewest(a, b));
+            case 'scripts':
+                return orderedBackups.sort((a, b) => Number(b?.scriptCount || 0) - Number(a?.scriptCount || 0) || byNewest(a, b));
+            case 'newest':
+            default:
+                return orderedBackups.sort(byNewest);
+        }
+    }
+
+    function getBackupDisplayGroups(backups = []) {
+        const orderedBackups = sortBackupsForDisplay(backups);
+        if (state.backupBrowserSort === 'largest') {
+            return [{ label: 'Largest Archives', backups: orderedBackups }];
+        }
+        if (state.backupBrowserSort === 'scripts') {
+            return [{ label: 'Most Scripts', backups: orderedBackups }];
+        }
+        const groupOrder = state.backupBrowserSort === 'oldest'
+            ? ['Older', 'Earlier This Month', 'Last 7 Days', 'Today']
+            : ['Today', 'Last 7 Days', 'Earlier This Month', 'Older'];
+        return groupBackupsForDisplay(orderedBackups, groupOrder);
+    }
+
+    function backupMatchesBrowserFilter(backup, filter = state.backupBrowserFilter) {
+        switch (filter) {
+            case 'vault':
+                return !!(backup.hasGlobalSettings || backup.hasFolders || backup.hasWorkspaces);
+            case 'scripts':
+                return !(backup.hasGlobalSettings || backup.hasFolders || backup.hasWorkspaces);
+            case 'values':
+                return !!backup.hasScriptStorage;
+            case 'all':
+            default:
+                return true;
+        }
+    }
+
+    function getVisibleBackups(backups = state.backups) {
+        const query = normalizeSettingsLabel(state.backupBrowserQuery);
+        return (Array.isArray(backups) ? backups : []).filter(backup => {
+            if (!backupMatchesBrowserFilter(backup)) return false;
+            if (!query) return true;
+            const haystack = normalizeSettingsLabel([
+                formatBackupReason(backup.reason),
+                backup.version || '',
+                describeBackupScope(backup),
+                backup.hasGlobalSettings ? 'settings' : '',
+                backup.hasFolders ? 'folders' : '',
+                backup.hasWorkspaces ? 'workspaces' : '',
+                backup.hasScriptStorage ? 'stored values' : '',
+                backup.timestamp ? dateTimeFormatter.format(new Date(backup.timestamp)) : ''
+            ].join(' '));
+            return haystack.includes(query);
+        });
+    }
+
+    function resetBackupBrowserView() {
+        state.backupBrowserFilter = 'all';
+        state.backupBrowserSort = 'newest';
+        state.backupBrowserQuery = '';
+        if (elements.backupBrowserQuickFilter) elements.backupBrowserQuickFilter.value = '';
+        if (elements.backupBrowserSort) elements.backupBrowserSort.value = 'newest';
+        applyBackupBrowserFilters();
+    }
+
+    function updateBackupBrowserControls(visibleBackups = getVisibleBackups()) {
+        elements.backupBrowserFilterButtons?.forEach(button => {
+            const label = button.dataset.backupBrowserLabel || button.textContent.trim();
+            button.dataset.backupBrowserLabel = label;
+            const filter = button.dataset.backupBrowserFilter || 'all';
+            const query = normalizeSettingsLabel(state.backupBrowserQuery);
+            const count = state.backups.filter(backup => {
+                if (!backupMatchesBrowserFilter(backup, filter)) return false;
+                if (!query) return true;
+                const haystack = normalizeSettingsLabel([
+                    formatBackupReason(backup.reason),
+                    backup.version || '',
+                    describeBackupScope(backup),
+                    backup.hasGlobalSettings ? 'settings' : '',
+                    backup.hasFolders ? 'folders' : '',
+                    backup.hasWorkspaces ? 'workspaces' : '',
+                    backup.hasScriptStorage ? 'stored values' : '',
+                    backup.timestamp ? dateTimeFormatter.format(new Date(backup.timestamp)) : ''
+                ].join(' '));
+                return haystack.includes(query);
+            }).length;
+            button.textContent = `${label} (${numberFormatter.format(count)})`;
+            button.classList.toggle('active', (button.dataset.backupBrowserFilter || 'all') === state.backupBrowserFilter);
+        });
+        if (elements.backupBrowserSort) {
+            elements.backupBrowserSort.value = state.backupBrowserSort || 'newest';
+        }
+        if (elements.btnResetBackupBrowser) {
+            const hasActiveView = state.backupBrowserFilter !== 'all'
+                || state.backupBrowserSort !== 'newest'
+                || !!state.backupBrowserQuery.trim();
+            elements.btnResetBackupBrowser.disabled = !hasActiveView;
+        }
+        if (!elements.backupBrowserStatus) return;
+        const totalCount = Array.isArray(state.backups) ? state.backups.length : 0;
+        const visibleCount = visibleBackups.length;
+        const query = state.backupBrowserQuery.trim();
+        const filterLabel = BACKUP_BROWSER_FILTER_LABELS[state.backupBrowserFilter] || 'all backups';
+        const sortLabel = BACKUP_BROWSER_SORT_LABELS[state.backupBrowserSort] || 'newest first';
+        const sortSuffix = state.backupBrowserSort === 'newest' ? '' : ` Sorted ${sortLabel}.`;
+        if (totalCount === 0) {
+            elements.backupBrowserStatus.textContent = 'No backups saved yet.';
+            return;
+        }
+        if (query) {
+            elements.backupBrowserStatus.textContent = `Showing ${numberFormatter.format(visibleCount)} of ${numberFormatter.format(totalCount)} backups for "${query}".${sortSuffix}`;
+            return;
+        }
+        if (state.backupBrowserFilter === 'all') {
+            elements.backupBrowserStatus.textContent = `Showing all ${numberFormatter.format(totalCount)} backups.${sortSuffix}`;
+            return;
+        }
+        elements.backupBrowserStatus.textContent = `Showing ${numberFormatter.format(visibleCount)} ${filterLabel}.${sortSuffix}`;
+    }
+
+    function applyBackupBrowserFilters() {
+        state.backupBrowserQuery = elements.backupBrowserQuickFilter?.value || '';
+        state.backupBrowserSort = elements.backupBrowserSort?.value || state.backupBrowserSort || 'newest';
+        const visibleBackups = getVisibleBackups();
+        renderBackupList(visibleBackups, { totalCount: state.backups.length });
+        updateBackupBrowserControls(visibleBackups);
+    }
+
+    function normalizeBackupSettings(rawSettings = {}) {
+        return {
+            enabled: !!rawSettings?.enabled,
+            scheduleType: rawSettings?.scheduleType || 'manual',
+            hour: Number.isFinite(Number(rawSettings?.hour)) ? Number(rawSettings.hour) : 3,
+            dayOfWeek: Number.isFinite(Number(rawSettings?.dayOfWeek)) ? Number(rawSettings.dayOfWeek) : 0,
+            maxBackups: Math.max(1, Number(rawSettings?.maxBackups || 5)),
+            notifyOnSuccess: rawSettings?.notifyOnSuccess !== false,
+            notifyOnFailure: rawSettings?.notifyOnFailure !== false,
+            warnOnStorageFull: rawSettings?.warnOnStorageFull !== false
+        };
+    }
+
+    function formatBackupScheduleSummary(settings = {}) {
+        if (!settings.enabled) return 'Manual only';
+        const hour = Math.max(0, Math.min(23, Number(settings.hour ?? 3)));
+        const hourLabel = timeOnlyFormatter.format(new Date(2000, 0, 1, hour, 0));
+        switch (settings.scheduleType) {
+            case 'daily':
+                return `Daily at ${hourLabel}`;
+            case 'weekly':
+                return `Weekly ${BACKUP_DAY_LABELS[Number(settings.dayOfWeek ?? 0)] || 'Sunday'} at ${hourLabel}`;
+            case 'onChange':
+                return 'After changes';
+            case 'manual':
+            default:
+                return 'Manual only';
+        }
+    }
+
+    function getNextBackupRun(settings = {}) {
+        if (!settings.enabled) return null;
+        const scheduleType = settings.scheduleType || 'manual';
+        const hour = Math.max(0, Math.min(23, Number(settings.hour ?? 3)));
+        if (scheduleType === 'daily' || scheduleType === 'weekly') {
+            const now = new Date();
+            const target = new Date(now);
+            target.setHours(hour, 0, 0, 0);
+            if (scheduleType === 'weekly') {
+                const dayOfWeek = Math.max(0, Math.min(6, Number(settings.dayOfWeek ?? 0)));
+                const currentDay = now.getDay();
+                let daysUntil = (dayOfWeek - currentDay + 7) % 7;
+                if (daysUntil === 0 && now >= target) daysUntil = 7;
+                target.setDate(target.getDate() + daysUntil);
+            } else if (now >= target) {
+                target.setDate(target.getDate() + 1);
+            }
+            return target;
+        }
+        return null;
+    }
+
+    function getScriptIdentityKey(scriptLike) {
+        if (!scriptLike || typeof scriptLike !== 'object') return '';
+        const metadata = scriptLike.metadata || scriptLike.meta || scriptLike;
+        const name = metadata?.name || '';
+        const namespace = metadata?.namespace || '';
+        if (name) {
+            return namespace ? `${name}::${namespace}` : name;
+        }
+        return scriptLike.id || '';
+    }
+
+    function formatImportSummary(result) {
+        const imported = Number(result?.imported || 0);
+        const skipped = Number(result?.skipped || 0);
+        const failed = Array.isArray(result?.errors) ? result.errors.length : 0;
+        const parts = [];
+        if (imported) parts.push(`${numberFormatter.format(imported)} imported`);
+        if (skipped) parts.push(`${numberFormatter.format(skipped)} skipped`);
+        if (failed) parts.push(`${numberFormatter.format(failed)} failed`);
+        if (!parts.length) parts.push('no scripts changed');
+        if (result?.settingsImported) parts.push('settings restored');
+        return parts.join(', ');
+    }
+
+    function getImportResultTone(result) {
+        if (result?.error) return 'error';
+        const imported = Number(result?.imported || 0);
+        const failed = Array.isArray(result?.errors) ? result.errors.length : 0;
+        if (failed > 0 && imported === 0) return 'error';
+        if (failed > 0) return 'warning';
+        if (Number(result?.skipped || 0) > 0 && imported === 0) return 'info';
+        return 'success';
+    }
+
+    function formatBackupRestoreSummary(result) {
+        const restoredScripts = Number(result?.restoredScripts || 0);
+        const skippedScripts = Number(result?.skippedScripts || 0);
+        const failed = Array.isArray(result?.errors) ? result.errors.length : 0;
+        const parts = [];
+        if (restoredScripts) parts.push(`${numberFormatter.format(restoredScripts)} scripts restored`);
+        if (skippedScripts) parts.push(`${numberFormatter.format(skippedScripts)} skipped`);
+        if (result?.restoredSettings) parts.push('settings restored');
+        if (result?.restoredFolders) parts.push('folders restored');
+        if (result?.restoredWorkspaces) parts.push('workspaces restored');
+        if (failed) parts.push(`${numberFormatter.format(failed)} issues`);
+        if (!parts.length) parts.push('no changes applied');
+        return parts.join(', ');
+    }
+
+    function getBackupRestoreTone(result) {
+        if (result?.error) return 'error';
+        const restored = Number(result?.restoredScripts || 0);
+        const failed = Array.isArray(result?.errors) ? result.errors.length : 0;
+        const restoredGlobal = !!(result?.restoredSettings || result?.restoredFolders || result?.restoredWorkspaces);
+        if (failed > 0 && !restored && !restoredGlobal) return 'error';
+        if (failed > 0) return 'warning';
+        return restored || restoredGlobal ? 'success' : 'info';
+    }
+
+    function buildImportConfirmationMessage(sourceLabel, options = {}) {
+        const {
+            overwriteTarget = 'matching scripts',
+            supportsSettings = false,
+            supportsStorage = false,
+            importSettings = false,
+            importStorage = false,
+            settingsUnavailableReason = '',
+            storageUnavailableReason = ''
+        } = options;
+        const details = [`${overwriteTarget} will be overwritten.`];
+        if (supportsStorage) {
+            details.push(importStorage
+                ? 'Stored values in the backup will also be restored when present.'
+                : 'Stored values in the backup will be left untouched.');
+        } else if (storageUnavailableReason) {
+            details.push(storageUnavailableReason);
+        }
+        if (supportsSettings) {
+            details.push(importSettings
+                ? 'ScriptVault settings in the backup will also be restored when present.'
+                : 'ScriptVault settings in the backup will not be restored.');
+        } else if (settingsUnavailableReason) {
+            details.push(settingsUnavailableReason);
+        }
+        return `Restore from ${sourceLabel}? ${details.join(' ')}`;
+    }
+
+    function downloadBase64Zip(zipData, filename) {
+        const raw = atob(zipData);
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/zip' });
+        const objUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = objUrl;
+        anchor.download = filename;
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
+    }
 
     function cacheElements() {
         // Main tabs
@@ -38,11 +618,20 @@
         elements.scriptSearch = document.getElementById('scriptSearch');
         elements.scriptTableBody = document.getElementById('scriptTableBody');
         elements.emptyState = document.getElementById('emptyState');
+        elements.emptyStateTitle = document.getElementById('emptyStateTitle');
+        elements.emptyStateDescription = document.getElementById('emptyStateDescription');
+        elements.emptyStatePrimaryAction = document.getElementById('emptyStatePrimaryAction');
+        elements.emptyStateSecondaryAction = document.getElementById('emptyStateSecondaryAction');
         elements.selectAllScripts = document.getElementById('selectAllScripts');
         elements.btnNewScript = document.getElementById('btnNewScript');
         elements.btnImportScript = document.getElementById('btnImportScript');
         elements.btnCheckUpdates = document.getElementById('btnCheckUpdates');
         elements.btnExportAll = document.getElementById('btnExportAll');
+        elements.btnViewToggle = document.getElementById('btnViewToggle');
+        elements.btnColumnToggle = document.getElementById('btnColumnToggle');
+        elements.workspaceInstalledStat = document.getElementById('workspaceInstalledStat');
+        elements.workspaceActiveStat = document.getElementById('workspaceActiveStat');
+        elements.workspaceStorageStat = document.getElementById('workspaceStorageStat');
         
         // Bulk Actions (Tampermonkey-style)
         elements.bulkSelectAll = document.getElementById('bulkSelectAll');
@@ -54,11 +643,25 @@
         // Help button (header icon)
         elements.btnHelpTab = document.getElementById('btnHelpTab');
         elements.btnCycleTheme = document.getElementById('btnCycleTheme');
+        elements.helpActionSummary = document.getElementById('helpActionSummary');
+        elements.helpVisibleSummary = document.getElementById('helpVisibleSummary');
+        elements.helpThemeSummary = document.getElementById('helpThemeSummary');
+        elements.helpScriptSummary = document.getElementById('helpScriptSummary');
+        elements.helpQuickFilter = document.getElementById('helpQuickFilter');
+        elements.helpFilterStatus = document.getElementById('helpFilterStatus');
+        elements.helpEmptyState = document.getElementById('helpEmptyState');
+        elements.helpFilterButtons = document.querySelectorAll('[data-help-filter]');
+        elements.helpActionButtons = document.querySelectorAll('[data-help-action]');
 
         // Editor overlay
         elements.editorOverlay = document.getElementById('editorOverlay');
+        elements.editorEyebrow = document.getElementById('editorEyebrow');
         elements.editorTitle = document.getElementById('editorTitle');
+        elements.editorSubtitle = document.getElementById('editorSubtitle');
+        elements.editorSaveState = document.getElementById('editorSaveState');
+        elements.editorSavedAt = document.getElementById('editorSavedAt');
         elements.editorLineCount = document.getElementById('editorLineCount');
+        elements.editorCharCount = document.getElementById('editorCharCount');
         elements.editorCursorPos = document.getElementById('editorCursorPos');
         elements.editorTextarea = document.getElementById('editorTextarea');
         elements.editorTabs = document.querySelectorAll('.editor-tab');
@@ -69,7 +672,9 @@
             scriptsettings: document.getElementById('scriptsettingsPanel')
         };
         elements.btnEditorSave = document.getElementById('btnEditorSave');
+        elements.btnEditorSaveLabel = document.getElementById('btnEditorSaveLabel');
         elements.btnEditorToggle = document.getElementById('btnEditorToggle');
+        elements.btnEditorToggleLabel = document.getElementById('btnEditorToggleLabel');
         elements.btnEditorDuplicate = document.getElementById('btnEditorDuplicate');
         elements.btnEditorExport = document.getElementById('btnEditorExport');
         elements.btnEditorDelete = document.getElementById('btnEditorDelete');
@@ -82,6 +687,8 @@
         elements.infoDescription = document.getElementById('infoDescription');
         elements.infoHomepage = document.getElementById('infoHomepage');
         elements.infoUpdateUrl = document.getElementById('infoUpdateUrl');
+        elements.infoDownloadUrl = document.getElementById('infoDownloadUrl');
+        elements.infoProvenance = document.getElementById('infoProvenance');
         elements.infoGrants = document.getElementById('infoGrants');
         elements.infoMatches = document.getElementById('infoMatches');
         elements.infoResources = document.getElementById('infoResources');
@@ -148,6 +755,15 @@
         elements.settingsTrashMode = document.getElementById('settingsTrashMode');
         elements.trashList = document.getElementById('trashList');
         elements.btnEmptyTrash = document.getElementById('btnEmptyTrash');
+        elements.trashCountSummary = document.getElementById('trashCountSummary');
+        elements.trashRetentionSummary = document.getElementById('trashRetentionSummary');
+        elements.trashLatestSummary = document.getElementById('trashLatestSummary');
+        elements.trashQuickFilter = document.getElementById('trashQuickFilter');
+        elements.trashFilterStatus = document.getElementById('trashFilterStatus');
+        elements.trashEmptyState = document.getElementById('trashEmptyState');
+        elements.trashEmptyTitle = document.getElementById('trashEmptyTitle');
+        elements.trashEmptyDescription = document.getElementById('trashEmptyDescription');
+        elements.trashFilterButtons = document.querySelectorAll('[data-trash-filter]');
 
         // Settings - Appearance
         elements.settingsLayout = document.getElementById('settingsLayout');
@@ -265,12 +881,46 @@
         elements.settingsTopLevelAwait = document.getElementById('settingsTopLevelAwait');
         
         // Settings - Reset
+        elements.settingsQuickFilter = document.getElementById('settingsQuickFilter');
+        elements.settingsModeSummary = document.getElementById('settingsModeSummary');
+        elements.settingsVisibleSummary = document.getElementById('settingsVisibleSummary');
+        elements.settingsAdvancedSummary = document.getElementById('settingsAdvancedSummary');
+        elements.settingsFilterStatus = document.getElementById('settingsFilterStatus');
+        elements.settingsEmptyState = document.getElementById('settingsEmptyState');
+        elements.settingsFilterButtons = document.querySelectorAll('#settingsCategoryFilters .settings-filter');
         elements.btnRestartExtension = document.getElementById('btnRestartExtension');
         elements.btnFactoryReset = document.getElementById('btnFactoryReset');
 
         // Utilities
         elements.btnExportFile = document.getElementById('btnExportFile');
         elements.btnExportZip = document.getElementById('btnExportZip');
+        elements.exportIncludeStorage = document.getElementById('exportIncludeStorage');
+        elements.exportIncludeSettings = document.getElementById('exportIncludeSettings');
+        elements.backupBrowserSummary = document.getElementById('backupBrowserSummary');
+        elements.backupBrowserQuickFilter = document.getElementById('backupBrowserQuickFilter');
+        elements.backupBrowserSort = document.getElementById('backupBrowserSort');
+        elements.backupBrowserStatus = document.getElementById('backupBrowserStatus');
+        elements.backupBrowserFilterButtons = Array.from(document.querySelectorAll('[data-backup-browser-filter]'));
+        elements.btnResetBackupBrowser = document.getElementById('btnResetBackupBrowser');
+        elements.backupList = document.getElementById('backupList');
+        elements.backupScheduleSummary = document.getElementById('backupScheduleSummary');
+        elements.backupScheduleStatus = document.getElementById('backupScheduleStatus');
+        elements.backupNextRunStatus = document.getElementById('backupNextRunStatus');
+        elements.backupEnabled = document.getElementById('backupEnabled');
+        elements.backupScheduleType = document.getElementById('backupScheduleType');
+        elements.backupHourRow = document.getElementById('backupHourRow');
+        elements.backupHour = document.getElementById('backupHour');
+        elements.backupDayRow = document.getElementById('backupDayRow');
+        elements.backupDayOfWeek = document.getElementById('backupDayOfWeek');
+        elements.backupMaxBackups = document.getElementById('backupMaxBackups');
+        elements.backupNotifyOnSuccess = document.getElementById('backupNotifyOnSuccess');
+        elements.backupNotifyOnFailure = document.getElementById('backupNotifyOnFailure');
+        elements.backupWarnOnStorageFull = document.getElementById('backupWarnOnStorageFull');
+        elements.btnSaveBackupSettings = document.getElementById('btnSaveBackupSettings');
+        elements.btnCreateBackup = document.getElementById('btnCreateBackup');
+        elements.btnImportBackupArchive = document.getElementById('btnImportBackupArchive');
+        elements.btnRefreshBackups = document.getElementById('btnRefreshBackups');
+        elements.backupArchiveInput = document.getElementById('backupArchiveInput');
         elements.btnChooseFile = document.getElementById('btnChooseFile');
         elements.importFileInput = document.getElementById('importFileInput');
         elements.importFileName = document.getElementById('importFileName');
@@ -287,6 +937,37 @@
         elements.btnCloudExport = document.getElementById('btnCloudExport');
         elements.btnCloudImport = document.getElementById('btnCloudImport');
         elements.cloudActionsRow = document.getElementById('cloudActionsRow');
+        elements.utilitiesQuickFilter = document.getElementById('utilitiesQuickFilter');
+        elements.utilitiesVisibleSummary = document.getElementById('utilitiesVisibleSummary');
+        elements.utilitiesCloudSummary = document.getElementById('utilitiesCloudSummary');
+        elements.utilitiesImportSummary = document.getElementById('utilitiesImportSummary');
+        elements.utilitiesWorkspaceSummary = document.getElementById('utilitiesWorkspaceSummary');
+        elements.utilitiesFilterStatus = document.getElementById('utilitiesFilterStatus');
+        elements.utilitiesEmptyState = document.getElementById('utilitiesEmptyState');
+        elements.utilitiesFilterButtons = document.querySelectorAll('#utilitiesCategoryFilters .utilities-filter');
+        elements.workspaceList = document.getElementById('workspaceList');
+        elements.networkLogContainer = document.getElementById('networkLogContainer');
+        elements.activityLog = document.getElementById('activityLog');
+        elements.perfBudgetDefault = document.getElementById('perfBudgetDefault');
+        elements.batchUrlInput = document.getElementById('batchUrlInput');
+        elements.runtimeStatusSummary = document.getElementById('runtimeStatusSummary');
+        elements.runtimeStatusDetails = document.getElementById('runtimeStatusDetails');
+        elements.supportSnapshotSummary = document.getElementById('supportSnapshotSummary');
+        elements.supportSnapshotStatus = document.getElementById('supportSnapshotStatus');
+        elements.publicApiTrustedOrigins = document.getElementById('publicApiTrustedOrigins');
+        elements.publicApiPermissionsSummary = document.getElementById('publicApiPermissionsSummary');
+        elements.publicApiTrustStatus = document.getElementById('publicApiTrustStatus');
+        elements.publicApiAuditLog = document.getElementById('publicApiAuditLog');
+        elements.signingTrustSummary = document.getElementById('signingTrustSummary');
+        elements.signingKeysList = document.getElementById('signingKeysList');
+        elements.btnRefreshRuntimeStatus = document.getElementById('btnRefreshRuntimeStatus');
+        elements.btnRepairRuntime = document.getElementById('btnRepairRuntime');
+        elements.btnShowSetupGuide = document.getElementById('btnShowSetupGuide');
+        elements.btnExportSupportSnapshot = document.getElementById('btnExportSupportSnapshot');
+        elements.btnRefreshPublicApiTrust = document.getElementById('btnRefreshPublicApiTrust');
+        elements.btnSavePublicApiOrigins = document.getElementById('btnSavePublicApiOrigins');
+        elements.btnClearPublicApiAudit = document.getElementById('btnClearPublicApiAudit');
+        elements.btnRefreshSigningTrust = document.getElementById('btnRefreshSigningTrust');
 
         // Stats
         elements.statTotalScripts = document.getElementById('statTotalScripts');
@@ -336,6 +1017,10 @@
         if (aboutVer) aboutVer.textContent = 'Version ' + chrome.runtime.getManifest().version;
 
         cacheElements();
+        initializeSettingsPanelControls();
+        initializeUtilitiesPanelControls();
+        initializeHelpPanelControls();
+        initializeTrashPanelControls();
         updateHeaderHeight();
         window.addEventListener('resize', updateHeaderHeight);
 
@@ -345,7 +1030,15 @@
             if (e.target.tagName === 'IMG' && e.target.hasAttribute('data-favicon-fallback')) {
                 e.target.style.display = 'none';
                 if (e.target.parentElement) {
-                    e.target.parentElement.classList.add('favicon-fallback');
+                    const parent = e.target.parentElement;
+                    const label = parent.dataset.fallbackLabel || '';
+                    const hue = parent.dataset.fallbackHue || '';
+                    const mode = parent.dataset.fallbackMode || 'google';
+                    parent.classList.add('marker-badge');
+                    if (mode === 'duckduckgo') parent.classList.add('compact');
+                    if (mode === 'none') parent.classList.add('minimal');
+                    if (hue) parent.style.setProperty('--marker-hue', hue);
+                    parent.textContent = mode === 'none' ? '' : label;
                 }
             }
         }, true); // Use capture phase to catch errors before they propagate
@@ -361,6 +1054,8 @@
         toggleSyncProviderSettings();
         loadSyncProviderStatus();
         loadWorkspaces();
+        loadBackups();
+        loadBackupSettings();
         await checkUserScriptsAvailability();
 
         // v2.0 Module Initialization
@@ -368,12 +1063,13 @@
         // Lazy-init the scripts tab (default active tab) so CardView etc. are available
         lazyInitTab('scripts');
 
-        const hash = window.location.hash.slice(1);
-        if (hash === 'new_script') {
+        const route = getDashboardRoute();
+        if (route.type === 'new') {
             createNewScript();
-        } else if (hash) {
-            const scriptId = hash.startsWith('script_') ? hash.slice(7) : hash;
-            openEditorForScript(scriptId);
+        } else if (route.type === 'script' && route.scriptId) {
+            openEditorForScript(route.scriptId, { updateRoute: false });
+        } else if (route.type === 'tab' && route.tab && route.tab !== 'scripts') {
+            await switchTab(route.tab, { updateRoute: false });
         }
     }
 
@@ -412,6 +1108,8 @@
             if (typeof LazyLoader !== 'undefined') {
                 LazyLoader.loadOnDemand('whatsnew').then(() => {
                     if (typeof WhatsNew !== 'undefined') WhatsNew.shouldShow().then(show => { if (show) WhatsNew.show(); });
+                }).catch(e => {
+                    console.warn('[ScriptVault] Failed to load whatsnew module:', e?.message || e);
                 });
             }
         });
@@ -437,10 +1135,12 @@
         try {
             await LazyLoader.loadForTab(tabName);
         } catch (e) {
-            _tabInited.delete(tabName);
             console.error(`[ScriptVault] Failed to init tab ${tabName}:`, e);
-            showToast(`Failed to load ${tabName} tab`, 'error');
-            return;
+            const failedModules = Array.isArray(e?.sources) && e.sources.length > 0
+                ? `Missing module${e.sources.length === 1 ? '' : 's'}: ${e.sources.join(', ')}`
+                : 'Some tools may be unavailable until the tab reloads.';
+            showToast(`Some ${tabName} tools failed to load`, 'error');
+            logActivity(`${tabName} tab load issue: ${failedModules}`, 'error');
         }
 
         switch (tabName) {
@@ -454,7 +1154,6 @@
                             },
                             onInstalled: async () => {
                                 await loadScripts();
-                                renderScriptTable();
                             }
                         });
                     });
@@ -465,7 +1164,10 @@
                 break;
             case 'settings':
                 // Theme editor loads with settings tab
-                await LazyLoader.loadOnDemand('scheduler').catch(() => {});
+                await LazyLoader.loadOnDemand('scheduler').catch(e => {
+                    console.error('[ScriptVault] Failed to load scheduler module:', e);
+                    showToast('Scheduling tools are unavailable right now', 'error');
+                });
                 break;
             case 'utilities':
                 // Collections, standalone, depgraph load with utilities tab
@@ -482,21 +1184,25 @@
                         const tableContainer = document.querySelector('.scripts-table-container');
                         if (tableContainer) tableContainer.parentNode.insertBefore(cardContainer, tableContainer.nextSibling);
                         CardView.init(cardContainer, {
+                            tableContainer,
+                            toggleButton: elements.btnViewToggle,
+                            hasScripts: () => state.scripts.length > 0,
                             onEdit: (id) => openEditorForScript(id),
                             onToggle: (id, enabled) => toggleScriptEnabled(id, enabled),
-                            onDelete: (id) => deleteScript(id)
+                            onUpdate: (id) => checkScriptForUpdates(id),
+                            onExport: (id) => {
+                                const script = state.scripts.find(s => s.id === id);
+                                if (script) exportSingleScript(script);
+                            },
+                            onDelete: async (id) => {
+                                const script = state.scripts.find(s => s.id === id);
+                                const name = script?.metadata?.name || id;
+                                if (await showConfirmModal(`Delete "${name}"?`, 'This action cannot be undone.')) {
+                                    deleteScript(id);
+                                }
+                            }
                         });
-                        const viewBtn = document.getElementById('btnViewToggle');
-                        if (viewBtn) {
-                            viewBtn.addEventListener('click', () => {
-                                const mode = CardView.getViewMode() === 'table' ? 'card' : 'table';
-                                CardView.setViewMode(mode);
-                                const tc = document.querySelector('.scripts-table-container');
-                                const cc = document.getElementById('cardViewContainer');
-                                if (mode === 'card') { if (tc) tc.style.display = 'none'; if (cc) { cc.style.display = ''; CardView.render(getFilteredScripts()); } }
-                                else { if (tc) tc.style.display = ''; if (cc) cc.style.display = 'none'; }
-                            });
-                        }
+                        syncCardView(getFilteredScripts());
                     }
                 });
                 break;
@@ -506,8 +1212,15 @@
     // On-demand module loader — call from UI handlers when a specific feature is triggered
     function initOnDemandModule(key, initFn) {
         if (typeof LazyLoader !== 'undefined') {
-            return LazyLoader.loadOnDemand(key).then(() => { safeInit(key, initFn); });
+            return LazyLoader.loadOnDemand(key)
+                .then(() => { safeInit(key, initFn); return true; })
+                .catch(e => {
+                    console.error(`[ScriptVault] Failed to load ${key} module:`, e);
+                    showToast(`Failed to load ${key} tools`, 'error');
+                    return false;
+                });
         }
+        return Promise.resolve(false);
     }
 
     // CWS Review Prompt - non-intrusive after 7 days of use
@@ -641,7 +1354,9 @@
         try {
             const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
             if (response?.settings) {
-                state.settings = response.settings;
+                state.settings = { ...response.settings };
+                state.settings.syncEnabled = normalizeSyncEnabled(state.settings);
+                state.settings.syncProvider = normalizeSyncProvider(state.settings);
                 applySettingsToUI();
             }
         } catch (e) {
@@ -661,6 +1376,8 @@
         if (elements.settingsShowFixedSource) elements.settingsShowFixedSource.checked = s.showFixedSource || false;
         if (elements.settingsLoggingLevel) elements.settingsLoggingLevel.value = s.loggingLevel || 'error';
         if (elements.settingsTrashMode) elements.settingsTrashMode.value = s.trashMode || '30';
+        updateHelpOverview();
+        updateTrashOverview();
         
         // Appearance settings
         if (elements.settingsLayout) elements.settingsLayout.value = s.layout || 'dark';
@@ -701,15 +1418,16 @@
         if (elements.settingsExternalsInterval) elements.settingsExternalsInterval.value = s.externalsInterval || '0';
         
         // Sync settings
-        if (elements.settingsEnableSync) elements.settingsEnableSync.checked = s.enableSync || false;
+        if (elements.settingsEnableSync) elements.settingsEnableSync.checked = normalizeSyncEnabled(s);
         if (elements.settingsSyncType) {
-            elements.settingsSyncType.value = s.syncType || 'browser';
+            elements.settingsSyncType.value = normalizeSyncProvider(s);
             toggleSyncProviderSettings();
         }
         if (elements.settingsWebdavUrl) elements.settingsWebdavUrl.value = s.webdavUrl || '';
         if (elements.settingsWebdavUsername) elements.settingsWebdavUsername.value = s.webdavUsername || '';
         if (elements.settingsWebdavPassword) elements.settingsWebdavPassword.value = s.webdavPassword || '';
         if (elements.syncLog) elements.syncLog.value = s.syncLog || '';
+        syncCloudProviderSelection(normalizeSyncProvider(s), { triggerChange: false });
         
         // Editor settings
         if (elements.settingsEnableEditor) elements.settingsEnableEditor.checked = s.enableEditor !== false;
@@ -784,6 +1502,7 @@
         } else if (customStyle) {
             customStyle.remove();
         }
+        updateSupportSnapshotSummary();
     }
 
     async function saveSetting(key, value) {
@@ -805,6 +1524,14 @@
             if (key === 'layout') document.documentElement.setAttribute('data-theme', value);
             if (key === 'configMode') applyConfigMode();
             if (key === 'customCss') applySettingsToUI();
+            if (key === 'layout') updateHelpOverview();
+            if (key === 'syncProvider') {
+                syncSettingsProviderSelection(value);
+                syncCloudProviderSelection(value);
+            }
+            if (key === 'syncEnabled' || key === 'syncProvider') {
+                loadSyncProviderStatus();
+            }
             showToast('Setting saved', 'success');
         } catch (e) {
             showToast('Failed to save', 'error');
@@ -812,7 +1539,7 @@
     }
 
     function toggleSyncProviderSettings() {
-        const syncType = elements.settingsSyncType?.value || 'browser';
+        const syncType = elements.settingsSyncType?.value || normalizeSyncProvider(state.settings);
         
         // Hide all provider settings first
         if (elements.syncWebdavSettings) elements.syncWebdavSettings.style.display = 'none';
@@ -821,40 +1548,51 @@
         // Show selected provider settings
         if (syncType === 'webdav' && elements.syncWebdavSettings) {
             elements.syncWebdavSettings.style.display = 'block';
-        } else if (['googledrive', 'dropbox', 'onedrive'].includes(syncType) && elements.syncOAuthSettings) {
+        } else if (OAUTH_SYNC_PROVIDERS.includes(syncType) && elements.syncOAuthSettings) {
             elements.syncOAuthSettings.style.display = 'block';
         }
+        loadSyncProviderStatus();
     }
     
     // Update sync provider status UI
     function updateSyncProviderUI(provider, status) {
-        const statusEl = elements[`${provider}Status`];
-        const userEl = elements[`${provider}User`];
-        const userRowEl = elements[`${provider}UserRow`];
-        const connectBtn = elements[`btnConnect${capitalize(provider)}`];
-        const disconnectBtn = elements[`btnDisconnect${capitalize(provider)}`];
-        const syncBtn = elements[`btnSync${capitalize(provider)}`];
-        
-        if (status?.connected) {
-            if (statusEl) {
-                statusEl.textContent = 'Connected';
-                statusEl.className = 'sync-status connected';
+        const selectedProvider = elements.settingsSyncType?.value || normalizeSyncProvider(state.settings);
+        if (!OAUTH_SYNC_PROVIDERS.includes(selectedProvider)) {
+            if (elements.oauthStatus) {
+                elements.oauthStatus.textContent = selectedProvider === 'none' ? 'Choose a provider' : 'Not required';
+                elements.oauthStatus.className = 'sync-status disconnected';
             }
-            if (userEl && status.user) userEl.textContent = status.user;
-            if (userRowEl) userRowEl.style.display = status.user ? 'flex' : 'none';
-            if (connectBtn) connectBtn.style.display = 'none';
-            if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
-            if (syncBtn) syncBtn.style.display = 'inline-block';
-        } else {
-            if (statusEl) {
-                statusEl.textContent = 'Not connected';
-                statusEl.className = 'sync-status disconnected';
-            }
-            if (userRowEl) userRowEl.style.display = 'none';
-            if (connectBtn) connectBtn.style.display = 'inline-block';
-            if (disconnectBtn) disconnectBtn.style.display = 'none';
-            if (syncBtn) syncBtn.style.display = 'none';
+            if (elements.oauthUserRow) elements.oauthUserRow.style.display = 'none';
+            if (elements.btnConnectOAuth) elements.btnConnectOAuth.style.display = selectedProvider === 'none' ? 'none' : 'inline-block';
+            if (elements.btnDisconnectOAuth) elements.btnDisconnectOAuth.style.display = 'none';
+            return;
         }
+
+        if (provider && provider !== selectedProvider) return;
+
+        const label = selectedProvider === 'googledrive'
+            ? 'Google Drive'
+            : selectedProvider === 'dropbox'
+                ? 'Dropbox'
+                : 'OneDrive';
+
+        if (elements.btnConnectOAuth) {
+            elements.btnConnectOAuth.textContent = `Connect ${label}`;
+            elements.btnConnectOAuth.style.display = status?.connected ? 'none' : 'inline-block';
+        }
+        if (elements.btnDisconnectOAuth) {
+            elements.btnDisconnectOAuth.textContent = `Disconnect ${label}`;
+            elements.btnDisconnectOAuth.style.display = status?.connected ? 'inline-block' : 'none';
+        }
+
+        if (elements.oauthStatus) {
+            elements.oauthStatus.textContent = status?.connected ? `${label} connected` : `${label} not connected`;
+            elements.oauthStatus.className = `sync-status ${status?.connected ? 'connected' : 'disconnected'}`;
+        }
+
+        const accountLabel = status?.user?.email || status?.user?.name || status?.user || '';
+        if (elements.oauthUser) elements.oauthUser.textContent = accountLabel;
+        if (elements.oauthUserRow) elements.oauthUserRow.style.display = accountLabel ? 'flex' : 'none';
     }
     
     function capitalize(str) {
@@ -863,30 +1601,54 @@
     
     // Load sync provider status for OAuth providers
     async function loadSyncProviderStatus() {
-        const providers = ['googledrive', 'dropbox', 'onedrive'];
-        await Promise.allSettled(providers.map(async (provider) => {
+        const provider = elements.settingsSyncType?.value || normalizeSyncProvider(state.settings);
+        if (!OAUTH_SYNC_PROVIDERS.includes(provider)) {
+            updateSyncProviderUI(provider, { connected: false });
+        } else {
             try {
                 const response = await chrome.runtime.sendMessage({ action: 'getSyncProviderStatus', provider });
                 updateSyncProviderUI(provider, response);
             } catch (e) {
                 console.error(`Failed to get ${provider} status:`, e);
+                updateSyncProviderUI(provider, { connected: false });
             }
-        }));
-        
-        // Update last sync time
-        if (elements.lastSyncTime && state.settings.lastSync) {
-            elements.lastSyncTime.textContent = new Date(state.settings.lastSync).toLocaleString();
+        }
+
+        if (elements.lastSyncTime) {
+            elements.lastSyncTime.textContent = formatSyncTimestamp(state.settings.lastSync);
+        }
+    }
+
+    async function ensureSyncIdentityPermission(provider) {
+        if (!['googledrive', 'dropbox'].includes(provider)) return true;
+        try {
+            const granted = await chrome.permissions.request({ permissions: ['identity'] });
+            if (!granted) {
+                showToast('Identity permission is required to connect this provider', 'error');
+                return false;
+            }
+            return true;
+        } catch (e) {
+            showToast(`Permission request failed: ${e.message}`, 'error');
+            return false;
         }
     }
     
     // Connect to cloud sync provider
     async function connectSyncProvider(provider) {
+        if (!(await ensureSyncIdentityPermission(provider))) return;
         showToast(`Connecting to ${capitalize(provider)}...`, 'info');
         try {
             const response = await chrome.runtime.sendMessage({ action: 'connectSyncProvider', provider });
             if (response?.success) {
                 showToast(`Connected to ${capitalize(provider)}!`, 'success');
-                updateSyncProviderUI(provider, response);
+                state.settings.syncEnabled = true;
+                state.settings.syncProvider = provider;
+                if (elements.settingsEnableSync) elements.settingsEnableSync.checked = true;
+                syncSettingsProviderSelection(provider);
+                syncCloudProviderSelection(provider);
+                await loadSettings();
+                toggleSyncProviderSettings();
             } else {
                 showToast(response?.error || `Failed to connect to ${capitalize(provider)}`, 'error');
             }
@@ -900,9 +1662,17 @@
         if (!await showConfirmModal('Disconnect', `Disconnect from ${capitalize(provider)}?`)) return;
         
         try {
-            await chrome.runtime.sendMessage({ action: 'disconnectSyncProvider', provider });
+            const response = await chrome.runtime.sendMessage({ action: 'disconnectSyncProvider', provider });
+            if (response?.error) {
+                showToast(response.error, 'error');
+                return;
+            }
             showToast(`Disconnected from ${capitalize(provider)}`, 'success');
-            updateSyncProviderUI(provider, { connected: false });
+            state.settings.syncProvider = 'none';
+            syncSettingsProviderSelection('none');
+            syncCloudProviderSelection('none');
+            await loadSettings();
+            toggleSyncProviderSettings();
         } catch (e) {
             showToast(`Disconnect failed: ${e.message}`, 'error');
         }
@@ -917,7 +1687,8 @@
                 await loadScripts();
                 updateStats();
                 if (elements.lastSyncTime) {
-                    elements.lastSyncTime.textContent = new Date().toLocaleString();
+                    state.settings.lastSync = Date.now();
+                    elements.lastSyncTime.textContent = formatSyncTimestamp(state.settings.lastSync);
                 }
                 showToast('Sync complete!', 'success');
             } else {
@@ -983,7 +1754,7 @@
         if (!el) return;
         
         if (!patterns || patterns.length === 0) {
-            el.innerHTML = '<em style="color: var(--text-muted);">None defined</em>';
+            el.innerHTML = '<span class="panel-empty-inline">None defined</span>';
             return;
         }
         
@@ -1163,79 +1934,1102 @@
         }
     }
 
-    function applyConfigMode() {
-        const mode = state.settings.configMode || 'advanced';
-        document.querySelectorAll('#settingsPanel .settings-section[data-config-level]').forEach(section => {
-            const level = section.getAttribute('data-config-level');
-            if (level === 'advanced' && mode !== 'advanced') {
-                section.style.display = 'none';
-            } else {
-                section.style.display = '';
+    function normalizeSettingsLabel(text) {
+        return (text || '')
+            .replace(/\s+/g, ' ')
+            .replace(/[!?]/g, '')
+            .trim()
+            .toLowerCase();
+    }
+
+    function getSettingsPanelSections() {
+        return Array.from(document.querySelectorAll('#settingsPanel #settingsSections .settings-section'));
+    }
+
+    function initializeSettingsPanelControls() {
+        const sections = getSettingsPanelSections();
+        if (sections.length === 0) return;
+
+        sections.forEach(section => {
+            if (!section.dataset.settingsGroup) {
+                const labelText = normalizeSettingsLabel(section.querySelector('.section-label')?.textContent || '');
+                const contentText = normalizeSettingsLabel(section.querySelector('.section-content')?.textContent || '');
+                section.dataset.settingsLabel = labelText;
+                section.dataset.settingsGroup = SETTINGS_SECTION_GROUPS[labelText] || 'core';
+                section.dataset.settingsSearch = `${labelText} ${contentText}`;
             }
+        });
+
+        elements.settingsFilterButtons?.forEach(button => {
+            button.addEventListener('click', () => {
+                state.settingsPanelFilter = button.dataset.settingsFilter || 'all';
+                applySettingsPanelFilters();
+            });
+        });
+
+        elements.settingsQuickFilter?.addEventListener('input', () => applySettingsPanelFilters());
+        applySettingsPanelFilters();
+    }
+
+    function applySettingsPanelFilters() {
+        const sections = getSettingsPanelSections();
+        if (sections.length === 0) return;
+
+        const mode = state.settings.configMode || 'advanced';
+        const query = normalizeSettingsLabel(elements.settingsQuickFilter?.value || '');
+        let visibleCount = 0;
+        let visibleAdvancedCount = 0;
+        let totalAdvancedCount = 0;
+
+        sections.forEach(section => {
+            const isAdvanced = section.dataset.configLevel === 'advanced';
+            const group = section.dataset.settingsGroup || 'core';
+            const matchesMode = !isAdvanced || mode === 'advanced';
+            const matchesGroup = state.settingsPanelFilter === 'all' || group === state.settingsPanelFilter;
+            const matchesQuery = !query || (section.dataset.settingsSearch || '').includes(query);
+            const shouldShow = matchesMode && matchesGroup && matchesQuery;
+
+            if (isAdvanced) totalAdvancedCount++;
+            if (shouldShow) {
+                visibleCount++;
+                if (isAdvanced) visibleAdvancedCount++;
+            }
+
+            section.hidden = !shouldShow;
+        });
+
+        elements.settingsFilterButtons?.forEach(button => {
+            button.classList.toggle('active', (button.dataset.settingsFilter || 'all') === state.settingsPanelFilter);
+        });
+
+        if (elements.settingsModeSummary) {
+            elements.settingsModeSummary.textContent = mode === 'advanced' ? 'Advanced' : 'Beginner';
+        }
+        if (elements.settingsVisibleSummary) {
+            elements.settingsVisibleSummary.textContent = `${numberFormatter.format(visibleCount)} section${visibleCount === 1 ? '' : 's'}`;
+        }
+        if (elements.settingsAdvancedSummary) {
+            elements.settingsAdvancedSummary.textContent = mode === 'advanced'
+                ? `${numberFormatter.format(visibleAdvancedCount)}/${numberFormatter.format(totalAdvancedCount)} shown`
+                : `${numberFormatter.format(totalAdvancedCount)} hidden`;
+        }
+        if (elements.settingsFilterStatus) {
+            if (query) {
+                elements.settingsFilterStatus.textContent = `Showing ${numberFormatter.format(visibleCount)} result${visibleCount === 1 ? '' : 's'} for "${elements.settingsQuickFilter?.value?.trim() || ''}".`;
+            } else {
+                elements.settingsFilterStatus.textContent = `Showing ${SETTINGS_FILTER_LABELS[state.settingsPanelFilter] || 'all sections'} in ${mode} mode.`;
+            }
+        }
+        if (elements.settingsEmptyState) {
+            elements.settingsEmptyState.hidden = visibleCount !== 0;
+        }
+    }
+
+    function getUtilitiesPanelSections() {
+        return Array.from(document.querySelectorAll('#utilitiesPanel #utilitiesSections .settings-section'));
+    }
+
+    function initializeUtilitiesPanelControls() {
+        const sections = getUtilitiesPanelSections();
+        if (sections.length === 0) return;
+
+        sections.forEach(section => {
+            if (!section.dataset.utilitiesGroup) {
+                const labelText = normalizeSettingsLabel(section.querySelector('.section-label')?.textContent || '');
+                const contentText = normalizeSettingsLabel(section.querySelector('.section-content')?.textContent || '');
+                section.dataset.utilitiesLabel = labelText;
+                section.dataset.utilitiesGroup = UTILITIES_SECTION_GROUPS[labelText] || 'backup';
+                section.dataset.utilitiesSearch = `${labelText} ${contentText}`;
+            }
+        });
+
+        elements.utilitiesFilterButtons?.forEach(button => {
+            button.addEventListener('click', () => {
+                state.utilitiesPanelFilter = button.dataset.utilitiesFilter || 'all';
+                applyUtilitiesPanelFilters();
+            });
+        });
+
+        elements.utilitiesQuickFilter?.addEventListener('input', () => applyUtilitiesPanelFilters());
+        applyUtilitiesPanelFilters();
+    }
+
+    function updateUtilitiesOverview(visibleCount = null) {
+        const providerLabel = elements.cloudProvider?.selectedOptions?.[0]?.textContent?.trim() || 'Cloud';
+        const providerValue = elements.cloudProvider?.value || 'none';
+        const cloudStatus = elements.cloudStatusText?.textContent?.trim() || 'Not connected';
+        const workspaceCount = elements.workspaceList?.querySelectorAll('.workspace-item').length || 0;
+        const importCount = getUtilitiesPanelSections().filter(section => section.dataset.utilitiesGroup === 'import').length;
+        const resolvedVisibleCount = visibleCount == null
+            ? getUtilitiesPanelSections().filter(section => !section.hidden).length
+            : visibleCount;
+
+        if (elements.utilitiesCloudSummary) {
+            elements.utilitiesCloudSummary.textContent = providerValue === 'none'
+                ? 'Choose provider'
+                : cloudStatus === 'Connected'
+                ? `${providerLabel} live`
+                : cloudStatus === 'Error'
+                    ? `${providerLabel} error`
+                    : `${providerLabel} idle`;
+        }
+        if (elements.utilitiesImportSummary) {
+            elements.utilitiesImportSummary.textContent = `${numberFormatter.format(importCount)} paths`;
+        }
+        if (elements.utilitiesWorkspaceSummary) {
+            elements.utilitiesWorkspaceSummary.textContent = workspaceCount === 0
+                ? 'None saved'
+                : `${numberFormatter.format(workspaceCount)} saved`;
+        }
+        if (elements.utilitiesVisibleSummary) {
+            elements.utilitiesVisibleSummary.textContent = `${numberFormatter.format(resolvedVisibleCount)} section${resolvedVisibleCount === 1 ? '' : 's'}`;
+        }
+    }
+
+    function applyUtilitiesPanelFilters() {
+        const sections = getUtilitiesPanelSections();
+        if (sections.length === 0) return;
+
+        const query = normalizeSettingsLabel(elements.utilitiesQuickFilter?.value || '');
+        let visibleCount = 0;
+
+        sections.forEach(section => {
+            const group = section.dataset.utilitiesGroup || 'backup';
+            const matchesGroup = state.utilitiesPanelFilter === 'all' || group === state.utilitiesPanelFilter;
+            const matchesQuery = !query || (section.dataset.utilitiesSearch || '').includes(query);
+            const shouldShow = matchesGroup && matchesQuery;
+            if (shouldShow) visibleCount++;
+            section.hidden = !shouldShow;
+        });
+
+        elements.utilitiesFilterButtons?.forEach(button => {
+            button.classList.toggle('active', (button.dataset.utilitiesFilter || 'all') === state.utilitiesPanelFilter);
+        });
+
+        if (elements.utilitiesFilterStatus) {
+            if (query) {
+                elements.utilitiesFilterStatus.textContent = `Showing ${numberFormatter.format(visibleCount)} result${visibleCount === 1 ? '' : 's'} for "${elements.utilitiesQuickFilter?.value?.trim() || ''}".`;
+            } else {
+                elements.utilitiesFilterStatus.textContent = `Showing ${UTILITIES_FILTER_LABELS[state.utilitiesPanelFilter] || 'all utilities'}.`;
+            }
+        }
+        if (elements.utilitiesEmptyState) {
+            elements.utilitiesEmptyState.hidden = visibleCount !== 0;
+        }
+
+        updateUtilitiesOverview(visibleCount);
+    }
+
+    function applyBackupScheduleFormState() {
+        const scheduleType = elements.backupScheduleType?.value || 'manual';
+        const showHour = scheduleType === 'daily' || scheduleType === 'weekly';
+        const showDay = scheduleType === 'weekly';
+        if (elements.backupHourRow) elements.backupHourRow.hidden = !showHour;
+        if (elements.backupDayRow) elements.backupDayRow.hidden = !showDay;
+        const manualOnly = scheduleType === 'manual';
+        if (elements.backupEnabled) {
+            elements.backupEnabled.disabled = manualOnly;
+            if (manualOnly) elements.backupEnabled.checked = false;
+        }
+    }
+
+    function updateBackupScheduleSummary(settings = state.backupSettings || {}) {
+        const latestBackup = getLatestBackup();
+        if (elements.backupScheduleSummary) {
+            elements.backupScheduleSummary.textContent = formatBackupScheduleSummary(settings);
+        }
+        if (elements.backupScheduleStatus) {
+            const retention = Math.max(1, Number(settings.maxBackups || 5));
+            const notificationParts = [];
+            if (settings.notifyOnSuccess) notificationParts.push('success alerts');
+            if (settings.notifyOnFailure !== false) notificationParts.push('failure alerts');
+            const lastBackupLabel = latestBackup
+                ? `last ${formatBackupReason(latestBackup.reason).toLowerCase()} backup ${dateTimeFormatter.format(new Date(latestBackup.timestamp || Date.now()))}`
+                : 'no backups saved yet';
+            elements.backupScheduleStatus.textContent = `${numberFormatter.format(retention)} backup${retention === 1 ? '' : 's'} retained · ${notificationParts.length ? notificationParts.join(' + ') : 'notifications off'} · ${lastBackupLabel}`;
+        }
+        if (elements.backupNextRunStatus) {
+            if (!settings.enabled) {
+                elements.backupNextRunStatus.textContent = 'Next run: manual only.';
+            } else if ((settings.scheduleType || 'manual') === 'onChange') {
+                elements.backupNextRunStatus.textContent = 'Next run: about 5 minutes after the next script change.';
+            } else {
+                const nextRun = getNextBackupRun(settings);
+                elements.backupNextRunStatus.textContent = nextRun
+                    ? `Next run: ${dateTimeFormatter.format(nextRun)}`
+                    : 'Next run: not scheduled.';
+            }
+        }
+    }
+
+    async function loadBackupSettings(options = {}) {
+        const { announce = false } = options;
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'getBackupSettings' });
+            const settings = normalizeBackupSettings(response);
+            state.backupSettings = settings;
+            if (elements.backupEnabled) elements.backupEnabled.checked = settings.enabled;
+            if (elements.backupScheduleType) elements.backupScheduleType.value = settings.scheduleType;
+            if (elements.backupHour) elements.backupHour.value = String(settings.hour);
+            if (elements.backupDayOfWeek) elements.backupDayOfWeek.value = String(settings.dayOfWeek);
+            if (elements.backupMaxBackups) elements.backupMaxBackups.value = String(settings.maxBackups);
+            if (elements.backupNotifyOnSuccess) elements.backupNotifyOnSuccess.checked = settings.notifyOnSuccess;
+            if (elements.backupNotifyOnFailure) elements.backupNotifyOnFailure.checked = settings.notifyOnFailure;
+            if (elements.backupWarnOnStorageFull) elements.backupWarnOnStorageFull.checked = settings.warnOnStorageFull;
+            applyBackupScheduleFormState();
+            updateBackupScheduleSummary(settings);
+            updateSupportSnapshotSummary();
+            if (announce) showToast('Backup schedule refreshed', 'success');
+            return settings;
+        } catch (error) {
+            const message = error?.message || 'Failed to load backup schedule';
+            state.backupSettings = null;
+            if (elements.backupScheduleSummary) elements.backupScheduleSummary.textContent = 'Unavailable';
+            if (elements.backupScheduleStatus) elements.backupScheduleStatus.textContent = message;
+            if (elements.backupNextRunStatus) elements.backupNextRunStatus.textContent = 'Next run unavailable.';
+            updateSupportSnapshotSummary();
+            if (announce) showToast(message, 'error');
+            return null;
+        }
+    }
+
+    async function saveBackupSettings() {
+        const scheduleType = elements.backupScheduleType?.value || 'manual';
+        const nextSettings = {
+            enabled: !!elements.backupEnabled?.checked && scheduleType !== 'manual',
+            scheduleType,
+            hour: Math.max(0, Math.min(23, Number(elements.backupHour?.value || 3))),
+            dayOfWeek: Math.max(0, Math.min(6, Number(elements.backupDayOfWeek?.value || 0))),
+            maxBackups: Math.max(1, Math.min(50, Number(elements.backupMaxBackups?.value || 5))),
+            notifyOnSuccess: !!elements.backupNotifyOnSuccess?.checked,
+            notifyOnFailure: !!elements.backupNotifyOnFailure?.checked,
+            warnOnStorageFull: !!elements.backupWarnOnStorageFull?.checked
+        };
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'setBackupSettings', settings: nextSettings });
+            if (response?.error || response?.success === false) {
+                showToast(response?.error || 'Failed to save backup schedule', 'error');
+                return;
+            }
+            const savedSettings = response?.settings && typeof response.settings === 'object'
+                ? {
+                    enabled: !!response.settings.enabled,
+                    scheduleType: response.settings.scheduleType || nextSettings.scheduleType,
+                    hour: Number.isFinite(Number(response.settings.hour)) ? Number(response.settings.hour) : nextSettings.hour,
+                    dayOfWeek: Number.isFinite(Number(response.settings.dayOfWeek)) ? Number(response.settings.dayOfWeek) : nextSettings.dayOfWeek,
+                    maxBackups: Math.max(1, Number(response.settings.maxBackups || nextSettings.maxBackups)),
+                    notifyOnSuccess: response.settings.notifyOnSuccess !== false,
+                    notifyOnFailure: response.settings.notifyOnFailure !== false,
+                    warnOnStorageFull: response.settings.warnOnStorageFull !== false
+                }
+                : { ...nextSettings };
+            state.backupSettings = savedSettings;
+            applyBackupScheduleFormState();
+            updateBackupScheduleSummary(savedSettings);
+            updateSupportSnapshotSummary();
+            const prunedCount = Number(response?.settings?.prunedCount || 0);
+            if (prunedCount > 0) {
+                await loadBackups();
+            }
+            showToast(
+                prunedCount > 0
+                    ? `Backup schedule saved, pruned ${numberFormatter.format(prunedCount)} old backup${prunedCount === 1 ? '' : 's'}`
+                    : 'Backup schedule saved',
+                'success'
+            );
+        } catch (error) {
+            showToast(error?.message || 'Failed to save backup schedule', 'error');
+        }
+    }
+
+    function updateSupportSnapshotSummary() {
+        if (!elements.supportSnapshotSummary) return;
+        const runtime = state.trustCenter.runtimeStatus;
+        const runtimeLabel = runtime
+            ? (runtime.setupRequired ? 'Needs setup' : 'Ready')
+            : 'Unchecked';
+        const trustedOriginCount = state.trustCenter.publicApiOrigins?.length || 0;
+        const trustedKeyCount = Object.keys(state.trustCenter.signingKeys || {}).length;
+        const syncProvider = normalizeSyncProvider(state.settings);
+        const enabledScriptCount = state.scripts.filter(script => script.enabled !== false).length;
+        const backupCount = Array.isArray(state.backups) ? state.backups.length : 0;
+        const backupSize = backupCount
+            ? state.backups.reduce((sum, entry) => sum + Number(entry.size || 0), 0)
+            : 0;
+        const latestBackup = getLatestBackup();
+        const backupSummary = latestBackup
+            ? `${numberFormatter.format(backupCount)} backup${backupCount === 1 ? '' : 's'} (${formatBytes(backupSize)}), latest ${formatBackupReason(latestBackup.reason).toLowerCase()} backup ${dateTimeFormatter.format(new Date(latestBackup.timestamp || Date.now()))} (${describeBackupScope(latestBackup)})`
+            : 'no backups saved yet';
+        const backupScheduleLabel = state.backupSettings
+            ? formatBackupScheduleSummary(state.backupSettings).toLowerCase()
+            : 'schedule unavailable';
+        elements.supportSnapshotSummary.textContent =
+            `Runtime ${runtimeLabel}, ${numberFormatter.format(state.scripts.length)} scripts (${numberFormatter.format(enabledScriptCount)} enabled), ${numberFormatter.format(trustedOriginCount)} trusted origins, ${numberFormatter.format(trustedKeyCount)} trusted signing keys, sync ${syncProvider === 'none' ? 'disabled' : syncProvider}, recovery ${backupSummary}, schedule ${backupScheduleLabel}.`;
+    }
+
+    function normalizeTrustedOriginInput(rawValue) {
+        const origins = [];
+        const invalid = [];
+        const seen = new Set();
+        String(rawValue || '')
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(Boolean)
+            .forEach(line => {
+                try {
+                    const parsed = new URL(line);
+                    if (!/^https?:$/.test(parsed.protocol)) {
+                        invalid.push(line);
+                        return;
+                    }
+                    const origin = parsed.origin;
+                    if (!seen.has(origin)) {
+                        seen.add(origin);
+                        origins.push(origin);
+                    }
+                } catch (error) {
+                    invalid.push(line);
+                }
+            });
+        return { origins, invalid };
+    }
+
+    function formatPublicApiPermissionSummary(permissions = {}) {
+        const values = Object.values(permissions);
+        if (!values.length) return 'Permission policy unavailable.';
+        const allowCount = values.filter(value => value === 'allow').length;
+        const promptCount = values.filter(value => value === 'prompt').length;
+        const denyCount = values.filter(value => value === 'deny').length;
+        const guardedActions = Object.entries(permissions)
+            .filter(([, value]) => value !== 'allow')
+            .map(([action, value]) => `${action}: ${value}`)
+            .slice(0, 4)
+            .join(' · ');
+        return `Policy: ${numberFormatter.format(allowCount)} allow, ${numberFormatter.format(promptCount)} prompt, ${numberFormatter.format(denyCount)} deny${guardedActions ? ` (${guardedActions})` : ''}.`;
+    }
+
+    function summarizeAuditDetails(details) {
+        if (!details || typeof details !== 'object') return '';
+        const json = JSON.stringify(details);
+        return json.length > 160 ? `${json.slice(0, 157)}...` : json;
+    }
+
+    function renderRuntimeStatus(status, errorMessage = '') {
+        if (elements.runtimeStatusSummary) {
+            elements.runtimeStatusSummary.textContent = errorMessage
+                ? 'Unavailable'
+                : status?.setupRequired
+                    ? 'Setup Needed'
+                    : status?.userScriptsAvailable
+                        ? 'Ready'
+                        : 'Unavailable';
+        }
+        if (elements.runtimeStatusDetails) {
+            if (errorMessage) {
+                elements.runtimeStatusDetails.textContent = errorMessage;
+            } else if (status) {
+                const detailLines = [
+                    `Chrome ${status.chromeVersion || 'unknown'}`,
+                    status.userScriptsAvailable
+                        ? 'userScripts API is available and ready for registrations.'
+                        : 'userScripts API is unavailable in the current browser state.',
+                    status.setupRequired
+                        ? status.setupMessage || 'Manual setup is still required before scripts can run.'
+                        : 'Runtime looks ready for script injection.'
+                ];
+                if (state.trustCenter.lastRuntimeRepairAt) {
+                    detailLines.push(`Last repair ran ${dateTimeFormatter.format(new Date(state.trustCenter.lastRuntimeRepairAt))}.`);
+                }
+                elements.runtimeStatusDetails.innerHTML = detailLines
+                    .map(line => `<div>${escapeHtml(line)}</div>`)
+                    .join('');
+            } else {
+                elements.runtimeStatusDetails.textContent = 'Runtime status unavailable.';
+            }
+        }
+        updateSupportSnapshotSummary();
+    }
+
+    async function loadRuntimeStatus(options = {}) {
+        const { announce = false } = options;
+        try {
+            const status = await chrome.runtime.sendMessage({ action: 'getExtensionStatus' });
+            state.trustCenter.runtimeStatus = status || null;
+            renderRuntimeStatus(status);
+            if (announce) {
+                showToast(status?.setupRequired ? 'Runtime still needs setup' : 'Runtime status refreshed', status?.setupRequired ? 'warning' : 'success');
+            }
+            return status;
+        } catch (error) {
+            const message = error?.message || 'Failed to load runtime status';
+            renderRuntimeStatus(null, message);
+            if (announce) showToast(message, 'error');
+            return null;
+        }
+    }
+
+    function renderPublicApiAuditLog(entries = []) {
+        if (!elements.publicApiAuditLog) return;
+        if (!entries.length) {
+            elements.publicApiAuditLog.innerHTML = '<div class="panel-empty-inline">No external API activity yet.</div>';
+            return;
+        }
+        elements.publicApiAuditLog.innerHTML = entries
+            .slice()
+            .reverse()
+            .map(entry => {
+                const resultTone = entry?.result === 'ok' ? 'success' : entry?.result === 'denied' ? 'warning' : 'error';
+                const detail = summarizeAuditDetails(entry?.details);
+                return `
+                    <div class="setting-row" style="margin:0;padding:10px 0;display:grid;gap:4px;border-bottom:1px solid rgba(127,127,127,0.1)">
+                        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+                            <strong style="color:var(--text-primary)">${escapeHtml(entry?.action || 'unknown')}</strong>
+                            <span class="info-tag ${resultTone}">${escapeHtml(entry?.result || 'unknown')}</span>
+                        </div>
+                        <div class="panel-empty-inline">${escapeHtml(entry?.sender || 'unknown sender')}</div>
+                        <div class="panel-empty-inline">${escapeHtml(dateTimeFormatter.format(new Date(entry?.timestamp || Date.now())))}</div>
+                        ${detail ? `<div class="panel-empty-inline" style="word-break:break-word">${escapeHtml(detail)}</div>` : ''}
+                    </div>
+                `;
+            })
+            .join('');
+    }
+
+    async function loadPublicApiTrustState(options = {}) {
+        const { announce = false } = options;
+        try {
+            const [originsResponse, permissionsResponse, auditResponse] = await Promise.all([
+                chrome.runtime.sendMessage({ action: 'publicApi_getTrustedOrigins' }),
+                chrome.runtime.sendMessage({ action: 'publicApi_getPermissions' }),
+                chrome.runtime.sendMessage({ action: 'publicApi_getAuditLog', data: { limit: 25 } })
+            ]);
+            const origins = Array.isArray(originsResponse?.origins) ? originsResponse.origins : [];
+            const permissions = permissionsResponse?.permissions && typeof permissionsResponse.permissions === 'object'
+                ? permissionsResponse.permissions
+                : {};
+            const entries = Array.isArray(auditResponse?.entries) ? auditResponse.entries : [];
+
+            state.trustCenter.publicApiOrigins = origins;
+            state.trustCenter.publicApiPermissions = permissions;
+            state.trustCenter.publicApiAudit = entries;
+
+            if (elements.publicApiTrustedOrigins) {
+                elements.publicApiTrustedOrigins.value = origins.join('\n');
+            }
+            if (elements.publicApiPermissionsSummary) {
+                elements.publicApiPermissionsSummary.textContent = formatPublicApiPermissionSummary(permissions);
+            }
+            if (elements.publicApiTrustStatus) {
+                elements.publicApiTrustStatus.textContent = origins.length
+                    ? `${numberFormatter.format(origins.length)} trusted origin${origins.length === 1 ? '' : 's'} · ${numberFormatter.format(entries.length)} recent audit entr${entries.length === 1 ? 'y' : 'ies'}`
+                    : 'No trusted origins configured.';
+            }
+            renderPublicApiAuditLog(entries);
+            updateSupportSnapshotSummary();
+            if (announce) showToast('Public API trust state refreshed', 'success');
+            return { origins, permissions, entries };
+        } catch (error) {
+            const message = error?.message || 'Failed to load public API trust state';
+            if (elements.publicApiPermissionsSummary) elements.publicApiPermissionsSummary.textContent = message;
+            if (elements.publicApiTrustStatus) elements.publicApiTrustStatus.textContent = 'Public API trust controls unavailable.';
+            if (elements.publicApiAuditLog) {
+                elements.publicApiAuditLog.innerHTML = `<div class="panel-empty-inline">${escapeHtml(message)}</div>`;
+            }
+            if (announce) showToast(message, 'error');
+            return null;
+        }
+    }
+
+    function renderSigningTrustList(keys = {}) {
+        if (!elements.signingKeysList) return;
+        const entries = Object.entries(keys).sort((a, b) => (b[1]?.addedAt || 0) - (a[1]?.addedAt || 0));
+        if (!entries.length) {
+            elements.signingKeysList.innerHTML = '<div class="panel-empty-inline">No trusted signing keys saved.</div>';
+            return;
+        }
+        elements.signingKeysList.innerHTML = entries
+            .map(([publicKey, meta]) => `
+                <div class="setting-row" style="margin:0;padding:10px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:1px solid rgba(127,127,127,0.1)">
+                    <div style="min-width:0;display:grid;gap:4px">
+                        <strong style="color:var(--text-primary)">${escapeHtml(meta?.name || publicKey.slice(0, 12))}</strong>
+                        <div class="panel-empty-inline" style="word-break:break-all">${escapeHtml(publicKey)}</div>
+                        <div class="panel-empty-inline">Trusted ${escapeHtml(meta?.addedAt ? dateTimeFormatter.format(new Date(meta.addedAt)) : 'recently')}</div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-danger" data-untrust-key="${escapeHtml(publicKey)}">Remove Trust</button>
+                </div>
+            `)
+            .join('');
+
+        elements.signingKeysList.querySelectorAll('[data-untrust-key]').forEach(button => {
+            button.addEventListener('click', async () => {
+                const publicKey = button.dataset.untrustKey;
+                const meta = keys[publicKey] || {};
+                const label = meta.name || `${publicKey.slice(0, 12)}...`;
+                if (!await showConfirmModal('Remove trusted key?', `Stop trusting ${label}? Verified installs from this key will require trust again.`)) {
+                    return;
+                }
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'signing_untrustKey', data: { publicKey } });
+                    if (response?.error) {
+                        showToast(response.error, 'error');
+                        return;
+                    }
+                    await loadSigningTrustState();
+                    showToast(`Removed trust for ${label}`, 'success');
+                } catch (error) {
+                    showToast(error?.message || 'Failed to remove trusted key', 'error');
+                }
+            });
         });
     }
 
-    // Trash
-    async function loadTrash() {
-        if (!elements.trashList) return;
+    async function loadSigningTrustState(options = {}) {
+        const { announce = false } = options;
         try {
-            const response = await chrome.runtime.sendMessage({ action: 'getTrash' });
-            const trash = response?.trash || [];
-
-            if (trash.length === 0) {
-                const trashMode = state.settings?.trashMode || '30';
-                const hint = trashMode === 'disabled'
-                    ? 'Trash is disabled in settings. Deleted scripts are permanently removed.'
-                    : `Trash is empty. Deleted scripts are kept for ${trashMode} day(s).`;
-                elements.trashList.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:40px">
-                    <div style="font-size:24px;margin-bottom:8px;opacity:0.5">🗑️</div>
-                    <div>${escapeHtml(hint)}</div>
-                </div>`;
-                return;
+            const response = await chrome.runtime.sendMessage({ action: 'signing_getTrustedKeys' });
+            const keys = response?.keys && typeof response.keys === 'object' ? response.keys : {};
+            state.trustCenter.signingKeys = keys;
+            const count = Object.keys(keys).length;
+            if (elements.signingTrustSummary) {
+                elements.signingTrustSummary.textContent = count
+                    ? `${numberFormatter.format(count)} trusted signing key${count === 1 ? '' : 's'} configured.`
+                    : 'No trusted signing keys saved.';
             }
+            renderSigningTrustList(keys);
+            updateSupportSnapshotSummary();
+            if (announce) showToast('Signing trust refreshed', 'success');
+            return keys;
+        } catch (error) {
+            const message = error?.message || 'Failed to load signing trust';
+            if (elements.signingTrustSummary) elements.signingTrustSummary.textContent = message;
+            if (elements.signingKeysList) {
+                elements.signingKeysList.innerHTML = `<div class="panel-empty-inline">${escapeHtml(message)}</div>`;
+            }
+            if (announce) showToast(message, 'error');
+            return null;
+        }
+    }
 
-            elements.trashList.innerHTML = '';
-            const table = document.createElement('table');
-            table.className = 'scripts-table';
-            table.style.width = '100%';
-            table.innerHTML = '<thead><tr><th>Name</th><th class="center">Version</th><th class="center">Deleted</th><th class="center">Actions</th></tr></thead>';
-            const tbody = document.createElement('tbody');
+    async function refreshUtilitiesDiagnostics(options = {}) {
+        const { announce = false } = options;
+        await Promise.all([
+            loadRuntimeStatus(),
+            loadPublicApiTrustState(),
+            loadSigningTrustState()
+        ]);
+        if (announce) showToast('Diagnostics refreshed', 'success');
+    }
 
-            trash.forEach(script => {
-                const tr = document.createElement('tr');
-                const name = script.metadata?.name || script.meta?.name || 'Unnamed';
-                const version = script.metadata?.version || script.meta?.version || '-';
-                const deletedAt = script.trashedAt ? formatTime(script.trashedAt) : '-';
-                tr.innerHTML = `
-                    <td>${escapeHtml(name)}</td>
-                    <td class="center">${escapeHtml(version)}</td>
-                    <td class="center">${deletedAt}</td>
-                    <td class="center">
-                        <div class="action-icons">
-                            <button class="btn" style="font-size:11px;padding:4px 10px" data-restore="${script.id}">Restore</button>
-                            <button class="btn btn-danger" style="font-size:11px;padding:4px 10px" data-permdelete="${script.id}">Delete</button>
-                        </div>
-                    </td>
-                `;
-                tr.querySelector('[data-restore]').addEventListener('click', async () => {
-                    await chrome.runtime.sendMessage({ action: 'restoreFromTrash', scriptId: script.id });
+    function getRecentActivityEntries(limit = 15) {
+        return Array.from(document.querySelectorAll('#activityLog .activity-entry'))
+            .slice(0, limit)
+            .map(entry => entry.textContent.trim())
+            .filter(Boolean);
+    }
+
+    async function exportSupportSnapshot() {
+        if (elements.supportSnapshotStatus) {
+            elements.supportSnapshotStatus.textContent = 'Collecting diagnostics...';
+        }
+        try {
+            const provider = normalizeSyncProvider(state.settings);
+            const [
+                runtimeStatus,
+                publicApiData,
+                signingKeys,
+                errorLog,
+                errorGroups,
+                networkStats,
+                networkLog,
+                backupInventory,
+                backupSettings
+            ] = await Promise.all([
+                chrome.runtime.sendMessage({ action: 'getExtensionStatus' }),
+                Promise.all([
+                    chrome.runtime.sendMessage({ action: 'publicApi_getTrustedOrigins' }),
+                    chrome.runtime.sendMessage({ action: 'publicApi_getPermissions' }),
+                    chrome.runtime.sendMessage({ action: 'publicApi_getAuditLog', data: { limit: 25 } })
+                ]),
+                chrome.runtime.sendMessage({ action: 'signing_getTrustedKeys' }),
+                chrome.runtime.sendMessage({ action: 'getErrorLog' }),
+                chrome.runtime.sendMessage({ action: 'getErrorLogGrouped' }),
+                chrome.runtime.sendMessage({ action: 'getNetworkLogStats' }),
+                chrome.runtime.sendMessage({ action: 'getNetworkLog' }),
+                chrome.runtime.sendMessage({ action: 'getBackups' }),
+                chrome.runtime.sendMessage({ action: 'getBackupSettings' })
+            ]);
+
+            const [originsResponse, permissionsResponse, auditResponse] = publicApiData;
+            const cloudStatus = provider && provider !== 'none'
+                ? await chrome.runtime.sendMessage({ action: 'cloudStatus', provider })
+                : { connected: false };
+            const backups = Array.isArray(backupInventory) ? backupInventory : (backupInventory?.backups || []);
+            state.backups = backups.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            state.backupSettings = normalizeBackupSettings(backupSettings);
+            const latestBackup = getLatestBackup();
+            const totalBackupSize = state.backups.reduce((sum, entry) => sum + Number(entry.size || 0), 0);
+
+            state.trustCenter.runtimeStatus = runtimeStatus || null;
+            state.trustCenter.publicApiOrigins = Array.isArray(originsResponse?.origins) ? originsResponse.origins : [];
+            state.trustCenter.publicApiPermissions = permissionsResponse?.permissions || {};
+            state.trustCenter.publicApiAudit = Array.isArray(auditResponse?.entries) ? auditResponse.entries : [];
+            state.trustCenter.signingKeys = signingKeys?.keys || {};
+
+            renderRuntimeStatus(runtimeStatus);
+            renderPublicApiAuditLog(state.trustCenter.publicApiAudit);
+            renderSigningTrustList(state.trustCenter.signingKeys);
+
+            const snapshot = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                extension: {
+                    name: chrome.runtime.getManifest().name,
+                    version: chrome.runtime.getManifest().version
+                },
+                runtime: runtimeStatus,
+                sync: {
+                    enabled: normalizeSyncEnabled(state.settings),
+                    provider,
+                    lastSyncTime: state.settings.lastSyncTime || null,
+                    cloudStatus
+                },
+                recovery: {
+                    schedule: state.backupSettings,
+                    inventory: {
+                        count: state.backups.length,
+                        totalSize: totalBackupSize,
+                        totalSizeFormatted: formatBytes(totalBackupSize),
+                        latest: latestBackup ? {
+                            id: latestBackup.id,
+                            timestamp: latestBackup.timestamp || null,
+                            reason: latestBackup.reason || 'backup',
+                            reasonLabel: formatBackupReason(latestBackup.reason),
+                            scope: describeBackupScope(latestBackup),
+                            scriptCount: latestBackup.scriptCount || 0,
+                            size: latestBackup.size || 0,
+                            sizeFormatted: latestBackup.sizeFormatted || formatBytes(latestBackup.size || 0)
+                        } : null,
+                        recentBackups: state.backups.slice(0, 10).map(backup => ({
+                            id: backup.id,
+                            timestamp: backup.timestamp || null,
+                            reason: backup.reason || 'backup',
+                            reasonLabel: formatBackupReason(backup.reason),
+                            scope: describeBackupScope(backup),
+                            scriptCount: backup.scriptCount || 0,
+                            size: backup.size || 0,
+                            sizeFormatted: backup.sizeFormatted || formatBytes(backup.size || 0)
+                        }))
+                    }
+                },
+                trust: {
+                    publicApiOrigins: state.trustCenter.publicApiOrigins,
+                    publicApiPermissions: state.trustCenter.publicApiPermissions,
+                    publicApiAudit: state.trustCenter.publicApiAudit,
+                    trustedSigningKeys: state.trustCenter.signingKeys,
+                    deniedHosts: state.settings.deniedHosts || []
+                },
+                counts: {
+                    scripts: state.scripts.length,
+                    enabledScripts: state.scripts.filter(script => script.enabled !== false).length,
+                    folders: state.folders.length,
+                    selectedScripts: state.selectedScripts.size
+                },
+                diagnostics: {
+                    activityLog: getRecentActivityEntries(),
+                    errorLog,
+                    errorGroups,
+                    networkStats,
+                    recentNetworkLog: Array.isArray(networkLog) ? networkLog.slice(-25) : networkLog
+                },
+                scripts: state.scripts.map(script => {
+                    const provenance = describeScriptProvenance(script);
+                    return {
+                        id: script.id,
+                        name: script.metadata?.name || script.id,
+                        version: script.metadata?.version || null,
+                        enabled: script.enabled !== false,
+                        provenance: provenance.label,
+                        provenanceDetail: provenance.detail,
+                        homepage: script.metadata?.homepage || script.metadata?.homepageURL || null,
+                        updateURL: script.metadata?.updateURL || null,
+                        downloadURL: script.metadata?.downloadURL || null,
+                        userModified: !!script.settings?.userModified,
+                        syncLock: !!script.settings?.syncLock
+                    };
+                })
+            };
+
+            const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = `scriptvault-support-snapshot-${new Date().toISOString().split('T')[0]}.json`;
+            anchor.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+            updateSupportSnapshotSummary();
+            if (elements.supportSnapshotStatus) {
+                elements.supportSnapshotStatus.textContent = `Exported ${dateTimeFormatter.format(new Date())}`;
+            }
+            showToast('Support snapshot exported', 'success');
+        } catch (error) {
+            if (elements.supportSnapshotStatus) {
+                elements.supportSnapshotStatus.textContent = error?.message || 'Export failed';
+            }
+            showToast(error?.message || 'Failed to export support snapshot', 'error');
+        }
+    }
+
+    function applyConfigMode() {
+        applySettingsPanelFilters();
+    }
+
+    function getHelpPanelSections() {
+        return Array.from(document.querySelectorAll('#helpPanel #helpSections .help-section'));
+    }
+
+    function initializeHelpPanelControls() {
+        const sections = getHelpPanelSections();
+        if (sections.length === 0) return;
+
+        sections.forEach(section => {
+            if (!section.dataset.helpGroup) {
+                section.dataset.helpGroup = 'reference';
+            }
+            const titleText = normalizeSettingsLabel(section.querySelector('.shortcuts-title, h2, h3')?.textContent || '');
+            const contentText = normalizeSettingsLabel(section.textContent || '');
+            section.dataset.helpSearch = `${titleText} ${contentText}`;
+        });
+
+        elements.helpFilterButtons?.forEach(button => {
+            button.addEventListener('click', () => {
+                state.helpPanelFilter = button.dataset.helpFilter || 'all';
+                applyHelpPanelFilters();
+            });
+        });
+
+        elements.helpQuickFilter?.addEventListener('input', () => applyHelpPanelFilters());
+        elements.helpActionButtons?.forEach(button => {
+            button.addEventListener('click', () => performHelpAction(button.dataset.helpAction || ''));
+        });
+
+        applyHelpPanelFilters();
+    }
+
+    function updateHelpOverview(visibleCount = null) {
+        const total = state.scripts.length;
+        const active = state.scripts.filter(s => s.enabled !== false).length;
+        const resolvedVisibleCount = visibleCount == null ? getHelpPanelSections().filter(section => !section.hidden).length : visibleCount;
+        const actionCount = elements.helpActionButtons?.length || 0;
+        const theme = THEME_LABELS[state.settings.layout || 'dark'] || 'Dark';
+
+        if (elements.helpActionSummary) {
+            elements.helpActionSummary.textContent = `${numberFormatter.format(actionCount)} launch${actionCount === 1 ? '' : 'es'}`;
+        }
+        if (elements.helpVisibleSummary) {
+            elements.helpVisibleSummary.textContent = `${numberFormatter.format(resolvedVisibleCount)} section${resolvedVisibleCount === 1 ? '' : 's'}`;
+        }
+        if (elements.helpThemeSummary) {
+            elements.helpThemeSummary.textContent = theme;
+        }
+        if (elements.helpScriptSummary) {
+            elements.helpScriptSummary.textContent = total === 0
+                ? '0 installed'
+                : `${numberFormatter.format(active)}/${numberFormatter.format(total)} active`;
+        }
+    }
+
+    function applyHelpPanelFilters() {
+        const sections = getHelpPanelSections();
+        if (sections.length === 0) return;
+
+        const query = normalizeSettingsLabel(elements.helpQuickFilter?.value || '');
+        let visibleCount = 0;
+
+        sections.forEach(section => {
+            const group = section.dataset.helpGroup || 'reference';
+            const matchesGroup = state.helpPanelFilter === 'all' || group === state.helpPanelFilter;
+            const matchesQuery = !query || (section.dataset.helpSearch || '').includes(query);
+            const shouldShow = matchesGroup && matchesQuery;
+            if (shouldShow) visibleCount++;
+            section.hidden = !shouldShow;
+        });
+
+        elements.helpFilterButtons?.forEach(button => {
+            button.classList.toggle('active', (button.dataset.helpFilter || 'all') === state.helpPanelFilter);
+        });
+
+        if (elements.helpFilterStatus) {
+            if (query) {
+                elements.helpFilterStatus.textContent = `Showing ${numberFormatter.format(visibleCount)} result${visibleCount === 1 ? '' : 's'} for "${elements.helpQuickFilter?.value?.trim() || ''}".`;
+            } else {
+                elements.helpFilterStatus.textContent = `Showing ${HELP_FILTER_LABELS[state.helpPanelFilter] || 'all references'}.`;
+            }
+        }
+        if (elements.helpEmptyState) {
+            elements.helpEmptyState.hidden = visibleCount !== 0;
+        }
+
+        updateHelpOverview(visibleCount);
+    }
+
+    function performHelpAction(action) {
+        switch (action) {
+            case 'new-script':
+                createNewScript();
+                break;
+            case 'import-script':
+                importScript();
+                break;
+            case 'find-scripts':
+                openFindScripts();
+                break;
+            case 'command-palette':
+                openCommandPalette();
+                break;
+            case 'open-settings':
+                switchTab('settings');
+                break;
+            case 'open-utilities':
+                switchTab('utilities');
+                break;
+            case 'open-trash':
+                switchTab('trash');
+                break;
+            case 'check-updates':
+                document.getElementById('btnCheckUpdates')?.click();
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Trash
+    function initializeTrashPanelControls() {
+        elements.trashFilterButtons?.forEach(button => {
+            button.addEventListener('click', () => {
+                state.trashPanelFilter = button.dataset.trashFilter || 'all';
+                renderTrashList();
+            });
+        });
+
+        elements.trashQuickFilter?.addEventListener('input', () => renderTrashList());
+        updateTrashOverview();
+    }
+
+    function getTrashTimestamp(script) {
+        const date = new Date(script?.trashedAt || 0);
+        const time = date.getTime();
+        return Number.isFinite(time) ? time : 0;
+    }
+
+    function getTrashMetadata(script) {
+        const metadata = script?.metadata || script?.meta || {};
+        return {
+            name: metadata.name || 'Unnamed',
+            version: metadata.version || 'No version',
+            author: metadata.author || '',
+            description: metadata.description || ''
+        };
+    }
+
+    function formatTrashRetention(mode = state.settings?.trashMode || 'disabled') {
+        if (mode === 'disabled') return 'Disabled';
+        const days = parseInt(mode, 10);
+        return Number.isFinite(days) ? `${days} day${days === 1 ? '' : 's'}` : 'Manual';
+    }
+
+    function formatRelativeTimeLabel(ts) {
+        const formatted = formatTime(ts);
+        if (formatted === '-') return 'Unknown';
+        if (formatted === 'now') return 'Just now';
+        return /^\d+[mhd]$/.test(formatted) ? `${formatted} ago` : formatted;
+    }
+
+    function getFilteredTrashItems() {
+        const query = normalizeSettingsLabel(elements.trashQuickFilter?.value || '');
+        return [...state.trashItems]
+            .sort((a, b) => getTrashTimestamp(b) - getTrashTimestamp(a))
+            .filter(script => {
+                const { name, version, author, description } = getTrashMetadata(script);
+                const searchText = normalizeSettingsLabel(`${name} ${version} ${author} ${description}`);
+                const deletedAt = getTrashTimestamp(script);
+                const ageDays = deletedAt ? (Date.now() - deletedAt) / 86400000 : Number.POSITIVE_INFINITY;
+                const matchesFilter = state.trashPanelFilter === 'all'
+                    || (state.trashPanelFilter === 'recent' && ageDays <= 7)
+                    || (state.trashPanelFilter === 'older' && ageDays > 7);
+                const matchesQuery = !query || searchText.includes(query);
+                return matchesFilter && matchesQuery;
+            });
+    }
+
+    function setTrashEmptyState(title, description) {
+        if (elements.trashEmptyTitle) elements.trashEmptyTitle.textContent = title;
+        if (elements.trashEmptyDescription) elements.trashEmptyDescription.textContent = description;
+        if (elements.trashEmptyState) elements.trashEmptyState.hidden = false;
+        if (elements.trashList) {
+            elements.trashList.hidden = true;
+            elements.trashList.replaceChildren();
+        }
+    }
+
+    function updateTrashOverview(visibleCount = null) {
+        const total = state.trashItems.length;
+        const retentionLabel = formatTrashRetention();
+        const latestDeletedAt = state.trashItems.reduce((latest, item) => Math.max(latest, getTrashTimestamp(item)), 0);
+        const resolvedVisibleCount = visibleCount == null ? getFilteredTrashItems().length : visibleCount;
+        const query = elements.trashQuickFilter?.value?.trim() || '';
+
+        if (elements.trashCountSummary) {
+            elements.trashCountSummary.textContent = `${numberFormatter.format(total)} script${total === 1 ? '' : 's'}`;
+        }
+        if (elements.trashRetentionSummary) {
+            elements.trashRetentionSummary.textContent = retentionLabel;
+        }
+        if (elements.trashLatestSummary) {
+            elements.trashLatestSummary.textContent = latestDeletedAt
+                ? formatRelativeTimeLabel(latestDeletedAt)
+                : 'Never';
+        }
+        if (elements.btnEmptyTrash) {
+            elements.btnEmptyTrash.disabled = total === 0;
+        }
+        if (elements.trashFilterButtons) {
+            elements.trashFilterButtons.forEach(button => {
+                button.classList.toggle('active', (button.dataset.trashFilter || 'all') === state.trashPanelFilter);
+            });
+        }
+        if (elements.trashFilterStatus) {
+            if (total === 0) {
+                elements.trashFilterStatus.textContent = retentionLabel === 'Disabled'
+                    ? 'Trash is disabled. Deleted scripts are removed immediately.'
+                    : `Deleted scripts stay here for ${retentionLabel.toLowerCase()} before final cleanup.`;
+            } else if (query) {
+                elements.trashFilterStatus.textContent = `Showing ${numberFormatter.format(resolvedVisibleCount)} result${resolvedVisibleCount === 1 ? '' : 's'} for "${query}".`;
+            } else {
+                elements.trashFilterStatus.textContent = `Showing ${TRASH_FILTER_LABELS[state.trashPanelFilter] || 'all deleted scripts'}.`;
+            }
+        }
+    }
+
+    function renderTrashList() {
+        if (!elements.trashList) return;
+
+        const filteredTrash = getFilteredTrashItems();
+        updateTrashOverview(filteredTrash.length);
+
+        if (state.trashItems.length === 0) {
+            const retentionLabel = formatTrashRetention();
+            setTrashEmptyState(
+                retentionLabel === 'Disabled' ? 'Trash is disabled' : 'Trash is empty',
+                retentionLabel === 'Disabled'
+                    ? 'Deleted scripts bypass recovery while this policy is off.'
+                    : `Deleted scripts will stay here for ${retentionLabel.toLowerCase()} before permanent cleanup.`
+            );
+            return;
+        }
+
+        if (filteredTrash.length === 0) {
+            setTrashEmptyState(
+                'No deleted scripts matched',
+                elements.trashQuickFilter?.value?.trim()
+                    ? 'Try a different name, author, or version search.'
+                    : 'Switch the time filter to inspect a different recovery window.'
+            );
+            return;
+        }
+
+        if (elements.trashEmptyState) elements.trashEmptyState.hidden = true;
+        elements.trashList.hidden = false;
+
+        const fragment = document.createDocumentFragment();
+        filteredTrash.forEach(script => {
+            const metadata = getTrashMetadata(script);
+            const deletedAt = getTrashTimestamp(script);
+            const deletedLabel = deletedAt ? formatRelativeTimeLabel(deletedAt) : 'Unknown';
+            const deletedExact = deletedAt ? dateTimeFormatter.format(new Date(deletedAt)) : 'Unknown time';
+            const item = document.createElement('article');
+            item.className = 'trash-item';
+            item.innerHTML = `
+                <div class="trash-item-main">
+                    <div class="trash-item-heading">
+                        <div class="trash-item-name">${escapeHtml(metadata.name)}</div>
+                        <span class="trash-item-version">${escapeHtml(metadata.version)}</span>
+                    </div>
+                    ${metadata.description ? `<div class="trash-item-description">${escapeHtml(metadata.description)}</div>` : ''}
+                    <div class="trash-item-meta">
+                        ${metadata.author ? `<span>${escapeHtml(metadata.author)}</span>` : ''}
+                        <span>Deleted ${escapeHtml(deletedLabel)}</span>
+                        <span>Removed ${escapeHtml(deletedExact)}</span>
+                    </div>
+                </div>
+                <div class="trash-item-actions">
+                    <button type="button" class="btn" data-trash-restore="${script.id}">Restore</button>
+                    <button type="button" class="btn btn-danger" data-trash-delete="${script.id}">Delete Forever</button>
+                </div>
+            `;
+
+            item.querySelector('[data-trash-restore]')?.addEventListener('click', async () => {
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'restoreFromTrash', scriptId: script.id });
+                    if (response?.error) {
+                        showToast(response.error, 'error');
+                        return;
+                    }
                     showToast('Script restored', 'success');
                     await loadTrash();
                     await loadScripts();
                     updateStats();
-                });
-                tr.querySelector('[data-permdelete]').addEventListener('click', async () => {
-                    await chrome.runtime.sendMessage({ action: 'permanentlyDelete', scriptId: script.id });
+                } catch (error) {
+                    console.error('Failed to restore from trash:', error);
+                    showToast('Failed to restore script', 'error');
+                }
+            });
+
+            item.querySelector('[data-trash-delete]')?.addEventListener('click', async () => {
+                const confirm = await showConfirmModal(
+                    'Delete Forever',
+                    `Permanently remove "${metadata.name}" from trash?`
+                );
+                if (!confirm) return;
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'permanentlyDelete', scriptId: script.id });
+                    if (response?.error) {
+                        showToast(response.error, 'error');
+                        return;
+                    }
                     showToast('Permanently deleted', 'success');
                     await loadTrash();
-                });
-                tbody.appendChild(tr);
+                    updateStats();
+                } catch (error) {
+                    console.error('Failed to permanently delete script:', error);
+                    showToast('Failed to permanently delete script', 'error');
+                }
             });
-            table.appendChild(tbody);
-            elements.trashList.innerHTML = '';
-            elements.trashList.appendChild(table);
+
+            fragment.appendChild(item);
+        });
+
+        elements.trashList.replaceChildren(fragment);
+    }
+
+    async function loadTrash() {
+        if (!elements.trashList) return;
+        elements.trashList.hidden = false;
+        if (elements.trashEmptyState) elements.trashEmptyState.hidden = true;
+        elements.trashList.innerHTML = '<div class="panel-empty-inline">Loading deleted scripts...</div>';
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'getTrash' });
+            state.trashItems = Array.isArray(response?.trash) ? response.trash : [];
+            renderTrashList();
         } catch (e) {
             console.error('Failed to load trash:', e);
+            state.trashItems = [];
+            updateTrashOverview(0);
+            if (elements.trashFilterStatus) {
+                elements.trashFilterStatus.textContent = 'Trash could not be loaded right now.';
+            }
+            setTrashEmptyState('Trash unavailable', 'ScriptVault could not load deleted scripts right now.');
         }
     }
 
@@ -1251,12 +3045,18 @@
     }
 
     async function createFolder() {
-        const name = prompt('Folder name:');
-        if (!name?.trim()) return;
+        const name = await showInputModal({
+            title: 'New Folder',
+            label: 'Folder name',
+            placeholder: 'Favorites',
+            confirmLabel: 'Create',
+            validate: value => value ? '' : 'Enter a folder name.'
+        });
+        if (!name) return;
         const colors = ['#60a5fa', '#f87171', '#fbbf24', '#a78bfa', '#34d399', '#fb923c'];
         const color = colors[state.folders?.length % colors.length] || '#60a5fa';
         try {
-            const res = await chrome.runtime.sendMessage({ action: 'createFolder', name: name.trim(), color });
+            const res = await chrome.runtime.sendMessage({ action: 'createFolder', name, color });
             if (res?.folder) {
                 await loadFolders();
                 renderScriptTable();
@@ -1305,6 +3105,7 @@
                 state.scripts = response.scripts;
                 updateTagFilterOptions();
                 renderScriptTable();
+                updateSupportSnapshotSummary();
             }
         } catch (e) {
             console.error('Failed to load scripts:', e);
@@ -1474,11 +3275,16 @@
     function updateSortIndicators() {
         document.querySelectorAll('.scripts-table th.sortable').forEach(th => {
             const indicator = th.querySelector('.sort-indicator');
-            if (!indicator) return;
-            indicator.className = 'sort-indicator';
-            if (th.dataset.sort === state.sortColumn) {
-                indicator.classList.add(state.sortDirection);
+            const isActive = th.dataset.sort === state.sortColumn;
+            if (indicator) {
+                indicator.className = 'sort-indicator';
+                if (isActive) {
+                    indicator.classList.add(state.sortDirection);
+                }
             }
+            th.setAttribute('aria-sort', isActive
+                ? (state.sortDirection === 'asc' ? 'ascending' : 'descending')
+                : 'none');
         });
     }
     
@@ -1628,20 +3434,130 @@
         if (elements.bulkActionSelect) elements.bulkActionSelect.value = '';
     }
 
+    function updateScriptEmptyState(filteredCount) {
+        if (!elements.emptyState) return;
+
+        const hasScripts = state.scripts.length > 0;
+        const searchQuery = elements.scriptSearch?.value?.trim() || '';
+        const filterValue = elements.filterSelect?.value || 'all';
+        const hasSearch = searchQuery.length > 0;
+        const hasFilter = filterValue !== 'all';
+
+        if (!hasScripts) {
+            if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = 'No Userscripts Yet';
+            if (elements.emptyStateDescription) {
+                elements.emptyStateDescription.textContent = 'Create a new script or import one to build out the workspace.';
+            }
+            if (elements.emptyStatePrimaryAction) {
+                elements.emptyStatePrimaryAction.hidden = false;
+                elements.emptyStatePrimaryAction.textContent = 'Create Script';
+                elements.emptyStatePrimaryAction.onclick = () => createNewScript();
+            }
+            if (elements.emptyStateSecondaryAction) {
+                elements.emptyStateSecondaryAction.hidden = false;
+                elements.emptyStateSecondaryAction.textContent = 'Import Script';
+                elements.emptyStateSecondaryAction.onclick = () => importScript();
+            }
+            return;
+        }
+
+        if (filteredCount === 0 && (hasSearch || hasFilter)) {
+            if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = 'No Matching Scripts';
+            if (elements.emptyStateDescription) {
+                const searchDetail = hasSearch ? ` for "${searchQuery}"` : '';
+                const filterDetail = hasFilter ? ` under the "${filterValue}" filter` : '';
+                elements.emptyStateDescription.textContent = `No scripts matched${searchDetail}${filterDetail}. Clear the current search or filter to see the full workspace.`;
+            }
+            if (elements.emptyStatePrimaryAction) {
+                elements.emptyStatePrimaryAction.hidden = false;
+                elements.emptyStatePrimaryAction.textContent = hasSearch && hasFilter ? 'Reset Search & Filter' : hasSearch ? 'Clear Search' : 'Clear Filter';
+                elements.emptyStatePrimaryAction.onclick = () => {
+                    if (elements.scriptSearch) elements.scriptSearch.value = '';
+                    if (elements.filterSelect) elements.filterSelect.value = 'all';
+                    renderScriptTable();
+                };
+            }
+            if (elements.emptyStateSecondaryAction) {
+                elements.emptyStateSecondaryAction.hidden = true;
+                elements.emptyStateSecondaryAction.onclick = null;
+            }
+            return;
+        }
+
+        if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = 'Nothing To Show';
+        if (elements.emptyStateDescription) {
+            elements.emptyStateDescription.textContent = 'This view is empty right now. Try a different filter or refresh the workspace.';
+        }
+        if (elements.emptyStatePrimaryAction) {
+            elements.emptyStatePrimaryAction.hidden = false;
+            elements.emptyStatePrimaryAction.textContent = 'Show All Scripts';
+            elements.emptyStatePrimaryAction.onclick = () => {
+                if (elements.scriptSearch) elements.scriptSearch.value = '';
+                if (elements.filterSelect) elements.filterSelect.value = 'all';
+                renderScriptTable();
+            };
+        }
+        if (elements.emptyStateSecondaryAction) {
+            elements.emptyStateSecondaryAction.hidden = true;
+            elements.emptyStateSecondaryAction.onclick = null;
+        }
+    }
+
+    function syncCardView(filteredScripts = null) {
+        if (typeof CardView === 'undefined' || !_tabInited.has('scripts')) return;
+        const scripts = Array.isArray(filteredScripts) ? filteredScripts : getFilteredScripts();
+        CardView.render(scripts);
+    }
+
+    function queueScriptTableRender(immediate = false) {
+        clearTimeout(scriptSearchTimer);
+        if (immediate) {
+            renderScriptTable();
+            return;
+        }
+        scriptSearchTimer = setTimeout(() => {
+            scriptSearchTimer = null;
+            renderScriptTable();
+        }, SCRIPT_SEARCH_DEBOUNCE_MS);
+    }
+
+    function getScriptTableListSize(count) {
+        if (count <= 0) return 'empty';
+        if (count >= 120) return 'huge';
+        if (count >= 60) return 'large';
+        if (count >= 18) return 'medium';
+        return 'small';
+    }
+
+    function syncScriptTableListSize(count) {
+        if (!elements.scriptTableBody) return;
+        const listSize = getScriptTableListSize(count);
+        elements.scriptTableBody.dataset.listSize = listSize;
+        const tableContainer = elements.scriptTableBody.closest('.scripts-table-container');
+        if (tableContainer) {
+            tableContainer.dataset.listSize = listSize;
+        }
+    }
+
     function renderScriptTable(filter = '') {
         if (!elements.scriptTableBody) return;
         elements.scriptTableBody.innerHTML = '';
         
         const filtered = getFilteredScripts();
+        syncScriptTableListSize(filtered.length);
+        syncCardView(filtered);
         
         // Update script counter
         if (elements.scriptCounter) {
             const total = state.scripts.length;
             const shown = filtered.length;
-            elements.scriptCounter.textContent = total === shown ? `${total} scripts` : `${shown} of ${total} scripts`;
+            const formattedTotal = numberFormatter.format(total);
+            const formattedShown = numberFormatter.format(shown);
+            elements.scriptCounter.textContent = total === shown ? `All ${formattedTotal} scripts` : `Showing ${formattedShown} of ${formattedTotal}`;
         }
 
         if (filtered.length === 0) {
+            updateScriptEmptyState(filtered.length);
             if (elements.emptyState) elements.emptyState.style.display = 'block';
             return;
         }
@@ -1653,6 +3569,7 @@
         // Render with folder grouping if folders exist
         const folders = state.folders || [];
         const collapsedFolders = state._collapsedFolders || new Set();
+        const fragment = document.createDocumentFragment();
 
         if (folders.length > 0) {
             // Scripts in folders
@@ -1674,7 +3591,7 @@
                     <span class="folder-color" style="background:${escapeHtml(folder.color)}"></span>
                     ${escapeHtml(folder.name)} <span class="folder-count">(${folderScripts.length})</span>
                     <span class="folder-actions">
-                        <button data-folder-delete="${folder.id}" title="Delete folder">x</button>
+                        <button type="button" data-folder-delete="${folder.id}" title="Delete folder" aria-label="Delete folder ${escapeHtml(folder.name)}">Delete</button>
                     </span>
                 </td>`;
                 folderTr.addEventListener('click', (e) => {
@@ -1688,12 +3605,12 @@
                     state._collapsedFolders = collapsedFolders;
                     renderScriptTable();
                 });
-                elements.scriptTableBody.appendChild(folderTr);
+                fragment.appendChild(folderTr);
 
                 // Scripts in this folder
                 if (!collapsed) {
                     for (const script of folderScripts) {
-                        elements.scriptTableBody.appendChild(createScriptRow(script, rowIdx++));
+                        fragment.appendChild(createScriptRow(script, rowIdx++));
                     }
                 }
             }
@@ -1707,20 +3624,25 @@
                     <span class="folder-icon">\u25BC</span>
                     Uncategorized <span class="folder-count">(${unassigned.length})</span>
                 </td>`;
-                elements.scriptTableBody.appendChild(headerTr);
+                fragment.appendChild(headerTr);
             }
             for (const script of unassigned) {
-                elements.scriptTableBody.appendChild(createScriptRow(script, rowIdx++));
+                fragment.appendChild(createScriptRow(script, rowIdx++));
             }
         } else {
             // No folders — flat list
             filtered.forEach((script, i) => {
-                elements.scriptTableBody.appendChild(createScriptRow(script, i + 1));
+                fragment.appendChild(createScriptRow(script, i + 1));
             });
         }
 
+        elements.scriptTableBody.appendChild(fragment);
+
         updateBulkCheckboxes();
         applyColumnVisibility();
+        if (typeof KeyboardNav !== 'undefined' && typeof KeyboardNav.resetFocus === 'function') {
+            KeyboardNav.resetFocus();
+        }
     }
 
     function createScriptRow(script, index) {
@@ -1744,7 +3666,7 @@
         const domains = extractDomainsFromPatterns(matches);
         
         // Generate favicon HTML - use @icon if present, otherwise derive from first domain
-        const faviconHtml = generateFaviconHtml(icon, domains[0]);
+        const faviconHtml = generateFaviconHtml(icon, domains[0], name);
         
         // Generate site icons HTML (up to 5 icons with overflow indicator)
         const siteIconsHtml = generateSiteIconsHtml(domains);
@@ -1771,6 +3693,9 @@
         const conflicts = findConflictingScripts(script.id, matches);
         const conflictHtml = conflicts.length > 0
           ? `<span class="conflict-badge" title="Overlaps with: ${escapeHtml(conflicts.map(c => c.name).join(', '))}">! ${conflicts.length}</span>`
+          : '';
+        const syncConflictHtml = script.settings?.mergeConflict
+          ? '<span class="conflict-badge sync-conflict" title="Cloud merge conflict detected. Review this script in the info panel and save it once you are happy with the code.">Sync conflict</span>'
           : '';
 
         // Health indicators
@@ -1801,6 +3726,7 @@
                     ${script.metadata?.author ? `<span class="script-author">${escapeHtml(script.metadata.author)}</span>` : ''}
                     ${tagHtml ? `<div class="script-tags">${tagHtml}</div>` : ''}
                     ${conflictHtml}
+                    ${syncConflictHtml}
                 </div>
             </td>
             <td class="center">${escapeHtml(version)}</td>
@@ -1810,30 +3736,30 @@
             <td class="center">
                 <div class="feature-badges">${features.map(f => `<span class="badge ${f.c}">${f.l}</span>`).join('')}</div>
             </td>
-            <td class="center">${homepage ? `<a href="${escapeHtml(homepage)}" target="_blank">🔗</a>` : '-'}</td>
-            <td class="center"><span class="updated-link" data-action="checkUpdate" data-id="${script.id}" title="Click to check for updates" style="cursor:pointer">${updated}</span></td>
+            <td class="center">${homepage ? `<a href="${escapeHtml(homepage)}" target="_blank" aria-label="Open homepage for ${escapeHtml(name)}">🔗</a>` : '-'}</td>
+            <td class="center"><span class="updated-link" data-action="checkUpdate" data-id="${script.id}" title="Check for updates" role="button" tabindex="0" aria-label="Check for updates for ${escapeHtml(name)}" style="cursor:pointer">${updated}</span></td>
             <td class="center">${statsHtml}</td>
             <td class="center">
                 <div class="action-icons">
-                    <button class="action-icon ${script.settings?.pinned ? 'pinned' : ''}" title="${script.settings?.pinned ? 'Unpin' : 'Pin to top'}" data-action="pin" data-id="${script.id}">
+                    <button type="button" class="action-icon ${script.settings?.pinned ? 'pinned' : ''}" title="${script.settings?.pinned ? 'Unpin' : 'Pin to top'}" aria-label="${script.settings?.pinned ? 'Unpin' : 'Pin'} ${escapeHtml(name)}" data-action="pin" data-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="${script.settings?.pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M12 2L9.1 8.6 2 9.2l5.5 4.8L5.8 21 12 17.3 18.2 21l-1.7-7 5.5-4.8-7.1-.6z"/></svg>
                     </button>
-                    <button class="action-icon" title="Edit" data-action="edit" data-id="${script.id}">
+                    <button type="button" class="action-icon" title="Edit" aria-label="Edit ${escapeHtml(name)}" data-action="edit" data-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
-                    <button class="action-icon" title="Check for update (right-click: force update)" data-action="updateScript" data-id="${script.id}">
+                    <button type="button" class="action-icon" title="Check for update (right-click: force update)" aria-label="Check for updates for ${escapeHtml(name)}" data-action="updateScript" data-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                     </button>
-                    <button class="action-icon" title="Export" data-action="exportScript" data-id="${script.id}">
+                    <button type="button" class="action-icon" title="Export" aria-label="Export ${escapeHtml(name)}" data-action="exportScript" data-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     </button>${(script.metadata?.downloadURL || script.metadata?.updateURL) ? `
-                    <button class="action-icon" title="Copy install URL" data-action="copyUrl" data-id="${script.id}" data-url="${escapeHtml(script.metadata.downloadURL || script.metadata.updateURL)}">
+                    <button type="button" class="action-icon" title="Copy install URL" aria-label="Copy install URL for ${escapeHtml(name)}" data-action="copyUrl" data-id="${script.id}" data-url="${escapeHtml(script.metadata.downloadURL || script.metadata.updateURL)}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                     </button>` : ''}
-                    <button class="action-icon" title="Move to folder" data-action="moveFolder" data-id="${script.id}">
+                    <button type="button" class="action-icon" title="Move to folder" aria-label="Move ${escapeHtml(name)} to folder" data-action="moveFolder" data-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                     </button>
-                    <button class="action-icon" title="Delete" data-action="delete" data-id="${script.id}">
+                    <button type="button" class="action-icon" title="Delete" aria-label="Delete ${escapeHtml(name)}" data-action="delete" data-id="${script.id}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                     </button>
                 </div>
@@ -1869,7 +3795,12 @@
         });
         tr.querySelector('.script-name')?.addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="edit"]')?.addEventListener('click', () => openEditorForScript(script.id));
-        tr.querySelector('[data-action="delete"]')?.addEventListener('click', () => deleteScript(script.id));
+        tr.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
+            const name = script.metadata?.name || script.id;
+            if (await showConfirmModal(`Delete "${name}"?`, 'This action cannot be undone.')) {
+                deleteScript(script.id);
+            }
+        });
         tr.querySelector('[data-action="exportScript"]')?.addEventListener('click', () => exportSingleScript(script));
         tr.querySelector('[data-action="moveFolder"]')?.addEventListener('click', () => moveScriptToFolder(script.id));
         tr.querySelector('[data-action="copyUrl"]')?.addEventListener('click', async (e) => {
@@ -1893,67 +3824,21 @@
             showToast(s.settings.pinned ? 'Pinned' : 'Unpinned', 'success');
         });
         tr.querySelector('[data-action="updateScript"]')?.addEventListener('click', async (e) => {
-            const btn = e.currentTarget;
-            btn.style.opacity = '0.4';
-            btn.style.pointerEvents = 'none';
-            try {
-                const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId: script.id });
-                if (updates && updates.length > 0) {
-                    await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: script.id, code: updates[0].code });
-                    showToast(`${name} updated to v${updates[0].newVersion}`, 'success');
-                    setTimeout(() => loadScripts(), 800);
-                } else {
-                    showToast(`${name} is up to date`, 'info');
-                    btn.style.opacity = '';
-                    btn.style.pointerEvents = '';
-                }
-            } catch (err) {
-                showToast('Update check failed', 'error');
-                btn.style.opacity = '';
-                btn.style.pointerEvents = '';
+            await checkScriptForUpdates(script.id, { triggerEl: e.currentTarget });
+        });
+        tr.querySelector('.updated-link')?.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                tr.querySelector('[data-action="updateScript"]')?.click();
             }
         });
         // Right-click = force update (bypass HTTP cache)
         tr.querySelector('[data-action="updateScript"]')?.addEventListener('contextmenu', async (e) => {
             e.preventDefault();
-            const btn = e.currentTarget;
-            btn.style.opacity = '0.4';
-            btn.style.pointerEvents = 'none';
-            showToast(`Force-updating ${name}...`, 'info');
-            try {
-                const res = await chrome.runtime.sendMessage({ action: 'forceUpdate', scriptId: script.id });
-                if (res?.success) {
-                    showToast(`${name} force-updated to v${res.script?.meta?.version || '?'}`, 'success');
-                    setTimeout(() => loadScripts(), 800);
-                } else {
-                    showToast(res?.error || 'Force update failed', 'error');
-                    btn.style.opacity = '';
-                    btn.style.pointerEvents = '';
-                }
-            } catch (err) {
-                showToast('Force update failed', 'error');
-                btn.style.opacity = '';
-                btn.style.pointerEvents = '';
-            }
+            await checkScriptForUpdates(script.id, { force: true, triggerEl: e.currentTarget });
         });
-        tr.querySelector('[data-action="checkUpdate"]')?.addEventListener('click', async (e) => {
-            const el = e.target;
-            el.textContent = '...';
-            try {
-                const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId: script.id });
-                if (updates && updates.length > 0) {
-                    await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: script.id, code: updates[0].code });
-                    el.textContent = `v${updates[0].newVersion}`;
-                    el.style.color = 'var(--accent-primary)';
-                    setTimeout(() => loadScripts(), 1500);
-                } else {
-                    el.textContent = 'Up to date';
-                    el.style.color = 'var(--text-muted)';
-                    setTimeout(() => { el.textContent = updated; el.style.color = ''; }, 2000);
-                }
-            } catch (e) {
-                el.textContent = updated;
-            }
+        tr.querySelector('[data-action="checkUpdate"]')?.addEventListener('click', async () => {
+            tr.querySelector('[data-action="updateScript"]')?.click();
         });
 
         // Drag-and-drop reorder
@@ -2048,20 +3933,68 @@
         
         return Array.from(domains);
     }
+
+    function getMarkerMode() {
+        const mode = state.settings?.faviconService || 'google';
+        return mode === 'duckduckgo' || mode === 'none' ? mode : 'google';
+    }
+
+    function hashMarkerSeed(seed) {
+        let hash = 0;
+        const input = String(seed || 'scriptvault');
+        for (let i = 0; i < input.length; i++) {
+            hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
+        }
+        return Math.abs(hash) % 360;
+    }
+
+    function getDomainRoot(domain) {
+        const parts = String(domain || '')
+            .replace(/^www\./, '')
+            .split('.')
+            .filter(Boolean);
+        return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
+    }
+
+    function getDomainBadgeLabel(domain, maxLetters = 2) {
+        const root = getDomainRoot(domain).replace(/[^a-z0-9]/gi, '');
+        if (!root) return 'SV'.slice(0, maxLetters);
+        return root.slice(0, maxLetters).toUpperCase();
+    }
+
+    function getScriptBadgeLabel(name, maxLetters = 2) {
+        const words = String(name || 'Script').trim().split(/\s+/).filter(Boolean);
+        if (!words.length) return 'SV'.slice(0, maxLetters);
+        if (words.length > 1) {
+            return words.slice(0, maxLetters).map(word => word[0]).join('').toUpperCase();
+        }
+        return words[0].replace(/[^a-z0-9]/gi, '').slice(0, maxLetters).toUpperCase() || 'SV'.slice(0, maxLetters);
+    }
+
+    function renderMarkerBadge(baseClass, label, seed, title, mode = getMarkerMode()) {
+        const classes = [baseClass, 'marker-badge'];
+        if (mode === 'duckduckgo') classes.push('compact');
+        if (mode === 'none') classes.push('minimal');
+        const hue = hashMarkerSeed(seed || label || title || 'scriptvault');
+        const style = mode === 'none' ? '' : ` style="--marker-hue:${hue}"`;
+        return `<span class="${classes.join(' ')}"${title ? ` title="${escapeHtml(title)}"` : ''}${style}>${mode === 'none' ? '' : escapeHtml(label)}</span>`;
+    }
     
     // Generate favicon HTML for script name column
     // Uses data-favicon-fallback attribute for CSP-compliant error handling
-    function generateFaviconHtml(iconUrl, firstDomain) {
+    function generateFaviconHtml(iconUrl, firstDomain, scriptName) {
+        const mode = getMarkerMode();
+        const maxLetters = mode === 'duckduckgo' ? 1 : 2;
+        const fallbackLabel = firstDomain
+            ? getDomainBadgeLabel(firstDomain, maxLetters)
+            : getScriptBadgeLabel(scriptName, maxLetters);
+        const fallbackSeed = firstDomain || scriptName || 'scriptvault';
+        const fallbackHue = hashMarkerSeed(fallbackSeed);
         if (iconUrl) {
             // Use the script's @icon directly
-            return `<span class="script-favicon"><img src="${escapeHtml(iconUrl)}" data-favicon-fallback="true"></span>`;
-        } else if (firstDomain) {
-            // Derive favicon from first domain
-            const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(firstDomain)}&sz=32`;
-            return `<span class="script-favicon"><img src="${faviconUrl}" data-favicon-fallback="true"></span>`;
-        } else {
-            return `<span class="script-favicon favicon-fallback"></span>`;
+            return `<span class="script-favicon" data-fallback-label="${escapeHtml(fallbackLabel)}" data-fallback-hue="${fallbackHue}" data-fallback-mode="${mode}"><img src="${escapeHtml(iconUrl)}" width="16" height="16" alt="" loading="lazy" data-favicon-fallback="true"></span>`;
         }
+        return renderMarkerBadge('script-favicon', fallbackLabel, fallbackSeed, firstDomain || scriptName || 'Script', mode);
     }
     
     // Derive homepage URL from updateURL or downloadURL
@@ -2099,34 +4032,104 @@
         
         return null;
     }
+
+    function renderInfoLink(url) {
+        if (!url) return '-';
+        const safeUrl = sanitizeUrl(url);
+        return safeUrl
+            ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>`
+            : escapeHtml(url);
+    }
+
+    function describeScriptProvenance(script) {
+        const metadata = script?.metadata || script?.meta || {};
+        const downloadUrl = metadata.downloadURL || '';
+        const updateUrl = metadata.updateURL || '';
+        const homepageUrl = metadata.homepage || metadata.homepageURL || deriveHomepageUrl(downloadUrl) || deriveHomepageUrl(updateUrl) || '';
+        const primaryUrl = downloadUrl || updateUrl || homepageUrl || '';
+        const provenance = {
+            label: 'Local or imported',
+            detail: 'No remote update channel is declared.',
+            sourceUrl: primaryUrl
+        };
+
+        if (primaryUrl) {
+            try {
+                const host = new URL(primaryUrl).hostname.replace(/^www\./, '');
+                provenance.label = host;
+                provenance.detail = downloadUrl && updateUrl && downloadUrl !== updateUrl
+                    ? 'Separate install and update channels are declared.'
+                    : (downloadUrl || updateUrl)
+                        ? 'Remote update channel declared in metadata.'
+                        : 'Linked from metadata only.';
+            } catch (error) {
+                provenance.label = 'Remote source';
+                provenance.detail = 'Metadata includes an external source URL.';
+            }
+        }
+
+        if (/greasyfork\.org/i.test(primaryUrl)) {
+            provenance.label = 'Greasy Fork';
+            provenance.detail = 'Installed from a Greasy Fork update channel.';
+        } else if (/openuserjs\.org/i.test(primaryUrl)) {
+            provenance.label = 'OpenUserJS';
+            provenance.detail = 'Installed from an OpenUserJS update channel.';
+        } else if (/(github\.com|raw\.githubusercontent\.com)/i.test(primaryUrl)) {
+            provenance.label = 'GitHub';
+            provenance.detail = downloadUrl && updateUrl && downloadUrl !== updateUrl
+                ? 'Install and update URLs point to GitHub-hosted files.'
+                : 'Script metadata points to GitHub-hosted source.';
+        } else if (/gitlab\.com/i.test(primaryUrl)) {
+            provenance.label = 'GitLab';
+            provenance.detail = 'Script metadata points to GitLab-hosted source.';
+        } else if (script?.settings?.userModified) {
+            provenance.detail = 'Local edits are present; review remote URLs before trusting future updates.';
+        }
+
+        if (!primaryUrl && script?.settings?.userModified) {
+            provenance.detail = 'Local edits are present and no remote source is declared.';
+        }
+
+        return provenance;
+    }
     
     // Generate site icons HTML for sites column
     function generateSiteIconsHtml(domains) {
         if (domains.length === 0) {
             return '-';
         }
-        
+
+        const mode = getMarkerMode();
+        if (mode === 'none') {
+            return `<div class="site-icons"><span class="site-icon site-icon-more" title="${escapeHtml(domains.join('\n'))}">${numberFormatter.format(domains.length)}</span></div>`;
+        }
+
         const maxIcons = 5;
         const displayDomains = domains.slice(0, maxIcons);
         const remainingCount = domains.length - maxIcons;
-        
+
         let html = '<div class="site-icons">';
-        
+
         for (const domain of displayDomains) {
-            const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
-            html += `<span class="site-icon" title="${escapeHtml(domain)}"><img src="${faviconUrl}" data-favicon-fallback="true"></span>`;
+            html += renderMarkerBadge(
+                'site-icon',
+                getDomainBadgeLabel(domain, mode === 'duckduckgo' ? 1 : 2),
+                domain,
+                domain,
+                mode
+            );
         }
-        
+
         if (remainingCount > 0) {
             html += `<span class="site-icon-more" title="${escapeHtml(domains.slice(maxIcons).join('\n'))}">+${remainingCount}</span>`;
         }
-        
+
         html += '</div>';
         return html;
     }
 
     // Editor
-    function openEditorForScript(scriptId) {
+    function openEditorForScript(scriptId, options = {}) {
         const script = state.scripts.find(s => s.id === scriptId);
         if (!script) return;
 
@@ -2144,12 +4147,18 @@
 
         // Create tab if not already open
         if (!state.openTabs[scriptId]) {
-            state.openTabs[scriptId] = { code: script.code || '', unsaved: false };
+            state.openTabs[scriptId] = {
+                code: script.code || '',
+                unsaved: false,
+                saveState: 'clean',
+                lastSavedAt: script.updatedAt || null,
+                saveError: ''
+            };
             createScriptTab(scriptId, script.metadata?.name || 'Unnamed Script');
         }
 
         // Activate this script tab
-        activateScriptTab(scriptId);
+        activateScriptTab(scriptId, options);
     }
 
     function createScriptTab(scriptId, name) {
@@ -2160,6 +4169,7 @@
         tab.dataset.tab = 'script_' + scriptId;
         tab.dataset.scriptId = scriptId;
         tab.innerHTML = `<span class="tab-name">${escapeHtml(name)}</span><span class="tab-close">&times;</span>`;
+        tab.classList.toggle('unsaved', !!state.openTabs[scriptId]?.unsaved);
         tabBar.appendChild(tab);
 
         tab.addEventListener('click', (e) => {
@@ -2184,10 +4194,165 @@
         });
     }
 
+    function getCurrentScript() {
+        return state.currentScriptId ? state.scripts.find(s => s.id === state.currentScriptId) || null : null;
+    }
+
+    function ensureOpenTabStatus(scriptId, script = null) {
+        if (!scriptId || !state.openTabs[scriptId]) return null;
+        const tabData = state.openTabs[scriptId];
+        if (typeof tabData.unsaved !== 'boolean') tabData.unsaved = false;
+        if (!tabData.saveState) tabData.saveState = tabData.unsaved ? 'dirty' : 'clean';
+        if (!Object.prototype.hasOwnProperty.call(tabData, 'lastSavedAt')) {
+            tabData.lastSavedAt = script?.updatedAt || null;
+        }
+        if (!Object.prototype.hasOwnProperty.call(tabData, 'saveError')) {
+            tabData.saveError = '';
+        }
+        return tabData;
+    }
+
+    function updateScriptTabVisual(scriptId, isDirty) {
+        const tab = document.querySelector(`.tm-tab[data-script-id="${scriptId}"]`);
+        if (tab) tab.classList.toggle('unsaved', !!isDirty);
+    }
+
+    function patchOpenTabStatus(scriptId, patch = {}, script = null) {
+        const tabData = ensureOpenTabStatus(scriptId, script);
+        if (!tabData) return null;
+        Object.assign(tabData, patch);
+        updateScriptTabVisual(scriptId, tabData.unsaved);
+        if (scriptId === state.currentScriptId) {
+            state.unsavedChanges = !!tabData.unsaved;
+        }
+        return tabData;
+    }
+
+    function countScriptTargets(script) {
+        if (!script) return 0;
+        const metadata = script.metadata || {};
+        const match = Array.isArray(metadata.match) ? metadata.match.length : 0;
+        const include = Array.isArray(metadata.include) ? metadata.include.length : 0;
+        return match + include;
+    }
+
+    function updateEditorHeader(script = getCurrentScript()) {
+        if (!script) return;
+
+        const metadata = script.metadata || {};
+        const tabData = ensureOpenTabStatus(script.id, script);
+        const saveState = tabData?.saveState || (tabData?.unsaved ? 'dirty' : 'clean');
+        const targetCount = countScriptTargets(script);
+        const subtitleParts = [
+            script.enabled !== false ? 'Enabled' : 'Disabled',
+            metadata.version ? `v${metadata.version}` : null,
+            metadata.author ? `by ${metadata.author}` : null,
+            targetCount > 0 ? `${numberFormatter.format(targetCount)} target${targetCount === 1 ? '' : 's'}` : 'No match rules',
+            metadata.runAt ? metadata.runAt.replace(/^document-/, '') : null
+        ].filter(Boolean);
+
+        if (elements.editorEyebrow) {
+            elements.editorEyebrow.textContent = metadata.downloadURL || metadata.updateURL ? 'Synced Userscript' : 'Userscript Editor';
+        }
+        if (elements.editorTitle) elements.editorTitle.textContent = metadata.name || 'Edit Script';
+        if (elements.editorSubtitle) elements.editorSubtitle.textContent = subtitleParts.join(' • ');
+
+        if (elements.editorSaveState) {
+            const stateLabel = saveState === 'dirty' ? 'Unsaved' : saveState === 'saving' ? 'Saving' : saveState === 'error' ? 'Save Failed' : 'Saved';
+            elements.editorSaveState.dataset.state = saveState;
+            elements.editorSaveState.textContent = stateLabel;
+            elements.editorSaveState.title = tabData?.saveError || stateLabel;
+        }
+
+        if (elements.editorSavedAt) {
+            let detail = 'Ready to edit';
+            if (saveState === 'dirty') {
+                detail = state.settings.autoSave ? 'Autosaves after 2 seconds' : 'Press Ctrl+S to save';
+            } else if (saveState === 'saving') {
+                detail = 'Writing changes...';
+            } else if (saveState === 'error') {
+                detail = tabData?.saveError ? `Retry required: ${tabData.saveError}` : 'Retry save';
+            } else if (tabData?.lastSavedAt) {
+                detail = `Saved ${formatTime(tabData.lastSavedAt)}`;
+            }
+            elements.editorSavedAt.textContent = detail;
+            elements.editorSavedAt.title = detail;
+        }
+
+        if (elements.btnEditorSave) {
+            elements.btnEditorSave.dataset.saveState = saveState;
+            elements.btnEditorSave.disabled = saveState === 'saving';
+            elements.btnEditorSave.classList.toggle('btn-primary', saveState === 'dirty' || saveState === 'saving');
+            elements.btnEditorSave.classList.toggle('btn-danger', saveState === 'error');
+        }
+        if (elements.btnEditorSaveLabel) {
+            elements.btnEditorSaveLabel.textContent = saveState === 'saving' ? 'Saving...' : saveState === 'error' ? 'Retry Save' : 'Save';
+        }
+
+        if (elements.btnEditorToggleLabel) {
+            elements.btnEditorToggleLabel.textContent = script.enabled !== false ? 'Disable' : 'Enable';
+        } else if (elements.btnEditorToggle) {
+            elements.btnEditorToggle.textContent = script.enabled !== false ? 'Disable' : 'Enable';
+        }
+
+        const wordWrapButton = document.getElementById('tbtnWordWrap');
+        if (wordWrapButton && state.editor) {
+            wordWrapButton.classList.toggle('active', !!state.editor.getOption('lineWrapping'));
+        }
+    }
+
+    function markCurrentEditorDirty() {
+        if (!state.currentScriptId) return;
+        patchOpenTabStatus(state.currentScriptId, {
+            unsaved: true,
+            saveState: 'dirty',
+            saveError: ''
+        }, getCurrentScript());
+        updateEditorHeader();
+    }
+
+    function markScriptSaved(scriptId, savedAt = Date.now()) {
+        if (!scriptId) return;
+        const script = state.scripts.find(s => s.id === scriptId) || null;
+        patchOpenTabStatus(scriptId, {
+            unsaved: false,
+            saveState: 'clean',
+            lastSavedAt: savedAt,
+            saveError: ''
+        }, script);
+        if (scriptId === state.currentScriptId) updateEditorHeader(script);
+    }
+
+    function markScriptSavePending(scriptId) {
+        if (!scriptId) return;
+        const script = state.scripts.find(s => s.id === scriptId) || null;
+        patchOpenTabStatus(scriptId, {
+            unsaved: true,
+            saveState: 'saving',
+            saveError: ''
+        }, script);
+        if (scriptId === state.currentScriptId) updateEditorHeader(script);
+    }
+
+    function markScriptSaveFailed(scriptId, message = '') {
+        if (!scriptId) return;
+        const script = state.scripts.find(s => s.id === scriptId) || null;
+        patchOpenTabStatus(scriptId, {
+            unsaved: true,
+            saveState: 'error',
+            saveError: message || 'Failed to save'
+        }, script);
+        if (scriptId === state.currentScriptId) updateEditorHeader(script);
+    }
+
     function updateLineCount() {
         if (elements.editorLineCount && state.editor) {
             const lines = state.editor.lineCount();
-            elements.editorLineCount.textContent = lines + ' line' + (lines !== 1 ? 's' : '');
+            elements.editorLineCount.textContent = `${numberFormatter.format(lines)} line${lines !== 1 ? 's' : ''}`;
+        }
+        if (elements.editorCharCount && state.editor) {
+            const chars = state.editor.getValue().length;
+            elements.editorCharCount.textContent = `${numberFormatter.format(chars)} chars`;
         }
     }
 
@@ -2198,12 +4363,14 @@
         }
     }
 
-    function activateScriptTab(scriptId) {
+    function activateScriptTab(scriptId, options = {}) {
+        const { updateRoute = true } = options;
         const script = state.scripts.find(s => s.id === scriptId);
         if (!script) return;
 
+        const previousScriptId = state.currentScriptId;
         state.currentScriptId = scriptId;
-        const tabData = state.openTabs[scriptId];
+        const tabData = ensureOpenTabStatus(scriptId, script);
         state.unsavedChanges = tabData?.unsaved || false;
 
         // Deactivate all tabs and panels
@@ -2217,11 +4384,10 @@
         if (tab) tab.classList.add('active');
 
         // Load editor content
-        if (elements.editorTitle) elements.editorTitle.textContent = script.metadata?.name || 'Edit Script';
         if (state.editor) {
-            // Save current tab's undo history before switching
-            if (state.currentScriptId && state.openTabs[state.currentScriptId]) {
-                try { state.openTabs[state.currentScriptId]._editorHistory = state.editor.getHistory(); } catch {}
+            // Save outgoing tab's undo history before switching
+            if (previousScriptId && state.openTabs[previousScriptId]) {
+                try { state.openTabs[previousScriptId]._editorHistory = state.editor.getHistory(); } catch {}
             }
             if (state.editor.isMonaco) state.editor.setScriptId(script.id);
             state.editor.setValue(tabData?.code ?? script.code ?? '');
@@ -2236,11 +4402,14 @@
             updateCursorPos();
         }
 
-        if (elements.btnEditorToggle) elements.btnEditorToggle.textContent = script.enabled !== false ? 'Disable' : 'Enable';
+        updateEditorHeader(script);
         loadScriptInfo(script);
         loadScriptStorage(script);
         loadExternals(script);
         elements.editorOverlay?.classList.add('active');
+        if (updateRoute) {
+            setDashboardHash(`script_${scriptId}`);
+        }
         setTimeout(() => state.editor?.focus(), 100);
     }
 
@@ -2272,18 +4441,18 @@
                 if (remaining.length > 0) {
                     activateScriptTab(remaining[remaining.length - 1]);
                 } else {
-                    const scriptsTab = document.querySelector('.tm-tab[data-tab="scripts"]');
-                    if (scriptsTab) {
-                        scriptsTab.classList.add('active');
-                        elements.mainPanels.scripts?.classList.add('active');
-                    }
+                    switchTab('scripts');
                 }
             }
         };
 
         // Check for unsaved changes (skip if noSaveConfirm setting is enabled)
         if (tabData?.unsaved && !state.settings.noSaveConfirm) {
-            if (!confirm('You have unsaved changes. Close without saving?')) return;
+            showConfirmModal('Unsaved Changes', 'You have unsaved changes. Close without saving?')
+                .then(confirmed => {
+                    if (confirmed) doClose();
+                });
+            return;
         }
         doClose();
     }
@@ -2310,13 +4479,17 @@
         if (elements.infoAuthor) elements.infoAuthor.textContent = m.author || '-';
         if (elements.infoDescription) elements.infoDescription.textContent = m.description || '-';
 
-        const hp = m.homepage || m.homepageURL;
-        const safeHp = hp ? sanitizeUrl(hp) : null;
-        if (elements.infoHomepage) elements.infoHomepage.innerHTML = safeHp ? `<a href="${escapeHtml(safeHp)}" target="_blank">${escapeHtml(hp)}</a>` : (hp ? escapeHtml(hp) : '-');
+        const hp = m.homepage || m.homepageURL || deriveHomepageUrl(m.downloadURL) || deriveHomepageUrl(m.updateURL);
+        if (elements.infoHomepage) elements.infoHomepage.innerHTML = renderInfoLink(hp);
 
-        const up = m.updateURL || m.downloadURL;
-        const safeUp = up ? sanitizeUrl(up) : null;
-        if (elements.infoUpdateUrl) elements.infoUpdateUrl.innerHTML = safeUp ? `<a href="${escapeHtml(safeUp)}" target="_blank">${escapeHtml(up)}</a>` : (up ? escapeHtml(up) : '-');
+        const updateUrl = m.updateURL || '';
+        const downloadUrl = m.downloadURL || '';
+        if (elements.infoUpdateUrl) elements.infoUpdateUrl.innerHTML = renderInfoLink(updateUrl);
+        if (elements.infoDownloadUrl) elements.infoDownloadUrl.innerHTML = renderInfoLink(downloadUrl);
+        if (elements.infoProvenance) {
+            const provenance = describeScriptProvenance(script);
+            elements.infoProvenance.innerHTML = `<strong>${escapeHtml(provenance.label)}</strong>${provenance.detail ? `<div class="panel-empty-inline" style="margin-top:4px">${escapeHtml(provenance.detail)}</div>` : ''}`;
+        }
 
         // @contributionURL
         const contribEl = document.getElementById('infoContributionURL');
@@ -2332,11 +4505,11 @@
             const compat = m.compatible || [];
             const incompat = m.incompatible || [];
             if (compat.length || incompat.length) {
-                const compatHtml = compat.map(c => `<span class="info-tag" style="background:var(--success-bg,#1a3a1a);color:var(--success-text,#4ade80)">✓ ${escapeHtml(c)}</span>`).join('');
-                const incompatHtml = incompat.map(c => `<span class="info-tag" style="background:var(--error-bg,#3a1a1a);color:var(--error-text,#f87171)">✗ ${escapeHtml(c)}</span>`).join('');
+                const compatHtml = compat.map(c => `<span class="info-tag success">✓ ${escapeHtml(c)}</span>`).join('');
+                const incompatHtml = incompat.map(c => `<span class="info-tag error">✗ ${escapeHtml(c)}</span>`).join('');
                 compatEl.innerHTML = compatHtml + incompatHtml;
             } else {
-                compatEl.innerHTML = '<span style="color:var(--text-muted)">Not specified</span>';
+                compatEl.innerHTML = '<span class="panel-empty-inline">Not specified</span>';
             }
         }
 
@@ -2348,10 +4521,19 @@
         if (elements.infoGrants) elements.infoGrants.innerHTML = grants.length ? grants.map(g => `<span class="info-tag grant">${escapeHtml(g)}</span>`).join('') : '<span class="info-tag">none</span>';
 
         const matches = [...(m.match || []), ...(m.include || [])];
-        elements.infoMatches.innerHTML = matches.length ? matches.map(x => `<span class="info-tag">${escapeHtml(x)}</span>`).join('') : '-';
+        if (elements.infoMatches) elements.infoMatches.innerHTML = matches.length ? matches.map(x => `<span class="info-tag">${escapeHtml(x)}</span>`).join('') : '<span class="panel-empty-inline">No match rules</span>';
 
         const res = [...(Array.isArray(m.resource) ? m.resource : []), ...(Array.isArray(m.require) ? m.require : [])];
-        elements.infoResources.innerHTML = res.length ? res.map(r => `<div style="font-size:11px;margin-bottom:3px">${escapeHtml(typeof r === 'string' ? r : r.url || r.name)}</div>`).join('') : '-';
+        if (elements.infoResources) {
+            elements.infoResources.innerHTML = res.length
+                ? `<div class="info-resource-list">${res.map(r => {
+                    const raw = typeof r === 'string' ? r : r.url || r.name || '';
+                    const safeUrl = sanitizeUrl(typeof r === 'string' ? (r.split(/\s+/)[1] || r) : (r.url || ''));
+                    const display = escapeHtml(raw);
+                    return `<div class="info-resource-row">${safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${display}</a>` : display}</div>`;
+                }).join('')}</div>`
+                : '<span class="panel-empty-inline">No external resources declared</span>';
+        }
 
         // Performance stats
         const perfEl = document.getElementById('infoPerfStats');
@@ -2359,14 +4541,14 @@
         if (perfEl) {
             const s = script.stats;
             if (s && s.runs > 0) {
-                const lastRun = s.lastRun ? new Date(s.lastRun).toLocaleString() : '-';
+                const lastRun = s.lastRun ? fullDateFormatter.format(new Date(s.lastRun)) : '-';
                 perfEl.innerHTML = `
-                    <span class="perf-label">Runs:</span><span class="perf-value">${s.runs}</span>
-                    <span class="perf-label">Avg Time:</span><span class="perf-value">${s.avgTime}ms</span>
-                    <span class="perf-label">Total Time:</span><span class="perf-value">${Math.round(s.totalTime)}ms</span>
-                    <span class="perf-label">Errors:</span><span class="perf-value">${s.errors}${s.lastError ? ` (${escapeHtml(s.lastError)})` : ''}</span>
+                    <span class="perf-label">Runs:</span><span class="perf-value">${numberFormatter.format(s.runs)}</span>
+                    <span class="perf-label">Avg Time:</span><span class="perf-value">${numberFormatter.format(s.avgTime)}ms</span>
+                    <span class="perf-label">Total Time:</span><span class="perf-value">${numberFormatter.format(Math.round(s.totalTime))}ms</span>
+                    <span class="perf-label">Errors:</span><span class="perf-value">${numberFormatter.format(s.errors)}${s.lastError ? ` (${escapeHtml(s.lastError)})` : ''}</span>
                     <span class="perf-label">Last Run:</span><span class="perf-value">${escapeHtml(lastRun)}</span>
-                    ${s.lastUrl ? `<span class="perf-label">Last URL:</span><span class="perf-value" style="word-break:break-all">${escapeHtml(s.lastUrl)}</span>` : ''}
+                    ${s.lastUrl ? `<span class="perf-label">Last URL:</span><span class="perf-value">${escapeHtml(s.lastUrl)}</span>` : ''}
                 `;
                 if (resetBtn) {
                     resetBtn.style.display = '';
@@ -2379,7 +4561,7 @@
                     };
                 }
             } else {
-                perfEl.textContent = 'No execution data yet';
+                perfEl.innerHTML = '<span class="panel-empty-inline">No execution data yet</span>';
                 if (resetBtn) resetBtn.style.display = 'none';
             }
         }
@@ -2389,12 +4571,27 @@
         if (conflictsEl) {
             const myPatterns = [...(m.match || []), ...(m.include || [])];
             const conflicts = findConflictingScripts(script.id, myPatterns);
+            const conflictCards = [];
+            if (script.settings?.mergeConflict) {
+                conflictCards.push(`
+                    <div class="conflict-list-item">
+                        <span>
+                            <strong>Cloud merge conflict</strong>
+                            <div class="panel-empty-inline" style="margin-top:4px">This script was marked during cloud merge. Review the code, then save it once you are happy with the local version to clear the conflict flag.</div>
+                        </span>
+                        <span class="info-tag error">Review required</span>
+                    </div>
+                `);
+            }
             if (conflicts.length > 0) {
-                conflictsEl.innerHTML = conflicts.map(c =>
-                    `<div class="conflict-list-item">${escapeHtml(c.name)} <span style="color:var(--text-muted)">(${escapeHtml(c.sharedPatterns.join(', '))})</span></div>`
-                ).join('');
+                conflictCards.push(...conflicts.map(c =>
+                    `<div class="conflict-list-item">${escapeHtml(c.name)} <span class="panel-empty-inline">(${escapeHtml(c.sharedPatterns.join(', '))})</span></div>`
+                ));
+            }
+            if (conflictCards.length > 0) {
+                conflictsEl.innerHTML = `<div class="conflict-list">${conflictCards.join('')}</div>`;
             } else {
-                conflictsEl.textContent = 'None';
+                conflictsEl.innerHTML = '<span class="panel-empty-inline">No sync or matcher conflicts detected</span>';
             }
         }
 
@@ -2403,14 +4600,14 @@
         if (historyEl) {
             const history = script.versionHistory || [];
             if (history.length > 0) {
-                historyEl.innerHTML = history.map((h, idx) =>
+                historyEl.innerHTML = `<div class="version-history-list">${history.map((h, idx) =>
                     `<div class="version-history-item">
                         <span class="version-history-ver">v${escapeHtml(h.version)}</span>
                         <span class="version-history-date">${formatTime(h.updatedAt)}</span>
                         <button class="toolbar-btn version-rollback-btn" data-rollback-idx="${idx}" title="Rollback to this version">Rollback</button>
                         <button class="toolbar-btn version-diff-btn" data-diff-idx="${idx}" title="View diff with current code">Diff</button>
                     </div>`
-                ).reverse().join('');
+                ).reverse().join('')}</div>`;
 
                 historyEl.querySelectorAll('.version-rollback-btn').forEach(btn => {
                     btn.addEventListener('click', async () => {
@@ -2426,7 +4623,7 @@
                                     loadScriptInfo(updated);
                                     if (state.editor && state.currentScriptId === script.id) {
                                         state.editor.setValue(updated.code);
-                                        state.unsavedChanges = false;
+                                        markScriptSaved(script.id, Date.now());
                                     }
                                 }
                                 showToast('Rolled back to v' + ver, 'success');
@@ -2448,7 +4645,7 @@
                     });
                 });
             } else {
-                historyEl.textContent = 'No previous versions';
+                historyEl.innerHTML = '<span class="panel-empty-inline">No previous versions</span>';
             }
         }
     }
@@ -2586,13 +4783,16 @@
 
         if (elements.externalRequireList) {
             if (requires.length === 0) {
-                elements.externalRequireList.innerHTML = '<span style="color:var(--text-muted)">No @require directives</span>';
+                elements.externalRequireList.innerHTML = '<div class="panel-empty"><strong>No @require directives</strong><span>This script does not import external libraries yet.</span></div>';
             } else {
-                elements.externalRequireList.innerHTML = requires.map(url => {
+                elements.externalRequireList.innerHTML = requires.map((url, index) => {
                     const safeUrl = sanitizeUrl(typeof url === 'string' ? url : url.url || '');
                     const display = escapeHtml(typeof url === 'string' ? url : url.url || url.name || '');
-                    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px;border:1px solid var(--border-color);border-radius:4px;margin-bottom:6px;background:var(--bg-input)">
-                        <span style="font-family:monospace;font-size:11px;word-break:break-all;flex:1">${safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" style="color:var(--accent-secondary)">${display}</a>` : display}</span>
+                    return `<div class="external-item">
+                        <div class="external-item-meta">
+                            <div class="external-item-name">@require ${numberFormatter.format(index + 1)}</div>
+                            <div class="external-item-url">${safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${display}</a>` : display}</div>
+                        </div>
                     </div>`;
                 }).join('');
             }
@@ -2600,16 +4800,16 @@
 
         if (elements.externalResourceList) {
             if (resources.length === 0) {
-                elements.externalResourceList.innerHTML = '<span style="color:var(--text-muted)">No @resource directives</span>';
+                elements.externalResourceList.innerHTML = '<div class="panel-empty"><strong>No @resource directives</strong><span>There are no named external assets attached to this script.</span></div>';
             } else {
                 elements.externalResourceList.innerHTML = resources.map(res => {
                     const name = typeof res === 'string' ? res.split(/\s+/)[0] : (res.name || '');
                     const url = typeof res === 'string' ? (res.split(/\s+/)[1] || res) : (res.url || '');
                     const safeUrl = sanitizeUrl(url);
-                    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px;border:1px solid var(--border-color);border-radius:4px;margin-bottom:6px;background:var(--bg-input)">
-                        <div style="flex:1">
-                            <div style="font-weight:500;font-size:12px;color:var(--text-primary)">${escapeHtml(name)}</div>
-                            <div style="font-family:monospace;font-size:11px;word-break:break-all;margin-top:2px">${safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" style="color:var(--accent-secondary)">${escapeHtml(url)}</a>` : escapeHtml(url)}</div>
+                    return `<div class="external-item">
+                        <div class="external-item-meta">
+                            <div class="external-item-name">${escapeHtml(name || '@resource')}</div>
+                            <div class="external-item-url">${safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>` : escapeHtml(url)}</div>
                         </div>
                     </div>`;
                 }).join('');
@@ -2626,7 +4826,7 @@
 
             elements.storageList.innerHTML = '';
             if (keys.length === 0) {
-                elements.storageList.innerHTML = '<div style="color:var(--text-muted);padding:20px;text-align:center">No stored values</div>';
+                elements.storageList.innerHTML = '<div class="panel-empty"><strong>No stored values</strong><span>This script has not written anything to persistent storage yet.</span></div>';
             } else {
                 keys.forEach(key => {
                     const item = createStorageItem(script.id, key, values[key]);
@@ -2647,12 +4847,12 @@
         let currentKey = key;
 
         item.innerHTML = `
-            <span class="storage-key" title="Click to rename" style="cursor:pointer">${escapeHtml(key)}</span>
-            <input type="text" class="input-field" value="${escapeHtml(valStr)}" style="flex:1">
-            <div class="btn-group">
-                <button class="btn" title="Save value">💾</button>
-                <button class="btn" title="Rename key">✏️</button>
-                <button class="btn btn-danger" title="Delete">🗑️</button>
+            <button type="button" class="storage-key storage-key-button" title="Rename storage key">${escapeHtml(key)}</button>
+            <input type="text" class="input-field storage-input" value="${escapeHtml(valStr)}">
+            <div class="btn-group storage-item-actions">
+                <button type="button" class="btn btn-sm" title="Save value">Save</button>
+                <button type="button" class="btn btn-sm" title="Rename key">Rename</button>
+                <button type="button" class="btn btn-sm btn-danger" title="Delete value">Delete</button>
             </div>
         `;
 
@@ -2662,17 +4862,29 @@
             let newVal = item.querySelector('.input-field').value;
             try { newVal = JSON.parse(newVal); } catch (e) {}
             await chrome.runtime.sendMessage({ action: 'setScriptValue', scriptId, key: currentKey, value: newVal });
+            await loadScriptStorage(state.scripts.find(s => s.id === scriptId) || { id: scriptId });
             showToast('Saved', 'success');
         });
 
         // Rename button
         item.querySelectorAll('.btn')[1]?.addEventListener('click', async () => {
-            const newKey = prompt('Rename key:', currentKey);
+            const newKey = await showInputModal({
+                title: 'Rename Value',
+                label: 'Storage key',
+                value: currentKey,
+                confirmLabel: 'Rename',
+                validate: value => {
+                    if (!value) return 'Enter a storage key.';
+                    if (value === currentKey) return 'Choose a different key name.';
+                    return '';
+                }
+            });
             if (!newKey || newKey === currentKey) return;
             const res = await chrome.runtime.sendMessage({ action: 'renameScriptValue', scriptId, oldKey: currentKey, newKey });
             if (res?.success) {
                 currentKey = newKey;
                 keySpan.textContent = newKey;
+                await loadScriptStorage(state.scripts.find(s => s.id === scriptId) || { id: scriptId });
                 showToast('Key renamed', 'success');
             } else {
                 showToast(res?.error || 'Rename failed', 'error');
@@ -2685,7 +4897,7 @@
         item.querySelector('.btn-danger')?.addEventListener('click', async () => {
             if (await showConfirmModal('Delete', `Delete "${currentKey}"?`)) {
                 await chrome.runtime.sendMessage({ action: 'deleteScriptValue', scriptId, key: currentKey });
-                item.remove();
+                await loadScriptStorage(state.scripts.find(s => s.id === scriptId) || { id: scriptId });
                 showToast('Deleted', 'success');
             }
         });
@@ -2700,7 +4912,7 @@
             const script = state.scripts.find(s => s.id === scriptId);
             if (script) script.enabled = enabled;
             if (scriptId === state.currentScriptId) {
-                if (elements.btnEditorToggle) elements.btnEditorToggle.textContent = enabled ? 'Disable' : 'Enable';
+                updateEditorHeader(script || getCurrentScript());
             }
             updateStats();
             showToast(enabled ? 'Enabled' : 'Disabled', 'success');
@@ -2710,41 +4922,45 @@
     }
 
     async function saveCurrentScript() {
-        if (!state.currentScriptId || !state.editor) return;
+        const savingScriptId = state.currentScriptId;
+        if (!savingScriptId || !state.editor) return;
+        markScriptSavePending(savingScriptId);
         try {
             let code = state.editor.getValue();
             // Trim trailing whitespace if setting enabled
             if (state.settings.trimWhitespace) {
                 code = code.split('\n').map(line => line.replace(/\s+$/, '')).join('\n');
                 state.editor.setValue(code);
+                updateLineCount();
+                updateCursorPos();
             }
-            const saveResult = await chrome.runtime.sendMessage({ action: 'saveScript', scriptId: state.currentScriptId, code, markModified: true });
+            const saveResult = await chrome.runtime.sendMessage({ action: 'saveScript', scriptId: savingScriptId, code, markModified: true });
             if (saveResult?.error) throw new Error(saveResult.error);
 
             // Reload script list FIRST, then mark as saved
             await loadScripts();
 
-            // Only mark unsaved=false after everything succeeded
-            state.unsavedChanges = false;
-            if (state.openTabs[state.currentScriptId]) {
-                state.openTabs[state.currentScriptId].code = code;
-                state.openTabs[state.currentScriptId].unsaved = false;
+            // Only mark unsaved=false after everything succeeded — use captured ID
+            if (state.openTabs[savingScriptId]) {
+                state.openTabs[savingScriptId].code = code;
             }
-            const script = state.scripts.find(s => s.id === state.currentScriptId);
+            const script = state.scripts.find(s => s.id === savingScriptId);
             if (script) {
-                loadScriptInfo(script);
+                if (state.currentScriptId === savingScriptId) loadScriptInfo(script);
                 const name = script.metadata?.name || 'Edit Script';
-                if (elements.editorTitle) elements.editorTitle.textContent = name;
+                if (state.currentScriptId === savingScriptId && elements.editorTitle) elements.editorTitle.textContent = name;
                 // Update tab name
-                const tab = document.querySelector(`.tm-tab[data-script-id="${state.currentScriptId}"]`);
+                const tab = document.querySelector(`.tm-tab[data-script-id="${savingScriptId}"]`);
                 if (tab) {
                     tab.classList.remove('unsaved');
                     const tabName = tab.querySelector('.tab-name');
                     if (tabName) tabName.textContent = name;
                 }
             }
+            markScriptSaved(savingScriptId, Date.now());
             showToast('Saved', 'success');
         } catch (e) {
+            markScriptSaveFailed(savingScriptId, e?.message || 'Failed to save');
             showToast('Failed to save', 'error');
         }
     }
@@ -2775,7 +4991,13 @@
             if (scriptId === state.currentScriptId) {
                 state.currentScriptId = null;
                 state.unsavedChanges = false;
-                elements.editorOverlay?.classList.remove('active');
+                const remaining = Object.keys(state.openTabs);
+                if (remaining.length > 0) {
+                    activateScriptTab(remaining[remaining.length - 1]);
+                } else {
+                    elements.editorOverlay?.classList.remove('active');
+                    await switchTab('scripts');
+                }
             }
             if (!skipReload) {
                 await loadScripts();
@@ -2784,6 +5006,56 @@
             }
         } catch (e) {
             if (!skipReload) showToast('Failed', 'error');
+        }
+    }
+
+    async function checkScriptForUpdates(scriptId, { force = false, triggerEl = null } = {}) {
+        const script = state.scripts.find(s => s.id === scriptId);
+        const name = script?.metadata?.name || scriptId;
+        const originalText = triggerEl?.matches('.updated-link') ? triggerEl.textContent : '';
+
+        if (triggerEl) {
+            triggerEl.style.opacity = '0.4';
+            triggerEl.style.pointerEvents = 'none';
+            if (triggerEl.matches('.updated-link')) {
+                triggerEl.textContent = force ? 'Forcing...' : 'Checking...';
+            }
+        }
+
+        try {
+            if (force) {
+                showToast(`Force-updating ${name}...`, 'info');
+                const response = await chrome.runtime.sendMessage({ action: 'forceUpdate', scriptId });
+                if (response?.success) {
+                    showToast(`${name} force-updated to v${response.script?.meta?.version || '?'}`, 'success');
+                    setTimeout(() => loadScripts(), 800);
+                    return true;
+                }
+                showToast(response?.error || 'Force update failed', 'error');
+                return false;
+            }
+
+            const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId });
+            if (updates && updates.length > 0) {
+                await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId, code: updates[0].code });
+                showToast(`${name} updated to v${updates[0].newVersion}`, 'success');
+                setTimeout(() => loadScripts(), 800);
+                return true;
+            }
+
+            showToast(`${name} is up to date`, 'info');
+            return false;
+        } catch (err) {
+            showToast(force ? 'Force update failed' : 'Update check failed', 'error');
+            return false;
+        } finally {
+            if (triggerEl) {
+                triggerEl.style.opacity = '';
+                triggerEl.style.pointerEvents = '';
+                if (triggerEl.matches('.updated-link')) {
+                    triggerEl.textContent = originalText;
+                }
+            }
         }
     }
 
@@ -3079,7 +5351,9 @@
 
         state.editor.setValue(beautified.join('\n'));
         state.editor.setCursor({ line: 0, ch: 0 });
-        state.unsavedChanges = true;
+        updateLineCount();
+        updateCursorPos();
+        markCurrentEditorDirty();
         showToast('Code beautified', 'success');
     }
 
@@ -3123,14 +5397,7 @@
                 'Tab': cm => cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection(indentStr, 'end'),
                 'Ctrl-Space': 'autocomplete',
                 'Ctrl-/': () => document.getElementById('tbtnComment')?.click(),
-                'Ctrl-G': (cm) => {
-                    const line = prompt('Go to line:');
-                    if (line && !isNaN(line)) {
-                        const ln = Math.max(1, Math.min(parseInt(line), cm.lineCount()));
-                        cm.setCursor(ln - 1, 0);
-                        cm.scrollIntoView(null, cm.getScrollerElement().offsetHeight / 2);
-                    }
-                }
+                'Ctrl-G': () => { goToEditorLine(state.editor); }
             }
         });
 
@@ -3145,13 +5412,7 @@
         state.editor.on('change', (cm, change) => {
             // Ignore programmatic loads (setValue) — only track actual user edits
             if (change.origin === 'setValue') return;
-            state.unsavedChanges = true;
-            // Mark tab as unsaved
-            if (state.currentScriptId) {
-                if (state.openTabs[state.currentScriptId]) state.openTabs[state.currentScriptId].unsaved = true;
-                const tab = document.querySelector(`.tm-tab[data-script-id="${state.currentScriptId}"]`);
-                if (tab) tab.classList.add('unsaved');
-            }
+            markCurrentEditorDirty();
             updateLineCount();
             if (s.autoSave) {
                 clearTimeout(autoSaveTimer);
@@ -3179,6 +5440,15 @@
         input.onchange = async e => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
+            const transfer = getTransferPreferences();
+            const hasStructuredImports = files.some(file => /\.(zip|json)$/i.test(file.name));
+            if (hasStructuredImports) {
+                const confirmed = await showConfirmModal(
+                    'Import Files',
+                    `Import ${files.length} file${files.length === 1 ? '' : 's'}? Matching scripts may be overwritten.`
+                );
+                if (!confirmed) return;
+            }
             showProgress(`Importing ${files.length} file${files.length > 1 ? 's' : ''}...`);
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -3192,12 +5462,32 @@
                         for (let j = 0; j < bytes.length; j += 8192) {
                             binary += String.fromCharCode.apply(null, bytes.subarray(j, j + 8192));
                         }
-                        const r = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: btoa(binary), options: { overwrite: true } });
-                        showToast(r?.error ? r.error : `Imported ${r?.imported || 0} scripts from ${file.name}`, r?.error ? 'error' : 'success');
+                        const r = await chrome.runtime.sendMessage({
+                            action: 'importFromZip',
+                            zipData: btoa(binary),
+                            options: { overwrite: true }
+                        });
+                        showToast(
+                            r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
+                            r?.error ? 'error' : getImportResultTone(r)
+                        );
                     } else if (name.endsWith('.json')) {
                         const data = JSON.parse(await file.text());
-                        const r = await chrome.runtime.sendMessage({ action: 'importAll', data: { data, options: { overwrite: true } } });
-                        showToast(r?.error ? r.error : `Imported ${r?.imported || 0} scripts from ${file.name}`, r?.error ? 'error' : 'success');
+                        const r = await chrome.runtime.sendMessage({
+                            action: 'importAll',
+                            data: {
+                                data,
+                                options: {
+                                    overwrite: true,
+                                    importSettings: transfer.includeSettings,
+                                    importStorage: transfer.includeStorage
+                                }
+                            }
+                        });
+                        showToast(
+                            r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
+                            r?.error ? 'error' : getImportResultTone(r)
+                        );
                     } else {
                         const code = await file.text();
                         const res = await chrome.runtime.sendMessage({ action: 'createScript', code });
@@ -3216,16 +5506,29 @@
 
     async function exportAllScripts() {
         try {
-            const response = await chrome.runtime.sendMessage({ action: 'exportAll' });
+            const transfer = getTransferPreferences();
+            const response = await chrome.runtime.sendMessage({
+                action: 'exportAll',
+                options: {
+                    includeSettings: transfer.includeSettings,
+                    includeStorage: transfer.includeStorage
+                }
+            });
             if (response) {
                 const blob = new Blob([JSON.stringify(response, null, 2)], { type: 'application/json' });
                 const a = document.createElement('a');
                 const url = URL.createObjectURL(blob);
                 a.href = url;
-                a.download = `scriptvault-backup-${new Date().toISOString().split('T')[0]}.json`;
+                a.download = `${transfer.includeSettings ? 'scriptvault-vault-export' : 'scriptvault-script-export'}-${new Date().toISOString().split('T')[0]}.json`;
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
-                showToast('Exported', 'success');
+                const exportedCount = response.scripts?.length || 0;
+                const exportDetails = [
+                    `${numberFormatter.format(exportedCount)} scripts`,
+                    transfer.includeStorage ? 'stored values included' : 'stored values excluded',
+                    transfer.includeSettings ? 'app settings included' : 'app settings excluded'
+                ];
+                showToast(`JSON export ready: ${exportDetails.join(', ')}`, 'success');
             }
         } catch (e) {
             showToast('Failed', 'error');
@@ -3246,7 +5549,11 @@
 
     async function exportToZip() {
         try {
-            const response = await chrome.runtime.sendMessage({ action: 'exportZip' });
+            const transfer = getTransferPreferences();
+            const response = await chrome.runtime.sendMessage({
+                action: 'exportZip',
+                options: { includeStorage: transfer.includeStorage }
+            });
             if (response?.zipData) {
                 const raw = atob(response.zipData);
                 const bytes = new Uint8Array(raw.length);
@@ -3258,7 +5565,12 @@
                 a.download = response.filename || `scriptvault-${new Date().toISOString().split('T')[0]}.zip`;
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
-                showToast('Exported ZIP', 'success');
+                showToast(
+                    transfer.includeStorage
+                        ? 'ZIP archive ready with stored values'
+                        : 'ZIP archive ready without stored values',
+                    'success'
+                );
             }
         } catch (e) {
             showToast('Failed', 'error');
@@ -3320,23 +5632,31 @@
     async function updateStats() {
         const total = state.scripts.length;
         const active = state.scripts.filter(s => s.enabled !== false).length;
-        if (elements.statTotalScripts) elements.statTotalScripts.textContent = total;
-        if (elements.statActiveScripts) elements.statActiveScripts.textContent = active;
+        const formattedTotal = numberFormatter.format(total);
+        const formattedActive = numberFormatter.format(active);
+        if (elements.statTotalScripts) elements.statTotalScripts.textContent = formattedTotal;
+        if (elements.statActiveScripts) elements.statActiveScripts.textContent = formattedActive;
+        if (elements.workspaceInstalledStat) elements.workspaceInstalledStat.textContent = formattedTotal;
+        if (elements.workspaceActiveStat) elements.workspaceActiveStat.textContent = formattedActive;
+        updateHelpOverview();
         try {
             const bytes = await chrome.storage.local.getBytesInUse(null);
-            if (elements.statTotalStorage) elements.statTotalStorage.textContent = formatBytes(bytes || 0);
+            const usedBytes = bytes || 0;
+            const formattedStorage = formatBytes(usedBytes);
+            if (elements.statTotalStorage) elements.statTotalStorage.textContent = formattedStorage;
+            if (elements.workspaceStorageStat) elements.workspaceStorageStat.textContent = formattedStorage;
 
             // Storage quota bar
             const quotaBar = document.getElementById('storageQuotaBar');
             const quotaText = document.getElementById('storageQuotaText');
             const QUOTA_BYTES = 10 * 1024 * 1024; // 10MB Chrome limit
-            const pct = Math.min(100, (bytes / QUOTA_BYTES) * 100);
+            const pct = Math.min(100, (usedBytes / QUOTA_BYTES) * 100);
             if (quotaBar) {
                 quotaBar.style.width = pct + '%';
                 quotaBar.className = 'quota-bar-fill' + (pct > 90 ? ' danger' : pct > 70 ? ' warning' : '');
             }
             if (quotaText) {
-                quotaText.textContent = `${formatBytes(bytes)} / ${formatBytes(QUOTA_BYTES)} (${pct.toFixed(1)}%)`;
+                quotaText.textContent = `${formatBytes(usedBytes)} / ${formatBytes(QUOTA_BYTES)} (${pct.toFixed(1)}%)`;
             }
             // Show warning toast if over 85%
             if (pct > 85 && !state._quotaWarned) {
@@ -3345,6 +5665,7 @@
             }
         } catch (e) {
             if (elements.statTotalStorage) elements.statTotalStorage.textContent = '-';
+            if (elements.workspaceStorageStat) elements.workspaceStorageStat.textContent = '-';
         }
     }
 
@@ -3352,7 +5673,7 @@
         if (bytes === 0) return '0 B';
         const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        return `${bytesFormatter.format(bytes / Math.pow(k, i))} ${sizes[i]}`;
     }
 
     function formatTime(ts) {
@@ -3363,7 +5684,7 @@
         const m = Math.floor(diff / 60000);
         const h = Math.floor(m / 60);
         const d = Math.floor(h / 24);
-        if (d > 30) return new Date(ts).toLocaleDateString();
+        if (d > 30) return fullDateFormatter.format(date);
         if (d > 0) return d + 'd';
         if (h > 0) return h + 'h';
         if (m > 0) return m + 'm';
@@ -3605,6 +5926,9 @@
         const icons = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
         toast.innerHTML = `<span class="toast-icon">${icons[type]}</span><span class="toast-message">${escapeHtml(msg)}</span>`;
         elements.toastContainer.appendChild(toast);
+        if (typeof A11y !== 'undefined' && typeof A11y.announce === 'function') {
+            A11y.announce(msg, type === 'error' ? 'assertive' : 'polite');
+        }
         requestAnimationFrame(() => toast.classList.add('show'));
         setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000);
 
@@ -3628,12 +5952,13 @@
 
     // Progress overlay helpers
     const progressEl = {
-        overlay: null, title: null, fill: null, status: null,
+        overlay: null, title: null, fill: null, status: null, bar: null,
         init() {
             this.overlay = document.getElementById('progressOverlay');
             this.title = document.getElementById('progressTitle');
             this.fill = document.getElementById('progressFill');
             this.status = document.getElementById('progressStatus');
+            this.bar = document.getElementById('progressBar');
         }
     };
 
@@ -3643,7 +5968,13 @@
         if (progressEl.title) progressEl.title.textContent = title;
         if (progressEl.fill) progressEl.fill.style.width = '0%';
         if (progressEl.status) progressEl.status.textContent = '';
+        if (progressEl.bar) progressEl.bar.setAttribute('aria-valuenow', '0');
+        progressEl.overlay.hidden = false;
+        progressEl.overlay.setAttribute('aria-hidden', 'false');
         progressEl.overlay.classList.add('active');
+        if (typeof A11y !== 'undefined' && typeof A11y.announce === 'function') {
+            A11y.announce(title, 'polite');
+        }
     }
 
     function updateProgress(current, total, label) {
@@ -3651,40 +5982,216 @@
         const pct = Math.round((current / total) * 100);
         progressEl.fill.style.width = pct + '%';
         if (progressEl.status) progressEl.status.textContent = label || `${current} / ${total}`;
+        if (progressEl.bar) progressEl.bar.setAttribute('aria-valuenow', String(Math.max(0, Math.min(100, pct))));
+        if (label && typeof A11y !== 'undefined' && typeof A11y.announce === 'function') {
+            A11y.announce(label, 'polite');
+        }
     }
 
     function hideProgress() {
         if (!progressEl.overlay) return;
         progressEl.fill.style.width = '100%';
-        setTimeout(() => progressEl.overlay.classList.remove('active'), 300);
+        if (progressEl.bar) progressEl.bar.setAttribute('aria-valuenow', '100');
+        setTimeout(() => {
+            progressEl.overlay.classList.remove('active');
+            progressEl.overlay.hidden = true;
+            progressEl.overlay.setAttribute('aria-hidden', 'true');
+        }, 300);
     }
 
-    function showModal(title, html, actions = []) {
+    let modalDismissHandler = null;
+    function closeModalShell() {
+        elements.modal?.classList.remove('show');
+        if (elements.modal) {
+            elements.modal.hidden = true;
+            elements.modal.setAttribute('aria-hidden', 'true');
+        }
+        if (modalFocusManaged && typeof A11y !== 'undefined' && typeof A11y.releaseFocus === 'function') {
+            A11y.releaseFocus();
+            modalFocusManaged = false;
+        }
+        if (modalLastFocusedElement?.isConnected) {
+            modalLastFocusedElement.focus();
+        }
+        modalLastFocusedElement = null;
+    }
+
+    function showModal(title, html, actions = [], options = {}) {
         if (!elements.modal) return;
+        modalLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        modalDismissHandler = typeof options.onDismiss === 'function' ? options.onDismiss : null;
         if (elements.modalTitle) elements.modalTitle.textContent = title;
         if (elements.modalBody) elements.modalBody.innerHTML = html;
         if (elements.modalActions) {
             elements.modalActions.innerHTML = '';
             actions.forEach(a => {
                 const btn = document.createElement('button');
+                btn.type = 'button';
                 btn.className = `btn ${a.class || ''}`;
                 btn.textContent = a.label;
                 btn.onclick = a.callback;
                 elements.modalActions.appendChild(btn);
             });
         }
-        elements.modal?.classList.add('show');
+        elements.modal.hidden = false;
+        elements.modal.setAttribute('aria-hidden', 'false');
+        elements.modal.classList.add('show');
+        const modalSurface = elements.modal.querySelector('.modal-content');
+        if (modalSurface && typeof A11y !== 'undefined' && typeof A11y.trapFocus === 'function') {
+            A11y.trapFocus(modalSurface);
+            modalFocusManaged = true;
+        }
+        requestAnimationFrame(() => {
+            const preferredFocus = elements.modalActions?.querySelector('.btn-primary')
+                || elements.modalActions?.querySelector('button')
+                || elements.modalClose
+                || modalSurface;
+            preferredFocus?.focus?.();
+        });
     }
 
-    function hideModal() { elements.modal?.classList.remove('show'); }
+    function hideModal() {
+        closeModalShell();
+        const onDismiss = modalDismissHandler;
+        modalDismissHandler = null;
+        onDismiss?.();
+    }
 
     function showConfirmModal(title, msg) {
         return new Promise(resolve => {
+            let settled = false;
+            const finish = result => {
+                if (settled) return;
+                settled = true;
+                modalDismissHandler = null;
+                closeModalShell();
+                resolve(result);
+            };
             showModal(title, `<p>${escapeHtml(msg)}</p>`, [
-                { label: 'Cancel', class: '', callback: () => { hideModal(); resolve(false); } },
-                { label: 'Confirm', class: 'btn-primary', callback: () => { hideModal(); resolve(true); } }
-            ]);
+                { label: 'Cancel', class: '', callback: () => finish(false) },
+                { label: 'Confirm', class: 'btn-primary', callback: () => finish(true) }
+            ], { onDismiss: () => finish(false) });
         });
+    }
+
+    function showInputModal({
+        title,
+        label,
+        value = '',
+        placeholder = '',
+        confirmLabel = 'Save',
+        validate
+    }) {
+        return new Promise(resolve => {
+            const inputId = `modal-input-${Date.now()}`;
+            const errorId = `${inputId}-error`;
+            let settled = false;
+
+            const finish = result => {
+                if (settled) return;
+                settled = true;
+                modalDismissHandler = null;
+                closeModalShell();
+                document.removeEventListener('keydown', handleKeyDown, true);
+                resolve(result);
+            };
+
+            const submit = () => {
+                const input = document.getElementById(inputId);
+                const errorEl = document.getElementById(errorId);
+                const rawValue = input?.value ?? '';
+                const trimmedValue = rawValue.trim();
+                const error = typeof validate === 'function'
+                    ? validate(trimmedValue, rawValue)
+                    : (!trimmedValue ? 'This field is required.' : '');
+
+                if (error) {
+                    if (errorEl) errorEl.textContent = error;
+                    input?.focus();
+                    input?.select?.();
+                    return;
+                }
+
+                finish(trimmedValue);
+            };
+
+            const handleKeyDown = e => {
+                if (!elements.modal?.classList.contains('show')) return;
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    finish(null);
+                    return;
+                }
+                if (e.key === 'Enter' && document.activeElement?.id === inputId) {
+                    e.preventDefault();
+                    submit();
+                }
+            };
+
+            showModal(title, `
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    <label for="${inputId}" style="font-weight:600;color:var(--text-primary)">${escapeHtml(label)}</label>
+                    <input id="${inputId}" class="input-field" type="text" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" aria-describedby="${errorId}">
+                    <div id="${errorId}" style="min-height:18px;font-size:12px;color:var(--accent-error)"></div>
+                </div>
+            `, [
+                { label: 'Cancel', class: '', callback: () => finish(null) },
+                { label: confirmLabel, class: 'btn-primary', callback: submit }
+            ], { onDismiss: () => finish(null) });
+
+            document.addEventListener('keydown', handleKeyDown, true);
+            requestAnimationFrame(() => {
+                const input = document.getElementById(inputId);
+                input?.focus();
+                input?.select?.();
+            });
+        });
+    }
+
+    window.ScriptVaultDashboardUI = {
+        confirm: showConfirmModal,
+        input: showInputModal,
+        toast: showToast
+    };
+
+    function getEditorLineCount(editor) {
+        if (!editor) return 1;
+        if (typeof editor.lineCount === 'function') return editor.lineCount();
+        if (typeof editor.getValue === 'function') return (editor.getValue().match(/\n/g) || []).length + 1;
+        return 1;
+    }
+
+    async function promptForLineNumber(editor = state.editor) {
+        if (!editor) return null;
+        const maxLine = Math.max(1, getEditorLineCount(editor));
+        const lineText = await showInputModal({
+            title: 'Go to Line',
+            label: `Line number (1-${maxLine})`,
+            placeholder: '42',
+            confirmLabel: 'Go',
+            validate: value => {
+                if (!value) return 'Enter a line number.';
+                if (!/^\d+$/.test(value)) return 'Use digits only.';
+                const lineNumber = parseInt(value, 10);
+                if (lineNumber < 1 || lineNumber > maxLine) {
+                    return `Enter a number between 1 and ${maxLine}.`;
+                }
+                return '';
+            }
+        });
+
+        return lineText ? parseInt(lineText, 10) : null;
+    }
+
+    async function goToEditorLine(editor = state.editor) {
+        const lineNumber = await promptForLineNumber(editor);
+        if (!editor || !lineNumber) return;
+        if (typeof editor.setCursor === 'function') {
+            editor.setCursor(lineNumber - 1, 0);
+        }
+        if (typeof editor.scrollIntoView === 'function' && typeof editor.getScrollerElement === 'function') {
+            editor.scrollIntoView(null, editor.getScrollerElement().offsetHeight / 2);
+        }
     }
 
     // Event listeners
@@ -3695,48 +6202,21 @@
                 const id = tab.dataset.tab;
                 // Skip script tabs — they have their own handler
                 if (tab.classList.contains('script-tab')) return;
-                closeFindScripts();
                 if (id === 'newscript') {
                     createNewScript();
                     return;
                 }
-                // Save current editor state if switching away
-                if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
-                    state.openTabs[state.currentScriptId].code = state.editor.getValue();
-                    state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
-                }
-                state.currentScriptId = null;
-                elements.editorOverlay?.classList.remove('active');
-                document.querySelectorAll('.tm-tab').forEach(t => t.classList.remove('active'));
-                Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
-                tab.classList.add('active');
-                elements.mainPanels[id]?.classList.add('active');
-                if (tab.dataset.tab === 'trash') await loadTrash();
-                await lazyInitTab(id);
-                elements.btnHelpTab?.classList.remove('active');
+                await switchTab(id);
             });
         });
 
         // Help icon button in header
-        elements.btnHelpTab?.addEventListener('click', () => {
+        elements.btnHelpTab?.addEventListener('click', async () => {
             const isActive = elements.btnHelpTab.classList.contains('active');
-            // Save current editor state if switching away
-            if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
-                state.openTabs[state.currentScriptId].code = state.editor.getValue();
-                state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
-            }
-            state.currentScriptId = null;
-            elements.editorOverlay?.classList.remove('active');
-            document.querySelectorAll('.tm-tab').forEach(t => t.classList.remove('active'));
-            Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
             if (isActive) {
-                elements.btnHelpTab.classList.remove('active');
-                const scriptsTab = document.querySelector('.tm-tab[data-tab="scripts"]');
-                if (scriptsTab) scriptsTab.classList.add('active');
-                elements.mainPanels.scripts?.classList.add('active');
+                await switchTab('scripts');
             } else {
-                elements.btnHelpTab.classList.add('active');
-                elements.mainPanels.help?.classList.add('active');
+                await switchTab('help');
             }
         });
 
@@ -3753,7 +6233,19 @@
         });
 
         // Scripts
-        elements.scriptSearch?.addEventListener('input', e => renderScriptTable(e.target.value));
+        elements.scriptSearch?.addEventListener('input', () => queueScriptTableRender());
+        elements.scriptSearch?.addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                queueScriptTableRender(true);
+                return;
+            }
+            if (e.key === 'Escape' && elements.scriptSearch?.value) {
+                e.preventDefault();
+                elements.scriptSearch.value = '';
+                queueScriptTableRender(true);
+            }
+        });
 
         // Column visibility toggle
         document.getElementById('btnColumnToggle')?.addEventListener('click', () => {
@@ -3843,7 +6335,16 @@
 
         // Sortable column headers
         document.querySelectorAll('.scripts-table th.sortable').forEach(th => {
+            th.tabIndex = 0;
+            th.setAttribute('role', 'button');
+            th.setAttribute('aria-label', `Sort by ${(th.textContent || '').replace(/\s+/g, ' ').trim()}`);
             th.addEventListener('click', () => handleSortClick(th.dataset.sort));
+            th.addEventListener('keydown', e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSortClick(th.dataset.sort);
+                }
+            });
         });
 
         elements.filterSelect?.addEventListener('change', () => {
@@ -3884,14 +6385,29 @@
             const script = state.scripts.find(s => s.id === state.currentScriptId);
             if (script) exportSingleScript(script);
         });
-        elements.btnEditorDelete?.addEventListener('click', () => { if (state.currentScriptId) deleteScript(state.currentScriptId); });
+        elements.btnEditorDelete?.addEventListener('click', async () => {
+            if (!state.currentScriptId) return;
+            const script = state.scripts.find(s => s.id === state.currentScriptId);
+            const name = script?.metadata?.name || 'this script';
+            if (await showConfirmModal(`Delete "${name}"?`, 'This action cannot be undone.')) {
+                deleteScript(state.currentScriptId);
+            }
+        });
         // Close button removed - tabs handle closing
 
         elements.btnEmptyTrash?.addEventListener('click', async () => {
-            if (!await showConfirmModal('Empty Trash', 'Permanently delete all trashed scripts?')) return;
-            const r = await chrome.runtime.sendMessage({ action: 'emptyTrash' });
-            showToast(r?.error ? r.error : 'Trash emptied', r?.error ? 'error' : 'success');
-            await loadTrash();
+            const total = state.trashItems.length;
+            if (total === 0) return;
+            if (!await showConfirmModal('Empty Trash', `Permanently delete ${numberFormatter.format(total)} script${total === 1 ? '' : 's'} from trash?`)) return;
+            try {
+                const r = await chrome.runtime.sendMessage({ action: 'emptyTrash' });
+                showToast(r?.error ? r.error : 'Trash emptied', r?.error ? 'error' : 'success');
+                await loadTrash();
+                if (!r?.error) updateStats();
+            } catch (error) {
+                console.error('Failed to empty trash:', error);
+                showToast('Failed to empty trash', 'error');
+            }
         });
 
         // Externals refresh
@@ -3920,13 +6436,17 @@
         async function searchLibraries() {
             const query = libSearchInput?.value?.trim();
             if (!query) return;
-            if (libSearchResults) libSearchResults.innerHTML = '<div style="padding:8px;color:var(--text-muted)">Searching...</div>';
+            if (libSearchResults) {
+                libSearchResults.innerHTML = '<div class="panel-empty"><strong>Searching libraries...</strong><span>Fetching matching packages from cdnjs.</span></div>';
+            }
             try {
                 const resp = await fetch(`https://api.cdnjs.com/libraries?search=${encodeURIComponent(query)}&fields=description,version,filename&limit=10`);
                 if (!resp.ok) throw new Error('Search failed');
                 const data = await resp.json();
                 if (!data.results || data.results.length === 0) {
-                    if (libSearchResults) libSearchResults.innerHTML = '<div style="padding:8px;color:var(--text-muted)">No libraries found</div>';
+                    if (libSearchResults) {
+                        libSearchResults.innerHTML = '<div class="panel-empty"><strong>No libraries found</strong><span>Try a broader package name like jquery, lodash, or react.</span></div>';
+                    }
                     return;
                 }
                 if (libSearchResults) libSearchResults.innerHTML = data.results.filter(lib =>
@@ -3955,12 +6475,8 @@
                         const updated = code.replace(/(\/\/\s*==\/UserScript==)/, insertLine + '\n$1');
                         if (updated !== code) {
                             state.editor.setValue(updated);
-                            state.unsavedChanges = true;
-                            if (state.openTabs[state.currentScriptId]) {
-                                state.openTabs[state.currentScriptId].unsaved = true;
-                            }
-                            const tab = document.querySelector(`.tm-tab[data-script-id="${state.currentScriptId}"]`);
-                            if (tab) tab.classList.add('unsaved');
+                            updateLineCount();
+                            markCurrentEditorDirty();
                             btn.textContent = 'Added';
                             btn.disabled = true;
                             showToast('Library added to @require', 'success');
@@ -3970,7 +6486,9 @@
                     });
                 });
             } catch (e) {
-                if (libSearchResults) libSearchResults.innerHTML = `<div style="padding:8px;color:var(--accent-red)">Search failed: ${escapeHtml(e.message)}</div>`;
+                if (libSearchResults) {
+                    libSearchResults.innerHTML = `<div class="panel-empty"><strong>Search failed</strong><span>${escapeHtml(e.message)}</span></div>`;
+                }
             }
         }
 
@@ -4021,14 +6539,14 @@
                 }
             }
         });
-        elements.tbtnJumpLine?.addEventListener('click', () => state.editor?.execCommand('jumpToLine'));
+        elements.tbtnJumpLine?.addEventListener('click', () => goToEditorLine(state.editor));
 
         // Comment toggle (Ctrl+/)
         document.getElementById('tbtnComment')?.addEventListener('click', () => {
             if (!state.editor) return;
             if (state.editor.isMonaco) {
                 state.editor.toggleComment();
-                state.unsavedChanges = true;
+                markCurrentEditorDirty();
                 return;
             }
             const cm = state.editor;
@@ -4053,7 +6571,7 @@
                     }
                 }
             });
-            state.unsavedChanges = true;
+            markCurrentEditorDirty();
         });
 
         // Word wrap toggle
@@ -4090,10 +6608,7 @@
                     const code = snippets[name];
                     if (code && state.editor) {
                         state.editor.replaceSelection(code);
-                        state.unsavedChanges = true;
-                        if (state.openTabs[state.currentScriptId]) state.openTabs[state.currentScriptId].unsaved = true;
-                        const tab = document.querySelector(`.tm-tab[data-script-id="${state.currentScriptId}"]`);
-                        if (tab) tab.classList.add('unsaved');
+                        markCurrentEditorDirty();
                     }
                     hideModal();
                 });
@@ -4232,7 +6747,7 @@
             settingsExternalsInterval: ['externalsInterval', 'value', v => parseInt(v) || 24],
             
             // Sync
-            settingsEnableSync: ['enableSync', 'checked'],
+            settingsEnableSync: ['syncEnabled', 'checked'],
             
             // Editor
             settingsEnableEditor: ['enableEditor', 'checked'],
@@ -4300,7 +6815,10 @@
 
         // Sync Type with provider toggle
         elements.settingsSyncType?.addEventListener('change', e => {
-            saveSetting('syncType', e.target.value);
+            saveSetting('syncProvider', e.target.value);
+            if (elements.cloudProvider && e.target.value && e.target.value !== 'none') {
+                elements.cloudProvider.value = e.target.value;
+            }
             toggleSyncProviderSettings();
         });
 
@@ -4329,7 +6847,20 @@
         });
         
         elements.btnSaveSync?.addEventListener('click', async () => {
-            showToast('Sync settings saved', 'success');
+            const provider = elements.settingsSyncType?.value || 'none';
+            await saveSetting('syncEnabled', !!elements.settingsEnableSync?.checked);
+            await saveSetting('syncProvider', provider);
+            if (provider === 'webdav') {
+                await saveSetting('webdavUrl', elements.settingsWebdavUrl?.value.trim() || '');
+                await saveSetting('webdavUsername', elements.settingsWebdavUsername?.value.trim() || '');
+                await saveSetting('webdavPassword', elements.settingsWebdavPassword?.value || '');
+            }
+            showToast(
+                provider === 'none'
+                    ? 'Sync is disabled until you choose a provider'
+                    : `Saved sync settings for ${provider}`,
+                'success'
+            );
         });
         
         elements.btnSaveEditor?.addEventListener('click', async () => {
@@ -4364,9 +6895,16 @@
                     elements.syncLog.value = (elements.syncLog.value || '') + 
                         `[${new Date().toLocaleTimeString()}] ${r?.success ? 'Sync completed' : (r?.error || 'Failed')}\n`;
                 }
-                if (r?.success) { await loadScripts(); updateStats(); }
-                showToast(r?.success ? 'Done' : (r?.error || 'Failed'), r?.success ? 'success' : 'error');
-            } catch (e) { showToast('Failed', 'error'); }
+                if (r?.success) {
+                    state.settings.lastSync = Date.now();
+                    if (elements.lastSyncTime) {
+                        elements.lastSyncTime.textContent = formatSyncTimestamp(state.settings.lastSync);
+                    }
+                    await loadScripts();
+                    updateStats();
+                }
+                showToast(r?.success ? 'Sync completed' : (r?.error || 'Sync failed'), r?.success ? 'success' : 'error');
+            } catch (e) { showToast('Sync failed', 'error'); }
         });
         
         elements.btnSyncReset?.addEventListener('click', async () => {
@@ -4389,12 +6927,59 @@
             }
         });
 
-        // Permissions (placeholder - full permission management not yet implemented)
-        elements.btnGrantSelected?.addEventListener('click', () => showToast('Permission management coming soon', 'info'));
-        elements.btnGrantAll?.addEventListener('click', () => showToast('Permission management coming soon', 'info'));
+        // Runtime host permissions
+        async function persistDeniedHosts(nextDeniedHosts, successMessage) {
+            const response = await chrome.runtime.sendMessage({ action: 'setSettings', settings: { deniedHosts: nextDeniedHosts } });
+            if (response?.error) {
+                showToast(response.error, 'error');
+                return false;
+            }
+            state.settings.deniedHosts = nextDeniedHosts;
+            if (elements.settingsDeniedHosts) {
+                elements.settingsDeniedHosts.value = nextDeniedHosts.join('\n');
+            }
+            showToast(successMessage, 'success');
+            return true;
+        }
+
+        elements.btnGrantSelected?.addEventListener('click', async () => {
+            const textarea = elements.settingsDeniedHosts;
+            const currentHosts = (state.settings.deniedHosts || []).slice();
+            if (!textarea || currentHosts.length === 0) {
+                showToast('No denied hosts to restore', 'info');
+                return;
+            }
+            const selectedText = textarea.value.slice(textarea.selectionStart || 0, textarea.selectionEnd || 0).trim();
+            if (!selectedText) {
+                showToast('Select one or more hosts in the list first', 'info');
+                return;
+            }
+            const selectedHosts = new Set(selectedText.split(/\r?\n/).map(value => value.trim()).filter(Boolean));
+            const nextDeniedHosts = currentHosts.filter(host => !selectedHosts.has(host));
+            if (nextDeniedHosts.length === currentHosts.length) {
+                showToast('Selected hosts were not found in the saved deny list', 'info');
+                return;
+            }
+            await persistDeniedHosts(nextDeniedHosts, `Restored ${numberFormatter.format(currentHosts.length - nextDeniedHosts.length)} host permission${currentHosts.length - nextDeniedHosts.length === 1 ? '' : 's'}`);
+        });
+        elements.btnGrantAll?.addEventListener('click', async () => {
+            const currentHosts = state.settings.deniedHosts || [];
+            if (!currentHosts.length) {
+                showToast('No denied hosts to restore', 'info');
+                return;
+            }
+            if (!await showConfirmModal('Restore all denied hosts?', `Remove ${currentHosts.length} remembered host deny entr${currentHosts.length === 1 ? 'y' : 'ies'} from ScriptVault's runtime list.`)) {
+                return;
+            }
+            await persistDeniedHosts([], 'Cleared all denied host entries');
+        });
         elements.btnResetPermissions?.addEventListener('click', () => {
-            if (elements.settingsDeniedHosts) elements.settingsDeniedHosts.value = '';
-            showToast('Permissions list cleared', 'info');
+            if (elements.settingsDeniedHosts) {
+                elements.settingsDeniedHosts.value = (state.settings.deniedHosts || []).join('\n');
+                elements.settingsDeniedHosts.focus();
+                elements.settingsDeniedHosts.select();
+            }
+            showToast('Reloaded the saved denied host list', 'info');
         });
 
         // Reset buttons
@@ -4415,6 +7000,140 @@
         // Utilities
         elements.btnExportFile?.addEventListener('click', exportAllScripts);
         elements.btnExportZip?.addEventListener('click', exportToZip);
+        elements.btnCreateBackup?.addEventListener('click', async () => {
+            showToast('Creating backup...', 'info');
+            try {
+                const response = await chrome.runtime.sendMessage({ action: 'createBackup', reason: 'manual' });
+                if (response?.error || response?.success === false) {
+                    showToast(response?.error || 'Backup failed', 'error');
+                    return;
+                }
+                await loadBackups();
+                showToast('Backup created', 'success');
+            } catch (error) {
+                showToast(error?.message || 'Backup failed', 'error');
+            }
+        });
+        elements.btnImportBackupArchive?.addEventListener('click', () => elements.backupArchiveInput?.click());
+        elements.btnRefreshBackups?.addEventListener('click', () => loadBackups({ announce: true }));
+        elements.backupBrowserFilterButtons?.forEach(button => {
+            button.addEventListener('click', () => {
+                state.backupBrowserFilter = button.dataset.backupBrowserFilter || 'all';
+                applyBackupBrowserFilters();
+            });
+        });
+        elements.backupBrowserQuickFilter?.addEventListener('input', () => {
+            state.backupBrowserQuery = elements.backupBrowserQuickFilter?.value || '';
+            applyBackupBrowserFilters();
+        });
+        elements.backupBrowserSort?.addEventListener('change', () => {
+            state.backupBrowserSort = elements.backupBrowserSort?.value || 'newest';
+            applyBackupBrowserFilters();
+        });
+        elements.btnResetBackupBrowser?.addEventListener('click', resetBackupBrowserView);
+        elements.backupArchiveInput?.addEventListener('change', async event => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            showProgress(`Importing ${file.name}...`);
+            updateProgress(0, 1, 'Reading archive...');
+            try {
+                const buf = await file.arrayBuffer();
+                const bytes = new Uint8Array(buf);
+                let binary = '';
+                for (let i = 0; i < bytes.length; i += 8192) {
+                    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+                }
+                updateProgress(1, 2, 'Saving backup...');
+                const response = await chrome.runtime.sendMessage({ action: 'importBackup', zipData: btoa(binary) });
+                hideProgress();
+                if (response?.error || response?.success === false || !response?.backupId) {
+                    showToast(response?.error || 'Failed to import backup archive', 'error');
+                    return;
+                }
+                await loadBackups();
+                showToast('Backup archive imported', 'success');
+                await openBackupReviewModal(response.backupId);
+            } catch (error) {
+                hideProgress();
+                showToast(error?.message || 'Failed to import backup archive', 'error');
+            } finally {
+                event.target.value = '';
+            }
+        });
+        elements.backupScheduleType?.addEventListener('change', () => {
+            applyBackupScheduleFormState();
+            updateBackupScheduleSummary({
+                ...(state.backupSettings || {}),
+                enabled: !!elements.backupEnabled?.checked,
+                scheduleType: elements.backupScheduleType?.value || 'manual',
+                hour: Number(elements.backupHour?.value || 3),
+                dayOfWeek: Number(elements.backupDayOfWeek?.value || 0),
+                maxBackups: Number(elements.backupMaxBackups?.value || 5),
+                notifyOnSuccess: !!elements.backupNotifyOnSuccess?.checked,
+                notifyOnFailure: !!elements.backupNotifyOnFailure?.checked
+            });
+        });
+        elements.backupEnabled?.addEventListener('change', () => updateBackupScheduleSummary({
+            ...(state.backupSettings || {}),
+            enabled: !!elements.backupEnabled?.checked,
+            scheduleType: elements.backupScheduleType?.value || 'manual',
+            hour: Number(elements.backupHour?.value || 3),
+            dayOfWeek: Number(elements.backupDayOfWeek?.value || 0),
+            maxBackups: Number(elements.backupMaxBackups?.value || 5),
+            notifyOnSuccess: !!elements.backupNotifyOnSuccess?.checked,
+            notifyOnFailure: !!elements.backupNotifyOnFailure?.checked
+        }));
+        elements.backupHour?.addEventListener('input', () => updateBackupScheduleSummary({
+            ...(state.backupSettings || {}),
+            enabled: !!elements.backupEnabled?.checked,
+            scheduleType: elements.backupScheduleType?.value || 'manual',
+            hour: Number(elements.backupHour?.value || 3),
+            dayOfWeek: Number(elements.backupDayOfWeek?.value || 0),
+            maxBackups: Number(elements.backupMaxBackups?.value || 5),
+            notifyOnSuccess: !!elements.backupNotifyOnSuccess?.checked,
+            notifyOnFailure: !!elements.backupNotifyOnFailure?.checked
+        }));
+        elements.backupDayOfWeek?.addEventListener('change', () => updateBackupScheduleSummary({
+            ...(state.backupSettings || {}),
+            enabled: !!elements.backupEnabled?.checked,
+            scheduleType: elements.backupScheduleType?.value || 'manual',
+            hour: Number(elements.backupHour?.value || 3),
+            dayOfWeek: Number(elements.backupDayOfWeek?.value || 0),
+            maxBackups: Number(elements.backupMaxBackups?.value || 5),
+            notifyOnSuccess: !!elements.backupNotifyOnSuccess?.checked,
+            notifyOnFailure: !!elements.backupNotifyOnFailure?.checked
+        }));
+        elements.backupMaxBackups?.addEventListener('input', () => updateBackupScheduleSummary({
+            ...(state.backupSettings || {}),
+            enabled: !!elements.backupEnabled?.checked,
+            scheduleType: elements.backupScheduleType?.value || 'manual',
+            hour: Number(elements.backupHour?.value || 3),
+            dayOfWeek: Number(elements.backupDayOfWeek?.value || 0),
+            maxBackups: Number(elements.backupMaxBackups?.value || 5),
+            notifyOnSuccess: !!elements.backupNotifyOnSuccess?.checked,
+            notifyOnFailure: !!elements.backupNotifyOnFailure?.checked
+        }));
+        elements.backupNotifyOnSuccess?.addEventListener('change', () => updateBackupScheduleSummary({
+            ...(state.backupSettings || {}),
+            enabled: !!elements.backupEnabled?.checked,
+            scheduleType: elements.backupScheduleType?.value || 'manual',
+            hour: Number(elements.backupHour?.value || 3),
+            dayOfWeek: Number(elements.backupDayOfWeek?.value || 0),
+            maxBackups: Number(elements.backupMaxBackups?.value || 5),
+            notifyOnSuccess: !!elements.backupNotifyOnSuccess?.checked,
+            notifyOnFailure: !!elements.backupNotifyOnFailure?.checked
+        }));
+        elements.backupNotifyOnFailure?.addEventListener('change', () => updateBackupScheduleSummary({
+            ...(state.backupSettings || {}),
+            enabled: !!elements.backupEnabled?.checked,
+            scheduleType: elements.backupScheduleType?.value || 'manual',
+            hour: Number(elements.backupHour?.value || 3),
+            dayOfWeek: Number(elements.backupDayOfWeek?.value || 0),
+            maxBackups: Number(elements.backupMaxBackups?.value || 5),
+            notifyOnSuccess: !!elements.backupNotifyOnSuccess?.checked,
+            notifyOnFailure: !!elements.backupNotifyOnFailure?.checked
+        }));
+        elements.btnSaveBackupSettings?.addEventListener('click', saveBackupSettings);
         document.getElementById('btnExportStats')?.addEventListener('click', exportStatsCSV);
         // Tampermonkey backup import
         document.getElementById('btnImportTampermonkey')?.addEventListener('click', () => {
@@ -4453,11 +7172,71 @@
             if (logEl) logEl.innerHTML = '<div style="color:var(--text-muted)">No activity yet</div>';
         });
 
+        elements.btnRefreshRuntimeStatus?.addEventListener('click', () => loadRuntimeStatus({ announce: true }));
+        elements.btnShowSetupGuide?.addEventListener('click', showSetupInstructions);
+        elements.btnRepairRuntime?.addEventListener('click', async () => {
+            if (!await showConfirmModal('Repair runtime?', 'Rebuild registrations, context menus, alarms, and badge state now.')) return;
+            try {
+                const result = await chrome.runtime.sendMessage({ action: 'repairRuntimeState' });
+                if (result?.error || result?.success === false) {
+                    showToast(result?.error || 'Runtime repair failed', 'error');
+                    return;
+                }
+                state.trustCenter.lastRuntimeRepairAt = Date.now();
+                state.trustCenter.runtimeStatus = result;
+                renderRuntimeStatus(result);
+                showToast('Runtime repaired', 'success');
+            } catch (error) {
+                showToast(error?.message || 'Runtime repair failed', 'error');
+            }
+        });
+        elements.btnExportSupportSnapshot?.addEventListener('click', exportSupportSnapshot);
+        elements.btnRefreshPublicApiTrust?.addEventListener('click', () => loadPublicApiTrustState({ announce: true }));
+        elements.btnSavePublicApiOrigins?.addEventListener('click', async () => {
+            const { origins, invalid } = normalizeTrustedOriginInput(elements.publicApiTrustedOrigins?.value || '');
+            if (invalid.length) {
+                showToast(`Invalid origin: ${invalid[0]}`, 'error');
+                return;
+            }
+            try {
+                const response = await chrome.runtime.sendMessage({ action: 'publicApi_setTrustedOrigins', data: { origins } });
+                if (response?.error) {
+                    showToast(response.error, 'error');
+                    return;
+                }
+                await loadPublicApiTrustState();
+                showToast(`Saved ${origins.length} trusted origin${origins.length === 1 ? '' : 's'}`, 'success');
+            } catch (error) {
+                showToast(error?.message || 'Failed to save trusted origins', 'error');
+            }
+        });
+        elements.btnClearPublicApiAudit?.addEventListener('click', async () => {
+            if (!await showConfirmModal('Clear audit log?', 'Remove recent Public API audit entries from the local log.')) return;
+            try {
+                const response = await chrome.runtime.sendMessage({ action: 'publicApi_clearAuditLog' });
+                if (response?.error) {
+                    showToast(response.error, 'error');
+                    return;
+                }
+                await loadPublicApiTrustState();
+                showToast('Public API audit log cleared', 'success');
+            } catch (error) {
+                showToast(error?.message || 'Failed to clear audit log', 'error');
+            }
+        });
+        elements.btnRefreshSigningTrust?.addEventListener('click', () => loadSigningTrustState({ announce: true }));
+
         // Workspaces
         document.getElementById('btnCreateWorkspace')?.addEventListener('click', async () => {
-            const name = prompt('Workspace name:');
-            if (!name?.trim()) return;
-            const res = await chrome.runtime.sendMessage({ action: 'createWorkspace', name: name.trim() });
+            const name = await showInputModal({
+                title: 'Save Workspace',
+                label: 'Workspace name',
+                placeholder: 'Work setup',
+                confirmLabel: 'Save',
+                validate: value => value ? '' : 'Enter a workspace name.'
+            });
+            if (!name) return;
+            const res = await chrome.runtime.sendMessage({ action: 'createWorkspace', name });
             if (res?.workspace) { showToast('Workspace saved', 'success'); loadWorkspaces(); }
         });
 
@@ -4470,12 +7249,13 @@
         });
         document.getElementById('btnExportNetLog')?.addEventListener('click', async () => {
             const res = await chrome.runtime.sendMessage({ action: 'getNetworkLog' });
-            if (!res?.log?.length) { showToast('No requests to export', 'info'); return; }
+            const logEntries = Array.isArray(res) ? res : (Array.isArray(res?.log) ? res.log : []);
+            if (!logEntries.length) { showToast('No requests to export', 'info'); return; }
             const har = {
                 log: {
                     version: '1.2',
                     creator: { name: 'ScriptVault', version: chrome.runtime.getManifest().version },
-                    entries: res.log.map(e => ({
+                    entries: logEntries.map(e => ({
                         startedDateTime: new Date(e.timestamp).toISOString(),
                         time: e.duration || 0,
                         request: { method: e.method, url: e.url, httpVersion: 'HTTP/1.1', headers: [], queryString: [], bodySize: e.requestSize || 0 },
@@ -4507,12 +7287,21 @@
 
         // Cloud
         async function updateCloudUI() {
-            const provider = elements.cloudProvider?.value || 'googledrive';
+            const provider = elements.cloudProvider?.value || normalizeSyncProvider(state.settings);
             const st = elements.cloudStatusText;
             const ui = elements.cloudUserInfo;
             const bc = elements.btnCloudConnect;
             const bd = elements.btnCloudDisconnect;
             const ar = elements.cloudActionsRow;
+            if (!provider || provider === 'none') {
+                if (st) { st.textContent = 'Not configured'; st.style.color = 'var(--text-muted)'; }
+                if (ui) ui.textContent = '';
+                if (bc) bc.style.display = 'none';
+                if (bd) bd.style.display = 'none';
+                if (ar) ar.style.display = 'none';
+                updateUtilitiesOverview();
+                return;
+            }
             try {
                 const r = await chrome.runtime.sendMessage({ action: 'cloudStatus', provider });
                 if (r?.connected) {
@@ -4531,13 +7320,24 @@
             } catch (e) {
                 if (st) { st.textContent = 'Error'; st.style.color = 'var(--danger)'; }
             }
+            updateUtilitiesOverview();
         }
 
-        elements.cloudProvider?.addEventListener('change', updateCloudUI);
+        elements.cloudProvider?.addEventListener('change', async () => {
+            const provider = elements.cloudProvider?.value || 'none';
+            state.settings.syncProvider = provider;
+            syncSettingsProviderSelection(provider);
+            toggleSyncProviderSettings();
+            await updateCloudUI();
+        });
         updateCloudUI();
 
         elements.btnCloudConnect?.addEventListener('click', async () => {
-            const provider = elements.cloudProvider?.value || 'googledrive';
+            const provider = elements.cloudProvider?.value || 'none';
+            if (provider === 'none') {
+                showToast('Choose a sync provider first', 'info');
+                return;
+            }
             // Request identity permission if needed for OAuth providers
             if (['googledrive', 'dropbox'].includes(provider)) {
                 try {
@@ -4564,7 +7364,11 @@
         });
 
         elements.btnCloudDisconnect?.addEventListener('click', async () => {
-            const provider = elements.cloudProvider?.value || 'googledrive';
+            const provider = elements.cloudProvider?.value || 'none';
+            if (provider === 'none') {
+                showToast('Choose a sync provider first', 'info');
+                return;
+            }
             try {
                 await chrome.runtime.sendMessage({ action: 'disconnectSyncProvider', provider });
                 showToast('Disconnected', 'success');
@@ -4573,24 +7377,62 @@
         });
 
         elements.btnCloudExport?.addEventListener('click', async () => {
-            const provider = elements.cloudProvider?.value || 'googledrive';
-            showToast('Exporting to ' + provider + '...', 'info');
+            const provider = elements.cloudProvider?.value || 'none';
+            if (provider === 'none') {
+                showToast('Choose a sync provider first', 'info');
+                return;
+            }
+            const transfer = getTransferPreferences();
+            showToast('Backing up to ' + provider + '...', 'info');
             try {
-                const r = await chrome.runtime.sendMessage({ action: 'cloudExport', provider });
-                showToast(r?.success ? 'Exported to cloud' : (r?.error || 'Export failed'), r?.success ? 'success' : 'error');
+                const r = await chrome.runtime.sendMessage({
+                    action: 'cloudExport',
+                    provider,
+                    includeSettings: transfer.includeSettings,
+                    includeStorage: transfer.includeStorage
+                });
+                if (r?.success) {
+                    const parts = [`${numberFormatter.format(r.exported || 0)} scripts backed up`];
+                    parts.push(r.storageIncluded ? 'stored values included' : 'stored values excluded');
+                    parts.push(r.settingsIncluded ? 'app settings included' : 'app settings excluded');
+                    showToast(`Cloud backup ready: ${parts.join(', ')}`, 'success');
+                } else {
+                    showToast(r?.error || 'Export failed', 'error');
+                }
             } catch (e) { showToast('Export failed: ' + e.message, 'error'); }
         });
 
         elements.btnCloudImport?.addEventListener('click', async () => {
-            const provider = elements.cloudProvider?.value || 'googledrive';
-            showToast('Importing from ' + provider + '...', 'info');
+            const provider = elements.cloudProvider?.value || 'none';
+            if (provider === 'none') {
+                showToast('Choose a sync provider first', 'info');
+                return;
+            }
+            const transfer = getTransferPreferences();
+            const confirmed = await showConfirmModal(
+                'Restore From Cloud',
+                buildImportConfirmationMessage(provider, {
+                    supportsSettings: true,
+                    supportsStorage: true,
+                    importSettings: transfer.includeSettings,
+                    importStorage: transfer.includeStorage,
+                    overwriteTarget: 'matching scripts in this vault'
+                })
+            );
+            if (!confirmed) return;
+            showToast('Restoring from ' + provider + '...', 'info');
             try {
-                const r = await chrome.runtime.sendMessage({ action: 'cloudImport', provider });
+                const r = await chrome.runtime.sendMessage({
+                    action: 'cloudImport',
+                    provider,
+                    importSettings: transfer.includeSettings,
+                    importStorage: transfer.includeStorage
+                });
                 if (r?.success) {
                     await loadScripts();
                     await loadSettings();
                     updateStats();
-                    showToast('Imported ' + (r.imported || 0) + ' scripts from cloud', 'success');
+                    showToast(`Cloud restore: ${formatImportSummary(r)}`, getImportResultTone(r));
                 } else {
                     showToast(r?.error || 'Import failed', 'error');
                 }
@@ -4601,7 +7443,23 @@
             if (!file) return;
             if (elements.importFileName) elements.importFileName.textContent = file.name;
             const isZip = file.name.endsWith('.zip');
-            if (!await showConfirmModal('Import', `Import from ${file.name}?`)) return;
+            const transfer = getTransferPreferences();
+            const isScriptFile = file.name.endsWith('.user.js') || file.name.endsWith('.js');
+            const confirmMessage = isZip
+                ? buildImportConfirmationMessage(file.name, {
+                    supportsStorage: true,
+                    importStorage: true,
+                    settingsUnavailableReason: 'ZIP archives do not include ScriptVault settings.'
+                })
+                : isScriptFile
+                    ? `Install ${file.name}?`
+                    : buildImportConfirmationMessage(file.name, {
+                        supportsSettings: true,
+                        supportsStorage: true,
+                        importSettings: transfer.includeSettings,
+                        importStorage: transfer.includeStorage
+                    });
+            if (!await showConfirmModal(isScriptFile ? 'Install Script' : 'Restore File', confirmMessage)) return;
             showProgress(`Importing ${file.name}...`);
             updateProgress(0, 1, 'Reading file...');
             try {
@@ -4615,7 +7473,10 @@
                     updateProgress(1, 2, 'Processing zip...');
                     const b64 = btoa(binary);
                     const r = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: b64, options: { overwrite: true } });
-                    showToast(r?.error ? r.error : `Imported ${r?.imported || 0}`, r?.error ? 'error' : 'success');
+                    showToast(
+                        r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
+                        r?.error ? 'error' : getImportResultTone(r)
+                    );
                 } else if (file.name.endsWith('.user.js') || file.name.endsWith('.js')) {
                     const code = await file.text();
                     updateProgress(1, 2, 'Installing script...');
@@ -4628,8 +7489,21 @@
                 } else {
                     const data = JSON.parse(await file.text());
                     updateProgress(1, 2, 'Importing scripts...');
-                    await chrome.runtime.sendMessage({ action: 'importAll', data: { data, options: { overwrite: true } } });
-                    showToast('Imported', 'success');
+                    const r = await chrome.runtime.sendMessage({
+                        action: 'importAll',
+                        data: {
+                            data,
+                            options: {
+                                overwrite: true,
+                                importSettings: transfer.includeSettings,
+                                importStorage: transfer.includeStorage
+                            }
+                        }
+                    });
+                    showToast(
+                        r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
+                        r?.error ? 'error' : getImportResultTone(r)
+                    );
                 }
                 await loadScripts();
                 await loadSettings();
@@ -4665,10 +7539,17 @@
         });
 
         elements.btnTextareaExport?.addEventListener('click', async () => {
-            const r = await chrome.runtime.sendMessage({ action: 'exportAll' });
+            const transfer = getTransferPreferences();
+            const r = await chrome.runtime.sendMessage({
+                action: 'exportAll',
+                options: {
+                    includeSettings: transfer.includeSettings,
+                    includeStorage: transfer.includeStorage
+                }
+            });
             if (r && elements.textareaData) {
                 elements.textareaData.value = JSON.stringify(r, null, 2);
-                showToast('Exported', 'success');
+                showToast('JSON export copied into textarea', 'success');
             }
         });
 
@@ -4677,14 +7558,34 @@
             if (!txt) return showToast('Empty', 'error');
             try {
                 const data = JSON.parse(txt);
-                if (!await showConfirmModal('Import', `Import ${data.scripts?.length || 0} scripts?`)) return;
+                const transfer = getTransferPreferences();
+                if (!await showConfirmModal('Restore JSON', buildImportConfirmationMessage('textarea data', {
+                    supportsSettings: true,
+                    supportsStorage: true,
+                    importSettings: transfer.includeSettings,
+                    importStorage: transfer.includeStorage
+                }))) return;
                 showProgress(`Importing ${data.scripts?.length || 0} scripts...`);
                 updateProgress(0, 1, 'Processing...');
-                await chrome.runtime.sendMessage({ action: 'importAll', data: { data, options: { overwrite: true } } });
+                const result = await chrome.runtime.sendMessage({
+                    action: 'importAll',
+                    data: {
+                        data,
+                        options: {
+                            overwrite: true,
+                            importSettings: transfer.includeSettings,
+                            importStorage: transfer.includeStorage
+                        }
+                    }
+                });
                 await loadScripts();
+                await loadSettings();
                 updateStats();
                 hideProgress();
-                showToast('Imported', 'success');
+                showToast(
+                    result?.error ? result.error : `Textarea restore: ${formatImportSummary(result)}`,
+                    result?.error ? 'error' : getImportResultTone(result)
+                );
             } catch (e) { hideProgress(); showToast('Invalid JSON', 'error'); }
         });
 
@@ -4697,9 +7598,23 @@
         document.getElementById('patternTestUrl')?.addEventListener('keydown', e => { if (e.key === 'Enter') testPatterns(); });
 
         // Keyboard shortcuts
-        document.addEventListener('keydown', e => {
+        document.addEventListener('keydown', async e => {
             const ctrl = e.ctrlKey || e.metaKey;
             const editorActive = elements.editorOverlay?.classList.contains('active');
+            const modalOpen = elements.modal?.classList.contains('show');
+            const paletteOpen = document.getElementById('commandPalette')?.classList.contains('open');
+
+            if (modalOpen) {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    hideModal();
+                }
+                return;
+            }
+
+            if (paletteOpen && !(ctrl && e.key === 'k')) {
+                return;
+            }
 
             // Ctrl+S — save in editor
             if (ctrl && e.key === 's' && editorActive) {
@@ -4718,34 +7633,25 @@
                 createNewScript();
                 return;
             }
+            // Ctrl+F — focus script search on the scripts tab
+            if (ctrl && e.key === 'f' && !editorActive && elements.mainPanels.scripts?.classList.contains('active')) {
+                e.preventDefault();
+                elements.scriptSearch?.focus();
+                elements.scriptSearch?.select?.();
+                return;
+            }
             // Ctrl+I — import script
             if (ctrl && e.key === 'i' && !editorActive) {
                 e.preventDefault();
                 importScript();
                 return;
             }
-            // Alt+1-5 — switch dashboard tabs
-            if (e.altKey && !ctrl && e.key >= '1' && e.key <= '5') {
+            // Alt+1-6 — switch dashboard tabs
+            if (e.altKey && !ctrl && e.key >= '1' && e.key <= String(DASHBOARD_TABS.length)) {
                 e.preventDefault();
-                const tabNames = ['scripts', 'settings', 'utilities', 'trash', 'help'];
                 const idx = parseInt(e.key) - 1;
-                if (tabNames[idx]) {
-                    // Close editor if open
-                    if (editorActive) {
-                        if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
-                            state.openTabs[state.currentScriptId].code = state.editor.getValue();
-                            state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
-                        }
-                        state.currentScriptId = null;
-                        elements.editorOverlay?.classList.remove('active');
-                    }
-                    document.querySelectorAll('.tm-tab').forEach(t => t.classList.remove('active'));
-                    Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
-                    const tab = document.querySelector(`.tm-tab[data-tab="${tabNames[idx]}"]`);
-                    tab?.classList.add('active');
-                    elements.mainPanels[tabNames[idx]]?.classList.add('active');
-                    if (tabNames[idx] === 'trash') loadTrash();
-                }
+                const tabName = DASHBOARD_TABS[idx];
+                if (tabName) await switchTab(tabName);
                 return;
             }
             // Ctrl+W — close current script tab
@@ -4978,6 +7884,574 @@
     }
 
     // =========================================
+    // Backup Browser
+    // =========================================
+    function renderBackupList(backups = [], options = {}) {
+        const totalCount = Number(options.totalCount ?? state.backups.length ?? backups.length);
+        if (!elements.backupList) return;
+        if (!backups.length) {
+            const hasActiveView = totalCount > 0 && (
+                state.backupBrowserFilter !== 'all'
+                || state.backupBrowserSort !== 'newest'
+                || !!state.backupBrowserQuery.trim()
+            );
+            elements.backupList.innerHTML = totalCount > 0
+                ? `<div class="panel-empty-inline">No backups match the current view.${hasActiveView ? '<div style="margin-top:10px"><button type="button" class="btn btn-sm" data-reset-backup-browser>Reset View</button></div>' : ''}</div>`
+                : '<div class="panel-empty-inline">No backups saved yet. Create one to capture scripts, settings, folders, and workspaces.</div>';
+            elements.backupList.querySelector('[data-reset-backup-browser]')?.addEventListener('click', resetBackupBrowserView);
+            return;
+        }
+
+        const groups = getBackupDisplayGroups(backups);
+        elements.backupList.innerHTML = `<div class="backup-browser-groups">${groups.map(group => `
+            <section class="backup-browser-group">
+                <div class="backup-browser-group-header">
+                    <strong>${escapeHtml(group.label)}</strong>
+                    <span class="panel-empty-inline">${numberFormatter.format(group.backups.length)} backup${group.backups.length === 1 ? '' : 's'}</span>
+                </div>
+                <div class="backup-browser-list">${group.backups.map(backup => `
+                    <div class="backup-browser-item" data-backup-id="${escapeHtml(backup.id)}">
+                        <div class="backup-browser-copy">
+                            <strong style="color:var(--text-primary)">${escapeHtml(dateTimeFormatter.format(new Date(backup.timestamp || Date.now())))}</strong>
+                            <div class="backup-browser-meta">
+                                <span>${escapeHtml(formatRelativeBackupTime(backup.timestamp))}</span>
+                                <span>${numberFormatter.format(backup.scriptCount || 0)} scripts</span>
+                                <span>${escapeHtml(backup.sizeFormatted || formatBytes(backup.size || 0))}</span>
+                                <span>${escapeHtml(formatBackupReason(backup.reason))}</span>
+                                <span>${escapeHtml(backup.version || 'current')}</span>
+                            </div>
+                            <div class="info-tags">
+                                <span class="info-tag ${backup.hasGlobalSettings || backup.hasFolders || backup.hasWorkspaces ? 'success' : ''}">${backup.hasGlobalSettings || backup.hasFolders || backup.hasWorkspaces ? 'Vault snapshot' : 'Scripts only'}</span>
+                                ${backup.hasGlobalSettings ? '<span class="info-tag">Settings</span>' : ''}
+                                ${backup.hasFolders ? '<span class="info-tag">Folders</span>' : ''}
+                                ${backup.hasWorkspaces ? '<span class="info-tag">Workspaces</span>' : ''}
+                                ${backup.hasScriptStorage ? '<span class="info-tag">Stored values</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="backup-browser-actions">
+                            <button type="button" class="btn btn-sm" data-backup-review="${escapeHtml(backup.id)}">Review</button>
+                            <button type="button" class="btn btn-sm" data-backup-export="${escapeHtml(backup.id)}">Download</button>
+                            <button type="button" class="btn btn-sm btn-danger" data-backup-delete="${escapeHtml(backup.id)}">Delete</button>
+                        </div>
+                    </div>
+                `).join('')}</div>
+            </section>
+        `).join('')}</div>`;
+
+        elements.backupList.querySelectorAll('[data-backup-review]').forEach(button => {
+            button.addEventListener('click', () => openBackupReviewModal(button.dataset.backupReview));
+        });
+        elements.backupList.querySelectorAll('[data-backup-export]').forEach(button => {
+            button.addEventListener('click', () => exportStoredBackup(button.dataset.backupExport));
+        });
+        elements.backupList.querySelectorAll('[data-backup-delete]').forEach(button => {
+            button.addEventListener('click', async () => {
+                const backup = state.backups.find(entry => entry.id === button.dataset.backupDelete);
+                const label = backup?.timestamp ? dateTimeFormatter.format(new Date(backup.timestamp)) : 'this backup';
+                const confirmed = await showConfirmModal('Delete Backup', `Delete the backup from ${label}? This removes the stored archive from ScriptVault.`);
+                if (!confirmed) return;
+                button.disabled = true;
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'deleteBackup', backupId: button.dataset.backupDelete });
+                    if (response?.error || response?.success === false) {
+                        showToast(response?.error || 'Failed to delete backup', 'error');
+                        return;
+                    }
+                    await loadBackups();
+                    showToast(`Deleted backup from ${label}`, 'success');
+                } catch (error) {
+                    showToast(error?.message || 'Failed to delete backup', 'error');
+                } finally {
+                    button.disabled = false;
+                }
+            });
+        });
+    }
+
+    async function loadBackups(options = {}) {
+        const { announce = false } = options;
+        if (!elements.backupList) return [];
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'getBackups' });
+            const backups = Array.isArray(response) ? response : (response?.backups || []);
+            state.backups = backups.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            applyBackupBrowserFilters();
+            if (elements.backupBrowserSummary) {
+                elements.backupBrowserSummary.textContent = formatBackupBrowserSummary(state.backups);
+            }
+            updateBackupScheduleSummary(state.backupSettings || {});
+            updateSupportSnapshotSummary();
+            updateUtilitiesOverview();
+            if (announce) showToast('Backups refreshed', 'success');
+            return state.backups;
+        } catch (error) {
+            const message = error?.message || 'Failed to load backups';
+            if (elements.backupBrowserSummary) elements.backupBrowserSummary.textContent = 'Backup browser unavailable';
+            if (elements.backupList) elements.backupList.innerHTML = `<div class="panel-empty-inline">${escapeHtml(message)}</div>`;
+            if (elements.backupBrowserStatus) elements.backupBrowserStatus.textContent = 'Backup browser unavailable.';
+            updateBackupScheduleSummary(state.backupSettings || {});
+            updateSupportSnapshotSummary();
+            if (announce) showToast(message, 'error');
+            return [];
+        }
+    }
+
+    async function exportStoredBackup(backupId) {
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'exportBackup', backupId });
+            if (response?.error || !response?.zipData) {
+                showToast(response?.error || 'Failed to export backup', 'error');
+                return;
+            }
+            downloadBase64Zip(response.zipData, response.filename || `scriptvault-autobackup-${backupId}.zip`);
+            showToast('Backup archive downloaded', 'success');
+        } catch (error) {
+            showToast(error?.message || 'Failed to export backup', 'error');
+        }
+    }
+
+    async function restoreStoredBackup(backupId, options = {}) {
+        const progressTitle = options.progressTitle
+            || (options.selective ? 'Restoring selected scripts...' : 'Restoring backup...');
+        const progressDetail = options.progressDetail
+            || (options.selective ? 'Applying selected scripts...' : 'Applying vault archive...');
+        showProgress(progressTitle);
+        updateProgress(0, 1, progressDetail);
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'restoreBackup', backupId, options });
+            hideProgress();
+            if (response?.error || response?.success === false) {
+                showToast(response?.error || 'Restore failed', 'error');
+                return response;
+            }
+            await loadScripts();
+            await loadSettings();
+            await loadFolders();
+            await loadWorkspaces();
+            updateStats();
+            showToast(`Backup restore: ${formatBackupRestoreSummary(response)}`, getBackupRestoreTone(response));
+            return response;
+        } catch (error) {
+            hideProgress();
+            showToast(error?.message || 'Restore failed', 'error');
+            return null;
+        }
+    }
+
+    async function openBackupReviewModal(backupId) {
+        const backup = state.backups.find(entry => entry.id === backupId);
+        if (!backup) {
+            showToast('Backup not found', 'error');
+            return;
+        }
+        try {
+            const manifest = await chrome.runtime.sendMessage({ action: 'inspectBackup', backupId });
+            if (!manifest || manifest?.error) {
+                showToast(manifest?.error || 'Failed to inspect backup', 'error');
+                return;
+            }
+            const installedIdentitySet = new Set(state.scripts.map(script => getScriptIdentityKey(script)).filter(Boolean));
+            const scripts = (Array.isArray(manifest.scripts) ? manifest.scripts : []).map(script => ({
+                ...script,
+                identity: script.id || getScriptIdentityKey(script),
+                existsInVault: installedIdentitySet.has(script.id || getScriptIdentityKey(script))
+            }));
+            const existingCount = scripts.filter(script => script.existsInVault).length;
+            const newCount = scripts.length - existingCount;
+            const hasScriptEntries = scripts.length > 0;
+            const scriptsWithStorageCount = Number(manifest.scriptsWithStorageCount || scripts.filter(script => script.hasStorage).length);
+            const currentSettingsKeyCount = Object.keys(state.settings || {}).length;
+            const currentFolderCount = Array.isArray(state.folders) ? state.folders.length : 0;
+            const currentWorkspaceCount = Array.isArray(state.workspaces) ? state.workspaces.length : 0;
+            const archivedFolders = Array.isArray(manifest.folders) ? manifest.folders : [];
+            const archivedWorkspaces = Array.isArray(manifest.workspaces) ? manifest.workspaces : [];
+            const formatNamedPreview = (entries, formatter, maxItems = 3) => {
+                const values = entries
+                    .map(formatter)
+                    .map(value => String(value || '').trim())
+                    .filter(Boolean);
+                if (!values.length) return '';
+                if (values.length <= maxItems) return values.join(', ');
+                const visible = values.slice(0, maxItems).join(', ');
+                return `${visible}, +${numberFormatter.format(values.length - maxItems)} more`;
+            };
+            const hasGlobalItems = [];
+            if (manifest.hasGlobalSettings) hasGlobalItems.push('app settings');
+            if (manifest.hasFolders) hasGlobalItems.push('folders');
+            if (manifest.hasWorkspaces) hasGlobalItems.push('workspaces');
+            const hasVaultRestoreItems = hasGlobalItems.length > 0;
+            const summaryText = hasGlobalItems.length
+                ? `Full restore also applies ${hasGlobalItems.join(', ')}.`
+                : scriptsWithStorageCount
+                    ? `This backup only contains script-level data plus stored values for ${numberFormatter.format(scriptsWithStorageCount)} script${scriptsWithStorageCount === 1 ? '' : 's'}.`
+                    : 'This backup only contains script-level data.';
+            const impactRows = [];
+            if (manifest.hasGlobalSettings) {
+                impactRows.push({
+                    label: 'App settings',
+                    tag: `${numberFormatter.format(manifest.settingsKeyCount || 0)} keys in backup`,
+                    detail: `Full restore will replace the current ${numberFormatter.format(currentSettingsKeyCount)} setting key${currentSettingsKeyCount === 1 ? '' : 's'} with the backup snapshot.`,
+                    tone: 'warning'
+                });
+            }
+            if (manifest.hasFolders) {
+                const folderPreview = formatNamedPreview(
+                    archivedFolders,
+                    folder => folder.scriptCount > 0
+                        ? `${folder.name} (${numberFormatter.format(folder.scriptCount)})`
+                        : folder.name
+                );
+                impactRows.push({
+                    label: 'Folders',
+                    tag: `${numberFormatter.format(manifest.folderCount || 0)} folders in backup`,
+                    detail: `Full restore will replace the current ${numberFormatter.format(currentFolderCount)} folder${currentFolderCount === 1 ? '' : 's'} with the archived layout.${folderPreview ? ` Includes ${folderPreview}.` : ''}`,
+                    tone: 'warning'
+                });
+            }
+            if (manifest.hasWorkspaces) {
+                const workspacePreview = formatNamedPreview(
+                    archivedWorkspaces,
+                    workspace => workspace.active
+                        ? `${workspace.name} (active)`
+                        : workspace.scriptCount > 0
+                            ? `${workspace.name} (${numberFormatter.format(workspace.scriptCount)})`
+                            : workspace.name
+                );
+                impactRows.push({
+                    label: 'Workspaces',
+                    tag: `${numberFormatter.format(manifest.workspaceCount || 0)} workspaces in backup`,
+                    detail: `Full restore will replace the current ${numberFormatter.format(currentWorkspaceCount)} workspace${currentWorkspaceCount === 1 ? '' : 's'} with the archived workspace set.${workspacePreview ? ` Includes ${workspacePreview}.` : ''}`,
+                    tone: 'warning'
+                });
+            }
+            if (scriptsWithStorageCount > 0) {
+                impactRows.push({
+                    label: 'Stored values',
+                    tag: `${numberFormatter.format(scriptsWithStorageCount)} script${scriptsWithStorageCount === 1 ? '' : 's'} carry values`,
+                    detail: 'Stored values are reapplied for matching scripts during full restore, and for checked scripts during selective restore.',
+                    tone: 'success'
+                });
+            }
+            const impactHtml = impactRows.length
+                ? `
+                    <div class="utility-surface">
+                        <div class="setting-row" style="margin:0 0 10px 0;justify-content:space-between;align-items:center;gap:10px">
+                            <strong style="color:var(--text-primary)">Full-vault impact</strong>
+                            <span class="panel-empty-inline">${escapeHtml(summaryText)}</span>
+                        </div>
+                        <div class="restore-preview-list">${impactRows.map(row => `
+                            <div class="restore-preview-item">
+                                <div class="restore-preview-copy">
+                                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                                        <strong style="color:var(--text-primary)">${escapeHtml(row.label)}</strong>
+                                        <span class="info-tag ${escapeHtml(row.tone)}">${escapeHtml(row.tag)}</span>
+                                    </div>
+                                    <div class="restore-preview-meta">
+                                        <span>${escapeHtml(row.detail)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}</div>
+                    </div>
+                `
+                : '';
+            const listHtml = scripts.length
+                ? `<div class="restore-preview-list">${scripts.map(script => `
+                    <label class="restore-preview-item">
+                        <div class="restore-preview-copy">
+                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                                <input type="checkbox" data-restore-script-id="${escapeHtml(script.identity)}" data-restore-status="${script.existsInVault ? 'existing' : 'new'}" data-restore-storage="${script.hasStorage ? 'yes' : 'no'}" checked>
+                                <strong style="color:var(--text-primary)">${escapeHtml(script.name || script.id)}</strong>
+                                ${script.namespace ? `<span class="panel-empty-inline">${escapeHtml(script.namespace)}</span>` : ''}
+                                <span class="info-tag ${script.existsInVault ? 'warning' : 'success'}">${script.existsInVault ? 'Will overwrite' : 'New script'}</span>
+                                ${script.hasStorage ? '<span class="info-tag success">Stored values</span>' : ''}
+                            </div>
+                            <div class="restore-preview-meta">
+                                <span>${script.hasStorage ? 'Stored values included' : 'No stored values'}</span>
+                                <span>${escapeHtml(script.identity)}</span>
+                            </div>
+                        </div>
+                    </label>
+                `).join('')}</div>`
+                : '<div class="panel-empty-inline">No scripts found in this backup.</div>';
+            const restoreAllScriptIds = scripts.map(script => script.identity).filter(Boolean);
+            const selectionSummaryCard = hasScriptEntries
+                ? `
+                        <div class="restore-preview-card">
+                            <span class="panel-empty-inline">Selected restore</span>
+                            <strong id="backupSelectionSummary">All ${numberFormatter.format(restoreAllScriptIds.length)} scripts</strong>
+                            <span class="panel-empty-inline" id="backupSelectionDetails">Ready to restore every archived script.</span>
+                        </div>
+                    `
+                : '';
+            const scopeNoteHtml = hasVaultRestoreItems
+                ? `
+                    <div class="utility-surface">
+                        <div class="utility-note" id="backupScopeNote">Restore Scripts Only keeps current app settings, folders, and workspaces untouched. Use Restore Full Vault only when you want the archived vault state back too.</div>
+                    </div>
+                `
+                : '';
+            const buildRestoreMessage = ({ mode, selectedCount = 0, overwriteCount = 0, newScriptCount = 0, storageCount = 0 }) => {
+                if (mode === 'full') {
+                    const parts = [`Restore the full vault from ${dateTimeFormatter.format(new Date(backup.timestamp || Date.now()))}?`];
+                    if (manifest.scriptCount) {
+                        parts.push(`${numberFormatter.format(manifest.scriptCount)} scripts will be restored (${numberFormatter.format(existingCount)} overwrite, ${numberFormatter.format(newCount)} new).`);
+                    }
+                    if (manifest.hasGlobalSettings) {
+                        parts.push(`App settings will be replaced with ${numberFormatter.format(manifest.settingsKeyCount || 0)} archived setting key${Number(manifest.settingsKeyCount || 0) === 1 ? '' : 's'}.`);
+                    }
+                    if (manifest.hasFolders) {
+                        parts.push(`${numberFormatter.format(manifest.folderCount || 0)} archived folder${Number(manifest.folderCount || 0) === 1 ? '' : 's'} will replace the current folder layout.`);
+                    }
+                    if (manifest.hasWorkspaces) {
+                        parts.push(`${numberFormatter.format(manifest.workspaceCount || 0)} archived workspace${Number(manifest.workspaceCount || 0) === 1 ? '' : 's'} will replace the current workspace set.`);
+                    }
+                    if (scriptsWithStorageCount > 0) {
+                        parts.push(`Stored values for ${numberFormatter.format(scriptsWithStorageCount)} script${scriptsWithStorageCount === 1 ? '' : 's'} will be reapplied where present.`);
+                    }
+                    return parts.join(' ');
+                }
+                const selectedLabel = `${numberFormatter.format(selectedCount)} script${selectedCount === 1 ? '' : 's'}`;
+                const detailParts = [
+                    `${numberFormatter.format(overwriteCount)} overwrite`,
+                    `${numberFormatter.format(newScriptCount)} new`
+                ];
+                if (storageCount > 0) {
+                    detailParts.push(`${numberFormatter.format(storageCount)} with stored values`);
+                }
+                const scopeSentence = hasVaultRestoreItems
+                    ? 'App settings, folders, and workspaces will stay unchanged.'
+                    : 'This backup only contains script-level data.';
+                return `Restore ${selectedLabel}? ${detailParts.join(', ')}. ${scopeSentence}`;
+            };
+            const getSelectedRestoreStats = () => {
+                const selectedScripts = scripts.filter(script => {
+                    const checkbox = elements.modalBody?.querySelector(`[data-restore-script-id="${CSS.escape(script.identity)}"]`);
+                    return !!checkbox?.checked;
+                });
+                const selectedCount = selectedScripts.length;
+                const overwriteCount = selectedScripts.filter(script => script.existsInVault).length;
+                const storageCount = selectedScripts.filter(script => script.hasStorage).length;
+                return {
+                    selectedScripts,
+                    selectedCount,
+                    overwriteCount,
+                    newScriptCount: selectedCount - overwriteCount,
+                    storageCount
+                };
+            };
+            const modalActions = [
+                { label: 'Close', class: '', callback: () => hideModal() },
+                { label: 'Download ZIP', class: '', callback: async () => { await exportStoredBackup(backupId); } }
+            ];
+            if (hasScriptEntries) {
+                modalActions.push({
+                    label: 'Restore Selected',
+                    class: '',
+                    callback: async () => {
+                        const selected = Array.from(elements.modalBody?.querySelectorAll('[data-restore-script-id]:checked') || [])
+                            .map(input => input.getAttribute('data-restore-script-id'))
+                            .filter(Boolean);
+                        if (!selected.length) {
+                            showToast('Select at least one script to restore', 'info');
+                            return;
+                        }
+                        const stats = getSelectedRestoreStats();
+                        const confirmed = await showConfirmModal(
+                            'Restore Selected Scripts',
+                            buildRestoreMessage({
+                                mode: 'selected',
+                                selectedCount: stats.selectedCount,
+                                overwriteCount: stats.overwriteCount,
+                                newScriptCount: stats.newScriptCount,
+                                storageCount: stats.storageCount
+                            })
+                        );
+                        if (!confirmed) return;
+                        hideModal();
+                        await restoreStoredBackup(backupId, {
+                            selective: true,
+                            scriptIds: selected,
+                            progressTitle: 'Restoring selected scripts...',
+                            progressDetail: `Applying ${numberFormatter.format(stats.selectedCount)} selected script${stats.selectedCount === 1 ? '' : 's'}...`
+                        });
+                    }
+                });
+            }
+            if (restoreAllScriptIds.length) {
+                modalActions.push({
+                    label: hasVaultRestoreItems ? 'Restore Scripts Only' : 'Restore All Scripts',
+                    class: 'btn-primary',
+                    callback: async () => {
+                        const confirmed = await showConfirmModal(
+                            hasVaultRestoreItems ? 'Restore Scripts Only' : 'Restore All Scripts',
+                            buildRestoreMessage({
+                                mode: 'selected',
+                                selectedCount: restoreAllScriptIds.length,
+                                overwriteCount: existingCount,
+                                newScriptCount: newCount,
+                                storageCount: scriptsWithStorageCount
+                            })
+                        );
+                        if (!confirmed) return;
+                        hideModal();
+                        await restoreStoredBackup(backupId, {
+                            selective: true,
+                            scriptIds: restoreAllScriptIds,
+                            progressTitle: hasVaultRestoreItems ? 'Restoring scripts only...' : 'Restoring all scripts...',
+                            progressDetail: `Applying ${numberFormatter.format(restoreAllScriptIds.length)} archived script${restoreAllScriptIds.length === 1 ? '' : 's'}...`
+                        });
+                    }
+                });
+            }
+            if (hasVaultRestoreItems) {
+                modalActions.push({
+                    label: 'Restore Full Vault',
+                    class: restoreAllScriptIds.length ? '' : 'btn-primary',
+                    callback: async () => {
+                        const confirmed = await showConfirmModal(
+                            'Restore Full Vault',
+                            buildRestoreMessage({ mode: 'full' })
+                        );
+                        if (!confirmed) return;
+                        hideModal();
+                        await restoreStoredBackup(backupId, {
+                            selective: false,
+                            progressTitle: 'Restoring full vault...',
+                            progressDetail: 'Applying archived scripts, settings, folders, and workspaces...'
+                        });
+                    }
+                });
+            }
+
+            showModal('Review Backup', `
+                <div class="restore-preview-shell">
+                    <div class="restore-preview-summary">
+                        <div class="restore-preview-card">
+                            <span class="panel-empty-inline">Created</span>
+                            <strong>${escapeHtml(dateTimeFormatter.format(new Date(backup.timestamp || Date.now())))}</strong>
+                            <span class="panel-empty-inline">${escapeHtml((backup.reason || 'backup').replace(/([A-Z])/g, ' $1').trim())}</span>
+                        </div>
+                        <div class="restore-preview-card">
+                            <span class="panel-empty-inline">Scripts</span>
+                            <strong>${numberFormatter.format(manifest.scriptCount || scripts.length)}</strong>
+                            <span class="panel-empty-inline">${escapeHtml(backup.sizeFormatted || formatBytes(backup.size || 0))}</span>
+                        </div>
+                        <div class="restore-preview-card">
+                            <span class="panel-empty-inline">Vault impact</span>
+                            <strong>${numberFormatter.format(existingCount)} overwrite · ${numberFormatter.format(newCount)} new</strong>
+                            <span class="panel-empty-inline">Use quick selection to restore only new or only overlapping scripts.</span>
+                        </div>
+                        <div class="restore-preview-card">
+                            <span class="panel-empty-inline">Full restore</span>
+                            <strong>${hasGlobalItems.length ? `${numberFormatter.format(hasGlobalItems.length)} vault area${hasGlobalItems.length === 1 ? '' : 's'}` : 'Scripts only'}</strong>
+                            <span class="panel-empty-inline">${escapeHtml(summaryText)}</span>
+                        </div>
+                        ${selectionSummaryCard}
+                    </div>
+                    ${impactHtml}
+                    ${scopeNoteHtml}
+                    ${hasScriptEntries ? `
+                        <div class="utility-surface">
+                            <div class="setting-row" style="margin:0 0 10px 0;justify-content:space-between;align-items:center;gap:10px">
+                                <strong style="color:var(--text-primary)">Scripts in backup</strong>
+                                <div class="backup-browser-actions">
+                                    <button type="button" class="btn btn-sm" id="selectBackupExisting">Select Existing</button>
+                                    <button type="button" class="btn btn-sm" id="selectBackupNew">Select New</button>
+                                    ${scriptsWithStorageCount > 0 ? '<button type="button" class="btn btn-sm" id="selectBackupStorage">Select With Values</button>' : ''}
+                                    <button type="button" class="btn btn-sm" id="toggleBackupSelection">Clear Selection</button>
+                                </div>
+                            </div>
+                            ${listHtml}
+                        </div>
+                    ` : `
+                        <div class="utility-surface">
+                            <div class="panel-empty-inline">This backup does not contain any scripts. Use Restore Full Vault to bring back archived settings, folders, or workspaces.</div>
+                        </div>
+                    `}
+                </div>
+            `, modalActions);
+
+            requestAnimationFrame(() => {
+                const toggleButton = document.getElementById('toggleBackupSelection');
+                const existingButton = document.getElementById('selectBackupExisting');
+                const newButton = document.getElementById('selectBackupNew');
+                const storageButton = document.getElementById('selectBackupStorage');
+                const selectionSummary = document.getElementById('backupSelectionSummary');
+                const selectionDetails = document.getElementById('backupSelectionDetails');
+                const checkboxes = Array.from(elements.modalBody?.querySelectorAll('[data-restore-script-id]') || []);
+                const updateToggleLabel = () => {
+                    const checkedCount = checkboxes.filter(box => box.checked).length;
+                    if (toggleButton) toggleButton.textContent = checkedCount === 0 ? 'Select All' : 'Clear Selection';
+                };
+                const updateSelectionSummary = () => {
+                    if (!selectionSummary || !selectionDetails) return;
+                    const selectedScripts = scripts.filter(script => {
+                        const checkbox = checkboxes.find(box => box.getAttribute('data-restore-script-id') === script.identity);
+                        return !!checkbox?.checked;
+                    });
+                    const selectedCount = selectedScripts.length;
+                    const selectedExisting = selectedScripts.filter(script => script.existsInVault).length;
+                    const selectedNew = selectedCount - selectedExisting;
+                    const selectedStorage = selectedScripts.filter(script => script.hasStorage).length;
+                    if (selectedCount === 0) {
+                        selectionSummary.textContent = 'No scripts selected';
+                        selectionDetails.textContent = 'Pick one or more archived scripts to restore.';
+                        return;
+                    }
+                    selectionSummary.textContent = `${numberFormatter.format(selectedCount)} script${selectedCount === 1 ? '' : 's'} selected`;
+                    const detailParts = [
+                        `${numberFormatter.format(selectedExisting)} overwrite`,
+                        `${numberFormatter.format(selectedNew)} new`
+                    ];
+                    if (selectedStorage > 0) {
+                        detailParts.push(`${numberFormatter.format(selectedStorage)} with stored values`);
+                    }
+                    if (hasVaultRestoreItems) {
+                        detailParts.push('settings/folders/workspaces stay unchanged');
+                    }
+                    selectionDetails.textContent = detailParts.join(' · ');
+                };
+                toggleButton?.addEventListener('click', () => {
+                    const shouldSelect = checkboxes.every(box => !box.checked);
+                    checkboxes.forEach(box => { box.checked = shouldSelect; });
+                    updateToggleLabel();
+                    updateSelectionSummary();
+                });
+                existingButton?.addEventListener('click', () => {
+                    checkboxes.forEach(box => {
+                        box.checked = box.dataset.restoreStatus === 'existing';
+                    });
+                    updateToggleLabel();
+                    updateSelectionSummary();
+                });
+                newButton?.addEventListener('click', () => {
+                    checkboxes.forEach(box => {
+                        box.checked = box.dataset.restoreStatus === 'new';
+                    });
+                    updateToggleLabel();
+                    updateSelectionSummary();
+                });
+                storageButton?.addEventListener('click', () => {
+                    checkboxes.forEach(box => {
+                        box.checked = box.dataset.restoreStorage === 'yes';
+                    });
+                    updateToggleLabel();
+                    updateSelectionSummary();
+                });
+                checkboxes.forEach(box => box.addEventListener('change', () => {
+                    updateToggleLabel();
+                    updateSelectionSummary();
+                }));
+                updateToggleLabel();
+                updateSelectionSummary();
+            });
+        } catch (error) {
+            showToast(error?.message || 'Failed to inspect backup', 'error');
+        }
+    }
+
+    // =========================================
     // Workspaces
     // =========================================
     async function loadWorkspaces() {
@@ -4986,8 +8460,10 @@
         try {
             const res = await chrome.runtime.sendMessage({ action: 'getWorkspaces' });
             const { active, list } = res || {};
+            state.workspaces = Array.isArray(list) ? list : [];
             if (!list || list.length === 0) {
                 container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:4px 0">No workspaces saved</div>';
+                updateUtilitiesOverview();
                 return;
             }
             container.innerHTML = list.map(ws => `
@@ -4997,7 +8473,7 @@
                     <div class="workspace-actions">
                         <button class="toolbar-btn${ws.id === active ? ' primary' : ''}" data-ws-activate="${ws.id}">${ws.id === active ? 'Active' : 'Switch'}</button>
                         <button class="toolbar-btn" data-ws-save="${ws.id}" title="Update with current state">Save</button>
-                        <button class="toolbar-btn" data-ws-delete="${ws.id}" title="Delete">x</button>
+                        <button class="toolbar-btn" data-ws-delete="${ws.id}" title="Delete workspace">Delete</button>
                     </div>
                 </div>
             `).join('');
@@ -5018,20 +8494,53 @@
             });
             container.querySelectorAll('[data-ws-save]').forEach(btn => {
                 btn.addEventListener('click', async () => {
-                    await chrome.runtime.sendMessage({ action: 'saveWorkspace', id: btn.dataset.wsSave });
-                    showToast('Workspace updated', 'success');
-                    loadWorkspaces();
+                    const workspaceName = btn.closest('[data-ws-id]')?.querySelector('.workspace-name')?.textContent?.trim() || 'workspace';
+                    btn.disabled = true;
+                    try {
+                        const res = await chrome.runtime.sendMessage({ action: 'saveWorkspace', id: btn.dataset.wsSave });
+                        if (res?.error || !res?.workspace) {
+                            showToast(res?.error || `Failed to update "${workspaceName}"`, 'error');
+                            return;
+                        }
+                        showToast(`Saved current script state to "${res.workspace.name}"`, 'success');
+                        await loadWorkspaces();
+                    } catch (error) {
+                        showToast(`Failed to update "${workspaceName}"`, 'error');
+                    } finally {
+                        btn.disabled = false;
+                    }
                 });
             });
             container.querySelectorAll('[data-ws-delete]').forEach(btn => {
                 btn.addEventListener('click', async () => {
-                    await chrome.runtime.sendMessage({ action: 'deleteWorkspace', id: btn.dataset.wsDelete });
-                    showToast('Workspace deleted', 'success');
-                    loadWorkspaces();
+                    const workspaceName = btn.closest('[data-ws-id]')?.querySelector('.workspace-name')?.textContent?.trim() || 'workspace';
+                    const confirmed = await showConfirmModal(
+                        'Delete Workspace',
+                        `Delete "${workspaceName}"? This removes the saved snapshot but does not delete any scripts.`
+                    );
+                    if (!confirmed) return;
+                    btn.disabled = true;
+                    try {
+                        const res = await chrome.runtime.sendMessage({ action: 'deleteWorkspace', id: btn.dataset.wsDelete });
+                        if (res?.error || !res?.success) {
+                            showToast(res?.error || `Failed to delete "${workspaceName}"`, 'error');
+                            return;
+                        }
+                        const deletedName = res?.workspace?.name || workspaceName;
+                        showToast(`Deleted workspace "${deletedName}"`, 'success');
+                        await loadWorkspaces();
+                    } catch (error) {
+                        showToast(`Failed to delete "${workspaceName}"`, 'error');
+                    } finally {
+                        btn.disabled = false;
+                    }
                 });
             });
+            updateUtilitiesOverview();
         } catch (e) {
+            state.workspaces = [];
             container.innerHTML = '<div style="color:var(--text-muted);font-size:12px">Failed to load workspaces</div>';
+            updateUtilitiesOverview();
         }
     }
 
@@ -5083,14 +8592,16 @@
     // =========================================
     function openCommandPalette() {
         let overlay = document.getElementById('commandPalette');
+        commandPaletteReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         if (!overlay) {
             overlay = document.createElement('div');
             overlay.id = 'commandPalette';
             overlay.innerHTML = `
                 <div class="cmd-backdrop"></div>
-                <div class="cmd-dialog">
+                <div class="cmd-dialog" role="dialog" aria-modal="true" aria-labelledby="commandPaletteLabel">
+                    <div id="commandPaletteLabel" class="sr-only">Command palette</div>
                     <input type="text" class="cmd-input" placeholder="Type a command, script name, or action..." autofocus aria-label="Command palette">
-                    <div class="cmd-results"></div>
+                    <div class="cmd-results" role="listbox" aria-label="Command results"></div>
                 </div>
             `;
             document.body.appendChild(overlay);
@@ -5121,13 +8632,26 @@
         }
 
         overlay.classList.add('open');
+        const dialog = overlay.querySelector('.cmd-dialog');
+        if (dialog && typeof A11y !== 'undefined' && typeof A11y.trapFocus === 'function') {
+            A11y.trapFocus(dialog);
+        }
         const input = overlay.querySelector('.cmd-input');
         if (input) { input.value = ''; input.focus(); }
         renderCommandResults('');
     }
 
     function closeCommandPalette() {
-        document.getElementById('commandPalette')?.classList.remove('open');
+        const overlay = document.getElementById('commandPalette');
+        const wasOpen = overlay?.classList.contains('open');
+        overlay?.classList.remove('open');
+        if (wasOpen && typeof A11y !== 'undefined' && typeof A11y.releaseFocus === 'function') {
+            A11y.releaseFocus();
+        }
+        if (commandPaletteReturnFocus?.isConnected) {
+            commandPaletteReturnFocus.focus();
+        }
+        commandPaletteReturnFocus = null;
     }
 
     function renderCommandResults(query) {
@@ -5146,12 +8670,13 @@
             { category: 'Actions', label: 'Export All (JSON)', desc: 'Export all scripts as JSON', action: () => { closeCommandPalette(); exportAllScripts(); } },
             { category: 'Actions', label: 'Export Stats CSV', desc: 'Export execution statistics', action: () => { closeCommandPalette(); exportStatsCSV(); } },
             { category: 'Actions', label: 'Find Scripts', desc: 'Search GreasyFork/OpenUserJS', action: () => { closeCommandPalette(); openFindScripts(); } },
-            { category: 'Editor', label: 'Go to Line (Ctrl+G)', desc: 'Jump to a specific line number', action: () => { closeCommandPalette(); if (state.editor) { const ln = prompt('Go to line:'); if (ln && !isNaN(ln)) { state.editor.setCursor(parseInt(ln) - 1, 0); } } } },
+            { category: 'Editor', label: 'Go to Line (Ctrl+G)', desc: 'Jump to a specific line number', action: async () => { closeCommandPalette(); await goToEditorLine(state.editor); } },
             // Navigation
             { category: 'Navigation', label: 'Scripts Tab', desc: 'Go to installed scripts', action: () => { closeCommandPalette(); switchTab('scripts'); } },
             { category: 'Navigation', label: 'Settings Tab', desc: 'Open settings', action: () => { closeCommandPalette(); switchTab('settings'); } },
             { category: 'Navigation', label: 'Utilities Tab', desc: 'Import/export tools', action: () => { closeCommandPalette(); switchTab('utilities'); } },
             { category: 'Navigation', label: 'Trash Tab', desc: 'View deleted scripts', action: () => { closeCommandPalette(); switchTab('trash'); } },
+            { category: 'Navigation', label: 'Script Store Tab', desc: 'Discover installable scripts', action: () => { closeCommandPalette(); switchTab('store'); } },
             { category: 'Navigation', label: 'Help Tab', desc: 'Shortcuts and documentation', action: () => { closeCommandPalette(); switchTab('help'); } },
             // Settings
             { category: 'Settings', label: 'Toggle Dark/Light Theme', desc: 'Switch between themes', action: () => { closeCommandPalette(); document.getElementById('btnCycleTheme')?.click(); } },
@@ -5188,9 +8713,14 @@
         }
 
         let html = '';
+        let renderedCount = 0;
         for (const [cat, items] of Object.entries(groups)) {
             html += `<div class="cmd-group">${escapeHtml(cat)}</div>`;
-            html += items.map((c, i) => `<div class="cmd-item${i === 0 && !q ? '' : ''}" data-cmd-idx="${commands.indexOf(c)}"><span class="cmd-label">${escapeHtml(c.label)}</span><span class="cmd-desc">${escapeHtml(c.desc)}</span></div>`).join('');
+            html += items.map(c => {
+                const activeClass = renderedCount === 0 ? ' active' : '';
+                renderedCount += 1;
+                return `<button type="button" role="option" class="cmd-item${activeClass}" data-cmd-idx="${commands.indexOf(c)}"><span class="cmd-label">${escapeHtml(c.label)}</span><span class="cmd-desc">${escapeHtml(c.desc)}</span></button>`;
+            }).join('');
         }
 
         results.innerHTML = html;
@@ -5205,10 +8735,16 @@
                 results.querySelectorAll('.cmd-item.active').forEach(i => i.classList.remove('active'));
                 item.classList.add('active');
             });
+            item.addEventListener('focus', () => {
+                results.querySelectorAll('.cmd-item.active').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+            });
         });
     }
 
-    async function switchTab(name) {
+    async function switchTab(name, options = {}) {
+        const { updateRoute = true } = options;
+        const nextTab = DASHBOARD_TABS.includes(name) ? name : 'scripts';
         const editorActive = elements.editorOverlay?.classList.contains('active');
         if (editorActive) {
             if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
@@ -5222,19 +8758,33 @@
         Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
         elements.btnHelpTab?.classList.remove('active');
 
-        if (name === 'help') {
+        if (nextTab === 'help') {
             // Help tab is a separate header icon, not a .tm-tab
             elements.btnHelpTab?.classList.add('active');
             elements.mainPanels.help?.classList.add('active');
         } else {
-            const tab = document.querySelector(`.tm-tab[data-tab="${name}"]`);
+            const tab = document.querySelector(`.tm-tab[data-tab="${nextTab}"]`);
             tab?.classList.add('active');
-            elements.mainPanels[name]?.classList.add('active');
+            elements.mainPanels[nextTab]?.classList.add('active');
         }
-        if (name === 'trash') loadTrash();
+        if (updateRoute) {
+            setDashboardHash(nextTab === 'scripts' ? '' : `tab=${nextTab}`);
+        }
+        if (nextTab === 'trash') loadTrash();
+        if (nextTab === 'utilities') {
+            refreshUtilitiesDiagnostics().catch(error => {
+                console.warn('[ScriptVault] Diagnostics refresh failed:', error?.message || error);
+            });
+            loadBackups().catch(error => {
+                console.warn('[ScriptVault] Backup browser refresh failed:', error?.message || error);
+            });
+            loadBackupSettings().catch(error => {
+                console.warn('[ScriptVault] Backup schedule refresh failed:', error?.message || error);
+            });
+        }
 
         // Lazy-load and initialize modules for this tab
-        await lazyInitTab(name);
+        await lazyInitTab(nextTab);
     }
 
     function showDropOverlay(show) {

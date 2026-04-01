@@ -827,16 +827,15 @@ const CSPReporter = (() => {
     }
   }
 
-  // Track hostname → ruleId mapping to avoid hash collisions
-  const _hostnameRuleIds = new Map();
-  let _nextRuleId = 900000; // Start in a high range to avoid conflicts with DNR rules
-
+  // Generate a stable, deterministic rule ID from hostname string
+  // Uses a simple hash to produce a consistent ID across page reloads
   function hashCode(str) {
-    // Return a stable, unique rule ID per hostname
-    if (_hostnameRuleIds.has(str)) return _hostnameRuleIds.get(str);
-    const id = _nextRuleId++;
-    _hostnameRuleIds.set(str, id);
-    return id;
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+    }
+    // Map to a high range (900000-999999) to avoid conflicts with other DNR rules
+    return 900000 + (Math.abs(hash) % 100000);
   }
 
   /* ------------------------------------------------------------------ */

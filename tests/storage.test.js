@@ -4,11 +4,15 @@ import { resolve } from 'path';
 
 // storage.js uses global const declarations (not ES modules), so we eval it
 const storageCode = readFileSync(resolve(__dirname, '../modules/storage.js'), 'utf8');
+const settingsDefaults = JSON.parse(
+  readFileSync(resolve(__dirname, '../src/config/settings-defaults.json'), 'utf8')
+);
 
 let SettingsManager, ScriptStorage, ScriptValues, FolderStorage;
 
 // Provide dependencies that storage.js expects in global scope
 const preamble = `
+  const SCRIPTVAULT_SETTINGS_DEFAULTS = ${JSON.stringify(settingsDefaults)};
   function generateId() { return 'id_' + Math.random().toString(36).slice(2, 10); }
   function debugLog() {}
 `;
@@ -39,6 +43,20 @@ describe('SettingsManager', () => {
     expect(settings.enabled).toBe(true);
     expect(settings.theme).toBe('dark');
     expect(settings.autoUpdate).toBe(true);
+    expect(settings.layout).toBe('dark');
+    expect(settings.trashMode).toBe('30');
+  });
+
+  it('includes the shared recovery and runtime defaults', async () => {
+    const settings = await SettingsManager.get();
+    expect(settings.badgeInfo).toBe('running');
+    expect(settings.autoReload).toBe(false);
+    expect(settings.pageFilterMode).toBe('blacklist');
+    expect(settings.blacklistedPages).toBe('');
+    expect(settings.whitelistedPages).toBe('');
+    expect(settings.deniedHosts).toEqual([]);
+    expect(settings.onedriveConnected).toBe(false);
+    expect(settings.trustedSigningKeys).toEqual({});
   });
 
   it('merges stored settings with defaults', async () => {
@@ -71,6 +89,18 @@ describe('SettingsManager', () => {
     await SettingsManager.set('theme', 'oled');
     await SettingsManager.reset();
     expect(await SettingsManager.get('theme')).toBe('dark');
+  });
+
+  it('reset() recreates nested default structures', async () => {
+    const settings = await SettingsManager.get();
+    settings.blacklist.push('example.com');
+    settings.deniedHosts.push('blocked.test');
+    settings.trustedSigningKeys.demo = { name: 'Demo', addedAt: 1 };
+    await SettingsManager.reset();
+    const resetSettings = await SettingsManager.get();
+    expect(resetSettings.blacklist).toEqual([]);
+    expect(resetSettings.deniedHosts).toEqual([]);
+    expect(resetSettings.trustedSigningKeys).toEqual({});
   });
 
   it('init() is idempotent', async () => {
