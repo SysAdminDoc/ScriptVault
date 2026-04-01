@@ -1254,12 +1254,12 @@
                 if (panel) panel.insertBefore(banner, panel.firstChild);
 
                 document.getElementById('btnReviewYes')?.addEventListener('click', () => {
-                    chrome.tabs.create({ url: 'https://chromewebstore.google.com/detail/scriptvault/' + chrome.runtime.id + '/reviews' });
+                    chrome.tabs.create({ url: 'https://chromewebstore.google.com/detail/scriptvault/jlhdbkeijcbgnonpfkfkkkhfmbeejkgh/reviews' });
                     chrome.storage.local.set({ reviewCompleted: true });
                     banner.remove();
                 });
                 document.getElementById('btnReviewLater')?.addEventListener('click', () => {
-                    chrome.storage.local.set({ installDate: Date.now() }); // Reset timer
+                    chrome.storage.local.set({ reviewDismissed: true });
                     banner.remove();
                 });
                 document.getElementById('btnReviewDismiss')?.addEventListener('click', () => {
