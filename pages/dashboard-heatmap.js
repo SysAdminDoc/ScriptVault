@@ -179,11 +179,12 @@ const ActivityHeatmap = (() => {
     return d.toISOString().split('T')[0];
   }
 
-  function _loadData() {
+  async function _loadData() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const result = await chrome.storage.local.get(STORAGE_KEY);
+      const raw = result[STORAGE_KEY];
       if (raw) {
-        const parsed = JSON.parse(raw);
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
         // Convert scripts arrays back to Sets for internal use
         _data = {};
         for (const [key, val] of Object.entries(parsed)) {
@@ -214,7 +215,7 @@ const ActivityHeatmap = (() => {
           scripts: [...val.scripts],
         };
       }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+      chrome.storage.local.set({ [STORAGE_KEY]: serializable });
     } catch (e) {
       console.warn('[ActivityHeatmap] Failed to save data:', e);
     }
@@ -560,7 +561,9 @@ const ActivityHeatmap = (() => {
       cell.style.background = color;
       legend.appendChild(cell);
     }
-    legend.innerHTML += '<span>More</span>';
+    const moreSpan = document.createElement('span');
+    moreSpan.textContent = 'More';
+    legend.appendChild(moreSpan);
     root.appendChild(legend);
 
     // Stats
@@ -616,10 +619,10 @@ const ActivityHeatmap = (() => {
   /*  Public API                                                         */
   /* ------------------------------------------------------------------ */
 
-  function init(containerEl) {
+  async function init(containerEl) {
     _container = containerEl;
     _injectStyles();
-    _loadData();
+    await _loadData();
     _buildUI();
     _initialized = true;
 
@@ -629,8 +632,8 @@ const ActivityHeatmap = (() => {
     }
   }
 
-  function refresh() {
-    _loadData();
+  async function refresh() {
+    await _loadData();
     if (_canvas && _ctx) {
       _drawHeatmap();
       const statsEl = _container?.querySelector('.sv-heatmap-stats');

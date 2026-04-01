@@ -4,7 +4,7 @@
 Modern userscript manager built with Chrome Manifest V3. Tampermonkey-inspired functionality with cloud sync, auto-updates, a full dashboard, Monaco editor, DevTools panel, and a persistent side panel.
 
 ## Version
-v2.0.2
+v2.0.3
 
 ## Tech Stack
 - Chrome MV3 extension (JavaScript runtime + TypeScript source in `src/`)
@@ -15,7 +15,7 @@ v2.0.2
 - **Monaco Editor** (v0.52.2, bundled locally in `lib/monaco/`, CDN fallback in sandboxed iframe)
 - Cloud sync: WebDAV, Google Drive (PKCE), Dropbox (PKCE), OneDrive (PKCE), Easy Cloud (chrome.identity)
 - Vitest test suite (15 test files, 370 test cases)
-- background.js: ~16,228 lines (built from 19+ source modules)
+- background.js: ~16,333 lines (built from 19+ source modules)
 - 37 TypeScript source files in `src/` (type-checked via `npm run typecheck`)
 
 ## Build
@@ -477,5 +477,102 @@ All 4 bg/ modules migrated:
 - Pattern builder ReDoS: 500-char length cap + bounded wildcard
 - Firefox build now uses esbuild pipeline
 
-**Version sync:** manifest.json, manifest-firefox.json, package.json all at 2.0.2
-- background.js: 16,228 lines
+### v2.0.2 Round 2 — Full Audit & Repair (2026-03-29)
+**Security (5 fixes):**
+- `GM_addElement` innerHTML XSS — sanitizes script tags, event handlers, javascript: URIs
+- `@connect self` was unconditional allow — now checks script @match domains
+- `GM_loadScript` had no @connect enforcement — now applies same rules as GM_xmlhttpRequest
+- Public API web install SSRF — validates HTTPS-only, rejects internal/private IPs
+- OneDrive OAuth missing CSRF `state` parameter — added state validation
+
+**Logic bugs (9 fixes):**
+- `setupAlarms` `clearAll()` wiped notification/backup alarms — now only clears autoUpdate/autoSync
+- `_toggleLocks` Map leaked entries — cleanup moved to `.finally()` block
+- `rollbackScript` left duplicate entries in version history — now removes target before push
+- `mergeData` returned object without tombstones — remote sync lost deletion info
+- `pendingInstall` left stale on non-userscript early return — now cleared
+- Public API `toggleScript`/`installScript` used array format — fixed for object storage format
+- Public API `getInstalledScripts` returned `s.name` instead of `s.meta?.name`
+- Notification error counts never reset after dispatch — now reset to 0
+- Digest alarm skipped recreation if existing — now clears and recreates
+- Notification context cleanup alarms (`notifCtx_clean_*`) were silently ignored — now handled
+- Quota manager `userscripts` key misattributed to `other` — now in `scripts` category
+- Backup selective restore matched by name only — now uses `name::namespace` composite key
+
+**Race condition fixes (2):**
+- `_ensureOffscreen()` concurrent calls created duplicate documents — serialized via promise
+- EasyCloud debounce used `setTimeout` (lost on SW shutdown) — now uses `chrome.alarms`
+
+**Dashboard fixes (5):**
+- `dashboard-linter.js` `api.replace('.', '\\.')` only escaped first dot — now uses `/\./g`
+- `dashboard-csp.js` rule IDs were non-persistent counters — now uses deterministic hash
+- `dashboard-whatsnew.js` version mismatch caused infinite re-check — marks seen even without entry
+- `dashboard-debugger.js` double-init leaked interval timers — now clears on re-init
+- `dashboard-profiles.js` `_startUrlWatcher` could register duplicate listeners — added guard
+
+**Other fixes (4):**
+- Dropbox upload used stale token — now calls `getValidToken()` before upload
+- `content.js` bridge globals (`__ScriptVault_ChannelID__`) were writable — now `Object.defineProperty` non-writable
+- `bg/signing.js` regex mismatch between sign and verify — aligned to `\n?` (optional trailing newline)
+- `bg/analyzer.js` `_ensureOffscreen` race — serialized with cached promise
+- `pages/install.js` `@resource` name prototype pollution — rejects `__proto__`/`constructor`/`prototype`
+
+**Test infrastructure (2 fixes):**
+- Vitest worker timeouts on VMware FS — `fileParallelism: false` fixes all 15 test files
+- `tests/setup.js` missing mocks — added `tabs.sendMessage/get`, `action`, `webNavigation`, `cookies`, `sidePanel`, `commands`, `scripting.executeScript`
+
+**Totals:** 27 fixes across 14 files. 370/370 tests green.
+- background.js: 16,333 lines
+
+### v2.0.3 — Comprehensive Audit (2026-04-01)
+**Security (5 fixes):**
+- Empty `@grant` array now correctly denies all permissions (was granting ALL — critical)
+- `@connect` enforcement: URL parse failure in catch block now returns error instead of silently allowing request
+- `GM_addElement` innerHTML sanitization: case-insensitive check for `javascript:`/`vbscript:` URIs + attr names
+- `signing.js` `trustKey()`: rejects `__proto__`/`constructor`/`prototype` keys (prototype pollution)
+- Monaco adapter: postMessage listener now validates `e.source === frame.contentWindow`
+
+**Crash/logic bugs (10 fixes):**
+- `ScriptStorage.search()` crashed on scripts with missing `meta.name` — added null-safe access
+- `ScriptStorage.getByNamespace()` crashed on missing `meta` — added optional chaining
+- `ScriptStorage.duplicate()` crashed on missing `meta.name` — added fallback
+- `toggleScript` accepted `undefined` for `enabled` — now coerces to boolean or toggles
+- Context menu `new URL(tab.url)` crashed on chrome:// tabs — wrapped in try/catch with guard
+- `GM_cookie.list/set/delete` crashed on undefined result from bridge timeout — added `?.` null checks
+- `_makeRuleId` returned 1 for zero-hash causing DNR rule ID collisions — changed `|| 1` to `+ 1`
+- `requireCache.set(url, ...)` used wrong key (with SRI fragment) — now uses `fetchUrl`
+- Signing: Windows `\r\n` line endings caused signature verification failure — regex updated to `[^\r\n]+\r?\n?`
+- Signing: signature insertion failed with non-standard `==/UserScript==` whitespace — now uses regex
+
+**Performance (5 fixes):**
+- Backup import handlers (TM/VM/GM) called `getAll()` inside loops (O(N*M)) — cached before loop
+- `resources.js` O(N^2) string concatenation for binary resources — chunked `String.fromCharCode.apply`
+- `_urlChangeHandlers` array grew unboundedly (no dedup) — added `includes()` guard before push
+- `console capture` unbounded spread of `data.entries` — capped incoming to 200 before spread
+- `_audioWatchedTabs` Set never cleaned on tab close — added cleanup in `tabs.onRemoved` listener
+
+**Robustness (5 fixes):**
+- Workspaces `activate()` bypassed `ScriptStorage.set()` rollback safety — now uses `set()` per script
+- Background task mutex deadlock on hung sync/update — added 5-minute safety timeout
+- `matchIncludePattern` ReDoS via crafted glob patterns — collapse consecutive `*` before conversion
+- `GM_getResourceURL` defaulted to blob URLs (leak) when callers omitted arg — now defaults to data URI
+- Notification `_errorCounts` not persisted after reset — now saved alongside `_rateLimits`
+
+**Dashboard (7 fixes):**
+- `dashboard-heatmap.js`: `innerHTML +=` destroyed previously-appended DOM children — use `appendChild`
+- `dashboard-standalone.js`: 5 `revokeObjectURL` calls too early (100ms or sync) — all delayed to 1000ms
+- `dashboard-profiles.js`: `_urlWatcherStarted` not reset on `destroy()` — blocks re-init; fixed
+- `dashboard-chains.js`: shallow step copy let editor mutations bypass cancel — deep copy with `map(s => ({...s}))`
+- `dashboard-diff.js`: LCS `Uint16Array` overflows at 65535 — upgraded to `Uint32Array`
+- `dashboard-linter.js`: same `Uint16Array` overflow — upgraded to `Uint32Array`
+- `devtools-panel.js`: HAR export hardcoded version `1.7.8` — now reads from manifest
+
+**Other (4 fixes):**
+- Monaco adapter `'null'` origin string is truthy, `'*'` fallback never triggered for sandbox — added check
+- `offscreen.js` AST walker created circular `parent` refs preventing GC — now uses `_parent` + cleanup
+- `offscreen.js` `resolveWithMarkers` had dead `localDiff`/`remoteDiff` variables — removed
+- `i18n.js` regex injection via placeholder keys — now escapes special regex chars
+- `signing.js` extract regex aligned to handle `\r\n` consistently
+
+**Totals:** 36 fixes across 16 files. 374/374 tests green.
+- background.js: 16,673 lines

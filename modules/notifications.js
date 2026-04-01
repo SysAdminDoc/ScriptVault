@@ -199,9 +199,13 @@ const NotificationSystem = {
       console.error('[ScriptVault] Failed to create error notification:', e);
     }
 
-    // Update rate limit
+    // Reset error count after notification and update rate limit
+    this._errorCounts[scriptId] = 0;
     this._rateLimits[scriptId] = Date.now();
-    await chrome.storage.local.set({ [this.STORAGE_KEY_RATE_LIMITS]: this._rateLimits });
+    await chrome.storage.local.set({
+      [this.STORAGE_KEY_ERROR_COUNTS]: this._errorCounts,
+      [this.STORAGE_KEY_RATE_LIMITS]: this._rateLimits
+    });
 
     await this._setClickContext(notifId, {
       action: 'openScript',
@@ -283,9 +287,8 @@ const NotificationSystem = {
     const prefs = await this.getPreferences();
     if (!prefs.digest) return;
 
-    // Check if alarm already exists
-    const existing = await chrome.alarms.get(this.ALARM_WEEKLY_DIGEST);
-    if (existing) return;
+    // Clear and recreate the alarm to ensure correct schedule
+    await chrome.alarms.clear(this.ALARM_WEEKLY_DIGEST).catch(() => {});
 
     // Schedule to fire in 7 days, repeating weekly
     const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -473,6 +476,13 @@ const NotificationSystem = {
   async handleAlarm(alarm) {
     if (alarm.name === this.ALARM_WEEKLY_DIGEST) {
       await this.generateDigest();
+      return true;
+    }
+    // Handle notification context cleanup alarms
+    if (alarm.name.startsWith('notifCtx_clean_')) {
+      const notifId = alarm.name.replace('notifCtx_clean_', '');
+      const ctxKey = `notifCtx_${notifId}`;
+      await chrome.storage.local.remove(ctxKey).catch(() => {});
       return true;
     }
     return false;

@@ -54,7 +54,8 @@ const LazyLoader = (() => {
 
   /**
    * Load a script by filename (relative to pages/).
-   * Returns a Promise that resolves when the script is loaded and executed.
+   * Returns a Promise that resolves when the script is loaded and executed,
+   * or rejects when the file could not be loaded.
    */
   function loadScript(src) {
     if (_loaded.has(src)) return Promise.resolve();
@@ -71,8 +72,10 @@ const LazyLoader = (() => {
       };
       script.onerror = () => {
         _loading.delete(src);
+        const error = new Error(`Failed to load: ${src}`);
+        error.source = src;
         console.warn(`[LazyLoader] Failed to load: ${src}`);
-        resolve(); // Don't reject — module is optional
+        reject(error);
       };
       (document.body || document.head || document.documentElement).appendChild(script);
     });
@@ -84,8 +87,17 @@ const LazyLoader = (() => {
   /**
    * Load multiple scripts in parallel.
    */
-  function loadScripts(srcs) {
-    return Promise.all(srcs.map(s => loadScript(s)));
+  async function loadScripts(srcs) {
+    const results = await Promise.allSettled(srcs.map(s => loadScript(s)));
+    const failed = results
+      .map((result, index) => result.status === 'rejected' ? (result.reason?.source || srcs[index]) : null)
+      .filter(Boolean);
+
+    if (failed.length > 0) {
+      const error = new Error(`Failed to load: ${failed.join(', ')}`);
+      error.sources = failed;
+      throw error;
+    }
   }
 
   /**

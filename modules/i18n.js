@@ -418,7 +418,8 @@ var I18n = (function() {
     
     // Replace placeholders like {count}, {name}, etc.
     Object.keys(placeholders).forEach(placeholder => {
-      message = message.replace(new RegExp(`\{${placeholder}\}`, 'g'), placeholders[placeholder]);
+      const escaped = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      message = message.replace(new RegExp(`\\{${escaped}\\}`, 'g'), placeholders[placeholder]);
     });
     
     return message;

@@ -39,6 +39,10 @@ function readFile(rel) {
   return readFileSync(join(ROOT, rel), "utf-8");
 }
 
+function readJson(rel) {
+  return JSON.parse(readFile(rel));
+}
+
 /**
  * Return sorted .js filenames inside a directory (alphabetical, matching
  * the glob expansion order used by the original bash build).
@@ -58,6 +62,7 @@ function jsFilesIn(dir) {
 
 async function buildBackground() {
   const version = readVersion();
+  const settingsDefaults = readJson("src/config/settings-defaults.json");
   console.log(`Building background.js v${version}${production ? " (production)" : ""}...`);
 
   const separator = "\n";
@@ -74,6 +79,14 @@ async function buildBackground() {
     ].join("\n"),
 
     readFile("shared/utils.js"),
+    [
+      "// ============================================================================",
+      "// SHARED SETTINGS DEFAULTS",
+      "// Generated from src/config/settings-defaults.json",
+      "// ============================================================================",
+      `const SCRIPTVAULT_SETTINGS_DEFAULTS = ${JSON.stringify(settingsDefaults, null, 2)};`,
+      "",
+    ].join("\n"),
     readFile("lib/fflate.js"),
     readFile("modules/sync-providers.js"),
     readFile("modules/i18n.js"),

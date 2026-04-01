@@ -233,7 +233,7 @@
       comment: e.scriptName || ''
     }));
 
-    const har = { log: { version: '1.2', creator: { name: 'ScriptVault', version: '1.7.8' }, entries } };
+    const har = { log: { version: '1.2', creator: { name: 'ScriptVault', version: chrome.runtime.getManifest().version }, entries } };
     const blob = new Blob([JSON.stringify(har, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

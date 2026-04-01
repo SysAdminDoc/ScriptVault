@@ -4,11 +4,19 @@
 (function() {
     'use strict';
 
+    const numberFormatter = new Intl.NumberFormat();
+
     // Event delegation for favicon error handling (CSP-compliant)
     document.addEventListener('error', function(e) {
         if (e.target.tagName === 'IMG' && e.target.hasAttribute('data-favicon-fallback')) {
             e.target.style.display = 'none';
-            if (e.target.parentElement) e.target.parentElement.textContent = e.target.getAttribute('data-favicon-fallback');
+            if (e.target.parentElement) {
+                e.target.parentElement.innerHTML = buildPopupIconBadgeHtml(
+                    e.target.dataset.fallbackLabel || 'SV',
+                    e.target.dataset.fallbackHue || '145',
+                    e.target.dataset.fallbackMode || 'google'
+                );
+            }
         }
     }, true);
 
@@ -78,13 +86,24 @@
     // Show current URL
     function updateUrlBar() {
         const urlBar = document.getElementById('urlBar');
+        const urlHost = document.getElementById('urlHost');
+        const urlPath = document.getElementById('urlPath');
         if (urlBar && currentUrl) {
             try {
                 const u = new URL(currentUrl);
-                urlBar.textContent = u.hostname + u.pathname;
+                const path = (u.pathname || '/') + (u.search || '');
+                if (urlHost) urlHost.textContent = u.hostname;
+                if (urlPath) urlPath.textContent = path;
+                urlBar.classList.add('has-url');
             } catch {
-                urlBar.textContent = '';
+                if (urlHost) urlHost.textContent = '';
+                if (urlPath) urlPath.textContent = '';
+                urlBar.classList.remove('has-url');
             }
+        } else if (urlBar) {
+            if (urlHost) urlHost.textContent = '';
+            if (urlPath) urlPath.textContent = '';
+            urlBar.classList.remove('has-url');
         }
     }
 
@@ -94,7 +113,7 @@
         if (el) {
             const total = allScripts.length;
             const active = allScripts.filter(s => s.enabled !== false).length;
-            el.textContent = `${active}/${total} scripts`;
+            el.textContent = `${numberFormatter.format(active)}/${numberFormatter.format(total)} scripts`;
         }
     }
 
@@ -119,6 +138,51 @@
                 el.appendChild(link);
             }
         } catch {}
+    }
+
+    function getMarkerMode() {
+        const mode = settings.faviconService || 'google';
+        return mode === 'duckduckgo' || mode === 'none' ? mode : 'google';
+    }
+
+    function hashMarkerSeed(seed) {
+        let hash = 0;
+        const input = String(seed || 'scriptvault');
+        for (let i = 0; i < input.length; i++) {
+            hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
+        }
+        return Math.abs(hash) % 360;
+    }
+
+    function getDomainRoot(domain) {
+        const parts = String(domain || '')
+            .replace(/^www\./, '')
+            .split('.')
+            .filter(Boolean);
+        return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
+    }
+
+    function getDomainBadgeLabel(domain, maxLetters = 2) {
+        const root = getDomainRoot(domain).replace(/[^a-z0-9]/gi, '');
+        if (!root) return 'SV'.slice(0, maxLetters);
+        return root.slice(0, maxLetters).toUpperCase();
+    }
+
+    function getScriptBadgeLabel(name, maxLetters = 2) {
+        const words = String(name || 'Script').trim().split(/\s+/).filter(Boolean);
+        if (!words.length) return 'SV'.slice(0, maxLetters);
+        if (words.length > 1) {
+            return words.slice(0, maxLetters).map(word => word[0]).join('').toUpperCase();
+        }
+        return words[0].replace(/[^a-z0-9]/gi, '').slice(0, maxLetters).toUpperCase() || 'SV'.slice(0, maxLetters);
+    }
+
+    function buildPopupIconBadgeHtml(label, hue, mode = getMarkerMode()) {
+        const classes = ['script-icon-badge'];
+        if (mode === 'duckduckgo') classes.push('compact');
+        if (mode === 'none') classes.push('minimal');
+        const style = mode === 'none' ? '' : ` style="--script-icon-hue:${hue}"`;
+        return `<span class="${classes.join(' ')}"${style}>${mode === 'none' ? '' : escapeHtml(label)}</span>`;
     }
     
     // Check if userScripts API is available and enabled
@@ -247,9 +311,57 @@
         }
     }
 
+    function getRuntimeError(result, fallback = 'Action failed') {
+        if (!result) return fallback;
+        if (result.error) return result.error;
+        if (result.success === false) return fallback;
+        return '';
+    }
+
+    function formatImportSummary(result) {
+        if (!result || result.error) return '';
+        const imported = Number(result.imported || 0);
+        const skipped = Number(result.skipped || 0);
+        const failed = Array.isArray(result.errors) ? result.errors.length : 0;
+        const parts = [];
+        if (imported) parts.push(`Imported ${numberFormatter.format(imported)}`);
+        if (skipped) parts.push(`Skipped ${numberFormatter.format(skipped)}`);
+        if (failed) parts.push(`Failed ${numberFormatter.format(failed)}`);
+        return parts.join(' • ') || 'Nothing changed';
+    }
+
     // Shared dropdown state (module-level to avoid listener accumulation)
     let activeDropdownScriptId = null;
     let dropdownListenersAttached = false;
+    let pendingDeleteScriptId = null;
+
+    function getDropdownDeleteButton() {
+        return document.querySelector('#scriptDropdown [data-action="delete"]');
+    }
+
+    function resetDropdownDeleteState() {
+        pendingDeleteScriptId = null;
+        const deleteBtn = getDropdownDeleteButton();
+        if (!deleteBtn) return;
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.classList.remove('confirming');
+    }
+
+    function closeScriptDropdown() {
+        activeDropdownScriptId = null;
+        resetDropdownDeleteState();
+        document.getElementById('scriptDropdown')?.classList.remove('open');
+    }
+
+    function armDropdownDelete(scriptId, name) {
+        pendingDeleteScriptId = scriptId;
+        const deleteBtn = getDropdownDeleteButton();
+        if (deleteBtn) {
+            deleteBtn.textContent = 'Confirm Delete';
+            deleteBtn.classList.add('confirming');
+        }
+        showPopupToast(`Click delete again to remove "${name}"`);
+    }
 
     // Render script list
     function renderScriptList() {
@@ -329,19 +441,21 @@
                         <span class="slider"></span>
                     </label>
                     <div class="script-icon">${icon}</div>
-                    <span class="script-name" data-edit-id="${script.id}">${escapeHtml(name)}${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}</span>
+                    <button class="script-name-btn" data-edit-id="${script.id}" type="button" aria-label="Open ${escapeHtml(name)} in editor">
+                        <span class="script-name-label">${escapeHtml(name)}</span>${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}
+                    </button>
                     ${errorDot}
                     ${perfHtml}
-                    <div class="script-quick-edit" data-quickedit-id="${script.id}" title="Quick edit">
+                    <button class="script-quick-edit" data-quickedit-id="${script.id}" type="button" aria-label="Quick edit ${escapeHtml(name)}" title="Quick edit">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
                         </svg>
-                    </div>
-                    <div class="script-more" data-more-id="${script.id}">
+                    </button>
+                    <button class="script-more" data-more-id="${script.id}" type="button" aria-label="More actions for ${escapeHtml(name)}">
                         <svg viewBox="0 0 24 24" fill="currentColor">
                             <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
                         </svg>
-                    </div>
+                    </button>
                 </div>
             `;
         }).join('');
@@ -368,7 +482,7 @@
             });
 
             // Script name click opens in dashboard editor
-            item.querySelector('.script-name')?.addEventListener('click', (e) => {
+            item.querySelector('.script-name-btn')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 openDashboard(scriptId);
             });
@@ -384,11 +498,11 @@
             moreBtn?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (dropdown.classList.contains('open') && activeDropdownScriptId === scriptId) {
-                    dropdown.classList.remove('open');
-                    activeDropdownScriptId = null;
+                    closeScriptDropdown();
                     return;
                 }
                 activeDropdownScriptId = scriptId;
+                resetDropdownDeleteState();
                 populateMenuCommands(scriptId);
                 const rect = moreBtn.getBoundingClientRect();
                 dropdown.style.top = rect.bottom + 2 + 'px';
@@ -403,19 +517,21 @@
 
             dropdown.querySelector('[data-action="edit"]')?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                dropdown.classList.remove('open');
-                if (activeDropdownScriptId) openDashboard(activeDropdownScriptId);
+                const scriptId = activeDropdownScriptId;
+                closeScriptDropdown();
+                if (scriptId) openDashboard(scriptId);
             });
 
             dropdown.querySelector('[data-action="update"]')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                dropdown.classList.remove('open');
-                if (!activeDropdownScriptId) return;
+                const scriptId = activeDropdownScriptId;
+                closeScriptDropdown();
+                if (!scriptId) return;
                 showPopupToast('Checking for update...');
                 try {
-                    const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId: activeDropdownScriptId });
+                    const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId });
                     if (updates && updates.length > 0) {
-                        await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: activeDropdownScriptId, code: updates[0].code });
+                        await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId, code: updates[0].code });
                         showPopupToast(`Updated to v${updates[0].newVersion}`);
                         await loadPageScripts();
                     } else {
@@ -428,9 +544,10 @@
 
             dropdown.querySelector('[data-action="copyUrl"]')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                dropdown.classList.remove('open');
-                if (!activeDropdownScriptId) return;
-                const script = pageScripts.find(s => s.id === activeDropdownScriptId);
+                const scriptId = activeDropdownScriptId;
+                closeScriptDropdown();
+                if (!scriptId) return;
+                const script = pageScripts.find(s => s.id === scriptId);
                 const url = (script?.metadata || script?.meta || {}).downloadURL || (script?.metadata || script?.meta || {}).updateURL;
                 if (url) {
                     try {
@@ -444,33 +561,43 @@
 
             dropdown.querySelector('[data-action="pin"]')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                dropdown.classList.remove('open');
-                if (!activeDropdownScriptId) return;
-                const script = pageScripts.find(s => s.id === activeDropdownScriptId);
+                const scriptId = activeDropdownScriptId;
+                closeScriptDropdown();
+                if (!scriptId) return;
+                const script = pageScripts.find(s => s.id === scriptId);
                 if (!script) return;
-                const settings = script.settings || {};
-                settings.pinned = !settings.pinned;
-                await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: activeDropdownScriptId, settings });
-                script.settings = settings;
-                showPopupToast(settings.pinned ? 'Pinned' : 'Unpinned');
+                const nextSettings = { ...(script.settings || {}), pinned: !script.settings?.pinned };
+                try {
+                    const result = await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId, settings: nextSettings });
+                    const error = getRuntimeError(result, 'Unable to update pin state');
+                    if (error) throw new Error(error);
+                    script.settings = nextSettings;
+                    const allScript = allScripts.find(s => s.id === scriptId);
+                    if (allScript) allScript.settings = nextSettings;
+                    showPopupToast(nextSettings.pinned ? 'Pinned' : 'Unpinned');
+                } catch (error) {
+                    showPopupToast(error.message || 'Unable to update pin state', 'error');
+                }
             });
 
             dropdown.querySelector('[data-action="delete"]')?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                dropdown.classList.remove('open');
                 if (!activeDropdownScriptId) return;
-                const script = pageScripts.find(s => s.id === activeDropdownScriptId);
+                const scriptId = activeDropdownScriptId;
+                const script = pageScripts.find(s => s.id === scriptId);
                 const name = (script?.metadata || script?.meta || {}).name || 'this script';
-                if (confirm(`Delete "${name}"?`)) {
-                    deleteScript(activeDropdownScriptId);
+                if (pendingDeleteScriptId !== scriptId) {
+                    armDropdownDelete(scriptId, name);
+                    return;
                 }
+                closeScriptDropdown();
+                deleteScript(scriptId);
             });
 
             // Close dropdown when clicking outside (but not inside it)
             document.addEventListener('click', (e) => {
                 if (!dropdown.contains(e.target) && !e.target.closest('.script-more')) {
-                    dropdown.classList.remove('open');
-                    activeDropdownScriptId = null;
+                    closeScriptDropdown();
                 }
             });
         }
@@ -485,14 +612,13 @@
             const data = await chrome.storage.session.get('menuCommands');
             const cmds = data?.menuCommands?.[scriptId] || [];
             for (const cmd of cmds) {
-                const el = document.createElement('div');
+                const el = document.createElement('button');
                 el.className = 'script-dropdown-cmd';
+                el.type = 'button';
                 el.textContent = cmd.caption || cmd.name || 'Command';
-                el.setAttribute('role', 'button');
-                el.setAttribute('tabindex', '0');
                 el.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    document.getElementById('scriptDropdown')?.classList.remove('open');
+                    closeScriptDropdown();
                     if (currentTab?.id) {
                         chrome.tabs.sendMessage(currentTab.id, {
                             action: 'executeMenuCommand',
@@ -509,38 +635,41 @@
     function getScriptIcon(script) {
         const meta = script.metadata || script.meta || {};
         const iconUrl = meta.icon || meta.iconURL;
-
-        if (iconUrl && sanitizeUrl(iconUrl)) {
-            return `<img src="${escapeHtml(iconUrl)}" data-favicon-fallback="📜">`;
-        }
-
-        // Derive favicon from first matched domain
+        const mode = getMarkerMode();
         const patterns = [...(meta.match || []), ...(meta.include || [])];
+        let domain = '';
+
         for (const pattern of patterns) {
             const m = pattern.match(/^(?:\*|https?|file):\/\/(?:\*\.)?([^\/\*]+)/);
             if (m) {
-                const domain = m[1].replace(/^\*\./, '').replace(/^www\./, '').toLowerCase();
-                if (domain && domain !== '*' && !domain.includes('*')) {
-                    const service = settings.faviconService || 'google';
-                    const faviconUrl = service === 'duckduckgo'
-                        ? `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`
-                        : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
-                    return `<img src="${escapeHtml(faviconUrl)}" data-favicon-fallback="📜">`;
-                }
+                domain = m[1].replace(/^\*\./, '').replace(/^www\./, '').toLowerCase();
+                if (domain && domain !== '*' && !domain.includes('*')) break;
             }
         }
 
-        return '📜';
+        const maxLetters = mode === 'duckduckgo' ? 1 : 2;
+        const label = domain
+            ? getDomainBadgeLabel(domain, maxLetters)
+            : getScriptBadgeLabel(meta.name || script.id, maxLetters);
+        const hue = hashMarkerSeed(domain || meta.name || script.id);
+
+        if (iconUrl && sanitizeUrl(iconUrl)) {
+            return `<img src="${escapeHtml(iconUrl)}" width="16" height="16" alt="" loading="lazy" data-favicon-fallback="true" data-fallback-label="${escapeHtml(label)}" data-fallback-hue="${hue}" data-fallback-mode="${mode}">`;
+        }
+
+        return buildPopupIconBadgeHtml(label, hue, mode);
     }
 
     // Toggle script enabled/disabled
     async function toggleScript(scriptId, enabled) {
         try {
-            await chrome.runtime.sendMessage({
+            const result = await chrome.runtime.sendMessage({
                 action: 'toggleScript',
                 scriptId: scriptId,
                 enabled: enabled
             });
+            const error = getRuntimeError(result, 'Failed to update script');
+            if (error) throw new Error(error);
 
             // Update local state in both arrays
             const script = pageScripts.find(s => s.id === scriptId);
@@ -555,16 +684,19 @@
             updateBadgeForTab();
         } catch (error) {
             console.error('Failed to toggle script:', error);
+            showPopupToast(error.message || 'Failed to update script', 'error');
         }
     }
 
     // Delete a script
     async function deleteScript(scriptId) {
         try {
-            await chrome.runtime.sendMessage({
+            const result = await chrome.runtime.sendMessage({
                 action: 'deleteScript',
                 scriptId: scriptId
             });
+            const error = getRuntimeError(result, 'Failed to delete script');
+            if (error) throw new Error(error);
 
             // Remove from both local arrays and re-render
             pageScripts = pageScripts.filter(s => s.id !== scriptId);
@@ -573,8 +705,11 @@
             updateEnabledState();
             updateFooterCount();
             updateBadgeForTab();
+            const deletedName = result?.scriptName || 'Script deleted';
+            showPopupToast(`Deleted ${deletedName}`);
         } catch (error) {
             console.error('Failed to delete script:', error);
+            showPopupToast(error.message || 'Failed to delete script', 'error');
         }
     }
 
@@ -583,18 +718,22 @@
         const newEnabled = settings.enabled === false;
         
         try {
-            await chrome.runtime.sendMessage({
+            const result = await chrome.runtime.sendMessage({
                 action: 'setSettings',
                 settings: { enabled: newEnabled }
             });
+            const error = getRuntimeError(result, 'Failed to update ScriptVault');
+            if (error) throw new Error(error);
 
-            settings.enabled = newEnabled;
+            settings.enabled = result?.enabled ?? newEnabled;
             updateEnabledState();
             
             // Update badge
             updateBadgeForTab();
+            showPopupToast(settings.enabled === false ? 'ScriptVault paused' : 'ScriptVault enabled');
         } catch (error) {
             console.error('Failed to toggle global enabled:', error);
+            showPopupToast(error.message || 'Failed to update ScriptVault', 'error');
         }
     }
 
@@ -686,6 +825,7 @@
 
             try {
                 const isZip = file.name.toLowerCase().endsWith('.zip');
+                let result;
                 
                 if (isZip) {
                     const arrayBuffer = await file.arrayBuffer();
@@ -693,7 +833,7 @@
                         new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
                     );
                     
-                    await chrome.runtime.sendMessage({
+                    result = await chrome.runtime.sendMessage({
                         action: 'importFromZip',
                         zipData: base64,
                         options: { overwrite: true }
@@ -702,17 +842,23 @@
                     const text = await file.text();
                     const data = JSON.parse(text);
                     
-                    await chrome.runtime.sendMessage({
+                    result = await chrome.runtime.sendMessage({
                         action: 'importAll',
                         data: { data, options: { overwrite: true } }
                     });
                 }
+                const error = getRuntimeError(result, 'Import failed');
+                if (error) throw new Error(error);
                 
                 // Reload and close
+                await loadAllScripts();
                 await loadPageScripts();
+                updateFooterCount();
                 updateBadgeForTab();
+                showPopupToast(formatImportSummary(result) || `Imported ${file.name}`);
             } catch (error) {
                 console.error('Failed to import:', error);
+                showPopupToast(error.message || 'Import failed', 'error');
             }
         };
 
@@ -722,11 +868,20 @@
     // Check for updates
     async function checkForUpdates() {
         try {
-            await chrome.runtime.sendMessage({ action: 'checkUpdates' });
-            showPopupToast('Checking for updates...');
-            setTimeout(() => window.close(), 1200);
+            const result = await chrome.runtime.sendMessage({ action: 'checkUpdates' });
+            const error = getRuntimeError(result, 'Update check failed');
+            if (error) throw new Error(error);
+            const updateCount = Array.isArray(result)
+                ? result.length
+                : (Array.isArray(result?.updates) ? result.updates.length : 0);
+            showPopupToast(
+                updateCount > 0
+                    ? `Updates available for ${numberFormatter.format(updateCount)} script${updateCount === 1 ? '' : 's'}`
+                    : 'All scripts are up to date'
+            );
         } catch (error) {
             console.error('Failed to check updates:', error);
+            showPopupToast(error.message || 'Update check failed', 'error');
         }
     }
 
@@ -746,6 +901,9 @@
         if (!toast) {
             toast = document.createElement('div');
             toast.className = 'popup-toast';
+            toast.setAttribute('role', 'status');
+            toast.setAttribute('aria-live', 'polite');
+            toast.setAttribute('aria-atomic', 'true');
             document.body.appendChild(toast);
         }
         toast.textContent = msg;
@@ -778,9 +936,9 @@
                         const menuText = elements.btnBlacklistDomain.querySelector('.menu-item-text');
                         if (menuText) {
                             const res = await chrome.runtime.sendMessage({ action: 'getSettings' });
-                            const bl = (res?.settings || res || {}).blacklist || [];
-                            const isBlacklisted = bl.some(p => p === `*://${domain}/*` || p === `*://*.${domain}/*`);
-                            menuText.textContent = isBlacklisted ? `Remove ${domain} from blacklist` : `Do not run on ${domain}`;
+                            const deniedHosts = (res?.settings || res || {}).deniedHosts || [];
+                            const isDenied = deniedHosts.includes(domain);
+                            menuText.textContent = isDenied ? `Allow ${domain} again` : `Do not run on ${domain}`;
                         }
                     }
                 } catch (e) {}
@@ -797,26 +955,30 @@
             if (!currentUrl) return;
             try {
                 const domain = new URL(currentUrl).hostname;
-                const pattern = `*://${domain}/*`;
                 const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
                 const freshSettings = response?.settings || response || {};
-                const blacklist = freshSettings.blacklist || [];
-                const existingIdx = blacklist.findIndex(p => p === pattern || p === `*://*.${domain}/*`);
+                const deniedHosts = Array.isArray(freshSettings.deniedHosts) ? [...freshSettings.deniedHosts] : [];
+                const existingIdx = deniedHosts.indexOf(domain);
                 if (existingIdx !== -1) {
-                    blacklist.splice(existingIdx, 1);
-                    await chrome.runtime.sendMessage({ action: 'setSettings', settings: { blacklist } });
-                    showPopupToast(`${domain} removed from blacklist`);
+                    deniedHosts.splice(existingIdx, 1);
+                    const result = await chrome.runtime.sendMessage({ action: 'setSettings', settings: { deniedHosts } });
+                    const error = getRuntimeError(result, `Failed to allow ${domain}`);
+                    if (error) throw new Error(error);
+                    showPopupToast(`ScriptVault can run on ${domain} again`);
                     const menuText = elements.btnBlacklistDomain.querySelector('.menu-item-text');
                     if (menuText) menuText.textContent = `Do not run on ${domain}`;
                     return;
                 }
-                blacklist.push(pattern);
-                await chrome.runtime.sendMessage({ action: 'setSettings', settings: { blacklist } });
-                showPopupToast(`${domain} blacklisted`);
+                deniedHosts.push(domain);
+                const result = await chrome.runtime.sendMessage({ action: 'setSettings', settings: { deniedHosts } });
+                const error = getRuntimeError(result, `Failed to block ${domain}`);
+                if (error) throw new Error(error);
+                showPopupToast(`ScriptVault will not run on ${domain}`);
                 const menuText = elements.btnBlacklistDomain.querySelector('.menu-item-text');
-                if (menuText) menuText.textContent = `Remove ${domain} from blacklist`;
+                if (menuText) menuText.textContent = `Allow ${domain} again`;
             } catch (e) {
                 console.error('Failed to blacklist:', e);
+                showPopupToast(e.message || 'Failed to update blocked domains', 'error');
             }
         });
 
@@ -858,14 +1020,6 @@
             }
         });
     }
-
-    // Keyboard support for role="button" elements (Enter/Space activates click)
-    document.addEventListener('keydown', (e) => {
-        if ((e.key === 'Enter' || e.key === ' ') && e.target.getAttribute('role') === 'button') {
-            e.preventDefault();
-            e.target.click();
-        }
-    });
 
     // Start
     document.addEventListener('DOMContentLoaded', init);

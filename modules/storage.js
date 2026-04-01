@@ -2,69 +2,22 @@
 // Settings Manager
 // ============================================================================
 
+function cloneDefaultSettings() {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(SCRIPTVAULT_SETTINGS_DEFAULTS);
+  }
+  return JSON.parse(JSON.stringify(SCRIPTVAULT_SETTINGS_DEFAULTS));
+}
+
 const SettingsManager = {
-  defaults: {
-    // General
-    enabled: true,
-    showBadge: true,
-    badgeColor: '#22c55e',
-    theme: 'dark',
-    
-    // Notifications
-    notifyOnInstall: true,
-    notifyOnUpdate: true,
-    notifyOnError: false,
-    
-    // Editor
-    editorTheme: 'material-darker',
-    editorFontSize: 13,
-    editorTabSize: 2,
-    editorLineWrapping: false,
-    editorAutoComplete: true,
-    editorMatchBrackets: true,
-    editorAutoCloseBrackets: true,
-    editorHighlightActiveLine: true,
-    editorShowInvisibles: false,
-    editorKeyMap: 'default',
-    
-    // Updates
-    autoUpdate: true,
-    updateInterval: 86400000, // 24 hours
-    lastUpdateCheck: 0,
-    
-    // Sync
-    syncEnabled: false,
-    syncProvider: 'none',
-    syncInterval: 3600000, // 1 hour
-    lastSync: 0,
-    webdavUrl: '',
-    webdavUsername: '',
-    webdavPassword: '',
-    // Google Drive (uses chrome.identity)
-    googleDriveConnected: false,
-    googleDriveUser: null,
-    // Dropbox
-    dropboxToken: '',
-    dropboxUser: null,
-    dropboxClientId: '',
-    // Language
-    language: 'auto',
-    
-    // Advanced
-    debugMode: false,
-    injectIntoFrames: true,
-    xhrTimeout: 30000,
-    
-    // Global Blacklist
-    blacklist: []
-  },
+  defaults: cloneDefaultSettings(),
   
   cache: null,
   
   async init() {
     if (this.cache !== null) return;
     const data = await chrome.storage.local.get('settings');
-    this.cache = { ...this.defaults, ...data.settings };
+    this.cache = { ...cloneDefaultSettings(), ...data.settings };
     console.log('[ScriptVault] Settings loaded');
   },
   
@@ -85,7 +38,8 @@ const SettingsManager = {
   },
   
   async reset() {
-    this.cache = { ...this.defaults };
+    this.defaults = cloneDefaultSettings();
+    this.cache = cloneDefaultSettings();
     await chrome.storage.local.set({ settings: this.cache });
     return this.cache;
   }
@@ -164,16 +118,16 @@ const ScriptStorage = {
   async search(query) {
     await this.init();
     const q = query.toLowerCase();
-    return Object.values(this.cache).filter(s => 
-      s.meta.name.toLowerCase().includes(q) ||
-      s.meta.description?.toLowerCase().includes(q) ||
-      s.meta.author?.toLowerCase().includes(q)
+    return Object.values(this.cache).filter(s =>
+      (s.meta?.name || '').toLowerCase().includes(q) ||
+      (s.meta?.description || '').toLowerCase().includes(q) ||
+      (s.meta?.author || '').toLowerCase().includes(q)
     );
   },
   
   async getByNamespace(namespace) {
     await this.init();
-    return Object.values(this.cache).filter(s => s.meta.namespace === namespace);
+    return Object.values(this.cache).filter(s => s.meta?.namespace === namespace);
   },
   
   async reorder(orderedIds) {
@@ -197,7 +151,7 @@ const ScriptStorage = {
       id: newId,
       meta: {
         ...original.meta,
-        name: original.meta.name + ' (Copy)'
+        name: (original.meta?.name || 'Unnamed') + ' (Copy)'
       },
       createdAt: Date.now(),
       updatedAt: Date.now()
