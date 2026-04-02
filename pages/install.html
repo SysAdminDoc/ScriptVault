@@ -859,7 +859,7 @@
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: background-color 0.15s, color 0.15s, transform 0.15s, opacity 0.15s;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1043,6 +1043,13 @@
       margin-bottom: 12px;
     }
 
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        transition: none !important;
+        animation: none !important;
+      }
+    }
+
     /* Responsive */
     @media (max-width: 900px) {
       .install-layout {
@@ -1092,7 +1099,7 @@
   <div class="container">
     <div class="header">
       <div class="header-left">
-        <div class="logo"><img src="../images/icon48.png" alt="ScriptVault" style="width:32px;height:32px"></div>
+        <div class="logo"><img src="../images/icon48.png" alt="ScriptVault" width="32" height="32" style="width:32px;height:32px"></div>
         <div class="header-text">
           <h1>Install Userscript</h1>
           <p>Review permissions, scope, and source details before bringing a script into ScriptVault.</p>
@@ -1104,7 +1111,7 @@
     <div class="content" id="content">
       <div class="loading">
         <div class="loading-spinner"></div>
-        <div class="loading-text">Loading script information...</div>
+        <div class="loading-text">Loading script information…</div>
       </div>
     </div>
   </div>

@@ -72,6 +72,7 @@ const ScriptChains = (() => {
   let _initialized = false;
   let _dragState = null;     // drag-and-drop tracking
   let _availableScripts = [];
+  let _runningChains = new Set();
 
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
@@ -496,6 +497,34 @@ const ScriptChains = (() => {
     _renderLogEntry(entry);
   }
 
+  async function _runButtonTask(button, task, { busyLabel } = {}) {
+    if (!(button instanceof HTMLButtonElement)) {
+      return task();
+    }
+    if (button.disabled || button.dataset.svBusy === 'true') {
+      return null;
+    }
+
+    const originalText = button.textContent;
+    button.dataset.svBusy = 'true';
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    if (busyLabel) {
+      button.textContent = busyLabel;
+    }
+
+    try {
+      return await task();
+    } finally {
+      delete button.dataset.svBusy;
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      if (originalText != null) {
+        button.textContent = originalText;
+      }
+    }
+  }
+
   /* ------------------------------------------------------------------ */
   /*  Fetch available scripts for dropdowns                              */
   /* ------------------------------------------------------------------ */
@@ -575,71 +604,81 @@ const ScriptChains = (() => {
       console.error('[ScriptChains] Chain not found:', chainId);
       return { success: false, error: 'Chain not found' };
     }
-
-    _addLog(chainId, 'info', `Starting chain: ${chain.name}`);
-
-    let lastResult = { success: true, data: null };
-
-    for (let i = 0; i < chain.steps.length; i++) {
-      const step = chain.steps[i];
-
-      // Check condition against previous step
-      if (i > 0) {
-        if (step.condition === 'success' && !lastResult.success) {
-          _addLog(chainId, 'warn', `Skipping step ${i + 1} (${step.label}): previous step failed`);
-          continue;
-        }
-        if (step.condition === 'failure' && lastResult.success) {
-          _addLog(chainId, 'warn', `Skipping step ${i + 1} (${step.label}): previous step succeeded`);
-          continue;
-        }
-      }
-
-      // Apply delay
-      if (step.delay > 0) {
-        _addLog(chainId, 'info', `Waiting ${step.delay}ms before step ${i + 1}...`);
-        await _delay(step.delay);
-      }
-
-      // Execute the step
-      _addLog(chainId, 'info', `Executing step ${i + 1}: ${step.label}`);
-
-      let retries = chain.errorMode === 'retry' ? 3 : 1;
-      let executed = false;
-
-      while (retries > 0 && !executed) {
-        try {
-          lastResult = await _executeStep(step);
-          executed = true;
-
-          if (lastResult.success) {
-            _addLog(chainId, 'success', `Step ${i + 1} completed successfully`);
-          } else {
-            _addLog(chainId, 'error', `Step ${i + 1} failed: ${lastResult.error || 'unknown error'}`);
-          }
-        } catch (e) {
-          retries--;
-          lastResult = { success: false, error: e.message };
-
-          if (retries > 0 && chain.errorMode === 'retry') {
-            _addLog(chainId, 'warn', `Step ${i + 1} failed, retrying (${retries} left)...`);
-            await _delay(1000);
-          } else {
-            _addLog(chainId, 'error', `Step ${i + 1} error: ${e.message}`);
-            executed = true;
-          }
-        }
-      }
-
-      // Handle error modes
-      if (!lastResult.success && chain.errorMode === 'stop') {
-        _addLog(chainId, 'error', `Chain stopped due to error at step ${i + 1}`);
-        return { success: false, stoppedAt: i, error: lastResult.error };
-      }
+    if (_runningChains.has(chainId)) {
+      _addLog(chainId, 'warn', `Chain "${chain.name}" is already running`);
+      return { success: false, error: 'Chain already running', alreadyRunning: true };
     }
 
-    _addLog(chainId, 'success', `Chain "${chain.name}" completed`);
-    return { success: true };
+    _runningChains.add(chainId);
+
+    try {
+      _addLog(chainId, 'info', `Starting chain: ${chain.name}`);
+
+      let lastResult = { success: true, data: null };
+
+      for (let i = 0; i < chain.steps.length; i++) {
+        const step = chain.steps[i];
+
+        // Check condition against previous step
+        if (i > 0) {
+          if (step.condition === 'success' && !lastResult.success) {
+            _addLog(chainId, 'warn', `Skipping step ${i + 1} (${step.label}): previous step failed`);
+            continue;
+          }
+          if (step.condition === 'failure' && lastResult.success) {
+            _addLog(chainId, 'warn', `Skipping step ${i + 1} (${step.label}): previous step succeeded`);
+            continue;
+          }
+        }
+
+        // Apply delay
+        if (step.delay > 0) {
+          _addLog(chainId, 'info', `Waiting ${step.delay}ms before step ${i + 1}...`);
+          await _delay(step.delay);
+        }
+
+        // Execute the step
+        _addLog(chainId, 'info', `Executing step ${i + 1}: ${step.label}`);
+
+        let retries = chain.errorMode === 'retry' ? 3 : 1;
+        let executed = false;
+
+        while (retries > 0 && !executed) {
+          try {
+            lastResult = await _executeStep(step);
+            executed = true;
+
+            if (lastResult.success) {
+              _addLog(chainId, 'success', `Step ${i + 1} completed successfully`);
+            } else {
+              _addLog(chainId, 'error', `Step ${i + 1} failed: ${lastResult.error || 'unknown error'}`);
+            }
+          } catch (e) {
+            retries--;
+            lastResult = { success: false, error: e.message };
+
+            if (retries > 0 && chain.errorMode === 'retry') {
+              _addLog(chainId, 'warn', `Step ${i + 1} failed, retrying (${retries} left)...`);
+              await _delay(1000);
+            } else {
+              _addLog(chainId, 'error', `Step ${i + 1} error: ${e.message}`);
+              executed = true;
+            }
+          }
+        }
+
+        // Handle error modes
+        if (!lastResult.success && chain.errorMode === 'stop') {
+          _addLog(chainId, 'error', `Chain stopped due to error at step ${i + 1}`);
+          return { success: false, stoppedAt: i, error: lastResult.error };
+        }
+      }
+
+      _addLog(chainId, 'success', `Chain "${chain.name}" completed`);
+      return { success: true };
+    } finally {
+      _runningChains.delete(chainId);
+    }
   }
 
   async function _executeStep(step) {
@@ -707,6 +746,7 @@ const ScriptChains = (() => {
       <h3><span class="icon">&#9918;</span> Script Chains</h3>
     `;
     const addBtn = document.createElement('button');
+    addBtn.type = 'button';
     addBtn.className = 'sv-chains-btn primary';
     addBtn.textContent = '+ New Chain';
     addBtn.addEventListener('click', () => _openEditor(null));
@@ -765,19 +805,26 @@ const ScriptChains = (() => {
       `;
 
       const actions = card.querySelector('.chain-actions');
+      const isRunning = _runningChains.has(chain.id);
 
       // Run button
       const runBtn = document.createElement('button');
+      runBtn.type = 'button';
       runBtn.className = 'sv-chains-btn';
-      runBtn.textContent = 'Run';
-      runBtn.addEventListener('click', (e) => {
+      runBtn.textContent = isRunning ? 'Running…' : 'Run';
+      runBtn.disabled = isRunning;
+      if (isRunning) {
+        runBtn.setAttribute('aria-busy', 'true');
+      }
+      runBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        executeChain(chain.id);
+        await _runButtonTask(runBtn, () => executeChain(chain.id), { busyLabel: 'Running…' });
       });
       actions.appendChild(runBtn);
 
       // Edit button
       const editBtn = document.createElement('button');
+      editBtn.type = 'button';
       editBtn.className = 'sv-chains-btn';
       editBtn.textContent = 'Edit';
       editBtn.addEventListener('click', (e) => {
@@ -789,6 +836,7 @@ const ScriptChains = (() => {
       // Delete button (not for builtins)
       if (!chain.builtin) {
         const delBtn = document.createElement('button');
+        delBtn.type = 'button';
         delBtn.className = 'sv-chains-btn danger';
         delBtn.textContent = 'Delete';
         delBtn.addEventListener('click', async (e) => {
@@ -797,7 +845,7 @@ const ScriptChains = (() => {
             ? await window.ScriptVaultDashboardUI.confirm('Delete Chain', `Delete chain "${chain.name}"?`)
             : confirm(`Delete chain "${chain.name}"?`);
           if (confirmed) {
-            deleteChain(chain.id);
+            await _runButtonTask(delBtn, () => deleteChain(chain.id), { busyLabel: 'Deleting…' });
           }
         });
         actions.appendChild(delBtn);
@@ -823,10 +871,10 @@ const ScriptChains = (() => {
     const overlay = document.createElement('div');
     overlay.className = 'sv-chain-editor-overlay';
     overlay.innerHTML = `
-      <div class="sv-chain-editor">
+      <div class="sv-chain-editor" role="dialog" aria-modal="true" aria-labelledby="sv-chain-editor-title">
         <div class="sv-chain-editor-top">
-          <h3>${chainId ? 'Edit Chain' : 'New Chain'}</h3>
-          <button class="sv-chain-editor-close">&times;</button>
+          <h3 id="sv-chain-editor-title">${chainId ? 'Edit Chain' : 'New Chain'}</h3>
+          <button type="button" class="sv-chain-editor-close" aria-label="Close chain editor">&times;</button>
         </div>
         <div class="sv-chain-editor-body">
           <div class="sv-chain-field">
@@ -857,7 +905,7 @@ const ScriptChains = (() => {
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
             <label style="color:var(--text-secondary,#a0a0a0);font-size:12px;">Pipeline Steps</label>
-            <button class="sv-chains-btn" id="sv-chain-add-step">+ Add Step</button>
+            <button type="button" class="sv-chains-btn" id="sv-chain-add-step">+ Add Step</button>
           </div>
           <div class="sv-chain-pipeline" id="sv-chain-pipeline"></div>
           <div>
@@ -866,8 +914,8 @@ const ScriptChains = (() => {
           </div>
         </div>
         <div class="sv-chain-editor-footer">
-          <button class="sv-chains-btn" id="sv-chain-cancel">Cancel</button>
-          <button class="sv-chains-btn primary" id="sv-chain-save">Save Chain</button>
+          <button type="button" class="sv-chains-btn" id="sv-chain-cancel">Cancel</button>
+          <button type="button" class="sv-chains-btn primary" id="sv-chain-save">Save Chain</button>
         </div>
       </div>
     `;
@@ -901,35 +949,38 @@ const ScriptChains = (() => {
     });
 
     overlay.querySelector('#sv-chain-save').addEventListener('click', async () => {
-      const name = overlay.querySelector('#sv-chain-name').value.trim() || 'Unnamed Chain';
-      const triggerType = overlay.querySelector('#sv-chain-trigger-type').value;
-      const triggerValue = overlay.querySelector('#sv-chain-trigger-value').value.trim();
-      const errorMode = overlay.querySelector('#sv-chain-error-mode').value;
+      const saveBtn = overlay.querySelector('#sv-chain-save');
+      await _runButtonTask(saveBtn, async () => {
+        const name = overlay.querySelector('#sv-chain-name').value.trim() || 'Unnamed Chain';
+        const triggerType = overlay.querySelector('#sv-chain-trigger-type').value;
+        const triggerValue = overlay.querySelector('#sv-chain-trigger-value').value.trim();
+        const errorMode = overlay.querySelector('#sv-chain-error-mode').value;
 
-      // Read steps from pipeline DOM
-      const stepEls = pipelineEl.querySelectorAll('.sv-chain-step');
-      const steps = [];
-      stepEls.forEach((el, i) => {
-        const scriptSelect = el.querySelector('.step-script-select');
-        const condSelect = el.querySelector('.step-condition-select');
-        const delayInput = el.querySelector('.step-delay-input');
-        steps.push({
-          scriptId: scriptSelect?.value || null,
-          label: scriptSelect?.selectedOptions?.[0]?.textContent || `Step ${i + 1}`,
-          condition: condSelect?.value || 'always',
-          delay: Math.min(Math.max(parseInt(delayInput?.value, 10) || 0, 0), MAX_DELAY),
+        // Read steps from pipeline DOM
+        const stepEls = pipelineEl.querySelectorAll('.sv-chain-step');
+        const steps = [];
+        stepEls.forEach((el, i) => {
+          const scriptSelect = el.querySelector('.step-script-select');
+          const condSelect = el.querySelector('.step-condition-select');
+          const delayInput = el.querySelector('.step-delay-input');
+          steps.push({
+            scriptId: scriptSelect?.value || null,
+            label: scriptSelect?.selectedOptions?.[0]?.textContent || `Step ${i + 1}`,
+            condition: condSelect?.value || 'always',
+            delay: Math.min(Math.max(parseInt(delayInput?.value, 10) || 0, 0), MAX_DELAY),
+          });
         });
-      });
 
-      if (chainId) {
-        await _updateChain(chainId, { name, trigger: { type: triggerType, value: triggerValue }, errorMode, steps });
-      } else {
-        const newId = await createChain(name, steps);
-        await _updateChain(newId, { trigger: { type: triggerType, value: triggerValue }, errorMode });
-      }
+        if (chainId) {
+          await _updateChain(chainId, { name, trigger: { type: triggerType, value: triggerValue }, errorMode, steps });
+        } else {
+          const newId = await createChain(name, steps);
+          await _updateChain(newId, { trigger: { type: triggerType, value: triggerValue }, errorMode });
+        }
 
-      _closeEditor(overlay);
-      _renderChainList();
+        _closeEditor(overlay);
+        _renderChainList();
+      }, { busyLabel: 'Saving…' });
     });
   }
 
@@ -1027,6 +1078,7 @@ const ScriptChains = (() => {
       ctrlEl.appendChild(delayInput);
 
       const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
       removeBtn.className = 'step-remove';
       removeBtn.innerHTML = '&times;';
       removeBtn.title = 'Remove step';
@@ -1148,6 +1200,7 @@ const ScriptChains = (() => {
     _logs = [];
     _dragState = null;
     _availableScripts = [];
+    _runningChains = new Set();
     _initialized = false;
   }
 

@@ -92,42 +92,65 @@ const CollectionManager = (() => {
 .sv-coll-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
-  padding: 16px 0;
+  gap: 18px;
+  padding: 18px 0;
 }
 
 /* Collection Card */
 .sv-coll-card {
-  background: var(--bg-row, #2a2a2a);
-  border: 1px solid var(--border-color, #404040);
-  border-radius: 8px;
-  padding: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(52, 211, 153, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    var(--bg-row, #2a2a2a);
+  border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-radius: 24px;
+  padding: 18px;
   cursor: pointer;
   transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
   position: relative;
+  overflow: hidden;
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
+}
+.sv-coll-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent 40%, transparent 62%, rgba(255,255,255,0.03));
+  pointer-events: none;
 }
 .sv-coll-card:hover {
-  border-color: var(--accent-green, #4ade80);
+  border-color: rgba(52, 211, 153, 0.28);
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 24px 42px rgba(0, 0, 0, 0.24);
 }
 .sv-coll-card.expanded {
-  border-color: var(--accent-green-dark, #22c55e);
+  border-color: rgba(52, 211, 153, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.16), 0 24px 42px rgba(0, 0, 0, 0.22);
 }
 .sv-coll-card-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 10px;
+  position: relative;
+  z-index: 1;
 }
 .sv-coll-icon {
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1;
   flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.05);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 18px rgba(0,0,0,0.18);
 }
 .sv-coll-title {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
   color: var(--text-primary, #e0e0e0);
   flex: 1;
   white-space: nowrap;
@@ -136,43 +159,56 @@ const CollectionManager = (() => {
 }
 .sv-coll-badge {
   font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--accent-green-dark, #22c55e);
-  color: #fff;
-  font-weight: 600;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(52, 211, 153, 0.16);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+  color: #d1fae5;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
   flex-shrink: 0;
 }
 .sv-coll-desc {
   font-size: 12px;
   color: var(--text-secondary, #a0a0a0);
-  line-height: 1.4;
-  margin-bottom: 10px;
+  line-height: 1.6;
+  margin-bottom: 12px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 .sv-coll-meta {
   display: flex;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
   font-size: 11px;
   color: var(--text-muted, #707070);
+  position: relative;
+  z-index: 1;
 }
 .sv-coll-meta span {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(127,127,127,0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
 /* Expanded Script List */
 .sv-coll-scripts {
-  margin-top: 12px;
-  border-top: 1px solid var(--border-color, #404040);
-  padding-top: 12px;
+  margin-top: 16px;
+  border-top: 1px solid rgba(127,127,127,0.14);
+  padding-top: 14px;
   display: none;
+  position: relative;
+  z-index: 1;
 }
 .sv-coll-card.expanded .sv-coll-scripts {
   display: block;
@@ -180,17 +216,22 @@ const CollectionManager = (() => {
 .sv-coll-script-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 0;
+  gap: 10px;
+  padding: 10px 12px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
   font-size: 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(127,127,127,0.1);
+  margin-bottom: 8px;
 }
 .sv-coll-script-row:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
 }
 .sv-coll-script-name {
   flex: 1;
   color: var(--text-primary, #e0e0e0);
+  font-weight: 600;
 }
 .sv-coll-script-note {
   font-size: 11px;
@@ -205,11 +246,14 @@ const CollectionManager = (() => {
   position: relative;
   width: 32px;
   height: 18px;
+  padding: 0;
+  border: none;
   border-radius: 9px;
   background: var(--toggle-off, #555);
   cursor: pointer;
   transition: background 0.2s;
   flex-shrink: 0;
+  appearance: none;
 }
 .sv-coll-script-toggle.on {
   background: var(--toggle-on, #22c55e);
@@ -228,44 +272,72 @@ const CollectionManager = (() => {
 .sv-coll-script-toggle.on::after {
   transform: translateX(14px);
 }
+.sv-coll-script-toggle:focus-visible,
+.sv-coll-btn:focus-visible,
+.sv-coll-modal-close:focus-visible {
+  outline: 2px solid rgba(74, 222, 128, 0.45);
+  outline-offset: 2px;
+}
+.sv-coll-script-toggle[disabled],
+.sv-coll-btn[disabled] {
+  cursor: progress;
+  opacity: 0.7;
+}
 
 /* Action Buttons */
 .sv-coll-actions {
   display: flex;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
 }
 .sv-coll-btn {
   flex: 1;
-  padding: 6px 10px;
-  border: 1px solid var(--border-color, #404040);
-  border-radius: 6px;
-  background: var(--bg-input, #333);
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)),
+    var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   text-align: center;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 14px 24px rgba(0,0,0,0.14);
 }
 .sv-coll-btn:hover {
-  background: var(--bg-row-hover, #333);
-  border-color: var(--accent-green, #4ade80);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0.03)),
+    var(--bg-row-hover, #333);
+  border-color: rgba(52, 211, 153, 0.24);
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 18px 30px rgba(0,0,0,0.2);
+  transform: translateY(-1px);
 }
 .sv-coll-btn.primary {
-  background: var(--accent-green-dark, #22c55e);
-  border-color: var(--accent-green-dark, #22c55e);
-  color: #fff;
+  background: linear-gradient(135deg, #34d399, var(--accent-green-dark, #22c55e));
+  border-color: rgba(52, 211, 153, 0.34);
+  color: #04130a;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 18px 32px rgba(34,197,94,0.2);
 }
 .sv-coll-btn.primary:hover {
-  background: var(--accent-green, #4ade80);
+  background: linear-gradient(135deg, #6ee7b7, var(--accent-green, #4ade80));
 }
 .sv-coll-btn.danger {
   border-color: var(--accent-red, #f87171);
   color: var(--accent-red, #f87171);
 }
 .sv-coll-btn.danger:hover {
-  background: rgba(248, 113, 113, 0.15);
+  background: rgba(248, 113, 113, 0.12);
+}
+.sv-coll-btn.inline-install {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 10px;
 }
 
 /* Toolbar */
@@ -273,50 +345,67 @@ const CollectionManager = (() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    var(--bg-section-header, #252525);
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
 .sv-coll-toolbar-title {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary, #e0e0e0);
   margin-right: auto;
 }
 .sv-coll-search {
-  padding: 6px 10px;
-  border: 1px solid var(--border-color, #404040);
-  border-radius: 6px;
-  background: var(--bg-input, #333);
+  padding: 10px 12px;
+  border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
+    var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
   font-size: 12px;
-  width: 200px;
+  width: 240px;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 .sv-coll-search:focus {
-  border-color: var(--accent-green, #4ade80);
+  border-color: rgba(52, 211, 153, 0.32);
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.12), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
 /* Create/Import Modal */
 .sv-coll-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(2, 6, 23, 0.64);
   z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
   animation: sv-coll-fade 0.15s ease;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 @keyframes sv-coll-fade {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 .sv-coll-modal {
-  background: var(--bg-header, #252525);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    var(--bg-header, #252525);
   color: var(--text-primary, #e0e0e0);
-  border: 1px solid var(--border-color, #404040);
-  border-radius: 10px;
+  border: 1px solid var(--panel-border-strong, rgba(148, 163, 184, 0.28));
+  border-radius: 24px;
   width: 540px;
   max-width: 95vw;
   max-height: 85vh;
@@ -324,7 +413,7 @@ const CollectionManager = (() => {
   flex-direction: column;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 13px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow-xl, 0 40px 120px rgba(0,0,0,0.34));
   animation: sv-coll-slide 0.2s ease;
 }
 @keyframes sv-coll-slide {
@@ -336,7 +425,8 @@ const CollectionManager = (() => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  border-bottom: 1px solid var(--border-color, #404040);
+  border-bottom: 1px solid rgba(127,127,127,0.14);
+  background: rgba(255,255,255,0.02);
 }
 .sv-coll-modal-header h3 {
   font-size: 15px;
@@ -365,7 +455,8 @@ const CollectionManager = (() => {
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 18px;
-  border-top: 1px solid var(--border-color, #404040);
+  border-top: 1px solid rgba(127,127,127,0.14);
+  background: rgba(255,255,255,0.02);
 }
 .sv-coll-field {
   margin-bottom: 12px;
@@ -382,42 +473,53 @@ const CollectionManager = (() => {
 .sv-coll-field input,
 .sv-coll-field textarea {
   width: 100%;
-  padding: 7px 10px;
-  border: 1px solid var(--border-color, #404040);
-  border-radius: 6px;
-  background: var(--bg-input, #333);
+  padding: 10px 12px;
+  border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
+    var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
   font-size: 13px;
   outline: none;
   font-family: inherit;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 .sv-coll-field input:focus,
 .sv-coll-field textarea:focus {
-  border-color: var(--accent-green, #4ade80);
+  border-color: rgba(52, 211, 153, 0.32);
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.12), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 .sv-coll-field textarea {
   resize: vertical;
   min-height: 60px;
 }
+.sv-coll-code-input {
+  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  font-size: 12px;
+}
 .sv-coll-script-picker {
   max-height: 200px;
   overflow-y: auto;
-  border: 1px solid var(--border-color, #404040);
-  border-radius: 6px;
-  background: var(--bg-row, #2a2a2a);
+  border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
+    var(--bg-row, #2a2a2a);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 .sv-coll-script-pick-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 10px 12px;
   cursor: pointer;
   transition: background 0.1s;
   font-size: 12px;
 }
 .sv-coll-script-pick-row:hover {
-  background: var(--bg-row-hover, #333);
+  background: rgba(255,255,255,0.04);
 }
 .sv-coll-script-pick-row input[type="checkbox"] {
   accent-color: var(--accent-green-dark, #22c55e);
@@ -425,23 +527,31 @@ const CollectionManager = (() => {
 .sv-coll-script-pick-note {
   margin-left: auto;
   width: 120px;
-  padding: 3px 6px;
-  border: 1px solid var(--border-color, #404040);
-  border-radius: 4px;
-  background: var(--bg-input, #333);
+  padding: 6px 8px;
+  border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
+    var(--bg-input, #333);
   color: var(--text-secondary, #a0a0a0);
   font-size: 11px;
   outline: none;
 }
 .sv-coll-script-pick-note:focus {
-  border-color: var(--accent-green, #4ade80);
+  border-color: rgba(52, 211, 153, 0.32);
 }
 
 /* Empty state */
 .sv-coll-empty {
   text-align: center;
-  padding: 48px 24px;
+  padding: 56px 28px;
   color: var(--text-muted, #707070);
+  border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top center, rgba(52, 211, 153, 0.14), transparent 48%),
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
 }
 .sv-coll-empty-icon {
   font-size: 48px;
@@ -449,7 +559,8 @@ const CollectionManager = (() => {
 }
 .sv-coll-empty-text {
   font-size: 14px;
-  margin-bottom: 16px;
+  line-height: 1.6;
+  margin-bottom: 18px;
 }
 
 /* Toast */
@@ -457,15 +568,41 @@ const CollectionManager = (() => {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  background: var(--bg-header, #252525);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    var(--bg-header, #252525);
   color: var(--text-primary, #e0e0e0);
-  border: 1px solid var(--accent-green-dark, #22c55e);
-  border-radius: 8px;
-  padding: 10px 16px;
+  border: 1px solid rgba(52, 211, 153, 0.24);
+  border-radius: 16px;
+  padding: 12px 16px;
   font-size: 13px;
   z-index: 10001;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 24px 42px rgba(0,0,0,0.28);
   animation: sv-coll-fade 0.2s ease;
+}
+
+@media (max-width: 768px) {
+  .sv-coll-grid {
+    gap: 14px;
+  }
+
+  .sv-coll-card {
+    border-radius: 20px;
+    padding: 16px;
+  }
+
+  .sv-coll-toolbar {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .sv-coll-search {
+    width: 100%;
+  }
+
+  .sv-coll-actions {
+    flex-direction: column;
+  }
 }
 `;
 
@@ -527,6 +664,51 @@ const CollectionManager = (() => {
     return _scripts;
   }
 
+  function getCurrentCollectionFilter() {
+    return _container?.querySelector('.sv-coll-search')?.value.trim().toLowerCase() || '';
+  }
+
+  async function runCollectionButtonTask(button, task, options = {}) {
+    const isButton = button instanceof HTMLButtonElement;
+    if (isButton && button.disabled) return null;
+
+    const busyLabel = options.busyLabel || '';
+    const originalText = isButton ? button.textContent : '';
+    const previousDisabled = isButton ? button.disabled : false;
+    const previousBusy = button?.getAttribute?.('aria-busy') ?? null;
+
+    try {
+      if (isButton) {
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        if (busyLabel) button.textContent = busyLabel;
+      }
+      return await task();
+    } finally {
+      if (isButton && button.isConnected) {
+        button.disabled = previousDisabled;
+        if (busyLabel) button.textContent = originalText;
+        if (previousBusy == null) {
+          button.removeAttribute('aria-busy');
+        } else {
+          button.setAttribute('aria-busy', previousBusy);
+        }
+      }
+    }
+  }
+
+  async function setInstalledScriptEnabled(scriptId, enable, options = {}) {
+    if (!scriptId) return null;
+    if (typeof _onToggle === 'function') {
+      return await Promise.resolve(_onToggle(scriptId, enable, options));
+    }
+    return await chrome.runtime.sendMessage({
+      action: 'setScriptSettings',
+      scriptId,
+      settings: { enabled: enable }
+    });
+  }
+
   function markLocalInstalled(script, scriptId, resultScript) {
     if (!scriptId) return;
     script.scriptId = scriptId;
@@ -583,10 +765,11 @@ const CollectionManager = (() => {
   /*  Rendering                                                          */
   /* ------------------------------------------------------------------ */
 
-  function render(filter = '') {
+  function render(filter = '', options = {}) {
     if (!_container) return;
 
     const allCollections = [...BUILT_IN_COLLECTIONS, ..._collections];
+    const expandedCollectionId = options.expandedCollectionId || null;
     const filtered = filter
       ? allCollections.filter(c =>
           c.name.toLowerCase().includes(filter) ||
@@ -602,10 +785,10 @@ const CollectionManager = (() => {
     toolbar.className = 'sv-coll-toolbar';
     toolbar.innerHTML = `
       <span class="sv-coll-toolbar-title">Collections</span>
-      <input type="text" class="sv-coll-search" placeholder="Search collections\u2026"
+      <input type="search" name="collectionSearch" class="sv-coll-search" aria-label="Search collections" autocomplete="off" spellcheck="false" placeholder="Search collections\u2026"
              value="${escapeHtml(filter)}">
-      <button class="sv-coll-btn" data-action="import">Import</button>
-      <button class="sv-coll-btn primary" data-action="create">+ New</button>
+      <button type="button" class="sv-coll-btn" data-action="import">Import</button>
+      <button type="button" class="sv-coll-btn primary" data-action="create">+ New</button>
     `;
     _container.appendChild(toolbar);
 
@@ -623,7 +806,7 @@ const CollectionManager = (() => {
       empty.innerHTML = `
         <div class="sv-coll-empty-icon">\u{1F4E6}</div>
         <div class="sv-coll-empty-text">No collections${filter ? ' match your search' : ' yet'}.</div>
-        <button class="sv-coll-btn primary" data-action="create">Create Collection</button>
+        <button type="button" class="sv-coll-btn primary" data-action="create">Create Collection</button>
       `;
       empty.querySelector('[data-action="create"]').addEventListener('click', () => openCreateModal());
       _container.appendChild(empty);
@@ -635,7 +818,12 @@ const CollectionManager = (() => {
     grid.className = 'sv-coll-grid';
 
     for (const coll of filtered) {
-      grid.appendChild(buildCard(coll, installed));
+      const card = buildCard(coll, installed);
+      if (expandedCollectionId === coll.id) {
+        card.classList.add('expanded');
+        renderExpandedScripts(card, coll, getInstalledScripts());
+      }
+      grid.appendChild(card);
     }
 
     _container.appendChild(grid);
@@ -680,7 +868,7 @@ const CollectionManager = (() => {
       });
       if (!wasExpanded) {
         card.classList.add('expanded');
-        renderExpandedScripts(card, coll, installed);
+        renderExpandedScripts(card, coll, getInstalledScripts());
       }
     });
 
@@ -690,20 +878,22 @@ const CollectionManager = (() => {
   function renderExpandedScripts(card, coll, installed) {
     const container = card.querySelector('.sv-coll-scripts');
     const scripts = coll.scripts || [];
+    const currentInstalled = Array.isArray(installed) ? installed : (getInstalledScripts() || []);
 
     let html = '';
     for (const s of scripts) {
-      const inst = (s.scriptId ? (installed || []).find(i => i.id === s.scriptId) : null) || s._localInstalled || null;
+      const inst = (s.scriptId ? currentInstalled.find(i => i.id === s.scriptId) : null) || s._localInstalled || null;
       const isInstalled = !!inst;
       const isEnabled = inst ? inst.enabled !== false : false;
+      const scriptName = escapeHtml(s.name || s.scriptId || 'Unknown');
 
       html += `
         <div class="sv-coll-script-row" data-script-id="${s.scriptId || ''}" data-gf-id="${s.greasyForkId || ''}">
-          <span class="sv-coll-script-name">${escapeHtml(s.name || s.scriptId || 'Unknown')}</span>
+          <span class="sv-coll-script-name">${scriptName}</span>
           ${s.note ? `<span class="sv-coll-script-note" title="${escapeHtml(s.note)}">${escapeHtml(s.note)}</span>` : ''}
           ${isInstalled
-            ? `<div class="sv-coll-script-toggle ${isEnabled ? 'on' : ''}" data-toggle-id="${s.scriptId}"></div>`
-            : `<button class="sv-coll-btn" style="flex:0;padding:3px 8px;font-size:10px" data-install-gf="${s.greasyForkId || ''}" data-install-name="${escapeHtml(s.name || '')}">Install</button>`}
+            ? `<button type="button" class="sv-coll-script-toggle ${isEnabled ? 'on' : ''}" data-toggle-id="${s.scriptId}" aria-pressed="${String(isEnabled)}" aria-label="${isEnabled ? 'Disable' : 'Enable'} ${scriptName}" title="${isEnabled ? 'Disable' : 'Enable'} ${scriptName}"></button>`
+            : `<button type="button" class="sv-coll-btn inline-install" data-install-gf="${s.greasyForkId || ''}" data-install-name="${escapeHtml(s.name || '')}">Install</button>`}
         </div>
       `;
     }
@@ -711,12 +901,12 @@ const CollectionManager = (() => {
     // Action buttons
     html += `
       <div class="sv-coll-actions">
-        <button class="sv-coll-btn primary" data-action="install-all">Install All</button>
-        <button class="sv-coll-btn" data-action="enable-all">Enable All</button>
-        <button class="sv-coll-btn" data-action="disable-all">Disable All</button>
-        <button class="sv-coll-btn" data-action="export" title="Export collection">Export</button>
-        <button class="sv-coll-btn" data-action="share" title="Shareable link">Share</button>
-        ${!coll.builtIn ? '<button class="sv-coll-btn danger" data-action="delete">Delete</button>' : ''}
+        <button type="button" class="sv-coll-btn primary" data-action="install-all">Install All</button>
+        <button type="button" class="sv-coll-btn" data-action="enable-all">Enable All</button>
+        <button type="button" class="sv-coll-btn" data-action="disable-all">Disable All</button>
+        <button type="button" class="sv-coll-btn" data-action="export" title="Export collection">Export</button>
+        <button type="button" class="sv-coll-btn" data-action="share" title="Shareable link">Share</button>
+        ${!coll.builtIn ? '<button type="button" class="sv-coll-btn danger" data-action="delete">Delete</button>' : ''}
       </div>
     `;
 
@@ -724,14 +914,18 @@ const CollectionManager = (() => {
 
     // Toggle listeners
     container.querySelectorAll('.sv-coll-script-toggle').forEach(tog => {
-      tog.addEventListener('click', (e) => {
+      tog.addEventListener('click', async (e) => {
         e.stopPropagation();
         const scriptId = tog.dataset.toggleId;
         const isOn = tog.classList.contains('on');
-        tog.classList.toggle('on', !isOn);
-        chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId, settings: { enabled: !isOn } }, () => {
-          renderExpandedScripts(card, coll, installed);
-        });
+        try {
+          await runCollectionButtonTask(tog, async () => {
+            await setInstalledScriptEnabled(scriptId, !isOn, { control: tog });
+            renderExpandedScripts(card, coll, getInstalledScripts());
+          });
+        } catch (error) {
+          showToast(`Toggle failed: ${error.message || 'Unknown error'}`);
+        }
       });
     });
 
@@ -761,43 +955,37 @@ const CollectionManager = (() => {
     // Bulk actions
     container.querySelector('[data-action="install-all"]').addEventListener('click', async (e) => {
       e.stopPropagation();
-      const btn = e.currentTarget;
-      const originalText = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Installing…';
-      try {
-        await handleInstallAll(coll, card);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
-      }
+      await runCollectionButtonTask(e.currentTarget, () => handleInstallAll(coll, card), { busyLabel: 'Installing…' });
     });
 
-    container.querySelector('[data-action="enable-all"]').addEventListener('click', (e) => {
+    container.querySelector('[data-action="enable-all"]').addEventListener('click', async (e) => {
       e.stopPropagation();
-      handleToggleAll(coll, true);
+      await runCollectionButtonTask(e.currentTarget, () => handleToggleAll(coll, true), { busyLabel: 'Enabling…' });
     });
 
-    container.querySelector('[data-action="disable-all"]').addEventListener('click', (e) => {
+    container.querySelector('[data-action="disable-all"]').addEventListener('click', async (e) => {
       e.stopPropagation();
-      handleToggleAll(coll, false);
+      await runCollectionButtonTask(e.currentTarget, () => handleToggleAll(coll, false), { busyLabel: 'Disabling…' });
     });
 
-    container.querySelector('[data-action="export"]').addEventListener('click', (e) => {
+    container.querySelector('[data-action="export"]').addEventListener('click', async (e) => {
       e.stopPropagation();
-      exportCollection(coll.id);
+      await runCollectionButtonTask(e.currentTarget, () => Promise.resolve(exportCollection(coll.id)), { busyLabel: 'Exporting…' });
     });
 
-    container.querySelector('[data-action="share"]').addEventListener('click', (e) => {
+    container.querySelector('[data-action="share"]').addEventListener('click', async (e) => {
       e.stopPropagation();
-      shareCollection(coll.id);
+      await runCollectionButtonTask(e.currentTarget, () => shareCollection(coll.id), { busyLabel: 'Sharing…' });
     });
 
     const delBtn = container.querySelector('[data-action="delete"]');
     if (delBtn) {
-      delBtn.addEventListener('click', (e) => {
+      delBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        deleteCollection(coll.id);
+        await runCollectionButtonTask(delBtn, () => {
+          if (!window.confirm(`Delete "${coll.name}"?`)) return false;
+          return Promise.resolve(deleteCollection(coll.id));
+        }, { busyLabel: 'Deleting…' });
       });
     }
   }
@@ -848,21 +1036,34 @@ const CollectionManager = (() => {
 
   let _onToggle = null;
 
-  function handleToggleAll(coll, enable) {
-    const installed = getInstalledScripts();
+  async function handleToggleAll(coll, enable) {
+    const installed = getInstalledScripts() || [];
     const scripts = coll.scripts || [];
-    let toggled = 0;
+    const toggleTasks = [];
     for (const s of scripts) {
       if (s.scriptId) {
-        const inst = (installed || []).find(i => i.id === s.scriptId);
-        if (inst) {
-          if (typeof _onToggle === 'function') _onToggle(s.scriptId, enable);
-          toggled++;
+        const inst = installed.find(i => i.id === s.scriptId);
+        if (inst && inst.enabled !== enable) {
+          toggleTasks.push(setInstalledScriptEnabled(s.scriptId, enable));
         }
       }
     }
-    showToast(`${enable ? 'Enabled' : 'Disabled'} ${toggled} script(s)`);
-    render();
+
+    if (toggleTasks.length === 0) {
+      showToast(`All installed scripts are already ${enable ? 'enabled' : 'disabled'}`);
+      render(getCurrentCollectionFilter(), { expandedCollectionId: coll.id });
+      return { toggled: 0, failed: 0 };
+    }
+
+    const results = await Promise.allSettled(toggleTasks);
+    const failed = results.filter(result => result.status === 'rejected').length;
+    const toggled = results.length - failed;
+
+    showToast(failed > 0
+      ? `${enable ? 'Enabled' : 'Disabled'} ${toggled} script(s), ${failed} failed`
+      : `${enable ? 'Enabled' : 'Disabled'} ${toggled} script(s)`);
+    render(getCurrentCollectionFilter(), { expandedCollectionId: coll.id });
+    return { toggled, failed };
   }
 
   /* ------------------------------------------------------------------ */
@@ -888,7 +1089,7 @@ const CollectionManager = (() => {
       <div class="sv-coll-modal">
         <div class="sv-coll-modal-header">
           <h3>${isEdit ? 'Edit' : 'Create'} Collection</h3>
-          <button class="sv-coll-modal-close">&times;</button>
+          <button type="button" class="sv-coll-modal-close" aria-label="Close collection editor">&times;</button>
         </div>
         <div class="sv-coll-modal-body">
           <div class="sv-coll-field">
@@ -928,8 +1129,8 @@ const CollectionManager = (() => {
           </div>
         </div>
         <div class="sv-coll-modal-footer">
-          <button class="sv-coll-btn" data-action="cancel">Cancel</button>
-          <button class="sv-coll-btn primary" data-action="save">${isEdit ? 'Save' : 'Create'}</button>
+          <button type="button" class="sv-coll-btn" data-action="cancel">Cancel</button>
+          <button type="button" class="sv-coll-btn primary" data-action="save">${isEdit ? 'Save' : 'Create'}</button>
         </div>
       </div>
     `;
@@ -1002,14 +1203,14 @@ const CollectionManager = (() => {
       <div class="sv-coll-modal">
         <div class="sv-coll-modal-header">
           <h3>Import Collection</h3>
-          <button class="sv-coll-modal-close">&times;</button>
+          <button type="button" class="sv-coll-modal-close" aria-label="Close collection importer">&times;</button>
         </div>
         <div class="sv-coll-modal-body">
           <div class="sv-coll-field">
             <label>Paste JSON Manifest</label>
-            <textarea id="sv-coll-import-json" rows="10"
+            <textarea id="sv-coll-import-json" class="sv-coll-code-input" rows="10"
                       placeholder='{"name":"My Collection","scripts":[...]}'
-                      style="font-family:monospace;font-size:12px"></textarea>
+                      ></textarea>
           </div>
           <div class="sv-coll-field">
             <label>Or load from file</label>
@@ -1018,8 +1219,8 @@ const CollectionManager = (() => {
           </div>
         </div>
         <div class="sv-coll-modal-footer">
-          <button class="sv-coll-btn" data-action="cancel">Cancel</button>
-          <button class="sv-coll-btn primary" data-action="import">Import</button>
+          <button type="button" class="sv-coll-btn" data-action="cancel">Cancel</button>
+          <button type="button" class="sv-coll-btn primary" data-action="import">Import</button>
         </div>
       </div>
     `;
@@ -1129,7 +1330,7 @@ const CollectionManager = (() => {
     return json;
   }
 
-  function shareCollection(collectionId) {
+  async function shareCollection(collectionId) {
     const all = [...BUILT_IN_COLLECTIONS, ..._collections];
     const coll = all.find(c => c.id === collectionId);
     if (!coll) return null;
@@ -1149,19 +1350,31 @@ const CollectionManager = (() => {
     const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(manifest))));
     const dataUrl = `data:application/json;base64,${encoded}`;
 
-    // Copy to clipboard
-    navigator.clipboard.writeText(dataUrl).then(() => {
-      showToast('Shareable link copied to clipboard');
-    }).catch(() => {
-      // Fallback
+    const fallbackCopy = () => {
       const ta = document.createElement('textarea');
       ta.value = dataUrl;
       document.body.appendChild(ta);
       ta.select();
-      document.execCommand('copy');
-      ta.remove();
-      showToast('Shareable link copied to clipboard');
-    });
+      try {
+        return typeof document.execCommand === 'function' && document.execCommand('copy') !== false;
+      } finally {
+        ta.remove();
+      }
+    };
+
+    let copied = false;
+    try {
+      if (typeof navigator.clipboard?.writeText === 'function') {
+        await navigator.clipboard.writeText(dataUrl);
+        copied = true;
+      } else {
+        copied = fallbackCopy();
+      }
+    } catch {
+      copied = fallbackCopy();
+    }
+
+    showToast(copied ? 'Shareable link copied to clipboard' : 'Shareable link ready to copy');
 
     return dataUrl;
   }

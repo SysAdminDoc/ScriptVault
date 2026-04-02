@@ -1,6 +1,6 @@
 {
   "name": "scriptvault",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,14 +12,15 @@
     "watch": "node esbuild.config.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:a11y": "vitest run tests/dashboard-a11y.test.js",
     "test:cov": "vitest run --coverage",
     "check": "tsc --noEmit && vitest run",
     "clean": "node -e \"const fs=require('fs'); fs.rmSync('background.js',{force:true}); fs.rmSync('lib/monaco',{recursive:true,force:true});\""
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.80.0",
+    "@vitest/coverage-v8": "^4.1.2",
     "chrome-types": "^0.1.425",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.27.4",
     "jsdom": "^29.0.1",
     "monaco-editor": "^0.52.0",
     "typescript": "^6.0.2",

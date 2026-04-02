@@ -174,7 +174,6 @@ const NotificationSystem = {
   async notifyUpdate(scripts: ScriptUpdateInfo | ScriptUpdateInfo[]): Promise<void> {
     const prefs = await this.getPreferences();
     if (!prefs.updates) return;
-    if (await this._isQuietHours()) return;
 
     const list = Array.isArray(scripts) ? scripts : [scripts];
     if (list.length === 0) return;
@@ -187,6 +186,8 @@ const NotificationSystem = {
       oldVersion: s.oldVersion ?? null,
       timestamp: Date.now()
     })));
+
+    if (await this._isQuietHours()) return;
 
     let title: string;
     let message: string;
@@ -217,10 +218,17 @@ const NotificationSystem = {
     }
 
     // Store click context so we can open the dashboard to the right script
-    await this._setClickContext(notifId, {
-      action: 'openScript',
-      scriptId: list.length === 1 ? list[0]?.id ?? null : null
-    });
+    await this._setClickContext(
+      notifId,
+      list.length === 1
+        ? {
+            action: 'openScript',
+            scriptId: list[0]?.id ?? null
+          }
+        : {
+            action: 'openDashboard'
+          }
+    );
   },
 
   // ---------------------------------------------------------------------------
@@ -454,7 +462,7 @@ const NotificationSystem = {
     if (summary.staleScripts.length > 0) {
       lines.push(`${summary.staleScripts.length} stale script(s) (90+ days)`);
     }
-    if (storageUsage) {
+    if (storageUsage && storageUsage.quota > 0) {
       const pct = ((storageUsage.used / storageUsage.quota) * 100).toFixed(1);
       lines.push(`Storage: ${pct}% used`);
     }
@@ -499,10 +507,18 @@ const NotificationSystem = {
    */
   async handleClick(notifId: string): Promise<void> {
     const ctxKey = `notifCtx_${notifId}`;
-    const data = await chrome.storage.local.get(ctxKey);
-    const ctx = data[ctxKey] as ClickContext | undefined;
-    await chrome.storage.local.remove(ctxKey);
-    chrome.notifications.clear(notifId);
+    const sessionStorage = chrome.storage.session;
+    const sessionData = sessionStorage?.get
+      ? await sessionStorage.get(ctxKey)
+      : {};
+    const localData = sessionData[ctxKey] ? {} : await chrome.storage.local.get(ctxKey);
+    const ctx = (sessionData[ctxKey] ?? localData[ctxKey]) as ClickContext | undefined;
+    const cleanup: Promise<unknown>[] = [chrome.storage.local.remove(ctxKey)];
+    if (sessionStorage?.remove) {
+      cleanup.unshift(sessionStorage.remove(ctxKey));
+    }
+    await Promise.allSettled(cleanup);
+    await chrome.notifications.clear(notifId);
 
     if (!ctx) return;
 
@@ -510,7 +526,7 @@ const NotificationSystem = {
 
     if (ctx.action === 'openScript' && ctx.scriptId) {
       try {
-        await chrome.tabs.create({ url: `${dashboardUrl}#script=${ctx.scriptId}` });
+        await chrome.tabs.create({ url: `${dashboardUrl}#script_${ctx.scriptId}` });
       } catch (_) {
         await chrome.tabs.create({ url: dashboardUrl });
       }
@@ -555,14 +571,11 @@ const NotificationSystem = {
 
   async _setClickContext(notifId: string, context: ClickContext): Promise<void> {
     const ctxKey = `notifCtx_${notifId}`;
+    if (chrome.storage.session?.set) {
+      await chrome.storage.session.set({ [ctxKey]: context });
+      return;
+    }
     await chrome.storage.local.set({ [ctxKey]: context });
-
-    // Auto-clean after 5 minutes to avoid storage cruft
-    setTimeout(async () => {
-      try {
-        await chrome.storage.local.remove(ctxKey);
-      } catch (_) { /* ignore */ }
-    }, 5 * 60 * 1000);
   },
 
   // ---------------------------------------------------------------------------
