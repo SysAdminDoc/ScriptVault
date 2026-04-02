@@ -245,7 +245,7 @@
             background: var(--accent-primary);
             color: #fff;
             padding: 8px 16px;
-            z-index: 9999;
+            z-index: 10001;
             font-size: 14px;
             border-radius: 0 0 8px 0;
             transition: top 0.2s ease;
@@ -256,11 +256,26 @@
         }
 
         /* ============================================
-           Firefox Scrollbar Support
+           Scrollbar Styling
            ============================================ */
         * {
             scrollbar-width: thin;
             scrollbar-color: var(--scrollbar-thumb) transparent;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--scrollbar-thumb);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--scrollbar-thumb-hover);
         }
 
         /* ============================================
@@ -704,7 +719,8 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            flex: 1 1 760px;
+            flex: 1 1 auto;
+            min-width: 0;
             flex-wrap: wrap;
             padding: 10px 12px;
             border: 1px solid rgba(127, 127, 127, 0.16);
@@ -716,7 +732,8 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            flex: 1 1 380px;
+            flex: 0 1 auto;
+            min-width: 0;
             flex-wrap: wrap;
             justify-content: flex-end;
             padding: 10px 12px;
@@ -793,7 +810,7 @@
         .search-box {
             position: relative;
             flex: 1 1 240px;
-            max-width: 280px;
+            max-width: 360px;
         }
 
         .search-box input {
@@ -829,6 +846,7 @@
             border-radius: 24px;
             box-shadow: 0 22px 44px rgba(0, 0, 0, 0.18);
             overflow: hidden;
+            overflow-x: auto;
         }
 
         /* Table */
@@ -2898,10 +2916,10 @@
             margin: 0 4px;
         }
 
-        .editor-body { flex: 1; display: flex; overflow: hidden; }
-        .editor-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .editor-body { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+        .editor-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
-        .editor-panel { display: none; flex: 1; overflow: auto; }
+        .editor-panel { display: none; flex: 1; overflow-y: auto; min-height: 0; }
         .editor-panel.active { display: flex; flex-direction: column; }
 
         .code-editor-wrapper { flex: 1; overflow: hidden; }
@@ -3923,16 +3941,18 @@
             #scriptsPanel { padding: 16px 10px 0; }
             .scripts-shell-copy h2 { font-size: 24px; }
             .scripts-toolbar { padding: 10px; border-radius: 18px; }
-            .scripts-table-container { border-radius: 20px; }
+            .scripts-table-container { border-radius: 20px; overflow-x: auto; }
             .scripts-table .col-source,
             .scripts-table .col-runs { display: none; }
             .search-box { max-width: none; flex-basis: 100%; }
             .input-field.wide { width: 100%; max-width: 300px; }
             .settings-row .label-text { min-width: 140px; }
-        .editor-header { padding: 12px; }
-        .editor-header-main { width: 100%; }
-        .editor-metrics { justify-content: flex-start; }
-        .editor-toolbar { flex-wrap: wrap; gap: 4px; }
+            .editor-header { padding: 12px; }
+            .editor-header-main { width: 100%; }
+            .editor-metrics { justify-content: flex-start; flex-wrap: wrap; }
+            .editor-toolbar { flex-wrap: wrap; gap: 4px; }
+            .editor-main { min-width: 0; }
+            .code-editor-wrapper { min-height: 200px; }
             .about-stats { gap: 20px; }
             .shortcuts-grid { grid-template-columns: 1fr; }
         }
@@ -3946,12 +3966,19 @@
             .scripts-shell-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); width: 100%; }
             .scripts-table .col-actions { min-width: 70px; }
             .scripts-table .col-name { min-width: 120px; }
+            .scripts-table .col-updated,
+            .scripts-table .col-size { display: none; }
             .modal-content { min-width: 90vw; max-width: 95vw; }
             .find-scripts-panel { width: 100%; left: 0; }
             .settings-row { flex-direction: column; }
             .settings-row .label-text { min-width: unset; width: 100%; }
             .info-grid { grid-template-columns: 1fr; }
             .storage-item { grid-template-columns: 1fr; }
+            .editor-header { padding: 8px; }
+            .editor-toolbar button span { display: none; }
+            .scripts-toolbar-left,
+            .scripts-toolbar-right { flex-basis: 100%; }
+            .toast-container { left: 12px; right: 12px; bottom: 12px; }
         }
 
         /* ============================================
