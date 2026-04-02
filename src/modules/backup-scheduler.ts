@@ -24,7 +24,12 @@ declare const fflate: {
 declare function importFromZip(
   zipData: string,
   options?: { overwrite?: boolean },
-): Promise<void>;
+): Promise<{
+  imported: number;
+  skipped: number;
+  errors: Array<{ name: string; error: string }>;
+  error?: string;
+}>;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,6 +85,7 @@ interface ExportedBackup {
 }
 
 interface InspectedScript {
+  id?: string | null;
   name: string;
   hasStorage: boolean;
 }
@@ -132,6 +138,18 @@ function _formatBytes(bytes: number): string {
   return (bytes / 1048576).toFixed(2) + ' MB';
 }
 
+function _zipBytesToBase64(zipData: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < zipData.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(
+      null,
+      Array.from(zipData.subarray(i, i + chunkSize)),
+    );
+  }
+  return btoa(binary);
+}
+
 /** Compute the next Date for a given hour (and optional dayOfWeek). */
 function _nextScheduledTime(
   hour: number,
@@ -163,7 +181,7 @@ function _notify(
   try {
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+      iconUrl: chrome.runtime.getURL('images/icon128.png'),
       title: `ScriptVault — ${title}`,
       message,
     });
@@ -229,6 +247,7 @@ async function _collectBackupData(): Promise<{
 
     // Options / metadata
     const options = {
+      scriptId: script.id,
       settings: {
         enabled: script.enabled,
         'run-at': script.meta?.['run-at'] || 'document-idle',
@@ -302,15 +321,7 @@ async function _collectBackupData(): Promise<{
 
   // Compress
   const zipData: Uint8Array = fflate.zipSync(files, { level: 6 });
-  let binary = '';
-  const chunkSize = 8192;
-  for (let i = 0; i < zipData.length; i += chunkSize) {
-    binary += String.fromCharCode.apply(
-      null,
-      Array.from(zipData.subarray(i, i + chunkSize)),
-    );
-  }
-  return { base64: btoa(binary), scriptCount: scripts.length };
+  return { base64: _zipBytesToBase64(zipData), scriptCount: scripts.length };
 }
 
 // ---------------------------------------------------------------------------
@@ -475,6 +486,7 @@ export const BackupScheduler = {
   /**
    * Restore from a backup.
    * If selective = true, only restore scripts whose original IDs are in scriptIds.
+   * Older backups may fall back to matching by script name.
    * Otherwise full restore (scripts, settings, folders, workspaces).
    */
   async restoreBackup(
@@ -504,17 +516,19 @@ export const BackupScheduler = {
       );
 
       if (options.selective && Array.isArray(options.scriptIds)) {
-        // Selective restore: import matching scripts individually
-        for (const filename of userScripts) {
-          const unzippedFile: Uint8Array | undefined = unzipped[filename];
-          if (!unzippedFile) continue;
-          const code: string = fflate.strFromU8(unzippedFile);
-          const baseName: string = filename.replace(/\.user\.js$/, '');
+        const selectedRefs = new Set(options.scriptIds);
+        const selectedFiles: Record<string, Uint8Array> = {};
 
-          // Parse metadata to get script identity
+        for (const filename of userScripts) {
+          const baseName: string = filename.replace(/\.user\.js$/, '');
+          const displayName: string = baseName.replace(/^scripts\//, '');
+
+          // Parse metadata to match IDs for new backups and names for legacy backups.
+          let scriptId = '';
+          let scriptName = displayName;
           let optionsMeta: {
+            scriptId?: string;
             meta?: { name?: string };
-            settings?: { enabled?: boolean };
           } = {};
           const optionsFile = `${baseName}.options.json`;
           const optionsFileData: Uint8Array | undefined =
@@ -524,61 +538,50 @@ export const BackupScheduler = {
               optionsMeta = JSON.parse(
                 fflate.strFromU8(optionsFileData),
               ) as typeof optionsMeta;
+              scriptId =
+                typeof optionsMeta.scriptId === 'string'
+                  ? optionsMeta.scriptId
+                  : '';
+              scriptName =
+                optionsMeta.meta?.name || displayName;
             } catch (_) {
               /* empty */
             }
           }
 
-          const scriptName: string =
-            optionsMeta.meta?.name || baseName.replace(/^scripts\//, '');
-          if (!options.scriptIds.includes(scriptName)) continue;
+          const matchesSelection =
+            selectedRefs.has(scriptName) ||
+            selectedRefs.has(displayName) ||
+            (scriptId ? selectedRefs.has(scriptId) : false);
+          if (!matchesSelection) continue;
 
-          try {
-            const meta = optionsMeta.meta || {};
-            const scriptSettings = optionsMeta.settings || {};
-            // Legacy save(scriptObj, opts) signature used by the service-worker global
-            await (ScriptStorage as unknown as {
-              save(
-                script: Record<string, unknown>,
-                opts: { overwrite: boolean },
-              ): Promise<void>;
-            }).save(
-              {
-                code,
-                enabled: scriptSettings.enabled !== false,
-                meta,
-              },
-              { overwrite: true },
-            );
-            restoredScripts++;
-
-            // Restore script values if present
-            const storageFile = `${baseName}.storage.json`;
-            const storageFileData: Uint8Array | undefined =
-              unzipped[storageFile];
-            if (storageFileData) {
-              try {
-                const storageData = JSON.parse(
-                  fflate.strFromU8(storageFileData),
-                ) as { data?: Record<string, unknown> };
-                if (storageData.data) {
-                  await ScriptValues.setAll(
-                    meta.name || scriptName,
-                    storageData.data,
-                  );
-                }
-              } catch (_) {
-                /* empty */
-              }
-            }
-          } catch (importErr: unknown) {
-            console.warn(
-              '[BackupScheduler] Script import error:',
-              filename,
-              importErr,
-            );
+          const scriptFile = unzipped[filename];
+          if (scriptFile) {
+            selectedFiles[filename] = scriptFile;
+          }
+          if (optionsFileData) {
+            selectedFiles[optionsFile] = optionsFileData;
+          }
+          const storageFile = `${baseName}.storage.json`;
+          const storageFileData: Uint8Array | undefined = unzipped[storageFile];
+          if (storageFileData) {
+            selectedFiles[storageFile] = storageFileData;
           }
         }
+
+        if (Object.keys(selectedFiles).length === 0) {
+          return { success: true, restoredScripts: 0 };
+        }
+
+        const selectiveZip = fflate.zipSync(selectedFiles, { level: 6 });
+        const importResult = await importFromZip(
+          _zipBytesToBase64(selectiveZip),
+          { overwrite: true },
+        );
+        if (importResult.error) {
+          return { success: false, error: importResult.error };
+        }
+        restoredScripts = importResult.imported;
       } else {
         // Full restore: use importFromZip for all scripts at once
         try {
@@ -801,7 +804,30 @@ export const BackupScheduler = {
             /^scripts\//,
             '',
           );
+          let scriptId: string | null = null;
+          const optionsFileData = unzipped[`${baseName}.options.json`];
+          if (optionsFileData) {
+            try {
+              const optionsData = JSON.parse(
+                fflate.strFromU8(optionsFileData),
+              ) as { scriptId?: string; meta?: { name?: string } };
+              scriptId =
+                typeof optionsData.scriptId === 'string'
+                  ? optionsData.scriptId
+                  : null;
+              if (optionsData.meta?.name) {
+                return {
+                  id: scriptId,
+                  name: optionsData.meta.name,
+                  hasStorage: !!unzipped[`${baseName}.storage.json`],
+                };
+              }
+            } catch (_) {
+              /* empty */
+            }
+          }
           return {
+            id: scriptId,
             name: displayName,
             hasStorage: !!unzipped[`${baseName}.storage.json`],
           };

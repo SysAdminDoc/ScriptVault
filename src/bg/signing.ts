@@ -10,15 +10,7 @@
 // Web Crypto Ed25519 support: Chrome 113+
 
 import type { Settings } from '../types/settings';
-
-// ---------------------------------------------------------------------------
-// External dependencies (not yet migrated to TS modules)
-// ---------------------------------------------------------------------------
-
-declare const SettingsManager: {
-  get(): Promise<Settings>;
-  set(key: keyof Settings | Partial<Settings>, value?: Settings[keyof Settings]): Promise<Settings>;
-};
+import { SettingsManager } from '../modules/storage';
 
 // ---------------------------------------------------------------------------
 // Types

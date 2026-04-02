@@ -80,6 +80,7 @@ interface ZipExportResult {
 }
 
 interface TampermonkeyOptions {
+  scriptId?: string;
   settings?: {
     enabled?: boolean;
     'run-at'?: string;
@@ -213,6 +214,7 @@ export async function exportToZip(): Promise<ZipExportResult> {
 
     // Add options.json (Tampermonkey format)
     const tmOptions: TampermonkeyOptions = {
+      scriptId: script.id,
       settings: {
         enabled: script.enabled,
         'run-at': script.meta['run-at'] || 'document-idle',
@@ -292,6 +294,7 @@ export async function importFromZip(
     // Find all .user.js files
     const userScripts: string[] = fileNames.filter(name => name.endsWith('.user.js'));
     const allExistingScripts: Script[] = await ScriptStorage.getAll();
+    const usedScriptIds = new Set(allExistingScripts.map((script) => script.id));
     // Starting position for newly-imported scripts (avoids O(n²) getAll() per script)
     let _importPosition: number = allExistingScripts.length;
 
@@ -330,14 +333,17 @@ export async function importFromZip(
 
         let enabled = true;
         let storedValues: Record<string, unknown> = {};
+        let preferredScriptId = '';
 
         // Parse options file if exists
         if (optionsFileData) {
           try {
             const optionsData = JSON.parse(fflate.strFromU8(optionsFileData)) as {
+              scriptId?: string;
               settings?: { enabled?: boolean };
             };
             enabled = optionsData.settings?.enabled !== false;
+            preferredScriptId = typeof optionsData.scriptId === 'string' ? optionsData.scriptId : '';
           } catch (e: unknown) {
             console.warn('Failed to parse options file:', e);
           }
@@ -356,7 +362,17 @@ export async function importFromZip(
         }
 
         // Create or update script
-        const scriptId: string = existing?.id || generateId();
+        let scriptId: string;
+        if (existing?.id) {
+          scriptId = existing.id;
+        } else if (preferredScriptId && !usedScriptIds.has(preferredScriptId)) {
+          scriptId = preferredScriptId;
+        } else {
+          do {
+            scriptId = generateId();
+          } while (usedScriptIds.has(scriptId));
+        }
+        usedScriptIds.add(scriptId);
         const script: Script = {
           id: scriptId,
           code: code,

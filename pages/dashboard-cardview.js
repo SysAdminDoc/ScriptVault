@@ -39,8 +39,8 @@ const CardView = (() => {
 .cv-grid {
   display: grid;
   grid-template-columns: repeat(1, 1fr);
-  gap: 12px;
-  padding: 12px;
+  gap: 16px;
+  padding: 16px;
   opacity: 1;
   transition: opacity ${TRANSITION_MS}ms ease;
 }
@@ -54,33 +54,44 @@ const CardView = (() => {
 /* Card */
 .cv-card {
   position: relative;
-  background: var(--bg-row);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    var(--bg-row);
+  border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-radius: 24px;
+  padding: 18px;
   cursor: pointer;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 140px;
+  gap: 10px;
+  min-height: 188px;
   overflow: hidden;
   content-visibility: auto;
-  contain-intrinsic-size: 190px;
+  contain-intrinsic-size: 240px;
   contain: layout style paint;
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
 }
 .cv-card::before {
   content: '';
   position: absolute;
   inset: 0 0 auto 0;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(90, 140, 255, 0), rgba(90, 140, 255, 0.55), rgba(90, 140, 255, 0));
+  height: 2px;
+  background: linear-gradient(90deg, rgba(96, 165, 250, 0), rgba(125, 211, 252, 0.65), rgba(96, 165, 250, 0));
+  pointer-events: none;
+}
+.cv-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 42%, transparent 62%, rgba(255,255,255,0.03));
   pointer-events: none;
 }
 .cv-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0,0,0,.35);
-  border-color: var(--accent-blue);
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 24px 42px rgba(0,0,0,.24);
+  border-color: rgba(96, 165, 250, 0.32);
 }
 .cv-grid[data-list-size="large"] .cv-card,
 .cv-grid[data-list-size="huge"] .cv-card {
@@ -91,23 +102,31 @@ const CardView = (() => {
 }
 
 /* Status borders */
-.cv-card.cv-enabled  { border-left: 3px solid var(--accent-green); }
-.cv-card.cv-disabled { border-left: 3px solid var(--toggle-off); opacity: 0.7; }
+.cv-card.cv-enabled  {
+  border-left: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.14), 0 18px 40px rgba(0,0,0,0.18);
+}
+.cv-card.cv-disabled {
+  border-left: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  opacity: 0.78;
+}
 
 /* Status dots */
 .cv-status-dots {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 14px;
+  right: 14px;
   display: flex;
   gap: 5px;
   align-items: center;
+  z-index: 1;
 }
 .cv-dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   display: inline-block;
+  box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.18);
 }
 .cv-dot-error  { background: var(--accent-red); }
 .cv-dot-stale  { background: var(--accent-yellow); }
@@ -117,8 +136,10 @@ const CardView = (() => {
 .cv-header {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 .cv-name-stack {
   display: flex;
@@ -151,28 +172,30 @@ const CardView = (() => {
 
 /* Favicon / letter avatar */
 .cv-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   flex-shrink: 0;
   object-fit: contain;
+  box-shadow: 0 12px 18px rgba(0,0,0,0.18);
 }
 .cv-icon-letter {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: #fff;
+  box-shadow: 0 12px 18px rgba(0,0,0,0.18);
 }
 
 .cv-name {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -187,13 +210,14 @@ const CardView = (() => {
   max-width: fit-content;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-secondary);
-  padding: 4px 8px;
+  padding: 5px 9px;
   border-radius: 999px;
   background: rgba(90, 140, 255, 0.12);
   border: 1px solid rgba(90, 140, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
 /* Meta row */
@@ -204,6 +228,8 @@ const CardView = (() => {
   font-size: 11px;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+  position: relative;
+  z-index: 1;
 }
 .cv-meta-item {
   display: flex;
@@ -219,15 +245,17 @@ const CardView = (() => {
   font: inherit;
   font-size: 11px;
   border-radius: 999px;
-  padding: 3px 8px;
+  padding: 5px 10px;
   cursor: pointer;
-  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 .cv-meta-button:hover,
 .cv-meta-button:focus-visible {
   color: var(--text-primary);
   border-color: rgba(90, 140, 255, 0.45);
   background: rgba(90, 140, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 18px rgba(59,130,246,0.14);
 }
 .cv-meta-button:focus-visible {
   outline: 2px solid rgba(90, 140, 255, 0.35);
@@ -238,21 +266,24 @@ const CardView = (() => {
 .cv-desc {
   font-size: 12px;
   color: var(--text-secondary);
-  line-height: 1.4;
+  line-height: 1.6;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  position: relative;
+  z-index: 1;
 }
 
 /* Performance badge */
 .cv-perf {
   display: inline-block;
   font-size: 10px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 .cv-perf.fast   { background: rgba(74,222,128,.15); color: var(--accent-green); }
 .cv-perf.medium { background: rgba(251,191,36,.15); color: var(--accent-yellow); }
@@ -264,8 +295,10 @@ const CardView = (() => {
   align-items: center;
   justify-content: space-between;
   margin-top: auto;
-  padding-top: 8px;
-  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+  border-top: 1px solid rgba(127, 127, 127, 0.14);
+  position: relative;
+  z-index: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -311,57 +344,70 @@ const CardView = (() => {
 
 /* Three-dot menu */
 .cv-menu-btn {
-  background: none;
-  border: none;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(127,127,127,0.14);
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
-  font-size: 18px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 16px;
   line-height: 1;
   letter-spacing: 2px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
-.cv-menu-btn:hover { background: var(--bg-row-hover); color: var(--text-primary); }
+.cv-menu-btn:hover {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    var(--bg-row-hover);
+  color: var(--text-primary);
+  border-color: rgba(96,165,250,0.24);
+}
 
 .cv-menu {
   position: absolute;
-  right: 12px;
-  bottom: 42px;
-  background: var(--bg-header);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 4px 0;
-  min-width: 140px;
+  right: 16px;
+  bottom: 50px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    var(--bg-header);
+  border: 1px solid var(--panel-border-strong, rgba(148,163,184,0.28));
+  border-radius: 16px;
+  padding: 6px;
+  min-width: 160px;
   z-index: 1000;
-  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 24px 40px rgba(0,0,0,.28);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
 .cv-menu.cv-hidden { display: none; }
 .cv-menu-item {
   display: block;
   width: 100%;
-  padding: 8px 14px;
+  padding: 10px 12px;
   background: none;
   border: none;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 12px;
+  border-radius: 10px;
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
 }
-.cv-menu-item:hover { background: var(--bg-row-hover); }
+.cv-menu-item:hover { background: rgba(255,255,255,0.06); }
 .cv-menu-item.danger { color: var(--accent-red); }
 
 .cv-empty {
   display: grid;
   place-items: center;
   min-height: 240px;
-  padding: 28px;
-  border: 1px dashed rgba(255, 255, 255, 0.12);
-  border-radius: 18px;
+  padding: 40px 28px;
+  border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-radius: 24px;
   background:
-    radial-gradient(circle at top, rgba(90, 140, 255, 0.12), transparent 58%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+    radial-gradient(circle at top, rgba(90, 140, 255, 0.16), transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
   text-align: center;
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
 }
 .cv-empty h3 {
   margin: 0 0 8px;
@@ -381,18 +427,22 @@ const CardView = (() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 4px 10px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    var(--bg-input);
+  border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-radius: 14px;
+  padding: 8px 12px;
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
-  transition: color 150ms, border-color 150ms;
+  transition: color 150ms, border-color 150ms, background 150ms, box-shadow 150ms;
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 14px 24px rgba(0,0,0,0.14);
 }
 .cv-view-toggle:hover {
   color: var(--text-primary);
-  border-color: var(--accent-blue);
+  border-color: rgba(96,165,250,0.28);
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 18px 30px rgba(0,0,0,0.2);
 }
 .cv-view-toggle svg {
   width: 16px;
@@ -406,6 +456,18 @@ const CardView = (() => {
 .cv-table-fade-out {
   opacity: 0 !important;
   transition: opacity ${TRANSITION_MS}ms ease !important;
+}
+
+@media (max-width: 768px) {
+  .cv-grid {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .cv-card {
+    border-radius: 20px;
+    padding: 16px;
+  }
 }
 `;
 
@@ -517,6 +579,37 @@ const CardView = (() => {
     try { localStorage.setItem(STORAGE_KEY, mode); } catch { /* ignore */ }
   }
 
+  function createCardIconHtml(name, iconUrl) {
+    const initial = escapeHtml(name.charAt(0).toUpperCase());
+    const background = nameToColor(name);
+    if (iconUrl) {
+      return `<img class="cv-icon" src="${escapeHtml(iconUrl)}" alt="" loading="lazy" data-favicon-fallback="true">
+        <span class="cv-icon-letter" hidden style="background:${background}">${initial}</span>`;
+    }
+    return `<span class="cv-icon-letter" style="background:${background}">${initial}</span>`;
+  }
+
+  function revealCardIconFallback(iconEl) {
+    if (!(iconEl instanceof HTMLImageElement)) return;
+    iconEl.hidden = true;
+    const fallback = iconEl.nextElementSibling;
+    if (fallback instanceof HTMLElement) {
+      fallback.hidden = false;
+    }
+  }
+
+  function invokeCardAction(callback, ...args) {
+    if (typeof callback !== 'function') return;
+    try {
+      const result = callback(...args);
+      if (result && typeof result.catch === 'function') {
+        result.catch(error => console.error('[CardView] Action failed:', error));
+      }
+    } catch (error) {
+      console.error('[CardView] Action failed:', error);
+    }
+  }
+
   /* ------------------------------------------------------------------ */
   /*  Card rendering                                                     */
   /* ------------------------------------------------------------------ */
@@ -549,14 +642,7 @@ const CardView = (() => {
     if (isStale)     dots.push('<span class="cv-dot cv-dot-stale" title="Stale script"></span>');
     if (overBudget)  dots.push('<span class="cv-dot cv-dot-budget" title="Over perf budget"></span>');
 
-    // Icon
-    let iconHtml;
-    if (iconUrl) {
-      iconHtml = `<img class="cv-icon" src="${escapeHtml(iconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <span class="cv-icon-letter" style="display:none;background:${nameToColor(name)}">${escapeHtml(name.charAt(0).toUpperCase())}</span>`;
-    } else {
-      iconHtml = `<span class="cv-icon-letter" style="background:${nameToColor(name)}">${escapeHtml(name.charAt(0).toUpperCase())}</span>`;
-    }
+    const iconHtml = createCardIconHtml(name, iconUrl);
 
     // Perf badge
     let perfHtml = '';
@@ -590,42 +676,45 @@ const CardView = (() => {
           <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${script.id}" aria-label="${enabled ? 'Disable' : 'Enable'} ${escapeHtml(name)}">
           <span class="cv-toggle-slider"></span>
         </label>
-        <button class="cv-menu-btn" data-menu-id="${script.id}" title="Actions" aria-label="Script actions for ${escapeHtml(name)}" aria-haspopup="menu" aria-expanded="false">\u22EF</button>
+        <button type="button" class="cv-menu-btn" data-menu-id="${script.id}" title="Actions" aria-label="Script actions for ${escapeHtml(name)}" aria-haspopup="menu" aria-expanded="false">\u22EF</button>
         <div class="cv-menu cv-hidden" data-menu-for="${script.id}" role="menu" aria-label="Actions for ${escapeHtml(name)}">
-          <button class="cv-menu-item" data-action="edit" data-id="${script.id}">Edit</button>
-          <button class="cv-menu-item" data-action="toggle" data-id="${script.id}">${enabled ? 'Disable' : 'Enable'}</button>
-          <button class="cv-menu-item" data-action="update" data-id="${script.id}">Check Update</button>
-          <button class="cv-menu-item" data-action="export" data-id="${script.id}">Export</button>
-          <button class="cv-menu-item danger" data-action="delete" data-id="${script.id}">Delete</button>
+          <button type="button" class="cv-menu-item" data-action="edit" data-id="${script.id}">Edit</button>
+          <button type="button" class="cv-menu-item" data-action="toggle" data-id="${script.id}">${enabled ? 'Disable' : 'Enable'}</button>
+          <button type="button" class="cv-menu-item" data-action="update" data-id="${script.id}">Check Update</button>
+          <button type="button" class="cv-menu-item" data-action="export" data-id="${script.id}">Export</button>
+          <button type="button" class="cv-menu-item danger" data-action="delete" data-id="${script.id}">Delete</button>
         </div>
       </div>
     `;
+
+    const icon = card.querySelector('.cv-icon[data-favicon-fallback="true"]');
+    icon?.addEventListener('error', () => revealCardIconFallback(icon));
 
     // -- Event listeners --
 
     // Click card body -> open editor
     card.addEventListener('click', (e) => {
       if (e.target.closest('.cv-toggle') || e.target.closest('.cv-menu-btn') || e.target.closest('.cv-menu')) return;
-      _options.onEdit?.(script.id);
+      invokeCardAction(_options.onEdit, script.id);
     });
 
     const openBtn = card.querySelector(`[data-open-id="${script.id}"]`);
     openBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      _options.onEdit?.(script.id);
+      invokeCardAction(_options.onEdit, script.id);
     });
 
     const updateBtn = card.querySelector(`[data-update-id="${script.id}"]`);
     updateBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      _options.onUpdate?.(script.id);
+      invokeCardAction(_options.onUpdate, script.id, { triggerEl: updateBtn });
     });
 
     // Toggle switch
     const toggle = card.querySelector(`[data-toggle-id="${script.id}"]`);
     toggle?.addEventListener('change', (e) => {
       e.stopPropagation();
-      _options.onToggle?.(script.id, e.target.checked);
+      invokeCardAction(_options.onToggle, script.id, e.target.checked, { control: toggle });
     });
     toggle?.addEventListener('click', (e) => e.stopPropagation());
 
@@ -652,11 +741,11 @@ const CardView = (() => {
         const action = btn.dataset.action;
         const id = btn.dataset.id;
         switch (action) {
-          case 'edit':   _options.onEdit?.(id); break;
-          case 'toggle': _options.onToggle?.(id, !enabled); break;
-          case 'update': _options.onUpdate?.(id); break;
-          case 'export': _options.onExport?.(id); break;
-          case 'delete': _options.onDelete?.(id); break;
+          case 'edit':   invokeCardAction(_options.onEdit, id); break;
+          case 'toggle': invokeCardAction(_options.onToggle, id, !enabled, { control: btn }); break;
+          case 'update': invokeCardAction(_options.onUpdate, id, { triggerEl: btn }); break;
+          case 'export': invokeCardAction(_options.onExport, id, { triggerEl: btn }); break;
+          case 'delete': invokeCardAction(_options.onDelete, id, { triggerEl: btn }); break;
         }
       });
     });
