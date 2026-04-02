@@ -63,6 +63,17 @@ function cloneDefaultSettings(): Settings {
   return JSON.parse(JSON.stringify(settingsDefaultsData)) as Settings;
 }
 
+async function getSettingsValue<K extends keyof Settings>(key: K): Promise<Settings[K]>;
+async function getSettingsValue(): Promise<Settings>;
+async function getSettingsValue<K extends keyof Settings>(key?: K): Promise<Settings | Settings[K]> {
+  await SettingsManager.init();
+  const cachedSettings = SettingsManager.cache!;
+  if (key !== undefined) {
+    return cachedSettings[key];
+  }
+  return { ...cachedSettings };
+}
+
 export const SettingsManager = {
   defaults: cloneDefaultSettings(),
 
@@ -75,14 +86,7 @@ export const SettingsManager = {
     console.log('[ScriptVault] Settings loaded');
   },
 
-  async get<K extends keyof Settings>(key?: K): Promise<K extends undefined ? Settings : Settings[K & keyof Settings]> {
-    await this.init();
-    const c = this.cache!;
-    if (key) {
-      return c[key] as any;
-    }
-    return { ...c } as any;
-  },
+  get: getSettingsValue,
 
   async set(key: keyof Settings | Partial<Settings>, value?: Settings[keyof Settings]): Promise<Settings> {
     await this.init();

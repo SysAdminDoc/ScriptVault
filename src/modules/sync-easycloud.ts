@@ -117,6 +117,12 @@ interface UserInfoResult {
   picture?: string;
 }
 
+type RuntimeHooks = typeof globalThis & {
+  registerScript?: (script: Script) => Promise<void>;
+  unregisterScript?: (scriptId: string) => Promise<void>;
+  updateBadge?: (tabId?: number | null) => Promise<void>;
+};
+
 // ============================================================================
 // Declare service-worker global for online/offline events
 // ============================================================================
@@ -131,6 +137,7 @@ declare const self: typeof globalThis & {
 
 const TAG = '[EasyCloud]';
 const ALARM_NAME = 'easycloud-periodic-sync';
+const DEBOUNCE_ALARM_NAME = 'easycloud-debounce-sync';
 const ALARM_PERIOD_MINUTES = 15;
 const DEBOUNCE_MS = 5000;
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
@@ -164,7 +171,6 @@ const STATUS = {
 
 let _status: string = STATUS.IDLE;
 let _syncInProgress = false;
-let _debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let _statusListeners: StatusCallback[] = [];
 let _cachedToken: string | null = null;
 let _cachedFileId: string | null = null;
@@ -181,6 +187,51 @@ function log(...args: unknown[]): void {
 
 function warn(...args: unknown[]): void {
   console.warn(TAG, ...args);
+}
+
+function _getRuntimeHooks(): RuntimeHooks {
+  return globalThis as RuntimeHooks;
+}
+
+async function _refreshScriptRuntime(script: Script): Promise<void> {
+  const hooks = _getRuntimeHooks();
+  if (typeof hooks.unregisterScript === 'function') {
+    try {
+      await hooks.unregisterScript(script.id);
+    } catch (e: unknown) {
+      warn(`Failed to unregister synced script ${script.id}:`, e);
+    }
+  }
+  if (script.enabled !== false && typeof hooks.registerScript === 'function') {
+    try {
+      await hooks.registerScript(script);
+    } catch (e: unknown) {
+      warn(`Failed to register synced script ${script.id}:`, e);
+    }
+  }
+}
+
+async function _deleteSyncedScript(scriptId: string): Promise<void> {
+  const hooks = _getRuntimeHooks();
+  if (typeof hooks.unregisterScript === 'function') {
+    try {
+      await hooks.unregisterScript(scriptId);
+    } catch (e: unknown) {
+      warn(`Failed to unregister deleted synced script ${scriptId}:`, e);
+    }
+  }
+  await ScriptStorage.delete(scriptId);
+}
+
+async function _updateBadgeIfAvailable(): Promise<void> {
+  const hooks = _getRuntimeHooks();
+  if (typeof hooks.updateBadge === 'function') {
+    try {
+      await hooks.updateBadge();
+    } catch (e: unknown) {
+      warn('Failed to refresh badge after sync:', e);
+    }
+  }
 }
 
 function setStatus(newStatus: string): void {
@@ -624,10 +675,18 @@ async function _performSync(): Promise<SyncResult> {
     if (remoteData) {
       // Merge
       const merged = await _mergeData(localData, remoteData, deviceId);
+      const mergedTombstones: Record<string, unknown> = merged.tombstones || {};
+      let localMutated = false;
+
+      for (const localScript of scripts) {
+        if (!mergedTombstones[localScript.id]) continue;
+        await _deleteSyncedScript(localScript.id);
+        localMutated = true;
+      }
 
       // Apply merged scripts locally
       for (const script of merged.scripts) {
-        if (merged.tombstones[script.id]) continue;
+        if (mergedTombstones[script.id]) continue;
 
         const existing: Script | null = await ScriptStorage.get(script.id);
 
@@ -640,7 +699,7 @@ async function _performSync(): Promise<SyncResult> {
             : { meta: {} as ScriptMeta, error: null };
 
           if (!parsed.error) {
-            await ScriptStorage.set(script.id, {
+            const nextScript = {
               id: script.id,
               code: script.code,
               meta: parsed.meta,
@@ -654,15 +713,21 @@ async function _performSync(): Promise<SyncResult> {
               updatedAt: script.updatedAt,
               createdAt: existing?.createdAt || script.updatedAt,
               syncBaseCode: script.code,
-            } as Script);
+            } as Script;
+            await ScriptStorage.set(script.id, nextScript);
+            await _refreshScriptRuntime(nextScript);
+            localMutated = true;
           }
         }
       }
 
       // Persist merged tombstones
-      const mergedTombstones: Record<string, unknown> = merged.tombstones || {};
       if (Object.keys(mergedTombstones).length > Object.keys(tombstones).length) {
         await chrome.storage.local.set({ syncTombstones: mergedTombstones });
+      }
+
+      if (localMutated) {
+        await _updateBadgeIfAvailable();
       }
 
       // Upload merged data
@@ -699,13 +764,10 @@ async function _performSync(): Promise<SyncResult> {
 // ============================================================================
 
 function _debouncedSync(): void {
-  if (_debounceTimer) {
-    clearTimeout(_debounceTimer);
-  }
-  _debounceTimer = setTimeout(() => {
-    _debounceTimer = null;
-    _performSync().catch((e: unknown) => warn('Debounced sync error:', e));
-  }, DEBOUNCE_MS);
+  // Use alarms so the debounce survives MV3 service-worker suspension.
+  chrome.alarms.create(DEBOUNCE_ALARM_NAME, {
+    delayInMinutes: DEBOUNCE_MS / 60000,
+  });
 }
 
 // ============================================================================
@@ -729,7 +791,17 @@ async function _clearPeriodicSync(): Promise<void> {
   } catch (_) { /* ignore */ }
 }
 
+async function _clearDebounceSync(): Promise<void> {
+  try {
+    await chrome.alarms.clear(DEBOUNCE_ALARM_NAME);
+  } catch (_) { /* ignore */ }
+}
+
 function _handleAlarm(alarm: chrome.alarms.Alarm): void {
+  if (alarm.name === DEBOUNCE_ALARM_NAME) {
+    _performSync().catch((e: unknown) => warn('Debounced sync error:', e));
+    return;
+  }
   if (alarm.name !== ALARM_NAME) return;
   _performSync().catch((e: unknown) => warn('Periodic sync error:', e));
 }
@@ -917,6 +989,7 @@ export const EasyCloudSync: EasyCloudSyncAPI = {
 
       // Clear periodic sync
       await _clearPeriodicSync();
+      await _clearDebounceSync();
 
       // Clear stored state
       await _setStorageValues({

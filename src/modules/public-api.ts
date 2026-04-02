@@ -100,6 +100,14 @@ interface ParsedMeta {
   [key: string]: unknown;
 }
 
+type StoredUserscripts = FlatScript[] | Record<string, unknown>;
+
+interface ScriptStoreSnapshot {
+  mode: 'array' | 'record';
+  raw: StoredUserscripts;
+  scripts: FlatScript[];
+}
+
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
@@ -367,8 +375,8 @@ async function authorize(apiName: string, sender: SenderLike | null): Promise<bo
 
 async function getScripts(): Promise<FlatScript[]> {
   try {
-    const result = await chrome.storage.local.get('userscripts');
-    return (result['userscripts'] as FlatScript[] | undefined) ?? [];
+    const store = await getScriptStore();
+    return store.scripts;
   } catch {
     return [];
   }
@@ -377,6 +385,218 @@ async function getScripts(): Promise<FlatScript[]> {
 async function getScriptById(scriptId: string): Promise<FlatScript | null> {
   const scripts = await getScripts();
   return scripts.find(s => s.id === scriptId || s.name === scriptId) ?? null;
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+}
+
+function asNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function normalizeStoredScript(raw: unknown): FlatScript | null {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const script = raw as Record<string, unknown>;
+  const meta = script.meta && typeof script.meta === 'object'
+    ? script.meta as Record<string, unknown>
+    : null;
+
+  const id = typeof script.id === 'string' ? script.id : '';
+  if (!id) return null;
+
+  const matches = asStringArray(script.matches ?? script.match ?? meta?.match ?? meta?.include);
+  const runAt = typeof script.runAt === 'string'
+    ? script.runAt
+    : typeof meta?.['run-at'] === 'string'
+      ? String(meta['run-at']).replace(/-/g, '_')
+      : 'document_idle';
+
+  return {
+    id,
+    name: typeof script.name === 'string'
+      ? script.name
+      : typeof meta?.name === 'string'
+        ? String(meta.name)
+        : id,
+    version: typeof script.version === 'string'
+      ? script.version
+      : typeof meta?.version === 'string'
+        ? String(meta.version)
+        : '1.0',
+    description: typeof script.description === 'string'
+      ? script.description
+      : typeof meta?.description === 'string'
+        ? String(meta.description)
+        : '',
+    enabled: script.enabled !== false,
+    matches,
+    match: matches,
+    code: typeof script.code === 'string' ? script.code : undefined,
+    lastModified: asNumber(script.lastModified) ?? asNumber(script.updatedAt),
+    runAt,
+    installedAt: asNumber(script.installedAt) ?? asNumber(script.createdAt),
+    installedBy: typeof script.installedBy === 'string' ? script.installedBy : undefined,
+    updatedAt: asNumber(script.updatedAt)
+  };
+}
+
+async function getScriptStore(): Promise<ScriptStoreSnapshot> {
+  const result = await chrome.storage.local.get('userscripts');
+  const raw = result['userscripts'];
+
+  if (Array.isArray(raw)) {
+    return {
+      mode: 'array',
+      raw,
+      scripts: raw
+        .map(normalizeStoredScript)
+        .filter((script): script is FlatScript => script !== null)
+    };
+  }
+
+  if (raw && typeof raw === 'object') {
+    const record = raw as Record<string, unknown>;
+    return {
+      mode: 'record',
+      raw: record,
+      scripts: Object.values(record)
+        .map(normalizeStoredScript)
+        .filter((script): script is FlatScript => script !== null)
+    };
+  }
+
+  return {
+    mode: 'record',
+    raw: {},
+    scripts: []
+  };
+}
+
+function findArrayScriptIndex(scripts: FlatScript[], scriptId: string): number {
+  return scripts.findIndex((script) => script.id === scriptId || script.name === scriptId);
+}
+
+function findRecordScriptEntry(
+  record: Record<string, unknown>,
+  scriptId: string
+): { key: string; value: Record<string, unknown> } | null {
+  for (const [key, value] of Object.entries(record)) {
+    const normalized = normalizeStoredScript(value);
+    if (normalized && (normalized.id === scriptId || normalized.name === scriptId) && value && typeof value === 'object') {
+      return { key, value: value as Record<string, unknown> };
+    }
+  }
+  return null;
+}
+
+function createNestedStoredScript(
+  newScript: FlatScript,
+  meta: ParsedMeta,
+  installedBy: string,
+  position: number,
+  existing: Record<string, unknown> | null = null
+): Record<string, unknown> {
+  const existingRecord = existing ?? {};
+  const existingMeta = existingRecord.meta && typeof existingRecord.meta === 'object'
+    ? existingRecord.meta as Record<string, unknown>
+    : {};
+  const matches = asStringArray(newScript.matches ?? newScript.match ?? meta.match ?? ['*://*/*']);
+
+  return {
+    ...existingRecord,
+    id: newScript.id,
+    code: newScript.code ?? (typeof existingRecord.code === 'string' ? existingRecord.code : ''),
+    enabled: newScript.enabled !== false,
+    position: asNumber(existingRecord.position) ?? position,
+    meta: {
+      ...existingMeta,
+      name: newScript.name ?? newScript.id,
+      namespace: typeof existingMeta.namespace === 'string' ? existingMeta.namespace : '',
+      version: newScript.version ?? '1.0',
+      description: newScript.description ?? '',
+      author: typeof existingMeta.author === 'string' ? existingMeta.author : '',
+      icon: typeof existingMeta.icon === 'string' ? existingMeta.icon : '',
+      icon64: typeof existingMeta.icon64 === 'string' ? existingMeta.icon64 : '',
+      homepage: typeof existingMeta.homepage === 'string' ? existingMeta.homepage : '',
+      homepageURL: typeof existingMeta.homepageURL === 'string' ? existingMeta.homepageURL : '',
+      website: typeof existingMeta.website === 'string' ? existingMeta.website : '',
+      source: typeof existingMeta.source === 'string' ? existingMeta.source : '',
+      updateURL: typeof existingMeta.updateURL === 'string' ? existingMeta.updateURL : '',
+      downloadURL: typeof existingMeta.downloadURL === 'string' ? existingMeta.downloadURL : '',
+      supportURL: typeof existingMeta.supportURL === 'string' ? existingMeta.supportURL : '',
+      license: typeof existingMeta.license === 'string' ? existingMeta.license : '',
+      copyright: typeof existingMeta.copyright === 'string' ? existingMeta.copyright : '',
+      contributionURL: typeof existingMeta.contributionURL === 'string' ? existingMeta.contributionURL : '',
+      match: matches.length > 0 ? matches : ['*://*/*'],
+      include: asStringArray(existingMeta.include),
+      exclude: asStringArray(existingMeta.exclude),
+      excludeMatch: asStringArray(existingMeta.excludeMatch),
+      'run-at': (newScript.runAt ?? meta.runAt ?? 'document_idle').replace(/_/g, '-'),
+      'inject-into': typeof existingMeta['inject-into'] === 'string' ? existingMeta['inject-into'] : 'auto',
+      noframes: Boolean(existingMeta.noframes),
+      unwrap: Boolean(existingMeta.unwrap),
+      sandbox: typeof existingMeta.sandbox === 'string' ? existingMeta.sandbox : '',
+      'run-in': typeof existingMeta['run-in'] === 'string' ? existingMeta['run-in'] : '',
+      grant: (() => {
+        const grants = asStringArray(existingMeta.grant);
+        return grants.length > 0 ? grants : ['none'];
+      })(),
+      require: asStringArray(existingMeta.require),
+      resource: existingMeta.resource && typeof existingMeta.resource === 'object'
+        ? existingMeta.resource as Record<string, unknown>
+        : {},
+      connect: asStringArray(existingMeta.connect),
+      'top-level-await': Boolean(existingMeta['top-level-await']),
+      webRequest: existingMeta.webRequest ?? null,
+      priority: asNumber(existingMeta.priority) ?? 0,
+      antifeature: asStringArray(existingMeta.antifeature),
+      tag: asStringArray(existingMeta.tag),
+      compatible: asStringArray(existingMeta.compatible),
+      incompatible: asStringArray(existingMeta.incompatible)
+    },
+    settings: existingRecord.settings && typeof existingRecord.settings === 'object'
+      ? existingRecord.settings
+      : {},
+    stats: existingRecord.stats && typeof existingRecord.stats === 'object'
+      ? existingRecord.stats
+      : { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 },
+    versionHistory: Array.isArray(existingRecord.versionHistory) ? existingRecord.versionHistory : [],
+    createdAt: asNumber(existingRecord.createdAt) ?? newScript.installedAt ?? Date.now(),
+    updatedAt: newScript.updatedAt ?? Date.now(),
+    installedBy
+  };
+}
+
+function upsertScriptStore(
+  store: ScriptStoreSnapshot,
+  newScript: FlatScript,
+  meta: ParsedMeta,
+  installedBy: string
+): StoredUserscripts {
+  if (store.mode === 'array') {
+    const scripts = Array.isArray(store.raw) ? [...store.raw] : [];
+    const idx = findArrayScriptIndex(scripts, newScript.id);
+    if (idx !== -1) {
+      scripts[idx] = { ...scripts[idx], ...newScript, updatedAt: Date.now(), installedBy };
+    } else {
+      scripts.push({ ...newScript, installedBy });
+    }
+    return scripts;
+  }
+
+  const record = !Array.isArray(store.raw) ? { ...store.raw } : {};
+  const existing = findRecordScriptEntry(record, newScript.id);
+  const key = existing?.key ?? newScript.id;
+  const position = existing
+    ? asNumber(existing.value.position) ?? store.scripts.length
+    : store.scripts.length;
+
+  record[key] = createNestedStoredScript(newScript, meta, installedBy, position, existing?.value ?? null);
+  return record;
 }
 
 async function getExtensionVersion(): Promise<string> {
@@ -441,16 +661,25 @@ const HANDLERS: Record<string, HandlerFn> = {
     if (!allowed) return { error: 'Permission denied', action: 'toggleScript' };
 
     try {
-      const result = await chrome.storage.local.get('userscripts');
-      const scripts: FlatScript[] = (result['userscripts'] as FlatScript[] | undefined) ?? [];
-      const idx = scripts.findIndex(s => s.id === scriptId || s.name === scriptId);
-      if (idx === -1) return { error: 'Script not found', scriptId };
+      const store = await getScriptStore();
+      let updatedStore: StoredUserscripts | null = null;
 
-      const target = scripts[idx];
-      if (target) {
-        target.enabled = enabled;
+      if (store.mode === 'array') {
+        const scripts = Array.isArray(store.raw) ? [...store.raw] : [];
+        const idx = findArrayScriptIndex(scripts, scriptId);
+        if (idx === -1) return { error: 'Script not found', scriptId };
+        const current = scripts[idx]!;
+        scripts[idx] = { ...current, enabled, updatedAt: Date.now() };
+        updatedStore = scripts;
+      } else {
+        const record = !Array.isArray(store.raw) ? { ...store.raw } : {};
+        const entry = findRecordScriptEntry(record, scriptId);
+        if (!entry) return { error: 'Script not found', scriptId };
+        record[entry.key] = { ...entry.value, enabled, updatedAt: Date.now() };
+        updatedStore = record;
       }
-      await chrome.storage.local.set({ userscripts: scripts });
+
+      await chrome.storage.local.set({ userscripts: updatedStore });
 
       void fireWebhook('script.toggled', { scriptId, enabled });
       return { ok: true, scriptId, enabled };
@@ -486,18 +715,10 @@ const HANDLERS: Record<string, HandlerFn> = {
         runAt: meta.runAt ?? 'document_idle'
       };
 
-      const result = await chrome.storage.local.get('userscripts');
-      const scripts: FlatScript[] = (result['userscripts'] as FlatScript[] | undefined) ?? [];
+      const store = await getScriptStore();
+      const updatedStore = upsertScriptStore(store, newScript, meta, describeSender(sender));
 
-      // Check for duplicate
-      const existing = scripts.findIndex(s => s.id === scriptId);
-      if (existing !== -1) {
-        scripts[existing] = { ...scripts[existing], ...newScript, updatedAt: Date.now() };
-      } else {
-        scripts.push(newScript);
-      }
-
-      await chrome.storage.local.set({ userscripts: scripts });
+      await chrome.storage.local.set({ userscripts: updatedStore });
 
       void fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
       return { ok: true, scriptId, name: newScript.name };
@@ -610,17 +831,10 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
         runAt: meta.runAt ?? 'document_idle'
       };
 
-      const result = await chrome.storage.local.get('userscripts');
-      const scripts: FlatScript[] = (result['userscripts'] as FlatScript[] | undefined) ?? [];
+      const store = await getScriptStore();
+      const updatedStore = upsertScriptStore(store, newScript, meta, `origin:${origin}`);
 
-      const existing = scripts.findIndex(s => s.id === scriptId);
-      if (existing !== -1) {
-        scripts[existing] = { ...scripts[existing], ...newScript, updatedAt: Date.now() };
-      } else {
-        scripts.push(newScript);
-      }
-
-      await chrome.storage.local.set({ userscripts: scripts });
+      await chrome.storage.local.set({ userscripts: updatedStore });
 
       void fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
       return { type: 'scriptvault:install:response', ok: true, scriptId, name: newScript.name };

@@ -67,6 +67,7 @@ const ProfileManager = (() => {
   flex-shrink: 0;
 }
 .sv-profile-chip {
+  appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -76,10 +77,11 @@ const ProfileManager = (() => {
   background: var(--bg-row, #2a2a2a);
   color: var(--text-primary, #e0e0e0);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   white-space: nowrap;
   font-size: 12px;
   user-select: none;
+  font: inherit;
 }
 .sv-profile-chip:hover {
   background: var(--bg-row-hover, #333333);
@@ -99,6 +101,7 @@ const ProfileManager = (() => {
   margin-left: 2px;
 }
 .sv-profile-add-btn {
+  appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -109,9 +112,10 @@ const ProfileManager = (() => {
   background: transparent;
   color: var(--text-secondary, #a0a0a0);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
   font-size: 16px;
   flex-shrink: 0;
+  font: inherit;
 }
 .sv-profile-add-btn:hover {
   border-color: var(--accent-green, #4ade80);
@@ -121,15 +125,19 @@ const ProfileManager = (() => {
 
 /* Header Profile Indicator */
 .sv-profile-indicator {
+  appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 3px 10px;
   border-radius: 12px;
   font-size: 12px;
+  background: none;
+  border: none;
   color: var(--text-primary, #e0e0e0);
   cursor: pointer;
   transition: background 0.15s ease;
+  font: inherit;
 }
 .sv-profile-indicator:hover {
   background: rgba(255,255,255,0.06);
@@ -164,11 +172,16 @@ const ProfileManager = (() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 8px 14px;
+  background: none;
+  border: none;
   cursor: pointer;
   color: var(--text-primary, #e0e0e0);
   font-size: 13px;
   transition: background 0.1s ease;
+  text-align: left;
+  font: inherit;
 }
 .sv-profile-dropdown-item:hover {
   background: var(--bg-row-hover, #333333);
@@ -236,6 +249,8 @@ const ProfileManager = (() => {
   padding: 2px 6px;
   border-radius: 4px;
   transition: color 0.15s, background 0.15s;
+  font: inherit;
+  line-height: 1;
 }
 .sv-profile-modal-close:hover {
   color: var(--text-primary, #e0e0e0);
@@ -286,26 +301,33 @@ const ProfileManager = (() => {
   flex-wrap: wrap;
 }
 .sv-profile-color-swatch {
+  appearance: none;
   width: 28px;
   height: 28px;
   border-radius: 50%;
   border: 2px solid transparent;
+  background: transparent;
   cursor: pointer;
   transition: transform 0.1s, border-color 0.15s;
+  padding: 0;
 }
 .sv-profile-color-swatch:hover { transform: scale(1.15); }
 .sv-profile-color-swatch.selected { border-color: #fff; }
 .sv-profile-emoji-option {
+  appearance: none;
   width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 6px;
+  background: none;
   border: 1px solid transparent;
   cursor: pointer;
   font-size: 18px;
   transition: background 0.1s, border-color 0.15s;
+  padding: 0;
+  font: inherit;
 }
 .sv-profile-emoji-option:hover { background: var(--bg-row-hover, #333333); }
 .sv-profile-emoji-option.selected {
@@ -349,6 +371,7 @@ const ProfileManager = (() => {
   border-top: 1px solid var(--border-color, #404040);
 }
 .sv-profile-btn {
+  appearance: none;
   padding: 7px 18px;
   border-radius: 6px;
   border: 1px solid var(--border-color, #404040);
@@ -357,6 +380,7 @@ const ProfileManager = (() => {
   cursor: pointer;
   font-size: 13px;
   transition: background 0.15s, border-color 0.15s;
+  font: inherit;
 }
 .sv-profile-btn:hover {
   background: var(--bg-row-hover, #333333);
@@ -378,6 +402,17 @@ const ProfileManager = (() => {
 }
 .sv-profile-btn-danger:hover {
   background: rgba(248, 113, 113, 0.12);
+}
+.sv-profile-chip:focus-visible,
+.sv-profile-add-btn:focus-visible,
+.sv-profile-indicator:focus-visible,
+.sv-profile-dropdown-item:focus-visible,
+.sv-profile-modal-close:focus-visible,
+.sv-profile-color-swatch:focus-visible,
+.sv-profile-emoji-option:focus-visible,
+.sv-profile-btn:focus-visible {
+  outline: 2px solid var(--accent-green, #4ade80);
+  outline-offset: 2px;
 }
 
 /* Comparison view */
@@ -491,10 +526,16 @@ const ProfileManager = (() => {
     try {
       await chrome.runtime.sendMessage({
         action: 'toggleScript',
-        id: scriptId,
+        scriptId,
         enabled
       });
     } catch (_) {}
+  }
+
+  function _refreshHeaderIndicator() {
+    if (_container) {
+      _createHeaderIndicator(_container.querySelector('.sv-profile-header-anchor'));
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -518,6 +559,7 @@ const ProfileManager = (() => {
     _activeProfileId = profile.id;
     await _saveProfiles();
     _renderProfileBar();
+    _refreshHeaderIndicator();
   }
 
   /* ------------------------------------------------------------------ */
@@ -615,25 +657,28 @@ const ProfileManager = (() => {
       const isActive = p.id === _activeProfileId;
       const shortcut = idx < 9 ? `Alt+${idx + 1}` : '';
       html += `
-        <span class="sv-profile-chip${isActive ? ' active' : ''}"
+        <button type="button"
+              class="sv-profile-chip${isActive ? ' active' : ''}"
               style="--color: ${p.color}"
               data-profile-id="${p.id}"
+              aria-pressed="${isActive ? 'true' : 'false'}"
+              aria-current="${isActive ? 'true' : 'false'}"
               title="${_escapeHtml(p.name)}${shortcut ? ' (' + shortcut + ')' : ''}">
           <span class="sv-chip-emoji">${p.emoji || ''}</span>
           <span>${_escapeHtml(p.name)}</span>
           ${shortcut ? `<span class="sv-chip-shortcut">${shortcut}</span>` : ''}
-        </span>`;
+        </button>`;
     });
 
     if (_profiles.length < MAX_PROFILES) {
-      html += '<button class="sv-profile-add-btn" title="New profile">+</button>';
+      html += '<button type="button" class="sv-profile-add-btn" title="New profile" aria-label="Create profile">+</button>';
     }
 
     _profileBar.innerHTML = html;
 
     // Click handlers
     _profileBar.querySelectorAll('.sv-profile-chip').forEach(chip => {
-      chip.addEventListener('click', (e) => {
+      chip.addEventListener('click', async (e) => {
         const id = chip.dataset.profileId;
         if (e.shiftKey) {
           // Shift+click opens editor
@@ -641,7 +686,7 @@ const ProfileManager = (() => {
           if (profile) _openEditorModal(profile);
         } else {
           const profile = _profiles.find(p => p.id === id);
-          if (profile) _applyProfile(profile);
+          if (profile) await _applyProfile(profile);
         }
       });
       chip.addEventListener('contextmenu', (e) => {
@@ -665,18 +710,25 @@ const ProfileManager = (() => {
   function _createHeaderIndicator(headerEl) {
     if (!headerEl) return;
 
-    const existing = headerEl.querySelector('.sv-profile-indicator');
-    if (existing) existing.remove();
+    headerEl.querySelector('.sv-profile-indicator-wrapper')?.remove();
 
     const active = _profiles.find(p => p.id === _activeProfileId) || _profiles[0];
     if (!active) return;
 
     const wrapper = document.createElement('div');
+    wrapper.className = 'sv-profile-indicator-wrapper';
     wrapper.style.position = 'relative';
     wrapper.style.display = 'inline-flex';
+    wrapper.style.alignItems = 'center';
 
-    const indicator = document.createElement('div');
+    const dropdownId = `sv-profile-dropdown-${_generateId()}`;
+    const indicator = document.createElement('button');
+    indicator.type = 'button';
     indicator.className = 'sv-profile-indicator';
+    indicator.setAttribute('aria-haspopup', 'menu');
+    indicator.setAttribute('aria-expanded', 'false');
+    indicator.setAttribute('aria-controls', dropdownId);
+    indicator.setAttribute('aria-label', `Active profile: ${active.name}`);
     indicator.innerHTML = `
       <span class="sv-pi-dot" style="background:${active.color}"></span>
       <span>${active.emoji || ''} ${_escapeHtml(active.name)}</span>
@@ -684,45 +736,97 @@ const ProfileManager = (() => {
     `;
 
     let dropdownOpen = false;
-    indicator.addEventListener('click', () => {
-      if (dropdownOpen) {
-        wrapper.querySelector('.sv-profile-dropdown')?.remove();
-        dropdownOpen = false;
-        return;
+    let closeHandler = null;
+    const closeDropdown = () => {
+      wrapper.querySelector('.sv-profile-dropdown')?.remove();
+      dropdownOpen = false;
+      indicator.setAttribute('aria-expanded', 'false');
+      if (closeHandler) {
+        document.removeEventListener('click', closeHandler, true);
+        closeHandler = null;
       }
+    };
+
+    const openDropdown = () => {
       const dd = document.createElement('div');
+      dd.id = dropdownId;
       dd.className = 'sv-profile-dropdown';
+      dd.setAttribute('role', 'menu');
+      dd.setAttribute('aria-label', 'Switch profile');
+      const items = [];
 
       _profiles.forEach(p => {
-        const item = document.createElement('div');
+        const item = document.createElement('button');
+        item.type = 'button';
         item.className = 'sv-profile-dropdown-item' + (p.id === _activeProfileId ? ' active' : '');
+        item.setAttribute('role', 'menuitemradio');
+        item.setAttribute('aria-checked', p.id === _activeProfileId ? 'true' : 'false');
         item.innerHTML = `
           <span class="sv-dd-check">${p.id === _activeProfileId ? '\u2713' : ''}</span>
           <span>${p.emoji || ''}</span>
           <span style="flex:1">${_escapeHtml(p.name)}</span>
         `;
-        item.addEventListener('click', (e) => {
+        item.addEventListener('click', async (e) => {
           e.stopPropagation();
-          dd.remove();
-          dropdownOpen = false;
-          _applyProfile(p);
-          _createHeaderIndicator(headerEl); // refresh
+          closeDropdown();
+          await _applyProfile(p);
         });
+        items.push(item);
         dd.appendChild(item);
+      });
+
+      items.forEach((item, index) => {
+        item.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            items[(index + 1) % items.length]?.focus();
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            items[(index - 1 + items.length) % items.length]?.focus();
+          } else if (e.key === 'Home') {
+            e.preventDefault();
+            items[0]?.focus();
+          } else if (e.key === 'End') {
+            e.preventDefault();
+            items[items.length - 1]?.focus();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            closeDropdown();
+            indicator.focus();
+          }
+        });
       });
 
       wrapper.appendChild(dd);
       dropdownOpen = true;
+      indicator.setAttribute('aria-expanded', 'true');
 
       // Close on outside click
-      const closeHandler = (e) => {
+      closeHandler = (e) => {
         if (!wrapper.contains(e.target)) {
-          dd.remove();
-          dropdownOpen = false;
-          document.removeEventListener('click', closeHandler, true);
+          closeDropdown();
         }
       };
       setTimeout(() => document.addEventListener('click', closeHandler, true), 0);
+    };
+
+    indicator.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (dropdownOpen) {
+        closeDropdown();
+        return;
+      }
+      openDropdown();
+    });
+    indicator.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (!dropdownOpen) openDropdown();
+        wrapper.querySelector('.sv-profile-dropdown-item')?.focus();
+      } else if (e.key === 'Escape' && dropdownOpen) {
+        e.preventDefault();
+        closeDropdown();
+      }
     });
 
     wrapper.appendChild(indicator);
@@ -762,18 +866,18 @@ const ProfileManager = (() => {
       <div class="sv-profile-modal">
         <div class="sv-profile-modal-header">
           <h3>${isNew ? 'Create Profile' : 'Edit Profile'}</h3>
-          <button class="sv-profile-modal-close">\u00D7</button>
+          <button type="button" class="sv-profile-modal-close" aria-label="Close profile editor">\u00D7</button>
         </div>
         <div class="sv-profile-modal-body">
           <div class="sv-profile-field">
             <label>Name</label>
-            <input type="text" id="svProfileName" value="${_escapeHtml(editing.name)}" placeholder="e.g., Work, Personal, Dev..." maxlength="40" />
+            <input type="text" id="svProfileName" value="${_escapeHtml(editing.name)}" placeholder="e.g., Work, Personal, Dev…" maxlength="40" />
           </div>
           <div class="sv-profile-field">
             <label>Emoji</label>
             <div class="sv-profile-emoji-grid" id="svProfileEmojiGrid">
               ${PROFILE_EMOJIS.map(e =>
-                `<div class="sv-profile-emoji-option${e === editing.emoji ? ' selected' : ''}" data-emoji="${e}">${e}</div>`
+                `<button type="button" class="sv-profile-emoji-option${e === editing.emoji ? ' selected' : ''}" data-emoji="${e}" aria-pressed="${e === editing.emoji ? 'true' : 'false'}" aria-label="Choose ${e}">${e}</button>`
               ).join('')}
             </div>
           </div>
@@ -781,7 +885,7 @@ const ProfileManager = (() => {
             <label>Color</label>
             <div class="sv-profile-color-grid" id="svProfileColorGrid">
               ${PROFILE_COLORS.map(c =>
-                `<div class="sv-profile-color-swatch${c === editing.color ? ' selected' : ''}" data-color="${c}" style="background:${c}"></div>`
+                `<button type="button" class="sv-profile-color-swatch${c === editing.color ? ' selected' : ''}" data-color="${c}" style="background:${c}" aria-pressed="${c === editing.color ? 'true' : 'false'}" aria-label="Choose color ${c}"></button>`
               ).join('')}
             </div>
           </div>
@@ -806,12 +910,12 @@ const ProfileManager = (() => {
         </div>
         <div class="sv-profile-modal-footer">
           ${!isNew && editing.id !== DEFAULT_PROFILE_ID
-            ? '<button class="sv-profile-btn sv-profile-btn-danger" id="svProfileDelete">Delete</button>'
+            ? '<button type="button" class="sv-profile-btn sv-profile-btn-danger" id="svProfileDelete">Delete</button>'
             : ''}
-          ${!isNew ? '<button class="sv-profile-btn" id="svProfileCompare">Compare</button>' : ''}
+          ${!isNew ? '<button type="button" class="sv-profile-btn" id="svProfileCompare">Compare</button>' : ''}
           <div style="flex:1"></div>
-          <button class="sv-profile-btn" id="svProfileCancel">Cancel</button>
-          <button class="sv-profile-btn sv-profile-btn-primary" id="svProfileSave">${isNew ? 'Create' : 'Save'}</button>
+          <button type="button" class="sv-profile-btn" id="svProfileCancel">Cancel</button>
+          <button type="button" class="sv-profile-btn sv-profile-btn-primary" id="svProfileSave">${isNew ? 'Create' : 'Save'}</button>
         </div>
       </div>
     `;
@@ -827,8 +931,12 @@ const ProfileManager = (() => {
     // --- Emoji selection ---
     overlay.querySelectorAll('.sv-profile-emoji-option').forEach(opt => {
       opt.addEventListener('click', () => {
-        overlay.querySelectorAll('.sv-profile-emoji-option').forEach(o => o.classList.remove('selected'));
+        overlay.querySelectorAll('.sv-profile-emoji-option').forEach(o => {
+          o.classList.remove('selected');
+          o.setAttribute('aria-pressed', 'false');
+        });
         opt.classList.add('selected');
+        opt.setAttribute('aria-pressed', 'true');
         editing.emoji = opt.dataset.emoji;
       });
     });
@@ -836,8 +944,12 @@ const ProfileManager = (() => {
     // --- Color selection ---
     overlay.querySelectorAll('.sv-profile-color-swatch').forEach(sw => {
       sw.addEventListener('click', () => {
-        overlay.querySelectorAll('.sv-profile-color-swatch').forEach(s => s.classList.remove('selected'));
+        overlay.querySelectorAll('.sv-profile-color-swatch').forEach(s => {
+          s.classList.remove('selected');
+          s.setAttribute('aria-pressed', 'false');
+        });
         sw.classList.add('selected');
+        sw.setAttribute('aria-pressed', 'true');
         editing.color = sw.dataset.color;
       });
     });
@@ -881,7 +993,7 @@ const ProfileManager = (() => {
 
       await _saveProfiles();
       _renderProfileBar();
-      if (_container) _createHeaderIndicator(_container.querySelector('.sv-profile-header-anchor'));
+      _refreshHeaderIndicator();
       closeModal();
     });
 
@@ -897,6 +1009,7 @@ const ProfileManager = (() => {
         if (_activeProfileId === editing.id) _activeProfileId = DEFAULT_PROFILE_ID;
         await _saveProfiles();
         _renderProfileBar();
+        _refreshHeaderIndicator();
         closeModal();
       });
     }
@@ -944,7 +1057,7 @@ const ProfileManager = (() => {
       <div class="sv-profile-compare">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
           <h3 style="margin:0;font-size:15px">Profile Comparison</h3>
-          <button class="sv-profile-modal-close" id="svCompareClose">\u00D7</button>
+          <button type="button" class="sv-profile-modal-close" id="svCompareClose" aria-label="Close profile comparison">\u00D7</button>
         </div>
         ${rows}
       </div>
@@ -1053,6 +1166,7 @@ const ProfileManager = (() => {
       _profiles.push(profile);
       await _saveProfiles();
       _renderProfileBar();
+      _refreshHeaderIndicator();
       return profile;
     },
 
@@ -1065,7 +1179,6 @@ const ProfileManager = (() => {
       const profile = _profiles.find(p => p.id === profileId);
       if (!profile) return { error: 'Profile not found' };
       await _applyProfile(profile);
-      if (_container) _createHeaderIndicator(_container.querySelector('.sv-profile-header-anchor'));
       return { success: true, name: profile.name };
     },
 
@@ -1092,6 +1205,7 @@ const ProfileManager = (() => {
       }
       await _saveProfiles();
       _renderProfileBar();
+      _refreshHeaderIndicator();
       return existed ? { success: true } : { error: 'Profile not found' };
     },
 
@@ -1120,6 +1234,7 @@ const ProfileManager = (() => {
       _profiles.push(profile);
       await _saveProfiles();
       _renderProfileBar();
+      _refreshHeaderIndicator();
       return { success: true, profile };
     },
 

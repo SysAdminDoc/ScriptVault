@@ -4,7 +4,7 @@
 Modern userscript manager built with Chrome Manifest V3. Tampermonkey-inspired functionality with cloud sync, auto-updates, a full dashboard, Monaco editor, DevTools panel, and a persistent side panel.
 
 ## Version
-v2.0.3
+v2.0.4
 
 ## Tech Stack
 - Chrome MV3 extension (JavaScript runtime + TypeScript source in `src/`)
@@ -524,7 +524,7 @@ All 4 bg/ modules migrated:
 **Totals:** 27 fixes across 14 files. 370/370 tests green.
 - background.js: 16,333 lines
 
-### v2.0.3 — Comprehensive Audit (2026-04-01)
+### v2.0.4 — Comprehensive Audit (2026-04-01)
 **Security (5 fixes):**
 - Empty `@grant` array now correctly denies all permissions (was granting ALL — critical)
 - `@connect` enforcement: URL parse failure in catch block now returns error instead of silently allowing request

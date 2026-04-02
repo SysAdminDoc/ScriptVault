@@ -13,8 +13,9 @@ interface NotificationPrefs {
   errors: boolean;
   digest: boolean;
   security: boolean;
-  quietStart: number | null;
-  quietEnd: number | null;
+  quietHoursEnabled: boolean;
+  quietHoursStart: number;
+  quietHoursEnd: number;
 }
 
 /** Backup scheduler settings stored in chrome.storage.local. */
@@ -104,8 +105,9 @@ async function migrateToV2(): Promise<void> {
       errors: true,
       digest: false,
       security: true,
-      quietStart: null,
-      quietEnd: null,
+      quietHoursEnabled: false,
+      quietHoursStart: 22,
+      quietHoursEnd: 7,
     };
     await chrome.storage.local.set({ notificationPrefs: prefs });
   }

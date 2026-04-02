@@ -151,8 +151,18 @@
     const OAUTH_SYNC_PROVIDERS = ['googledrive', 'dropbox', 'onedrive'];
     let modalLastFocusedElement = null;
     let modalFocusManaged = false;
+    let progressLastFocusedElement = null;
+    let progressFocusManaged = false;
+    let progressHideTimer = null;
+    let editorLastFocusedElement = null;
+    let editorFocusManaged = false;
+    let findScriptsLastFocusedElement = null;
+    let findScriptsFocusManaged = false;
     let scriptSearchTimer = null;
     let commandPaletteReturnFocus = null;
+    const PROGRESS_BACKGROUND_SELECTORS = ['.skip-link', '.tm-header', '#viewSettingsBar', '#setupWarning', '#mainContent', '#editorOverlay', '#findScriptsOverlay', '#modal', '#commandPalette'];
+    const EDITOR_BACKGROUND_SELECTORS = ['.skip-link', '.tm-header', '#viewSettingsBar', '#setupWarning', '#mainContent'];
+    const FIND_SCRIPTS_BACKGROUND_SELECTORS = ['.skip-link', '.tm-header', '#mainContent'];
 
     function normalizeSyncProvider(settings = {}) {
         const provider = settings.syncProvider || settings.syncType || 'none';
@@ -387,6 +397,241 @@
         applyBackupBrowserFilters();
     }
 
+    function syncPressedButtons(buttons, isActive) {
+        buttons?.forEach(button => {
+            const active = Boolean(isActive(button));
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-pressed', String(active));
+        });
+    }
+
+    function setEditorTab(panelId, { focusTab = false } = {}) {
+        const tabs = Array.from(elements.editorTabs || []);
+        const targetTab = tabs.find(tab => tab.dataset.panel === panelId);
+        const targetPanel = elements.editorPanels?.[panelId];
+        if (!targetTab || !targetPanel) return false;
+
+        tabs.forEach(tab => {
+            const isActive = tab === targetTab;
+            tab.classList.toggle('active', isActive);
+            tab.setAttribute('aria-selected', String(isActive));
+            tab.tabIndex = isActive ? 0 : -1;
+        });
+
+        Object.entries(elements.editorPanels || {}).forEach(([id, panel]) => {
+            if (!panel) return;
+            const isActive = id === panelId;
+            panel.classList.toggle('active', isActive);
+            panel.hidden = !isActive;
+        });
+
+        if (focusTab) targetTab.focus();
+        if (panelId === 'code') setTimeout(() => state.editor?.refresh(), 10);
+        if (panelId === 'scriptsettings') {
+            const script = state.scripts.find(s => s.id === state.currentScriptId);
+            loadScriptSettings(script);
+        }
+        return true;
+    }
+
+    function clearDashboardSectionSelection() {
+        Array.from(elements.dashboardTabs || []).forEach(tab => {
+            tab.classList.remove('active');
+            tab.setAttribute('aria-selected', 'false');
+            tab.tabIndex = -1;
+        });
+
+        Object.values(elements.mainPanels || {}).forEach(panel => {
+            if (!panel) return;
+            panel.classList.remove('active');
+            panel.hidden = true;
+        });
+
+        if (elements.btnHelpTab) {
+            elements.btnHelpTab.classList.remove('active');
+            elements.btnHelpTab.setAttribute('aria-expanded', 'false');
+            elements.btnHelpTab.setAttribute('aria-pressed', 'false');
+        }
+    }
+
+    function setDashboardSection(name, { focusControl = false } = {}) {
+        const nextTab = DASHBOARD_TABS.includes(name) ? name : 'scripts';
+        clearDashboardSectionSelection();
+
+        if (nextTab === 'help') {
+            const panel = elements.mainPanels?.help;
+            if (!panel) return false;
+            panel.classList.add('active');
+            panel.hidden = false;
+            elements.btnHelpTab?.classList.add('active');
+            elements.btnHelpTab?.setAttribute('aria-expanded', 'true');
+            elements.btnHelpTab?.setAttribute('aria-pressed', 'true');
+            if (focusControl) elements.btnHelpTab?.focus();
+            return true;
+        }
+
+        const tab = Array.from(elements.dashboardTabs || []).find(candidate => candidate.dataset.tab === nextTab);
+        const panel = elements.mainPanels?.[nextTab];
+        if (!tab || !panel) return false;
+
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+        tab.tabIndex = 0;
+        panel.classList.add('active');
+        panel.hidden = false;
+        if (focusControl) tab.focus();
+        return true;
+    }
+
+    function setEditorBackgroundHidden(hidden) {
+        EDITOR_BACKGROUND_SELECTORS.forEach(selector => {
+            const element = document.querySelector(selector);
+            if (!(element instanceof HTMLElement) || element === elements.editorOverlay) {
+                return;
+            }
+
+            if (hidden) {
+                const previousAriaHidden = element.getAttribute('aria-hidden');
+                element.dataset.editorPreviousAriaHidden = previousAriaHidden == null ? '__none__' : previousAriaHidden;
+                element.setAttribute('aria-hidden', 'true');
+                element.inert = true;
+                return;
+            }
+
+            if (element.dataset.editorPreviousAriaHidden === '__none__') {
+                element.removeAttribute('aria-hidden');
+            } else if (element.dataset.editorPreviousAriaHidden) {
+                element.setAttribute('aria-hidden', element.dataset.editorPreviousAriaHidden);
+            }
+            delete element.dataset.editorPreviousAriaHidden;
+            element.inert = false;
+        });
+    }
+
+    function openEditorOverlay() {
+        const overlay = elements.editorOverlay;
+        if (!overlay) return;
+
+        if (!overlay.classList.contains('active')) {
+            editorLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            editorFocusManaged = false;
+        }
+
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+        overlay.classList.add('active');
+
+        if (!editorFocusManaged) {
+            setEditorBackgroundHidden(true);
+            if (typeof A11y !== 'undefined' && typeof A11y.trapFocus === 'function') {
+                A11y.trapFocus(overlay);
+                editorFocusManaged = true;
+            }
+        }
+    }
+
+    function hideEditorOverlay({ restoreFocus = false, focusTarget = null } = {}) {
+        const overlay = elements.editorOverlay;
+        if (!overlay) return;
+
+        overlay.classList.remove('active');
+        overlay.hidden = true;
+        overlay.setAttribute('aria-hidden', 'true');
+        setEditorBackgroundHidden(false);
+
+        if (editorFocusManaged && typeof A11y !== 'undefined' && typeof A11y.releaseFocus === 'function') {
+            A11y.releaseFocus();
+            editorFocusManaged = false;
+        }
+
+        const target = focusTarget?.isConnected
+            ? focusTarget
+            : (restoreFocus && editorLastFocusedElement?.isConnected ? editorLastFocusedElement : null);
+        editorLastFocusedElement = null;
+
+        if (target instanceof HTMLElement) {
+            requestAnimationFrame(() => target.focus());
+        }
+    }
+
+    function getOpenScriptTabs() {
+        return Array.from(document.querySelectorAll('.tm-tab.script-tab'));
+    }
+
+    function syncScriptTabAccessibility(tab, options = {}) {
+        if (!(tab instanceof HTMLElement)) return;
+        const name = options.name || tab.dataset.scriptName || tab.querySelector('.tab-name')?.textContent?.trim() || 'Untitled script';
+        const isActive = typeof options.isActive === 'boolean' ? options.isActive : tab.classList.contains('active');
+        const isDirty = typeof options.isDirty === 'boolean' ? options.isDirty : tab.classList.contains('unsaved');
+        const labelParts = [
+            isActive ? `Editing ${name}` : `Open ${name}`,
+            isDirty ? 'Unsaved changes.' : 'Saved changes.',
+            'Press Delete to close this tab.'
+        ];
+
+        tab.dataset.scriptName = name;
+        tab.title = name;
+        tab.setAttribute('aria-label', labelParts.join(' '));
+        tab.setAttribute('aria-keyshortcuts', 'Delete Backspace');
+        if (isActive) {
+            tab.setAttribute('aria-current', 'true');
+        } else {
+            tab.removeAttribute('aria-current');
+        }
+    }
+
+    function getCommandPaletteItems(overlay = document.getElementById('commandPalette')) {
+        return Array.from(overlay?.querySelectorAll('.cmd-item') || []);
+    }
+
+    function setCommandPaletteActiveItem(overlay, nextItem) {
+        const input = overlay?.querySelector('.cmd-input');
+        const items = getCommandPaletteItems(overlay);
+
+        items.forEach(item => {
+            const isActive = item === nextItem;
+            item.classList.toggle('active', isActive);
+            item.setAttribute('aria-selected', String(isActive));
+        });
+
+        if (input) {
+            if (nextItem?.id) {
+                input.setAttribute('aria-activedescendant', nextItem.id);
+            } else {
+                input.removeAttribute('aria-activedescendant');
+            }
+        }
+    }
+
+    async function runButtonTask(button, task, options = {}) {
+        const busyLabel = options.busyLabel || '';
+        const isButton = button instanceof HTMLButtonElement;
+        if (isButton && button.disabled) return null;
+
+        const originalLabel = isButton ? button.textContent : '';
+        const previousDisabled = isButton ? button.disabled : false;
+        const previousAriaBusy = isButton ? button.getAttribute('aria-busy') : null;
+
+        if (isButton) {
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            if (busyLabel) button.textContent = busyLabel;
+        }
+
+        try {
+            return await task();
+        } finally {
+            if (!isButton) return;
+            button.disabled = previousDisabled;
+            if (previousAriaBusy == null) {
+                button.removeAttribute('aria-busy');
+            } else {
+                button.setAttribute('aria-busy', previousAriaBusy);
+            }
+            if (busyLabel) button.textContent = originalLabel;
+        }
+    }
+
     function updateBackupBrowserControls(visibleBackups = getVisibleBackups()) {
         elements.backupBrowserFilterButtons?.forEach(button => {
             const label = button.dataset.backupBrowserLabel || button.textContent.trim();
@@ -409,8 +654,11 @@
                 return haystack.includes(query);
             }).length;
             button.textContent = `${label} (${numberFormatter.format(count)})`;
-            button.classList.toggle('active', (button.dataset.backupBrowserFilter || 'all') === state.backupBrowserFilter);
         });
+        syncPressedButtons(
+            elements.backupBrowserFilterButtons,
+            button => (button.dataset.backupBrowserFilter || 'all') === state.backupBrowserFilter
+        );
         if (elements.backupBrowserSort) {
             elements.backupBrowserSort.value = state.backupBrowserSort || 'newest';
         }
@@ -604,7 +852,8 @@
 
     function cacheElements() {
         // Main tabs
-        elements.mainTabs = document.querySelectorAll('.tm-tab');
+        elements.mainTabs = document.querySelectorAll('.tm-tabs .tm-tab');
+        elements.dashboardTabs = document.querySelectorAll('.tm-tab[role="tab"]');
         elements.mainPanels = {
             scripts: document.getElementById('scriptsPanel'),
             settings: document.getElementById('settingsPanel'),
@@ -669,7 +918,8 @@
             code: document.getElementById('codePanel'),
             info: document.getElementById('infoPanel'),
             storage: document.getElementById('storagePanel'),
-            scriptsettings: document.getElementById('scriptsettingsPanel')
+            scriptsettings: document.getElementById('scriptsettingsPanel'),
+            externals: document.getElementById('externalsPanel')
         };
         elements.btnEditorSave = document.getElementById('btnEditorSave');
         elements.btnEditorSaveLabel = document.getElementById('btnEditorSaveLabel');
@@ -678,7 +928,7 @@
         elements.btnEditorDuplicate = document.getElementById('btnEditorDuplicate');
         elements.btnEditorExport = document.getElementById('btnEditorExport');
         elements.btnEditorDelete = document.getElementById('btnEditorDelete');
-        // btnEditorClose removed - tabs handle closing
+        elements.btnEditorClose = document.getElementById('btnEditorClose');
 
         // Info panel
         elements.infoName = document.getElementById('infoName');
@@ -1188,18 +1438,32 @@
                             toggleButton: elements.btnViewToggle,
                             hasScripts: () => state.scripts.length > 0,
                             onEdit: (id) => openEditorForScript(id),
-                            onToggle: (id, enabled) => toggleScriptEnabled(id, enabled),
-                            onUpdate: (id) => checkScriptForUpdates(id),
-                            onExport: (id) => {
-                                const script = state.scripts.find(s => s.id === id);
-                                if (script) exportSingleScript(script);
-                            },
-                            onDelete: async (id) => {
-                                const script = state.scripts.find(s => s.id === id);
-                                const name = script?.metadata?.name || id;
-                                if (await showConfirmModal(`Delete "${name}"?`, 'This action cannot be undone.')) {
-                                    deleteScript(id);
+                            onToggle: (id, enabled, options = {}) => toggleScriptEnabled(id, enabled, options),
+                            onUpdate: (id, options = {}) => checkScriptForUpdates(id, { ...options }),
+                            onExport: async (id, options = {}) => {
+                                const exportTask = () => {
+                                    const script = state.scripts.find(s => s.id === id);
+                                    if (script) exportSingleScript(script);
+                                };
+                                if (options.triggerEl instanceof HTMLButtonElement) {
+                                    await runButtonTask(options.triggerEl, exportTask, { busyLabel: 'Exporting…' });
+                                    return;
                                 }
+                                exportTask();
+                            },
+                            onDelete: async (id, options = {}) => {
+                                const deleteTask = async () => {
+                                    const script = state.scripts.find(s => s.id === id);
+                                    const name = script?.metadata?.name || id;
+                                    if (await showConfirmModal(`Delete "${name}"?`, 'This action cannot be undone.')) {
+                                        await deleteScript(id);
+                                    }
+                                };
+                                if (options.triggerEl instanceof HTMLButtonElement) {
+                                    await runButtonTask(options.triggerEl, deleteTask, { busyLabel: 'Deleting…' });
+                                    return;
+                                }
+                                await deleteTask();
                             }
                         });
                         syncCardView(getFilteredScripts());
@@ -1998,9 +2262,10 @@
             section.hidden = !shouldShow;
         });
 
-        elements.settingsFilterButtons?.forEach(button => {
-            button.classList.toggle('active', (button.dataset.settingsFilter || 'all') === state.settingsPanelFilter);
-        });
+        syncPressedButtons(
+            elements.settingsFilterButtons,
+            button => (button.dataset.settingsFilter || 'all') === state.settingsPanelFilter
+        );
 
         if (elements.settingsModeSummary) {
             elements.settingsModeSummary.textContent = mode === 'advanced' ? 'Advanced' : 'Beginner';
@@ -2102,9 +2367,10 @@
             section.hidden = !shouldShow;
         });
 
-        elements.utilitiesFilterButtons?.forEach(button => {
-            button.classList.toggle('active', (button.dataset.utilitiesFilter || 'all') === state.utilitiesPanelFilter);
-        });
+        syncPressedButtons(
+            elements.utilitiesFilterButtons,
+            button => (button.dataset.utilitiesFilter || 'all') === state.utilitiesPanelFilter
+        );
 
         if (elements.utilitiesFilterStatus) {
             if (query) {
@@ -2755,9 +3021,10 @@
             section.hidden = !shouldShow;
         });
 
-        elements.helpFilterButtons?.forEach(button => {
-            button.classList.toggle('active', (button.dataset.helpFilter || 'all') === state.helpPanelFilter);
-        });
+        syncPressedButtons(
+            elements.helpFilterButtons,
+            button => (button.dataset.helpFilter || 'all') === state.helpPanelFilter
+        );
 
         if (elements.helpFilterStatus) {
             if (query) {
@@ -2894,11 +3161,10 @@
         if (elements.btnEmptyTrash) {
             elements.btnEmptyTrash.disabled = total === 0;
         }
-        if (elements.trashFilterButtons) {
-            elements.trashFilterButtons.forEach(button => {
-                button.classList.toggle('active', (button.dataset.trashFilter || 'all') === state.trashPanelFilter);
-            });
-        }
+        syncPressedButtons(
+            elements.trashFilterButtons,
+            button => (button.dataset.trashFilter || 'all') === state.trashPanelFilter
+        );
         if (elements.trashFilterStatus) {
             if (total === 0) {
                 elements.trashFilterStatus.textContent = retentionLabel === 'Disabled'
@@ -2970,41 +3236,46 @@
             `;
 
             item.querySelector('[data-trash-restore]')?.addEventListener('click', async () => {
-                try {
-                    const response = await chrome.runtime.sendMessage({ action: 'restoreFromTrash', scriptId: script.id });
-                    if (response?.error) {
-                        showToast(response.error, 'error');
-                        return;
+                const button = item.querySelector('[data-trash-restore]');
+                await runButtonTask(button, async () => {
+                    try {
+                        const response = await chrome.runtime.sendMessage({ action: 'restoreFromTrash', scriptId: script.id });
+                        if (response?.error) {
+                            showToast(response.error, 'error');
+                            return;
+                        }
+                        await Promise.all([loadTrash(), loadScripts()]);
+                        updateStats();
+                        showToast('Script restored', 'success');
+                    } catch (error) {
+                        console.error('Failed to restore from trash:', error);
+                        showToast('Failed to restore script', 'error');
                     }
-                    showToast('Script restored', 'success');
-                    await loadTrash();
-                    await loadScripts();
-                    updateStats();
-                } catch (error) {
-                    console.error('Failed to restore from trash:', error);
-                    showToast('Failed to restore script', 'error');
-                }
+                }, { busyLabel: 'Restoring…' });
             });
 
             item.querySelector('[data-trash-delete]')?.addEventListener('click', async () => {
-                const confirm = await showConfirmModal(
-                    'Delete Forever',
-                    `Permanently remove "${metadata.name}" from trash?`
-                );
-                if (!confirm) return;
-                try {
-                    const response = await chrome.runtime.sendMessage({ action: 'permanentlyDelete', scriptId: script.id });
-                    if (response?.error) {
-                        showToast(response.error, 'error');
-                        return;
+                const button = item.querySelector('[data-trash-delete]');
+                await runButtonTask(button, async () => {
+                    const confirm = await showConfirmModal(
+                        'Delete Forever',
+                        `Permanently remove "${metadata.name}" from trash?`
+                    );
+                    if (!confirm) return;
+                    try {
+                        const response = await chrome.runtime.sendMessage({ action: 'permanentlyDelete', scriptId: script.id });
+                        if (response?.error) {
+                            showToast(response.error, 'error');
+                            return;
+                        }
+                        await loadTrash();
+                        updateStats();
+                        showToast('Permanently deleted', 'success');
+                    } catch (error) {
+                        console.error('Failed to permanently delete script:', error);
+                        showToast('Failed to permanently delete script', 'error');
                     }
-                    showToast('Permanently deleted', 'success');
-                    await loadTrash();
-                    updateStats();
-                } catch (error) {
-                    console.error('Failed to permanently delete script:', error);
-                    showToast('Failed to permanently delete script', 'error');
-                }
+                }, { busyLabel: 'Deleting…' });
             });
 
             fragment.appendChild(item);
@@ -3067,10 +3338,14 @@
 
     async function deleteFolder(folderId) {
         if (!await showConfirmModal('Delete Folder', 'Delete this folder? Scripts will not be deleted.')) return;
-        await chrome.runtime.sendMessage({ action: 'deleteFolder', id: folderId });
-        await loadFolders();
-        renderScriptTable();
-        showToast('Folder deleted', 'success');
+        try {
+            await chrome.runtime.sendMessage({ action: 'deleteFolder', id: folderId });
+            await loadFolders();
+            renderScriptTable();
+            showToast('Folder deleted', 'success');
+        } catch (error) {
+            showToast('Failed to delete folder', 'error');
+        }
     }
 
     async function moveScriptToFolder(scriptId) {
@@ -3087,12 +3362,19 @@
             { label: 'Move', class: 'btn-primary', callback: async () => {
                 const toId = document.getElementById('moveToFolderSelect')?.value || null;
                 const fromId = currentFolder?.id || null;
-                if (fromId !== toId) {
+                if (fromId === toId) {
+                    hideModal();
+                    return;
+                }
+                try {
                     await chrome.runtime.sendMessage({ action: 'moveScriptToFolder', scriptId, fromFolderId: fromId, toFolderId: toId });
                     await loadFolders();
                     renderScriptTable();
+                    showToast(toId ? 'Script moved to folder' : 'Script removed from folder', 'success');
+                    hideModal();
+                } catch (error) {
+                    showToast('Failed to move script', 'error');
                 }
-                hideModal();
             }},
             { label: 'Cancel', callback: () => hideModal() }
         ]);
@@ -3594,10 +3876,11 @@
                         <button type="button" data-folder-delete="${folder.id}" title="Delete folder" aria-label="Delete folder ${escapeHtml(folder.name)}">Delete</button>
                     </span>
                 </td>`;
-                folderTr.addEventListener('click', (e) => {
-                    if (e.target.closest('[data-folder-delete]')) {
+                folderTr.addEventListener('click', async (e) => {
+                    const deleteButton = e.target.closest('[data-folder-delete]');
+                    if (deleteButton) {
                         e.stopPropagation();
-                        deleteFolder(folder.id);
+                        await runButtonTask(deleteButton, () => deleteFolder(folder.id), { busyLabel: 'Deleting…' });
                         return;
                     }
                     if (collapsedFolders.has(folder.id)) collapsedFolders.delete(folder.id);
@@ -3767,7 +4050,7 @@
         `;
 
         tr.querySelector('.script-toggle')?.addEventListener('change', e => {
-            toggleScriptEnabled(script.id, e.target.checked);
+            toggleScriptEnabled(script.id, e.target.checked, { control: e.target });
         });
         tr.querySelector('.script-checkbox')?.addEventListener('click', e => {
             const checkbox = e.target;
@@ -4165,11 +4448,17 @@
         const tabBar = document.getElementById('scriptTabsGroup');
         if (!tabBar) return;
         const tab = document.createElement('button');
+        tab.type = 'button';
         tab.className = 'tm-tab script-tab';
         tab.dataset.tab = 'script_' + scriptId;
         tab.dataset.scriptId = scriptId;
         tab.innerHTML = `<span class="tab-name">${escapeHtml(name)}</span><span class="tab-close">&times;</span>`;
         tab.classList.toggle('unsaved', !!state.openTabs[scriptId]?.unsaved);
+        syncScriptTabAccessibility(tab, {
+            name,
+            isDirty: !!state.openTabs[scriptId]?.unsaved,
+            isActive: state.currentScriptId === scriptId
+        });
         tabBar.appendChild(tab);
 
         tab.addEventListener('click', (e) => {
@@ -4191,6 +4480,42 @@
                 e.preventDefault();
                 closeScriptTab(scriptId);
             }
+        });
+
+        tab.addEventListener('keydown', (event) => {
+            const tabs = getOpenScriptTabs();
+            const currentIndex = tabs.indexOf(tab);
+            if (currentIndex === -1) return;
+
+            let nextIndex = -1;
+            switch (event.key) {
+                case 'ArrowLeft':
+                    nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+                    break;
+                case 'ArrowRight':
+                    nextIndex = (currentIndex + 1) % tabs.length;
+                    break;
+                case 'Home':
+                    nextIndex = 0;
+                    break;
+                case 'End':
+                    nextIndex = tabs.length - 1;
+                    break;
+                case 'Delete':
+                case 'Backspace': {
+                    event.preventDefault();
+                    const fallbackTab = tabs.length > 1
+                        ? tabs[currentIndex === tabs.length - 1 ? currentIndex - 1 : currentIndex + 1]
+                        : null;
+                    closeScriptTab(scriptId, { focusFallbackScriptId: fallbackTab?.dataset.scriptId || null });
+                    return;
+                }
+                default:
+                    return;
+            }
+
+            event.preventDefault();
+            tabs[nextIndex]?.focus();
         });
     }
 
@@ -4214,7 +4539,10 @@
 
     function updateScriptTabVisual(scriptId, isDirty) {
         const tab = document.querySelector(`.tm-tab[data-script-id="${scriptId}"]`);
-        if (tab) tab.classList.toggle('unsaved', !!isDirty);
+        if (tab) {
+            tab.classList.toggle('unsaved', !!isDirty);
+            syncScriptTabAccessibility(tab, { isDirty });
+        }
     }
 
     function patchOpenTabStatus(scriptId, patch = {}, script = null) {
@@ -4269,7 +4597,7 @@
             if (saveState === 'dirty') {
                 detail = state.settings.autoSave ? 'Autosaves after 2 seconds' : 'Press Ctrl+S to save';
             } else if (saveState === 'saving') {
-                detail = 'Writing changes...';
+                detail = 'Writing changes…';
             } else if (saveState === 'error') {
                 detail = tabData?.saveError ? `Retry required: ${tabData.saveError}` : 'Retry save';
             } else if (tabData?.lastSavedAt) {
@@ -4286,7 +4614,7 @@
             elements.btnEditorSave.classList.toggle('btn-danger', saveState === 'error');
         }
         if (elements.btnEditorSaveLabel) {
-            elements.btnEditorSaveLabel.textContent = saveState === 'saving' ? 'Saving...' : saveState === 'error' ? 'Retry Save' : 'Save';
+            elements.btnEditorSaveLabel.textContent = saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Retry Save' : 'Save';
         }
 
         if (elements.btnEditorToggleLabel) {
@@ -4374,14 +4702,19 @@
         state.unsavedChanges = tabData?.unsaved || false;
 
         // Deactivate all tabs and panels
-        document.querySelectorAll('.tm-tab').forEach(t => t.classList.remove('active'));
-        Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
-        elements.btnHelpTab?.classList.remove('active');
+        getOpenScriptTabs().forEach(t => {
+            t.classList.remove('active');
+            syncScriptTabAccessibility(t, { isActive: false });
+        });
+        clearDashboardSectionSelection();
         closeFindScripts();
 
         // Activate script tab
         const tab = document.querySelector(`.tm-tab[data-script-id="${scriptId}"]`);
-        if (tab) tab.classList.add('active');
+        if (tab) {
+            tab.classList.add('active');
+            syncScriptTabAccessibility(tab, { isActive: true });
+        }
 
         // Load editor content
         if (state.editor) {
@@ -4406,14 +4739,15 @@
         loadScriptInfo(script);
         loadScriptStorage(script);
         loadExternals(script);
-        elements.editorOverlay?.classList.add('active');
+        openEditorOverlay();
         if (updateRoute) {
             setDashboardHash(`script_${scriptId}`);
         }
         setTimeout(() => state.editor?.focus(), 100);
     }
 
-    function closeScriptTab(scriptId) {
+    function closeScriptTab(scriptId, options = {}) {
+        const { focusFallbackScriptId = null } = options;
         const tabData = state.openTabs[scriptId];
         const doClose = () => {
             // Remove tab element
@@ -4434,15 +4768,33 @@
             if (state.currentScriptId === scriptId) {
                 state.currentScriptId = null;
                 state.unsavedChanges = false;
-                elements.editorOverlay?.classList.remove('active');
 
                 // Switch to another open script tab, or back to scripts panel
                 const remaining = Object.keys(state.openTabs);
                 if (remaining.length > 0) {
                     activateScriptTab(remaining[remaining.length - 1]);
                 } else {
-                    switchTab('scripts');
+                    const restoreTarget = editorLastFocusedElement instanceof HTMLElement && editorLastFocusedElement.isConnected
+                        ? editorLastFocusedElement
+                        : null;
+                    hideEditorOverlay();
+                    Promise.resolve(switchTab('scripts', { focusControl: !restoreTarget })).finally(() => {
+                        if (restoreTarget) {
+                            restoreTarget.focus();
+                        }
+                    });
                 }
+            }
+
+            if (focusFallbackScriptId) {
+                setTimeout(() => {
+                    const fallbackTab = document.querySelector(`.tm-tab.script-tab[data-script-id="${focusFallbackScriptId}"]`);
+                    if (fallbackTab instanceof HTMLElement) {
+                        fallbackTab.focus();
+                        return;
+                    }
+                    document.getElementById('tabNewScript')?.focus?.();
+                }, 0);
             }
         };
 
@@ -4461,7 +4813,7 @@
         if (state.currentScriptId) {
             closeScriptTab(state.currentScriptId);
         } else {
-            elements.editorOverlay?.classList.remove('active');
+            hideEditorOverlay({ restoreFocus: true });
         }
     }
 
@@ -4906,18 +5258,41 @@
     }
 
     // Script operations
-    async function toggleScriptEnabled(scriptId, enabled) {
+    async function toggleScriptEnabled(scriptId, enabled, options = {}) {
+        const control = options.control instanceof HTMLElement ? options.control : null;
+        const script = state.scripts.find(s => s.id === scriptId);
+        const previousEnabled = script ? script.enabled !== false : !enabled;
+        const previousDisabled = control?.matches('input, button') ? control.disabled : false;
+        const previousAriaBusy = control?.getAttribute?.('aria-busy') ?? null;
         try {
+            if (control?.matches('input, button')) {
+                control.disabled = true;
+                control.setAttribute('aria-busy', 'true');
+            }
             await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId, enabled });
-            const script = state.scripts.find(s => s.id === scriptId);
             if (script) script.enabled = enabled;
             if (scriptId === state.currentScriptId) {
                 updateEditorHeader(script || getCurrentScript());
             }
+            renderScriptTable();
             updateStats();
             showToast(enabled ? 'Enabled' : 'Disabled', 'success');
         } catch (e) {
-            showToast('Failed', 'error');
+            if (script) script.enabled = previousEnabled;
+            if (control instanceof HTMLInputElement && control.isConnected) {
+                control.checked = previousEnabled;
+            }
+            renderScriptTable();
+            showToast('Failed to update script status', 'error');
+        } finally {
+            if (control?.matches('input, button') && control.isConnected) {
+                control.disabled = previousDisabled;
+                if (previousAriaBusy == null) {
+                    control.removeAttribute('aria-busy');
+                } else {
+                    control.setAttribute('aria-busy', previousAriaBusy);
+                }
+            }
         }
     }
 
@@ -4955,6 +5330,11 @@
                     tab.classList.remove('unsaved');
                     const tabName = tab.querySelector('.tab-name');
                     if (tabName) tabName.textContent = name;
+                    syncScriptTabAccessibility(tab, {
+                        name,
+                        isDirty: false,
+                        isActive: state.currentScriptId === savingScriptId
+                    });
                 }
             }
             markScriptSaved(savingScriptId, Date.now());
@@ -4995,7 +5375,7 @@
                 if (remaining.length > 0) {
                     activateScriptTab(remaining[remaining.length - 1]);
                 } else {
-                    elements.editorOverlay?.classList.remove('active');
+                    hideEditorOverlay();
                     await switchTab('scripts');
                 }
             }
@@ -5698,13 +6078,72 @@
     // =========================================
     const findScriptsState = { page: 1, query: '', source: 'greasyfork', loading: false };
 
+    function setFindScriptsBackgroundHidden(hidden) {
+        FIND_SCRIPTS_BACKGROUND_SELECTORS.forEach(selector => {
+            const element = document.querySelector(selector);
+            if (!(element instanceof HTMLElement) || element === elements.findScriptsOverlay) {
+                return;
+            }
+
+            if (hidden) {
+                const previousAriaHidden = element.getAttribute('aria-hidden');
+                element.dataset.findScriptsPreviousAriaHidden = previousAriaHidden == null ? '__none__' : previousAriaHidden;
+                element.setAttribute('aria-hidden', 'true');
+                element.inert = true;
+                return;
+            }
+
+            if (element.dataset.findScriptsPreviousAriaHidden === '__none__') {
+                element.removeAttribute('aria-hidden');
+            } else if (element.dataset.findScriptsPreviousAriaHidden) {
+                element.setAttribute('aria-hidden', element.dataset.findScriptsPreviousAriaHidden);
+            }
+            delete element.dataset.findScriptsPreviousAriaHidden;
+            element.inert = false;
+        });
+    }
+
     function openFindScripts() {
-        elements.findScriptsOverlay?.classList.add('active');
-        elements.findScriptsInput?.focus();
+        const overlay = elements.findScriptsOverlay;
+        if (!overlay || overlay.classList.contains('active')) return;
+
+        findScriptsLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        findScriptsFocusManaged = false;
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+        overlay.classList.add('active');
+        elements.btnFindScripts?.setAttribute('aria-expanded', 'true');
+        setFindScriptsBackgroundHidden(true);
+
+        if (typeof A11y !== 'undefined' && typeof A11y.trapFocus === 'function') {
+            A11y.trapFocus(overlay);
+            findScriptsFocusManaged = true;
+        }
+
+        requestAnimationFrame(() => {
+            if (overlay.hidden || !overlay.classList.contains('active')) return;
+            (elements.findScriptsInput || elements.btnFindScriptsSearch || elements.btnCloseFindScripts || overlay)?.focus?.();
+        });
     }
 
     function closeFindScripts() {
-        elements.findScriptsOverlay?.classList.remove('active');
+        const overlay = elements.findScriptsOverlay;
+        if (!overlay) return;
+
+        overlay.classList.remove('active');
+        overlay.hidden = true;
+        overlay.setAttribute('aria-hidden', 'true');
+        elements.btnFindScripts?.setAttribute('aria-expanded', 'false');
+        setFindScriptsBackgroundHidden(false);
+
+        if (findScriptsFocusManaged && typeof A11y !== 'undefined' && typeof A11y.releaseFocus === 'function') {
+            A11y.releaseFocus();
+            findScriptsFocusManaged = false;
+        }
+        if (findScriptsLastFocusedElement?.isConnected) {
+            findScriptsLastFocusedElement.focus();
+        }
+        findScriptsLastFocusedElement = null;
     }
 
     async function searchScripts(page = 1) {
@@ -5962,16 +6401,59 @@
         }
     };
 
+    function setProgressBackgroundHidden(hidden) {
+        PROGRESS_BACKGROUND_SELECTORS.forEach(selector => {
+            const element = document.querySelector(selector);
+            if (!(element instanceof HTMLElement) || element === progressEl.overlay) {
+                return;
+            }
+
+            if (hidden) {
+                const previousAriaHidden = element.getAttribute('aria-hidden');
+                element.dataset.progressPreviousAriaHidden = previousAriaHidden == null ? '__none__' : previousAriaHidden;
+                element.setAttribute('aria-hidden', 'true');
+                element.inert = true;
+                return;
+            }
+
+            if (element.dataset.progressPreviousAriaHidden === '__none__') {
+                element.removeAttribute('aria-hidden');
+            } else if (element.dataset.progressPreviousAriaHidden) {
+                element.setAttribute('aria-hidden', element.dataset.progressPreviousAriaHidden);
+            }
+            delete element.dataset.progressPreviousAriaHidden;
+            element.inert = false;
+        });
+    }
+
     function showProgress(title) {
         if (!progressEl.overlay) progressEl.init();
         if (!progressEl.overlay) return;
+        const overlayWasOpen = progressEl.overlay.classList.contains('active') && !progressEl.overlay.hidden;
+        if (progressHideTimer) {
+            clearTimeout(progressHideTimer);
+            progressHideTimer = null;
+        }
+        if (!overlayWasOpen) {
+            progressLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            progressFocusManaged = false;
+        }
         if (progressEl.title) progressEl.title.textContent = title;
         if (progressEl.fill) progressEl.fill.style.width = '0%';
         if (progressEl.status) progressEl.status.textContent = '';
         if (progressEl.bar) progressEl.bar.setAttribute('aria-valuenow', '0');
+        progressEl.overlay.setAttribute('aria-busy', 'true');
         progressEl.overlay.hidden = false;
         progressEl.overlay.setAttribute('aria-hidden', 'false');
         progressEl.overlay.classList.add('active');
+        if (!progressFocusManaged) {
+            setProgressBackgroundHidden(true);
+            if (typeof A11y !== 'undefined' && typeof A11y.trapFocus === 'function') {
+                A11y.trapFocus(progressEl.overlay);
+                progressFocusManaged = true;
+            }
+        }
+        requestAnimationFrame(() => progressEl.overlay?.focus());
         if (typeof A11y !== 'undefined' && typeof A11y.announce === 'function') {
             A11y.announce(title, 'polite');
         }
@@ -5990,13 +6472,27 @@
 
     function hideProgress() {
         if (!progressEl.overlay) return;
-        progressEl.fill.style.width = '100%';
+        if (progressHideTimer) {
+            clearTimeout(progressHideTimer);
+        }
+        if (progressEl.fill) progressEl.fill.style.width = '100%';
         if (progressEl.bar) progressEl.bar.setAttribute('aria-valuenow', '100');
-        setTimeout(() => {
+        progressEl.overlay.setAttribute('aria-busy', 'false');
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+        progressHideTimer = window.setTimeout(() => {
+            progressHideTimer = null;
             progressEl.overlay.classList.remove('active');
             progressEl.overlay.hidden = true;
             progressEl.overlay.setAttribute('aria-hidden', 'true');
-        }, 300);
+            setProgressBackgroundHidden(false);
+            if (progressFocusManaged && typeof A11y !== 'undefined' && typeof A11y.releaseFocus === 'function') {
+                A11y.releaseFocus();
+                progressFocusManaged = false;
+            } else if (progressLastFocusedElement?.isConnected) {
+                progressLastFocusedElement.focus();
+            }
+            progressLastFocusedElement = null;
+        }, reduceMotion ? 0 : 300);
     }
 
     let modalDismissHandler = null;
@@ -6029,7 +6525,9 @@
                 btn.type = 'button';
                 btn.className = `btn ${a.class || ''}`;
                 btn.textContent = a.label;
-                btn.onclick = a.callback;
+                btn.addEventListener('click', async () => {
+                    await runButtonTask(btn, a.callback, { busyLabel: a.busyLabel });
+                });
                 elements.modalActions.appendChild(btn);
             });
         }
@@ -6200,8 +6698,6 @@
         elements.mainTabs.forEach(tab => {
             tab.addEventListener('click', async () => {
                 const id = tab.dataset.tab;
-                // Skip script tabs — they have their own handler
-                if (tab.classList.contains('script-tab')) return;
                 if (id === 'newscript') {
                     createNewScript();
                     return;
@@ -6210,11 +6706,39 @@
             });
         });
 
+        elements.dashboardTabs.forEach(tab => {
+            tab.addEventListener('keydown', async (event) => {
+                const tabs = Array.from(elements.dashboardTabs || []);
+                if (!tabs.length) return;
+
+                let nextIndex = -1;
+                switch (event.key) {
+                    case 'ArrowLeft':
+                        nextIndex = (tabs.indexOf(tab) - 1 + tabs.length) % tabs.length;
+                        break;
+                    case 'ArrowRight':
+                        nextIndex = (tabs.indexOf(tab) + 1) % tabs.length;
+                        break;
+                    case 'Home':
+                        nextIndex = 0;
+                        break;
+                    case 'End':
+                        nextIndex = tabs.length - 1;
+                        break;
+                    default:
+                        return;
+                }
+
+                event.preventDefault();
+                await switchTab(tabs[nextIndex]?.dataset.tab, { focusControl: true });
+            });
+        });
+
         // Help icon button in header
         elements.btnHelpTab?.addEventListener('click', async () => {
             const isActive = elements.btnHelpTab.classList.contains('active');
             if (isActive) {
-                await switchTab('scripts');
+                await switchTab('scripts', { focusControl: true });
             } else {
                 await switchTab('help');
             }
@@ -6307,6 +6831,12 @@
         elements.btnFindScripts?.addEventListener('click', openFindScripts);
         elements.btnCloseFindScripts?.addEventListener('click', closeFindScripts);
         elements.btnFindScriptsSearch?.addEventListener('click', () => searchScripts(1));
+        elements.findScriptsOverlay?.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                closeFindScripts();
+            }
+        });
         elements.findScriptsInput?.addEventListener('keydown', e => {
             if (e.key === 'Enter') searchScripts(1);
         });
@@ -6385,6 +6915,7 @@
             const script = state.scripts.find(s => s.id === state.currentScriptId);
             if (script) exportSingleScript(script);
         });
+        elements.btnEditorClose?.addEventListener('click', closeEditor);
         elements.btnEditorDelete?.addEventListener('click', async () => {
             if (!state.currentScriptId) return;
             const script = state.scripts.find(s => s.id === state.currentScriptId);
@@ -6618,16 +7149,32 @@
         // Editor tabs
         elements.editorTabs.forEach(tab => {
             tab.addEventListener('click', () => {
-                const id = tab.dataset.panel;
-                elements.editorTabs.forEach(t => t.classList.remove('active'));
-                Object.values(elements.editorPanels).forEach(p => p?.classList.remove('active'));
-                tab.classList.add('active');
-                elements.editorPanels[id]?.classList.add('active');
-                if (id === 'code') setTimeout(() => state.editor?.refresh(), 10);
-                if (id === 'scriptsettings') {
-                    const script = state.scripts.find(s => s.id === state.currentScriptId);
-                    loadScriptSettings(script);
+                setEditorTab(tab.dataset.panel);
+            });
+            tab.addEventListener('keydown', (event) => {
+                const tabs = Array.from(elements.editorTabs || []);
+                if (!tabs.length) return;
+
+                let nextIndex = -1;
+                switch (event.key) {
+                    case 'ArrowLeft':
+                        nextIndex = (tabs.indexOf(tab) - 1 + tabs.length) % tabs.length;
+                        break;
+                    case 'ArrowRight':
+                        nextIndex = (tabs.indexOf(tab) + 1) % tabs.length;
+                        break;
+                    case 'Home':
+                        nextIndex = 0;
+                        break;
+                    case 'End':
+                        nextIndex = tabs.length - 1;
+                        break;
+                    default:
+                        return;
                 }
+
+                event.preventDefault();
+                setEditorTab(tabs[nextIndex]?.dataset.panel, { focusTab: true });
             });
         });
 
@@ -6998,24 +7545,32 @@
         });
 
         // Utilities
-        elements.btnExportFile?.addEventListener('click', exportAllScripts);
-        elements.btnExportZip?.addEventListener('click', exportToZip);
-        elements.btnCreateBackup?.addEventListener('click', async () => {
-            showToast('Creating backup...', 'info');
-            try {
-                const response = await chrome.runtime.sendMessage({ action: 'createBackup', reason: 'manual' });
-                if (response?.error || response?.success === false) {
-                    showToast(response?.error || 'Backup failed', 'error');
-                    return;
+        elements.btnExportFile?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, exportAllScripts, { busyLabel: 'Exporting JSON…' });
+        });
+        elements.btnExportZip?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, exportToZip, { busyLabel: 'Exporting ZIP…' });
+        });
+        elements.btnCreateBackup?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                showToast('Creating backup…', 'info');
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'createBackup', reason: 'manual' });
+                    if (response?.error || response?.success === false) {
+                        showToast(response?.error || 'Backup failed', 'error');
+                        return;
+                    }
+                    await loadBackups();
+                    showToast('Backup created', 'success');
+                } catch (error) {
+                    showToast(error?.message || 'Backup failed', 'error');
                 }
-                await loadBackups();
-                showToast('Backup created', 'success');
-            } catch (error) {
-                showToast(error?.message || 'Backup failed', 'error');
-            }
+            }, { busyLabel: 'Creating Backup…' });
         });
         elements.btnImportBackupArchive?.addEventListener('click', () => elements.backupArchiveInput?.click());
-        elements.btnRefreshBackups?.addEventListener('click', () => loadBackups({ announce: true }));
+        elements.btnRefreshBackups?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, () => loadBackups({ announce: true }), { busyLabel: 'Refreshing…' });
+        });
         elements.backupBrowserFilterButtons?.forEach(button => {
             button.addEventListener('click', () => {
                 state.backupBrowserFilter = button.dataset.backupBrowserFilter || 'all';
@@ -7133,7 +7688,9 @@
             notifyOnSuccess: !!elements.backupNotifyOnSuccess?.checked,
             notifyOnFailure: !!elements.backupNotifyOnFailure?.checked
         }));
-        elements.btnSaveBackupSettings?.addEventListener('click', saveBackupSettings);
+        elements.btnSaveBackupSettings?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, saveBackupSettings, { busyLabel: 'Saving Schedule…' });
+        });
         document.getElementById('btnExportStats')?.addEventListener('click', exportStatsCSV);
         // Tampermonkey backup import
         document.getElementById('btnImportTampermonkey')?.addEventListener('click', () => {
@@ -7439,154 +7996,183 @@
             } catch (e) { showToast('Import failed: ' + e.message, 'error'); }
         });
         elements.importFileInput?.addEventListener('change', async e => {
-            const file = e.target.files[0];
-            if (!file) return;
+            const input = e.target;
+            const file = input.files?.[0];
+            if (!file) {
+                if (elements.importFileName) elements.importFileName.textContent = 'No file chosen';
+                return;
+            }
             if (elements.importFileName) elements.importFileName.textContent = file.name;
-            const isZip = file.name.endsWith('.zip');
-            const transfer = getTransferPreferences();
-            const isScriptFile = file.name.endsWith('.user.js') || file.name.endsWith('.js');
-            const confirmMessage = isZip
-                ? buildImportConfirmationMessage(file.name, {
-                    supportsStorage: true,
-                    importStorage: true,
-                    settingsUnavailableReason: 'ZIP archives do not include ScriptVault settings.'
-                })
-                : isScriptFile
-                    ? `Install ${file.name}?`
-                    : buildImportConfirmationMessage(file.name, {
+            try {
+                const isZip = file.name.endsWith('.zip');
+                const transfer = getTransferPreferences();
+                const isScriptFile = file.name.endsWith('.user.js') || file.name.endsWith('.js');
+                const confirmMessage = isZip
+                    ? buildImportConfirmationMessage(file.name, {
+                        supportsStorage: true,
+                        importStorage: true,
+                        settingsUnavailableReason: 'ZIP archives do not include ScriptVault settings.'
+                    })
+                    : isScriptFile
+                        ? `Install ${file.name}?`
+                        : buildImportConfirmationMessage(file.name, {
+                            supportsSettings: true,
+                            supportsStorage: true,
+                            importSettings: transfer.includeSettings,
+                            importStorage: transfer.includeStorage
+                        });
+                if (!await showConfirmModal(isScriptFile ? 'Install Script' : 'Restore File', confirmMessage)) return;
+                showProgress(`Importing ${file.name}...`);
+                updateProgress(0, 1, 'Reading file...');
+                try {
+                    if (isZip) {
+                        const buf = await file.arrayBuffer();
+                        const bytes = new Uint8Array(buf);
+                        let binary = '';
+                        for (let i = 0; i < bytes.length; i += 8192) {
+                            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+                        }
+                        updateProgress(1, 2, 'Processing zip...');
+                        const b64 = btoa(binary);
+                        const r = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: b64, options: { overwrite: true } });
+                        showToast(
+                            r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
+                            r?.error ? 'error' : getImportResultTone(r)
+                        );
+                    } else if (file.name.endsWith('.user.js') || file.name.endsWith('.js')) {
+                        const code = await file.text();
+                        updateProgress(1, 2, 'Installing script...');
+                        const r = await chrome.runtime.sendMessage({ action: 'saveScript', code });
+                        if (r?.success) {
+                            showToast('Script installed', 'success');
+                        } else {
+                            showToast(r?.error || 'Install failed', 'error');
+                        }
+                    } else {
+                        const data = JSON.parse(await file.text());
+                        updateProgress(1, 2, 'Importing scripts...');
+                        const r = await chrome.runtime.sendMessage({
+                            action: 'importAll',
+                            data: {
+                                data,
+                                options: {
+                                    overwrite: true,
+                                    importSettings: transfer.includeSettings,
+                                    importStorage: transfer.includeStorage
+                                }
+                            }
+                        });
+                        showToast(
+                            r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
+                            r?.error ? 'error' : getImportResultTone(r)
+                        );
+                    }
+                    await loadScripts();
+                    await loadSettings();
+                    updateStats();
+                } catch (err) {
+                    showToast('Failed: ' + err.message, 'error');
+                } finally {
+                    hideProgress();
+                }
+            } finally {
+                input.value = '';
+                if (elements.importFileName) elements.importFileName.textContent = 'No file chosen';
+            }
+        });
+
+        elements.btnInstallFromUrl?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, installFromUrl, { busyLabel: 'Installing…' });
+        });
+
+        // Batch URL install
+        document.getElementById('btnBatchInstall')?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const textarea = document.getElementById('batchUrlInput');
+                const urls = (textarea?.value || '').split('\n').map(u => u.trim()).filter(u => u && u.startsWith('http'));
+                if (urls.length === 0) return showToast('No valid URLs found', 'error');
+                if (!await showConfirmModal('Batch Install', `Install ${urls.length} script${urls.length > 1 ? 's' : ''} from URLs?`)) return;
+                showProgress(`Installing ${urls.length} scripts...`);
+                let installed = 0, failed = 0;
+                try {
+                    for (let i = 0; i < urls.length; i++) {
+                        updateProgress(i + 1, urls.length, urls[i].split('/').pop() || urls[i]);
+                        try {
+                            const res = await chrome.runtime.sendMessage({ action: 'installFromUrl', url: urls[i] });
+                            if (res?.success) installed++;
+                            else failed++;
+                        } catch (e) {
+                            failed++;
+                        }
+                    }
+                    await loadScripts();
+                    updateStats();
+                    if (textarea) textarea.value = '';
+                    showToast(`Installed ${installed}${failed > 0 ? `, ${failed} failed` : ''}`, installed > 0 ? 'success' : 'error');
+                } finally {
+                    hideProgress();
+                }
+            }, { busyLabel: 'Installing…' });
+        });
+
+        elements.btnTextareaExport?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const transfer = getTransferPreferences();
+                const r = await chrome.runtime.sendMessage({
+                    action: 'exportAll',
+                    options: {
+                        includeSettings: transfer.includeSettings,
+                        includeStorage: transfer.includeStorage
+                    }
+                });
+                if (r && elements.textareaData) {
+                    elements.textareaData.value = JSON.stringify(r, null, 2);
+                    showToast('JSON export copied into textarea', 'success');
+                }
+            }, { busyLabel: 'Exporting…' });
+        });
+
+        elements.btnTextareaImport?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const txt = elements.textareaData?.value?.trim();
+                if (!txt) return showToast('Empty', 'error');
+                try {
+                    const data = JSON.parse(txt);
+                    const transfer = getTransferPreferences();
+                    if (!await showConfirmModal('Restore JSON', buildImportConfirmationMessage('textarea data', {
                         supportsSettings: true,
                         supportsStorage: true,
                         importSettings: transfer.includeSettings,
                         importStorage: transfer.includeStorage
-                    });
-            if (!await showConfirmModal(isScriptFile ? 'Install Script' : 'Restore File', confirmMessage)) return;
-            showProgress(`Importing ${file.name}...`);
-            updateProgress(0, 1, 'Reading file...');
-            try {
-                if (isZip) {
-                    const buf = await file.arrayBuffer();
-                    const bytes = new Uint8Array(buf);
-                    let binary = '';
-                    for (let i = 0; i < bytes.length; i += 8192) {
-                        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
-                    }
-                    updateProgress(1, 2, 'Processing zip...');
-                    const b64 = btoa(binary);
-                    const r = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: b64, options: { overwrite: true } });
-                    showToast(
-                        r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
-                        r?.error ? 'error' : getImportResultTone(r)
-                    );
-                } else if (file.name.endsWith('.user.js') || file.name.endsWith('.js')) {
-                    const code = await file.text();
-                    updateProgress(1, 2, 'Installing script...');
-                    const r = await chrome.runtime.sendMessage({ action: 'saveScript', code });
-                    if (r?.success) {
-                        showToast('Script installed', 'success');
-                    } else {
-                        showToast(r?.error || 'Install failed', 'error');
-                    }
-                } else {
-                    const data = JSON.parse(await file.text());
-                    updateProgress(1, 2, 'Importing scripts...');
-                    const r = await chrome.runtime.sendMessage({
-                        action: 'importAll',
-                        data: {
-                            data,
-                            options: {
-                                overwrite: true,
-                                importSettings: transfer.includeSettings,
-                                importStorage: transfer.includeStorage
+                    }))) return;
+                    showProgress(`Importing ${data.scripts?.length || 0} scripts...`);
+                    updateProgress(0, 1, 'Processing...');
+                    try {
+                        const result = await chrome.runtime.sendMessage({
+                            action: 'importAll',
+                            data: {
+                                data,
+                                options: {
+                                    overwrite: true,
+                                    importSettings: transfer.includeSettings,
+                                    importStorage: transfer.includeStorage
+                                }
                             }
-                        }
-                    });
-                    showToast(
-                        r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
-                        r?.error ? 'error' : getImportResultTone(r)
-                    );
-                }
-                await loadScripts();
-                await loadSettings();
-                updateStats();
-            } catch (err) { showToast('Failed: ' + err.message, 'error'); }
-            hideProgress();
-            e.target.value = '';
-        });
-
-        elements.btnInstallFromUrl?.addEventListener('click', installFromUrl);
-
-        // Batch URL install
-        document.getElementById('btnBatchInstall')?.addEventListener('click', async () => {
-            const textarea = document.getElementById('batchUrlInput');
-            const urls = (textarea?.value || '').split('\n').map(u => u.trim()).filter(u => u && u.startsWith('http'));
-            if (urls.length === 0) return showToast('No valid URLs found', 'error');
-            if (!await showConfirmModal('Batch Install', `Install ${urls.length} script${urls.length > 1 ? 's' : ''} from URLs?`)) return;
-            showProgress(`Installing ${urls.length} scripts...`);
-            let installed = 0, failed = 0;
-            for (let i = 0; i < urls.length; i++) {
-                updateProgress(i + 1, urls.length, urls[i].split('/').pop() || urls[i]);
-                try {
-                    const res = await chrome.runtime.sendMessage({ action: 'installFromUrl', url: urls[i] });
-                    if (res?.success) installed++;
-                    else failed++;
-                } catch (e) { failed++; }
-            }
-            hideProgress();
-            await loadScripts();
-            updateStats();
-            if (textarea) textarea.value = '';
-            showToast(`Installed ${installed}${failed > 0 ? `, ${failed} failed` : ''}`, installed > 0 ? 'success' : 'error');
-        });
-
-        elements.btnTextareaExport?.addEventListener('click', async () => {
-            const transfer = getTransferPreferences();
-            const r = await chrome.runtime.sendMessage({
-                action: 'exportAll',
-                options: {
-                    includeSettings: transfer.includeSettings,
-                    includeStorage: transfer.includeStorage
-                }
-            });
-            if (r && elements.textareaData) {
-                elements.textareaData.value = JSON.stringify(r, null, 2);
-                showToast('JSON export copied into textarea', 'success');
-            }
-        });
-
-        elements.btnTextareaImport?.addEventListener('click', async () => {
-            const txt = elements.textareaData?.value?.trim();
-            if (!txt) return showToast('Empty', 'error');
-            try {
-                const data = JSON.parse(txt);
-                const transfer = getTransferPreferences();
-                if (!await showConfirmModal('Restore JSON', buildImportConfirmationMessage('textarea data', {
-                    supportsSettings: true,
-                    supportsStorage: true,
-                    importSettings: transfer.includeSettings,
-                    importStorage: transfer.includeStorage
-                }))) return;
-                showProgress(`Importing ${data.scripts?.length || 0} scripts...`);
-                updateProgress(0, 1, 'Processing...');
-                const result = await chrome.runtime.sendMessage({
-                    action: 'importAll',
-                    data: {
-                        data,
-                        options: {
-                            overwrite: true,
-                            importSettings: transfer.includeSettings,
-                            importStorage: transfer.includeStorage
-                        }
+                        });
+                        await loadScripts();
+                        await loadSettings();
+                        updateStats();
+                        showToast(
+                            result?.error ? result.error : `Textarea restore: ${formatImportSummary(result)}`,
+                            result?.error ? 'error' : getImportResultTone(result)
+                        );
+                    } finally {
+                        hideProgress();
                     }
-                });
-                await loadScripts();
-                await loadSettings();
-                updateStats();
-                hideProgress();
-                showToast(
-                    result?.error ? result.error : `Textarea restore: ${formatImportSummary(result)}`,
-                    result?.error ? 'error' : getImportResultTone(result)
-                );
-            } catch (e) { hideProgress(); showToast('Invalid JSON', 'error'); }
+                } catch (e) {
+                    showToast('Invalid JSON', 'error');
+                }
+            }, { busyLabel: 'Restoring…' });
         });
 
         // Modal
@@ -7939,31 +8525,34 @@
         `).join('')}</div>`;
 
         elements.backupList.querySelectorAll('[data-backup-review]').forEach(button => {
-            button.addEventListener('click', () => openBackupReviewModal(button.dataset.backupReview));
+            button.addEventListener('click', async () => {
+                await runButtonTask(button, () => openBackupReviewModal(button.dataset.backupReview), { busyLabel: 'Loading…' });
+            });
         });
         elements.backupList.querySelectorAll('[data-backup-export]').forEach(button => {
-            button.addEventListener('click', () => exportStoredBackup(button.dataset.backupExport));
+            button.addEventListener('click', async () => {
+                await runButtonTask(button, () => exportStoredBackup(button.dataset.backupExport), { busyLabel: 'Downloading…' });
+            });
         });
         elements.backupList.querySelectorAll('[data-backup-delete]').forEach(button => {
             button.addEventListener('click', async () => {
-                const backup = state.backups.find(entry => entry.id === button.dataset.backupDelete);
-                const label = backup?.timestamp ? dateTimeFormatter.format(new Date(backup.timestamp)) : 'this backup';
-                const confirmed = await showConfirmModal('Delete Backup', `Delete the backup from ${label}? This removes the stored archive from ScriptVault.`);
-                if (!confirmed) return;
-                button.disabled = true;
-                try {
-                    const response = await chrome.runtime.sendMessage({ action: 'deleteBackup', backupId: button.dataset.backupDelete });
-                    if (response?.error || response?.success === false) {
-                        showToast(response?.error || 'Failed to delete backup', 'error');
-                        return;
+                await runButtonTask(button, async () => {
+                    const backup = state.backups.find(entry => entry.id === button.dataset.backupDelete);
+                    const label = backup?.timestamp ? dateTimeFormatter.format(new Date(backup.timestamp)) : 'this backup';
+                    const confirmed = await showConfirmModal('Delete Backup', `Delete the backup from ${label}? This removes the stored archive from ScriptVault.`);
+                    if (!confirmed) return;
+                    try {
+                        const response = await chrome.runtime.sendMessage({ action: 'deleteBackup', backupId: button.dataset.backupDelete });
+                        if (response?.error || response?.success === false) {
+                            showToast(response?.error || 'Failed to delete backup', 'error');
+                            return;
+                        }
+                        await loadBackups();
+                        showToast(`Deleted backup from ${label}`, 'success');
+                    } catch (error) {
+                        showToast(error?.message || 'Failed to delete backup', 'error');
                     }
-                    await loadBackups();
-                    showToast(`Deleted backup from ${label}`, 'success');
-                } catch (error) {
-                    showToast(error?.message || 'Failed to delete backup', 'error');
-                } finally {
-                    button.disabled = false;
-                }
+                });
             });
         });
     }
@@ -8012,23 +8601,29 @@
 
     async function restoreStoredBackup(backupId, options = {}) {
         const progressTitle = options.progressTitle
-            || (options.selective ? 'Restoring selected scripts...' : 'Restoring backup...');
+            || (options.selective ? 'Restoring selected scripts…' : 'Restoring backup…');
         const progressDetail = options.progressDetail
-            || (options.selective ? 'Applying selected scripts...' : 'Applying vault archive...');
+            || (options.selective ? 'Applying selected scripts…' : 'Applying vault archive…');
         showProgress(progressTitle);
-        updateProgress(0, 1, progressDetail);
+        updateProgress(0, 3, progressDetail);
         try {
             const response = await chrome.runtime.sendMessage({ action: 'restoreBackup', backupId, options });
-            hideProgress();
             if (response?.error || response?.success === false) {
+                hideProgress();
                 showToast(response?.error || 'Restore failed', 'error');
                 return response;
             }
-            await loadScripts();
-            await loadSettings();
+            updateProgress(1, 3, 'Refreshing folders…');
             await loadFolders();
-            await loadWorkspaces();
+            updateProgress(2, 3, 'Refreshing scripts, settings, and workspaces…');
+            await Promise.all([
+                loadScripts(),
+                loadSettings(),
+                loadWorkspaces()
+            ]);
             updateStats();
+            updateProgress(3, 3, 'Restore complete');
+            hideProgress();
             showToast(`Backup restore: ${formatBackupRestoreSummary(response)}`, getBackupRestoreTone(response));
             return response;
         } catch (error) {
@@ -8038,13 +8633,15 @@
         }
     }
 
-    async function openBackupReviewModal(backupId) {
+    async function openBackupReviewModal(backupId, options = {}) {
         const backup = state.backups.find(entry => entry.id === backupId);
         if (!backup) {
             showToast('Backup not found', 'error');
             return;
         }
         try {
+            const hasExplicitSelection = Array.isArray(options.selectedScriptIds);
+            const selectedScriptIdSet = new Set(hasExplicitSelection ? options.selectedScriptIds.filter(Boolean) : []);
             const manifest = await chrome.runtime.sendMessage({ action: 'inspectBackup', backupId });
             if (!manifest || manifest?.error) {
                 showToast(manifest?.error || 'Failed to inspect backup', 'error');
@@ -8160,7 +8757,7 @@
                     <label class="restore-preview-item">
                         <div class="restore-preview-copy">
                             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                                <input type="checkbox" data-restore-script-id="${escapeHtml(script.identity)}" data-restore-status="${script.existsInVault ? 'existing' : 'new'}" data-restore-storage="${script.hasStorage ? 'yes' : 'no'}" checked>
+                                <input type="checkbox" data-restore-script-id="${escapeHtml(script.identity)}" data-restore-status="${script.existsInVault ? 'existing' : 'new'}" data-restore-storage="${script.hasStorage ? 'yes' : 'no'}"${!hasExplicitSelection || selectedScriptIdSet.has(script.identity) ? ' checked' : ''}>
                                 <strong style="color:var(--text-primary)">${escapeHtml(script.name || script.id)}</strong>
                                 ${script.namespace ? `<span class="panel-empty-inline">${escapeHtml(script.namespace)}</span>` : ''}
                                 <span class="info-tag ${script.existsInVault ? 'warning' : 'success'}">${script.existsInVault ? 'Will overwrite' : 'New script'}</span>
@@ -8240,18 +8837,22 @@
                     storageCount
                 };
             };
+            const getSelectedRestoreIds = () => Array.from(elements.modalBody?.querySelectorAll('[data-restore-script-id]:checked') || [])
+                .map(input => input.getAttribute('data-restore-script-id'))
+                .filter(Boolean);
+            const reopenBackupReview = async selectedScriptIds => {
+                await openBackupReviewModal(backupId, { selectedScriptIds });
+            };
             const modalActions = [
                 { label: 'Close', class: '', callback: () => hideModal() },
-                { label: 'Download ZIP', class: '', callback: async () => { await exportStoredBackup(backupId); } }
+                { label: 'Download ZIP', class: '', busyLabel: 'Downloading…', callback: async () => { await exportStoredBackup(backupId); } }
             ];
             if (hasScriptEntries) {
                 modalActions.push({
                     label: 'Restore Selected',
                     class: '',
                     callback: async () => {
-                        const selected = Array.from(elements.modalBody?.querySelectorAll('[data-restore-script-id]:checked') || [])
-                            .map(input => input.getAttribute('data-restore-script-id'))
-                            .filter(Boolean);
+                        const selected = getSelectedRestoreIds();
                         if (!selected.length) {
                             showToast('Select at least one script to restore', 'info');
                             return;
@@ -8267,13 +8868,16 @@
                                 storageCount: stats.storageCount
                             })
                         );
-                        if (!confirmed) return;
+                        if (!confirmed) {
+                            await reopenBackupReview(selected);
+                            return;
+                        }
                         hideModal();
                         await restoreStoredBackup(backupId, {
                             selective: true,
                             scriptIds: selected,
-                            progressTitle: 'Restoring selected scripts...',
-                            progressDetail: `Applying ${numberFormatter.format(stats.selectedCount)} selected script${stats.selectedCount === 1 ? '' : 's'}...`
+                            progressTitle: 'Restoring selected scripts…',
+                            progressDetail: `Applying ${numberFormatter.format(stats.selectedCount)} selected script${stats.selectedCount === 1 ? '' : 's'}…`
                         });
                     }
                 });
@@ -8283,6 +8887,7 @@
                     label: hasVaultRestoreItems ? 'Restore Scripts Only' : 'Restore All Scripts',
                     class: 'btn-primary',
                     callback: async () => {
+                        const preservedSelection = getSelectedRestoreIds();
                         const confirmed = await showConfirmModal(
                             hasVaultRestoreItems ? 'Restore Scripts Only' : 'Restore All Scripts',
                             buildRestoreMessage({
@@ -8293,13 +8898,16 @@
                                 storageCount: scriptsWithStorageCount
                             })
                         );
-                        if (!confirmed) return;
+                        if (!confirmed) {
+                            await reopenBackupReview(preservedSelection);
+                            return;
+                        }
                         hideModal();
                         await restoreStoredBackup(backupId, {
                             selective: true,
                             scriptIds: restoreAllScriptIds,
-                            progressTitle: hasVaultRestoreItems ? 'Restoring scripts only...' : 'Restoring all scripts...',
-                            progressDetail: `Applying ${numberFormatter.format(restoreAllScriptIds.length)} archived script${restoreAllScriptIds.length === 1 ? '' : 's'}...`
+                            progressTitle: hasVaultRestoreItems ? 'Restoring scripts only…' : 'Restoring all scripts…',
+                            progressDetail: `Applying ${numberFormatter.format(restoreAllScriptIds.length)} archived script${restoreAllScriptIds.length === 1 ? '' : 's'}…`
                         });
                     }
                 });
@@ -8309,16 +8917,20 @@
                     label: 'Restore Full Vault',
                     class: restoreAllScriptIds.length ? '' : 'btn-primary',
                     callback: async () => {
+                        const preservedSelection = getSelectedRestoreIds();
                         const confirmed = await showConfirmModal(
                             'Restore Full Vault',
                             buildRestoreMessage({ mode: 'full' })
                         );
-                        if (!confirmed) return;
+                        if (!confirmed) {
+                            await reopenBackupReview(preservedSelection);
+                            return;
+                        }
                         hideModal();
                         await restoreStoredBackup(backupId, {
                             selective: false,
-                            progressTitle: 'Restoring full vault...',
-                            progressDetail: 'Applying archived scripts, settings, folders, and workspaces...'
+                            progressTitle: 'Restoring full vault…',
+                            progressDetail: 'Applying archived scripts, settings, folders, and workspaces…'
                         });
                     }
                 });
@@ -8471,69 +9083,69 @@
                     <span class="workspace-name">${escapeHtml(ws.name)}</span>
                     <span class="workspace-scripts">${Object.keys(ws.snapshot || {}).length} scripts</span>
                     <div class="workspace-actions">
-                        <button class="toolbar-btn${ws.id === active ? ' primary' : ''}" data-ws-activate="${ws.id}">${ws.id === active ? 'Active' : 'Switch'}</button>
-                        <button class="toolbar-btn" data-ws-save="${ws.id}" title="Update with current state">Save</button>
-                        <button class="toolbar-btn" data-ws-delete="${ws.id}" title="Delete workspace">Delete</button>
+                        <button type="button" class="toolbar-btn${ws.id === active ? ' primary' : ''}" data-ws-activate="${ws.id}"${ws.id === active ? ' disabled aria-current="true" title="Current workspace"' : ' title="Switch to workspace"'}>${ws.id === active ? 'Active' : 'Switch'}</button>
+                        <button type="button" class="toolbar-btn" data-ws-save="${ws.id}" title="Update with current state">Save</button>
+                        <button type="button" class="toolbar-btn" data-ws-delete="${ws.id}" title="Delete workspace">Delete</button>
                     </div>
                 </div>
             `).join('');
 
             container.querySelectorAll('[data-ws-activate]').forEach(btn => {
                 btn.addEventListener('click', async () => {
-                    const id = btn.dataset.wsActivate;
-                    showToast('Switching workspace...', 'info');
-                    const res = await chrome.runtime.sendMessage({ action: 'activateWorkspace', id });
-                    if (res?.success) {
-                        await loadScripts();
-                        await loadWorkspaces();
-                        showToast(`Workspace "${res.name}" activated`, 'success');
-                    } else {
-                        showToast(res?.error || 'Failed', 'error');
-                    }
+                    await runButtonTask(btn, async () => {
+                        const id = btn.dataset.wsActivate;
+                        showToast('Switching workspace…', 'info');
+                        const res = await chrome.runtime.sendMessage({ action: 'activateWorkspace', id });
+                        if (res?.success) {
+                            await Promise.all([loadScripts(), loadWorkspaces()]);
+                            updateStats();
+                            showToast(`Workspace "${res.name}" activated`, 'success');
+                        } else {
+                            showToast(res?.error || 'Failed', 'error');
+                        }
+                    }, { busyLabel: 'Switching…' });
                 });
             });
             container.querySelectorAll('[data-ws-save]').forEach(btn => {
                 btn.addEventListener('click', async () => {
-                    const workspaceName = btn.closest('[data-ws-id]')?.querySelector('.workspace-name')?.textContent?.trim() || 'workspace';
-                    btn.disabled = true;
-                    try {
-                        const res = await chrome.runtime.sendMessage({ action: 'saveWorkspace', id: btn.dataset.wsSave });
-                        if (res?.error || !res?.workspace) {
-                            showToast(res?.error || `Failed to update "${workspaceName}"`, 'error');
-                            return;
+                    await runButtonTask(btn, async () => {
+                        const workspaceName = btn.closest('[data-ws-id]')?.querySelector('.workspace-name')?.textContent?.trim() || 'workspace';
+                        try {
+                            const res = await chrome.runtime.sendMessage({ action: 'saveWorkspace', id: btn.dataset.wsSave });
+                            if (res?.error || !res?.workspace) {
+                                showToast(res?.error || `Failed to update "${workspaceName}"`, 'error');
+                                return;
+                            }
+                            showToast(`Saved current script state to "${res.workspace.name}"`, 'success');
+                            await loadWorkspaces();
+                        } catch (error) {
+                            showToast(`Failed to update "${workspaceName}"`, 'error');
                         }
-                        showToast(`Saved current script state to "${res.workspace.name}"`, 'success');
-                        await loadWorkspaces();
-                    } catch (error) {
-                        showToast(`Failed to update "${workspaceName}"`, 'error');
-                    } finally {
-                        btn.disabled = false;
-                    }
+                    }, { busyLabel: 'Saving…' });
                 });
             });
             container.querySelectorAll('[data-ws-delete]').forEach(btn => {
                 btn.addEventListener('click', async () => {
-                    const workspaceName = btn.closest('[data-ws-id]')?.querySelector('.workspace-name')?.textContent?.trim() || 'workspace';
-                    const confirmed = await showConfirmModal(
-                        'Delete Workspace',
-                        `Delete "${workspaceName}"? This removes the saved snapshot but does not delete any scripts.`
-                    );
-                    if (!confirmed) return;
-                    btn.disabled = true;
-                    try {
-                        const res = await chrome.runtime.sendMessage({ action: 'deleteWorkspace', id: btn.dataset.wsDelete });
-                        if (res?.error || !res?.success) {
-                            showToast(res?.error || `Failed to delete "${workspaceName}"`, 'error');
-                            return;
+                    await runButtonTask(btn, async () => {
+                        const workspaceName = btn.closest('[data-ws-id]')?.querySelector('.workspace-name')?.textContent?.trim() || 'workspace';
+                        const confirmed = await showConfirmModal(
+                            'Delete Workspace',
+                            `Delete "${workspaceName}"? This removes the saved snapshot but does not delete any scripts.`
+                        );
+                        if (!confirmed) return;
+                        try {
+                            const res = await chrome.runtime.sendMessage({ action: 'deleteWorkspace', id: btn.dataset.wsDelete });
+                            if (res?.error || !res?.success) {
+                                showToast(res?.error || `Failed to delete "${workspaceName}"`, 'error');
+                                return;
+                            }
+                            const deletedName = res?.workspace?.name || workspaceName;
+                            showToast(`Deleted workspace "${deletedName}"`, 'success');
+                            await loadWorkspaces();
+                        } catch (error) {
+                            showToast(`Failed to delete "${workspaceName}"`, 'error');
                         }
-                        const deletedName = res?.workspace?.name || workspaceName;
-                        showToast(`Deleted workspace "${deletedName}"`, 'success');
-                        await loadWorkspaces();
-                    } catch (error) {
-                        showToast(`Failed to delete "${workspaceName}"`, 'error');
-                    } finally {
-                        btn.disabled = false;
-                    }
+                    }, { busyLabel: 'Deleting…' });
                 });
             });
             updateUtilitiesOverview();
@@ -8600,8 +9212,8 @@
                 <div class="cmd-backdrop"></div>
                 <div class="cmd-dialog" role="dialog" aria-modal="true" aria-labelledby="commandPaletteLabel">
                     <div id="commandPaletteLabel" class="sr-only">Command palette</div>
-                    <input type="text" class="cmd-input" placeholder="Type a command, script name, or action..." autofocus aria-label="Command palette">
-                    <div class="cmd-results" role="listbox" aria-label="Command results"></div>
+                    <input type="search" id="commandPaletteInput" class="cmd-input" name="command_palette_query" placeholder="Type a command, script name, or action…" aria-label="Command palette" role="combobox" aria-autocomplete="list" aria-controls="commandPaletteResults" aria-expanded="true" autocomplete="off" spellcheck="false">
+                    <div id="commandPaletteResults" class="cmd-results" role="listbox" aria-label="Command results"></div>
                 </div>
             `;
             document.body.appendChild(overlay);
@@ -8612,18 +9224,34 @@
             const input = overlay.querySelector('.cmd-input');
             input.addEventListener('input', () => renderCommandResults(input.value));
             input.addEventListener('keydown', (e) => {
-                const items = overlay.querySelectorAll('.cmd-item');
-                const active = overlay.querySelector('.cmd-item.active');
+                const items = getCommandPaletteItems(overlay);
+                const activeIndex = items.findIndex(item => item.classList.contains('active'));
                 if (e.key === 'ArrowDown') {
                     e.preventDefault();
-                    if (!active && items.length) { items[0].classList.add('active'); items[0].scrollIntoView({ block: 'nearest' }); }
-                    else if (active?.nextElementSibling) { active.classList.remove('active'); active.nextElementSibling.classList.add('active'); active.nextElementSibling.scrollIntoView({ block: 'nearest' }); }
+                    if (!items.length) return;
+                    const nextItem = activeIndex === -1 ? items[0] : items[Math.min(activeIndex + 1, items.length - 1)];
+                    setCommandPaletteActiveItem(overlay, nextItem);
+                    nextItem?.scrollIntoView({ block: 'nearest' });
                 } else if (e.key === 'ArrowUp') {
                     e.preventDefault();
-                    if (active?.previousElementSibling) { active.classList.remove('active'); active.previousElementSibling.classList.add('active'); active.previousElementSibling.scrollIntoView({ block: 'nearest' }); }
+                    if (!items.length) return;
+                    const nextItem = activeIndex <= 0 ? items[0] : items[activeIndex - 1];
+                    setCommandPaletteActiveItem(overlay, nextItem);
+                    nextItem?.scrollIntoView({ block: 'nearest' });
+                } else if (e.key === 'Home') {
+                    e.preventDefault();
+                    if (!items.length) return;
+                    setCommandPaletteActiveItem(overlay, items[0]);
+                    items[0]?.scrollIntoView({ block: 'nearest' });
+                } else if (e.key === 'End') {
+                    e.preventDefault();
+                    if (!items.length) return;
+                    const nextItem = items[items.length - 1];
+                    setCommandPaletteActiveItem(overlay, nextItem);
+                    nextItem?.scrollIntoView({ block: 'nearest' });
                 } else if (e.key === 'Enter') {
                     e.preventDefault();
-                    const target = active || items[0];
+                    const target = activeIndex >= 0 ? items[activeIndex] : items[0];
                     if (target) target.click();
                 } else if (e.key === 'Escape') {
                     closeCommandPalette();
@@ -8637,7 +9265,12 @@
             A11y.trapFocus(dialog);
         }
         const input = overlay.querySelector('.cmd-input');
-        if (input) { input.value = ''; input.focus(); }
+        if (input) {
+            input.value = '';
+            input.setAttribute('aria-expanded', 'true');
+            input.removeAttribute('aria-activedescendant');
+            input.focus();
+        }
         renderCommandResults('');
     }
 
@@ -8645,6 +9278,9 @@
         const overlay = document.getElementById('commandPalette');
         const wasOpen = overlay?.classList.contains('open');
         overlay?.classList.remove('open');
+        const input = overlay?.querySelector('.cmd-input');
+        input?.setAttribute('aria-expanded', 'false');
+        input?.removeAttribute('aria-activedescendant');
         if (wasOpen && typeof A11y !== 'undefined' && typeof A11y.releaseFocus === 'function') {
             A11y.releaseFocus();
         }
@@ -8657,6 +9293,7 @@
     function renderCommandResults(query) {
         const results = document.querySelector('#commandPalette .cmd-results');
         if (!results) return;
+        const overlay = results.closest('#commandPalette');
 
         const q = query.toLowerCase().trim();
 
@@ -8666,8 +9303,8 @@
             { category: 'Actions', label: 'New Script', desc: 'Create a new script from template', action: () => { closeCommandPalette(); createNewScript(); } },
             { category: 'Actions', label: 'Import Script', desc: 'Import from file', action: () => { closeCommandPalette(); importScript(); } },
             { category: 'Actions', label: 'Check for Updates', desc: 'Check all scripts for updates', action: () => { closeCommandPalette(); document.getElementById('btnCheckUpdates')?.click(); } },
-            { category: 'Actions', label: 'Export All (ZIP)', desc: 'Export all scripts as ZIP', action: () => { closeCommandPalette(); exportToZip(); } },
-            { category: 'Actions', label: 'Export All (JSON)', desc: 'Export all scripts as JSON', action: () => { closeCommandPalette(); exportAllScripts(); } },
+            { category: 'Actions', label: 'Export All (ZIP)', desc: 'Export all scripts as ZIP', action: () => { closeCommandPalette(); elements.btnExportZip?.click(); } },
+            { category: 'Actions', label: 'Export All (JSON)', desc: 'Export all scripts as JSON', action: () => { closeCommandPalette(); elements.btnExportFile?.click(); } },
             { category: 'Actions', label: 'Export Stats CSV', desc: 'Export execution statistics', action: () => { closeCommandPalette(); exportStatsCSV(); } },
             { category: 'Actions', label: 'Find Scripts', desc: 'Search GreasyFork/OpenUserJS', action: () => { closeCommandPalette(); openFindScripts(); } },
             { category: 'Editor', label: 'Go to Line (Ctrl+G)', desc: 'Jump to a specific line number', action: async () => { closeCommandPalette(); await goToEditorLine(state.editor); } },
@@ -8708,7 +9345,8 @@
         }
 
         if (Object.keys(groups).length === 0) {
-            results.innerHTML = '<div class="cmd-empty">No matching commands</div>';
+            results.innerHTML = '<div class="cmd-empty" role="status" aria-live="polite">No matching commands</div>';
+            setCommandPaletteActiveItem(overlay, null);
             return;
         }
 
@@ -8718,12 +9356,15 @@
             html += `<div class="cmd-group">${escapeHtml(cat)}</div>`;
             html += items.map(c => {
                 const activeClass = renderedCount === 0 ? ' active' : '';
+                const isActive = renderedCount === 0;
+                const optionId = `commandPaletteOption-${renderedCount}`;
                 renderedCount += 1;
-                return `<button type="button" role="option" class="cmd-item${activeClass}" data-cmd-idx="${commands.indexOf(c)}"><span class="cmd-label">${escapeHtml(c.label)}</span><span class="cmd-desc">${escapeHtml(c.desc)}</span></button>`;
+                return `<button type="button" id="${optionId}" role="option" aria-selected="${String(isActive)}" tabindex="-1" class="cmd-item${activeClass}" data-cmd-idx="${commands.indexOf(c)}"><span class="cmd-label">${escapeHtml(c.label)}</span><span class="cmd-desc">${escapeHtml(c.desc)}</span></button>`;
             }).join('');
         }
 
         results.innerHTML = html;
+        setCommandPaletteActiveItem(overlay, getCommandPaletteItems(overlay)[0] || null);
 
         // Bind clicks
         results.querySelectorAll('.cmd-item').forEach(item => {
@@ -8732,18 +9373,16 @@
                 commands[idx]?.action();
             });
             item.addEventListener('mouseenter', () => {
-                results.querySelectorAll('.cmd-item.active').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
+                setCommandPaletteActiveItem(overlay, item);
             });
             item.addEventListener('focus', () => {
-                results.querySelectorAll('.cmd-item.active').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
+                setCommandPaletteActiveItem(overlay, item);
             });
         });
     }
 
     async function switchTab(name, options = {}) {
-        const { updateRoute = true } = options;
+        const { updateRoute = true, focusControl = false } = options;
         const nextTab = DASHBOARD_TABS.includes(name) ? name : 'scripts';
         const editorActive = elements.editorOverlay?.classList.contains('active');
         if (editorActive) {
@@ -8752,21 +9391,10 @@
                 state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
             }
             state.currentScriptId = null;
-            elements.editorOverlay?.classList.remove('active');
+            hideEditorOverlay();
         }
-        document.querySelectorAll('.tm-tab').forEach(t => t.classList.remove('active'));
-        Object.values(elements.mainPanels).forEach(p => p?.classList.remove('active'));
-        elements.btnHelpTab?.classList.remove('active');
-
-        if (nextTab === 'help') {
-            // Help tab is a separate header icon, not a .tm-tab
-            elements.btnHelpTab?.classList.add('active');
-            elements.mainPanels.help?.classList.add('active');
-        } else {
-            const tab = document.querySelector(`.tm-tab[data-tab="${nextTab}"]`);
-            tab?.classList.add('active');
-            elements.mainPanels[nextTab]?.classList.add('active');
-        }
+        document.querySelectorAll('.tm-tab.script-tab').forEach(t => t.classList.remove('active'));
+        setDashboardSection(nextTab, { focusControl });
         if (updateRoute) {
             setDashboardHash(nextTab === 'scripts' ? '' : `tab=${nextTab}`);
         }

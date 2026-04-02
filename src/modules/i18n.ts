@@ -562,14 +562,27 @@ const localeNames: Record<string, string> = {
   ru: 'Русский',
 };
 
+function resolveLocale(locale: string | null | undefined): LocaleCode | null {
+  const normalized = (locale ?? '')
+    .trim()
+    .split(/[-_]/)[0]
+    ?.toLowerCase();
+  return normalized && (translations as Record<string, unknown>)[normalized]
+    ? normalized as LocaleCode
+    : null;
+}
+
+function normalizeLocale(locale: string | null | undefined): LocaleCode {
+  return resolveLocale(locale) ?? 'en';
+}
+
 // Detect browser language
 function detectLocale(): string {
   const browserLang: string =
     navigator.language ||
     (navigator as Navigator & { userLanguage?: string }).userLanguage ||
     'en';
-  const shortLang: string = browserLang.split('-')[0]!.toLowerCase();
-  return (translations as Record<string, unknown>)[shortLang] ? shortLang : 'en';
+  return normalizeLocale(browserLang);
 }
 
 // Get message with optional placeholder substitution
@@ -597,19 +610,16 @@ export const I18n: I18nModule = {
     currentLocale =
       locale === 'auto'
         ? detectLocale()
-        : (translations as Record<string, unknown>)[locale]
-          ? locale
-          : 'en';
+        : normalizeLocale(locale);
     console.log('[I18n] Initialized with locale:', currentLocale);
     return currentLocale;
   },
 
   setLocale(locale: string): boolean {
-    if ((translations as Record<string, unknown>)[locale]) {
-      currentLocale = locale;
-      return true;
-    }
-    return false;
+    const normalized = resolveLocale(locale);
+    if (!normalized) return false;
+    currentLocale = normalized;
+    return true;
   },
 
   getLocale(): string {

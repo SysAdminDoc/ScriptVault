@@ -50,6 +50,17 @@ interface CleanupResult {
 /** Resolve the effective quota once and cache it. */
 let _resolvedQuota: number | null = null;
 
+function measureStoredBytes(value: unknown): number {
+  const serialized = JSON.stringify(value);
+  return typeof serialized === 'string' ? serialized.length : 0;
+}
+
+function countStoredScripts(value: unknown): number {
+  if (Array.isArray(value)) return value.length;
+  if (value && typeof value === 'object') return Object.keys(value as Record<string, unknown>).length;
+  return 0;
+}
+
 async function _getQuotaLimit(): Promise<number> {
   if (_resolvedQuota !== null) return _resolvedQuota;
   // Prefer navigator.storage.estimate() for the real quota
@@ -80,7 +91,7 @@ async function _getQuotaLimit(): Promise<number> {
 async function getUsage(): Promise<UsageInfo> {
   const quotaLimit: number = await _getQuotaLimit();
   const bytesUsed: number = await chrome.storage.local.getBytesInUse(undefined);
-  const percentage: number = bytesUsed / quotaLimit;
+  const percentage: number = quotaLimit > 0 ? bytesUsed / quotaLimit : 0;
   const level: UsageLevel = percentage >= CRITICAL_THRESHOLD ? 'critical'
     : percentage >= WARNING_THRESHOLD ? 'warning'
     : 'ok';
@@ -104,8 +115,12 @@ async function getBreakdown(): Promise<StorageBreakdown> {
   };
 
   for (const [key, value] of Object.entries(all)) {
-    const size: number = JSON.stringify(value).length;
-    if (key.startsWith('script_')) { categories.scripts.count++; categories.scripts.bytes += size; }
+    const size: number = measureStoredBytes(value);
+    if (key === 'userscripts') {
+      categories.scripts.count += countStoredScripts(value);
+      categories.scripts.bytes += size;
+    }
+    else if (key.startsWith('script_')) { categories.scripts.count++; categories.scripts.bytes += size; }
     else if (key.startsWith('values_') || key.startsWith('SV_GM_')) { categories.scriptValues.count++; categories.scriptValues.bytes += size; }
     else if (key.startsWith('require_cache_')) { categories.requireCache.count++; categories.requireCache.bytes += size; }
     else if (key.startsWith('res_cache_')) { categories.resourceCache.count++; categories.resourceCache.bytes += size; }
@@ -124,10 +139,18 @@ async function getBreakdown(): Promise<StorageBreakdown> {
 async function cleanup(options: CleanupOptions = {}): Promise<CleanupResult> {
   const actions: string[] = [];
   let freedBytes: number = 0;
+  const all: Record<string, unknown> = await chrome.storage.local.get(undefined);
+  const keysToRemove = new Set<string>();
+
+  const scheduleRemoval = (key: string): boolean => {
+    if (!(key in all) || keysToRemove.has(key)) return false;
+    freedBytes += measureStoredBytes(all[key]);
+    keysToRemove.add(key);
+    return true;
+  };
 
   // 1. Clear expired require cache (>7 days)
   if (options.requireCache !== false) {
-    const all: Record<string, unknown> = await chrome.storage.local.get(undefined);
     const expiredKeys: string[] = [];
     const now: number = Date.now();
     for (const [key, value] of Object.entries(all)) {
@@ -136,14 +159,14 @@ async function cleanup(options: CleanupOptions = {}): Promise<CleanupResult> {
         const ts = entry.timestamp as number;
         if (now - ts > 7 * 24 * 60 * 60 * 1000) {
           expiredKeys.push(key);
-          freedBytes += JSON.stringify(value).length;
+          freedBytes += measureStoredBytes(value);
         }
       }
       if (key.startsWith('res_cache_') && entry && typeof entry === 'object' && 'timestamp' in entry) {
         const ts = entry.timestamp as number;
         if (now - ts > 7 * 24 * 60 * 60 * 1000) {
           expiredKeys.push(key);
-          freedBytes += JSON.stringify(value).length;
+          freedBytes += measureStoredBytes(value);
         }
       }
     }
@@ -155,51 +178,75 @@ async function cleanup(options: CleanupOptions = {}): Promise<CleanupResult> {
 
   // 2. Trim error log to 200 entries
   if (options.errorLog !== false) {
-    const errData: Record<string, unknown> = await chrome.storage.local.get('errorLog');
-    const errorLog = errData.errorLog as unknown[] | undefined;
+    const errorLog = all.errorLog as unknown[] | undefined;
     if (errorLog && errorLog.length > 200) {
       const trimmed: unknown[] = errorLog.slice(-200);
       const removed: number = errorLog.length - trimmed.length;
       await chrome.storage.local.set({ errorLog: trimmed });
       actions.push(`Pruned ${removed} error log entries`);
-      freedBytes += removed * 300;
+      freedBytes += Math.max(0, measureStoredBytes(errorLog) - measureStoredBytes(trimmed));
     }
   }
 
   // 5. Trim CSP reports to 100
   if (options.cspReports !== false) {
-    const cspData: Record<string, unknown> = await chrome.storage.local.get('sv_csp_reports');
-    const cspReports = cspData.sv_csp_reports as unknown[] | undefined;
+    const cspReports = all.sv_csp_reports as unknown[] | undefined;
     if (cspReports && cspReports.length > 100) {
       const trimmed: unknown[] = cspReports.slice(-100);
       await chrome.storage.local.set({ sv_csp_reports: trimmed });
       actions.push('Pruned old CSP reports');
+      freedBytes += Math.max(0, measureStoredBytes(cspReports) - measureStoredBytes(trimmed));
     }
   }
 
   // 6. Clear old sync tombstones (>30 days)
   if (options.tombstones !== false) {
-    const tombData: Record<string, unknown> = await chrome.storage.local.get('syncTombstones');
-    const syncTombstones = tombData.syncTombstones as Record<string, number> | undefined;
+    const syncTombstones = all.syncTombstones as Record<string, number> | undefined;
     if (syncTombstones) {
       const now: number = Date.now();
       const cutoff: number = 30 * 24 * 60 * 60 * 1000;
       let pruned: number = 0;
+      const nextTombstones = { ...syncTombstones };
       for (const [id, ts] of Object.entries(syncTombstones)) {
-        if (ts !== undefined && now - ts > cutoff) { delete syncTombstones[id]; pruned++; }
+        if (ts !== undefined && now - ts > cutoff) { delete nextTombstones[id]; pruned++; }
       }
       if (pruned > 0) {
-        await chrome.storage.local.set({ syncTombstones });
+        if (Object.keys(nextTombstones).length === 0) {
+          await chrome.storage.local.remove('syncTombstones');
+        } else {
+          await chrome.storage.local.set({ syncTombstones: nextTombstones });
+        }
         actions.push(`Pruned ${pruned} sync tombstones`);
+        freedBytes += Math.max(0, measureStoredBytes(syncTombstones) - (Object.keys(nextTombstones).length === 0 ? 0 : measureStoredBytes(nextTombstones)));
       }
     }
   }
 
   // 7. Remove npm cache if critical
   if (options.npmCache) {
-    await chrome.storage.local.remove('npmCache');
-    actions.push('Cleared npm package cache');
-    freedBytes += 5000;
+    if (scheduleRemoval('npmCache')) {
+      actions.push('Cleared npm package cache');
+    }
+  }
+
+  // 8. Remove analytics data when asked
+  if (options.analytics) {
+    const analyticsKeys = Object.keys(all).filter((key) => key === 'analytics' || key.startsWith('sv_analytics'));
+    const removedAnalytics = analyticsKeys.filter((key) => scheduleRemoval(key));
+    if (removedAnalytics.length > 0) {
+      actions.push(`Cleared ${removedAnalytics.length} analytics entr${removedAnalytics.length === 1 ? 'y' : 'ies'}`);
+    }
+  }
+
+  // 9. Remove performance history when asked
+  if (options.perfHistory) {
+    if (scheduleRemoval('perfHistory')) {
+      actions.push('Cleared performance history');
+    }
+  }
+
+  if (keysToRemove.size > 0) {
+    await chrome.storage.local.remove([...keysToRemove]);
   }
 
   return { freedBytes, actions };
@@ -219,7 +266,11 @@ async function autoCleanup(): Promise<CleanupResult | null> {
 
   if (usage.level === 'critical' && result.freedBytes < 500000) {
     // Still critical — try more aggressive cleanup
-    await cleanup({ analytics: true, perfHistory: true, errorLog: true, cspReports: true });
+    const aggressiveResult = await cleanup({ analytics: true, perfHistory: true, errorLog: true, cspReports: true });
+    return {
+      freedBytes: result.freedBytes + aggressiveResult.freedBytes,
+      actions: [...result.actions, ...aggressiveResult.actions]
+    };
   }
 
   return result;

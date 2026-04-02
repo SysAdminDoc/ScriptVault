@@ -28,6 +28,7 @@ declare const ScriptStorage: {
   get(id: string): Promise<Script | null>;
   getAll(): Promise<Script[]>;
   set(id: string, script: Script): Promise<void>;
+  delete(id: string): Promise<void>;
 };
 
 declare const SettingsManager: {
@@ -84,6 +85,57 @@ interface MergeResult {
   merged?: string;
   error?: string;
   conflicts?: boolean;
+}
+
+type RuntimeHooks = typeof globalThis & {
+  registerScript?: (script: Script) => Promise<void>;
+  unregisterScript?: (scriptId: string) => Promise<void>;
+  updateBadge?: (tabId?: number | null) => Promise<void>;
+};
+
+function getRuntimeHooks(): RuntimeHooks {
+  return globalThis as RuntimeHooks;
+}
+
+async function refreshSyncedScriptRuntime(script: Script): Promise<void> {
+  const hooks = getRuntimeHooks();
+  if (typeof hooks.unregisterScript === 'function') {
+    try {
+      await hooks.unregisterScript(script.id);
+    } catch (e) {
+      debugLog('[CloudSync] Failed to unregister synced script:', script.id, e);
+    }
+  }
+  if (script.enabled !== false && typeof hooks.registerScript === 'function') {
+    try {
+      await hooks.registerScript(script);
+    } catch (e) {
+      debugLog('[CloudSync] Failed to register synced script:', script.id, e);
+    }
+  }
+}
+
+async function deleteSyncedScript(scriptId: string): Promise<void> {
+  const hooks = getRuntimeHooks();
+  if (typeof hooks.unregisterScript === 'function') {
+    try {
+      await hooks.unregisterScript(scriptId);
+    } catch (e) {
+      debugLog('[CloudSync] Failed to unregister deleted synced script:', scriptId, e);
+    }
+  }
+  await ScriptStorage.delete(scriptId);
+}
+
+async function updateBadgeIfAvailable(): Promise<void> {
+  const hooks = getRuntimeHooks();
+  if (typeof hooks.updateBadge === 'function') {
+    try {
+      await hooks.updateBadge();
+    } catch (e) {
+      debugLog('[CloudSync] Failed to refresh badge after sync:', e);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +210,14 @@ export const CloudSync = {
 
       // Merge: prefer newer versions
       const merged = this.mergeData(localData, remoteData);
+      merged.scripts = merged.scripts.filter((script: SyncScript) => !mergedTombstones[script.id]);
+      let localMutated = false;
+
+      for (const localScript of scripts) {
+        if (!mergedTombstones[localScript.id]) continue;
+        await deleteSyncedScript(localScript.id);
+        localMutated = true;
+      }
 
       // Apply merged data locally, skipping tombstoned (deleted) scripts
       // Uses 3-way text merge (via offscreen doc) when both sides have changed since sync base
@@ -203,7 +263,7 @@ export const CloudSync = {
         if (!existing || script.updatedAt > existing.updatedAt || mergeConflict) {
           const parsed = parseUserscript(codeToSave);
           if (!parsed.error && parsed.meta) {
-            await ScriptStorage.set(script.id, {
+            const nextScript = {
               id: script.id,
               code: codeToSave,
               meta: parsed.meta,
@@ -216,7 +276,10 @@ export const CloudSync = {
               updatedAt: Math.max(script.updatedAt, existing?.updatedAt ?? 0),
               createdAt: existing?.createdAt ?? script.updatedAt,
               syncBaseCode: codeToSave // record merged result as new base for future syncs
-            });
+            } as Script;
+            await ScriptStorage.set(script.id, nextScript);
+            await refreshSyncedScriptRuntime(nextScript);
+            localMutated = true;
           }
         }
       }
@@ -224,6 +287,10 @@ export const CloudSync = {
       // Persist merged tombstones locally
       if (Object.keys(mergedTombstones).length > Object.keys(tombstones).length) {
         await chrome.storage.local.set({ syncTombstones: mergedTombstones });
+      }
+
+      if (localMutated) {
+        await updateBadgeIfAvailable();
       }
 
       // Upload merged data (includes tombstones)

@@ -953,7 +953,7 @@
     </div>
     
     <!-- Setup Warning Banner (Chrome 138+) -->
-    <div class="setup-warning" id="setupWarning">
+    <div class="setup-warning" id="setupWarning" role="status" aria-live="polite" aria-atomic="true">
         <div class="setup-warning-title">
             <span>⚠️</span>
             <span>Setup Required</span>
@@ -968,7 +968,7 @@
     <div class="script-list" id="scriptList"></div>
 
     <!-- Empty state (shown when no scripts match) -->
-    <div id="emptyState" style="display:none; padding:20px 16px; text-align:center;">
+    <div id="emptyState" role="status" aria-live="polite" aria-atomic="true" style="display:none; padding:20px 16px; text-align:center;">
         <div style="font-size:28px; margin-bottom:8px; opacity:0.6;">📜</div>
         <div style="font-size:13px; font-weight:500; color:var(--popup-text); margin-bottom:4px;">No scripts for this page</div>
         <div id="emptyStateHint" style="font-size:12px; color:var(--popup-text-muted);">Find scripts on GreasyFork or create your own</div>
@@ -998,7 +998,7 @@
         </button>
 
         <!-- Utilities submenu -->
-        <button class="menu-item" id="btnUtilities" type="button">
+        <button class="menu-item" id="btnUtilities" type="button" aria-expanded="false" aria-controls="utilitiesSubmenu">
             <div class="menu-item-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
@@ -1012,7 +1012,7 @@
             </div>
         </button>
 
-        <div class="submenu" id="utilitiesSubmenu">
+        <div class="submenu" id="utilitiesSubmenu" aria-hidden="true">
             <button class="menu-item" id="btnCheckUpdates" type="button">
                 <span class="menu-item-text">Update Userscripts</span>
             </button>

@@ -64,6 +64,7 @@ interface StyleRegistration {
 interface ParseResult {
   meta?: StyleMeta;
   variables?: StyleVariable[];
+  match?: string[];
   css?: string;
   error?: string;
 }
@@ -112,7 +113,8 @@ const DIRECTIVE_REGEX: RegExp = /^@(\S+)\s+(.*?)\s*$/;
 let _styles: Record<string, StyleEntry> = {};
 let _customVars: Record<string, Record<string, string | number | boolean>> = {};
 let _initialized = false;
-const _registeredTabs: Map<number, Set<string>> = new Map();
+const _registeredTabs: Map<number, Map<string, string>> = new Map();
+const _injectingTabs: Set<number> = new Set();
 
 /* ------------------------------------------------------------------ */
 /*  Storage helpers                                                    */
@@ -279,6 +281,7 @@ function parseUserCSS(code: string): ParseResult {
     updateURL: '',
   };
   const variables: StyleVariable[] = [];
+  const matchPatterns: string[] = [];
 
   const metaBlock: string = metaMatch[1] ?? '';
   const lines: string[] = metaBlock.split('\n');
@@ -300,6 +303,8 @@ function parseUserCSS(code: string): ParseResult {
         const parsed: StyleVariable | null = _parseVarDirective(varTypeMatch[1] as VarType, varTypeMatch[2] ?? '');
         if (parsed) variables.push(parsed);
       }
+    } else if (key === 'match' && value) {
+      matchPatterns.push(value);
     } else if (key in meta) {
       meta[key] = value;
     }
@@ -313,7 +318,12 @@ function parseUserCSS(code: string): ParseResult {
     css = code.substring(afterMeta + 2).trim();
   }
 
-  return { meta, variables, css };
+  return {
+    meta,
+    variables,
+    match: matchPatterns.length ? matchPatterns : ['*://*/*'],
+    css,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -451,15 +461,25 @@ async function _injectStyleToMatchingTabs(styleId: string): Promise<void> {
     for (const tab of tabs) {
       if (tab.id == null) continue;
       if (_urlMatchesPatterns(tab.url, style.match)) {
+        const tabStyles: Map<string, string> = _registeredTabs.get(tab.id) ?? new Map<string, string>();
+        const previousCss: string | undefined = tabStyles.get(styleId);
         try {
+          if (previousCss && previousCss !== css) {
+            try {
+              await chrome.scripting.removeCSS({
+                target: { tabId: tab.id },
+                css: previousCss,
+              });
+            } catch {
+              // The tab may have navigated since the previous injection.
+            }
+          }
           await chrome.scripting.insertCSS({
             target: { tabId: tab.id },
             css,
           });
-          if (!_registeredTabs.has(tab.id)) {
-            _registeredTabs.set(tab.id, new Set());
-          }
-          _registeredTabs.get(tab.id)!.add(styleId);
+          tabStyles.set(styleId, css);
+          _registeredTabs.set(tab.id, tabStyles);
         } catch {
           // Tab may not be injectable (chrome://, etc.)
         }
@@ -474,21 +494,23 @@ async function _injectStyleToMatchingTabs(styleId: string): Promise<void> {
  * Remove a style's CSS from all tabs.
  */
 async function _removeStyleFromAllTabs(styleId: string): Promise<void> {
-  const css: string = _buildCSS(styleId);
-  if (!css) return;
-
   try {
     const tabs: chrome.tabs.Tab[] = await chrome.tabs.query({});
     for (const tab of tabs) {
       if (tab.id == null) continue;
-      const tabStyles: Set<string> | undefined = _registeredTabs.get(tab.id);
-      if (tabStyles?.has(styleId)) {
+      const tabStyles: Map<string, string> | undefined = _registeredTabs.get(tab.id);
+      if (!tabStyles) continue;
+      const registeredCss: string | undefined = tabStyles.get(styleId);
+      if (registeredCss) {
         try {
           await chrome.scripting.removeCSS({
             target: { tabId: tab.id },
-            css,
+            css: registeredCss,
           });
           tabStyles.delete(styleId);
+          if (tabStyles.size === 0) {
+            _registeredTabs.delete(tab.id);
+          }
         } catch {
           // Tab may have been closed
         }
@@ -521,11 +543,33 @@ function _urlMatchesPatterns(url: string | undefined, patterns: string[]): boole
 }
 
 function _matchPatternToRegex(pattern: string): RegExp {
-  // Chrome extension match pattern: scheme://host/path
-  const escaped: string = pattern
-    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\\\*/g, '.*');
-  return new RegExp('^' + escaped + '$');
+  const match = pattern.match(/^(\*|http|https|file|ftp):\/\/([^/]*)(\/.*)$/);
+  if (!match) {
+    throw new Error(`Invalid match pattern: ${pattern}`);
+  }
+
+  const scheme: string = match[1] ?? '';
+  const host: string = match[2] ?? '';
+  const path: string = match[3] ?? '';
+
+  const schemeRegex =
+    scheme === '*'
+      ? 'https?'
+      : _escapeRegex(scheme);
+
+  let hostRegex = '';
+  if (scheme !== 'file') {
+    if (host === '*') {
+      hostRegex = '[^/]+';
+    } else if (host.startsWith('*.')) {
+      hostRegex = `(?:[^/]+\\.)*${_escapeRegex(host.slice(2))}`;
+    } else {
+      hostRegex = _escapeRegex(host);
+    }
+  }
+
+  const pathRegex = path.split('*').map((segment: string) => _escapeRegex(segment)).join('.*');
+  return new RegExp(`^${schemeRegex}:\\/\\/${hostRegex}${pathRegex}$`);
 }
 
 function _globMatch(url: string, glob: string): boolean {
@@ -590,6 +634,7 @@ function convertToUserscript(usercssCode: string): ConvertResult {
 
   const meta: StyleMeta = parsed.meta!;
   const variables: StyleVariable[] = parsed.variables!;
+  const matchPatterns: string[] = parsed.match ?? ['*://*/*'];
   const css: string = parsed.css!;
 
   // Build the default variable values for substitution
@@ -605,7 +650,7 @@ function convertToUserscript(usercssCode: string): ConvertResult {
     .replace(/`/g, '\\`')
     .replace(/\$/g, '\\$');
 
-  const matchDirectives = '// @match        *://*/*';
+  const matchDirectives: string[] = matchPatterns.map((pattern: string) => `// @match        ${pattern}`);
   const grantDirective = '// @grant        GM_addStyle';
 
   const script: string = [
@@ -615,7 +660,7 @@ function convertToUserscript(usercssCode: string): ConvertResult {
     `// @version      ${meta.version}`,
     `// @description  ${meta.description}`,
     `// @author       ${meta.author}`,
-    matchDirectives,
+    ...matchDirectives,
     grantDirective,
     '// @run-at       document-start',
     '// ==/UserScript==',
@@ -791,28 +836,44 @@ function isUserCSSUrl(url: string): boolean {
  * Call from background.js webNavigation.onCommitted or tabs.onUpdated.
  */
 async function onTabUpdated(tabId: number, url: string | undefined): Promise<void> {
-  if (!_initialized) await _loadState();
   if (!url) return;
+  if (_injectingTabs.has(tabId)) return;
+  _injectingTabs.add(tabId);
 
-  for (const [styleId, style] of Object.entries(_styles)) {
-    if (!style.enabled) continue;
-    if (!_urlMatchesPatterns(url, style.match)) continue;
+  try {
+    if (!_initialized) await _loadState();
+    for (const [styleId, style] of Object.entries(_styles)) {
+      if (!style.enabled) continue;
+      if (!_urlMatchesPatterns(url, style.match)) continue;
 
-    const css: string = _buildCSS(styleId);
-    if (!css) continue;
+      const css: string = _buildCSS(styleId);
+      if (!css) continue;
 
-    try {
-      await chrome.scripting.insertCSS({
-        target: { tabId },
-        css,
-      });
-      if (!_registeredTabs.has(tabId)) {
-        _registeredTabs.set(tabId, new Set());
+        try {
+          const tabStyles: Map<string, string> = _registeredTabs.get(tabId) ?? new Map<string, string>();
+          const previousCss: string | undefined = tabStyles.get(styleId);
+          if (previousCss && previousCss !== css) {
+            try {
+              await chrome.scripting.removeCSS({
+                target: { tabId },
+                css: previousCss,
+              });
+            } catch {
+              // The previous page may already be gone.
+            }
+          }
+          await chrome.scripting.insertCSS({
+            target: { tabId },
+            css,
+          });
+          tabStyles.set(styleId, css);
+          _registeredTabs.set(tabId, tabStyles);
+        } catch {
+          // Tab not injectable
+        }
       }
-      _registeredTabs.get(tabId)!.add(styleId);
-    } catch {
-      // Tab not injectable
-    }
+  } finally {
+    _injectingTabs.delete(tabId);
   }
 }
 
@@ -861,6 +922,7 @@ async function updateCSS(styleId: string, newCSS: string): Promise<void> {
     if (!parsed.error) {
       style.meta = parsed.meta!;
       style.variables = parsed.variables!;
+      style.match = parsed.match!;
       style.css = parsed.css!;
       style.rawCode = newCSS;
     }

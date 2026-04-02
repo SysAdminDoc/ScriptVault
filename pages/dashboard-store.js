@@ -25,6 +25,7 @@ const ScriptStore = (() => {
         requestToken: 0,
         getInstalledScripts: null, // fn supplied by caller
         onInstalled: null,         // callback after successful install
+        searchUiBusy: false,
     };
 
     const CATEGORIES = {
@@ -420,19 +421,37 @@ const ScriptStore = (() => {
     gap: 18px;
 }
 .ss-hero {
+    position: relative;
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     justify-content: space-between;
     gap: 20px;
     flex-wrap: wrap;
-    padding: 22px 24px;
-    border: 1px solid rgba(127, 127, 127, 0.16);
-    border-radius: 20px;
+    padding: 26px 28px;
+    border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+    border-radius: 28px;
     background:
-        radial-gradient(circle at top right, rgba(96, 165, 250, 0.14), transparent 16rem),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+        radial-gradient(circle at top right, rgba(96, 165, 250, 0.2), transparent 16rem),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02) 58%, transparent),
         var(--bg-section-header);
-    box-shadow: 0 18px 32px rgba(0, 0, 0, 0.14);
+    box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow-lg, 0 28px 70px rgba(0,0,0,0.26));
+    overflow: hidden;
+    isolation: isolate;
+}
+.ss-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 40%, transparent 62%, rgba(255, 255, 255, 0.03));
+    pointer-events: none;
+}
+.ss-hero-copy,
+.ss-overview {
+    position: relative;
+    z-index: 1;
+}
+.ss-hero-copy {
+    max-width: 700px;
 }
 .ss-eyebrow {
     font-size: 10px;
@@ -442,17 +461,18 @@ const ScriptStore = (() => {
     color: var(--accent-secondary);
 }
 .ss-hero-copy h2 {
-    margin-top: 10px;
-    font-size: 24px;
-    font-weight: 700;
-    letter-spacing: -0.04em;
+    margin-top: 14px;
+    font-size: clamp(28px, 3.2vw, 38px);
+    font-weight: 760;
+    letter-spacing: -0.05em;
     color: var(--text-primary);
+    text-wrap: balance;
 }
 .ss-hero-copy p {
     margin-top: 8px;
-    max-width: 620px;
+    max-width: 700px;
     font-size: 13px;
-    line-height: 1.6;
+    line-height: 1.7;
     color: var(--text-secondary);
 }
 .ss-overview {
@@ -463,9 +483,14 @@ const ScriptStore = (() => {
 .ss-summary {
     min-width: 118px;
     padding: 12px 14px;
-    border: 1px solid rgba(127, 127, 127, 0.14);
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)),
+        rgba(255, 255, 255, 0.02);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 30px rgba(0, 0, 0, 0.16);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
 }
 .ss-summary-label {
     display: block;
@@ -489,6 +514,15 @@ const ScriptStore = (() => {
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
+    padding: 14px 16px;
+    border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+    border-radius: 22px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+        var(--bg-section-header);
+    box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
 }
 .ss-search-bar {
     flex: 1 1 320px;
@@ -496,9 +530,10 @@ const ScriptStore = (() => {
     align-items: center;
     padding: 0 14px;
     gap: 10px;
-    border: 1px solid rgba(127, 127, 127, 0.16);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(127, 127, 127, 0.14);
+    border-radius: 18px;
+    background: rgba(0, 0, 0, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 .ss-search-label {
     color: var(--text-muted);
@@ -518,33 +553,57 @@ const ScriptStore = (() => {
     flex-wrap: wrap;
 }
 .ss-btn {
-    padding: 8px 13px;
-    border-radius: 12px;
+    padding: 9px 14px;
+    border-radius: 14px;
     font-size: 12px;
     font-weight: 600;
     gap: 6px;
+    border-color: var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+        var(--bg-button);
+    box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 14px 24px rgba(0, 0, 0, 0.14);
 }
 .ss-btn.small {
     font-size: 11px;
     padding: 6px 10px;
     border-radius: 10px;
 }
+.ss-btn:hover {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03)),
+        var(--bg-button-hover);
+    border-color: var(--panel-border-strong, rgba(148, 163, 184, 0.28));
+    box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 18px 30px rgba(0,0,0,0.2);
+}
+.ss-btn.primary {
+    color: #04131a;
+    border-color: rgba(125, 211, 252, 0.34);
+    background: linear-gradient(135deg, #7dd3fc, var(--accent-secondary));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 18px 32px rgba(96, 165, 250, 0.24);
+}
+.ss-btn.primary:hover {
+    background: linear-gradient(135deg, #bae6fd, #60a5fa);
+}
 .ss-btn.ghost {
     background: rgba(255, 255, 255, 0.03);
 }
 .ss-btn.ghost.active {
-    background: rgba(96, 165, 250, 0.16);
+    background: linear-gradient(135deg, rgba(125, 211, 252, 0.18), rgba(96, 165, 250, 0.16));
     border-color: rgba(96, 165, 250, 0.34);
     color: #dbeafe;
-    box-shadow: 0 10px 18px rgba(96, 165, 250, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 14px 24px rgba(96, 165, 250, 0.16);
 }
 .ss-nav {
     padding: 14px 16px;
-    border: 1px solid rgba(127, 127, 127, 0.16);
-    border-radius: 18px;
+    border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+    border-radius: 22px;
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
         var(--bg-content);
+    box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
 }
 .ss-nav-label {
     font-size: 10px;
@@ -553,28 +612,47 @@ const ScriptStore = (() => {
     text-transform: uppercase;
 }
 .ss-chip {
-    padding: 7px 12px;
+    padding: 8px 13px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
+    letter-spacing: 0.02em;
+    border-color: rgba(127, 127, 127, 0.14);
+    background: rgba(255, 255, 255, 0.03);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.ss-chip.active {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 14px 24px rgba(0,0,0,0.18);
 }
 .ss-nav-sep {
     height: 20px;
     background: rgba(127, 127, 127, 0.16);
 }
 .ss-status {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
-    padding: 0 2px;
+    padding: 0 4px;
     font-size: 12px;
     line-height: 1.5;
     color: var(--text-muted);
 }
 .ss-status strong {
     color: var(--text-primary);
+}
+.ss-status-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(127, 127, 127, 0.14);
+}
+.ss-status-hint {
+    color: var(--text-secondary);
 }
 .ss-results {
     padding: 8px 0 0;
@@ -588,12 +666,14 @@ const ScriptStore = (() => {
 .ss-empty,
 .ss-error,
 .ss-loading {
-    padding: 28px 20px;
-    border: 1px solid rgba(127, 127, 127, 0.14);
-    border-radius: 18px;
+    padding: 34px 24px;
+    border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+    border-radius: 24px;
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+        radial-gradient(circle at top center, rgba(96, 165, 250, 0.12), transparent 48%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
         var(--bg-content);
+    box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
 }
 .ss-empty strong,
 .ss-error strong,
@@ -625,6 +705,8 @@ const ScriptStore = (() => {
     padding: 7px 11px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(127, 127, 127, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
     font-size: 11px;
 }
 .ss-card {
@@ -632,20 +714,21 @@ const ScriptStore = (() => {
     gap: 16px;
     padding: 16px;
     margin-bottom: 0;
-    border-radius: 18px;
-    border: 1px solid rgba(127, 127, 127, 0.16);
+    border-radius: 24px;
+    border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+        radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 35%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
         var(--bg-content);
-    box-shadow: 0 14px 24px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
     content-visibility: auto;
     contain-intrinsic-size: 188px;
     contain: layout style paint;
 }
 .ss-card:hover {
     transform: translateY(-1px);
-    border-color: rgba(96, 165, 250, 0.24);
-    box-shadow: 0 18px 30px rgba(0, 0, 0, 0.16);
+    border-color: rgba(96, 165, 250, 0.3);
+    box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 24px 40px rgba(0, 0, 0, 0.22);
 }
 .ss-results-inner {
     content-visibility: auto;
@@ -659,8 +742,12 @@ const ScriptStore = (() => {
     transform: none;
 }
 .ss-card.installed {
-    border-left: 1px solid rgba(127, 127, 127, 0.16);
-    box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.16), 0 14px 24px rgba(0, 0, 0, 0.12);
+    border-left: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+    background:
+        radial-gradient(circle at top right, rgba(52, 211, 153, 0.1), transparent 36%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+        var(--bg-content);
+    box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.18), 0 18px 34px rgba(0, 0, 0, 0.16);
 }
 .ss-card-name {
     margin-bottom: 6px;
@@ -681,10 +768,12 @@ const ScriptStore = (() => {
     text-transform: uppercase;
 }
 .ss-card-version {
+    border: 1px solid rgba(127, 127, 127, 0.14);
     background: rgba(255, 255, 255, 0.04);
 }
 .ss-installed-badge {
     color: #d1fae5;
+    border: 1px solid rgba(52, 211, 153, 0.18);
     background: rgba(52, 211, 153, 0.14);
 }
 .ss-card-desc {
@@ -705,6 +794,8 @@ const ScriptStore = (() => {
     padding: 6px 10px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(127, 127, 127, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
 }
 .ss-card-actions {
     flex-direction: row;
@@ -712,17 +803,21 @@ const ScriptStore = (() => {
     align-items: center;
     flex-wrap: wrap;
     gap: 8px;
+    align-self: flex-start;
 }
 .ss-card-preview {
     max-height: 360px;
     margin-top: 14px;
     padding: 14px 16px;
-    border-radius: 14px;
-    border: 1px solid rgba(127, 127, 127, 0.16);
-    background: rgba(0, 0, 0, 0.22);
+    border-radius: 18px;
+    border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255,255,255,0.02)),
+        rgba(0, 0, 0, 0.22);
     font-family: Consolas, 'Cascadia Code', monospace;
     font-size: 11px;
     line-height: 1.55;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 .ss-pagination {
     padding: 4px 0 0;
@@ -735,13 +830,15 @@ const ScriptStore = (() => {
     border-top: none;
     background: transparent;
     font-size: 11px;
+    color: var(--text-muted);
 }
 @media (max-width: 900px) {
     .ss-shell {
         padding: 16px;
     }
     .ss-hero {
-        padding: 18px;
+        padding: 20px;
+        border-radius: 24px;
     }
     .ss-toolbar,
     .ss-status {
@@ -823,6 +920,38 @@ const ScriptStore = (() => {
         const helper = _state.container?.querySelector('.ss-status-hint');
         if (status) status.textContent = message;
         if (helper) helper.textContent = hint;
+    }
+
+    function getStoreSearchControls() {
+        return Array.from(_state.container?.querySelectorAll('.ss-search-control') || []);
+    }
+
+    function setSearchUiBusy(isBusy) {
+        _state.searchUiBusy = isBusy;
+
+        const searchInput = _state.container?.querySelector('.ss-search-input');
+        if (searchInput instanceof HTMLInputElement) {
+            searchInput.disabled = isBusy;
+            searchInput.setAttribute('aria-busy', String(isBusy));
+        }
+
+        getStoreSearchControls().forEach((control) => {
+            if (!(control instanceof HTMLButtonElement)) return;
+            if (isBusy) {
+                control.dataset.prevDisabled = control.disabled ? 'true' : 'false';
+                control.disabled = true;
+                control.setAttribute('aria-busy', 'true');
+            } else {
+                control.disabled = control.dataset.prevDisabled === 'true';
+                control.removeAttribute('data-prev-disabled');
+                control.removeAttribute('aria-busy');
+            }
+        });
+
+        const resultsEl = getResultsEl();
+        if (resultsEl) {
+            resultsEl.setAttribute('aria-busy', String(isBusy));
+        }
     }
 
     function getViewLabel() {
@@ -1067,6 +1196,7 @@ const ScriptStore = (() => {
         updateOverview();
         setStatus(message, 'Preview and install stay in the same view.');
         if (el) {
+            el.setAttribute('aria-busy', 'true');
             el.dataset.listSize = 'empty';
             el.innerHTML = `<div class="ss-loading"><strong>${escapeHtml(message)}</strong><span>Fetching scripts from the active discovery sources.</span></div>`;
         }
@@ -1078,6 +1208,7 @@ const ScriptStore = (() => {
         updateOverview();
         setStatus('No scripts matched this view.', 'Try another query, category, or source mix.');
         if (el) {
+            el.setAttribute('aria-busy', 'false');
             el.dataset.listSize = 'empty';
             el.innerHTML = `<div class="ss-empty"><strong>No scripts matched</strong><span>${escapeHtml(message)}</span></div>`;
         }
@@ -1089,6 +1220,7 @@ const ScriptStore = (() => {
         updateOverview();
         setStatus('Store search failed.', 'Check the active sources or try again in a moment.');
         if (el) {
+            el.setAttribute('aria-busy', 'false');
             el.dataset.listSize = 'empty';
             el.innerHTML = `<div class="ss-error"><strong>Search failed</strong><span>${escapeHtml(message)}</span></div>`;
         }
@@ -1111,6 +1243,7 @@ const ScriptStore = (() => {
         _state.lastResultsCount = scripts.length;
         _state.lastContextLabel = contextLabel || getViewLabel();
         _state.lastSourceStats = sourceStats || null;
+        el.setAttribute('aria-busy', 'false');
         el.dataset.listSize = getResultListSize(scripts.length);
         updateOverview();
         setStatus(_state.lastContextLabel, `${scripts.length} script${scripts.length === 1 ? '' : 's'} ready to preview or install.`);
@@ -1172,9 +1305,9 @@ const ScriptStore = (() => {
         </div>
     </div>
     <div class="ss-card-actions">
-        <button class="ss-btn primary small" data-action="install" data-url="${escapeHtml(codeUrl)}">${installed ? 'Reinstall' : 'Install'}</button>
-        <button class="ss-btn small" data-action="preview" data-url="${escapeHtml(codeUrl)}">Preview Code</button>
-        <button class="ss-btn small" data-action="view" data-url="${escapeHtml(pageUrl)}">Open Page</button>
+        <button type="button" class="ss-btn primary small" data-action="install" data-url="${escapeHtml(codeUrl)}">${installed ? 'Reinstall' : 'Install'}</button>
+        <button type="button" class="ss-btn small" data-action="preview" data-url="${escapeHtml(codeUrl)}">Preview Code</button>
+        <button type="button" class="ss-btn small" data-action="view" data-url="${escapeHtml(pageUrl)}">Open Page</button>
     </div>
     <div class="ss-card-preview"></div>
 </div>`;
@@ -1183,12 +1316,12 @@ const ScriptStore = (() => {
         // Pagination
         html += '<div class="ss-pagination">';
         if (page > 1) {
-            html += `<button class="ss-btn small" data-action="page" data-page="${page - 1}">Previous</button>`;
+            html += `<button type="button" class="ss-btn small ss-search-control" data-action="page" data-page="${page - 1}">Previous</button>`;
         }
         html += `<span class="ss-pagination-info">Page ${page}</span>`;
         // Show "Next" only when we got a full page of results (at least 10 from any source)
         if (hasMore) {
-            html += `<button class="ss-btn small" data-action="page" data-page="${page + 1}">Next</button>`;
+            html += `<button type="button" class="ss-btn small ss-search-control" data-action="page" data-page="${page + 1}">Next</button>`;
         }
         html += '</div>';
         html += '</div>';
@@ -1231,8 +1364,9 @@ const ScriptStore = (() => {
     async function handleInstall(btn, url) {
         if (!url) return;
         const originalText = btn.textContent;
-        btn.textContent = 'Installing...';
+        btn.textContent = 'Installing…';
         btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
 
         try {
             const res = await chrome.runtime.sendMessage({ action: 'installFromUrl', url });
@@ -1255,16 +1389,30 @@ const ScriptStore = (() => {
                         nameEl.appendChild(badge);
                     }
                 }
-                if (typeof _state.onInstalled === 'function') _state.onInstalled();
+                if (typeof _state.onInstalled === 'function') {
+                    await Promise.resolve(_state.onInstalled());
+                }
             } else {
                 btn.textContent = 'Failed';
                 setStatus('Install failed.', 'The source may be unavailable or rejected the request.');
-                setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2000);
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                    btn.removeAttribute('aria-busy');
+                }, 2000);
             }
         } catch (e) {
             btn.textContent = 'Error';
             setStatus('Install failed.', 'Check the source URL or try again in a moment.');
-            setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2000);
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+                btn.removeAttribute('aria-busy');
+            }, 2000);
+        }
+
+        if (btn.textContent === 'Installed') {
+            btn.removeAttribute('aria-busy');
         }
     }
 
@@ -1281,10 +1429,14 @@ const ScriptStore = (() => {
             return;
         }
 
-        btn.textContent = 'Loading...';
+        btn.textContent = 'Loading…';
         btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
         try {
             const resp = await fetch(url);
+            if (!resp.ok) {
+                throw new Error(`Source returned ${resp.status}`);
+            }
             const code = await resp.text();
             preview.textContent = code;
             preview.classList.add('open');
@@ -1297,6 +1449,7 @@ const ScriptStore = (() => {
             setStatus('Preview failed.', 'The source script could not be fetched right now.');
         }
         btn.disabled = false;
+        btn.removeAttribute('aria-busy');
     }
 
     // =========================================
@@ -1310,6 +1463,7 @@ const ScriptStore = (() => {
     async function executeSearch() {
         const requestToken = ++_state.requestToken;
         _state.loading = true;
+        setSearchUiBusy(true);
         const loadingLabel = _state.siteHostname
             ? `Finding scripts for ${_state.siteHostname}`
             : _state.sortMode === 'daily_installs'
@@ -1375,6 +1529,7 @@ const ScriptStore = (() => {
         } finally {
             if (requestToken === _state.requestToken) {
                 _state.loading = false;
+                setSearchUiBusy(false);
             }
         }
     }
@@ -1450,27 +1605,27 @@ const ScriptStore = (() => {
         <input type="search" class="ss-search-input" name="store_search" autocomplete="off" spellcheck="false" aria-label="Search script store" placeholder="Search by name, task, or domain like youtube.com…" />
     </div>
     <div class="ss-toolbar-actions">
-        <button class="ss-btn primary" data-action="search">Search</button>
-        <button class="ss-btn ghost" data-action="discover-trending">Trending</button>
-        <button class="ss-btn ghost" data-action="discover-popular">Popular</button>
+        <button type="button" class="ss-btn primary ss-search-control" data-action="search">Search</button>
+        <button type="button" class="ss-btn ghost ss-search-control" data-action="discover-trending">Trending</button>
+        <button type="button" class="ss-btn ghost ss-search-control" data-action="discover-popular">Popular</button>
     </div>
     </div>
-    <div class="ss-status">
-        <strong class="ss-status-text">Trending scripts ready.</strong>
+    <div class="ss-status" role="status" aria-live="polite">
+        <span class="ss-status-summary"><strong class="ss-status-text">Trending scripts ready.</strong></span>
         <span class="ss-status-hint">Search by keyword or domain, then preview or install inline.</span>
     </div>
     <div class="ss-nav">
         <span class="ss-nav-label">Browse:</span>
         ${Object.entries(CATEGORIES).map(([key, val]) =>
-            `<button type="button" class="ss-chip" data-category="${key}" aria-pressed="false">${val.label}</button>`
+            `<button type="button" class="ss-chip ss-search-control" data-category="${key}" aria-pressed="false">${val.label}</button>`
         ).join('')}
         <span class="ss-nav-sep"></span>
         <span class="ss-nav-label">Sources:</span>
         ${Object.entries(SOURCES).map(([key, src]) =>
-            `<button type="button" class="ss-chip ss-source-chip${_activeSources.has(key) ? ' active' : ''}" data-source="${key}" data-label="${src.label}" aria-pressed="${_activeSources.has(key) ? 'true' : 'false'}" style="border-left:3px solid ${src.color}">${src.label}</button>`
+            `<button type="button" class="ss-chip ss-source-chip ss-search-control${_activeSources.has(key) ? ' active' : ''}" data-source="${key}" data-label="${src.label}" aria-pressed="${_activeSources.has(key) ? 'true' : 'false'}" style="border-left:3px solid ${src.color}">${src.label}</button>`
         ).join('')}
     </div>
-    <div class="ss-results">
+    <div class="ss-results" aria-busy="true">
         <div class="ss-loading"><strong>Loading discovery feed</strong><span>Fetching trending scripts from the store sources.</span></div>
     </div>
     <div class="ss-footer">
@@ -1492,6 +1647,7 @@ const ScriptStore = (() => {
         const popularBtn = container.querySelector('[data-action="discover-popular"]');
 
         searchBtn?.addEventListener('click', () => {
+            if (_state.searchUiBusy) return;
             const q = searchInput?.value?.trim();
             resetState();
             if (!q) {
@@ -1525,6 +1681,7 @@ const ScriptStore = (() => {
         });
 
         trendingBtn?.addEventListener('click', () => {
+            if (_state.searchUiBusy) return;
             resetState();
             _state.sortMode = 'daily_installs';
             if (searchInput) searchInput.value = '';
@@ -1533,6 +1690,7 @@ const ScriptStore = (() => {
         });
 
         popularBtn?.addEventListener('click', () => {
+            if (_state.searchUiBusy) return;
             resetState();
             _state.sortMode = 'total_installs';
             if (searchInput) searchInput.value = '';
@@ -1543,6 +1701,7 @@ const ScriptStore = (() => {
         // Category chips
         container.querySelectorAll('.ss-chip[data-category]').forEach(chip => {
             chip.addEventListener('click', () => {
+                if (_state.searchUiBusy) return;
                 resetState();
                 _state.category = chip.dataset.category;
                 updateActiveChips();
@@ -1553,6 +1712,7 @@ const ScriptStore = (() => {
         // Sort chips (Popular, Trending)
         container.querySelectorAll('.ss-chip[data-sort]').forEach(chip => {
             chip.addEventListener('click', () => {
+                if (_state.searchUiBusy) return;
                 resetState();
                 _state.sortMode = chip.dataset.sort;
                 updateActiveChips();
@@ -1563,6 +1723,7 @@ const ScriptStore = (() => {
         // Source toggle chips
         container.querySelectorAll('.ss-source-chip[data-source]').forEach(chip => {
             chip.addEventListener('click', () => {
+                if (_state.searchUiBusy) return;
                 const src = chip.dataset.source;
                 if (_activeSources.has(src)) {
                     // Don't allow disabling all sources

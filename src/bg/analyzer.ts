@@ -2,7 +2,12 @@
 // AST-based analysis via offscreen document (Acorn parser).
 // Falls back to regex patterns if offscreen is unavailable.
 
-declare function debugLog(...args: unknown[]): void;
+function debugLogSafe(...args: unknown[]): void {
+  const maybeDebugLog = (globalThis as { debugLog?: (...debugArgs: unknown[]) => void }).debugLog;
+  if (typeof maybeDebugLog === 'function') {
+    maybeDebugLog(...args);
+  }
+}
 
 interface AnalysisPattern {
   id: string;
@@ -44,7 +49,7 @@ async function analyzeAsync(code: string): Promise<AnalysisResult> {
     if (result && !result.parseError) return result;
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
-    debugLog('[Analyzer] Offscreen failed, using regex fallback:', message);
+    debugLogSafe('[Analyzer] Offscreen failed, using regex fallback:', message);
   }
   return analyze(code);
 }

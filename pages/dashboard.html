@@ -42,6 +42,13 @@
             --bg-row-selected: #2a3a2a;
             --scrollbar-thumb: rgba(255,255,255,0.15);
             --scrollbar-thumb-hover: rgba(255,255,255,0.25);
+            --canvas-grid: rgba(255, 255, 255, 0.035);
+            --panel-border-soft: rgba(148, 163, 184, 0.16);
+            --panel-border-strong: rgba(148, 163, 184, 0.28);
+            --panel-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            --panel-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+            --panel-shadow-lg: 0 28px 70px rgba(0, 0, 0, 0.26);
+            --panel-shadow-xl: 0 40px 120px rgba(0, 0, 0, 0.34);
         }
 
         [data-theme="light"] {
@@ -76,6 +83,13 @@
             --bg-row-selected: #e8f5e9;
             --scrollbar-thumb: rgba(0,0,0,0.2);
             --scrollbar-thumb-hover: rgba(0,0,0,0.35);
+            --canvas-grid: rgba(15, 23, 42, 0.05);
+            --panel-border-soft: rgba(148, 163, 184, 0.2);
+            --panel-border-strong: rgba(148, 163, 184, 0.32);
+            --panel-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+            --panel-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+            --panel-shadow-lg: 0 28px 60px rgba(15, 23, 42, 0.12);
+            --panel-shadow-xl: 0 42px 110px rgba(15, 23, 42, 0.16);
         }
 
         [data-theme="catppuccin"] {
@@ -110,6 +124,7 @@
             --bg-row-selected: #2a3a2a;
             --scrollbar-thumb: rgba(205,214,244,0.15);
             --scrollbar-thumb-hover: rgba(205,214,244,0.25);
+            --canvas-grid: rgba(205, 214, 244, 0.035);
         }
 
         [data-theme="oled"] {
@@ -144,6 +159,10 @@
             --bg-row-selected: #1a2a1a;
             --scrollbar-thumb: rgba(255,255,255,0.1);
             --scrollbar-thumb-hover: rgba(255,255,255,0.2);
+            --canvas-grid: rgba(255, 255, 255, 0.02);
+            --panel-shadow: 0 22px 52px rgba(0, 0, 0, 0.32);
+            --panel-shadow-lg: 0 34px 82px rgba(0, 0, 0, 0.4);
+            --panel-shadow-xl: 0 48px 140px rgba(0, 0, 0, 0.5);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -173,13 +192,16 @@
         }
 
         body {
-            font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Aptos', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             font-size: var(--base-font);
             background:
-                radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 26%),
-                radial-gradient(circle at top right, rgba(96, 165, 250, 0.1), transparent 24%),
-                linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
+                radial-gradient(circle at top left, rgba(34, 197, 94, 0.16), transparent 24%),
+                radial-gradient(circle at top right, rgba(96, 165, 250, 0.14), transparent 22%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%),
+                linear-gradient(var(--canvas-grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--canvas-grid) 1px, transparent 1px),
                 var(--bg-body);
+            background-size: auto, auto, auto, 40px 40px, 40px 40px, auto;
             background-attachment: fixed;
             color: var(--text-primary);
             min-height: 100vh;
@@ -266,16 +288,16 @@
            ============================================ */
         .tm-header {
             background:
-                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 140%),
                 var(--bg-header);
-            border-bottom: 1px solid rgba(127, 127, 127, 0.22);
-            padding: 10px 20px 4px 20px;
+            border-bottom: 1px solid rgba(127, 127, 127, 0.14);
+            padding: 14px 20px 10px 20px;
             position: sticky;
             top: 0;
             z-index: 100;
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
-            -webkit-backdrop-filter: blur(12px);
-            backdrop-filter: blur(12px);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.26);
+            -webkit-backdrop-filter: blur(18px);
+            backdrop-filter: blur(18px);
         }
 
         .tm-header::after {
@@ -284,9 +306,9 @@
             bottom: 0;
             left: 0;
             right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary), var(--accent-primary));
-            opacity: 0.4;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+            opacity: 1;
         }
 
         .tm-logo {
@@ -300,6 +322,8 @@
         .tm-logo img {
             width: 24px;
             height: 24px;
+            border-radius: 7px;
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.18);
         }
 
         .tm-logo-text h1 {
@@ -411,9 +435,16 @@
         .tm-tabs-bar {
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 12px;
             max-width: 1600px;
             margin: 0 auto;
+            padding: 10px 12px;
+            border: 1px solid var(--panel-border-soft);
+            border-radius: 26px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02)),
+                var(--bg-section-header);
+            box-shadow: var(--panel-sheen), var(--panel-shadow);
         }
 
         .tm-tabs-scripts {
@@ -424,62 +455,82 @@
             flex-shrink: 1;
             min-width: 0;
             align-self: flex-end;
-            padding-bottom: 2px;
+            padding: 4px;
+            border: 1px solid rgba(127, 127, 127, 0.12);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.03);
         }
 
         .tm-tabs {
             display: flex;
-            gap: 6px;
+            gap: 10px;
             margin-left: auto;
             flex-shrink: 0;
             align-self: flex-end;
-            padding-bottom: 2px;
+            align-items: flex-end;
+            min-width: 0;
+        }
+
+        .tm-tablist {
+            display: flex;
+            gap: 4px;
+            min-width: 0;
+            padding: 4px;
+            border: 1px solid rgba(127, 127, 127, 0.12);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.03);
         }
 
         .tm-tab {
-            padding: 7px 14px;
-            background: rgba(255, 255, 255, 0.02);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 14px;
+            min-height: 42px;
+            background: transparent;
             border: 1px solid transparent;
-            border-bottom: none;
-            border-radius: 10px 10px 0 0;
-            color: var(--text-muted);
+            border-radius: 15px;
+            color: var(--text-secondary);
             font-size: 11px;
-            font-weight: 500;
-            letter-spacing: 0.02em;
+            font-weight: 600;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
             cursor: pointer;
             transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .tm-tab:hover {
-            background: rgba(255, 255, 255, 0.07);
+            background: rgba(255, 255, 255, 0.08);
             color: var(--text-primary);
             transform: translateY(-1px);
+            border-color: rgba(127, 127, 127, 0.2);
         }
 
         .tm-tab[data-tab="newscript"] {
+            min-width: 42px;
+            padding: 0 14px;
+            justify-content: center;
             font-size: 14px;
-            font-weight: bold;
-            padding: 5px 12px;
-            color: var(--accent-primary);
+            font-weight: 700;
+            color: #d1fae5;
             text-transform: none;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(96, 165, 250, 0.14));
+            border-color: rgba(34, 197, 94, 0.26);
         }
 
         .tm-tab[data-tab="newscript"]:hover {
             color: #fff;
-            background: var(--accent-primary);
-            box-shadow: 0 0 12px rgba(34, 197, 94, 0.3);
+            background: linear-gradient(135deg, #22c55e, #34d399);
+            box-shadow: 0 18px 30px rgba(34, 197, 94, 0.24);
         }
 
         .tm-tab.active {
-            background: var(--bg-content);
-            color: var(--accent-primary);
-            border-color: rgba(127, 127, 127, 0.28);
-            border-bottom: 1px solid var(--bg-content);
-            margin-bottom: -1px;
-            position: relative;
-            z-index: 1;
-            box-shadow: 0 -12px 30px rgba(34, 197, 94, 0.08);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)),
+                rgba(34, 197, 94, 0.1);
+            color: #ecfdf5;
+            border-color: rgba(34, 197, 94, 0.28);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 16px 28px rgba(34, 197, 94, 0.16);
         }
 
         .tm-tab.script-tab {
@@ -530,8 +581,11 @@
            Content Area
            ============================================ */
         .tm-content {
-            background: var(--bg-content);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 18rem),
+                var(--bg-content);
             min-height: calc(100vh - 60px);
+            padding-bottom: 28px;
         }
 
         .tm-panel {
@@ -933,7 +987,7 @@
             color: var(--text-muted);
             cursor: pointer;
             border-radius: 5px;
-            transition: all 0.2s ease;
+            transition: color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
         }
         .action-icon:hover { color: var(--text-primary); background: var(--bg-button); transform: translateY(-1px); }
         .action-icon svg { width: 14px; height: 14px; }
@@ -967,7 +1021,7 @@
             border-radius: 6px;
             color: var(--text-primary);
             font-size: 12px;
-            transition: all 0.2s ease;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
         }
 
         .input-field:focus, .select-field:focus {
@@ -989,7 +1043,7 @@
             font-size: 12px;
             font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
             resize: vertical;
-            transition: all 0.2s ease;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
         }
 
         .textarea-field:focus {
@@ -1009,7 +1063,7 @@
             font-size: 10px;
             color: var(--text-muted);
             cursor: help;
-            transition: all 0.2s ease;
+            transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
         }
         .help-icon:hover { border-color: var(--accent-secondary); color: var(--accent-secondary); }
 
@@ -1022,7 +1076,7 @@
             font-size: 12px;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .btn:hover { background: var(--bg-button-hover); transform: translateY(-1px); box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18); }
@@ -1159,13 +1213,19 @@
             box-shadow: none;
         }
 
-        .settings-filter-row {
+        .settings-filter-row,
+        .utilities-filter-row,
+        .trash-filter-row,
+        .help-filter-row {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
         }
 
-        .settings-filter {
+        .settings-filter,
+        .utilities-filter,
+        .trash-filter,
+        .help-filter {
             appearance: none;
             border: 1px solid rgba(127, 127, 127, 0.16);
             background: rgba(255, 255, 255, 0.03);
@@ -1175,23 +1235,76 @@
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, outline-color 0.2s ease;
         }
 
-        .settings-filter:hover {
-            border-color: rgba(34, 197, 94, 0.24);
+        .settings-filter {
+            --panel-filter-hover-border: rgba(34, 197, 94, 0.24);
+            --panel-filter-active-bg: var(--accent-primary);
+            --panel-filter-active-border: var(--accent-primary);
+            --panel-filter-active-color: #fff;
+            --panel-filter-active-shadow: 0 10px 18px rgba(34, 197, 94, 0.24);
+            --panel-filter-focus-ring: rgba(34, 197, 94, 0.38);
+        }
+
+        .utilities-filter {
+            --panel-filter-hover-border: rgba(96, 165, 250, 0.24);
+            --panel-filter-active-bg: var(--accent-secondary);
+            --panel-filter-active-border: var(--accent-secondary);
+            --panel-filter-active-color: #fff;
+            --panel-filter-active-shadow: 0 10px 18px rgba(96, 165, 250, 0.24);
+            --panel-filter-focus-ring: rgba(96, 165, 250, 0.38);
+        }
+
+        .trash-filter {
+            --panel-filter-hover-border: rgba(251, 191, 36, 0.28);
+            --panel-filter-active-bg: rgba(251, 191, 36, 0.16);
+            --panel-filter-active-border: rgba(251, 191, 36, 0.36);
+            --panel-filter-active-color: #fde68a;
+            --panel-filter-active-shadow: 0 10px 18px rgba(251, 191, 36, 0.14);
+            --panel-filter-focus-ring: rgba(251, 191, 36, 0.38);
+        }
+
+        .help-filter {
+            --panel-filter-hover-border: rgba(52, 211, 153, 0.26);
+            --panel-filter-active-bg: rgba(52, 211, 153, 0.18);
+            --panel-filter-active-border: rgba(52, 211, 153, 0.34);
+            --panel-filter-active-color: #d1fae5;
+            --panel-filter-active-shadow: 0 10px 18px rgba(52, 211, 153, 0.14);
+            --panel-filter-focus-ring: rgba(52, 211, 153, 0.38);
+        }
+
+        .settings-filter:hover,
+        .utilities-filter:hover,
+        .trash-filter:hover,
+        .help-filter:hover {
+            border-color: var(--panel-filter-hover-border, rgba(127, 127, 127, 0.28));
             color: var(--text-primary);
             transform: translateY(-1px);
         }
 
-        .settings-filter.active {
-            background: var(--accent-primary);
-            border-color: var(--accent-primary);
-            color: #fff;
-            box-shadow: 0 10px 18px rgba(34, 197, 94, 0.24);
+        .settings-filter:focus-visible,
+        .utilities-filter:focus-visible,
+        .trash-filter:focus-visible,
+        .help-filter:focus-visible {
+            outline: 2px solid var(--panel-filter-focus-ring, rgba(255, 255, 255, 0.32));
+            outline-offset: 2px;
         }
 
-        .settings-filter-status {
+        .settings-filter.active,
+        .utilities-filter.active,
+        .trash-filter.active,
+        .help-filter.active {
+            background: var(--panel-filter-active-bg);
+            border-color: var(--panel-filter-active-border);
+            color: var(--panel-filter-active-color, #fff);
+            box-shadow: var(--panel-filter-active-shadow, none);
+        }
+
+        .settings-filter-status,
+        .utilities-filter-status,
+        .trash-filter-status,
+        .help-filter-status {
             font-size: 12px;
             color: var(--text-muted);
             line-height: 1.5;
@@ -1447,44 +1560,6 @@
         .utilities-search-input:focus {
             outline: none;
             box-shadow: none;
-        }
-
-        .utilities-filter-row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .utilities-filter {
-            appearance: none;
-            border: 1px solid rgba(127, 127, 127, 0.16);
-            background: rgba(255, 255, 255, 0.03);
-            color: var(--text-secondary);
-            border-radius: 999px;
-            padding: 8px 12px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .utilities-filter:hover {
-            border-color: rgba(96, 165, 250, 0.24);
-            color: var(--text-primary);
-            transform: translateY(-1px);
-        }
-
-        .utilities-filter.active {
-            background: var(--accent-secondary);
-            border-color: var(--accent-secondary);
-            color: #fff;
-            box-shadow: 0 10px 18px rgba(96, 165, 250, 0.24);
-        }
-
-        .utilities-filter-status {
-            font-size: 12px;
-            color: var(--text-muted);
-            line-height: 1.5;
         }
 
         .utilities-sections {
@@ -1786,44 +1861,6 @@
             flex-wrap: wrap;
         }
 
-        .trash-filter-row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .trash-filter {
-            appearance: none;
-            border: 1px solid rgba(127, 127, 127, 0.16);
-            background: rgba(255, 255, 255, 0.03);
-            color: var(--text-secondary);
-            border-radius: 999px;
-            padding: 8px 12px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .trash-filter:hover {
-            border-color: rgba(251, 191, 36, 0.28);
-            color: var(--text-primary);
-            transform: translateY(-1px);
-        }
-
-        .trash-filter.active {
-            background: rgba(251, 191, 36, 0.16);
-            border-color: rgba(251, 191, 36, 0.36);
-            color: #fde68a;
-            box-shadow: 0 10px 18px rgba(251, 191, 36, 0.14);
-        }
-
-        .trash-filter-status {
-            font-size: 12px;
-            color: var(--text-muted);
-            line-height: 1.5;
-        }
-
         .trash-surface {
             padding: 8px;
             border-radius: 18px;
@@ -1980,7 +2017,7 @@
             font-weight: bold;
             padding: 0 2px;
             border-radius: 2px;
-            transition: all 0.15s;
+            transition: color 0.15s ease, background-color 0.15s ease;
         }
         
         .url-pattern-editable .pattern-tag .remove-pattern:hover {
@@ -2259,44 +2296,6 @@
         .help-search-input:focus {
             outline: none;
             box-shadow: none;
-        }
-
-        .help-filter-row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .help-filter {
-            appearance: none;
-            border: 1px solid rgba(127, 127, 127, 0.16);
-            background: rgba(255, 255, 255, 0.03);
-            color: var(--text-secondary);
-            border-radius: 999px;
-            padding: 8px 12px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .help-filter:hover {
-            border-color: rgba(52, 211, 153, 0.26);
-            color: var(--text-primary);
-            transform: translateY(-1px);
-        }
-
-        .help-filter.active {
-            background: rgba(52, 211, 153, 0.18);
-            border-color: rgba(52, 211, 153, 0.34);
-            color: #d1fae5;
-            box-shadow: 0 10px 18px rgba(52, 211, 153, 0.14);
-        }
-
-        .help-filter-status {
-            font-size: 12px;
-            color: var(--text-muted);
-            line-height: 1.5;
         }
 
         .help-sections {
@@ -2710,6 +2709,7 @@
         }
 
         .editor-title {
+            margin: 0;
             font-size: 22px;
             font-weight: 700;
             letter-spacing: -0.03em;
@@ -2758,7 +2758,7 @@
 
         .editor-subtitle {
             display: block;
-            margin-top: 8px;
+            margin: 8px 0 0;
             color: var(--text-secondary);
             font-size: 12px;
             line-height: 1.5;
@@ -2834,7 +2834,7 @@
             font-weight: 500;
             cursor: pointer;
             border-bottom: 2px solid transparent;
-            transition: all 0.25s ease;
+            transition: color 0.25s ease, border-bottom-color 0.25s ease, text-shadow 0.25s ease;
         }
 
         .editor-tab:hover { color: var(--text-primary); }
@@ -3813,8 +3813,8 @@
             border: 1px solid var(--border-color);
             border-radius: 10px;
             padding: 24px 32px;
-            min-width: 340px;
-            max-width: 420px;
+            width: min(420px, calc(100vw - 32px));
+            min-width: min(340px, calc(100vw - 32px));
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
             text-align: center;
         }
@@ -3822,7 +3822,7 @@
             font-size: 14px;
             font-weight: 600;
             color: var(--text-primary);
-            margin-bottom: 16px;
+            margin: 0 0 16px;
         }
         .progress-bar-track {
             width: 100%;
@@ -3842,6 +3842,7 @@
         .progress-status {
             font-size: 11px;
             color: var(--text-secondary);
+            margin: 0;
         }
 
         /* Lazy loading states */
@@ -3870,6 +3871,24 @@
             .lazy-spinner { animation: none; border-top-color: var(--text-muted); }
             .editor-actions .btn[data-save-state="saving"] svg { animation: none; }
             .scripts-table tbody tr { animation: none; transition: none; }
+            .action-icon,
+            .input-field,
+            .select-field,
+            .textarea-field,
+            .help-icon,
+            .btn,
+            .settings-filter,
+            .utilities-filter,
+            .trash-filter,
+            .help-filter,
+            .url-pattern-editable .pattern-tag .remove-pattern,
+            .editor-tab { transition: none; }
+            .action-icon:hover,
+            .btn:hover,
+            .settings-filter:hover,
+            .utilities-filter:hover,
+            .trash-filter:hover,
+            .help-filter:hover { transform: none; }
         }
 
         /* ============================================
@@ -3899,7 +3918,7 @@
         /* Small tablet / large phone */
         @media (max-width: 768px) {
             .tm-header { padding: 6px 10px 2px 10px; }
-            .tm-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .tm-tablist { overflow-x: auto; -webkit-overflow-scrolling: touch; }
             .tm-tab { padding: 4px 10px; font-size: 11px; }
             #scriptsPanel { padding: 16px 10px 0; }
             .scripts-shell-copy h2 { font-size: 24px; }
@@ -3978,6 +3997,490 @@
             color: var(--text-on-accent);
             border-color: var(--accent-primary);
         }
+
+        /* ============================================
+           Premium Shell Refresh
+           ============================================ */
+        .scripts-shell-header,
+        .settings-hero,
+        .utilities-hero,
+        .trash-hero,
+        .help-hero {
+            --hero-accent: rgba(34, 197, 94, 0.18);
+            position: relative;
+            align-items: stretch;
+            padding: 26px 28px;
+            border: 1px solid var(--panel-border-soft);
+            border-radius: 28px;
+            background:
+                radial-gradient(circle at top right, var(--hero-accent), transparent 16rem),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 58%, transparent 100%),
+                var(--bg-section-header);
+            box-shadow: var(--panel-sheen), var(--panel-shadow-lg);
+            overflow: hidden;
+            isolation: isolate;
+        }
+
+        .scripts-shell-header::before,
+        .settings-hero::before,
+        .utilities-hero::before,
+        .trash-hero::before,
+        .help-hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 40%, transparent 62%, rgba(255, 255, 255, 0.03));
+            opacity: 0.75;
+            pointer-events: none;
+        }
+
+        .scripts-shell-header {
+            --hero-accent: rgba(34, 197, 94, 0.18);
+            margin-bottom: 16px;
+        }
+
+        .settings-hero {
+            --hero-accent: rgba(34, 197, 94, 0.18);
+        }
+
+        .utilities-hero {
+            --hero-accent: rgba(96, 165, 250, 0.18);
+        }
+
+        .trash-hero {
+            --hero-accent: rgba(251, 191, 36, 0.18);
+        }
+
+        .help-hero {
+            --hero-accent: rgba(52, 211, 153, 0.18);
+        }
+
+        .scripts-shell-copy,
+        .scripts-shell-stats,
+        .settings-hero-copy,
+        .settings-overview,
+        .utilities-hero-copy,
+        .utilities-overview,
+        .trash-hero-copy,
+        .trash-overview,
+        .help-hero-copy,
+        .help-overview {
+            position: relative;
+            z-index: 1;
+        }
+
+        .scripts-shell-copy,
+        .settings-hero-copy,
+        .utilities-hero-copy,
+        .trash-hero-copy,
+        .help-hero-copy {
+            max-width: 700px;
+        }
+
+        .scripts-shell-copy h2,
+        .settings-hero-copy h2,
+        .utilities-hero-copy h2,
+        .trash-hero-copy h2,
+        .help-hero-copy h2 {
+            margin-top: 14px;
+            font-size: clamp(28px, 3.2vw, 38px);
+            font-weight: 760;
+            letter-spacing: -0.05em;
+            text-wrap: balance;
+        }
+
+        .scripts-shell-copy p,
+        .settings-hero-copy p,
+        .utilities-hero-copy p,
+        .trash-hero-copy p,
+        .help-hero-copy p {
+            max-width: 700px;
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--text-secondary);
+        }
+
+        .scripts-shell-stat,
+        .settings-summary,
+        .utilities-summary,
+        .trash-summary,
+        .help-summary {
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 18px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)),
+                rgba(255, 255, 255, 0.02);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 30px rgba(0, 0, 0, 0.16);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+        }
+
+        .scripts-toolbar,
+        .settings-toolbar,
+        .utilities-toolbar,
+        .trash-toolbar,
+        .help-toolbar,
+        .view-settings-bar {
+            border: 1px solid var(--panel-border-soft);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+                var(--bg-section-header);
+            box-shadow: var(--panel-sheen), var(--panel-shadow);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+        }
+
+        .settings-toolbar,
+        .utilities-toolbar,
+        .trash-toolbar,
+        .help-toolbar {
+            padding: 14px 16px;
+            border-radius: 22px;
+        }
+
+        .view-settings-bar {
+            gap: 12px;
+            margin: 12px auto 0;
+            padding: 12px 18px;
+            border-radius: 22px;
+        }
+
+        .view-settings-bar label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .view-settings-divider {
+            width: 1px;
+            height: 18px;
+            margin: 0 2px;
+            border-radius: 999px;
+            background: rgba(127, 127, 127, 0.24);
+        }
+
+        .scripts-toolbar-left,
+        .scripts-toolbar-right,
+        .settings-search,
+        .utilities-search,
+        .trash-search,
+        .help-search,
+        .settings-filter-row,
+        .utilities-filter-row,
+        .trash-filter-row,
+        .help-filter-row {
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 18px;
+            background: rgba(0, 0, 0, 0.12);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .settings-filter-row,
+        .utilities-filter-row,
+        .trash-filter-row,
+        .help-filter-row {
+            padding: 4px;
+        }
+
+        .toolbar-btn,
+        .btn {
+            border-radius: 14px;
+            border-color: var(--panel-border-soft);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+                var(--bg-button);
+            box-shadow: var(--panel-sheen), 0 14px 24px rgba(0, 0, 0, 0.14);
+        }
+
+        .toolbar-btn:hover,
+        .btn:hover {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03)),
+                var(--bg-button-hover);
+            border-color: var(--panel-border-strong);
+            box-shadow: var(--panel-sheen), 0 18px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .toolbar-btn.primary,
+        .btn-primary {
+            color: #04130a;
+            border-color: rgba(52, 211, 153, 0.34);
+            background: linear-gradient(135deg, #34d399, var(--accent-primary));
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 18px 32px rgba(34, 197, 94, 0.22);
+        }
+
+        .toolbar-btn.primary:hover,
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #6ee7b7, #22c55e);
+        }
+
+        .btn-danger {
+            border-color: rgba(248, 113, 113, 0.3);
+            background: linear-gradient(135deg, #f87171, var(--accent-error));
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 18px 32px rgba(239, 68, 68, 0.18);
+        }
+
+        .btn-danger:hover {
+            background: linear-gradient(135deg, #fca5a5, #ef4444);
+        }
+
+        .btn-sm {
+            min-height: 30px;
+            padding: 0 10px;
+            border-radius: 10px;
+        }
+
+        .input-field,
+        .select-field,
+        .textarea-field,
+        .search-box input,
+        .view-settings-bar select {
+            border-radius: 14px;
+            border-color: var(--panel-border-soft);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+                var(--bg-input);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .input-field:focus,
+        .select-field:focus,
+        .textarea-field:focus,
+        .search-box input:focus,
+        .view-settings-bar select:focus {
+            border-color: rgba(34, 197, 94, 0.36);
+            box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+
+        .view-settings-bar .density-btn {
+            min-height: 36px;
+            padding: 0 14px;
+            border-radius: 999px;
+            border-color: var(--panel-border-soft);
+            background: rgba(255, 255, 255, 0.03);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .view-settings-bar .density-btn:hover,
+        .view-settings-bar .density-btn.active {
+            background: linear-gradient(135deg, #34d399, var(--accent-primary));
+            color: #04130a;
+            border-color: rgba(52, 211, 153, 0.32);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 14px 26px rgba(34, 197, 94, 0.2);
+        }
+
+        .scripts-table-container {
+            border-color: var(--panel-border-soft);
+            border-radius: 28px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 150px),
+                var(--bg-content);
+            box-shadow: var(--panel-sheen), var(--panel-shadow-lg);
+        }
+
+        .scripts-table th {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+                var(--bg-section-header);
+            border-bottom-color: rgba(34, 197, 94, 0.5);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+        }
+
+        .scripts-table tbody tr:hover {
+            background:
+                linear-gradient(90deg, rgba(34, 197, 94, 0.12), transparent 34%),
+                rgba(255, 255, 255, 0.03);
+            box-shadow: inset 3px 0 0 var(--accent-primary);
+        }
+
+        .action-icon {
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .action-icon:hover {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+                var(--bg-button);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.16);
+        }
+
+        .editor-overlay,
+        .find-scripts-overlay {
+            background:
+                radial-gradient(circle at top right, rgba(96, 165, 250, 0.1), transparent 24%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 18%),
+                var(--bg-body);
+        }
+
+        .editor-header,
+        .editor-tabs,
+        .editor-toolbar,
+        .find-scripts-header,
+        .find-scripts-search {
+            border-color: var(--panel-border-soft);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+                var(--bg-section-header);
+        }
+
+        .editor-header {
+            box-shadow: var(--panel-sheen), var(--panel-shadow);
+        }
+
+        .editor-tab {
+            min-height: 40px;
+            padding: 0 16px;
+            border: 1px solid transparent;
+            border-radius: 14px 14px 0 0;
+        }
+
+        .editor-tab.active {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02)),
+                rgba(34, 197, 94, 0.08);
+            border-color: rgba(34, 197, 94, 0.18);
+        }
+
+        .modal-overlay {
+            background: rgba(2, 6, 23, 0.64);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-content {
+            border-color: var(--panel-border-strong);
+            border-radius: 22px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+                var(--bg-content);
+            box-shadow: var(--panel-sheen), var(--panel-shadow-xl);
+        }
+
+        .modal-header,
+        .modal-footer {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .find-script-card {
+            border-radius: 18px;
+            border-color: var(--panel-border-soft);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+                var(--bg-content);
+            box-shadow: var(--panel-sheen), 0 18px 28px rgba(0, 0, 0, 0.12);
+        }
+
+        .find-script-card:hover {
+            border-color: rgba(34, 197, 94, 0.24);
+            box-shadow: var(--panel-sheen), 0 22px 36px rgba(0, 0, 0, 0.18);
+        }
+
+        .find-script-preview {
+            border-color: var(--panel-border-soft);
+            border-radius: 14px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+                var(--bg-input);
+        }
+
+        @media (max-width: 1024px) {
+            .tm-tabs-bar {
+                padding: 10px;
+                border-radius: 22px;
+            }
+
+            .tm-tabs {
+                width: 100%;
+                margin-left: 0;
+                justify-content: space-between;
+            }
+
+            .tm-tabs-scripts {
+                order: 3;
+                flex-basis: 100%;
+            }
+
+            .view-settings-bar {
+                margin-left: 10px;
+                margin-right: 10px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .tm-header {
+                padding: 12px 10px 8px 10px;
+            }
+
+            .tm-tabs-bar {
+                gap: 10px;
+                border-radius: 20px;
+            }
+
+            .tm-tabs {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+
+            .tm-tablist {
+                width: 100%;
+                overflow-x: auto;
+            }
+
+            .scripts-shell-header,
+            .settings-hero,
+            .utilities-hero,
+            .trash-hero,
+            .help-hero {
+                padding: 20px;
+                border-radius: 24px;
+            }
+
+            .scripts-shell-stats,
+            .settings-overview,
+            .utilities-overview,
+            .trash-overview,
+            .help-overview {
+                width: 100%;
+            }
+
+            .scripts-toolbar,
+            .settings-toolbar,
+            .utilities-toolbar,
+            .trash-toolbar,
+            .help-toolbar,
+            .view-settings-bar {
+                padding: 12px;
+                border-radius: 18px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .tm-header {
+                padding: 10px 8px 8px 8px;
+            }
+
+            .tm-tabs-bar {
+                padding: 8px;
+                border-radius: 18px;
+            }
+
+            .view-settings-bar {
+                margin: 8px 8px 0;
+            }
+
+            .scripts-shell-header,
+            .settings-hero,
+            .utilities-hero,
+            .trash-hero,
+            .help-hero {
+                padding: 18px;
+            }
+        }
+
         /* Compact density */
         [data-density="compact"] .scripts-table td { padding: 6px 8px; }
         [data-density="compact"] .scripts-table th { padding: 7px 8px; }
@@ -3993,14 +4496,14 @@
 </head>
 <body>
     <!-- Accessibility: Skip to main content -->
-    <a href="#scriptsPanel" class="skip-link">Skip to main content</a>
+<a href="#mainContent" class="skip-link">Skip to main content</a>
     <!-- Live region for screen reader announcements -->
     <div id="a11yAnnouncer" role="status" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap"></div>
     <!-- Header -->
     <header class="tm-header" role="banner">
         <nav class="tm-tabs-bar">
             <div class="tm-logo">
-                <img src="../images/icon48.png" alt="ScriptVault">
+                <img src="../images/icon48.png" alt="ScriptVault" width="24" height="24">
                 <div class="tm-logo-text">
                     <h1>ScriptVault<sup id="headerVersion"></sup></h1>
                 </div>
@@ -4009,25 +4512,27 @@
                         <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                     </svg>
                 </a>
-                <button class="header-icon-btn" id="btnHelpTab" title="Help" aria-label="Open Help">
+                <button class="header-icon-btn" id="btnHelpTab" type="button" title="Help" aria-label="Open Help" aria-controls="helpPanel" aria-expanded="false" aria-pressed="false">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                     </svg>
                 </button>
-                <button class="header-icon-btn" id="btnCycleTheme" title="Theme: Dark" aria-label="Cycle theme">
+                <button class="header-icon-btn" id="btnCycleTheme" type="button" title="Theme: Dark" aria-label="Cycle theme">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
                     </svg>
                 </button>
             </div>
-            <div class="tm-tabs-scripts" id="scriptTabsGroup"></div>
+            <div class="tm-tabs-scripts" id="scriptTabsGroup" role="group" aria-label="Open script editors"></div>
             <div class="tm-tabs">
-                <button class="tm-tab" data-tab="newscript" id="tabNewScript" title="Create a new script" aria-label="Create a new script">+</button>
-                <button class="tm-tab active" data-tab="scripts">Installed Userscripts</button>
-                <button class="tm-tab" data-tab="settings">Settings</button>
-                <button class="tm-tab" data-tab="utilities">Utilities</button>
-                <button class="tm-tab" data-tab="trash">Trash</button>
-                <button class="tm-tab" data-tab="store">Script Store</button>
+                <button type="button" class="tm-tab" data-tab="newscript" id="tabNewScript" title="Create a new script" aria-label="Create a new script">+</button>
+                <div class="tm-tablist" role="tablist" aria-label="Dashboard sections">
+                    <button type="button" class="tm-tab active" id="dashboardTabScripts" role="tab" aria-selected="true" aria-controls="scriptsPanel" tabindex="0" data-tab="scripts">Installed Userscripts</button>
+                    <button type="button" class="tm-tab" id="dashboardTabSettings" role="tab" aria-selected="false" aria-controls="settingsPanel" tabindex="-1" data-tab="settings">Settings</button>
+                    <button type="button" class="tm-tab" id="dashboardTabUtilities" role="tab" aria-selected="false" aria-controls="utilitiesPanel" tabindex="-1" data-tab="utilities">Utilities</button>
+                    <button type="button" class="tm-tab" id="dashboardTabTrash" role="tab" aria-selected="false" aria-controls="trashPanel" tabindex="-1" data-tab="trash">Trash</button>
+                    <button type="button" class="tm-tab" id="dashboardTabStore" role="tab" aria-selected="false" aria-controls="storePanel" tabindex="-1" data-tab="store">Script Store</button>
+                </div>
             </div>
         </nav>
     </header>
@@ -4043,11 +4548,11 @@
             <option value="1.25">125%</option>
             <option value="1.5">150%</option>
         </select>
-        <span style="margin:0 4px;opacity:0.3">|</span>
+        <span class="view-settings-divider" aria-hidden="true"></span>
         <label>Density:</label>
-        <button class="density-btn" data-density="compact" title="Compact spacing">Compact</button>
-        <button class="density-btn active" data-density="comfortable" title="Default spacing">Comfortable</button>
-        <button class="density-btn" data-density="spacious" title="Extra spacing">Spacious</button>
+        <button type="button" class="density-btn" data-density="compact" title="Compact spacing">Compact</button>
+        <button type="button" class="density-btn active" data-density="comfortable" title="Default spacing">Comfortable</button>
+        <button type="button" class="density-btn" data-density="spacious" title="Extra spacing">Spacious</button>
     </div>
 
     <!-- Setup Warning Banner (Chrome 138+ / Developer Mode) -->
@@ -4059,15 +4564,15 @@
                 For Chrome 138+, enable <strong>"Allow User Scripts"</strong> in extension settings. 
                 For older Chrome versions, enable <strong>Developer Mode</strong> in chrome://extensions.
             </div>
-            <button class="btn btn-warning" id="btnSetupHelp">How to Enable</button>
-            <button class="setup-warning-dismiss" id="btnDismissWarning" title="Dismiss" aria-label="Dismiss setup warning">×</button>
+            <button type="button" class="btn btn-warning" id="btnSetupHelp">How to Enable</button>
+            <button type="button" class="setup-warning-dismiss" id="btnDismissWarning" title="Dismiss" aria-label="Dismiss setup warning">×</button>
         </div>
     </div>
 
     <!-- Content -->
-    <main class="tm-content" role="main" id="mainContent">
+    <main class="tm-content" role="main" id="mainContent" tabindex="-1">
         <!-- Scripts Panel -->
-        <div id="scriptsPanel" class="tm-panel active">
+        <div id="scriptsPanel" class="tm-panel active" role="tabpanel" aria-labelledby="dashboardTabScripts">
             <div class="scripts-shell-header">
                 <div class="scripts-shell-copy">
                     <span class="scripts-shell-kicker">Workspace</span>
@@ -4092,27 +4597,27 @@
             <!-- Combined Toolbar -->
             <div class="scripts-toolbar" role="toolbar" aria-label="Script controls">
                 <div class="scripts-toolbar-left">
-                    <button class="toolbar-btn primary" id="btnNewScript">
+                    <button type="button" class="toolbar-btn primary" id="btnNewScript">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         New
                     </button>
-                    <button class="toolbar-btn" id="btnImportScript">
+                    <button type="button" class="toolbar-btn" id="btnImportScript">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         Import
                     </button>
-                    <button class="toolbar-btn" id="btnCheckUpdates">
+                    <button type="button" class="toolbar-btn" id="btnCheckUpdates">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                         Updates
                     </button>
-                    <button class="toolbar-btn" id="btnExportAll">
+                    <button type="button" class="toolbar-btn" id="btnExportAll">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         Export
                     </button>
-                    <button class="toolbar-btn" id="btnNewFolder" title="Create a new folder">
+                    <button type="button" class="toolbar-btn" id="btnNewFolder" title="Create a new folder">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
                         Folder
                     </button>
-                    <button class="toolbar-btn" id="btnFindScripts">
+                    <button class="toolbar-btn" id="btnFindScripts" type="button" aria-haspopup="dialog" aria-controls="findScriptsOverlay" aria-expanded="false">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         Find
                     </button>
@@ -4127,7 +4632,7 @@
                         <option value="reset">Factory Reset</option>
                         <option value="delete">Delete</option>
                     </select>
-                    <button class="btn bulk-btn" id="btnBulkApply">Go</button>
+                    <button type="button" class="btn bulk-btn" id="btnBulkApply">Go</button>
                 </div>
                 <div class="scripts-toolbar-right">
                     <select id="filterSelect" class="select-field bulk-select" title="Filter scripts" aria-label="Filter scripts">
@@ -4152,10 +4657,10 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         <input type="text" id="scriptSearch" name="script_search" placeholder="Search scripts or code:fetch…" aria-label="Search scripts" autocomplete="off" spellcheck="false">
                     </div>
-                    <button class="toolbar-btn compact" id="btnViewToggle" title="Toggle table/card view" aria-label="Toggle table or card view" aria-pressed="false">
+                    <button type="button" class="toolbar-btn compact" id="btnViewToggle" title="Toggle table/card view" aria-label="Toggle table or card view" aria-pressed="false">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px" id="viewToggleIcon"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
                     </button>
-                    <button class="toolbar-btn compact" id="btnColumnToggle" title="Show/hide columns" aria-label="Show or hide columns" aria-haspopup="dialog">
+                    <button type="button" class="toolbar-btn compact" id="btnColumnToggle" title="Show/hide columns" aria-label="Show or hide columns" aria-haspopup="dialog">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M12 3v18M3 12h18M3 6h18M3 18h18"/></svg>
                     </button>
                 </div>
@@ -4195,7 +4700,7 @@
 
         <!-- Settings Panel -->
         <!-- Settings Panel - Comprehensive Tampermonkey-style -->
-        <div id="settingsPanel" class="tm-panel">
+        <div id="settingsPanel" class="tm-panel" role="tabpanel" aria-labelledby="dashboardTabSettings" hidden>
             <div class="settings-shell">
             <div class="settings-hero">
                 <div class="settings-hero-copy">
@@ -4223,7 +4728,7 @@
                     <span class="settings-search-icon">⌕</span>
                     <input type="search" class="settings-search-input" id="settingsQuickFilter" name="settings_search" placeholder="Search settings, sync, editor, CSP…" autocomplete="off" spellcheck="false">
                 </label>
-                <div class="settings-filter-row" id="settingsCategoryFilters">
+                <div class="settings-filter-row" id="settingsCategoryFilters" role="group" aria-label="Settings category filters">
                     <button type="button" class="settings-filter active" data-settings-filter="all">All</button>
                     <button type="button" class="settings-filter" data-settings-filter="core">Core</button>
                     <button type="button" class="settings-filter" data-settings-filter="workspace">Workspace</button>
@@ -4334,7 +4839,7 @@
                         </select>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnSaveAppearance">Save</button>
+                        <button type="button" class="btn" id="btnSaveAppearance">Save</button>
                     </div>
                 </div>
             </div>
@@ -4387,7 +4892,7 @@
                         <div class="color-preview" id="badgeColorPreview" style="width: 24px; height: 24px; border-radius: 50%; background: #ee3131; border: 1px solid var(--border-color);"></div>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnSaveActionMenu">Save</button>
+                        <button type="button" class="btn" id="btnSaveActionMenu">Save</button>
                     </div>
                 </div>
             </div>
@@ -4516,8 +5021,8 @@
                             <span id="oauthUser" class="sync-user"></span>
                         </div>
                         <div class="setting-row">
-                            <button class="btn btn-primary" id="btnConnectOAuth">Connect</button>
-                            <button class="btn btn-danger" id="btnDisconnectOAuth" style="display:none">Disconnect</button>
+                            <button type="button" class="btn btn-primary" id="btnConnectOAuth">Connect</button>
+                            <button type="button" class="btn btn-danger" id="btnDisconnectOAuth" style="display:none">Disconnect</button>
                         </div>
                     </div>
                     
@@ -4526,8 +5031,8 @@
                         <span id="lastSyncTime" style="color:var(--text-secondary)">Never</span>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnSyncNow">Sync Now</button>
-                        <button class="btn" id="btnSyncReset">Clear Log</button>
+                        <button type="button" class="btn" id="btnSyncNow">Sync Now</button>
+                        <button type="button" class="btn" id="btnSyncReset">Clear Log</button>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Recent Sync Log:</span>
@@ -4536,7 +5041,7 @@
                         <textarea class="textarea-field" id="syncLog" readonly style="min-height: 80px; font-family: monospace; font-size: 11px;"></textarea>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnSaveSync">Save Provider Settings</button>
+                        <button type="button" class="btn" id="btnSaveSync">Save Provider Settings</button>
                     </div>
                 </div>
             </div>
@@ -4652,7 +5157,7 @@
                         <textarea class="textarea-field" id="settingsLinterConfig" placeholder="{}" style="min-height: 80px; font-family: monospace;"></textarea>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnSaveEditor">Save</button>
+                        <button type="button" class="btn" id="btnSaveEditor">Save</button>
                     </div>
                 </div>
             </div>
@@ -4790,7 +5295,7 @@ https://*bankofamerica.tld/*
 https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnSaveSecurity">Save</button>
+                        <button type="button" class="btn" id="btnSaveSecurity">Save</button>
                     </div>
                 </div>
             </div>
@@ -4806,9 +5311,9 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <textarea class="textarea-field" id="settingsDeniedHosts" readonly placeholder="&lt;No previously denied runtime host permissions found&gt;" style="min-height: 80px;"></textarea>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnGrantSelected">Grant Selected</button>
-                        <button class="btn" id="btnGrantAll">Grant All</button>
-                        <button class="btn" id="btnResetPermissions">Reset List</button>
+                        <button type="button" class="btn" id="btnGrantSelected">Grant Selected</button>
+                        <button type="button" class="btn" id="btnGrantAll">Grant All</button>
+                        <button type="button" class="btn" id="btnResetPermissions">Reset List</button>
                     </div>
                 </div>
             </div>
@@ -4843,7 +5348,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <textarea class="textarea-field" id="settingsManualBlacklist" placeholder="/^https?:\/\/example\.com(:[0-9]{1,5})?\/.*/" style="min-height: 100px; font-family: monospace;">/^https?:\/\/example\.com(:[0-9]{1,5})?\/.*/ </textarea>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnSaveBlackCheck">Save</button>
+                        <button type="button" class="btn" id="btnSaveBlackCheck">Save</button>
                     </div>
                 </div>
             </div>
@@ -4879,7 +5384,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
 .rss</textarea>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnSaveDownloads">Save</button>
+                        <button type="button" class="btn" id="btnSaveDownloads">Save</button>
                     </div>
                 </div>
             </div>
@@ -4912,10 +5417,10 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Reset</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button class="btn" id="btnRestartExtension">Restart ScriptVault</button>
+                        <button type="button" class="btn" id="btnRestartExtension">Restart ScriptVault</button>
                     </div>
                     <div class="setting-row">
-                        <button class="btn btn-danger" id="btnFactoryReset">Factory Reset</button>
+                        <button type="button" class="btn btn-danger" id="btnFactoryReset">Factory Reset</button>
                     </div>
                 </div>
             </div>
@@ -4927,7 +5432,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
         </div>
         <!-- Utilities Panel -->
-        <div id="utilitiesPanel" class="tm-panel">
+        <div id="utilitiesPanel" class="tm-panel" role="tabpanel" aria-labelledby="dashboardTabUtilities" hidden>
             <div class="utilities-shell">
             <div class="utilities-hero">
                 <div class="utilities-hero-copy">
@@ -4959,7 +5464,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <span class="utilities-search-icon">⌕</span>
                     <input type="search" class="utilities-search-input" id="utilitiesQuickFilter" name="utilities_search" placeholder="Search zip, cloud, import, network log…" autocomplete="off" spellcheck="false">
                 </label>
-                <div class="utilities-filter-row" id="utilitiesCategoryFilters">
+                <div class="utilities-filter-row" id="utilitiesCategoryFilters" role="group" aria-label="Utilities category filters">
                     <button type="button" class="utilities-filter active" data-utilities-filter="all">All</button>
                     <button type="button" class="utilities-filter" data-utilities-filter="backup">Backup</button>
                     <button type="button" class="utilities-filter" data-utilities-filter="import">Import</button>
@@ -5004,14 +5509,14 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                     <div class="setting-row">
                         <div class="btn-group">
-                            <button class="btn" id="btnCloudConnect">Connect</button>
-                            <button class="btn" id="btnCloudDisconnect" style="display:none">Disconnect</button>
+                            <button type="button" class="btn" id="btnCloudConnect">Connect</button>
+                            <button type="button" class="btn" id="btnCloudDisconnect" style="display:none">Disconnect</button>
                         </div>
                     </div>
                     <div class="setting-row" id="cloudActionsRow" style="display:none">
                         <div class="btn-group">
-                            <button class="btn" id="btnCloudExport">Backup to Cloud</button>
-                            <button class="btn" id="btnCloudImport">Restore from Cloud</button>
+                            <button type="button" class="btn" id="btnCloudExport">Backup to Cloud</button>
+                            <button type="button" class="btn" id="btnCloudImport">Restore from Cloud</button>
                         </div>
                     </div>
                     <div class="setting-row">
@@ -5025,8 +5530,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div class="setting-row">
                         <input type="file" id="importFileInput" accept=".json,.zip,.user.js,.js" style="display:none">
-                        <button class="btn" id="btnChooseFile">Choose File</button>
-                        <span id="importFileName" class="utility-inline-status" style="margin-left:10px">No file chosen</span>
+                        <button type="button" class="btn" id="btnChooseFile">Choose File</button>
+                        <span id="importFileName" class="utility-inline-status" role="status" aria-live="polite" aria-atomic="true" style="margin-left:10px">No file chosen</span>
                     </div>
                 </div>
             </div>
@@ -5035,7 +5540,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">ZIP archive</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button class="btn" id="btnExportZip">Download ZIP</button>
+                        <button type="button" class="btn" id="btnExportZip">Download ZIP</button>
                         <span class="utility-inline-status" style="margin-left:8px">Portable script archive. App-wide settings are not included.</span>
                     </div>
                 </div>
@@ -5045,7 +5550,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Vault JSON</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button class="btn" id="btnExportFile">Download JSON</button>
+                        <button type="button" class="btn" id="btnExportFile">Download JSON</button>
                         <span class="utility-inline-status" style="margin-left:8px">Exports scripts plus the options enabled above.</span>
                     </div>
                 </div>
@@ -5106,7 +5611,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <label><input type="checkbox" id="backupWarnOnStorageFull" checked> Warn when backup storage gets too large</label>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnSaveBackupSettings">Save Backup Schedule</button>
+                        <button type="button" class="btn" id="btnSaveBackupSettings">Save Backup Schedule</button>
                     </div>
                 </div>
             </div>
@@ -5118,9 +5623,9 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="setting-row" style="justify-content:space-between;align-items:center;gap:12px">
                         <span class="script-counter" id="backupBrowserSummary">0 backups</span>
                         <div class="btn-group">
-                            <button class="btn" id="btnCreateBackup">Create Backup</button>
-                            <button class="btn" id="btnImportBackupArchive">Import ZIP</button>
-                            <button class="btn" id="btnRefreshBackups">Refresh</button>
+                            <button type="button" class="btn" id="btnCreateBackup">Create Backup</button>
+                            <button type="button" class="btn" id="btnImportBackupArchive">Import ZIP</button>
+                            <button type="button" class="btn" id="btnRefreshBackups">Refresh</button>
                         </div>
                     </div>
                     <div class="utilities-toolbar" style="padding:0;margin-top:12px">
@@ -5129,7 +5634,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             <input type="search" class="utilities-search-input" id="backupBrowserQuickFilter" name="backup_browser_search" placeholder="Search manual, scheduled, vault snapshot…" autocomplete="off" spellcheck="false">
                         </label>
                         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end">
-                            <div class="utilities-filter-row" aria-label="Backup browser filters">
+                            <div class="utilities-filter-row" role="group" aria-label="Backup browser filters">
                                 <button type="button" class="utilities-filter active" data-backup-browser-filter="all">All</button>
                                 <button type="button" class="utilities-filter" data-backup-browser-filter="vault">Vault</button>
                                 <button type="button" class="utilities-filter" data-backup-browser-filter="scripts">Scripts</button>
@@ -5156,7 +5661,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Script Stats</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button class="btn" id="btnExportStats">Export CSV</button>
+                        <button type="button" class="btn" id="btnExportStats">Export CSV</button>
                         <span class="utility-inline-status" style="margin-left:8px">Export execution stats for all scripts</span>
                     </div>
                 </div>
@@ -5166,7 +5671,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Tampermonkey Import</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button class="btn" id="btnImportTampermonkey">Import .txt Export</button>
+                        <button type="button" class="btn" id="btnImportTampermonkey">Import .txt Export</button>
                         <span class="utility-inline-status" style="margin-left:8px">Import from Tampermonkey's text backup format</span>
                     </div>
                 </div>
@@ -5177,12 +5682,12 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div class="setting-row">
                         <div class="btn-group">
-                            <button class="btn" id="btnTextareaExport">Export</button>
-                            <button class="btn" id="btnTextareaImport">Import</button>
+                            <button type="button" class="btn" id="btnTextareaExport">Export</button>
+                            <button type="button" class="btn" id="btnTextareaImport">Import</button>
                         </div>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="textareaData" style="min-height:150px" placeholder="Paste JSON data here..."></textarea>
+                        <textarea class="textarea-field" id="textareaData" name="vault_json_data" aria-label="Vault JSON data" spellcheck="false" style="min-height:150px" placeholder="Paste JSON data here…"></textarea>
                     </div>
                 </div>
             </div>
@@ -5191,8 +5696,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Import from URL</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <input type="text" class="input-field wide" id="importUrlInput" placeholder="https://example.com/script.user.js">
-                        <button class="btn" id="btnInstallFromUrl" style="margin-left:10px">Install</button>
+                        <input type="url" class="input-field wide" id="importUrlInput" name="import_script_url" aria-label="Userscript URL" autocomplete="off" spellcheck="false" inputmode="url" placeholder="https://example.com/script.user.js">
+                        <button type="button" class="btn" id="btnInstallFromUrl" style="margin-left:10px">Install</button>
                     </div>
                 </div>
             </div>
@@ -5201,10 +5706,10 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Batch Install from URLs</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="batchUrlInput" rows="4" placeholder="Paste one .user.js URL per line..." style="width:100%;font-size:12px;resize:vertical"></textarea>
+                        <textarea class="textarea-field" id="batchUrlInput" name="batch_install_urls" aria-label="Batch install script URLs" spellcheck="false" rows="4" placeholder="Paste one .user.js URL per line…" style="width:100%;font-size:12px;resize:vertical"></textarea>
                     </div>
                     <div class="setting-row">
-                        <button class="btn" id="btnBatchInstall">Install All</button>
+                        <button type="button" class="btn" id="btnBatchInstall">Install All</button>
                         <span class="utility-inline-status" style="margin-left:8px">One URL per line</span>
                     </div>
                 </div>
@@ -5216,7 +5721,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="utility-note" style="margin-bottom:8px">Save and switch between different sets of enabled and disabled scripts.</div>
                     <div id="workspaceList" style="margin-bottom:8px"></div>
                     <div class="setting-row">
-                        <button class="btn" id="btnCreateWorkspace">Save Current as Workspace</button>
+                        <button type="button" class="btn" id="btnCreateWorkspace">Save Current as Workspace</button>
                     </div>
                 </div>
             </div>
@@ -5228,9 +5733,9 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <div style="color:var(--text-muted)">No network requests logged yet. GM_xmlhttpRequest calls will appear here.</div>
                     </div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
-                        <button class="btn" id="btnRefreshNetLog">Refresh</button>
-                        <button class="btn" id="btnClearNetLog">Clear</button>
-                        <button class="btn" id="btnExportNetLog">Export HAR</button>
+                        <button type="button" class="btn" id="btnRefreshNetLog">Refresh</button>
+                        <button type="button" class="btn" id="btnClearNetLog">Clear</button>
+                        <button type="button" class="btn" id="btnExportNetLog">Export HAR</button>
                     </div>
                 </div>
             </div>
@@ -5242,7 +5747,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="setting-row">
                         <span class="label-text">Default budget (ms):</span>
                         <input type="number" class="input-field" id="perfBudgetDefault" value="200" style="width:80px" min="10" max="10000">
-                        <button class="btn" id="btnSavePerfBudget" style="margin-left:8px">Save</button>
+                        <button type="button" class="btn" id="btnSavePerfBudget" style="margin-left:8px">Save</button>
                     </div>
                     <div id="perfBudgetOverrides" style="margin-top:8px;font-size:12px"></div>
                 </div>
@@ -5260,9 +5765,9 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <div class="utility-note" id="runtimeStatusDetails">Loading runtime diagnostics...</div>
                     </div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
-                        <button class="btn" id="btnRefreshRuntimeStatus">Refresh Status</button>
-                        <button class="btn" id="btnRepairRuntime">Repair Runtime</button>
-                        <button class="btn" id="btnShowSetupGuide">Setup Guide</button>
+                        <button type="button" class="btn" id="btnRefreshRuntimeStatus">Refresh Status</button>
+                        <button type="button" class="btn" id="btnRepairRuntime">Repair Runtime</button>
+                        <button type="button" class="btn" id="btnShowSetupGuide">Setup Guide</button>
                     </div>
                 </div>
             </div>
@@ -5273,7 +5778,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="utility-note" style="margin-bottom:8px">Export a support bundle with runtime setup, trust state, sync summary, recovery inventory, script inventory, and recent diagnostics.</div>
                     <div id="supportSnapshotSummary" class="utility-surface">Bundle includes runtime status, trusted origins, signing keys, backup inventory, recent errors, and script counts.</div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
-                        <button class="btn" id="btnExportSupportSnapshot">Export Snapshot</button>
+                        <button type="button" class="btn" id="btnExportSupportSnapshot">Export Snapshot</button>
                         <span class="utility-inline-status" id="supportSnapshotStatus">Ready</span>
                     </div>
                 </div>
@@ -5290,9 +5795,9 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="utility-inline-status" id="publicApiPermissionsSummary" style="display:block;margin-top:8px">Loading permission policy...</div>
                     <div class="utility-inline-status" id="publicApiTrustStatus" style="display:block;margin-top:4px">Loading trusted origins...</div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
-                        <button class="btn" id="btnRefreshPublicApiTrust">Refresh</button>
-                        <button class="btn" id="btnSavePublicApiOrigins">Save Origins</button>
-                        <button class="btn" id="btnClearPublicApiAudit">Clear Audit</button>
+                        <button type="button" class="btn" id="btnRefreshPublicApiTrust">Refresh</button>
+                        <button type="button" class="btn" id="btnSavePublicApiOrigins">Save Origins</button>
+                        <button type="button" class="btn" id="btnClearPublicApiAudit">Clear Audit</button>
                     </div>
                     <div id="publicApiAuditLog" class="utility-surface" style="margin-top:8px;max-height:220px;overflow-y:auto;font-size:12px">
                         <div class="panel-empty-inline">No external API activity yet.</div>
@@ -5309,7 +5814,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <div class="panel-empty-inline">No trusted signing keys saved.</div>
                     </div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
-                        <button class="btn" id="btnRefreshSigningTrust">Refresh</button>
+                        <button type="button" class="btn" id="btnRefreshSigningTrust">Refresh</button>
                     </div>
                 </div>
             </div>
@@ -5319,7 +5824,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div id="activityLog" class="activity-log utility-surface" style="max-height:200px;overflow-y:auto;font-size:12px;color:var(--text-muted)">No activity yet</div>
                     <div class="setting-row" style="margin-top:8px">
-                        <button class="btn" id="btnClearLog">Clear Log</button>
+                        <button type="button" class="btn" id="btnClearLog">Clear Log</button>
                     </div>
                 </div>
             </div>
@@ -5332,7 +5837,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
         </div>
 
         <!-- Trash Panel -->
-        <div id="trashPanel" class="tm-panel">
+        <div id="trashPanel" class="tm-panel" role="tabpanel" aria-labelledby="dashboardTabTrash" hidden>
             <div class="trash-shell">
                 <div class="trash-hero">
                     <div class="trash-hero-copy">
@@ -5362,7 +5867,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <input id="trashQuickFilter" name="trash_search" type="search" placeholder="Filter deleted scripts by name, author, or version" autocomplete="off" spellcheck="false">
                     </label>
                     <div class="trash-toolbar-actions">
-                        <div class="trash-filter-row" id="trashCategoryFilters">
+                        <div class="trash-filter-row" id="trashCategoryFilters" role="group" aria-label="Trash time filters">
                             <button type="button" class="trash-filter active" data-trash-filter="all">All</button>
                             <button type="button" class="trash-filter" data-trash-filter="recent">Last 7 Days</button>
                             <button type="button" class="trash-filter" data-trash-filter="older">Older</button>
@@ -5384,7 +5889,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
         </div>
 
         <!-- Script Store Panel -->
-        <div id="storePanel" class="tm-panel">
+        <div id="storePanel" class="tm-panel" role="tabpanel" aria-labelledby="dashboardTabStore" hidden>
             <div id="storeContainer" style="min-height:calc(100vh - 120px);">
                 <div class="lazy-loading-state"><div class="lazy-spinner"></div><div>Loading Script Store...</div></div>
             </div>
@@ -5392,7 +5897,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
 
 
         <!-- Help Panel -->
-        <div id="helpPanel" class="tm-panel">
+        <div id="helpPanel" class="tm-panel" role="region" aria-labelledby="btnHelpTab" hidden>
             <div class="help-shell">
                 <div class="help-hero">
                     <div class="help-hero-copy">
@@ -5425,7 +5930,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <span class="help-search-icon">Search</span>
                         <input type="search" class="help-search-input" id="helpQuickFilter" name="help_search" placeholder="Search commands, shortcuts, APIs, & matching tools" autocomplete="off" spellcheck="false">
                     </label>
-                    <div class="help-filter-row" id="helpCategoryFilters">
+                    <div class="help-filter-row" id="helpCategoryFilters" role="group" aria-label="Help category filters">
                         <button type="button" class="help-filter active" data-help-filter="all">All</button>
                         <button type="button" class="help-filter" data-help-filter="actions">Actions</button>
                         <button type="button" class="help-filter" data-help-filter="shortcuts">Shortcuts</button>
@@ -5549,7 +6054,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="help-content">
                     <div class="help-pattern-row">
                         <input type="text" class="input-field" id="patternTestUrl" placeholder="Enter a URL to test (e.g., https://example.com/page)" style="flex:1">
-                        <button class="btn btn-primary" id="btnTestPattern">Test</button>
+                        <button type="button" class="btn btn-primary" id="btnTestPattern">Test</button>
                     </div>
                     <div id="patternTestResults" class="help-pattern-results">Enter a URL to see which scripts would run on it.</div>
                 </div>
@@ -5628,7 +6133,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="help-section about-section" data-help-group="reference">
                 <div class="about-shell">
                     <div class="about-brand">
-                        <img src="../images/icon128.png" alt="ScriptVault">
+                        <img src="../images/icon128.png" alt="ScriptVault" width="128" height="128">
                         <div class="about-brand-copy">
                             <h2>ScriptVault</h2>
                             <p class="version" id="aboutVersion"></p>
@@ -5672,16 +6177,16 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     </main>
 
     <!-- Editor Overlay -->
-    <div class="editor-overlay" id="editorOverlay">
+    <div class="editor-overlay" id="editorOverlay" role="dialog" aria-modal="true" aria-labelledby="editorTitle" aria-describedby="editorSubtitle" aria-hidden="true" hidden tabindex="-1">
         <div class="editor-header">
             <div class="editor-header-main">
                 <div class="editor-heading">
                     <span class="editor-eyebrow" id="editorEyebrow">Userscript Editor</span>
                     <div class="editor-title-row">
-                        <span class="editor-title" id="editorTitle">Edit Script</span>
+                        <h2 class="editor-title" id="editorTitle">Edit Script</h2>
                         <span class="editor-save-state" id="editorSaveState" data-state="clean" role="status" aria-live="polite" aria-atomic="true">Saved</span>
                     </div>
-                    <span class="editor-subtitle" id="editorSubtitle">Ready to edit.</span>
+                    <p class="editor-subtitle" id="editorSubtitle">Ready to edit.</p>
                 </div>
                 <div class="editor-metrics" aria-label="Editor metrics">
                     <span class="editor-metric editor-line-count" id="editorLineCount"></span>
@@ -5711,73 +6216,77 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     <span>Delete</span>
                 </button>
+                <button class="btn" id="btnEditorClose" type="button" title="Close editor (Esc)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                    <span>Close</span>
+                </button>
             </div>
         </div>
-        <div class="editor-tabs">
-            <button class="editor-tab active" data-panel="code">Code</button>
-            <button class="editor-tab" data-panel="scriptsettings">Settings</button>
-            <button class="editor-tab" data-panel="externals">Externals</button>
-            <button class="editor-tab" data-panel="storage">Storage</button>
-            <button class="editor-tab" data-panel="info">Info</button>
+        <div class="editor-tabs" role="tablist" aria-label="Script editor panels">
+            <button type="button" class="editor-tab active" id="editorTabCode" role="tab" aria-selected="true" aria-controls="codePanel" tabindex="0" data-panel="code">Code</button>
+            <button type="button" class="editor-tab" id="editorTabScriptSettings" role="tab" aria-selected="false" aria-controls="scriptsettingsPanel" tabindex="-1" data-panel="scriptsettings">Settings</button>
+            <button type="button" class="editor-tab" id="editorTabExternals" role="tab" aria-selected="false" aria-controls="externalsPanel" tabindex="-1" data-panel="externals">Externals</button>
+            <button type="button" class="editor-tab" id="editorTabStorage" role="tab" aria-selected="false" aria-controls="storagePanel" tabindex="-1" data-panel="storage">Storage</button>
+            <button type="button" class="editor-tab" id="editorTabInfo" role="tab" aria-selected="false" aria-controls="infoPanel" tabindex="-1" data-panel="info">Info</button>
         </div>
         <div class="editor-toolbar" id="editorToolbar">
-            <button class="toolbar-btn" id="tbtnUndo" title="Undo (Ctrl+Z)">
+            <button type="button" class="toolbar-btn" id="tbtnUndo" title="Undo (Ctrl+Z)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 0118 0 9 9 0 01-9 9 9 9 0 01-7.5-4"/></svg>
                 Undo
             </button>
-            <button class="toolbar-btn" id="tbtnRedo" title="Redo (Ctrl+Y)">
+            <button type="button" class="toolbar-btn" id="tbtnRedo" title="Redo (Ctrl+Y)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 00-18 0 9 9 0 009 9 9 9 0 007.5-4"/></svg>
                 Redo
             </button>
             <div class="toolbar-separator"></div>
-            <button class="toolbar-btn" id="tbtnSearch" title="Find (Ctrl+F)">
+            <button type="button" class="toolbar-btn" id="tbtnSearch" title="Find (Ctrl+F)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
                 Find
             </button>
-            <button class="toolbar-btn" id="tbtnReplace" title="Replace (Ctrl+H)">
+            <button type="button" class="toolbar-btn" id="tbtnReplace" title="Replace (Ctrl+H)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/><path d="M11 8v6"/></svg>
                 Replace
             </button>
             <div class="toolbar-separator"></div>
-            <button class="toolbar-btn" id="tbtnBeautify" title="Format/Beautify Code">
+            <button type="button" class="toolbar-btn" id="tbtnBeautify" title="Format/Beautify Code">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h6"/></svg>
                 Beautify
             </button>
-            <button class="toolbar-btn" id="tbtnLint" title="Check for Errors">
+            <button type="button" class="toolbar-btn" id="tbtnLint" title="Check for Errors">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 Lint
             </button>
             <div class="toolbar-separator"></div>
-            <button class="toolbar-btn" id="tbtnFoldAll" title="Fold All">
+            <button type="button" class="toolbar-btn" id="tbtnFoldAll" title="Fold All">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
                 Fold
             </button>
-            <button class="toolbar-btn" id="tbtnUnfoldAll" title="Unfold All">
+            <button type="button" class="toolbar-btn" id="tbtnUnfoldAll" title="Unfold All">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
                 Unfold
             </button>
             <div class="toolbar-separator"></div>
-            <button class="toolbar-btn" id="tbtnJumpLine" title="Go to Line (Ctrl+G)">
+            <button type="button" class="toolbar-btn" id="tbtnJumpLine" title="Go to Line (Ctrl+G)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 Go to Line
             </button>
             <div class="toolbar-separator"></div>
-            <button class="toolbar-btn" id="tbtnComment" title="Toggle Comment (Ctrl+/)">
+            <button type="button" class="toolbar-btn" id="tbtnComment" title="Toggle Comment (Ctrl+/)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h7M4 12h16M4 17h11"/><path d="M17 7l3 3-3 3"/></svg>
                 //
             </button>
-            <button class="toolbar-btn" id="tbtnWordWrap" title="Toggle Word Wrap">
+            <button type="button" class="toolbar-btn" id="tbtnWordWrap" title="Toggle Word Wrap">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h15a3 3 0 010 6H9m0 0l3-3m-3 3l3 3"/></svg>
                 Wrap
             </button>
-            <button class="toolbar-btn" id="tbtnSnippet" title="Insert Code Snippet">
+            <button type="button" class="toolbar-btn" id="tbtnSnippet" title="Insert Code Snippet">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                 Snippet
             </button>
         </div>
         <div class="editor-body">
             <div class="editor-main">
-                <div id="codePanel" class="editor-panel active">
+                <div id="codePanel" class="editor-panel active" role="tabpanel" aria-labelledby="editorTabCode">
                     <div class="code-editor-wrapper" id="editorWrapper">
                         <!-- Monaco editor runs in a sandboxed iframe to allow eval (required by Monaco's tokenizer) -->
                         <iframe id="monacoFrame"
@@ -5789,7 +6298,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <textarea id="editorTextarea" style="display:none;width:100%;height:100%;background:#1a1a1a;color:#e0e0e0;font-family:monospace;font-size:13px;border:none;resize:none;padding:8px;box-sizing:border-box;"></textarea>
                     </div>
                 </div>
-                <div id="infoPanel" class="editor-panel">
+                <div id="infoPanel" class="editor-panel" role="tabpanel" aria-labelledby="editorTabInfo" hidden>
                     <div class="editor-panel-shell">
                         <div class="editor-panel-head">
                             <div class="editor-panel-headline">
@@ -5860,7 +6369,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                         <span class="info-label">Performance</span>
                                         <div class="info-value" id="infoPerf">
                                             <div id="infoPerfStats" class="perf-stats-grid">-</div>
-                                            <button class="btn btn-sm btn-danger" id="btnResetStats" style="margin-top:10px;display:none">Reset Stats</button>
+                                            <button type="button" class="btn btn-sm btn-danger" id="btnResetStats" style="margin-top:10px;display:none">Reset Stats</button>
                                         </div>
                                     </div>
                                     <div class="info-item info-item-wide">
@@ -5876,7 +6385,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         </div>
                     </div>
                 </div>
-                <div id="storagePanel" class="editor-panel">
+                <div id="storagePanel" class="editor-panel" role="tabpanel" aria-labelledby="editorTabStorage" hidden>
                     <div class="editor-panel-shell">
                         <div class="editor-panel-head">
                             <div class="editor-panel-headline">
@@ -5885,7 +6394,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             </div>
                             <div class="editor-panel-actions">
                                 <span id="storageSizeInfo" class="script-counter">0 B used</span>
-                                <button class="btn" id="btnAddStorage">+ Add Value</button>
+                                <button type="button" class="btn" id="btnAddStorage">+ Add Value</button>
                             </div>
                         </div>
                         <div class="editor-panel-scroll">
@@ -5895,7 +6404,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         </div>
                     </div>
                 </div>
-                <div id="scriptsettingsPanel" class="editor-panel">
+                <div id="scriptsettingsPanel" class="editor-panel" role="tabpanel" aria-labelledby="editorTabScriptSettings" hidden>
                     <div class="editor-panel-shell">
                         <div class="editor-panel-head">
                             <div class="editor-panel-headline">
@@ -6027,7 +6536,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                     <div class="url-override-header">
                                         <span class="label-text url-override-title accent">User @include</span>
                                         <div class="url-override-actions">
-                                            <button class="btn btn-sm" id="btnAddUserInclude" title="Add pattern">+ Add</button>
+                                            <button type="button" class="btn btn-sm" id="btnAddUserInclude" title="Add pattern">+ Add</button>
                                         </div>
                                     </div>
                                     <div class="url-pattern-editable" id="userIncludesList">
@@ -6041,7 +6550,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                     <div class="url-override-header">
                                         <span class="label-text url-override-title accent">User @match</span>
                                         <div class="url-override-actions">
-                                            <button class="btn btn-sm" id="btnAddUserMatch" title="Add pattern">+ Add</button>
+                                            <button type="button" class="btn btn-sm" id="btnAddUserMatch" title="Add pattern">+ Add</button>
                                         </div>
                                     </div>
                                     <div class="url-pattern-editable" id="userMatchesList">
@@ -6055,7 +6564,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                     <div class="url-override-header">
                                         <span class="label-text url-override-title danger">User @exclude</span>
                                         <div class="url-override-actions">
-                                            <button class="btn btn-sm" id="btnAddUserExclude" title="Add pattern">+ Add</button>
+                                            <button type="button" class="btn btn-sm" id="btnAddUserExclude" title="Add pattern">+ Add</button>
                                         </div>
                                     </div>
                                     <div class="url-pattern-editable" id="userExcludesList">
@@ -6067,14 +6576,14 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         </div>
                         
                                 <div class="btn-group editor-panel-footer">
-                            <button class="btn btn-primary" id="btnSaveScriptSettings">Save Settings</button>
-                            <button class="btn" id="btnResetScriptSettings">Reset to Defaults</button>
+                            <button type="button" class="btn btn-primary" id="btnSaveScriptSettings">Save Settings</button>
+                            <button type="button" class="btn" id="btnResetScriptSettings">Reset to Defaults</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div id="externalsPanel" class="editor-panel">
+                <div id="externalsPanel" class="editor-panel" role="tabpanel" aria-labelledby="editorTabExternals" hidden>
                     <div class="editor-panel-shell">
                         <div class="editor-panel-head">
                             <div class="editor-panel-headline">
@@ -6082,7 +6591,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                 <p>Review `@require` and `@resource` dependencies, then pull in library URLs without leaving the editor.</p>
                             </div>
                             <div class="editor-panel-actions">
-                                <button class="btn" id="btnRefreshExternals" title="Re-fetch all external resources">Refresh All</button>
+                                <button type="button" class="btn" id="btnRefreshExternals" title="Re-fetch all external resources">Refresh All</button>
                             </div>
                         </div>
                         <div class="editor-panel-scroll">
@@ -6091,10 +6600,10 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             <div class="section-label">Find Libraries</div>
                             <div class="section-content">
                                 <div class="editor-inline-search">
-                                    <input type="text" class="input-field" id="libSearchInput" placeholder="Search CDN libraries (e.g. jquery, lodash, react)">
-                                    <button class="btn btn-primary" id="btnLibSearch">Search</button>
+                                    <input type="search" class="input-field" id="libSearchInput" name="librarySearch" aria-label="Search CDN libraries" autocomplete="off" spellcheck="false" placeholder="Search CDN libraries (e.g. jquery, lodash, react)…">
+                                    <button type="button" class="btn btn-primary" id="btnLibSearch">Search</button>
                                 </div>
-                                <div id="libSearchResults" class="panel-empty-inline">Search cdnjs for popular libraries to add as @require</div>
+                                <div id="libSearchResults" class="panel-empty-inline" aria-live="polite">Search cdnjs for popular libraries to add as @require</div>
                             </div>
                         </div>
                                 <div class="settings-section">
@@ -6118,24 +6627,24 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     </div>
 
     <!-- Find Scripts Overlay -->
-    <div class="find-scripts-overlay" id="findScriptsOverlay">
+    <div class="find-scripts-overlay" id="findScriptsOverlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="findScriptsTitle" tabindex="-1">
         <div class="find-scripts-header">
-            <div class="find-scripts-title">
+            <div class="find-scripts-title" id="findScriptsTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 Find Userscripts
             </div>
-            <button class="find-scripts-close" id="btnCloseFindScripts">&times;</button>
+            <button class="find-scripts-close" id="btnCloseFindScripts" type="button" aria-label="Close Find Userscripts dialog">&times;</button>
         </div>
         <div class="find-scripts-search">
-            <input type="text" id="findScriptsInput" class="input-field" placeholder="Search by domain or keyword (e.g. youtube.com, dark mode)...">
-            <select id="findScriptsSource" class="select-field">
+            <input type="search" id="findScriptsInput" name="find_scripts_query" class="input-field" placeholder="Search by domain or keyword (e.g. youtube.com, dark mode)…" aria-label="Search userscripts by domain or keyword" autocomplete="off" spellcheck="false">
+            <select id="findScriptsSource" name="find_scripts_source" class="select-field" aria-label="Choose script search source">
                 <option value="greasyfork">GreasyFork</option>
                 <option value="openuserjs">OpenUserJS</option>
                 <option value="github">GitHub</option>
             </select>
-            <button class="toolbar-btn primary" id="btnFindScriptsSearch">Search</button>
+            <button class="toolbar-btn primary" id="btnFindScriptsSearch" type="button">Search</button>
         </div>
-        <div class="find-scripts-results" id="findScriptsResults">
+        <div class="find-scripts-results" id="findScriptsResults" role="status" aria-live="polite" aria-atomic="false">
             <div class="find-scripts-empty">Search for userscripts by entering a domain or keyword above</div>
         </div>
     </div>
@@ -6177,13 +6686,13 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <!-- See LazyLoader.TAB_MODULES, EDITOR_MODULES, ON_DEMAND_MODULES for the full map -->
 
     <!-- Progress Overlay -->
-    <div class="progress-overlay" id="progressOverlay" hidden aria-hidden="true">
+    <div class="progress-overlay" id="progressOverlay" role="dialog" aria-modal="true" aria-labelledby="progressTitle" aria-describedby="progressStatus" aria-hidden="true" aria-busy="false" tabindex="-1" hidden>
         <div class="progress-card">
-            <div class="progress-title" id="progressTitle">Working...</div>
+            <h2 class="progress-title" id="progressTitle">Working…</h2>
             <div class="progress-bar-track" id="progressBar" role="progressbar" aria-labelledby="progressTitle" aria-describedby="progressStatus" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                 <div class="progress-bar-fill" id="progressFill"></div>
             </div>
-            <div class="progress-status" id="progressStatus"></div>
+            <p class="progress-status" id="progressStatus" role="status" aria-live="polite" aria-atomic="true"></p>
         </div>
     </div>
 

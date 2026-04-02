@@ -47,6 +47,31 @@ interface GoogleDriveFile {
   modifiedTime: string;
 }
 
+function getRequiredWebDavBaseUrl(settings: Pick<Settings, 'webdavUrl'>): string {
+  const baseUrl = settings.webdavUrl?.trim();
+  if (!baseUrl) throw new Error('WebDAV URL is required');
+  return baseUrl.replace(/\/$/, '');
+}
+
+function getWebDavAuthHeader(
+  settings: Pick<Settings, 'webdavUsername' | 'webdavPassword'>,
+): string {
+  const credentials = `${settings.webdavUsername}:${settings.webdavPassword}`;
+  const bytes = new TextEncoder().encode(credentials);
+  let binary = '';
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return `Basic ${btoa(binary)}`;
+}
+
+function generateOAuthState(): string {
+  return Array.from(
+    crypto.getRandomValues(new Uint8Array(16)),
+    (b: number) => b.toString(16).padStart(2, '0'),
+  ).join('');
+}
+
 // ============================================================================
 // WebDAV Provider
 // ============================================================================
@@ -57,14 +82,13 @@ const webdav = {
   requiresAuth: true as const,
 
   async upload(data: unknown, settings: Settings): Promise<SyncUploadResult> {
-    if (!settings.webdavUrl) throw new Error('WebDAV URL is required');
-    const url = `${settings.webdavUrl.replace(/\/$/, '')}/scriptvault-backup.json`;
-    const auth = btoa(`${settings.webdavUsername}:${settings.webdavPassword}`);
+    const url = `${getRequiredWebDavBaseUrl(settings)}/scriptvault-backup.json`;
+    const auth = getWebDavAuthHeader(settings);
 
     const response = await fetch(url, {
       method: 'PUT',
       headers: {
-        'Authorization': `Basic ${auth}`,
+        'Authorization': auth,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(data),
@@ -75,13 +99,12 @@ const webdav = {
   },
 
   async download(settings: Settings): Promise<unknown | null> {
-    if (!settings.webdavUrl) throw new Error('WebDAV URL is required');
-    const url = `${settings.webdavUrl.replace(/\/$/, '')}/scriptvault-backup.json`;
-    const auth = btoa(`${settings.webdavUsername}:${settings.webdavPassword}`);
+    const url = `${getRequiredWebDavBaseUrl(settings)}/scriptvault-backup.json`;
+    const auth = getWebDavAuthHeader(settings);
 
     const response = await fetch(url, {
       method: 'GET',
-      headers: { 'Authorization': `Basic ${auth}` },
+      headers: { 'Authorization': auth },
     });
 
     if (response.status === 404) return null;
@@ -92,12 +115,12 @@ const webdav = {
 
   async test(settings: Settings): Promise<SyncTestResult> {
     try {
-      const url = settings.webdavUrl.replace(/\/$/, '');
-      const auth = btoa(`${settings.webdavUsername}:${settings.webdavPassword}`);
+      const url = getRequiredWebDavBaseUrl(settings);
+      const auth = getWebDavAuthHeader(settings);
 
       const response = await fetch(url, {
         method: 'PROPFIND',
-        headers: { 'Authorization': `Basic ${auth}`, 'Depth': '0' },
+        headers: { 'Authorization': auth, 'Depth': '0' },
       });
 
       return { success: response.ok || response.status === 207 };
@@ -126,12 +149,12 @@ const googledrive = {
     return settings.googleDriveToken || null;
   },
 
-  async refreshToken(): Promise<string | null> {
-    const settings = await getSettings();
-    const refreshTok = settings.googleDriveRefreshToken;
+  async refreshToken(settings?: Settings): Promise<string | null> {
+    const currentSettings = settings ?? (await getSettings());
+    const refreshTok = currentSettings.googleDriveRefreshToken;
     if (!refreshTok) return null;
 
-    const clientId = settings.googleClientId || this.clientId;
+    const clientId = currentSettings.googleClientId || this.clientId;
     const resp = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -148,7 +171,10 @@ const googledrive = {
     }
     const data: { access_token?: string; refresh_token?: string } = await resp.json();
     if (data.access_token) {
-      await SettingsManager.set({ googleDriveToken: data.access_token });
+      await SettingsManager.set({
+        googleDriveToken: data.access_token,
+        googleDriveConnected: true,
+      });
       if (data.refresh_token) {
         await SettingsManager.set({ googleDriveRefreshToken: data.refresh_token });
       }
@@ -157,20 +183,27 @@ const googledrive = {
     return null;
   },
 
-  async getValidToken(): Promise<string | null> {
-    let token = await this.getToken();
-    if (!token) return null;
+  async getValidToken(settings?: Settings): Promise<string | null> {
+    const currentSettings = settings ?? (await getSettings());
+    let token = currentSettings.googleDriveToken || null;
+    if (!token) {
+      return await this.refreshToken(currentSettings);
+    }
 
-    // Test if token is still valid
-    const test = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
+    try {
+      // Test if token is still valid
+      const test = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
 
-    if (test.ok) return token;
-
-    // Try refresh
-    token = await this.refreshToken();
-    return token;
+      if (test.ok) return token;
+      if (test.status === 401 || test.status === 403) {
+        return await this.refreshToken(currentSettings);
+      }
+      return token;
+    } catch (_e: unknown) {
+      return token;
+    }
   },
 
   async connect(): Promise<SyncConnectResult> {
@@ -195,6 +228,7 @@ const googledrive = {
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
+      const state = generateOAuthState();
 
       const authUrl =
         'https://accounts.google.com/o/oauth2/v2/auth?' +
@@ -207,6 +241,7 @@ const googledrive = {
           prompt: 'consent',
           code_challenge: codeChallenge,
           code_challenge_method: 'S256',
+          state,
         }).toString();
 
       const responseUrl = await chrome.identity.launchWebAuthFlow({
@@ -216,6 +251,10 @@ const googledrive = {
       if (!responseUrl) throw new Error('No response from auth flow');
 
       const url = new URL(responseUrl);
+      const returnedState = url.searchParams.get('state');
+      if (returnedState !== state) {
+        throw new Error('OAuth state mismatch - possible CSRF attack');
+      }
       const code = url.searchParams.get('code');
       if (!code) throw new Error('No authorization code received');
 
@@ -298,8 +337,8 @@ const googledrive = {
     return data.files?.[0] ?? null;
   },
 
-  async upload(data: unknown, _settings: Settings): Promise<SyncUploadResult> {
-    const token = await this.getValidToken();
+  async upload(data: unknown, settings: Settings): Promise<SyncUploadResult> {
+    const token = await this.getValidToken(settings);
     if (!token) throw new Error('Not authenticated with Google Drive');
 
     const existingFile = await this.findFile(token);
@@ -346,8 +385,8 @@ const googledrive = {
     return { success: true, timestamp: Date.now() };
   },
 
-  async download(_settings: Settings): Promise<unknown | null> {
-    const token = await this.getValidToken();
+  async download(settings: Settings): Promise<unknown | null> {
+    const token = await this.getValidToken(settings);
     if (!token) throw new Error('Not authenticated with Google Drive');
 
     const file = await this.findFile(token);
@@ -362,9 +401,9 @@ const googledrive = {
     return (await response.json()) as unknown;
   },
 
-  async test(_settings: Settings): Promise<SyncTestResult> {
+  async test(settings: Settings): Promise<SyncTestResult> {
     try {
-      const token = await this.getValidToken();
+      const token = await this.getValidToken(settings);
       if (!token) return { success: false, error: 'Not authenticated' };
 
       const response = await fetch(
@@ -382,11 +421,11 @@ const googledrive = {
   async getStatus(settings?: Settings): Promise<SyncStatusResult> {
     try {
       const s = settings ?? (await getSettings());
-      if (!s.googleDriveConnected || !s.googleDriveToken) {
+      if (!s.googleDriveToken && !s.googleDriveRefreshToken) {
         return { connected: false };
       }
 
-      const token = await this.getValidToken();
+      const token = await this.getValidToken(s);
       if (!token) return { connected: false };
 
       const response = await fetch(
@@ -522,14 +561,18 @@ const dropbox = {
   },
 
   async getValidToken(settings: Settings): Promise<string | null> {
-    if (!settings.dropboxToken) return null;
-    // Test current token
-    const test = await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${settings.dropboxToken}` },
-    });
-    if (test.ok) return settings.dropboxToken;
-    // Try refresh
+    if (settings.dropboxToken) {
+      try {
+        const test = await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${settings.dropboxToken}` },
+        });
+        if (test.ok) return settings.dropboxToken;
+        if (test.status !== 401 && test.status !== 403) return settings.dropboxToken;
+      } catch (_e: unknown) {
+        return settings.dropboxToken;
+      }
+    }
     return await this.refreshToken(settings);
   },
 
@@ -544,16 +587,22 @@ const dropbox = {
         console.warn('[CloudSync] Dropbox revoke error:', e);
       }
     }
+    await SettingsManager.set({
+      dropboxToken: '',
+      dropboxRefreshToken: '',
+      dropboxUser: null,
+    });
     return { success: true };
   },
 
   async upload(data: unknown, settings: Settings): Promise<SyncUploadResult> {
-    if (!settings.dropboxToken) throw new Error('Not authenticated with Dropbox');
+    const token = await this.getValidToken(settings);
+    if (!token) throw new Error('Not authenticated with Dropbox');
 
     const response = await fetch('https://content.dropboxapi.com/2/files/upload', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${settings.dropboxToken}`,
+        'Authorization': `Bearer ${token}`,
         'Dropbox-API-Arg': JSON.stringify({
           path: this.fileName,
           mode: 'overwrite',
@@ -575,12 +624,13 @@ const dropbox = {
   },
 
   async download(settings: Settings): Promise<unknown | null> {
-    if (!settings.dropboxToken) throw new Error('Not authenticated with Dropbox');
+    const token = await this.getValidToken(settings);
+    if (!token) throw new Error('Not authenticated with Dropbox');
 
     const response = await fetch('https://content.dropboxapi.com/2/files/download', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${settings.dropboxToken}`,
+        'Authorization': `Bearer ${token}`,
         'Dropbox-API-Arg': JSON.stringify({ path: this.fileName }),
       },
     });
@@ -593,14 +643,15 @@ const dropbox = {
   },
 
   async test(settings: Settings): Promise<SyncTestResult> {
-    if (!settings.dropboxToken) return { success: false, error: 'Not authenticated' };
-
     try {
+      const token = await this.getValidToken(settings);
+      if (!token) return { success: false, error: 'Not authenticated' };
+
       const response = await fetch(
         'https://api.dropboxapi.com/2/users/get_current_account',
         {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${settings.dropboxToken}` },
+          headers: { 'Authorization': `Bearer ${token}` },
         },
       );
 
@@ -614,14 +665,17 @@ const dropbox = {
 
   async getStatus(settings?: Settings): Promise<SyncStatusResult> {
     const s = settings ?? (await getSettings());
-    if (!s.dropboxToken) return { connected: false };
+    if (!s.dropboxToken && !s.dropboxRefreshToken) return { connected: false };
 
     try {
+      const token = await this.getValidToken(s);
+      if (!token) return { connected: false };
+
       const response = await fetch(
         'https://api.dropboxapi.com/2/users/get_current_account',
         {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${s.dropboxToken}` },
+          headers: { 'Authorization': `Bearer ${token}` },
         },
       );
 
@@ -677,6 +731,7 @@ const onedrive = {
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '');
+    const state = generateOAuthState();
 
     const authUrl =
       'https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?' +
@@ -687,6 +742,7 @@ const onedrive = {
         scope: scopes,
         code_challenge: codeChallenge,
         code_challenge_method: 'S256',
+        state,
       }).toString();
 
     const responseUrl = await chrome.identity.launchWebAuthFlow({
@@ -696,6 +752,10 @@ const onedrive = {
     if (!responseUrl) throw new Error('No response from auth flow');
 
     const url = new URL(responseUrl);
+    const returnedState = url.searchParams.get('state');
+    if (returnedState !== state) {
+      throw new Error('OAuth state mismatch - possible CSRF attack');
+    }
     const code = url.searchParams.get('code');
     if (!code) throw new Error('No authorization code received');
 
@@ -743,10 +803,10 @@ const onedrive = {
     };
   },
 
-  async refreshToken(): Promise<string | null> {
-    const settings = await getSettings();
-    const refreshTok = settings.onedriveRefreshToken;
-    const clientId = settings.onedriveClientId;
+  async refreshToken(settings?: Settings): Promise<string | null> {
+    const currentSettings = settings ?? (await getSettings());
+    const refreshTok = currentSettings.onedriveRefreshToken;
+    const clientId = currentSettings.onedriveClientId;
     if (!refreshTok || !clientId) return null;
 
     const resp = await fetch(
@@ -769,23 +829,32 @@ const onedrive = {
       await SettingsManager.set({
         onedriveToken: data.access_token,
         onedriveRefreshToken: data.refresh_token || refreshTok,
+        onedriveConnected: true,
       });
       return data.access_token;
     }
     return null;
   },
 
-  async getValidToken(): Promise<string | null> {
-    const settings = await getSettings();
-    const token = settings.onedriveToken;
-    if (!token) return null;
+  async getValidToken(settings?: Settings): Promise<string | null> {
+    const currentSettings = settings ?? (await getSettings());
+    const token = currentSettings.onedriveToken;
+    if (!token) {
+      return await this.refreshToken(currentSettings);
+    }
 
-    const test = await fetch('https://graph.microsoft.com/v1.0/me', {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    if (test.ok) return token;
-
-    return await this.refreshToken();
+    try {
+      const test = await fetch('https://graph.microsoft.com/v1.0/me', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (test.ok) return token;
+      if (test.status === 401 || test.status === 403) {
+        return await this.refreshToken(currentSettings);
+      }
+      return token;
+    } catch (_e: unknown) {
+      return token;
+    }
   },
 
   async disconnect(): Promise<SyncDisconnectResult> {
@@ -798,8 +867,8 @@ const onedrive = {
     return { success: true };
   },
 
-  async upload(data: unknown): Promise<SyncUploadResult> {
-    const token = await this.getValidToken();
+  async upload(data: unknown, settings?: Settings): Promise<SyncUploadResult> {
+    const token = await this.getValidToken(settings);
     if (!token) throw new Error('Not authenticated with OneDrive');
     if (!data || typeof data !== 'object') throw new Error('Invalid backup data');
 
@@ -819,8 +888,8 @@ const onedrive = {
     return { success: true, timestamp: Date.now() };
   },
 
-  async download(): Promise<unknown | null> {
-    const token = await this.getValidToken();
+  async download(settings?: Settings): Promise<unknown | null> {
+    const token = await this.getValidToken(settings);
     if (!token) throw new Error('Not authenticated with OneDrive');
 
     const response = await fetch(
@@ -833,9 +902,9 @@ const onedrive = {
     return (await response.json()) as unknown;
   },
 
-  async test(): Promise<SyncTestResult> {
+  async test(settings?: Settings): Promise<SyncTestResult> {
     try {
-      const token = await this.getValidToken();
+      const token = await this.getValidToken(settings);
       if (!token) return { success: false, error: 'Not authenticated' };
       const response = await fetch('https://graph.microsoft.com/v1.0/me', {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -850,8 +919,8 @@ const onedrive = {
   async getStatus(settings?: Settings): Promise<SyncStatusResult> {
     try {
       const s = settings ?? (await getSettings());
-      if (!s.onedriveConnected || !s.onedriveToken) return { connected: false };
-      const token = await this.getValidToken();
+      if (!s.onedriveToken && !s.onedriveRefreshToken) return { connected: false };
+      const token = await this.getValidToken(s);
       if (!token) return { connected: false };
       const response = await fetch('https://graph.microsoft.com/v1.0/me', {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -879,6 +948,7 @@ const onedrive = {
 export const CloudSyncProviders = {
   webdav,
   googledrive,
+  google: googledrive,
   dropbox,
   onedrive,
 };
