@@ -16,7 +16,9 @@
   let sortMode = 'default'; // default, alpha, perf, errors
   let noticeTimer = null;
   let searchRenderTimer = null;
+  let currentPageCanRunScripts = false;
   const SEARCH_RENDER_DEBOUNCE_MS = 90;
+  const MATCHABLE_PROTOCOLS = new Set(['http:', 'https:', 'file:', 'ftp:']);
 
   const $ = id => document.getElementById(id) || document.createElement('div'); // null-safe
 
@@ -98,6 +100,15 @@
     return '';
   }
 
+  function canMatchScriptsForUrl(url) {
+    if (!url) return false;
+    try {
+      return MATCHABLE_PROTOCOLS.has(new URL(url).protocol);
+    } catch {
+      return false;
+    }
+  }
+
   function createScriptBadge(domain, name) {
     const badge = document.createElement('span');
     badge.className = 'sp-item-icon-badge';
@@ -130,12 +141,10 @@
       currentTab = tab;
       updateUrlBar();
       const currentUrl = currentTab?.url || '';
-      const canMatchScripts = currentUrl &&
-        !currentUrl.startsWith('chrome://') &&
-        !currentUrl.startsWith('chrome-extension://');
+      currentPageCanRunScripts = canMatchScriptsForUrl(currentUrl);
       const [allRes, matchedRes] = await Promise.all([
         chrome.runtime.sendMessage({ action: 'getScripts' }),
-        canMatchScripts
+        currentPageCanRunScripts
           ? chrome.runtime.sendMessage({ action: 'getScriptsForUrl', url: currentUrl })
           : Promise.resolve([])
       ]);
@@ -176,6 +185,23 @@
   function renderPageScripts() {
     const list = $('pageScriptList');
     $('pageScriptCount').textContent = numberFormatter.format(pageScripts.length);
+
+    if (!currentPageCanRunScripts) {
+      list.innerHTML = '';
+      const empty = document.createElement('div');
+      empty.className = 'sp-empty';
+      const icon = document.createElement('div');
+      icon.className = 'sp-empty-icon';
+      icon.textContent = '🛡️';
+      const msg = document.createElement('div');
+      msg.textContent = 'Scripts don’t run on this page.';
+      const detail = document.createElement('div');
+      detail.style.marginTop = '4px';
+      detail.textContent = 'Open a regular website or local file to see matching userscripts.';
+      empty.append(icon, msg, detail);
+      list.replaceChildren(empty);
+      return;
+    }
 
     if (!pageScripts.length) {
       const url = currentTab?.url || '';
@@ -429,8 +455,13 @@
     $('btnNewScript').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard', data: { newScript: true } }));
     $('btnFindScripts').addEventListener('click', () => {
       let hostname = '';
-      try { hostname = new URL(currentTab?.url || '').hostname; } catch {}
-      chrome.tabs.create({ url: 'https://greasyfork.org/en/scripts/by-site/' + encodeURIComponent(hostname) });
+      if (canMatchScriptsForUrl(currentTab?.url || '')) {
+        try { hostname = new URL(currentTab?.url || '').hostname.replace(/^www\./, ''); } catch {}
+      }
+      const url = hostname
+        ? `https://greasyfork.org/en/scripts/by-site/${encodeURIComponent(hostname)}?filter_locale=0`
+        : 'https://greasyfork.org/en/scripts';
+      chrome.tabs.create({ url });
     });
     $('btnOpenDash').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }));
     $('btnToggleAll').addEventListener('click', toggleAll);

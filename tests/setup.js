@@ -5,6 +5,7 @@ import { vi } from 'vitest';
 
 // Mock chrome.* APIs
 const storageMock = {};
+const sessionStorageMock = {};
 
 globalThis.chrome = {
   runtime: {
@@ -53,9 +54,34 @@ globalThis.chrome = {
       onChanged: { addListener: vi.fn() },
     },
     session: {
-      get: vi.fn().mockResolvedValue({}),
-      set: vi.fn().mockResolvedValue(),
-      remove: vi.fn().mockResolvedValue(),
+      get: vi.fn((keys) => {
+        if (keys === null || keys === undefined) return Promise.resolve({ ...sessionStorageMock });
+        if (typeof keys === 'string') {
+          return Promise.resolve(sessionStorageMock[keys] !== undefined ? { [keys]: sessionStorageMock[keys] } : {});
+        }
+        if (Array.isArray(keys)) {
+          const result = {};
+          keys.forEach(k => { if (sessionStorageMock[k] !== undefined) result[k] = sessionStorageMock[k]; });
+          return Promise.resolve(result);
+        }
+        if (typeof keys === 'object') {
+          const result = { ...keys };
+          for (const k of Object.keys(keys)) {
+            if (sessionStorageMock[k] !== undefined) result[k] = sessionStorageMock[k];
+          }
+          return Promise.resolve(result);
+        }
+        return Promise.resolve({});
+      }),
+      set: vi.fn((items) => {
+        Object.assign(sessionStorageMock, items);
+        return Promise.resolve();
+      }),
+      remove: vi.fn((keys) => {
+        const arr = Array.isArray(keys) ? keys : [keys];
+        arr.forEach(k => delete sessionStorageMock[k]);
+        return Promise.resolve();
+      }),
     },
     onChanged: { addListener: vi.fn() },
   },
@@ -66,9 +92,9 @@ globalThis.chrome = {
     reload: vi.fn().mockResolvedValue(),
     get: vi.fn().mockResolvedValue({ id: 1, url: 'https://example.com' }),
     sendMessage: vi.fn().mockResolvedValue({}),
-    onActivated: { addListener: vi.fn() },
-    onUpdated: { addListener: vi.fn() },
-    onRemoved: { addListener: vi.fn() },
+    onActivated: { addListener: vi.fn(), removeListener: vi.fn() },
+    onUpdated: { addListener: vi.fn(), removeListener: vi.fn() },
+    onRemoved: { addListener: vi.fn(), removeListener: vi.fn() },
   },
   action: {
     setBadgeText: vi.fn().mockResolvedValue(),
@@ -136,9 +162,13 @@ globalThis.chrome = {
   },
   identity: {
     getAuthToken: vi.fn().mockResolvedValue('mock-token'),
+    getRedirectURL: vi.fn((path = '') => `https://test-extension.chromiumapp.org/${path}`),
+    launchWebAuthFlow: vi.fn().mockResolvedValue(null),
+    removeCachedAuthToken: vi.fn().mockResolvedValue(),
   },
   permissions: {
     request: vi.fn().mockResolvedValue(true),
+    getAll: vi.fn().mockResolvedValue({ permissions: [] }),
   },
   declarativeNetRequest: {
     updateDynamicRules: vi.fn().mockResolvedValue(),
@@ -148,6 +178,7 @@ globalThis.chrome = {
 // Helper to reset storage mock between tests
 globalThis.__resetStorageMock = () => {
   for (const key of Object.keys(storageMock)) delete storageMock[key];
+  for (const key of Object.keys(sessionStorageMock)) delete sessionStorageMock[key];
 };
 
 // Mock crypto.randomUUID

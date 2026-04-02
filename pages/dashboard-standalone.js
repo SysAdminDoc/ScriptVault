@@ -49,6 +49,7 @@ const StandaloneExport = (() => {
 .se-modal h3 { margin: 0 0 16px; color: var(--accent-green, #4ade80); }
 .se-modal p { color: var(--text-secondary, #a0a0a0); font-size: 13px; margin-bottom: 12px; }
 .se-btn {
+    appearance: none;
     padding: 8px 18px;
     border: 1px solid var(--border-color, #404040);
     border-radius: 6px;
@@ -56,7 +57,7 @@ const StandaloneExport = (() => {
     color: var(--text-primary, #e0e0e0);
     cursor: pointer;
     font-size: 13px;
-    transition: all 0.15s;
+    transition: border-color 0.15s, background 0.15s, filter 0.15s;
 }
 .se-btn:hover { border-color: var(--accent-green, #4ade80); }
 .se-btn.primary { background: var(--accent-green-dark, #22c55e); border-color: var(--accent-green-dark, #22c55e); color: #fff; }
@@ -89,8 +90,40 @@ const StandaloneExport = (() => {
         setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
     }
 
+    async function copyText(text) {
+        if (navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return true;
+            } catch (_) {}
+        }
+
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        let copied = false;
+        try {
+            copied = document.execCommand('copy');
+        } catch (_) {
+            copied = false;
+        }
+        ta.remove();
+        return copied;
+    }
+
     function slugify(str) {
-        return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const base = String(str || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        return base || 'script';
+    }
+
+    function formatGeneratedDate() {
+        try {
+            return new Date().toLocaleDateString();
+        } catch {
+            return new Date().toISOString().slice(0, 10);
+        }
     }
 
     function parseMetadata(code) {
@@ -133,6 +166,67 @@ const StandaloneExport = (() => {
         return js;
     }
 
+    function buildClientHelpers() {
+        return `
+function svShowToast(message) {
+    var toast = document.getElementById('copyToast');
+    if (!toast) return;
+    toast.textContent = message || 'Copied to clipboard!';
+    toast.classList.add('show');
+    if (window.__svToastTimer) {
+        clearTimeout(window.__svToastTimer);
+    }
+    window.__svToastTimer = setTimeout(function() {
+        toast.classList.remove('show');
+    }, 2000);
+}
+function svCopyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).catch(function() {
+            return svLegacyCopyText(text);
+        });
+    }
+    return svLegacyCopyText(text);
+}
+function svLegacyCopyText(text) {
+    return new Promise(function(resolve, reject) {
+        try {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;opacity:0';
+            document.body.appendChild(ta);
+            ta.select();
+            var copied = document.execCommand('copy');
+            ta.remove();
+            if (copied === false) {
+                reject(new Error('Copy failed'));
+                return;
+            }
+            resolve();
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
+function svDownloadFile(filename, content, mimeType) {
+    var blob = new Blob([content], { type: (mimeType || 'text/plain') + ';charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+    }, 1000);
+}
+function svSetToggleState(button, expanded, showLabel, hideLabel) {
+    if (!button) return;
+    button.textContent = expanded ? hideLabel : showLabel;
+    button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+}`;
+    }
+
     // =========================================
     // Shared HTML Theme
     // =========================================
@@ -163,7 +257,7 @@ h3{font-size:15px;color:#a0a0a0;margin-bottom:8px}
 .card-desc{color:#a0a0a0;font-size:13px;margin-bottom:12px}
 .code-block{background:#1a1a1a;border:1px solid #404040;border-radius:8px;padding:16px;font-family:'Cascadia Code','Fira Code',Consolas,monospace;font-size:12px;line-height:1.6;overflow-x:auto;position:relative;white-space:pre;color:#a0a0a0;max-height:400px;overflow-y:auto}
 .code-block.expanded{max-height:none}
-.btn{display:inline-block;padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:all 0.15s}
+.btn{appearance:none;display:inline-flex;align-items:center;justify-content:center;padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:background 0.15s,border-color 0.15s,filter 0.15s,color 0.15s}
 .btn-green{background:#22c55e;color:#fff}.btn-green:hover{filter:brightness(1.1)}
 .btn-blue{background:#3b82f6;color:#fff}.btn-blue:hover{filter:brightness(1.1)}
 .btn-outline{background:transparent;border:1px solid #404040;color:#e0e0e0}.btn-outline:hover{border-color:#4ade80}
@@ -176,7 +270,7 @@ h3{font-size:15px;color:#a0a0a0;margin-bottom:8px}
 .search-box::placeholder{color:#707070}
 .header-bar{background:#252525;border-bottom:1px solid #404040;padding:16px 24px;margin-bottom:32px}
 .header-bar h1{margin:0}
-.toggle-btn{background:none;border:1px solid #404040;color:#a0a0a0;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px}
+.toggle-btn{appearance:none;background:none;border:1px solid #404040;color:#a0a0a0;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;transition:border-color 0.15s,color 0.15s,background 0.15s}
 .toggle-btn:hover{border-color:#4ade80;color:#e0e0e0}
 .footer{text-align:center;padding:32px 24px;color:#707070;font-size:12px;border-top:1px solid #333;margin-top:32px}
 .copy-toast{position:fixed;bottom:24px;right:24px;background:#333;color:#4ade80;padding:10px 20px;border-radius:8px;font-size:13px;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:9999}
@@ -219,6 +313,8 @@ ${inlineJS ? `<script>${inlineJS.replace(/<\/(script)/gi, '<\\/$1')}<\/script>` 
         const desc = script.description || meta.description || '';
         const version = script.version || meta.version || '1.0';
         const author = script.author || meta.author || 'Unknown';
+        const downloadSlug = slugify(name);
+        const generatedDate = formatGeneratedDate();
 
         const metaRows = [
             ['Name', escapeHTML(name)],
@@ -248,8 +344,8 @@ ${inlineJS ? `<script>${inlineJS.replace(/<\/(script)/gi, '<\\/$1')}<\/script>` 
         <div class="card-header">
             <h2>Source Code</h2>
             <div class="btn-row" style="margin:0">
-                <button class="btn btn-green" onclick="copyCode()">Copy Code</button>
-                <button class="btn btn-outline" onclick="downloadScript()">Download .user.js</button>
+                <button type="button" class="btn btn-green" data-action="copy-code">Copy Code</button>
+                <button type="button" class="btn btn-outline" data-action="download-script">Download .user.js</button>
             </div>
         </div>
         <pre class="code-block" id="codeBlock">${highlightJS(script.code || '')}</pre>
@@ -258,7 +354,7 @@ ${inlineJS ? `<script>${inlineJS.replace(/<\/(script)/gi, '<\\/$1')}<\/script>` 
     <div class="card">
         <h2>Install Instructions</h2>
         <ol style="padding-left:20px;color:#a0a0a0;font-size:13px;line-height:2">
-            <li>Install a userscript manager: <a href="https://www.tampermonkey.net/" target="_blank">Tampermonkey</a> or <a href="https://violentmonkey.github.io/" target="_blank">Violentmonkey</a></li>
+            <li>Install a userscript manager: <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener noreferrer">Tampermonkey</a> or <a href="https://violentmonkey.github.io/" target="_blank" rel="noopener noreferrer">Violentmonkey</a></li>
             <li>Click the "Copy Code" button above</li>
             <li>Open your userscript manager dashboard</li>
             <li>Create a new script and paste the code</li>
@@ -267,39 +363,31 @@ ${inlineJS ? `<script>${inlineJS.replace(/<\/(script)/gi, '<\\/$1')}<\/script>` 
     </div>
 
     <div class="footer">
-        Generated by ScriptVault &middot; ${new Date().toLocaleDateString()}
+        Generated by ScriptVault &middot; ${generatedDate}
     </div>
 </div>
-<div class="copy-toast" id="copyToast">Copied to clipboard!</div>`;
+<div class="copy-toast" id="copyToast" role="status" aria-live="polite" aria-atomic="true">Copied to clipboard!</div>`;
 
         const inlineJS = `
+${buildClientHelpers()}
 var _rawCode = ${JSON.stringify(script.code || '')};
-function copyCode() {
-    navigator.clipboard.writeText(_rawCode).then(function() {
-        var t = document.getElementById('copyToast');
-        t.classList.add('show');
-        setTimeout(function() { t.classList.remove('show'); }, 2000);
-    }).catch(function() {
-        var ta = document.createElement('textarea');
-        ta.value = _rawCode;
-        ta.style.cssText = 'position:fixed;opacity:0';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        ta.remove();
-        var t = document.getElementById('copyToast');
-        t.classList.add('show');
-        setTimeout(function() { t.classList.remove('show'); }, 2000);
+var _downloadName = ${JSON.stringify(downloadSlug + '.user.js')};
+document.addEventListener('DOMContentLoaded', function() {
+    var copyButton = document.querySelector('[data-action="copy-code"]');
+    var downloadButton = document.querySelector('[data-action="download-script"]');
+
+    copyButton && copyButton.addEventListener('click', function() {
+        svCopyText(_rawCode).then(function() {
+            svShowToast('Copied to clipboard!');
+        }).catch(function() {
+            svShowToast('Copy failed');
+        });
     });
-}
-function downloadScript() {
-    var blob = new Blob([_rawCode], {type:'text/javascript'});
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = ${JSON.stringify(slugify(name) + '.user.js')};
-    a.click();
-    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
-}`;
+
+    downloadButton && downloadButton.addEventListener('click', function() {
+        svDownloadFile(_downloadName, _rawCode, 'text/javascript');
+    });
+});`;
 
         const html = baseHTMLTemplate({
             title: name + ' - ScriptVault Export',
@@ -307,7 +395,7 @@ function downloadScript() {
             inlineJS,
         });
 
-        downloadFile(slugify(name) + '.html', html);
+        downloadFile(downloadSlug + '.html', html);
         return html;
     }
 
@@ -325,12 +413,15 @@ function downloadScript() {
         }
 
         if (scripts.length === 0) throw new Error('No scripts to export');
+        const generatedDate = formatGeneratedDate();
 
         const scriptDataJSON = JSON.stringify(scripts.map((s, i) => {
             const meta = parseMetadata(s.code || '');
+            const scriptName = s.name || meta.name || 'Untitled';
             return {
                 idx: i,
-                name: s.name || meta.name || 'Untitled',
+                name: scriptName,
+                slug: slugify(scriptName),
                 description: s.description || meta.description || '',
                 version: s.version || meta.version || '1.0',
                 author: s.author || meta.author || '',
@@ -354,13 +445,13 @@ function downloadScript() {
             <span class="badge badge-green">v${escapeHTML(version)}</span>
             <span class="badge badge-purple">${escapeHTML(cat)}</span>
         </div>
-        <button class="toggle-btn" onclick="toggleCode(${i})">Show Code</button>
+        <button type="button" class="toggle-btn" data-action="toggle-code" data-idx="${i}" aria-controls="code-${i}" aria-expanded="false">Show Code</button>
     </div>
     <div class="card-desc">${escapeHTML(desc)}</div>
-    <pre class="code-block" id="code-${i}" style="display:none">${highlightJS(s.code || '')}</pre>
+    <pre class="code-block" id="code-${i}" hidden>${highlightJS(s.code || '')}</pre>
     <div class="btn-row">
-        <button class="btn btn-green" onclick="copyScript(${i})">Copy</button>
-        <button class="btn btn-outline" onclick="downloadOne(${i})">Download .user.js</button>
+        <button type="button" class="btn btn-green" data-action="copy-script" data-idx="${i}">Copy</button>
+        <button type="button" class="btn btn-outline" data-action="download-script" data-idx="${i}">Download .user.js</button>
     </div>
 </div>`;
         }).join('\n');
@@ -371,40 +462,17 @@ function downloadScript() {
     <p class="subtitle">${scripts.length} userscript${scripts.length !== 1 ? 's' : ''} &middot; Generated by ScriptVault</p>
 </div>
 <div class="container">
-    <input type="text" class="search-box" id="searchBox" placeholder="Search scripts by name, description, or category..." oninput="filterScripts()">
+    <input type="search" class="search-box" id="searchBox" name="portfolioSearch" autocomplete="off" spellcheck="false" placeholder="Search scripts by name, description, or category...">
     <div id="scriptList">${cardsHTML}</div>
     <div class="footer">
-        Generated by ScriptVault &middot; ${new Date().toLocaleDateString()}
+        Generated by ScriptVault &middot; ${generatedDate}
     </div>
 </div>
-<div class="copy-toast" id="copyToast">Copied to clipboard!</div>`;
+<div class="copy-toast" id="copyToast" role="status" aria-live="polite" aria-atomic="true">Copied to clipboard!</div>`;
 
         const inlineJS = `
+${buildClientHelpers()}
 var _scripts = ${scriptDataJSON};
-function toggleCode(idx) {
-    var el = document.getElementById('code-' + idx);
-    var btn = el.parentElement.querySelector('.toggle-btn');
-    if (el.style.display === 'none') { el.style.display = ''; btn.textContent = 'Hide Code'; }
-    else { el.style.display = 'none'; btn.textContent = 'Show Code'; }
-}
-function copyScript(idx) {
-    var code = _scripts[idx].code;
-    navigator.clipboard.writeText(code).then(function(){showToast()}).catch(function(){
-        var ta = document.createElement('textarea'); ta.value = code; ta.style.cssText='position:fixed;opacity:0';
-        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast();
-    });
-}
-function downloadOne(idx) {
-    var s = _scripts[idx];
-    var blob = new Blob([s.code], {type:'text/javascript'});
-    var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = s.name.toLowerCase().replace(/[^a-z0-9]+/g,'-') + '.user.js';
-    a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
-}
-function showToast() {
-    var t = document.getElementById('copyToast'); t.classList.add('show');
-    setTimeout(function(){ t.classList.remove('show'); }, 2000);
-}
 function filterScripts() {
     var q = document.getElementById('searchBox').value.toLowerCase().trim();
     var cards = document.querySelectorAll('.script-card');
@@ -412,9 +480,43 @@ function filterScripts() {
         var name = card.getAttribute('data-name') || '';
         var desc = card.getAttribute('data-desc') || '';
         var cat = card.getAttribute('data-cat') || '';
-        card.style.display = (!q || name.includes(q) || desc.includes(q) || cat.includes(q)) ? '' : 'none';
+        card.hidden = !!(q && !name.includes(q) && !desc.includes(q) && !cat.includes(q));
     });
-}`;
+}
+document.addEventListener('DOMContentLoaded', function() {
+    var searchBox = document.getElementById('searchBox');
+    searchBox && searchBox.addEventListener('input', filterScripts);
+
+    document.querySelectorAll('[data-action="toggle-code"]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var idx = button.getAttribute('data-idx');
+            var panel = document.getElementById('code-' + idx);
+            if (!panel) return;
+            panel.hidden = !panel.hidden;
+            svSetToggleState(button, !panel.hidden, 'Show Code', 'Hide Code');
+        });
+    });
+
+    document.querySelectorAll('[data-action="copy-script"]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var script = _scripts[Number(button.getAttribute('data-idx'))];
+            if (!script) return;
+            svCopyText(script.code).then(function() {
+                svShowToast('Copied to clipboard!');
+            }).catch(function() {
+                svShowToast('Copy failed');
+            });
+        });
+    });
+
+    document.querySelectorAll('[data-action="download-script"]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var script = _scripts[Number(button.getAttribute('data-idx'))];
+            if (!script) return;
+            svDownloadFile(script.slug + '.user.js', script.code, 'text/javascript');
+        });
+    });
+});`;
 
         const html = baseHTMLTemplate({
             title: 'Script Portfolio - ScriptVault',
@@ -475,19 +577,19 @@ function filterScripts() {
         <div class="se-preview" style="margin-top:8px">${escapeHTML(result.code)}</div>
     </details>
     <div class="se-btn-row">
-        <button class="se-btn" id="se-bm-copy">Copy URL</button>
-        <button class="se-btn primary" id="se-bm-close">Close</button>
+        <button type="button" class="se-btn" id="se-bm-copy">Copy URL</button>
+        <button type="button" class="se-btn primary" id="se-bm-close">Close</button>
     </div>
 </div>`;
         document.body.appendChild(overlay);
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-        overlay.querySelector('#se-bm-close').onclick = () => overlay.remove();
-        overlay.querySelector('#se-bm-copy').onclick = () => {
-            navigator.clipboard.writeText(result.code).catch(() => {});
+        overlay.querySelector('#se-bm-close').addEventListener('click', () => overlay.remove());
+        overlay.querySelector('#se-bm-copy').addEventListener('click', async () => {
+            await copyText(result.code);
             const btn = overlay.querySelector('#se-bm-copy');
             btn.textContent = 'Copied!';
             setTimeout(() => { btn.textContent = 'Copy URL'; }, 1500);
-        };
+        });
 
         return result;
     }
@@ -504,6 +606,8 @@ function filterScripts() {
         const desc = script.description || meta.description || '';
         const version = script.version || meta.version || '1.0';
         const author = script.author || meta.author || 'Unknown';
+        const downloadSlug = slugify(name);
+        const generatedDate = formatGeneratedDate();
 
         // QR Code generator (self-contained, alphanumeric-only for simplicity)
         // Uses a minimal QR code library embedded inline
@@ -517,8 +621,8 @@ function filterScripts() {
 <div class="container">
     <div class="card" style="text-align:center;padding:32px">
         <h2 style="margin-bottom:16px">One-Click Install</h2>
-        <p style="margin-bottom:20px">Click the button below to install this userscript. You need a userscript manager like <a href="https://www.tampermonkey.net/" target="_blank">Tampermonkey</a> installed first.</p>
-        <button class="btn btn-green" style="font-size:16px;padding:14px 40px" onclick="installScript()">Install Script</button>
+        <p style="margin-bottom:20px">Click the button below to install this userscript. You need a userscript manager like <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener noreferrer">Tampermonkey</a> installed first.</p>
+        <button type="button" class="btn btn-green" style="font-size:16px;padding:14px 40px" data-action="install-script">Install Script</button>
     </div>
 
     <div class="card">
@@ -541,59 +645,55 @@ function filterScripts() {
     <div class="card">
         <div class="card-header">
             <h2>Source Code</h2>
-            <button class="toggle-btn" onclick="toggleSource()">Show</button>
+            <button type="button" class="toggle-btn" data-action="toggle-source" aria-controls="sourceCode" aria-expanded="false">Show</button>
         </div>
-        <pre class="code-block" id="sourceCode" style="display:none">${highlightJS(script.code || '')}</pre>
+        <pre class="code-block" id="sourceCode" hidden>${highlightJS(script.code || '')}</pre>
         <div class="btn-row">
-            <button class="btn btn-green" onclick="copyCode()">Copy Code</button>
-            <button class="btn btn-outline" onclick="downloadScript()">Download .user.js</button>
+            <button type="button" class="btn btn-green" data-action="copy-code">Copy Code</button>
+            <button type="button" class="btn btn-outline" data-action="download-script">Download .user.js</button>
         </div>
     </div>
 
     <div class="footer">
-        Generated by ScriptVault &middot; ${new Date().toLocaleDateString()}
+        Generated by ScriptVault &middot; ${generatedDate}
     </div>
 </div>
-<div class="copy-toast" id="copyToast">Copied to clipboard!</div>`;
+<div class="copy-toast" id="copyToast" role="status" aria-live="polite" aria-atomic="true">Copied to clipboard!</div>`;
 
         const inlineJS = `
+${buildClientHelpers()}
 var _rawCode = ${JSON.stringify(script.code || '')};
-var _scriptName = ${JSON.stringify(slugify(name))};
-function installScript() {
-    // Create a blob URL that Tampermonkey can detect
-    var blob = new Blob([_rawCode], {type:'text/javascript'});
-    var url = URL.createObjectURL(blob);
-    // Try to trigger userscript manager install
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = _scriptName + '.user.js';
-    a.click();
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
-}
-function toggleSource() {
-    var el = document.getElementById('sourceCode');
-    var btn = el.parentElement.querySelector('.toggle-btn');
-    el.style.display = el.style.display === 'none' ? '' : 'none';
-    btn.textContent = el.style.display === 'none' ? 'Show' : 'Hide';
-}
-function copyCode() {
-    navigator.clipboard.writeText(_rawCode).then(function(){showToast()}).catch(function(){
-        var ta = document.createElement('textarea'); ta.value = _rawCode; ta.style.cssText='position:fixed;opacity:0';
-        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast();
-    });
-}
-function downloadScript() {
-    var blob = new Blob([_rawCode], {type:'text/javascript'});
-    var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = _scriptName + '.user.js'; a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
-}
-function showToast() {
-    var t = document.getElementById('copyToast'); t.classList.add('show');
-    setTimeout(function(){ t.classList.remove('show'); }, 2000);
-}
+var _scriptName = ${JSON.stringify(downloadSlug)};
 ${qrInlineJS}
-// Generate QR code for the current page URL
 document.addEventListener('DOMContentLoaded', function() {
+    var installButton = document.querySelector('[data-action="install-script"]');
+    var toggleButton = document.querySelector('[data-action="toggle-source"]');
+    var copyButton = document.querySelector('[data-action="copy-code"]');
+    var downloadButton = document.querySelector('[data-action="download-script"]');
+
+    installButton && installButton.addEventListener('click', function() {
+        svDownloadFile(_scriptName + '.user.js', _rawCode, 'text/javascript');
+    });
+
+    toggleButton && toggleButton.addEventListener('click', function() {
+        var panel = document.getElementById('sourceCode');
+        if (!panel) return;
+        panel.hidden = !panel.hidden;
+        svSetToggleState(toggleButton, !panel.hidden, 'Show', 'Hide');
+    });
+
+    copyButton && copyButton.addEventListener('click', function() {
+        svCopyText(_rawCode).then(function() {
+            svShowToast('Copied to clipboard!');
+        }).catch(function() {
+            svShowToast('Copy failed');
+        });
+    });
+
+    downloadButton && downloadButton.addEventListener('click', function() {
+        svDownloadFile(_scriptName + '.user.js', _rawCode, 'text/javascript');
+    });
+
     generateQR(document.getElementById('qrCanvas'), location.href);
 });`;
 
@@ -603,7 +703,7 @@ document.addEventListener('DOMContentLoaded', function() {
             inlineJS,
         });
 
-        downloadFile(slugify(name) + '-install.html', html);
+        downloadFile(downloadSlug + '-install.html', html);
         return html;
     }
 

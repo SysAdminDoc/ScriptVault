@@ -27,6 +27,8 @@
     let allScripts = [];
     let settings = {};
     let userScriptsAvailable = true;
+    let popupToastTimer = null;
+    const MATCHABLE_PROTOCOLS = new Set(['http:', 'https:', 'file:', 'ftp:']);
 
     // DOM Elements
     const elements = {
@@ -121,6 +123,11 @@
     function updateEmptyStateHint() {
         const el = document.getElementById('emptyStateHint');
         if (!el) return;
+        el.textContent = 'Find scripts on GreasyFork or create your own';
+        if (!canMatchScriptsForUrl(currentUrl)) {
+            el.textContent = 'Switch to a regular website or local file to search for matching scripts.';
+            return;
+        }
         try {
             const hostname = new URL(currentUrl).hostname.replace(/^www\./, '');
             if (hostname) {
@@ -160,6 +167,36 @@
             .split('.')
             .filter(Boolean);
         return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
+    }
+
+    function canMatchScriptsForUrl(url) {
+        if (!url) return false;
+        try {
+            return MATCHABLE_PROTOCOLS.has(new URL(url).protocol);
+        } catch {
+            return false;
+        }
+    }
+
+    function showPopupEmptyState(title, description, iconText = '\uD83D\uDCDC') {
+        const emptyState = document.getElementById('emptyState');
+        if (!emptyState) return;
+        emptyState.style.display = 'block';
+        emptyState.textContent = '';
+
+        const icon = document.createElement('div');
+        icon.style.cssText = 'font-size:24px;margin-bottom:8px;opacity:0.72';
+        icon.textContent = iconText;
+
+        const heading = document.createElement('div');
+        heading.style.cssText = 'font-size:13px;font-weight:500;color:var(--popup-text);margin-bottom:4px';
+        heading.textContent = title;
+
+        const body = document.createElement('div');
+        body.style.cssText = 'font-size:12px;color:var(--popup-text-muted)';
+        body.textContent = description;
+
+        emptyState.append(icon, heading, body);
     }
 
     function getDomainBadgeLabel(domain, maxLetters = 2) {
@@ -218,8 +255,8 @@
     function showSetupWarning(message) {
         if (elements.setupWarning) {
             elements.setupWarning.classList.add('visible');
-            // Update message if provided and an element exists for it
-            const msgEl = elements.setupWarning.querySelector('.setup-warning-msg, p, span');
+            // Keep the warning title/icon intact and update only the explanatory text.
+            const msgEl = elements.setupWarning.querySelector('.setup-warning-text');
             if (msgEl && message) msgEl.textContent = message;
         }
     }
@@ -257,13 +294,29 @@
 
     // Load scripts for current page (with 5s timeout)
     async function loadPageScripts() {
+        if (!currentUrl) {
+            pageScripts = [];
+            renderScriptList();
+            updateEnabledState();
+            showPopupEmptyState('No page selected', 'Open a tab to see which scripts match it.');
+            return;
+        }
+
+        if (!canMatchScriptsForUrl(currentUrl)) {
+            pageScripts = [];
+            renderScriptList();
+            updateEnabledState();
+            showPopupEmptyState('Scripts don’t run here', 'Browser pages, extension pages, and other internal surfaces block userscripts.', '\uD83D\uDEE1\uFE0F');
+            return;
+        }
+
         try {
             const response = await Promise.race([
                 chrome.runtime.sendMessage({ action: 'getScriptsForUrl', url: currentUrl }),
                 new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
             ]);
 
-            pageScripts = response || [];
+            pageScripts = Array.isArray(response) ? response : [];
             renderScriptList();
             updateEnabledState();
         } catch (error) {
@@ -271,24 +324,14 @@
             pageScripts = [];
             renderScriptList();
             updateEnabledState();
-
-            // Show distinct error state when background is unresponsive
-            const emptyState = document.getElementById('emptyState');
-            if (emptyState) {
-                emptyState.style.display = 'block';
-                const isTimeout = error.message === 'timeout';
-                emptyState.textContent = '';
-                const icon = document.createElement('div');
-                icon.style.cssText = 'font-size:24px;margin-bottom:8px;opacity:0.6';
-                icon.textContent = '\u26A0';
-                const title = document.createElement('div');
-                title.style.cssText = 'font-size:13px;font-weight:500;color:var(--popup-text);margin-bottom:4px';
-                title.textContent = isTimeout ? 'ScriptVault is loading...' : 'Connection error';
-                const desc = document.createElement('div');
-                desc.style.cssText = 'font-size:12px;color:var(--popup-text-muted)';
-                desc.textContent = isTimeout ? 'The background service is still starting up. Try again in a moment.' : 'Could not connect to ScriptVault background service.';
-                emptyState.append(icon, title, desc);
-            }
+            const isTimeout = error.message === 'timeout';
+            showPopupEmptyState(
+                isTimeout ? 'ScriptVault is loading…' : 'Connection error',
+                isTimeout
+                    ? 'The background service is still starting up. Try again in a moment.'
+                    : 'Could not connect to the ScriptVault background service.',
+                '\u26A0'
+            );
         }
     }
 
@@ -653,8 +696,9 @@
             : getScriptBadgeLabel(meta.name || script.id, maxLetters);
         const hue = hashMarkerSeed(domain || meta.name || script.id);
 
-        if (iconUrl && sanitizeUrl(iconUrl)) {
-            return `<img src="${escapeHtml(iconUrl)}" width="16" height="16" alt="" loading="lazy" data-favicon-fallback="true" data-fallback-label="${escapeHtml(label)}" data-fallback-hue="${hue}" data-fallback-mode="${mode}">`;
+        const safeIconUrl = iconUrl ? sanitizeUrl(iconUrl) : '';
+        if (safeIconUrl) {
+            return `<img src="${escapeHtml(safeIconUrl)}" width="16" height="16" alt="" loading="lazy" data-favicon-fallback="true" data-fallback-label="${escapeHtml(label)}" data-fallback-hue="${hue}" data-fallback-mode="${mode}">`;
         }
 
         return buildPopupIconBadgeHtml(label, hue, mode);
@@ -771,6 +815,7 @@
         try {
             let hostname = '';
             try {
+                if (!canMatchScriptsForUrl(currentUrl)) throw new Error('restricted-page');
                 hostname = new URL(currentUrl).hostname.replace(/^www\./, '');
             } catch (e) {}
 
@@ -911,7 +956,8 @@
         toast.classList.remove('show');
         void toast.offsetWidth;
         toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 3500);
+        clearTimeout(popupToastTimer);
+        popupToastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
     }
 
     // Setup event listeners
@@ -927,7 +973,9 @@
 
         // Utilities submenu toggle
         elements.btnUtilities?.addEventListener('click', async () => {
-            elements.utilitiesSubmenu?.classList.toggle('open');
+            const isOpen = !!elements.utilitiesSubmenu?.classList.toggle('open');
+            elements.btnUtilities?.setAttribute('aria-expanded', String(isOpen));
+            elements.utilitiesSubmenu?.setAttribute('aria-hidden', String(!isOpen));
             // Update blacklist item with current domain (show toggle state)
             if (elements.btnBlacklistDomain && currentUrl) {
                 try {

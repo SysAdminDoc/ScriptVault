@@ -551,7 +551,7 @@ function renderTrustCard(sourceUrl) {
     ${signatureState.detail ? `<div class="analysis-summary" style="margin-top:14px">${escapeHtml(signatureState.detail)}</div>` : ''}
     ${verification?.valid && !verification.trusted && verification.publicKey ? `
       <div class="trust-actions">
-        <button class="btn btn-secondary" id="btnTrustSigner">Trust signer</button>
+        <button class="btn btn-secondary" id="btnTrustSigner" type="button">Trust signer</button>
       </div>
     ` : ''}
   `;
@@ -763,7 +763,7 @@ function renderInstallUI(sourceUrl) {
       <div class="script-header">
         <div class="script-icon-row">
           <div class="script-icon">
-            ${iconUrl && sanitizeUrl(iconUrl) ? `<img src="${escapeHtml(sanitizeUrl(iconUrl))}" alt="" data-icon-fallback="\uD83D\uDCDC">` : '<img src="../images/icon48.png" alt="ScriptVault">'}
+            ${iconUrl && sanitizeUrl(iconUrl) ? `<img src="${escapeHtml(sanitizeUrl(iconUrl))}" width="48" height="48" alt="" data-icon-fallback="\uD83D\uDCDC">` : '<img src="../images/icon48.png" width="48" height="48" alt="ScriptVault">'}
           </div>
           <div class="script-title-area">
             <div class="script-name">${escapeHtml(scriptMeta.name)}</div>
@@ -941,10 +941,10 @@ function renderInstallUI(sourceUrl) {
           <div class="analysis-summary">${hasSignature ? 'ScriptVault is checking the embedded signature and signer trust.' : 'This script does not declare an embedded signature.'}</div>
         </div>
 
-        <div class="code-preview surface-card">
+      <div class="code-preview surface-card">
           <div class="code-preview-header">
             <span class="code-preview-title">Script Code <span class="install-card-subtitle">(${numberFormatter.format(lineCount)} lines)</span></span>
-        <button class="code-preview-toggle" id="toggle-code" aria-expanded="false" aria-controls="code-container">
+        <button class="code-preview-toggle" id="toggle-code" type="button" aria-expanded="false" aria-controls="code-container">
           <span id="toggle-icon">\u25BC</span>
           <span id="toggle-text">Show code</span>
         </button>
@@ -1025,8 +1025,8 @@ function renderInstallUI(sourceUrl) {
           <div class="install-error" id="installError" role="alert"></div>
 
           <div class="actions">
-            <button class="btn ${presentation.installClass}" id="btn-install">${escapeHtml(presentation.installLabel)}</button>
-            <button class="btn btn-secondary" id="btn-cancel">Cancel</button>
+            <button class="btn ${presentation.installClass}" id="btn-install" type="button">${escapeHtml(presentation.installLabel)}</button>
+            <button class="btn btn-secondary" id="btn-cancel" type="button">Cancel</button>
           </div>
 
           <div class="decision-hint" id="decisionHint">Press Enter to ${presentation.isUpdate ? 'update' : presentation.isDowngrade ? 'downgrade' : presentation.isReinstall ? 'reinstall' : 'install'} when the install button is focused. Press Esc to arm cancel.</div>
@@ -1038,13 +1038,16 @@ function renderInstallUI(sourceUrl) {
   content.innerHTML = html;
 
   // Entrance animation
-  content.style.opacity = '0';
-  content.style.transform = 'translateY(8px)';
-  requestAnimationFrame(() => {
-    content.style.transition = 'opacity 0.3s, transform 0.3s';
-    content.style.opacity = '1';
-    content.style.transform = 'translateY(0)';
-  });
+  const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (!prefersReducedMotion) {
+    content.style.opacity = '0';
+    content.style.transform = 'translateY(8px)';
+    requestAnimationFrame(() => {
+      content.style.transition = 'opacity 0.3s, transform 0.3s';
+      content.style.opacity = '1';
+      content.style.transform = 'translateY(0)';
+    });
+  }
 
   // Setup code preview
   setupCodePreview();
@@ -1161,7 +1164,7 @@ async function handleInstall() {
   const presentation = getInstallPresentation();
   setCancelReviewArmed(false);
   btn.disabled = true;
-  btn.innerHTML = '<span class="loading-spinner install-inline-spinner"></span> Installing...';
+  btn.innerHTML = '<span class="loading-spinner install-inline-spinner"></span> Installing…';
 
   try {
     const scriptId = existingScript?.id || null;
@@ -1219,7 +1222,7 @@ function showError(title, message) {
       <div class="error-title">${escapeHtml(title)}</div>
       <div class="error-message">${escapeHtml(message)}</div>
       <div class="actions" style="justify-content: center;">
-        <button class="btn btn-secondary" id="btnCloseError" style="flex:none;min-width:120px">Close</button>
+        <button class="btn btn-secondary" id="btnCloseError" type="button" style="flex:none;min-width:120px">Close</button>
       </div>
     </div>
   `;
@@ -1243,8 +1246,8 @@ function showSuccess(name, action, scriptId) {
       <div class="success-title">${escapeHtml(titleMap[action] || 'Script Installed')}!</div>
       <div class="success-message">${escapeHtml(name)} is now ${enableOnInstall ? 'active' : 'installed but disabled'}.</div>
       <div class="success-actions">
-        <button class="btn btn-secondary" id="btnSuccessClose" style="flex:none">Close</button>
-        <button class="btn btn-primary" id="btnOpenDashboard" style="flex:none">Open in Dashboard</button>
+        <button class="btn btn-secondary" id="btnSuccessClose" type="button" style="flex:none">Close</button>
+        <button class="btn btn-primary" id="btnOpenDashboard" type="button" style="flex:none">Open in Dashboard</button>
       </div>
     </div>
   `;
@@ -1265,9 +1268,9 @@ function showSuccess(name, action, scriptId) {
 function truncateUrl(url) {
   try {
     const u = new URL(url);
-    return u.hostname + (u.pathname.length > 20 ? u.pathname.substring(0, 20) + '...' : u.pathname);
+    return u.hostname + (u.pathname.length > 20 ? u.pathname.substring(0, 20) + '…' : u.pathname);
   } catch {
-    return url.length > 40 ? url.substring(0, 40) + '...' : url;
+    return url.length > 40 ? url.substring(0, 40) + '…' : url;
   }
 }
 
@@ -1278,22 +1281,28 @@ function getUrlFilename(url) {
     const filename = path.substring(path.lastIndexOf('/') + 1);
     return filename || u.hostname;
   } catch {
-    return url.length > 30 ? url.substring(0, 30) + '...' : url;
+    return url.length > 30 ? url.substring(0, 30) + '…' : url;
   }
 }
 
 function compareVersions(v1, v2) {
-  const parts1 = v1.split('.').map(Number);
-  const parts2 = v2.split('.').map(Number);
+  const preRelease1 = v1.includes('-');
+  const preRelease2 = v2.includes('-');
+  const clean1 = (typeof v1 === 'string' ? v1 : String(v1)).replace(/-.*$/, '');
+  const clean2 = (typeof v2 === 'string' ? v2 : String(v2)).replace(/-.*$/, '');
+  const parts1 = clean1.split('.').map(n => parseInt(n, 10) || 0);
+  const parts2 = clean2.split('.').map(n => parseInt(n, 10) || 0);
 
   for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-    const p1 = parts1[i] || 0;
-    const p2 = parts2[i] || 0;
+    const p1 = parts1[i] ?? 0;
+    const p2 = parts2[i] ?? 0;
 
     if (p1 > p2) return 1;
     if (p1 < p2) return -1;
   }
 
+  if (preRelease1 && !preRelease2) return -1;
+  if (!preRelease1 && preRelease2) return 1;
   return 0;
 }
 

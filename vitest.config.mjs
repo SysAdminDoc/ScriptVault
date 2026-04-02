@@ -9,8 +9,9 @@ export default defineConfig({
     include: ["tests/**/*.test.{js,mjs}", "tests/**/*.spec.{js,mjs}"],
     coverage: {
       provider: "v8",
-      include: ["shared/**", "modules/**", "bg/**"],
-      exclude: ["lib/**", "node_modules/**"],
+      all: false,
+      include: ["src/shared/**/*.ts", "src/modules/**/*.ts", "src/bg/**/*.ts"],
+      exclude: ["src/config/**", "src/types/**", "lib/**", "node_modules/**"],
     },
     // Mock chrome.* APIs that aren't available in jsdom
     setupFiles: ["tests/setup.js"],

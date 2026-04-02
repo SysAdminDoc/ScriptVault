@@ -93,4 +93,11 @@ export interface Settings {
   trashMode?: string;
 }
 
-export type SyncProvider = 'none' | 'webdav' | 'google' | 'dropbox' | 'onedrive' | 'easycloud';
+export type SyncProvider =
+  | 'none'
+  | 'webdav'
+  | 'google'
+  | 'googledrive'
+  | 'dropbox'
+  | 'onedrive'
+  | 'easycloud';
