@@ -10892,7 +10892,7 @@ async function importScripts(data, options = {}) {
   }
   
   // Re-register all scripts after import
-  await registerAllScripts();
+  await registerAllScripts(true);
   await updateBadge();
 
   return results;
@@ -11118,7 +11118,7 @@ async function importFromZip(zipData, options = {}) {
     await updateBadge();
 
     // Re-register all scripts after import
-    await registerAllScripts();
+    await registerAllScripts(true);
 
     return results;
   } catch (e) {
@@ -11553,7 +11553,7 @@ async function handleMessage(message, sender) {
         try {
           await configureUserScriptsWorld();
           await setupContextMenus();
-          await registerAllScripts();
+          await registerAllScripts(true);
           await updateBadge();
           await setupAlarms();
 
@@ -11588,7 +11588,7 @@ async function handleMessage(message, sender) {
 
         // If global enabled state changed, re-register all scripts
         if ('enabled' in changed && changed.enabled !== oldSettings.enabled) {
-          await registerAllScripts();
+          await registerAllScripts(true);
         }
 
         // If update/sync intervals changed, reconfigure alarms
@@ -11610,7 +11610,7 @@ async function handleMessage(message, sender) {
         // If page filter settings changed, re-register scripts
         if ('pageFilterMode' in changed || 'whitelistedPages' in changed ||
             'blacklistedPages' in changed || 'deniedHosts' in changed) {
-          await registerAllScripts();
+          await registerAllScripts(true);
         }
 
         return result;
@@ -11988,7 +11988,7 @@ async function handleMessage(message, sender) {
             results.errors.push({ error: e.message });
           }
         }
-        await registerAllScripts();
+        await registerAllScripts(true);
         await updateBadge();
         return results;
       }
@@ -12071,7 +12071,7 @@ async function handleMessage(message, sender) {
         }
         if (updates.length) await Promise.all(updates);
         await chrome.storage.local.set({ activeProfileId: data.profileId });
-        await registerAllScripts();
+        await registerAllScripts(true);
         await updateBadge();
         return { success: true };
       }
@@ -12175,7 +12175,7 @@ async function handleMessage(message, sender) {
                 results.errors.push({ error: e.message });
               }
             }
-            await registerAllScripts();
+            await registerAllScripts(true);
             await updateBadge();
             return results;
           }
@@ -12209,7 +12209,7 @@ async function handleMessage(message, sender) {
             }
           }
         }
-        await registerAllScripts();
+        await registerAllScripts(true);
         await updateBadge();
         return results;
       }
@@ -12250,7 +12250,7 @@ async function handleMessage(message, sender) {
         } catch (e) {
           return { error: 'Invalid Greasemonkey backup format: ' + e.message };
         }
-        await registerAllScripts();
+        await registerAllScripts(true);
         await updateBadge();
         return results;
       }
@@ -13843,7 +13843,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     case 'scriptvault-toggle': {
       const settings = await SettingsManager.get();
       await SettingsManager.set('enabled', !settings.enabled);
-      await registerAllScripts();
+      await registerAllScripts(true);
       await updateBadge();
       break;
     }
@@ -13941,7 +13941,7 @@ chrome.commands.onCommand.addListener(async (command) => {
     case 'toggle_scripts': {
       const settings = await SettingsManager.get();
       await SettingsManager.set('enabled', !settings.enabled);
-      await registerAllScripts();
+      await registerAllScripts(true);
       await updateBadge();
       
       chrome.notifications.create({
@@ -14275,7 +14275,7 @@ async function installFromUrl(url) {
     };
 
     await ScriptStorage.set(id, script);
-    await registerAllScripts();
+    await registerAllScripts(true);
     await updateBadge();
     await autoReloadMatchingTabs(script);
 
@@ -14305,7 +14305,7 @@ async function init() {
   // Setup context menus
   await setupContextMenus();
 
-  // Register all enabled scripts
+  // Register all enabled scripts (skip if already registered from a previous SW lifecycle)
   await registerAllScripts();
 
   await updateBadge();
@@ -14431,14 +14431,29 @@ async function configureUserScriptsWorld() {
 }
 
 // Register all enabled scripts with the userScripts API
-async function registerAllScripts() {
+async function registerAllScripts(forceReregister = false) {
   try {
     if (!chrome.userScripts) {
       console.warn('[ScriptVault] userScripts API not available');
       return;
     }
-    
-    // First, unregister all existing scripts
+
+    // On normal SW wake, check if scripts are already registered to avoid
+    // the destructive unregister→register cycle that creates a gap where
+    // scripts aren't active on page navigations.
+    if (!forceReregister) {
+      try {
+        const existing = await chrome.userScripts.getScripts();
+        if (existing && existing.length > 0) {
+          debugLog(`Skipping re-registration: ${existing.length} scripts already registered`);
+          return;
+        }
+      } catch (e) {
+        // getScripts not available or failed — fall through to full registration
+      }
+    }
+
+    // Full re-registration: unregister all, then register fresh
     await chrome.userScripts.unregister().catch(() => {});
     
     const scripts = await ScriptStorage.getAll();
