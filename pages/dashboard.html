@@ -454,7 +454,60 @@
             background: rgba(34, 197, 94, 0.1);
             border-color: rgba(34, 197, 94, 0.2);
         }
-        
+
+        .header-divider {
+            width: 1px;
+            height: 20px;
+            background: rgba(127, 127, 127, 0.25);
+            flex-shrink: 0;
+        }
+
+        .header-zoom-select {
+            height: 28px;
+            padding: 0 8px;
+            font-size: 11px;
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--text-secondary);
+            border: 1px solid rgba(127, 127, 127, 0.18);
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .header-zoom-select:focus-visible {
+            outline: 2px solid var(--accent-primary);
+            outline-offset: -2px;
+        }
+
+        .header-density-group {
+            display: flex;
+            gap: 2px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(127, 127, 127, 0.18);
+            border-radius: 8px;
+            padding: 2px;
+        }
+        .header-density-group .density-btn {
+            height: 24px;
+            min-width: 26px;
+            padding: 0 6px;
+            font-size: 10px;
+            font-weight: 600;
+            background: transparent;
+            color: var(--text-muted);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.12s, color 0.12s;
+        }
+        .header-density-group .density-btn:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-secondary);
+        }
+        .header-density-group .density-btn.active,
+        .header-density-group .density-btn[aria-pressed="true"] {
+            background: var(--accent-primary);
+            color: var(--text-on-accent);
+        }
+
         /* Setup Warning Banner */
         .setup-warning-banner {
             background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
@@ -4611,16 +4664,7 @@
         .utilities-hero,
         .trash-hero,
         .help-hero {
-            --hero-accent: rgba(34, 197, 94, 0.18);
-            position: relative;
-            align-items: stretch;
-            padding: 26px 28px;
-            border: 1px solid var(--panel-border-soft);
-            border-radius: 28px;
-            background:
-                radial-gradient(circle at top right, var(--hero-accent), transparent 16rem),
-                linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 58%, transparent 100%),
-                var(--bg-section-header);
+            display: none !important;
             box-shadow: var(--panel-sheen), var(--panel-shadow-lg);
             overflow: hidden;
             isolation: isolate;
@@ -5248,6 +5292,20 @@
                         <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
                     </svg>
                 </button>
+                <span class="header-divider" aria-hidden="true"></span>
+                <select id="uiScaleSelect" class="header-zoom-select" title="UI Scale" aria-label="UI Scale">
+                    <option value="0.85">85%</option>
+                    <option value="0.9">90%</option>
+                    <option value="1" selected>100%</option>
+                    <option value="1.1">110%</option>
+                    <option value="1.25">125%</option>
+                    <option value="1.5">150%</option>
+                </select>
+                <div class="header-density-group" role="group" aria-label="Density">
+                    <button type="button" class="density-btn" data-density="compact" title="Compact" aria-pressed="false">C</button>
+                    <button type="button" class="density-btn active" data-density="comfortable" title="Comfortable" aria-pressed="true">M</button>
+                    <button type="button" class="density-btn" data-density="spacious" title="Spacious" aria-pressed="false">S</button>
+                </div>
             </div>
             <div class="tm-tabs-scripts" id="scriptTabsGroup" role="group" aria-label="Open script editors"></div>
             <div class="tm-tabs">
@@ -5263,23 +5321,7 @@
         </nav>
     </header>
 
-    <!-- View Settings Bar -->
-    <div class="view-settings-bar" id="viewSettingsBar">
-        <label>Zoom:</label>
-        <select id="uiScaleSelect" title="UI Scale" aria-label="UI Scale">
-            <option value="0.85">85%</option>
-            <option value="0.9">90%</option>
-            <option value="1" selected>100%</option>
-            <option value="1.1">110%</option>
-            <option value="1.25">125%</option>
-            <option value="1.5">150%</option>
-        </select>
-        <span class="view-settings-divider" aria-hidden="true"></span>
-        <label>Density:</label>
-        <button type="button" class="density-btn" data-density="compact" title="Compact spacing" aria-pressed="false">Compact</button>
-        <button type="button" class="density-btn active" data-density="comfortable" title="Default spacing" aria-pressed="true">Comfortable</button>
-        <button type="button" class="density-btn" data-density="spacious" title="Extra spacing" aria-pressed="false">Spacious</button>
-    </div>
+    <!-- View Settings moved to header -->
 
     <!-- Setup Warning Banner (Chrome 138+ / Developer Mode) -->
     <div class="setup-warning-banner" id="setupWarningBanner" style="display: none;">
