@@ -566,7 +566,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 10px 14px;
+            padding: var(--density-tab-padding-y) var(--density-tab-padding-x);
             min-height: 42px;
             background: transparent;
             border: 1px solid transparent;
@@ -767,7 +767,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 12px 14px;
+            padding: var(--density-toolbar-padding-y) var(--density-toolbar-padding-x);
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
                 var(--bg-section-header);
@@ -1198,8 +1198,7 @@
             border: 1px solid rgba(127, 127, 127, 0.18);
             border-radius: 24px;
             box-shadow: 0 22px 44px rgba(0, 0, 0, 0.18);
-            overflow: hidden;
-            overflow-x: auto;
+            overflow: clip;
         }
 
         /* Table */
@@ -1211,13 +1210,13 @@
 
         .scripts-table thead {
             position: sticky;
-            top: var(--toolbar-bottom, 69px);
+            top: var(--toolbar-bottom, 100px);
             z-index: 80;
         }
 
         .scripts-table th {
             background: var(--bg-section-header);
-            padding: 10px 10px;
+            padding: var(--density-table-cell-padding-y) var(--density-table-cell-padding-x);
             text-align: left;
             font-weight: 600;
             font-size: 11px;
@@ -1281,7 +1280,7 @@
         .scripts-table td.center { font-variant-numeric: tabular-nums; }
 
         .scripts-table td {
-            padding: 9px 10px;
+            padding: var(--density-table-cell-padding-y) var(--density-table-cell-padding-x);
             border-bottom: 1px solid rgba(127, 127, 127, 0.12);
             font-size: 12px;
             vertical-align: middle;
@@ -4521,6 +4520,42 @@
             .scripts-toolbar-left,
             .scripts-toolbar-right { flex-basis: 100%; }
             .toast-container { left: 12px; right: 12px; bottom: 12px; }
+        }
+
+        /* ============================================
+           Script Template Picker (New Script modal)
+           ============================================ */
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .template-card {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s, transform 0.1s;
+        }
+        .template-card:hover {
+            border-color: var(--accent-primary);
+            background: var(--bg-row-hover);
+            transform: translateY(-1px);
+        }
+        .template-card:focus-visible {
+            outline: 2px solid var(--accent-primary);
+            outline-offset: -2px;
+        }
+        .template-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        .template-desc {
+            font-size: 11px;
+            color: var(--text-muted);
         }
 
         /* ============================================
