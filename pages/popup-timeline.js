@@ -12,10 +12,11 @@ const PopupTimeline = (() => {
     const style = document.createElement('style');
     style.id = 'sv-ptl-css';
     style.textContent = `
-      .ptl-panel { display:none; border-top:1px solid var(--popup-border); max-height:200px; overflow-y:auto; }
+      .ptl-panel { display:none; border-top:1px solid var(--popup-border); max-height:200px; overflow-y:auto; overscroll-behavior:contain; }
       .ptl-panel.open { display:block; }
-      .ptl-header { display:flex; align-items:center; justify-content:space-between; padding:4px 12px; background:var(--popup-bg-raised); border-bottom:1px solid var(--popup-border-subtle); cursor:pointer; }
+      .ptl-header { display:flex; align-items:center; justify-content:space-between; width:100%; padding:4px 12px; background:var(--popup-bg-raised); border:none; border-bottom:1px solid var(--popup-border-subtle); cursor:pointer; color:inherit; font:inherit; text-align:left; transition:background 0.18s ease; }
       .ptl-header:hover { background:var(--popup-bg-hover); }
+      .ptl-header:focus-visible { outline:2px solid var(--popup-accent); outline-offset:-2px; }
       .ptl-title { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--popup-text-muted); }
       .ptl-toggle { font-size:10px; color:var(--popup-text-dim); }
       .ptl-list { padding:4px 0; }
@@ -32,6 +33,9 @@ const PopupTimeline = (() => {
       .ptl-summary { display:flex; gap:8px; padding:4px 12px; font-size:10px; color:var(--popup-text-muted); border-top:1px solid var(--popup-border-subtle); }
       .ptl-stat { display:flex; align-items:center; gap:3px; }
       .ptl-dot { width:6px; height:6px; border-radius:50%; }
+      @media (prefers-reduced-motion: reduce) {
+        .ptl-bar { transition:none; }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -86,11 +90,11 @@ const PopupTimeline = (() => {
 
       _container = document.createElement('div');
       _container.innerHTML = `
-        <div class="ptl-header" id="ptlToggle">
+        <button class="ptl-header" id="ptlToggle" type="button" aria-expanded="false" aria-controls="ptlPanel">
           <span class="ptl-title">Execution Timeline</span>
           <span class="ptl-toggle" id="ptlArrow">▶</span>
-        </div>
-        <div class="ptl-panel" id="ptlPanel">
+        </button>
+        <div class="ptl-panel" id="ptlPanel" role="region" aria-label="Execution timeline" hidden>
           <div class="ptl-list"></div>
           <div class="ptl-summary"></div>
         </div>
@@ -100,7 +104,11 @@ const PopupTimeline = (() => {
 
       _container.querySelector('#ptlToggle').addEventListener('click', () => {
         _visible = !_visible;
-        _container.querySelector('#ptlPanel').classList.toggle('open', _visible);
+        const toggle = _container.querySelector('#ptlToggle');
+        const panel = _container.querySelector('#ptlPanel');
+        panel.classList.toggle('open', _visible);
+        panel.hidden = !_visible;
+        toggle.setAttribute('aria-expanded', String(_visible));
         _container.querySelector('#ptlArrow').textContent = _visible ? '▼' : '▶';
       });
 

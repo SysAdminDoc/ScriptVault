@@ -1901,7 +1901,7 @@
     // Connect to cloud sync provider
     async function connectSyncProvider(provider) {
         if (!(await ensureSyncIdentityPermission(provider))) return;
-        showToast(`Connecting to ${capitalize(provider)}...`, 'info');
+        showToast(`Connecting to ${capitalize(provider)}…`, 'info');
         try {
             const response = await chrome.runtime.sendMessage({ action: 'connectSyncProvider', provider });
             if (response?.success) {
@@ -1944,7 +1944,7 @@
     
     // Sync with provider
     async function syncWithProvider(provider) {
-        showToast('Syncing...', 'info');
+        showToast('Syncing…', 'info');
         try {
             const response = await chrome.runtime.sendMessage({ action: 'syncNow', provider });
             if (response?.success) {
@@ -2795,7 +2795,7 @@
 
     async function exportSupportSnapshot() {
         if (elements.supportSnapshotStatus) {
-            elements.supportSnapshotStatus.textContent = 'Collecting diagnostics...';
+            elements.supportSnapshotStatus.textContent = 'Collecting diagnostics…';
         }
         try {
             const provider = normalizeSyncProvider(state.settings);
@@ -3288,7 +3288,7 @@
         if (!elements.trashList) return;
         elements.trashList.hidden = false;
         if (elements.trashEmptyState) elements.trashEmptyState.hidden = true;
-        elements.trashList.innerHTML = '<div class="panel-empty-inline">Loading deleted scripts...</div>';
+        elements.trashList.innerHTML = '<div class="panel-empty-inline">Loading deleted scripts…</div>';
         try {
             const response = await chrome.runtime.sendMessage({ action: 'getTrash' });
             state.trashItems = Array.isArray(response?.trash) ? response.trash : [];
@@ -3555,18 +3555,26 @@
 
     // Update sort indicator icons in table headers
     function updateSortIndicators() {
-        document.querySelectorAll('.scripts-table th.sortable').forEach(th => {
-            const indicator = th.querySelector('.sort-indicator');
-            const isActive = th.dataset.sort === state.sortColumn;
+        document.querySelectorAll('.table-sort-button[data-sort]').forEach(button => {
+            const indicator = button.querySelector('.sort-indicator');
+            const th = button.closest('th');
+            const isActive = button.dataset.sort === state.sortColumn;
+            const sortLabel = button.dataset.sortLabel || (button.textContent || '').replace(/\s+/g, ' ').trim();
             if (indicator) {
                 indicator.className = 'sort-indicator';
                 if (isActive) {
                     indicator.classList.add(state.sortDirection);
                 }
             }
-            th.setAttribute('aria-sort', isActive
-                ? (state.sortDirection === 'asc' ? 'ascending' : 'descending')
-                : 'none');
+            if (th) {
+                th.setAttribute('aria-sort', isActive
+                    ? (state.sortDirection === 'asc' ? 'ascending' : 'descending')
+                    : 'none');
+            }
+            button.setAttribute('aria-pressed', String(isActive));
+            button.setAttribute('aria-label', isActive
+                ? `Sort by ${sortLabel} (${state.sortDirection === 'asc' ? 'ascending' : 'descending'})`
+                : `Sort by ${sortLabel}`);
         });
     }
     
@@ -3602,7 +3610,7 @@
         
         switch (action) {
             case 'enable':
-                showProgress(`Enabling ${ids.length} scripts...`);
+                showProgress(`Enabling ${ids.length} scripts…`);
                 for (let i = 0; i < ids.length; i++) {
                     const s = state.scripts.find(x => x.id === ids[i]);
                     updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
@@ -3619,7 +3627,7 @@
                 break;
 
             case 'disable':
-                showProgress(`Disabling ${ids.length} scripts...`);
+                showProgress(`Disabling ${ids.length} scripts…`);
                 for (let i = 0; i < ids.length; i++) {
                     const s = state.scripts.find(x => x.id === ids[i]);
                     updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
@@ -3659,7 +3667,7 @@
                 break;
 
             case 'update':
-                showProgress(`Checking updates for ${ids.length} scripts...`);
+                showProgress(`Checking updates for ${ids.length} scripts…`);
                 let updateCount = 0;
                 for (let i = 0; i < ids.length; i++) {
                     const s = state.scripts.find(x => x.id === ids[i]);
@@ -3681,7 +3689,7 @@
 
             case 'reset':
                 if (!await showConfirmModal('Factory Reset', `Reset settings for ${ids.length} scripts?`)) return;
-                showProgress(`Resetting ${ids.length} scripts...`);
+                showProgress(`Resetting ${ids.length} scripts…`);
                 for (let i = 0; i < ids.length; i++) {
                     const s = state.scripts.find(x => x.id === ids[i]);
                     updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
@@ -3698,7 +3706,7 @@
 
             case 'delete':
                 if (!await showConfirmModal('Delete Scripts', `Permanently delete ${ids.length} selected script(s)? This cannot be undone.`)) return;
-                showProgress(`Deleting ${ids.length} scripts...`);
+                showProgress(`Deleting ${ids.length} scripts…`);
                 for (let i = 0; i < ids.length; i++) {
                     const s = state.scripts.find(x => x.id === ids[i]);
                     updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
@@ -4020,7 +4028,7 @@
                 <div class="feature-badges">${features.map(f => `<span class="badge ${f.c}">${f.l}</span>`).join('')}</div>
             </td>
             <td class="center">${homepage ? `<a href="${escapeHtml(homepage)}" target="_blank" aria-label="Open homepage for ${escapeHtml(name)}">🔗</a>` : '-'}</td>
-            <td class="center"><span class="updated-link" data-action="checkUpdate" data-id="${script.id}" title="Check for updates" role="button" tabindex="0" aria-label="Check for updates for ${escapeHtml(name)}" style="cursor:pointer">${updated}</span></td>
+            <td class="center"><button type="button" class="updated-link" data-action="checkUpdate" data-id="${script.id}" title="Check for updates" aria-label="Check for updates for ${escapeHtml(name)}">${updated}</button></td>
             <td class="center">${statsHtml}</td>
             <td class="center">
                 <div class="action-icons">
@@ -4108,12 +4116,6 @@
         });
         tr.querySelector('[data-action="updateScript"]')?.addEventListener('click', async (e) => {
             await checkScriptForUpdates(script.id, { triggerEl: e.currentTarget });
-        });
-        tr.querySelector('.updated-link')?.addEventListener('keydown', e => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                tr.querySelector('[data-action="updateScript"]')?.click();
-            }
         });
         // Right-click = force update (bypass HTTP cache)
         tr.querySelector('[data-action="updateScript"]')?.addEventListener('contextmenu', async (e) => {
@@ -5395,16 +5397,20 @@
         const originalText = triggerEl?.matches('.updated-link') ? triggerEl.textContent : '';
 
         if (triggerEl) {
-            triggerEl.style.opacity = '0.4';
-            triggerEl.style.pointerEvents = 'none';
+            if ('disabled' in triggerEl) {
+                triggerEl.disabled = true;
+            } else {
+                triggerEl.style.opacity = '0.4';
+                triggerEl.style.pointerEvents = 'none';
+            }
             if (triggerEl.matches('.updated-link')) {
-                triggerEl.textContent = force ? 'Forcing...' : 'Checking...';
+                triggerEl.textContent = force ? 'Forcing…' : 'Checking…';
             }
         }
 
         try {
             if (force) {
-                showToast(`Force-updating ${name}...`, 'info');
+                showToast(`Force-updating ${name}…`, 'info');
                 const response = await chrome.runtime.sendMessage({ action: 'forceUpdate', scriptId });
                 if (response?.success) {
                     showToast(`${name} force-updated to v${response.script?.meta?.version || '?'}`, 'success');
@@ -5430,8 +5436,12 @@
             return false;
         } finally {
             if (triggerEl) {
-                triggerEl.style.opacity = '';
-                triggerEl.style.pointerEvents = '';
+                if ('disabled' in triggerEl) {
+                    triggerEl.disabled = false;
+                } else {
+                    triggerEl.style.opacity = '';
+                    triggerEl.style.pointerEvents = '';
+                }
                 if (triggerEl.matches('.updated-link')) {
                     triggerEl.textContent = originalText;
                 }
@@ -6864,17 +6874,8 @@
         elements.btnBulkApply?.addEventListener('click', executeBulkAction);
 
         // Sortable column headers
-        document.querySelectorAll('.scripts-table th.sortable').forEach(th => {
-            th.tabIndex = 0;
-            th.setAttribute('role', 'button');
-            th.setAttribute('aria-label', `Sort by ${(th.textContent || '').replace(/\s+/g, ' ').trim()}`);
-            th.addEventListener('click', () => handleSortClick(th.dataset.sort));
-            th.addEventListener('keydown', e => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleSortClick(th.dataset.sort);
-                }
-            });
+        document.querySelectorAll('.table-sort-button[data-sort]').forEach(button => {
+            button.addEventListener('click', () => handleSortClick(button.dataset.sort));
         });
 
         elements.filterSelect?.addEventListener('change', () => {

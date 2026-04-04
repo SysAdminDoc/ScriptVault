@@ -40,6 +40,7 @@
         :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 4px; }
         input:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent); }
+        .sp-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
         /* Header */
         .sp-header { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 12px 28px rgba(0,0,0,0.16); padding: 10px 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
@@ -180,10 +181,15 @@
 
         /* v2.0: Search & Sort */
         .sp-search-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 14px; flex-shrink: 0; }
-        .sp-search-input { flex: 1; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; font-size: 11px; color: var(--text); outline: none; }
-        .sp-search-input:focus { border-color: var(--accent); }
+        .sp-search-input { order: 1; flex: 1; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; font-size: 11px; color: var(--text); outline: none; }
+        .sp-search-input:focus,
+        .sp-search-input:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(76,175,80,0.18); }
         .sp-search-input::placeholder { color: var(--text-muted); }
-        .sp-sort-select { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; font-size: 10px; color: var(--text); cursor: pointer; }
+        .sp-sort-select { order: 3; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; font-size: 10px; color: var(--text); cursor: pointer; }
+        .sp-search-clear { order: 2; border: 1px solid var(--border); background: var(--bg-raised); color: var(--text-muted); border-radius: 10px; padding: 6px 8px; font-size: 10px; font-weight: 600; cursor: pointer; transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease; }
+        .sp-search-clear:hover { color: var(--text); border-color: var(--accent); background: var(--bg-hover); }
+        .sp-search-meta { display: flex; align-items: center; justify-content: space-between; min-height: 18px; padding: 0 4px; }
+        .sp-search-status { font-size: 10px; color: var(--text-muted); }
 
         /* Reduced motion */
         @media (prefers-reduced-motion: reduce) {
@@ -218,13 +224,16 @@
         </div>
     </div>
 
-    <div class="sp-list" id="pageScriptList">
+    <div class="sp-list" id="pageScriptList" role="region" aria-label="Scripts running on this page" aria-busy="true">
         <div class="sp-loading">Loading scripts…</div>
     </div>
 
     <!-- v2.0: Search & Sort Controls -->
-    <div class="sp-search-bar">
-        <input type="search" class="sp-search-input" id="spSearch" name="sidepanel_search" placeholder="Search Scripts… (Ctrl+F)" aria-label="Search scripts" autocomplete="off" spellcheck="false">
+    <div class="sp-search-bar" role="search" aria-label="Filter installed scripts">
+        <label class="sp-sr-only" for="spSearch">Search installed scripts</label>
+        <button class="sp-search-clear" id="btnClearSearch" type="button" aria-label="Clear script search" hidden>Clear</button>
+        <label class="sp-sr-only" for="spSort">Sort installed scripts</label>
+        <input type="search" class="sp-search-input" id="spSearch" name="sidepanel_search" placeholder="Search Scripts… (Ctrl+F)" aria-label="Search scripts" aria-describedby="spSearchStatus" autocomplete="off" spellcheck="false">
         <select class="sp-sort-select" id="spSort" title="Sort scripts" aria-label="Sort scripts by">
             <option value="default">Install Order</option>
             <option value="alpha">A-Z</option>
@@ -233,16 +242,19 @@
             <option value="recent">Recently Updated</option>
         </select>
     </div>
+    <div class="sp-search-meta">
+        <p class="sp-search-status" id="spSearchStatus" role="status" aria-live="polite" aria-atomic="true">Showing all installed scripts.</p>
+    </div>
 
     <div class="sp-all-section" id="allSection">
-        <button class="sp-all-header" id="allSectionHeader" type="button">
+        <button class="sp-all-header" id="allSectionHeader" type="button" aria-expanded="true" aria-controls="allScriptList">
             <div style="display:flex;align-items:center;gap:6px">
                 <span class="sp-section-title">All Scripts</span>
                 <span class="sp-section-count" id="allScriptCount">0</span>
             </div>
             <span class="sp-collapse-icon" id="collapseIcon">▼</span>
         </button>
-        <div class="sp-all-list" id="allScriptList"></div>
+        <div class="sp-all-list" id="allScriptList" role="region" aria-labelledby="allSectionHeader" aria-busy="true"></div>
     </div>
 
     <div class="sp-footer">
