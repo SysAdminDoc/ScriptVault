@@ -173,6 +173,20 @@
         :root {
             --ui-scale: 1;
             --base-font: 13px;
+            --density-toolbar-padding-y: 12px;
+            --density-toolbar-padding-x: 14px;
+            --density-toolbar-cluster-gap: 8px;
+            --density-filter-gap: 8px;
+            --density-summary-padding-y: 12px;
+            --density-summary-padding-x: 14px;
+            --density-control-height: 36px;
+            --density-control-padding-x: 12px;
+            --density-tab-padding-y: 10px;
+            --density-tab-padding-x: 14px;
+            --density-table-cell-padding-y: 9px;
+            --density-table-cell-padding-x: 10px;
+            --density-view-pill-height: 30px;
+            --density-view-pill-padding-x: 12px;
         }
         [data-ui-scale="0.85"] { --ui-scale: 0.85; --base-font: 11px; }
         [data-ui-scale="0.9"]  { --ui-scale: 0.9;  --base-font: 12px; }
@@ -180,6 +194,58 @@
         [data-ui-scale="1.1"]  { --ui-scale: 1.1;   --base-font: 14px; }
         [data-ui-scale="1.25"] { --ui-scale: 1.25;  --base-font: 16px; }
         [data-ui-scale="1.5"]  { --ui-scale: 1.5;   --base-font: 19px; }
+
+        :root,
+        [data-density="comfortable"] {
+            --density-toolbar-padding-y: 12px;
+            --density-toolbar-padding-x: 14px;
+            --density-toolbar-cluster-gap: 8px;
+            --density-filter-gap: 8px;
+            --density-summary-padding-y: 12px;
+            --density-summary-padding-x: 14px;
+            --density-control-height: 36px;
+            --density-control-padding-x: 12px;
+            --density-tab-padding-y: 10px;
+            --density-tab-padding-x: 14px;
+            --density-table-cell-padding-y: 9px;
+            --density-table-cell-padding-x: 10px;
+            --density-view-pill-height: 30px;
+            --density-view-pill-padding-x: 12px;
+        }
+
+        [data-density="compact"] {
+            --density-toolbar-padding-y: 9px;
+            --density-toolbar-padding-x: 11px;
+            --density-toolbar-cluster-gap: 6px;
+            --density-filter-gap: 6px;
+            --density-summary-padding-y: 9px;
+            --density-summary-padding-x: 11px;
+            --density-control-height: 32px;
+            --density-control-padding-x: 10px;
+            --density-tab-padding-y: 7px;
+            --density-tab-padding-x: 10px;
+            --density-table-cell-padding-y: 6px;
+            --density-table-cell-padding-x: 8px;
+            --density-view-pill-height: 28px;
+            --density-view-pill-padding-x: 10px;
+        }
+
+        [data-density="spacious"] {
+            --density-toolbar-padding-y: 15px;
+            --density-toolbar-padding-x: 18px;
+            --density-toolbar-cluster-gap: 10px;
+            --density-filter-gap: 10px;
+            --density-summary-padding-y: 15px;
+            --density-summary-padding-x: 18px;
+            --density-control-height: 42px;
+            --density-control-padding-x: 15px;
+            --density-tab-padding-y: 12px;
+            --density-tab-padding-x: 18px;
+            --density-table-cell-padding-y: 12px;
+            --density-table-cell-padding-x: 12px;
+            --density-view-pill-height: 34px;
+            --density-view-pill-padding-x: 14px;
+        }
 
         html[data-theme="dark"],
         html[data-theme="catppuccin"],
@@ -880,11 +946,39 @@
             -webkit-user-select: none;
             user-select: none;
             white-space: nowrap;
+            padding: 0;
         }
 
         .scripts-table th.sortable:hover {
             color: var(--text-primary);
             background: var(--bg-button);
+        }
+
+        .table-sort-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 6px;
+            width: 100%;
+            min-height: 100%;
+            padding: calc((var(--density-table-cell-padding-y) + 1px) * var(--ui-scale)) calc(var(--density-table-cell-padding-x) * var(--ui-scale));
+            border: 0;
+            background: transparent;
+            color: inherit;
+            font: inherit;
+            letter-spacing: inherit;
+            text-transform: inherit;
+            text-align: inherit;
+            cursor: pointer;
+        }
+
+        .table-sort-button.centered {
+            justify-content: center;
+        }
+
+        .table-sort-button:focus-visible {
+            outline: none;
+            box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.34);
         }
 
         .sort-indicator {
@@ -993,7 +1087,25 @@
         .badge-t { background: linear-gradient(135deg, #f59e0b, #d97706); }
 
         /* Action Icons */
+        .updated-link {
+            border: 0;
+            background: transparent;
+            color: inherit;
+            font: inherit;
+            cursor: pointer;
+            padding: 0;
+        }
         .updated-link:hover { color: var(--accent-secondary); text-decoration: underline; }
+        .updated-link:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.28);
+            border-radius: 6px;
+        }
+        .updated-link:disabled {
+            cursor: wait;
+            opacity: 0.56;
+            text-decoration: none;
+        }
         .action-icons { display: flex; gap: 4px; }
         .action-icon {
             width: 26px; height: 26px;
@@ -4019,7 +4131,8 @@
             transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
         }
         .view-settings-bar .density-btn:hover,
-        .view-settings-bar .density-btn.active {
+        .view-settings-bar .density-btn.active,
+        .view-settings-bar .density-btn[aria-pressed="true"] {
             background: var(--accent-primary);
             color: var(--text-on-accent);
             border-color: var(--accent-primary);
@@ -4291,11 +4404,136 @@
         }
 
         .view-settings-bar .density-btn:hover,
-        .view-settings-bar .density-btn.active {
+        .view-settings-bar .density-btn.active,
+        .view-settings-bar .density-btn[aria-pressed="true"] {
             background: linear-gradient(135deg, #34d399, var(--accent-primary));
             color: #04130a;
             border-color: rgba(52, 211, 153, 0.32);
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 14px 26px rgba(34, 197, 94, 0.2);
+        }
+
+        .tm-tab {
+            min-height: calc(42px * var(--ui-scale));
+            padding: calc(var(--density-tab-padding-y) * var(--ui-scale)) calc(var(--density-tab-padding-x) * var(--ui-scale));
+            border-radius: calc(15px * var(--ui-scale));
+            font-size: max(11px, calc(11px * var(--ui-scale)));
+        }
+
+        .scripts-shell-copy h2,
+        .settings-hero-copy h2,
+        .utilities-hero-copy h2,
+        .trash-hero-copy h2,
+        .help-hero-copy h2 {
+            font-size: clamp(24px, calc(14px + 18px * var(--ui-scale)), 46px);
+        }
+
+        .scripts-shell-copy p,
+        .settings-hero-copy p,
+        .utilities-hero-copy p,
+        .trash-hero-copy p,
+        .help-hero-copy p {
+            font-size: max(12px, calc(13px * var(--ui-scale)));
+        }
+
+        .scripts-shell-kicker,
+        .settings-eyebrow,
+        .utilities-eyebrow,
+        .trash-eyebrow,
+        .help-eyebrow,
+        .scripts-shell-stat span,
+        .settings-summary-label,
+        .utilities-summary-label,
+        .trash-summary-label,
+        .help-summary-label {
+            font-size: max(10px, calc(10px * var(--ui-scale)));
+        }
+
+        .scripts-shell-stat strong,
+        .settings-summary strong,
+        .utilities-summary strong,
+        .trash-summary strong,
+        .help-summary strong {
+            font-size: calc(18px * var(--ui-scale));
+        }
+
+        .scripts-shell-stat,
+        .settings-summary,
+        .utilities-summary,
+        .trash-summary,
+        .help-summary {
+            padding: calc(var(--density-summary-padding-y) * var(--ui-scale)) calc(var(--density-summary-padding-x) * var(--ui-scale));
+            border-radius: calc(18px * var(--ui-scale));
+        }
+
+        .scripts-toolbar,
+        .settings-toolbar,
+        .utilities-toolbar,
+        .trash-toolbar,
+        .help-toolbar {
+            gap: calc(12px * var(--ui-scale));
+            padding: calc(var(--density-toolbar-padding-y) * var(--ui-scale)) calc(var(--density-toolbar-padding-x) * var(--ui-scale));
+            border-radius: calc(22px * var(--ui-scale));
+        }
+
+        .scripts-toolbar-left,
+        .scripts-toolbar-right,
+        .settings-search,
+        .utilities-search,
+        .trash-search,
+        .help-search {
+            gap: calc(var(--density-toolbar-cluster-gap) * var(--ui-scale));
+            border-radius: calc(18px * var(--ui-scale));
+        }
+
+        .settings-filter-row,
+        .utilities-filter-row,
+        .trash-filter-row,
+        .help-filter-row {
+            gap: calc(var(--density-filter-gap) * var(--ui-scale));
+            padding: calc(4px * var(--ui-scale));
+            border-radius: calc(18px * var(--ui-scale));
+        }
+
+        .toolbar-btn,
+        .btn {
+            min-height: calc(var(--density-control-height) * var(--ui-scale));
+            padding: 0 calc(var(--density-control-padding-x) * var(--ui-scale));
+            border-radius: calc(14px * var(--ui-scale));
+            font-size: max(12px, calc(12px * var(--ui-scale)));
+        }
+
+        .btn-sm {
+            min-height: calc(30px * var(--ui-scale));
+            padding: 0 calc(10px * var(--ui-scale));
+            border-radius: calc(10px * var(--ui-scale));
+        }
+
+        .input-field,
+        .select-field,
+        .search-box input,
+        .view-settings-bar select {
+            min-height: calc(var(--density-control-height) * var(--ui-scale));
+            padding: 0 calc(var(--density-control-padding-x) * var(--ui-scale));
+            border-radius: calc(14px * var(--ui-scale));
+            font-size: max(12px, calc(12px * var(--ui-scale)));
+        }
+
+        .textarea-field {
+            border-radius: calc(14px * var(--ui-scale));
+            font-size: max(12px, calc(12px * var(--ui-scale)));
+        }
+
+        .view-settings-bar {
+            gap: calc(12px * var(--ui-scale));
+            padding: calc(10px * var(--ui-scale)) calc(20px * var(--ui-scale)) 0;
+            font-size: max(11px, calc(11px * var(--ui-scale)));
+        }
+
+        .view-settings-bar select,
+        .view-settings-bar .density-btn {
+            min-height: calc(var(--density-view-pill-height) * var(--ui-scale));
+            padding: 0 calc(var(--density-view-pill-padding-x) * var(--ui-scale));
+            font-size: max(10px, calc(10px * var(--ui-scale)));
         }
 
         .scripts-table-container {
@@ -4508,17 +4746,13 @@
             }
         }
 
-        /* Compact density */
-        [data-density="compact"] .scripts-table td { padding: 6px 8px; }
-        [data-density="compact"] .scripts-table th { padding: 7px 8px; }
-        [data-density="compact"] .tm-tab { padding: 3px 10px; }
-        /* Comfortable density (default) */
-        [data-density="comfortable"] .scripts-table td { padding: 9px 10px; }
-        [data-density="comfortable"] .scripts-table th { padding: 10px 10px; }
-        /* Spacious density */
-        [data-density="spacious"] .scripts-table td { padding: 12px 12px; }
-        [data-density="spacious"] .scripts-table th { padding: 12px 12px; }
-        [data-density="spacious"] .tm-tab { padding: 7px 16px; }
+        .scripts-table td {
+            padding: calc(var(--density-table-cell-padding-y) * var(--ui-scale)) calc(var(--density-table-cell-padding-x) * var(--ui-scale));
+        }
+
+        .scripts-table th {
+            padding: calc((var(--density-table-cell-padding-y) + 1px) * var(--ui-scale)) calc(var(--density-table-cell-padding-x) * var(--ui-scale));
+        }
     </style>
 </head>
 <body>
@@ -4577,9 +4811,9 @@
         </select>
         <span class="view-settings-divider" aria-hidden="true"></span>
         <label>Density:</label>
-        <button type="button" class="density-btn" data-density="compact" title="Compact spacing">Compact</button>
-        <button type="button" class="density-btn active" data-density="comfortable" title="Default spacing">Comfortable</button>
-        <button type="button" class="density-btn" data-density="spacious" title="Extra spacing">Spacious</button>
+        <button type="button" class="density-btn" data-density="compact" title="Compact spacing" aria-pressed="false">Compact</button>
+        <button type="button" class="density-btn active" data-density="comfortable" title="Default spacing" aria-pressed="true">Comfortable</button>
+        <button type="button" class="density-btn" data-density="spacious" title="Extra spacing" aria-pressed="false">Spacious</button>
     </div>
 
     <!-- Setup Warning Banner (Chrome 138+ / Developer Mode) -->
@@ -4697,17 +4931,49 @@
                     <thead>
                         <tr>
                             <th class="center" style="width:30px"><input type="checkbox" id="selectAllScripts" aria-label="Select all scripts in table"></th>
-                            <th class="center sortable" style="width:40px" data-sort="order"># <span class="sort-indicator"></span></th>
-                            <th class="center sortable" style="width:50px" data-sort="enabled">Enabled <span class="sort-indicator"></span></th>
-                            <th class="sortable" style="min-width:200px" data-sort="name">Name <span class="sort-indicator"></span></th>
-                            <th class="center sortable" style="width:70px" data-sort="version" data-col="version">Version <span class="sort-indicator"></span></th>
-                            <th class="center sortable" style="width:60px" data-sort="size" data-col="size">Size <span class="sort-indicator"></span></th>
-                            <th class="center sortable" style="width:55px" data-sort="lines" data-col="lines">Lines <span class="sort-indicator"></span></th>
+                            <th class="center sortable" style="width:40px">
+                                <button type="button" class="table-sort-button centered" data-sort="order" data-sort-label="Order">
+                                    # <span class="sort-indicator" aria-hidden="true"></span>
+                                </button>
+                            </th>
+                            <th class="center sortable" style="width:50px">
+                                <button type="button" class="table-sort-button centered" data-sort="enabled" data-sort-label="Enabled">
+                                    Enabled <span class="sort-indicator" aria-hidden="true"></span>
+                                </button>
+                            </th>
+                            <th class="sortable" style="min-width:200px">
+                                <button type="button" class="table-sort-button" data-sort="name" data-sort-label="Name">
+                                    Name <span class="sort-indicator" aria-hidden="true"></span>
+                                </button>
+                            </th>
+                            <th class="center sortable" style="width:70px" data-col="version">
+                                <button type="button" class="table-sort-button centered" data-sort="version" data-sort-label="Version">
+                                    Version <span class="sort-indicator" aria-hidden="true"></span>
+                                </button>
+                            </th>
+                            <th class="center sortable" style="width:60px" data-col="size">
+                                <button type="button" class="table-sort-button centered" data-sort="size" data-sort-label="Size">
+                                    Size <span class="sort-indicator" aria-hidden="true"></span>
+                                </button>
+                            </th>
+                            <th class="center sortable" style="width:55px" data-col="lines">
+                                <button type="button" class="table-sort-button centered" data-sort="lines" data-sort-label="Lines">
+                                    Lines <span class="sort-indicator" aria-hidden="true"></span>
+                                </button>
+                            </th>
                             <th class="center" style="width:80px" data-col="sites">Sites</th>
                             <th class="center" style="width:80px" data-col="features">Features</th>
                             <th class="center" style="width:50px" data-col="home">🏠</th>
-                            <th class="center sortable" style="width:80px" data-sort="updated" data-col="updated">Updated <span class="sort-indicator"></span></th>
-                            <th class="center sortable" style="width:65px" data-sort="perf" data-col="perf">Perf <span class="sort-indicator"></span></th>
+                            <th class="center sortable" style="width:80px" data-col="updated">
+                                <button type="button" class="table-sort-button centered" data-sort="updated" data-sort-label="Updated">
+                                    Updated <span class="sort-indicator" aria-hidden="true"></span>
+                                </button>
+                            </th>
+                            <th class="center sortable" style="width:65px" data-col="perf">
+                                <button type="button" class="table-sort-button centered" data-sort="perf" data-sort-label="Performance">
+                                    Perf <span class="sort-indicator" aria-hidden="true"></span>
+                                </button>
+                            </th>
                             <th class="center" style="width:100px">Actions</th>
                         </tr>
                     </thead>
@@ -6727,42 +6993,76 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <script>
     (function() {
         'use strict';
+        const STORAGE_KEY = 'sv_viewSettings';
         const scaleSelect = document.getElementById('uiScaleSelect');
         const densityBtns = document.querySelectorAll('.density-btn');
 
-        // Restore saved preferences
-        const saved = JSON.parse(localStorage.getItem('sv_viewSettings') || '{}');
-        if (saved.scale) {
-            document.documentElement.setAttribute('data-ui-scale', saved.scale);
-            if (scaleSelect) scaleSelect.value = saved.scale;
-        }
-        if (saved.density) {
-            document.documentElement.setAttribute('data-density', saved.density);
-            densityBtns.forEach(b => b.classList.toggle('active', b.dataset.density === saved.density));
-        } else {
-            document.documentElement.setAttribute('data-density', 'comfortable');
+        function readViewSettings() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                return raw ? JSON.parse(raw) : {};
+            } catch (_) {
+                return {};
+            }
         }
 
-        // Scale change
+        function writeViewSettings(settings) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        }
+
+        function sanitizeScale(scale) {
+            const value = String(scale || '1');
+            return ['0.85', '0.9', '1', '1.1', '1.25', '1.5'].includes(value) ? value : '1';
+        }
+
+        function sanitizeDensity(density) {
+            const value = String(density || 'comfortable');
+            return ['compact', 'comfortable', 'spacious'].includes(value) ? value : 'comfortable';
+        }
+
+        function applyViewSettings(settings) {
+            const applied = {
+                scale: sanitizeScale(settings.scale),
+                density: sanitizeDensity(settings.density)
+            };
+
+            document.documentElement.setAttribute('data-ui-scale', applied.scale);
+            document.documentElement.setAttribute('data-density', applied.density);
+            if (document.body) {
+                document.body.setAttribute('data-ui-scale', applied.scale);
+                document.body.setAttribute('data-density', applied.density);
+            }
+
+            if (scaleSelect) scaleSelect.value = applied.scale;
+            densityBtns.forEach(btn => {
+                const isActive = btn.dataset.density === applied.density;
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-pressed', String(isActive));
+            });
+
+            return applied;
+        }
+
+        const initialSettings = applyViewSettings(readViewSettings());
+
         if (scaleSelect) {
             scaleSelect.addEventListener('change', () => {
-                const v = scaleSelect.value;
-                document.documentElement.setAttribute('data-ui-scale', v);
-                const s = JSON.parse(localStorage.getItem('sv_viewSettings') || '{}');
-                s.scale = v;
-                localStorage.setItem('sv_viewSettings', JSON.stringify(s));
+                const nextSettings = applyViewSettings({
+                    ...readViewSettings(),
+                    scale: scaleSelect.value
+                });
+                writeViewSettings(nextSettings);
             });
         }
 
-        // Density buttons
         densityBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                const d = btn.dataset.density;
-                document.documentElement.setAttribute('data-density', d);
-                densityBtns.forEach(b => b.classList.toggle('active', b.dataset.density === d));
-                const s = JSON.parse(localStorage.getItem('sv_viewSettings') || '{}');
-                s.density = d;
-                localStorage.setItem('sv_viewSettings', JSON.stringify(s));
+                const nextSettings = applyViewSettings({
+                    ...readViewSettings(),
+                    scale: scaleSelect ? scaleSelect.value : initialSettings.scale,
+                    density: btn.dataset.density
+                });
+                writeViewSettings(nextSettings);
             });
         });
     })();

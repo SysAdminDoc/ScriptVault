@@ -51,6 +51,65 @@
     if (pageScript) pageScript.enabled = enabled;
   }
 
+  function setListBusy(isBusy) {
+    $('pageScriptList').setAttribute('aria-busy', String(isBusy));
+    $('allScriptList').setAttribute('aria-busy', String(isBusy));
+  }
+
+  function updateSearchSummary(filteredCount = allScripts.length) {
+    const status = $('spSearchStatus');
+    if (!status) return;
+    const total = allScripts.length;
+    const normalizedQuery = searchQuery.replace(/\s+/g, ' ').trim();
+    if (!total) {
+      status.textContent = 'No installed scripts yet.';
+      return;
+    }
+    if (normalizedQuery) {
+      status.textContent = `Showing ${numberFormatter.format(filteredCount)} of ${numberFormatter.format(total)} installed scripts for "${normalizedQuery}".`;
+      return;
+    }
+    status.textContent = `Showing all ${numberFormatter.format(total)} installed scripts.`;
+  }
+
+  function updatePageActions() {
+    const toggleButton = $('btnToggleAll');
+    if (toggleButton) {
+      const pageCount = pageScripts.length;
+      const anyEnabled = pageScripts.some((script) => script.enabled !== false);
+      const canToggle = currentPageCanRunScripts && pageCount > 0;
+      toggleButton.disabled = !canToggle;
+      toggleButton.textContent = canToggle
+        ? (anyEnabled ? 'Disable Page Scripts' : 'Enable Page Scripts')
+        : 'Toggle All';
+      toggleButton.setAttribute(
+        'aria-label',
+        canToggle
+          ? `${toggleButton.textContent} (${numberFormatter.format(pageCount)})`
+          : 'No page scripts are available to toggle'
+      );
+    }
+
+    const findButton = $('btnFindScripts');
+    if (findButton) {
+      let hostname = '';
+      if (canMatchScriptsForUrl(currentTab?.url || '')) {
+        try { hostname = new URL(currentTab?.url || '').hostname.replace(/^www\./, ''); } catch {}
+      }
+      findButton.textContent = hostname ? `Find for ${hostname}` : 'Find Scripts';
+      findButton.setAttribute('aria-label', hostname ? `Find userscripts for ${hostname}` : 'Find userscripts');
+    }
+  }
+
+  function setAllScriptsCollapsed(collapsed) {
+    allCollapsed = collapsed;
+    const list = $('allScriptList');
+    list.classList.toggle('collapsed', collapsed);
+    list.hidden = collapsed;
+    $('allSectionHeader').setAttribute('aria-expanded', String(!collapsed));
+    $('collapseIcon').textContent = collapsed ? '\u25B6' : '\u25BC';
+  }
+
   function queueAllScriptsRender(immediate = false) {
     clearTimeout(searchRenderTimer);
     if (immediate) {
@@ -136,6 +195,7 @@
   }
 
   async function refresh() {
+    setListBusy(true);
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       currentTab = tab;
@@ -163,6 +223,9 @@
         err.textContent = 'Connection lost. Click refresh.';
         list.appendChild(err);
       }
+    } finally {
+      setListBusy(false);
+      updatePageActions();
     }
   }
 
@@ -200,6 +263,7 @@
       detail.textContent = 'Open a regular website or local file to see matching userscripts.';
       empty.append(icon, msg, detail);
       list.replaceChildren(empty);
+      updatePageActions();
       return;
     }
 
@@ -231,6 +295,7 @@
       empty.appendChild(msg);
       empty.appendChild(link);
       list.replaceChildren(empty);
+      updatePageActions();
       return;
     }
 
@@ -239,6 +304,7 @@
       fragment.appendChild(buildScriptItem(script, true));
     }
     list.replaceChildren(fragment);
+    updatePageActions();
   }
 
   // ── Render all scripts ────────────────────────────────────────────────────
@@ -277,12 +343,42 @@
       }
     });
 
+    if (!sorted.length) {
+      const empty = document.createElement('div');
+      empty.className = 'sp-empty';
+      const icon = document.createElement('div');
+      icon.className = 'sp-empty-icon';
+      icon.textContent = searchQuery ? '\u2315' : '\uD83D\uDCC2';
+      const msg = document.createElement('div');
+      msg.textContent = searchQuery ? `No scripts match "${searchQuery}".` : 'No installed scripts yet.';
+      empty.append(icon, msg);
+      if (searchQuery) {
+        const reset = document.createElement('button');
+        reset.type = 'button';
+        reset.className = 'sp-empty-link';
+        reset.textContent = 'Clear search';
+        reset.addEventListener('click', () => {
+          $('spSearch').value = '';
+          searchQuery = '';
+          $('btnClearSearch').hidden = true;
+          queueAllScriptsRender(true);
+          $('spSearch').focus();
+        });
+        empty.appendChild(reset);
+      }
+      list.replaceChildren(empty);
+      updateSearchSummary(0);
+      setAllScriptsCollapsed(allCollapsed);
+      return;
+    }
+
     const fragment = document.createDocumentFragment();
     for (const script of sorted) {
       fragment.appendChild(buildScriptItem(script, false));
     }
     list.replaceChildren(fragment);
-    if (allCollapsed) list.classList.add('collapsed');
+    updateSearchSummary(sorted.length);
+    setAllScriptsCollapsed(allCollapsed);
   }
 
   function buildScriptItem(script, isPageScript) {
@@ -466,16 +562,16 @@
     $('btnOpenDash').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }));
     $('btnToggleAll').addEventListener('click', toggleAll);
     $('allSectionHeader').addEventListener('click', () => {
-      allCollapsed = !allCollapsed;
-      $('allScriptList').classList.toggle('collapsed', allCollapsed);
-      $('collapseIcon').textContent = allCollapsed ? '▶' : '▼';
+      setAllScriptsCollapsed(!allCollapsed);
     });
 
     // v2.0: Search filter
     const searchEl = $('spSearch');
+    const clearSearchButton = $('btnClearSearch');
     if (searchEl) {
       searchEl.addEventListener('input', (e) => {
         searchQuery = e.target.value.trim();
+        clearSearchButton.hidden = !searchQuery;
         queueAllScriptsRender();
       });
       searchEl.addEventListener('keydown', (e) => {
@@ -488,6 +584,7 @@
           e.preventDefault();
           searchEl.value = '';
           searchQuery = '';
+          clearSearchButton.hidden = true;
           queueAllScriptsRender(true);
           searchEl.blur();
         }
@@ -502,11 +599,19 @@
         if (e.key === 'Escape' && document.activeElement === searchEl) {
           searchEl.value = '';
           searchQuery = '';
+          clearSearchButton.hidden = true;
           searchEl.blur();
           queueAllScriptsRender(true);
         }
       });
     }
+    clearSearchButton?.addEventListener('click', () => {
+      searchEl.value = '';
+      searchQuery = '';
+      clearSearchButton.hidden = true;
+      queueAllScriptsRender(true);
+      searchEl.focus();
+    });
 
     // v2.0: Sort controls
     const sortEl = $('spSort');
@@ -516,6 +621,10 @@
         queueAllScriptsRender(true);
       });
     }
+
+    updateSearchSummary(allScripts.length);
+    updatePageActions();
+    setAllScriptsCollapsed(false);
   }
 
   function setupTabListeners() {
