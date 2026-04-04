@@ -437,15 +437,24 @@ const DiffTool = (() => {
           const hiddenOps = unchangedRun.slice(2, unchangedRun.length - 2);
           const toggleFn = (container, col, isA) => {
             let expanded = false;
+            let expandedEls = [];
             container.onclick = () => {
+              if (!container.parentNode) return;
               expanded = !expanded;
               if (expanded) {
                 const frag = document.createDocumentFragment();
+                expandedEls = [];
                 for (const op of hiddenOps) {
-                  frag.appendChild(_makeLine(isA ? op.lineA : op.lineB, op.text, ''));
+                  const line = _makeLine(isA ? op.lineA : op.lineB, op.text, '');
+                  expandedEls.push(line);
+                  frag.appendChild(line);
                 }
-                container.style.display = 'none';
                 container.parentNode.insertBefore(frag, container.nextSibling);
+                container.textContent = `... collapse ${hiddenOps.length} lines ...`;
+              } else {
+                for (const el of expandedEls) el.remove();
+                expandedEls = [];
+                container.textContent = `... ${hidden} unchanged lines ...`;
               }
             };
           };

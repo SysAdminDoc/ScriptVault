@@ -100,6 +100,7 @@ const PopupTimeline = (() => {
         </div>
       `;
 
+      if (!insertBeforeEl?.parentNode) return;
       insertBeforeEl.parentNode.insertBefore(_container, insertBeforeEl);
 
       _container.querySelector('#ptlToggle').addEventListener('click', () => {

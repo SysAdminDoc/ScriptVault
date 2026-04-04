@@ -31,6 +31,16 @@ const ResourceCache = {
 
   async set(url, text, dataUri) {
     const entry = { text, dataUri, timestamp: Date.now() };
+    // Cap in-memory cache size to prevent unbounded growth
+    const keys = Object.keys(this.cache);
+    if (keys.length >= 200) {
+      // Evict oldest entry
+      let oldestKey = keys[0], oldestTs = Infinity;
+      for (const k of keys) {
+        if (this.cache[k].timestamp < oldestTs) { oldestTs = this.cache[k].timestamp; oldestKey = k; }
+      }
+      delete this.cache[oldestKey];
+    }
     this.cache[url] = entry;
     try {
       const key = this.STORAGE_PREFIX + url;
