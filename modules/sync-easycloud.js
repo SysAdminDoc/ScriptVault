@@ -393,7 +393,7 @@ var EasyCloudSync = (() => {
       if (local.code !== remote.code) {
         const base = local.syncBaseCode || remote.syncBaseCode || null;
 
-        if (base && base !== local.code && base !== remote.code) {
+        if (base != null && base !== local.code && base !== remote.code) {
           // Both sides changed since base — attempt 3-way merge
           try {
             if (typeof ScriptAnalyzer !== 'undefined' && ScriptAnalyzer._ensureOffscreen) {
@@ -411,8 +411,9 @@ var EasyCloudSync = (() => {
                 }
                 log(`3-way merge for ${id}: conflicts=${mergeResult.conflicts || false}`);
               } else {
-                // Merge failed — newest wins
+                // Merge failed — newest wins, flag conflict so user knows
                 merged.code = localNewer ? local.code : remote.code;
+                merged.settings = { ...(merged.settings || {}), mergeConflict: true };
               }
             } else {
               // No offscreen available — newest wins

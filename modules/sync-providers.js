@@ -214,7 +214,11 @@ var CloudSyncProviders = {
       try {
         const token = await this.getToken();
         if (token) {
-          await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`).catch(() => {});
+          await fetch('https://oauth2.googleapis.com/revoke', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ token })
+          }).catch(() => {});
         }
         await SettingsManager.set({
           googleDriveToken: '',
@@ -480,6 +484,7 @@ var CloudSyncProviders = {
 
       // Ensure token is fresh before upload
       const token = await this.getValidToken(settings);
+      if (!token) throw new Error('Dropbox token expired. Please reconnect.');
 
       const response = await fetch('https://content.dropboxapi.com/2/files/upload', {
         method: 'POST',

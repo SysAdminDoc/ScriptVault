@@ -370,9 +370,9 @@ const ScriptDebugger = (() => {
       toggle.addEventListener('click', () => {
         _liveReload[id] = !_liveReload[id];
         if (_liveReload[id]) {
-          chrome.runtime.sendMessage({ action: 'liveReloadEnabled', scriptId: id });
+          chrome.runtime.sendMessage({ action: 'setLiveReload', scriptId: id, enabled: true });
         } else {
-          chrome.runtime.sendMessage({ action: 'liveReloadDisabled', scriptId: id });
+          chrome.runtime.sendMessage({ action: 'setLiveReload', scriptId: id, enabled: false });
         }
         render();
       });
@@ -766,7 +766,7 @@ const ScriptDebugger = (() => {
     enableLiveReload(scriptId, enabled = true) {
       ensureScript(scriptId);
       _liveReload[scriptId] = enabled;
-      if (enabled) notifyBackground('liveReloadEnabled', scriptId);
+      chrome.runtime.sendMessage({ action: 'setLiveReload', scriptId, enabled }).catch(() => {});
       if (_activeTab === 'reload') render();
     },
 

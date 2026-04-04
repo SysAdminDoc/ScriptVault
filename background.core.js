@@ -492,25 +492,26 @@ const CloudSync = {
   
   mergeData(local, remote) {
     const scriptsMap = new Map();
-    
+    const mergedTombstones = { ...(local.tombstones || {}), ...(remote.tombstones || {}) };
+
     // Add all local scripts
-    for (const script of local.scripts) {
+    for (const script of (local.scripts || [])) {
       scriptsMap.set(script.id, script);
     }
-    
+
     // Merge remote scripts (prefer newer)
-    for (const script of remote.scripts) {
+    for (const script of (remote.scripts || [])) {
       const existing = scriptsMap.get(script.id);
       if (!existing || script.updatedAt > existing.updatedAt) {
         scriptsMap.set(script.id, script);
       }
     }
-    
+
     return {
       version: 1,
       timestamp: Date.now(),
-      scripts: Array.from(scriptsMap.values()),
-      tombstones: { ...(local.tombstones || {}), ...(remote.tombstones || {}) }
+      scripts: Array.from(scriptsMap.values()).filter(s => !mergedTombstones[s.id]),
+      tombstones: mergedTombstones
     };
   }
 };
@@ -629,7 +630,8 @@ async function importScripts(data, options = {}) {
   
   // Re-register all scripts after import
   await registerAllScripts();
-  
+  await updateBadge();
+
   return results;
 }
 
@@ -3125,6 +3127,36 @@ async function handleMessage(message, sender) {
         return { scripts: lrData2.liveReloadScripts || {} };
       }
 
+      case 'openDashboard': {
+        const dashUrl = chrome.runtime.getURL('pages/dashboard.html');
+        const scriptParam = data.scriptId ? `#edit=${data.scriptId}` : '';
+        const newParam = data.newScript ? '#new' : '';
+        await chrome.tabs.create({ url: dashUrl + (scriptParam || newParam) });
+        return { success: true };
+      }
+
+      case 'factoryReset': {
+        // Clear all scripts
+        const allScripts = await ScriptStorage.getAll();
+        for (const s of allScripts) {
+          await unregisterScript(s.id);
+        }
+        await chrome.storage.local.remove('userscripts');
+        ScriptStorage.cache = {};
+        // Reset settings
+        await SettingsManager.reset();
+        await updateBadge();
+        return { success: true };
+      }
+
+      case 'resetScriptSettings': {
+        const script = await ScriptStorage.get(data.scriptId);
+        if (!script) return { error: 'Script not found' };
+        script.settings = {};
+        await ScriptStorage.set(data.scriptId, script);
+        return { success: true };
+      }
+
       default:
         return { error: 'Unknown action: ' + action };
     }
@@ -4442,7 +4474,7 @@ async function registerScript(script) {
       await applyWebRequestRules(script.id, rules);
     }
   } catch (e) {
-    console.error(`[ScriptVault] Failed to register ${script.meta.name}:`, e);
+    console.error(`[ScriptVault] Failed to register ${script.meta?.name || script.id}:`, e);
     // Mark script with registration failure for UI display
     try {
       script.settings = script.settings || {};
@@ -5600,7 +5632,7 @@ ${req.code}
       silent: opts.silent || false,
       hasOnclick: !!opts.onclick,
       hasOndone: !!opts.ondone
-    }).catch(() => {});
+    }).catch(() => { _notifCallbacks.delete(notifTag); });
   }
   
   // GM_openInTab (with close(), onclose, insert, setParent, incognito)

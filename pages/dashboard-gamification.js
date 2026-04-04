@@ -756,7 +756,7 @@ const Gamification = (() => {
           : '';
 
         badge.innerHTML = `
-          <div class="sv-gam-badge-icon">${isHidden ? '\uD83D\uDD12' : a.icon}</div>
+          <div class="sv-gam-badge-icon">${isHidden ? '\uD83D\uDD12' : esc(a.icon)}</div>
           <div class="sv-gam-badge-body">
             <div class="sv-gam-badge-name">${isHidden ? 'Hidden' : esc(a.name)}</div>
             <div class="sv-gam-badge-desc">${isHidden ? 'Discover this secret achievement' : esc(a.desc)}</div>
