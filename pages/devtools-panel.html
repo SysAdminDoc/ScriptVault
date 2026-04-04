@@ -44,19 +44,23 @@
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; font-size: 12px; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+        :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
         /* Toolbar */
-        .toolbar { display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: var(--bg-raised); border-bottom: 1px solid var(--border); flex-shrink: 0; height: 32px; }
+        .toolbar { display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: var(--bg-raised); border-bottom: 1px solid var(--border); flex-shrink: 0; min-height: 32px; }
         .toolbar-title { font-weight: 600; color: var(--accent); font-size: 12px; }
         .toolbar-sep { width: 1px; height: 16px; background: var(--border); }
+        .toolbar-tabs { display: inline-flex; align-items: center; gap: 4px; }
         .tab-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 3px 8px; border-radius: 3px; font-size: 12px; transition: color 0.15s; }
         .tab-btn:hover { color: var(--text); background: var(--bg-hover); }
         .tab-btn.active { color: var(--accent); background: var(--bg-hover); }
         .spacer { flex: 1; }
         .toolbar-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; padding: 2px 8px; border-radius: 3px; font-size: 11px; }
         .toolbar-btn:hover { color: var(--text); border-color: var(--text-muted); }
-        .filter-input { background: var(--bg-row); border: 1px solid var(--border); color: var(--text); padding: 2px 6px; border-radius: 3px; font-size: 11px; width: 140px; }
-        .filter-input:focus { outline: none; border-color: var(--accent); }
+        .filter-input { background: var(--bg-row); border: 1px solid var(--border); color: var(--text); padding: 2px 6px; border-radius: 3px; font-size: 11px; width: 180px; }
+        .filter-input:focus,
+        .filter-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.18); }
 
         /* Panels */
         .panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
@@ -70,8 +74,7 @@
 
         .net-table-wrap { flex: 1; overflow: auto; min-height: 0; }
         .net-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        .net-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 500; text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; }
-        .net-table th:hover { color: var(--text); }
+        .net-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 500; text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; user-select: none; }
         .net-table td { padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; vertical-align: middle; }
         .net-table tr:hover td { background: var(--bg-hover); }
         .net-table tr.selected td { background: var(--bg-hover); outline: 1px solid var(--accent); }
@@ -136,19 +139,22 @@
     <div class="toolbar">
         <span class="toolbar-title">ScriptVault</span>
         <div class="toolbar-sep"></div>
-        <button class="tab-btn active" data-tab="network">Network</button>
-        <button class="tab-btn" data-tab="execution">Execution</button>
-        <button class="tab-btn" data-tab="console">Console</button>
+        <div class="toolbar-tabs" role="tablist" aria-label="DevTools sections">
+            <button class="tab-btn active" id="devtoolsTabNetwork" type="button" role="tab" tabindex="0" aria-selected="true" aria-controls="panelNetwork" data-tab="network">Network</button>
+            <button class="tab-btn" id="devtoolsTabExecution" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="panelExecution" data-tab="execution">Execution</button>
+            <button class="tab-btn" id="devtoolsTabConsole" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="panelConsole" data-tab="console">Console</button>
+        </div>
         <div class="spacer"></div>
-        <input class="filter-input" id="filterInput" type="text" placeholder="Filter…">
-        <button class="toolbar-btn" id="btnClear">Clear</button>
-        <button class="toolbar-btn" id="btnExportHAR" style="display:none">Export HAR</button>
-        <button class="toolbar-btn" id="btnRefresh">Refresh</button>
+        <label class="sr-only" for="filterInput">Filter network requests</label>
+        <input class="filter-input" id="filterInput" type="search" placeholder="Filter requests, URLs, or scripts" aria-describedby="devtoolsStatus" autocomplete="off" spellcheck="false">
+        <button class="toolbar-btn" id="btnClear" type="button">Clear</button>
+        <button class="toolbar-btn" id="btnExportHAR" type="button" style="display:none">Export HAR</button>
+        <button class="toolbar-btn" id="btnRefresh" type="button">Refresh</button>
     </div>
 
     <!-- Network panel -->
-    <div class="panel active" id="panelNetwork">
-        <div class="net-stats" id="netStats">
+    <div class="panel active" id="panelNetwork" role="tabpanel" aria-labelledby="devtoolsTabNetwork">
+        <div class="net-stats" id="devtoolsStatus" role="status" aria-live="polite" aria-atomic="true">
             <span class="net-stat"><span class="net-stat-val" id="netTotal">0</span> requests</span>
             <span class="net-stat"><span class="net-stat-val net-stat-err" id="netErrors">0</span> errors</span>
             <span class="net-stat"><span class="net-stat-val" id="netBytes">0 B</span> transferred</span>
@@ -169,10 +175,10 @@
                     <tbody id="netTableBody"></tbody>
                 </table>
             </div>
-            <div class="net-detail" id="netDetail">
+            <div class="net-detail" id="netDetail" role="region" aria-labelledby="netDetailTitle" aria-hidden="true" hidden>
                 <div class="net-detail-header">
                     <span id="netDetailTitle">Request Detail</span>
-                    <button class="net-detail-close" id="btnCloseDetail">×</button>
+                    <button class="net-detail-close" id="btnCloseDetail" type="button" aria-label="Close request detail">×</button>
                 </div>
                 <div id="netDetailBody"></div>
             </div>
@@ -180,7 +186,7 @@
     </div>
 
     <!-- Execution panel -->
-    <div class="panel" id="panelExecution">
+    <div class="panel" id="panelExecution" role="tabpanel" aria-labelledby="devtoolsTabExecution" hidden>
         <div class="exec-table-wrap">
             <table class="exec-table">
                 <thead>
@@ -199,12 +205,12 @@
     </div>
 
     <!-- Console panel -->
-    <div class="panel" id="panelConsole">
+    <div class="panel" id="panelConsole" role="tabpanel" aria-labelledby="devtoolsTabConsole" hidden>
         <div class="console-wrap" id="consoleWrap">
             <div class="empty-state" id="consoleEmpty">
                 <div class="empty-icon">🖥️</div>
-                <div>Console messages from user scripts will appear here</div>
-                <div style="font-size:10px;margin-top:4px">Requires scripts to use <code>GM_log()</code> or the console bridge</div>
+                <div>Console messages from user scripts will appear here when capture is available</div>
+                <div style="font-size:10px;margin-top:4px">This panel currently focuses on network and execution insight first.</div>
             </div>
         </div>
     </div>
