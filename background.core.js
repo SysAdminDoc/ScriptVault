@@ -955,7 +955,7 @@ async function handleMessage(message, sender) {
             const allTabs = await chrome.tabs.query({});
             for (const tab of allTabs) {
               if (tab.url && doesScriptMatchUrl(script, tab.url)) {
-                try { chrome.tabs.reload(tab.id); } catch {}
+                try { chrome.tabs.reload(tab.id).catch(() => {}); } catch {}
               }
             }
           }
@@ -1137,7 +1137,7 @@ async function handleMessage(message, sender) {
             const tabs = await chrome.tabs.query({});
             for (const tab of tabs) {
               if (tab.url && doesScriptMatchUrl(script, tab.url)) {
-                chrome.tabs.reload(tab.id);
+                chrome.tabs.reload(tab.id).catch(() => {});
               }
             }
           } catch (e) {
@@ -1579,16 +1579,17 @@ async function handleMessage(message, sender) {
       // Values Editor - Get all scripts' values
       case 'getAllScriptsValues': {
         const scripts = await ScriptStorage.getAll();
+        const allValuesResults = await Promise.all(scripts.map(s => ScriptValues.getAll(s.id)));
         const allValues = {};
-        for (const script of scripts) {
-          const values = await ScriptValues.getAll(script.id);
+        scripts.forEach((script, i) => {
+          const values = allValuesResults[i];
           if (values && Object.keys(values).length > 0) {
             allValues[script.id] = {
               scriptName: script.meta?.name || 'Unknown Script',
               values
             };
           }
-        }
+        });
         return { allValues };
       }
       
@@ -1656,7 +1657,7 @@ async function handleMessage(message, sender) {
             const tabs = await chrome.tabs.query({});
             for (const tab of tabs) {
               if (tab.url && doesScriptMatchUrl(script, tab.url)) {
-                chrome.tabs.reload(tab.id);
+                chrome.tabs.reload(tab.id).catch(() => {});
               }
             }
           } catch {}
@@ -1795,15 +1796,17 @@ async function handleMessage(message, sender) {
         const profiles = pData2.profiles || [];
         const profile = profiles.find(p => p.id === data.profileId);
         if (!profile) return { error: 'Profile not found' };
-        // Apply script states from profile
+        // Apply script states from profile (parallel writes)
         const scripts = await ScriptStorage.getAll();
+        const updates = [];
         for (const script of scripts) {
           const newEnabled = profile.scriptStates?.[script.id] ?? script.enabled;
           if (script.enabled !== newEnabled) {
             script.enabled = newEnabled;
-            await ScriptStorage.set(script.id, script);
+            updates.push(ScriptStorage.set(script.id, script));
           }
         }
+        if (updates.length) await Promise.all(updates);
         await chrome.storage.local.set({ activeProfileId: data.profileId });
         await registerAllScripts();
         await updateBadge();
@@ -1851,10 +1854,10 @@ async function handleMessage(message, sender) {
       // v2.0: CSP Reports
       case 'reportCSPFailure': {
         const cspData = await chrome.storage.local.get('cspReports');
-        const reports = cspData.cspReports || [];
+        let reports = cspData.cspReports || [];
         reports.push({ url: data.url, scriptId: data.scriptId, directive: data.directive, timestamp: Date.now() });
-        // Keep last 500 reports
-        if (reports.length > 500) reports.splice(0, reports.length - 500);
+        // Keep last 500 reports (slice is cheaper than splice-from-head)
+        if (reports.length > 510) reports = reports.slice(-500);
         await chrome.storage.local.set({ cspReports: reports });
         return { success: true };
       }
@@ -2642,6 +2645,11 @@ async function handleMessage(message, sender) {
         // Track notification for callbacks
         if (tabId && (data.hasOnclick || data.hasOndone)) {
           if (!self._notifCallbacks) self._notifCallbacks = new Map();
+          // Evict oldest if map grows too large (prevents unbounded growth)
+          if (self._notifCallbacks.size > 500) {
+            const oldest = self._notifCallbacks.keys().next().value;
+            self._notifCallbacks.delete(oldest);
+          }
           self._notifCallbacks.set(notifId, {
             tabId, scriptId: data.scriptId,
             hasOnclick: data.hasOnclick, hasOndone: data.hasOndone
@@ -2682,6 +2690,11 @@ async function handleMessage(message, sender) {
         const callerTabId = sender.tab?.id;
         if (callerTabId && data.trackClose) {
           if (!self._openTabTrackers) self._openTabTrackers = new Map();
+          // Evict oldest if map grows too large (prevents unbounded growth from orphaned tabs)
+          if (self._openTabTrackers.size > 1000) {
+            const oldest = self._openTabTrackers.keys().next().value;
+            self._openTabTrackers.delete(oldest);
+          }
           self._openTabTrackers.set(tab.id, { callerTabId, scriptId: data.scriptId });
         }
         return { success: true, tabId: tab.id };
@@ -3176,18 +3189,18 @@ async function handleMessage(message, sender) {
 
 // Debounced auto-reload to prevent mass tab reloads on rapid saves
 let _autoReloadTimer = null;
-let _autoReloadScripts = [];
+let _autoReloadScriptsMap = new Map(); // scriptId → script (deduplicates rapid saves)
 
 async function autoReloadMatchingTabs(script) {
   const settings = await SettingsManager.get();
   if (!settings.autoReload) return;
 
-  _autoReloadScripts.push(script);
+  _autoReloadScriptsMap.set(script.id, script);
   if (_autoReloadTimer) clearTimeout(_autoReloadTimer);
 
   _autoReloadTimer = setTimeout(async () => {
-    const scripts = _autoReloadScripts;
-    _autoReloadScripts = [];
+    const scripts = [..._autoReloadScriptsMap.values()];
+    _autoReloadScriptsMap.clear();
     _autoReloadTimer = null;
 
     try {
@@ -3196,7 +3209,7 @@ async function autoReloadMatchingTabs(script) {
       for (const tab of tabs) {
         if (reloaded.has(tab.id)) continue;
         if (tab.url && scripts.some(s => doesScriptMatchUrl(s, tab.url))) {
-          chrome.tabs.reload(tab.id);
+          chrome.tabs.reload(tab.id).catch(() => {});
           reloaded.add(tab.id);
         }
       }

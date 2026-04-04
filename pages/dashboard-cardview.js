@@ -61,11 +61,10 @@ const CardView = (() => {
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
   border-radius: 24px;
   padding: 18px;
-  cursor: pointer;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   min-height: 188px;
   overflow: hidden;
   content-visibility: auto;
@@ -88,7 +87,8 @@ const CardView = (() => {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 42%, transparent 62%, rgba(255,255,255,0.03));
   pointer-events: none;
 }
-.cv-card:hover {
+.cv-card:hover,
+.cv-card:focus-within {
   transform: translateY(-2px);
   box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 24px 42px rgba(0,0,0,.24);
   border-color: rgba(96, 165, 250, 0.32);
@@ -109,6 +109,15 @@ const CardView = (() => {
 .cv-card.cv-disabled {
   border-left: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
   opacity: 0.78;
+}
+.cv-card.cv-selected {
+  border-color: rgba(74, 222, 128, 0.34);
+  box-shadow:
+    inset 0 0 0 1px rgba(74, 222, 128, 0.18),
+    0 24px 42px rgba(0, 0, 0, 0.22);
+}
+.cv-card.cv-selected::before {
+  background: linear-gradient(90deg, rgba(74, 222, 128, 0), rgba(74, 222, 128, 0.72), rgba(96, 165, 250, 0.4));
 }
 
 /* Status dots */
@@ -141,6 +150,23 @@ const CardView = (() => {
   position: relative;
   z-index: 1;
 }
+.cv-open-surface {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 40px 0 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cv-open-surface:focus-visible {
+  outline: none;
+}
 .cv-name-stack {
   display: flex;
   flex-direction: column;
@@ -148,26 +174,12 @@ const CardView = (() => {
   min-width: 0;
   flex: 1;
 }
-.cv-name-btn {
-  appearance: none;
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  text-align: left;
-  color: var(--text-primary);
-  font: inherit;
-  min-width: 0;
-  cursor: pointer;
-}
-.cv-name-btn:hover .cv-name,
-.cv-name-btn:focus-visible .cv-name {
+.cv-open-surface:hover .cv-name,
+.cv-open-surface:focus-visible .cv-name {
   color: var(--accent-blue);
-}
-.cv-name-btn:focus-visible {
-  outline: 2px solid rgba(90, 140, 255, 0.45);
-  outline-offset: 3px;
-  border-radius: 8px;
+  text-decoration: underline;
+  text-decoration-color: rgba(96, 165, 250, 0.38);
+  text-underline-offset: 3px;
 }
 
 /* Favicon / letter avatar */
@@ -218,6 +230,80 @@ const CardView = (() => {
   background: rgba(90, 140, 255, 0.12);
   border: 1px solid rgba(90, 140, 255, 0.18);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.cv-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.cv-state-pill,
+.cv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.cv-state-pill.enabled {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--accent-green);
+}
+
+.cv-state-pill.paused {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+
+.cv-state-pill.error {
+  background: rgba(248, 113, 113, 0.14);
+  color: var(--accent-red);
+}
+
+.cv-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.cv-badge.remote {
+  background: rgba(96, 165, 250, 0.12);
+  color: #bfdbfe;
+}
+
+.cv-badge.local {
+  background: rgba(148, 163, 184, 0.12);
+  color: #cbd5e1;
+}
+
+.cv-badge.warning {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--accent-yellow);
+}
+
+.cv-badge.alert {
+  background: rgba(248, 113, 113, 0.14);
+  color: var(--accent-red);
+}
+
+.cv-badge.tag {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
 }
 
 /* Meta row */
@@ -275,6 +361,18 @@ const CardView = (() => {
   z-index: 1;
 }
 
+.cv-summary {
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative;
+  z-index: 1;
+}
+
 /* Performance badge */
 .cv-perf {
   display: inline-block;
@@ -300,15 +398,68 @@ const CardView = (() => {
   position: relative;
   z-index: 1;
 }
+.cv-footer-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.cv-select-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(127,127,127,0.14);
+  background: rgba(255,255,255,0.05);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.cv-select-btn:hover,
+.cv-select-btn:focus-visible {
+  color: var(--text-primary);
+  border-color: rgba(96, 165, 250, 0.34);
+  background: rgba(96, 165, 250, 0.1);
+  transform: translateY(-1px);
+}
+.cv-select-btn:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.34);
+  outline-offset: 2px;
+}
+.cv-select-btn[aria-pressed="true"] {
+  color: var(--accent-green);
+  border-color: rgba(74, 222, 128, 0.28);
+  background: rgba(74, 222, 128, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 18px rgba(34, 197, 94, 0.12);
+}
+.cv-select-btn[aria-pressed="true"]:hover,
+.cv-select-btn[aria-pressed="true"]:focus-visible {
+  border-color: rgba(74, 222, 128, 0.42);
+  background: rgba(74, 222, 128, 0.16);
+}
 
 @media (prefers-reduced-motion: reduce) {
   .cv-grid,
   .cv-card,
   .cv-meta-button,
-  .cv-view-toggle {
+  .cv-view-toggle,
+  .cv-select-btn {
     transition: none;
   }
   .cv-card:hover {
+    transform: none;
+  }
+  .cv-select-btn:hover,
+  .cv-select-btn:focus-visible {
     transform: none;
   }
 }
@@ -361,6 +512,13 @@ const CardView = (() => {
     var(--bg-row-hover);
   color: var(--text-primary);
   border-color: rgba(96,165,250,0.24);
+}
+.cv-menu-btn:focus-visible,
+.cv-menu-item:focus-visible,
+.cv-open-surface:focus-visible,
+.cv-toggle:focus-within {
+  outline: 2px solid rgba(96, 165, 250, 0.35);
+  outline-offset: 2px;
 }
 
 .cv-menu {
@@ -526,6 +684,70 @@ const CardView = (() => {
     return `${months}mo ago`;
   }
 
+  function getMetadata(script) {
+    return script?.metadata || script?.meta || {};
+  }
+
+  function classifySourceLabel(url) {
+    if (!url) return '';
+    try {
+      const host = new URL(url).hostname.replace(/^www\./, '');
+      if (host.includes('greasyfork.org') || host.includes('sleazyfork.org')) return 'Greasy Fork';
+      if (host.includes('openuserjs.org')) return 'OpenUserJS';
+      if (host.includes('github.com') || host.includes('githubusercontent.com')) return 'GitHub';
+      return host;
+    } catch {
+      return '';
+    }
+  }
+
+  function describeCardProvenance(script) {
+    const metadata = getMetadata(script);
+    const sourceUrl = metadata.homepage || metadata.homepageURL || metadata.downloadURL || metadata.updateURL || '';
+    const sourceLabel = classifySourceLabel(sourceUrl);
+    if (sourceLabel) {
+      return { label: sourceLabel, tone: 'remote', detail: sourceUrl };
+    }
+    return { label: 'Local', tone: 'local', detail: 'Created locally in ScriptVault' };
+  }
+
+  function buildCardBadges(script, { hasErrors = false, isStale = false, overBudget = false } = {}) {
+    const metadata = getMetadata(script);
+    const badges = [];
+    const provenance = describeCardProvenance(script);
+    const isNew = Boolean(script.installedAt && (Date.now() - script.installedAt < 86400000));
+
+    badges.push(`<span class="cv-badge ${provenance.tone}" title="${escapeHtml(provenance.detail || provenance.label)}">${escapeHtml(provenance.label)}</span>`);
+    if (script.settings?.pinned) {
+      badges.push('<span class="cv-badge tag" title="Pinned to the top of the scripts list">Pinned</span>');
+    }
+    if (isNew) {
+      badges.push('<span class="cv-badge tag" title="Installed within the last day">New</span>');
+    }
+    if (script.settings?.userModified) {
+      badges.push('<span class="cv-badge warning" title="Local edits are present for this script">Local edits</span>');
+    }
+    if (script.settings?.mergeConflict) {
+      badges.push('<span class="cv-badge alert" title="Cloud merge conflict detected. Review the script before saving again.">Conflict</span>');
+    }
+    if (isStale) {
+      badges.push('<span class="cv-badge warning" title="This remote script has not been refreshed in over 180 days">Stale</span>');
+    }
+    if (overBudget) {
+      badges.push('<span class="cv-badge warning" title="Average runtime exceeds the current performance budget">Slow</span>');
+    }
+    if (hasErrors) {
+      badges.push(`<span class="cv-badge alert" title="${escapeHtml(String(script.stats?.errors || 0))} execution error(s) recorded">Errors</span>`);
+    }
+
+    const tags = metadata.tag || metadata.tags || [];
+    tags.slice(0, 2).forEach((tag) => {
+      badges.push(`<span class="cv-badge tag" title="Tag: ${escapeHtml(String(tag))}">#${escapeHtml(String(tag))}</span>`);
+    });
+
+    return badges.join('');
+  }
+
   function getCardListSize(count) {
     if (count <= 0) return 'empty';
     if (count >= 80) return 'huge';
@@ -583,7 +805,7 @@ const CardView = (() => {
     const initial = escapeHtml(name.charAt(0).toUpperCase());
     const background = nameToColor(name);
     if (iconUrl) {
-      return `<img class="cv-icon" src="${escapeHtml(iconUrl)}" alt="" loading="lazy" data-favicon-fallback="true">
+      return `<img class="cv-icon" src="${escapeHtml(iconUrl)}" alt="" width="38" height="38" loading="lazy" decoding="async" data-favicon-fallback="true">
         <span class="cv-icon-letter" hidden style="background:${background}">${initial}</span>`;
     }
     return `<span class="cv-icon-letter" style="background:${background}">${initial}</span>`;
@@ -617,24 +839,44 @@ const CardView = (() => {
   function buildCard(script) {
     const card = document.createElement('article');
     const cardTitleId = `cv-title-${script.id}`;
-    card.className = `cv-card ${script.enabled !== false ? 'cv-enabled' : 'cv-disabled'}`;
+    const cardSummaryId = `cv-summary-${script.id}`;
+    const cardMenuId = `cv-menu-${script.id}`;
+    const selected = Boolean(_options.isSelected?.(script.id));
+    card.className = `cv-card ${script.enabled !== false ? 'cv-enabled' : 'cv-disabled'}${selected ? ' cv-selected' : ''}`;
     card.dataset.scriptId = script.id;
+    card.dataset.selected = String(selected);
     card.setAttribute('aria-labelledby', cardTitleId);
 
-    const name = script.metadata?.name || 'Unnamed Script';
-    const version = script.metadata?.version || '1.0';
-    const author = script.metadata?.author || '';
-    const desc = script.metadata?.description || '';
+    const metadata = getMetadata(script);
+    const name = metadata.name || 'Unnamed Script';
+    const version = metadata.version || '1.0';
+    const author = metadata.author || '';
+    const desc = metadata.description || '';
     const enabled = script.enabled !== false;
-    const matches = [...(script.metadata?.match || []), ...(script.metadata?.include || [])];
+    const matches = [...(metadata.match || []), ...(metadata.include || [])];
     const domain = extractFirstDomain(matches);
-    const iconUrl = script.metadata?.icon || script.metadata?.iconURL;
+    const iconUrl = metadata.icon || metadata.iconURL;
     const stats = script.stats;
     const hasErrors = stats?.errors > 0;
     const daysSinceUpdate = script.updatedAt ? Math.floor((Date.now() - script.updatedAt) / 86400000) : 0;
-    const isStale = daysSinceUpdate > 180 && (script.metadata?.updateURL || script.metadata?.downloadURL);
+    const isStale = daysSinceUpdate > 180 && (metadata.updateURL || metadata.downloadURL);
     const perfBudget = script.settings?.perfBudget || 200;
     const overBudget = stats?.avgTime > perfBudget && stats?.runs > 2;
+    const stateTone = hasErrors ? 'error' : enabled ? 'enabled' : 'paused';
+    const stateLabel = hasErrors ? 'Errors' : enabled ? 'Enabled' : 'Paused';
+    const stateTitle = hasErrors
+      ? `${escapeHtml(String(stats?.errors || 0))} execution error(s) recorded`
+      : enabled
+        ? 'Enabled and ready to run on matching sites'
+        : 'Disabled until you turn it back on';
+    const badgeHtml = buildCardBadges(script, { hasErrors, isStale, overBudget });
+    const summaryParts = [
+      author ? `By ${author}` : '',
+      `${matches.length} ${matches.length === 1 ? 'match' : 'matches'}`,
+      stats?.runs > 0 ? `${stats.runs} ${stats.runs === 1 ? 'run' : 'runs'}` : 'No recent runs',
+      script.updatedAt ? `Updated ${formatRelativeTime(script.updatedAt)}` : ''
+    ].filter(Boolean);
+    const summaryText = summaryParts.join(' • ');
 
     // Status dots
     const dots = [];
@@ -654,33 +896,39 @@ const CardView = (() => {
 
     card.innerHTML = `
       <div class="cv-status-dots">${dots.join('')}</div>
-      <div class="cv-header">
-        ${iconHtml}
-        <div class="cv-name-stack">
-          <button type="button" class="cv-name-btn" data-open-id="${script.id}" aria-label="Open ${escapeHtml(name)} in the editor">
+      <button type="button" class="cv-open-surface" data-open-id="${script.id}" aria-label="Open ${escapeHtml(name)} in the editor" aria-describedby="${cardSummaryId}">
+        <div class="cv-header">
+          ${iconHtml}
+          <div class="cv-name-stack">
             <span class="cv-name" id="${cardTitleId}" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
-          </button>
-          ${domain ? `<span class="cv-domain" title="${escapeHtml(domain)}">${escapeHtml(domain)}</span>` : ''}
+            ${domain ? `<span class="cv-domain" title="${escapeHtml(domain)}">${escapeHtml(domain)}</span>` : ''}
+          </div>
         </div>
-      </div>
-      ${desc ? `<div class="cv-desc" title="${escapeHtml(desc)}">${escapeHtml(truncate(desc, DESCRIPTION_MAX))}</div>` : ''}
+        <div class="cv-status-row">
+          <span class="cv-state-pill ${stateTone}" title="${stateTitle}">${stateLabel}</span>
+          ${badgeHtml ? `<div class="cv-badges">${badgeHtml}</div>` : ''}
+        </div>
+        ${desc ? `<div class="cv-desc" title="${escapeHtml(desc)}">${escapeHtml(truncate(desc, DESCRIPTION_MAX))}</div>` : ''}
+        <div class="cv-summary" id="${cardSummaryId}" title="${escapeHtml(summaryText)}">${escapeHtml(summaryText)}</div>
+      </button>
       <div class="cv-meta">
         <span class="cv-meta-item"><span class="cv-meta-label">v</span>${escapeHtml(version)}</span>
-        ${author ? `<span class="cv-meta-item"><span class="cv-meta-label">by</span>${escapeHtml(author)}</span>` : ''}
-        <span class="cv-meta-item"><span class="cv-meta-label">matches</span>${matches.length}</span>
-        <button type="button" class="cv-meta-button" data-update-id="${script.id}" aria-label="Check for updates for ${escapeHtml(name)}" title="Check for updates">${formatRelativeTime(script.updatedAt)}</button>
+        <button type="button" class="cv-meta-button" data-update-id="${script.id}" aria-label="Check for updates for ${escapeHtml(name)}. Last updated ${escapeHtml(formatRelativeTime(script.updatedAt))}" title="Check for updates. Last updated ${escapeHtml(formatRelativeTime(script.updatedAt))}">${formatRelativeTime(script.updatedAt)}</button>
         ${perfHtml}
       </div>
       <div class="cv-footer">
-        <label class="cv-toggle" title="${enabled ? 'Enabled' : 'Disabled'}">
-          <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${script.id}" aria-label="${enabled ? 'Disable' : 'Enable'} ${escapeHtml(name)}">
-          <span class="cv-toggle-slider"></span>
-        </label>
-        <button type="button" class="cv-menu-btn" data-menu-id="${script.id}" title="Actions" aria-label="Script actions for ${escapeHtml(name)}" aria-haspopup="menu" aria-expanded="false">\u22EF</button>
-        <div class="cv-menu cv-hidden" data-menu-for="${script.id}" role="menu" aria-label="Actions for ${escapeHtml(name)}">
+        <div class="cv-footer-main">
+          <button type="button" class="cv-select-btn" data-select-id="${script.id}" aria-pressed="${selected ? 'true' : 'false'}" aria-label="${selected ? 'Unselect' : 'Select'} ${escapeHtml(name)}">${selected ? 'Selected' : 'Select'}</button>
+          <label class="cv-toggle" title="${enabled ? 'Enabled' : 'Disabled'}">
+            <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${script.id}" aria-label="${enabled ? 'Disable' : 'Enable'} ${escapeHtml(name)}">
+            <span class="cv-toggle-slider"></span>
+          </label>
+        </div>
+        <button type="button" class="cv-menu-btn" data-menu-id="${script.id}" title="Actions" aria-label="Script actions for ${escapeHtml(name)}" aria-haspopup="menu" aria-controls="${cardMenuId}" aria-expanded="false">\u22EF</button>
+        <div class="cv-menu cv-hidden" id="${cardMenuId}" data-menu-for="${script.id}" role="menu" aria-label="Actions for ${escapeHtml(name)}">
           <button type="button" class="cv-menu-item" data-action="edit" data-id="${script.id}">Edit</button>
           <button type="button" class="cv-menu-item" data-action="toggle" data-id="${script.id}">${enabled ? 'Disable' : 'Enable'}</button>
-          <button type="button" class="cv-menu-item" data-action="update" data-id="${script.id}">Check Update</button>
+          <button type="button" class="cv-menu-item" data-action="update" data-id="${script.id}">Check for Updates</button>
           <button type="button" class="cv-menu-item" data-action="export" data-id="${script.id}">Export</button>
           <button type="button" class="cv-menu-item danger" data-action="delete" data-id="${script.id}">Delete</button>
         </div>
@@ -692,15 +940,8 @@ const CardView = (() => {
 
     // -- Event listeners --
 
-    // Click card body -> open editor
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.cv-toggle') || e.target.closest('.cv-menu-btn') || e.target.closest('.cv-menu')) return;
-      invokeCardAction(_options.onEdit, script.id);
-    });
-
     const openBtn = card.querySelector(`[data-open-id="${script.id}"]`);
-    openBtn?.addEventListener('click', (e) => {
-      e.stopPropagation();
+    openBtn?.addEventListener('click', () => {
       invokeCardAction(_options.onEdit, script.id);
     });
 
@@ -708,6 +949,12 @@ const CardView = (() => {
     updateBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       invokeCardAction(_options.onUpdate, script.id, { triggerEl: updateBtn });
+    });
+
+    const selectBtn = card.querySelector(`[data-select-id="${script.id}"]`);
+    selectBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      invokeCardAction(_options.onSelect, script.id, !selected, { triggerEl: selectBtn });
     });
 
     // Toggle switch
@@ -767,6 +1014,7 @@ const CardView = (() => {
       menu.classList.remove('cv-hidden');
       _activeMenuId = id;
       menuBtn?.setAttribute('aria-expanded', 'true');
+      menu.querySelector('.cv-menu-item')?.focus();
     }
   }
 
@@ -774,6 +1022,22 @@ const CardView = (() => {
     _activeMenuId = null;
     _cardGrid?.querySelectorAll('.cv-menu').forEach(m => m.classList.add('cv-hidden'));
     _cardGrid?.querySelectorAll('.cv-menu-btn').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
+  }
+
+  function syncSelectionState() {
+    _cardGrid?.querySelectorAll('.cv-card[data-script-id]').forEach(card => {
+      const id = card.dataset.scriptId;
+      const selected = Boolean(_options.isSelected?.(id));
+      card.classList.toggle('cv-selected', selected);
+      card.dataset.selected = String(selected);
+
+      const selectBtn = card.querySelector(`[data-select-id="${id}"]`);
+      if (selectBtn) {
+        selectBtn.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        selectBtn.setAttribute('aria-label', `${selected ? 'Unselect' : 'Select'} ${selectBtn.closest('.cv-card')?.querySelector('.cv-name')?.textContent?.trim() || 'script'}`);
+        selectBtn.textContent = selected ? 'Selected' : 'Select';
+      }
+    });
   }
 
   /* ------------------------------------------------------------------ */
@@ -861,6 +1125,8 @@ const CardView = (() => {
      * @param {Function} options.onUpdate   - Called with scriptId.
      * @param {Function} options.onExport   - Called with scriptId.
      * @param {Function} options.onDelete   - Called with scriptId.
+     * @param {Function} options.onSelect   - Called with (scriptId, selected).
+     * @param {Function} options.isSelected - Returns true when a script is selected.
      * @param {HTMLElement} [options.tableContainer] - The table wrapper to hide in card mode.
      * @param {HTMLElement} [options.toggleButton] - Existing toggle button to bind.
      * @param {HTMLElement} [options.toggleTarget] - Element to append the view toggle button into.
@@ -926,6 +1192,7 @@ const CardView = (() => {
         _cardGrid.appendChild(fragment);
       }
 
+      syncSelectionState();
       syncLayout();
     },
 
@@ -945,6 +1212,10 @@ const CardView = (() => {
      */
     getViewMode() {
       return _viewMode;
+    },
+
+    syncSelection() {
+      syncSelectionState();
     },
 
     /**

@@ -939,7 +939,7 @@ const ScriptSharing = (() => {
         modal.innerHTML = `
             <div class="ss-modal-header">
                 <h3>Share Script</h3>
-                <button class="ss-modal-close" data-action="close">\u2715</button>
+                <button class="ss-modal-close" data-action="close" type="button" aria-label="Close share dialog">\u2715</button>
             </div>
             <div class="ss-modal-body">
                 <div class="ss-script-info">
@@ -948,13 +948,13 @@ const ScriptSharing = (() => {
                     ${meta.description ? `<div class="ss-desc">${escapeHtml(meta.description)}</div>` : ''}
                 </div>
 
-                <div class="ss-tab-bar">
-                    <button class="ss-tab ss-active" data-tab="qr">QR Code</button>
-                    <button class="ss-tab" data-tab="links">Share Links</button>
-                    <button class="ss-tab" data-tab="import">Import</button>
+                <div class="ss-tab-bar" role="tablist" aria-label="Share options">
+                    <button class="ss-tab ss-active" data-tab="qr" type="button" role="tab" aria-selected="true">QR Code</button>
+                    <button class="ss-tab" data-tab="links" type="button" role="tab" aria-selected="false">Share Links</button>
+                    <button class="ss-tab" data-tab="import" type="button" role="tab" aria-selected="false">Import</button>
                 </div>
 
-                <div class="ss-tab-panel ss-visible" data-panel="qr">
+                <div class="ss-tab-panel ss-visible" data-panel="qr" role="tabpanel">
                     <div class="ss-qr-section">
                         <canvas id="ss-qr-canvas"></canvas>
                         <div class="ss-qr-note">${isSmall ? 'Full script encoded in QR code' : 'Links to download URL / Greasy Fork search'}</div>
@@ -963,40 +963,44 @@ const ScriptSharing = (() => {
                     <div class="ss-section-title">Data URL</div>
                     <div class="ss-input-group">
                         <input type="text" value="${escapeAttr(dataUrl)}" readonly id="ss-data-url-input" />
-                        <button data-action="copy-dataurl">Copy</button>
+                        <button data-action="copy-dataurl" type="button">Copy</button>
                     </div>
                 </div>
 
-                <div class="ss-tab-panel" data-panel="links">
+                <div class="ss-tab-panel" data-panel="links" role="tabpanel" hidden>
                     <div class="ss-share-actions">
                         ${meta.downloadURL ? `
-                        <button class="ss-share-btn" data-action="copy-install-url">
+                        <button class="ss-share-btn" data-action="copy-install-url" type="button">
                             <span class="ss-icon">\uD83D\uDD17</span>
                             <span class="ss-label">Copy Install URL<br><span class="ss-sublabel">${escapeHtml(truncate(meta.downloadURL, 50))}</span></span>
                         </button>` : ''}
-                        <button class="ss-share-btn" data-action="copy-link">
+                        <button class="ss-share-btn" data-action="copy-link" type="button">
                             <span class="ss-icon">\uD83D\uDCCB</span>
                             <span class="ss-label">Copy as Data URL<br><span class="ss-sublabel">Self-contained encoded link</span></span>
                         </button>
-                        <button class="ss-share-btn" data-action="share-email">
+                        <button class="ss-share-btn" data-action="share-email" type="button">
                             <span class="ss-icon">\u2709</span>
                             <span class="ss-label">Share via Email<br><span class="ss-sublabel">Opens email client with script details</span></span>
                         </button>
-                        <button class="ss-share-btn" data-action="export-file">
+                        <button class="ss-share-btn" data-action="export-file" type="button">
                             <span class="ss-icon">\uD83D\uDCE5</span>
                             <span class="ss-label">Export as .user.js<br><span class="ss-sublabel">Download script file</span></span>
                         </button>
                     </div>
                 </div>
 
-                <div class="ss-tab-panel" data-panel="import">
+                <div class="ss-tab-panel" data-panel="import" role="tabpanel" hidden>
                     <div class="ss-section-title">Paste Data URL to Import</div>
-                    <textarea class="ss-import-area" id="ss-import-input" placeholder="Paste a data:application/x-userscript;base64,... URL here"></textarea>
-                    <button class="ss-install-btn" data-action="import-decode" style="margin-top:8px;">Decode &amp; Preview</button>
+                    <textarea class="ss-import-area" id="ss-import-input" placeholder="Paste a data:application/x-userscript;base64,… URL here"></textarea>
+                    <button class="ss-install-btn" data-action="import-decode" type="button" style="margin-top:8px;">Decode &amp; Preview</button>
                     <div id="ss-import-preview"></div>
                 </div>
             </div>
         `;
+
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-label', 'Share Script');
 
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
@@ -1022,8 +1026,16 @@ const ScriptSharing = (() => {
             const tab = e.target.closest('.ss-tab');
             if (tab) {
                 const tabName = tab.dataset.tab;
-                modal.querySelectorAll('.ss-tab').forEach(t => t.classList.toggle('ss-active', t === tab));
-                modal.querySelectorAll('.ss-tab-panel').forEach(p => p.classList.toggle('ss-visible', p.dataset.panel === tabName));
+                modal.querySelectorAll('.ss-tab').forEach(t => {
+                    const isActive = t === tab;
+                    t.classList.toggle('ss-active', isActive);
+                    t.setAttribute('aria-selected', String(isActive));
+                });
+                modal.querySelectorAll('.ss-tab-panel').forEach(p => {
+                    const isActive = p.dataset.panel === tabName;
+                    p.classList.toggle('ss-visible', isActive);
+                    p.hidden = !isActive;
+                });
                 return;
             }
 
@@ -1068,7 +1080,7 @@ const ScriptSharing = (() => {
                                 <div class="ss-meta">${importMeta.version ? `v${escapeHtml(importMeta.version)}` : ''} ${importMeta.author ? `by ${escapeHtml(importMeta.author)}` : ''}</div>
                                 <div class="ss-code-preview">${escapeHtml(previewCode)}</div>
                             </div>
-                            <button class="ss-install-btn" data-action="install-decoded">Install Script</button>
+                            <button class="ss-install-btn" data-action="install-decoded" type="button">Install Script</button>
                         `;
                         preview._decodedCode = decoded;
                     } else {

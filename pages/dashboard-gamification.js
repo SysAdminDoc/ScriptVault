@@ -602,6 +602,7 @@ const Gamification = (() => {
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
     // Background
     const grad = ctx.createLinearGradient(0, 0, W, H);

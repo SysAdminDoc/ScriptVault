@@ -821,6 +821,50 @@
             accent-color: var(--accent-primary);
         }
 
+        .bulk-action-cluster {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 36px;
+            padding: 5px 8px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        .bulk-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 28px;
+            padding: 0 4px 0 2px;
+            border-radius: 999px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+            -webkit-user-select: none;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .bulk-toggle:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-primary);
+        }
+
+        .bulk-toggle:focus-within {
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
+            color: var(--text-primary);
+        }
+
+        .bulk-toggle-label {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            white-space: nowrap;
+        }
+
         .bulk-select {
             padding: 3px 6px;
             min-width: 0;
@@ -901,6 +945,249 @@
             width: 14px;
             height: 14px;
             color: var(--text-muted);
+        }
+
+        .search-box-clear {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 24px;
+            height: 24px;
+            border: 0;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-muted);
+            font: inherit;
+            font-size: 15px;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+        }
+
+        .search-box-clear:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: var(--text-primary);
+            transform: translateY(calc(-50% - 1px));
+        }
+
+        .search-box-clear:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+            color: var(--text-primary);
+        }
+
+        .scripts-results-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 14px;
+            padding: 12px 14px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 18px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+                rgba(0, 0, 0, 0.12);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            flex-wrap: wrap;
+        }
+
+        .bulk-selection-rail {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 14px;
+            padding: 12px 14px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 18px;
+            background:
+                linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(96, 165, 250, 0.06) 58%, rgba(255, 255, 255, 0.02)),
+                rgba(0, 0, 0, 0.14);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            flex-wrap: wrap;
+        }
+
+        .bulk-selection-rail[data-selection-state="active"] {
+            border-color: rgba(34, 197, 94, 0.2);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 30px rgba(15, 23, 42, 0.18);
+        }
+
+        .bulk-selection-rail[data-selection-state="mixed"] {
+            border-color: rgba(251, 191, 36, 0.24);
+            background:
+                linear-gradient(135deg, rgba(251, 191, 36, 0.13), rgba(96, 165, 250, 0.07) 60%, rgba(255, 255, 255, 0.02)),
+                rgba(0, 0, 0, 0.14);
+        }
+
+        .bulk-selection-copy {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            flex: 1 1 420px;
+            flex-wrap: wrap;
+        }
+
+        .bulk-selection-summary {
+            display: inline-flex;
+            align-items: center;
+            min-height: 30px;
+            padding: 0 12px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.36);
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            color: var(--text-primary);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .bulk-selection-summary[data-selection-state="active"] {
+            background: rgba(34, 197, 94, 0.15);
+            border-color: rgba(34, 197, 94, 0.22);
+            color: var(--accent-primary);
+        }
+
+        .bulk-selection-summary[data-selection-state="mixed"] {
+            background: rgba(251, 191, 36, 0.14);
+            border-color: rgba(251, 191, 36, 0.24);
+            color: #fbbf24;
+        }
+
+        .bulk-selection-meta {
+            min-width: 0;
+            flex: 1 1 240px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.45;
+            text-wrap: pretty;
+        }
+
+        .bulk-action-feedback {
+            flex: 1 1 100%;
+            display: inline-flex;
+            align-items: center;
+            min-height: 34px;
+            padding: 8px 12px;
+            border-radius: 14px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            background: rgba(15, 23, 42, 0.3);
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.45;
+            text-wrap: pretty;
+        }
+
+        .bulk-action-feedback[data-tone="success"] {
+            border-color: rgba(34, 197, 94, 0.2);
+            background: rgba(34, 197, 94, 0.12);
+            color: var(--accent-primary);
+        }
+
+        .bulk-action-feedback[data-tone="info"] {
+            border-color: rgba(96, 165, 250, 0.22);
+            background: rgba(96, 165, 250, 0.12);
+            color: #bfdbfe;
+        }
+
+        .bulk-action-feedback[data-tone="warning"] {
+            border-color: rgba(251, 191, 36, 0.24);
+            background: rgba(251, 191, 36, 0.12);
+            color: #fcd34d;
+        }
+
+        .bulk-action-feedback[data-tone="error"] {
+            border-color: rgba(248, 113, 113, 0.24);
+            background: rgba(248, 113, 113, 0.12);
+            color: #fca5a5;
+        }
+
+        .bulk-selection-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .scripts-quick-filters {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            min-width: 0;
+        }
+
+        .script-filter-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 32px;
+            padding: 0 12px;
+            border: 1px solid rgba(127, 127, 127, 0.18);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-secondary);
+            font: inherit;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            cursor: pointer;
+            transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+        }
+
+        .script-filter-chip:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(127, 127, 127, 0.26);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        .script-filter-chip:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+            color: var(--text-primary);
+        }
+
+        .script-filter-chip.active,
+        .script-filter-chip[aria-pressed="true"] {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(96, 165, 250, 0.14));
+            border-color: rgba(34, 197, 94, 0.26);
+            color: var(--text-primary);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+
+        .scripts-results-meta {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            flex: 1 1 320px;
+            min-width: 0;
+            flex-wrap: wrap;
+        }
+
+        .scripts-results-summary {
+            min-width: 0;
+            flex: 1 1 220px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.45;
+            text-wrap: pretty;
+        }
+
+        .scripts-results-summary strong {
+            color: var(--text-primary);
+            font-weight: 650;
+        }
+
+        .scripts-results-reset {
+            min-height: 32px;
+            padding: 0 12px;
+            border-radius: 999px;
         }
 
         .scripts-table-container {
@@ -1017,6 +1304,20 @@
                 linear-gradient(90deg, rgba(34, 197, 94, 0.12), transparent 35%),
                 var(--bg-row-hover);
             box-shadow: inset 3px 0 0 var(--accent-primary);
+        }
+
+        .scripts-table tbody tr.row-selected {
+            background:
+                linear-gradient(90deg, rgba(34, 197, 94, 0.16), rgba(96, 165, 250, 0.05) 40%, transparent 80%),
+                var(--bg-row-selected);
+            box-shadow: inset 3px 0 0 rgba(34, 197, 94, 0.72);
+        }
+
+        .scripts-table tbody tr.row-selected:hover {
+            background:
+                linear-gradient(90deg, rgba(34, 197, 94, 0.2), rgba(96, 165, 250, 0.08) 44%, transparent 84%),
+                var(--bg-row-selected);
+            box-shadow: inset 3px 0 0 rgba(34, 197, 94, 0.88);
         }
 
         .scripts-table tbody tr.drag-over {
@@ -3815,9 +4116,138 @@
         /* Script Name with Favicon */
         .script-name-cell {
             display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .script-name-stack {
+            min-width: 0;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .script-name-row {
+            display: flex;
             align-items: center;
             gap: 8px;
             flex-wrap: wrap;
+            min-width: 0;
+        }
+
+        .script-name-button {
+            min-width: 0;
+            max-width: 100%;
+            padding: 0;
+            border: 0;
+            background: none;
+            color: var(--text-primary);
+            font: inherit;
+            font-size: 13px;
+            font-weight: 650;
+            letter-spacing: 0.01em;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .script-name-button:hover,
+        .script-name-button:focus-visible {
+            color: var(--accent-primary);
+            text-decoration: underline;
+            text-decoration-color: rgba(34, 197, 94, 0.4);
+            text-underline-offset: 3px;
+        }
+
+        .script-name-button:focus-visible {
+            outline: none;
+        }
+
+        .script-name-button-text {
+            min-width: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .script-name-badges {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            min-width: 0;
+        }
+
+        .script-author {
+            color: var(--text-muted);
+            font-size: 11px;
+            white-space: nowrap;
+        }
+
+        .script-tags {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            min-width: 0;
+        }
+
+        .script-tag,
+        .script-origin-badge,
+        .script-health-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            max-width: 100%;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            line-height: 1;
+            white-space: nowrap;
+            text-transform: uppercase;
+        }
+
+        .script-tag {
+            background: rgba(96, 165, 250, 0.12);
+            border: 1px solid rgba(96, 165, 250, 0.18);
+            color: #bfdbfe;
+        }
+
+        .script-origin-badge {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-secondary);
+        }
+
+        .script-origin-badge.remote {
+            background: rgba(34, 197, 94, 0.12);
+            border-color: rgba(34, 197, 94, 0.2);
+            color: #bbf7d0;
+        }
+
+        .script-origin-badge.local {
+            background: rgba(148, 163, 184, 0.12);
+            border-color: rgba(148, 163, 184, 0.2);
+            color: #cbd5e1;
+        }
+
+        .script-health-badge.warning {
+            background: rgba(245, 158, 11, 0.14);
+            border: 1px solid rgba(245, 158, 11, 0.24);
+            color: #fcd34d;
+        }
+
+        .script-health-badge.alert {
+            background: rgba(239, 68, 68, 0.14);
+            border: 1px solid rgba(239, 68, 68, 0.24);
+            color: #fecaca;
         }
         .script-favicon {
             width: 16px;
@@ -4883,17 +5313,22 @@
                         Find
                     </button>
                     <div class="toolbar-divider"></div>
-                    <input type="checkbox" id="bulkSelectAll" class="bulk-checkbox" title="Select all visible scripts" aria-label="Select all visible scripts">
-                    <select id="bulkActionSelect" class="select-field bulk-select" title="Bulk action" aria-label="Bulk action">
-                        <option value="">Bulk...</option>
-                        <option value="enable">Enable</option>
-                        <option value="disable">Disable</option>
-                        <option value="export">Export</option>
-                        <option value="update">Trigger Update</option>
-                        <option value="reset">Factory Reset</option>
-                        <option value="delete">Delete</option>
-                    </select>
-                    <button type="button" class="btn bulk-btn" id="btnBulkApply">Go</button>
+                    <div class="bulk-action-cluster" role="group" aria-label="Bulk actions">
+                        <label class="bulk-toggle" for="bulkSelectAll">
+                            <input type="checkbox" id="bulkSelectAll" class="bulk-checkbox" title="Select all shown scripts" aria-label="Select all shown scripts">
+                            <span class="bulk-toggle-label">Select Shown</span>
+                        </label>
+                        <select id="bulkActionSelect" class="select-field bulk-select" title="Bulk action" aria-label="Bulk action" disabled>
+                            <option value="">Choose Action</option>
+                            <option value="enable">Enable</option>
+                            <option value="disable">Disable</option>
+                            <option value="export">Export</option>
+                            <option value="update">Check for Updates</option>
+                            <option value="reset">Factory Reset</option>
+                            <option value="delete">Delete</option>
+                        </select>
+                        <button type="button" class="btn bulk-btn" id="btnBulkApply" disabled>Apply</button>
+                    </div>
                 </div>
                 <div class="scripts-toolbar-right">
                     <select id="filterSelect" class="select-field bulk-select" title="Filter scripts" aria-label="Filter scripts">
@@ -4901,6 +5336,10 @@
                         <option value="enabled">Enabled</option>
                         <option value="disabled">Disabled</option>
                         <option disabled>--- Status ---</option>
+                        <option value="attention">Needs Review</option>
+                        <option value="pinned">Pinned</option>
+                        <option value="local">Local Edits</option>
+                        <option value="remote">Remote Source</option>
                         <option value="has-errors">Has Errors</option>
                         <option value="has-updates">Has Update URL</option>
                         <option value="no-url">No Update URL</option>
@@ -4917,6 +5356,7 @@
                     <div class="search-box">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         <input type="text" id="scriptSearch" name="script_search" placeholder="Search scripts or code:fetch…" aria-label="Search scripts" autocomplete="off" spellcheck="false">
+                        <button type="button" class="search-box-clear" id="btnClearScriptSearch" aria-label="Clear script search" hidden>×</button>
                     </div>
                     <button type="button" class="toolbar-btn compact" id="btnViewToggle" title="Toggle table/card view" aria-label="Toggle table or card view" aria-pressed="false">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px" id="viewToggleIcon"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
@@ -4926,11 +5366,35 @@
                     </button>
                 </div>
             </div>
+            <div class="bulk-selection-rail" id="bulkSelectionRail" role="group" aria-label="Selection summary">
+                <div class="bulk-selection-copy">
+                    <span class="bulk-selection-summary" id="bulkSelectionSummary" role="status" aria-live="polite" aria-atomic="true" data-selection-state="idle">No scripts selected</span>
+                    <span class="bulk-selection-meta" id="bulkSelectionMeta">Select scripts in this view to enable, export, update, reset, or delete them in batches.</span>
+                    <span class="bulk-action-feedback" id="bulkActionFeedback" role="status" aria-live="polite" aria-atomic="true" hidden></span>
+                </div>
+                <div class="bulk-selection-actions">
+                    <button type="button" class="toolbar-btn compact" id="btnClearSelection" disabled>Clear Selection</button>
+                </div>
+            </div>
+            <div class="scripts-results-bar">
+                <div class="scripts-quick-filters" id="scriptQuickFilters" role="group" aria-label="Script quick filters">
+                    <button type="button" class="script-filter-chip active" data-filter-value="all" aria-pressed="true">All</button>
+                    <button type="button" class="script-filter-chip" data-filter-value="enabled" aria-pressed="false">Enabled</button>
+                    <button type="button" class="script-filter-chip" data-filter-value="attention" aria-pressed="false">Needs Review</button>
+                    <button type="button" class="script-filter-chip" data-filter-value="pinned" aria-pressed="false">Pinned</button>
+                    <button type="button" class="script-filter-chip" data-filter-value="local" aria-pressed="false">Local Edits</button>
+                    <button type="button" class="script-filter-chip" data-filter-value="remote" aria-pressed="false">Remote</button>
+                </div>
+                <div class="scripts-results-meta">
+                    <div class="scripts-results-summary" id="scriptResultsSummary" role="status" aria-live="polite" aria-atomic="true">Loading workspace…</div>
+                    <button type="button" class="toolbar-btn scripts-results-reset" id="btnClearScriptWorkspace" hidden>Reset View</button>
+                </div>
+            </div>
             <div class="scripts-table-container">
                 <table class="scripts-table">
                     <thead>
                         <tr>
-                            <th class="center" style="width:30px"><input type="checkbox" id="selectAllScripts" aria-label="Select all scripts in table"></th>
+                            <th class="center" style="width:30px"><input type="checkbox" id="selectAllScripts" aria-label="Select all shown scripts in table" title="Select all shown scripts in table"></th>
                             <th class="center sortable" style="width:40px">
                                 <button type="button" class="table-sort-button centered" data-sort="order" data-sort-label="Order">
                                     # <span class="sort-indicator" aria-hidden="true"></span>

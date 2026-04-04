@@ -35,7 +35,8 @@
             lastRuntimeRepairAt: 0
         },
         backups: [],
-        backupSettings: null
+        backupSettings: null,
+        bulkActionFeedback: null
     };
 
     // DOM Elements
@@ -81,6 +82,42 @@
         import: 'import utilities',
         cloud: 'cloud utilities',
         diagnostics: 'diagnostic utilities'
+    };
+    const SCRIPT_FILTER_LABELS = {
+        all: 'All Scripts',
+        enabled: 'Enabled',
+        disabled: 'Disabled',
+        attention: 'Needs Review',
+        pinned: 'Pinned',
+        local: 'Local Edits',
+        remote: 'Remote Source',
+        'has-errors': 'Has Errors',
+        'has-updates': 'Has Update URL',
+        'no-url': 'No Update URL',
+        'grant:xhr': 'Uses XHR',
+        'grant:storage': 'Uses Storage',
+        'grant:style': 'Uses AddStyle',
+        'grant:none': 'Grant None',
+        'scope:broad': 'Broad Match',
+        'scope:single': 'Single Site'
+    };
+    const SCRIPT_SORT_LABELS = {
+        order: 'Manual Order',
+        enabled: 'Enabled',
+        name: 'Name',
+        version: 'Version',
+        size: 'Size',
+        lines: 'Lines',
+        updated: 'Updated',
+        perf: 'Performance'
+    };
+    const BULK_ACTION_LABELS = {
+        enable: 'Enable Selected',
+        disable: 'Disable Selected',
+        export: 'Export Selected',
+        update: 'Update Selected',
+        reset: 'Reset Selected',
+        delete: 'Delete Selected'
     };
     const BACKUP_BROWSER_FILTER_LABELS = {
         all: 'all backups',
@@ -194,9 +231,18 @@
         }
     }
 
+    function getDashboardUrl() {
+        return new URL(window.location.href);
+    }
+
+    function replaceDashboardUrl(url) {
+        history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+
     function setDashboardHash(fragment) {
-        const base = `${window.location.pathname}${window.location.search}`;
-        history.replaceState(null, '', fragment ? `${base}#${fragment}` : base);
+        const url = getDashboardUrl();
+        url.hash = fragment ? `#${fragment}` : '';
+        replaceDashboardUrl(url);
     }
 
     function getDashboardRoute() {
@@ -211,6 +257,354 @@
             return { type: 'script', scriptId: hash.slice(7) };
         }
         return { type: 'script', scriptId: hash };
+    }
+
+    function getCurrentScriptViewMode() {
+        try {
+            return localStorage.getItem('sv_viewMode') === 'card' ? 'card' : 'table';
+        } catch {
+            return 'table';
+        }
+    }
+
+    function getScriptDisplayName(scriptId) {
+        return state.scripts.find(script => script.id === scriptId)?.metadata?.name || scriptId;
+    }
+
+    function getErrorMessage(error, fallback = 'Unknown error') {
+        if (typeof error === 'string' && error.trim()) return error.trim();
+        if (error && typeof error.message === 'string' && error.message.trim()) return error.message.trim();
+        return fallback;
+    }
+
+    function summarizeNames(names = [], maxVisible = 2) {
+        const cleanNames = names
+            .filter(name => typeof name === 'string')
+            .map(name => name.trim())
+            .filter(Boolean);
+        if (cleanNames.length === 0) return '';
+        if (cleanNames.length <= maxVisible) return cleanNames.join(', ');
+        return `${cleanNames.slice(0, maxVisible).join(', ')}, +${cleanNames.length - maxVisible} more`;
+    }
+
+    function getBulkActionButtonLabel(action) {
+        return BULK_ACTION_LABELS[action] || 'Apply';
+    }
+
+    function setBulkActionFeedback(summary = '', { tone = 'info', detail = '' } = {}) {
+        state.bulkActionFeedback = summary ? { summary, detail, tone } : null;
+        if (!elements.bulkActionFeedback) return;
+
+        const hasFeedback = Boolean(summary);
+        elements.bulkActionFeedback.hidden = !hasFeedback;
+        elements.bulkActionFeedback.dataset.tone = hasFeedback ? tone : 'idle';
+
+        const nextText = detail ? `${summary} ${detail}` : summary;
+        elements.bulkActionFeedback.textContent = nextText;
+        if (hasFeedback) {
+            elements.bulkActionFeedback.title = nextText;
+        } else {
+            elements.bulkActionFeedback.removeAttribute('title');
+        }
+    }
+
+    function buildBulkActionFeedback(action, result) {
+        const totalCount = result.totalCount || 0;
+        const successCount = result.successCount || 0;
+        const failureCount = result.failureCount || 0;
+        const skippedCount = result.skippedCount || 0;
+        const plural = count => count === 1 ? 'script' : 'scripts';
+        const formattedTotal = numberFormatter.format(totalCount);
+        const formattedSuccess = numberFormatter.format(successCount);
+        const formattedSkipped = numberFormatter.format(skippedCount);
+        const failureNames = summarizeNames((result.failures || []).map(entry => entry.name));
+        const singleFailure = (result.failures || [])[0];
+
+        const failureDetail = failureCount === 1 && singleFailure
+            ? `${singleFailure.name}: ${singleFailure.reason}.`
+            : failureNames
+                ? `Needs attention: ${failureNames}.`
+                : '';
+
+        if (action === 'update') {
+            if (failureCount === 0 && successCount === 0) {
+                return {
+                    tone: 'info',
+                    summary: 'All selected scripts are already up to date.',
+                    detail: '',
+                };
+            }
+
+            if (failureCount === 0) {
+                return {
+                    tone: 'success',
+                    summary: `Updated ${formattedSuccess} ${plural(successCount)}.`,
+                    detail: skippedCount > 0 ? `${formattedSkipped} already up to date.` : '',
+                };
+            }
+
+            if (successCount > 0) {
+                return {
+                    tone: 'warning',
+                    summary: `Updated ${formattedSuccess} of ${formattedTotal} selected scripts.`,
+                    detail: [skippedCount > 0 ? `${formattedSkipped} already up to date.` : '', failureDetail].filter(Boolean).join(' '),
+                };
+            }
+
+            return {
+                tone: 'error',
+                summary: "Couldn't update the selected scripts.",
+                detail: [skippedCount > 0 ? `${formattedSkipped} already up to date.` : '', failureDetail].filter(Boolean).join(' '),
+            };
+        }
+
+        const actionCopy = {
+            enable: { success: 'Enabled', failure: 'enable' },
+            disable: { success: 'Disabled', failure: 'disable' },
+            export: { success: 'Exported', failure: 'export' },
+            reset: { success: 'Reset', failure: 'reset' },
+            delete: { success: 'Deleted', failure: 'delete' }
+        }[action];
+
+        if (!actionCopy) {
+            return {
+                tone: failureCount > 0 ? 'warning' : 'success',
+                summary: failureCount > 0 ? `Completed ${formattedSuccess} of ${formattedTotal} selected scripts.` : `Completed ${formattedSuccess} ${plural(successCount)}.`,
+                detail: failureDetail,
+            };
+        }
+
+        if (failureCount === 0) {
+            return {
+                tone: 'success',
+                summary: `${actionCopy.success} ${formattedSuccess} ${plural(successCount)}.`,
+                detail: '',
+            };
+        }
+
+        if (successCount > 0) {
+            return {
+                tone: 'warning',
+                summary: `${actionCopy.success} ${formattedSuccess} of ${formattedTotal} selected scripts.`,
+                detail: failureDetail,
+            };
+        }
+
+        return {
+            tone: 'error',
+            summary: `Couldn't ${actionCopy.failure} the selected scripts.`,
+            detail: failureDetail,
+        };
+    }
+
+    async function runBulkScriptOperation(ids, options) {
+        const failures = [];
+        const skipped = [];
+        const succeededIds = [];
+        const {
+            action,
+            progressTitle,
+            task,
+            reloadAfter = true,
+            refreshStats = false,
+            keepFailedSelection = false,
+        } = options;
+
+        showProgress(progressTitle);
+        try {
+            for (let i = 0; i < ids.length; i++) {
+                const scriptId = ids[i];
+                const name = getScriptDisplayName(scriptId);
+                updateProgress(i + 1, ids.length, `${name} (${i + 1}/${ids.length})`);
+                try {
+                    const result = await task(scriptId, name, i);
+                    if (result?.skipped) {
+                        skipped.push({
+                            id: scriptId,
+                            name,
+                            reason: result.reason || '',
+                        });
+                        continue;
+                    }
+                    succeededIds.push(scriptId);
+                } catch (error) {
+                    const reason = getErrorMessage(error, `Failed to ${action} ${name}`);
+                    failures.push({ id: scriptId, name, reason });
+                    console.warn(`[ScriptVault] Bulk ${action} failed for`, scriptId, reason);
+                }
+            }
+
+            if (reloadAfter) await loadScripts();
+            if (refreshStats) updateStats();
+
+            if (keepFailedSelection) {
+                state.selectedScripts = new Set(ids.filter(id => !succeededIds.includes(id)));
+                if (state._lastCheckedId && !state.selectedScripts.has(state._lastCheckedId)) {
+                    state._lastCheckedId = null;
+                }
+            }
+
+            const feedback = buildBulkActionFeedback(action, {
+                totalCount: ids.length,
+                successCount: succeededIds.length,
+                failureCount: failures.length,
+                skippedCount: skipped.length,
+                failures,
+                skipped,
+            });
+            setBulkActionFeedback(feedback.summary, { tone: feedback.tone, detail: feedback.detail });
+            showToast(feedback.summary, feedback.tone);
+            return { succeededIds, failures, skipped, feedback };
+        } finally {
+            hideProgress();
+        }
+    }
+
+    function isValidScriptFilter(value) {
+        if (!value || !elements.filterSelect) return false;
+        return Array.from(elements.filterSelect.options || []).some(option => option.value === value && !option.disabled);
+    }
+
+    function normalizeScriptSortColumn(value) {
+        return Object.prototype.hasOwnProperty.call(SCRIPT_SORT_LABELS, value) ? value : 'updated';
+    }
+
+    function normalizeScriptSortDirection(value) {
+        return value === 'asc' ? 'asc' : 'desc';
+    }
+
+    function restoreScriptViewModeFromQuery() {
+        const viewMode = getDashboardUrl().searchParams.get('view');
+        if (viewMode === 'card' || viewMode === 'table') {
+            try {
+                localStorage.setItem('sv_viewMode', viewMode);
+            } catch {
+                // Ignore localStorage failures
+            }
+        }
+    }
+
+    function restoreScriptWorkspaceStateFromQuery() {
+        const params = getDashboardUrl().searchParams;
+        const query = params.get('q') || '';
+        const filter = params.get('filter') || 'all';
+        const sort = normalizeScriptSortColumn(params.get('sort') || state.sortColumn);
+        const dir = normalizeScriptSortDirection(params.get('dir') || state.sortDirection);
+
+        if (elements.scriptSearch) {
+            elements.scriptSearch.value = query;
+        }
+        if (elements.filterSelect && isValidScriptFilter(filter)) {
+            elements.filterSelect.value = filter;
+        }
+        state.sortColumn = sort;
+        state.sortDirection = dir;
+        updateScriptSearchAffordances();
+        updateScriptQuickFilterButtons();
+    }
+
+    function syncScriptWorkspaceStateToUrl() {
+        const url = getDashboardUrl();
+        const searchValue = elements.scriptSearch?.value?.trim() || '';
+        const filterValue = elements.filterSelect?.value || 'all';
+        const viewMode = getCurrentScriptViewMode();
+
+        if (searchValue) url.searchParams.set('q', searchValue);
+        else url.searchParams.delete('q');
+
+        if (filterValue !== 'all') url.searchParams.set('filter', filterValue);
+        else url.searchParams.delete('filter');
+
+        if (state.sortColumn !== 'updated') url.searchParams.set('sort', state.sortColumn);
+        else url.searchParams.delete('sort');
+
+        if (state.sortDirection !== 'desc') url.searchParams.set('dir', state.sortDirection);
+        else url.searchParams.delete('dir');
+
+        if (viewMode !== 'table') url.searchParams.set('view', viewMode);
+        else url.searchParams.delete('view');
+
+        replaceDashboardUrl(url);
+    }
+
+    function updateScriptSearchAffordances() {
+        if (!elements.btnClearScriptSearch) return;
+        const hasSearch = Boolean(elements.scriptSearch?.value?.trim());
+        elements.btnClearScriptSearch.hidden = !hasSearch;
+    }
+
+    function updateScriptQuickFilterButtons() {
+        const activeFilter = elements.filterSelect?.value || 'all';
+        document.querySelectorAll('#scriptQuickFilters .script-filter-chip[data-filter-value]').forEach(button => {
+            const isActive = button.dataset.filterValue === activeFilter;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-pressed', String(isActive));
+        });
+    }
+
+    function updateScriptResultsSummary(filtered = []) {
+        if (!elements.scriptResultsSummary) return;
+
+        const total = state.scripts.length;
+        const shown = filtered.length;
+        const enabledCount = filtered.filter(script => script.enabled !== false).length;
+        const pinnedCount = filtered.filter(script => script.settings?.pinned).length;
+        const filterValue = elements.filterSelect?.value || 'all';
+        const searchValue = elements.scriptSearch?.value?.trim() || '';
+        const sortLabel = SCRIPT_SORT_LABELS[state.sortColumn] || 'Updated';
+        const sortDirectionLabel = state.sortDirection === 'asc' ? 'Ascending' : 'Descending';
+        const viewLabel = getCurrentScriptViewMode() === 'card' ? 'Cards' : 'Table';
+        const fragments = [
+            `<strong>${numberFormatter.format(shown)}</strong> visible`
+        ];
+
+        if (total !== shown) {
+            fragments.push(`${numberFormatter.format(total)} total`);
+        }
+        fragments.push(`${numberFormatter.format(enabledCount)} enabled`);
+        if (pinnedCount > 0) {
+            fragments.push(`${numberFormatter.format(pinnedCount)} pinned`);
+        }
+        fragments.push(`${sortLabel} ${state.sortDirection === 'asc' ? '↑' : '↓'}`);
+        if (filterValue !== 'all') {
+            fragments.push(`Filter: ${escapeHtml(SCRIPT_FILTER_LABELS[filterValue] || filterValue)}`);
+        }
+        if (searchValue) {
+            fragments.push(`Search: ${escapeHtml(searchValue)}`);
+        }
+        fragments.push(`View: ${viewLabel}`);
+
+        elements.scriptResultsSummary.innerHTML = fragments.join(' • ');
+
+        if (elements.btnClearScriptWorkspace) {
+            elements.btnClearScriptWorkspace.hidden = !(
+                searchValue ||
+                filterValue !== 'all' ||
+                state.sortColumn !== 'updated' ||
+                state.sortDirection !== 'desc' ||
+                viewLabel === 'Cards'
+            );
+        }
+    }
+
+    function resetScriptWorkspaceView() {
+        if (elements.scriptSearch) elements.scriptSearch.value = '';
+        if (elements.filterSelect) elements.filterSelect.value = 'all';
+        state.sortColumn = 'updated';
+        state.sortDirection = 'desc';
+        if (typeof CardView !== 'undefined' && typeof CardView.setViewMode === 'function') {
+            CardView.setViewMode('table');
+        } else {
+            try {
+                localStorage.setItem('sv_viewMode', 'table');
+            } catch {
+                // Ignore localStorage failures
+            }
+        }
+        updateSortIndicators();
+        updateScriptSearchAffordances();
+        updateScriptQuickFilterButtons();
+        renderScriptTable();
     }
 
     function getTransferPreferences() {
@@ -865,6 +1259,7 @@
 
         // Scripts tab
         elements.scriptSearch = document.getElementById('scriptSearch');
+        elements.btnClearScriptSearch = document.getElementById('btnClearScriptSearch');
         elements.scriptTableBody = document.getElementById('scriptTableBody');
         elements.emptyState = document.getElementById('emptyState');
         elements.emptyStateTitle = document.getElementById('emptyStateTitle');
@@ -886,8 +1281,16 @@
         elements.bulkSelectAll = document.getElementById('bulkSelectAll');
         elements.bulkActionSelect = document.getElementById('bulkActionSelect');
         elements.btnBulkApply = document.getElementById('btnBulkApply');
+        elements.bulkSelectionRail = document.getElementById('bulkSelectionRail');
+        elements.bulkSelectionSummary = document.getElementById('bulkSelectionSummary');
+        elements.bulkSelectionMeta = document.getElementById('bulkSelectionMeta');
+        elements.bulkActionFeedback = document.getElementById('bulkActionFeedback');
+        elements.btnClearSelection = document.getElementById('btnClearSelection');
         elements.filterSelect = document.getElementById('filterSelect');
         elements.scriptCounter = document.getElementById('scriptCounter');
+        elements.scriptQuickFilters = document.getElementById('scriptQuickFilters');
+        elements.scriptResultsSummary = document.getElementById('scriptResultsSummary');
+        elements.btnClearScriptWorkspace = document.getElementById('btnClearScriptWorkspace');
 
         // Help button (header icon)
         elements.btnHelpTab = document.getElementById('btnHelpTab');
@@ -1293,12 +1696,15 @@
             }
         }, true); // Use capture phase to catch errors before they propagate
         
+        restoreScriptViewModeFromQuery();
         await loadSettings();
         await loadFolders();
         await loadScripts();
+        restoreScriptWorkspaceStateFromQuery();
         try { initEditor(); } catch (e) { console.error('[ScriptVault] Editor init failed:', e); }
         initEventListeners();
         updateSortIndicators();
+        renderScriptTable();
         applyTheme();
         updateStats();
         toggleSyncProviderSettings();
@@ -1437,6 +1843,15 @@
                             tableContainer,
                             toggleButton: elements.btnViewToggle,
                             hasScripts: () => state.scripts.length > 0,
+                            isSelected: id => state.selectedScripts.has(id),
+                            onSelect: (id, selected) => {
+                                if (selected) state.selectedScripts.add(id);
+                                else state.selectedScripts.delete(id);
+                                if (!selected && state._lastCheckedId === id) {
+                                    state._lastCheckedId = null;
+                                }
+                                updateBulkCheckboxes();
+                            },
                             onEdit: (id) => openEditorForScript(id),
                             onToggle: (id, enabled, options = {}) => toggleScriptEnabled(id, enabled, options),
                             onUpdate: (id, options = {}) => checkScriptForUpdates(id, { ...options }),
@@ -3455,6 +3870,25 @@
                 matchesStatus = s.enabled !== false;
             } else if (statusFilter === 'disabled') {
                 matchesStatus = s.enabled === false;
+            } else if (statusFilter === 'attention') {
+                const daysSinceUpdate = s.updatedAt ? Math.floor((Date.now() - s.updatedAt) / 86400000) : 0;
+                const isRemoteScript = Boolean(m.updateURL || m.downloadURL);
+                const isStale = isRemoteScript && daysSinceUpdate > 180;
+                const perfBudget = s.settings?.perfBudget || state.settings.perfBudget || 200;
+                const overBudget = Number(s.stats?.avgTime || 0) > perfBudget && Number(s.stats?.runs || 0) > 2;
+                matchesStatus = Boolean(
+                    s.stats?.errors > 0 ||
+                    s.settings?.mergeConflict ||
+                    s.settings?.userModified ||
+                    isStale ||
+                    overBudget
+                );
+            } else if (statusFilter === 'pinned') {
+                matchesStatus = s.settings?.pinned === true;
+            } else if (statusFilter === 'local') {
+                matchesStatus = s.settings?.userModified === true;
+            } else if (statusFilter === 'remote') {
+                matchesStatus = Boolean(m.updateURL || m.downloadURL);
             } else if (statusFilter === 'has-errors') {
                 matchesStatus = s.stats?.errors > 0;
             } else if (statusFilter === 'has-updates') {
@@ -3577,24 +4011,174 @@
                 : `Sort by ${sortLabel}`);
         });
     }
+
+    function pruneSelectedScripts() {
+        if (!(state.selectedScripts instanceof Set)) {
+            state.selectedScripts = new Set(Array.isArray(state.selectedScripts) ? state.selectedScripts : []);
+        }
+
+        const validIds = new Set((state.scripts || []).map(script => script.id));
+        const nextSelection = new Set();
+        state.selectedScripts.forEach(id => {
+            if (validIds.has(id)) nextSelection.add(id);
+        });
+        state.selectedScripts = nextSelection;
+    }
+
+    function setBulkMasterCheckboxState(checkbox, { allVisibleSelected, someVisibleSelected, hasVisibleScripts }) {
+        if (!checkbox) return;
+        checkbox.checked = allVisibleSelected;
+        checkbox.indeterminate = !allVisibleSelected && someVisibleSelected;
+        checkbox.disabled = !hasVisibleScripts;
+        checkbox.setAttribute('aria-disabled', String(!hasVisibleScripts));
+    }
+
+    function updateBulkActionAvailability(selectionState) {
+        const {
+            filteredCount,
+            visibleSelectedCount,
+            hiddenSelectedCount,
+            totalSelectedCount,
+            allVisibleSelected,
+            hasVisibleScripts,
+        } = selectionState;
+
+        const hasSelection = totalSelectedCount > 0;
+        if (!hasSelection && elements.bulkActionSelect?.value) {
+            elements.bulkActionSelect.value = '';
+        }
+        const hasAction = Boolean(elements.bulkActionSelect?.value);
+        const formattedTotalSelected = numberFormatter.format(totalSelectedCount);
+        const formattedVisibleSelected = numberFormatter.format(visibleSelectedCount);
+        const formattedHiddenSelected = numberFormatter.format(hiddenSelectedCount);
+        const formattedFiltered = numberFormatter.format(filteredCount);
+        const selectionLabel = totalSelectedCount === 1 ? 'script' : 'scripts';
+
+        if (elements.bulkActionSelect) {
+            const selectDisabled = !hasSelection;
+            elements.bulkActionSelect.disabled = selectDisabled;
+            elements.bulkActionSelect.setAttribute('aria-disabled', String(selectDisabled));
+            elements.bulkActionSelect.title = hasSelection
+                ? `Choose a bulk action for ${formattedTotalSelected} selected ${selectionLabel}`
+                : 'Select scripts to enable bulk actions';
+        }
+
+        if (elements.btnBulkApply) {
+            const buttonDisabled = !hasSelection || !hasAction;
+            elements.btnBulkApply.disabled = buttonDisabled;
+            elements.btnBulkApply.setAttribute('aria-disabled', String(buttonDisabled));
+            elements.btnBulkApply.textContent = hasAction ? getBulkActionButtonLabel(elements.bulkActionSelect?.value) : 'Apply';
+            elements.btnBulkApply.title = !hasSelection
+                ? 'Select scripts to enable bulk actions'
+                : hasAction
+                    ? `Apply the selected bulk action to ${formattedTotalSelected} ${selectionLabel}`
+                    : `Choose a bulk action for ${formattedTotalSelected} selected ${selectionLabel}`;
+            elements.btnBulkApply.setAttribute('aria-label', elements.btnBulkApply.title);
+        }
+
+        if (elements.btnClearSelection) {
+            elements.btnClearSelection.disabled = !hasSelection;
+            elements.btnClearSelection.setAttribute('aria-disabled', String(!hasSelection));
+        }
+
+        if (elements.bulkSelectionRail) {
+            const selectionStateValue = !hasSelection ? 'idle' : hiddenSelectedCount > 0 ? 'mixed' : 'active';
+            elements.bulkSelectionRail.hidden = state.scripts.length === 0;
+            elements.bulkSelectionRail.dataset.selectionState = selectionStateValue;
+        }
+
+        if (elements.bulkSelectionSummary) {
+            const selectionStateValue = !hasSelection ? 'idle' : hiddenSelectedCount > 0 ? 'mixed' : 'active';
+            elements.bulkSelectionSummary.dataset.selectionState = selectionStateValue;
+            elements.bulkSelectionSummary.textContent = !hasSelection
+                ? 'No scripts selected'
+                : hiddenSelectedCount > 0
+                    ? `${formattedTotalSelected} selected across the workspace`
+                    : `${formattedTotalSelected} selected`;
+        }
+
+        if (elements.bulkSelectionMeta) {
+            if (!hasSelection) {
+                elements.bulkSelectionMeta.textContent = hasVisibleScripts
+                    ? 'Select scripts in this view to enable, export, update, reset, or delete them in batches.'
+                    : 'Adjust the current search or filter to reveal scripts before selecting them.';
+                return;
+            }
+
+            if (!hasVisibleScripts && hiddenSelectedCount > 0) {
+                elements.bulkSelectionMeta.textContent = `${formattedHiddenSelected} selected ${hiddenSelectedCount === 1 ? 'script is' : 'scripts are'} hidden by the current search or filter. Clear the view or clear the selection before applying an action.`;
+                return;
+            }
+
+            if (hiddenSelectedCount > 0) {
+                elements.bulkSelectionMeta.textContent = `${formattedVisibleSelected} shown in this view and ${formattedHiddenSelected} hidden by the current search or filter.`;
+                return;
+            }
+
+            const selectionHint = getCurrentScriptViewMode() === 'card'
+                ? 'Use the Select control on each card to build a batch faster.'
+                : 'Shift-click a checkbox to select a range faster.';
+
+            if (allVisibleSelected && filteredCount > 0) {
+                elements.bulkSelectionMeta.textContent = `All ${formattedFiltered} shown ${filteredCount === 1 ? 'script is' : 'scripts are'} selected. ${selectionHint}`;
+                return;
+            }
+
+            elements.bulkSelectionMeta.textContent = `${formattedVisibleSelected} of ${formattedFiltered} shown ${filteredCount === 1 ? 'script is' : 'scripts are'} selected. ${selectionHint}`;
+        }
+    }
     
     // Update bulk selection checkboxes
     function updateBulkCheckboxes() {
         const filtered = getFilteredScripts();
+        pruneSelectedScripts();
+        const filteredIds = new Set(filtered.map(script => script.id));
+        let visibleSelectedCount = 0;
         
         // Update individual checkboxes
         document.querySelectorAll('.script-checkbox').forEach(cb => {
-            cb.checked = state.selectedScripts.has(cb.dataset.id);
+            const isChecked = state.selectedScripts.has(cb.dataset.id);
+            cb.checked = isChecked;
+            const row = cb.closest('tr');
+            row?.classList.toggle('row-selected', isChecked);
+            row?.setAttribute('aria-selected', String(isChecked));
+            if (filteredIds.has(cb.dataset.id) && isChecked) visibleSelectedCount += 1;
         });
         
         // Update select all checkbox
-        const allSelected = filtered.length > 0 && filtered.every(s => state.selectedScripts.has(s.id));
-        if (elements.bulkSelectAll) elements.bulkSelectAll.checked = allSelected;
-        if (elements.selectAllScripts) elements.selectAllScripts.checked = allSelected;
+        const filteredCount = filtered.length;
+        const totalSelectedCount = state.selectedScripts.size;
+        const hiddenSelectedCount = Math.max(0, totalSelectedCount - visibleSelectedCount);
+        const allVisibleSelected = filteredCount > 0 && visibleSelectedCount === filteredCount;
+        const someVisibleSelected = visibleSelectedCount > 0 && visibleSelectedCount < filteredCount;
+
+        setBulkMasterCheckboxState(elements.bulkSelectAll, {
+            allVisibleSelected,
+            someVisibleSelected,
+            hasVisibleScripts: filteredCount > 0,
+        });
+        setBulkMasterCheckboxState(elements.selectAllScripts, {
+            allVisibleSelected,
+            someVisibleSelected,
+            hasVisibleScripts: filteredCount > 0,
+        });
+
+        updateBulkActionAvailability({
+            filteredCount,
+            visibleSelectedCount,
+            hiddenSelectedCount,
+            totalSelectedCount,
+            allVisibleSelected,
+            hasVisibleScripts: filteredCount > 0,
+        });
+        if (typeof CardView !== 'undefined' && typeof CardView.syncSelection === 'function') {
+            CardView.syncSelection();
+        }
     }
     
     // Execute bulk action
     async function executeBulkAction() {
+        pruneSelectedScripts();
         const action = elements.bulkActionSelect?.value;
         if (!action) {
             showToast('Please select an action', 'error');
@@ -3610,40 +4194,30 @@
         
         switch (action) {
             case 'enable':
-                showProgress(`Enabling ${ids.length} scripts…`);
-                for (let i = 0; i < ids.length; i++) {
-                    const s = state.scripts.find(x => x.id === ids[i]);
-                    updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
-                    try {
-                        await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId: ids[i], enabled: true });
-                    } catch (e) {
-                        console.warn('[ScriptVault] Enable failed for', ids[i], e.message);
+                await runBulkScriptOperation(ids, {
+                    action,
+                    progressTitle: `Enabling ${ids.length} scripts…`,
+                    refreshStats: true,
+                    task: async scriptId => {
+                        const response = await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId, enabled: true });
+                        if (response?.error) throw new Error(response.error);
                     }
-                }
-                await loadScripts();
-                updateStats();
-                hideProgress();
-                showToast(`Enabled ${ids.length} scripts`, 'success');
+                });
                 break;
 
             case 'disable':
-                showProgress(`Disabling ${ids.length} scripts…`);
-                for (let i = 0; i < ids.length; i++) {
-                    const s = state.scripts.find(x => x.id === ids[i]);
-                    updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
-                    try {
-                        await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId: ids[i], enabled: false });
-                    } catch (e) {
-                        console.warn('[ScriptVault] Disable failed for', ids[i], e.message);
+                await runBulkScriptOperation(ids, {
+                    action,
+                    progressTitle: `Disabling ${ids.length} scripts…`,
+                    refreshStats: true,
+                    task: async scriptId => {
+                        const response = await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId, enabled: false });
+                        if (response?.error) throw new Error(response.error);
                     }
-                }
-                await loadScripts();
-                updateStats();
-                hideProgress();
-                showToast(`Disabled ${ids.length} scripts`, 'success');
+                });
                 break;
 
-            case 'export':
+            case 'export': {
                 const exportData = {
                     version: 2,
                     exportedAt: new Date().toISOString(),
@@ -3663,65 +4237,60 @@
                 a.download = `scriptvault-export-${Date.now()}.json`;
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
-                showToast(`Exported ${ids.length} scripts`, 'success');
+                setBulkActionFeedback(`Exported ${numberFormatter.format(exportData.scripts.length)} ${exportData.scripts.length === 1 ? 'script' : 'scripts'}.`, {
+                    tone: 'success',
+                    detail: 'Ready to import or archive.',
+                });
+                showToast(`Exported ${numberFormatter.format(exportData.scripts.length)} ${exportData.scripts.length === 1 ? 'script' : 'scripts'}`, 'success');
                 break;
+            }
 
             case 'update':
-                showProgress(`Checking updates for ${ids.length} scripts…`);
-                let updateCount = 0;
-                for (let i = 0; i < ids.length; i++) {
-                    const s = state.scripts.find(x => x.id === ids[i]);
-                    updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
-                    try {
-                        const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId: ids[i] });
-                        if (updates && updates.length > 0) {
-                            await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: ids[i], code: updates[0].code });
-                            updateCount++;
+                await runBulkScriptOperation(ids, {
+                    action,
+                    progressTitle: `Checking updates for ${ids.length} scripts…`,
+                    task: async scriptId => {
+                        const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId });
+                        if (updates?.error) throw new Error(updates.error);
+                        if (!Array.isArray(updates) || updates.length === 0) {
+                            return { skipped: true, reason: 'Already up to date' };
                         }
-                    } catch (e) {
-                        console.warn('[ScriptVault] Update check failed for', ids[i], e.message);
+                        const response = await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId, code: updates[0].code });
+                        if (response?.error) throw new Error(response.error);
                     }
-                }
-                await loadScripts();
-                hideProgress();
-                showToast(updateCount > 0 ? `${updateCount} script${updateCount > 1 ? 's' : ''} updated` : 'All up to date', 'success');
+                });
                 break;
 
             case 'reset':
                 if (!await showConfirmModal('Factory Reset', `Reset settings for ${ids.length} scripts?`)) return;
-                showProgress(`Resetting ${ids.length} scripts…`);
-                for (let i = 0; i < ids.length; i++) {
-                    const s = state.scripts.find(x => x.id === ids[i]);
-                    updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
-                    try {
-                        await chrome.runtime.sendMessage({ action: 'resetScriptSettings', scriptId: ids[i] });
-                    } catch (e) {
-                        console.warn('[ScriptVault] Reset failed for', ids[i], e.message);
+                await runBulkScriptOperation(ids, {
+                    action,
+                    progressTitle: `Resetting ${ids.length} scripts…`,
+                    task: async scriptId => {
+                        const response = await chrome.runtime.sendMessage({ action: 'resetScriptSettings', scriptId });
+                        if (response?.error) throw new Error(response.error);
                     }
-                }
-                await loadScripts();
-                hideProgress();
-                showToast(`Reset ${ids.length} scripts`, 'success');
+                });
                 break;
 
             case 'delete':
                 if (!await showConfirmModal('Delete Scripts', `Permanently delete ${ids.length} selected script(s)? This cannot be undone.`)) return;
-                showProgress(`Deleting ${ids.length} scripts…`);
-                for (let i = 0; i < ids.length; i++) {
-                    const s = state.scripts.find(x => x.id === ids[i]);
-                    updateProgress(i + 1, ids.length, `${s?.metadata?.name || ids[i]} (${i + 1}/${ids.length})`);
-                    await deleteScript(ids[i], true);
-                }
-                state.selectedScripts.clear();
-                await loadScripts();
-                updateStats();
-                hideProgress();
-                showToast(`Deleted ${ids.length} scripts`, 'success');
+                await runBulkScriptOperation(ids, {
+                    action,
+                    progressTitle: `Deleting ${ids.length} scripts…`,
+                    refreshStats: true,
+                    keepFailedSelection: true,
+                    task: async scriptId => {
+                        const deleted = await deleteScript(scriptId, true);
+                        if (!deleted) throw new Error('Delete failed');
+                    }
+                });
                 break;
         }
         
         // Reset dropdown
         if (elements.bulkActionSelect) elements.bulkActionSelect.value = '';
+        updateBulkCheckboxes();
     }
 
     function updateScriptEmptyState(filteredCount) {
@@ -3836,6 +4405,8 @@
         const filtered = getFilteredScripts();
         syncScriptTableListSize(filtered.length);
         syncCardView(filtered);
+        updateScriptSearchAffordances();
+        updateScriptQuickFilterButtons();
         
         // Update script counter
         if (elements.scriptCounter) {
@@ -3845,6 +4416,8 @@
             const formattedShown = numberFormatter.format(shown);
             elements.scriptCounter.textContent = total === shown ? `All ${formattedTotal} scripts` : `Showing ${formattedShown} of ${formattedTotal}`;
         }
+        updateScriptResultsSummary(filtered);
+        syncScriptWorkspaceStateToUrl();
 
         if (filtered.length === 0) {
             updateScriptEmptyState(filtered.length);
@@ -3979,6 +4552,9 @@
         // @tag badges
         const tags = script.metadata?.tag || script.metadata?.tags || [];
         const tagHtml = tags.map(t => `<span class="script-tag">${escapeHtml(t)}</span>`).join('');
+        const provenance = describeScriptProvenance(script);
+        const hasRemoteSource = Boolean(script.metadata?.updateURL || script.metadata?.downloadURL);
+        const provenanceBadgeHtml = `<span class="script-origin-badge ${hasRemoteSource ? 'remote' : 'local'}" title="${escapeHtml(provenance.detail || provenance.label)}">${escapeHtml(provenance.label)}</span>`;
 
         // Conflict detection for table row
         const conflicts = findConflictingScripts(script.id, matches);
@@ -3995,6 +4571,18 @@
         const isStale = daysSinceUpdate > 180 && (script.metadata?.updateURL || script.metadata?.downloadURL);
         const perfBudget = script.settings?.perfBudget || state.settings.perfBudget || 200;
         const overBudget = script.stats?.avgTime > perfBudget && script.stats?.runs > 2;
+        const localEditsHtml = script.settings?.userModified
+          ? '<span class="script-health-badge warning" title="Local edits are present for this script.">Local edits</span>'
+          : '';
+        const staleHtml = isStale
+          ? '<span class="script-health-badge warning" title="This remote script has not been refreshed in over 180 days.">Stale</span>'
+          : '';
+        const slowHtml = overBudget
+          ? `<span class="script-health-badge warning" title="Average runtime exceeds the current ${escapeHtml(String(perfBudget))}ms budget.">Slow</span>`
+          : '';
+        const errorHtml = hasErrors
+          ? `<span class="script-health-badge alert" title="${escapeHtml(String(script.stats?.errors || 0))} execution error(s) recorded.">Errors</span>`
+          : '';
         if (hasErrors) tr.classList.add('row-has-errors');
         if (isStale) tr.classList.add('row-stale');
         if (overBudget) tr.classList.add('row-over-budget');
@@ -4002,22 +4590,35 @@
         tr.draggable = true;
         tr.dataset.scriptId = script.id;
         tr.innerHTML = `
-            <td class="center"><input type="checkbox" class="script-checkbox" data-id="${script.id}"></td>
+            <td class="center"><input type="checkbox" class="script-checkbox" data-id="${script.id}" aria-label="Select ${escapeHtml(name)}"></td>
             <td class="center drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text-muted)">⠿</td>
             <td class="center">
                 <label class="toggle-switch">
-                    <input type="checkbox" class="script-toggle" data-id="${script.id}" ${enabled ? 'checked' : ''}>
+                    <input type="checkbox" class="script-toggle" data-id="${script.id}" ${enabled ? 'checked' : ''} aria-label="${enabled ? 'Disable' : 'Enable'} ${escapeHtml(name)}">
                     <span class="toggle-slider"></span>
                 </label>
             </td>
             <td>
                 <div class="script-name-cell">
                     ${faviconHtml}
-                    <span class="script-name" data-id="${script.id}" title="${escapeHtml(script.metadata?.description || '')}">${escapeHtml(name)}${isBroadMatch(matches) ? ' <span title="Runs on all/most sites" style="opacity:0.5">🌐</span>' : ''}</span>
-                    ${script.metadata?.author ? `<span class="script-author">${escapeHtml(script.metadata.author)}</span>` : ''}
-                    ${tagHtml ? `<div class="script-tags">${tagHtml}</div>` : ''}
-                    ${conflictHtml}
-                    ${syncConflictHtml}
+                    <div class="script-name-stack">
+                        <div class="script-name-row">
+                            <button type="button" class="script-name-button" data-id="${script.id}" title="${escapeHtml(script.metadata?.description || '')}" aria-label="Open ${escapeHtml(name)} in the editor">
+                                <span class="script-name-button-text">${escapeHtml(name)}${isBroadMatch(matches) ? ' <span title="Runs on all or most sites" style="opacity:0.58">🌐</span>' : ''}</span>
+                            </button>
+                            ${script.metadata?.author ? `<span class="script-author">by ${escapeHtml(script.metadata.author)}</span>` : ''}
+                        </div>
+                        <div class="script-name-badges">
+                            ${provenanceBadgeHtml}
+                            ${localEditsHtml}
+                            ${errorHtml}
+                            ${slowHtml}
+                            ${staleHtml}
+                            ${tagHtml ? `<div class="script-tags">${tagHtml}</div>` : ''}
+                            ${conflictHtml}
+                            ${syncConflictHtml}
+                        </div>
+                    </div>
                 </div>
             </td>
             <td class="center">${escapeHtml(version)}</td>
@@ -4027,7 +4628,7 @@
             <td class="center">
                 <div class="feature-badges">${features.map(f => `<span class="badge ${f.c}">${f.l}</span>`).join('')}</div>
             </td>
-            <td class="center">${homepage ? `<a href="${escapeHtml(homepage)}" target="_blank" aria-label="Open homepage for ${escapeHtml(name)}">🔗</a>` : '-'}</td>
+            <td class="center">${homepage ? `<a href="${escapeHtml(homepage)}" target="_blank" rel="noopener noreferrer" aria-label="Open homepage for ${escapeHtml(name)}">🔗</a>` : '-'}</td>
             <td class="center"><button type="button" class="updated-link" data-action="checkUpdate" data-id="${script.id}" title="Check for updates" aria-label="Check for updates for ${escapeHtml(name)}">${updated}</button></td>
             <td class="center">${statsHtml}</td>
             <td class="center">
@@ -4084,7 +4685,7 @@
             state._lastCheckedId = script.id;
             updateBulkCheckboxes();
         });
-        tr.querySelector('.script-name')?.addEventListener('click', () => openEditorForScript(script.id));
+        tr.querySelector('.script-name-button')?.addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="edit"]')?.addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
             const name = script.metadata?.name || script.id;
@@ -5271,7 +5872,8 @@
                 control.disabled = true;
                 control.setAttribute('aria-busy', 'true');
             }
-            await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId, enabled });
+            const response = await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId, enabled });
+            if (response?.error) throw new Error(response.error);
             if (script) script.enabled = enabled;
             if (scriptId === state.currentScriptId) {
                 updateEditorHeader(script || getCurrentScript());
@@ -5279,6 +5881,7 @@
             renderScriptTable();
             updateStats();
             showToast(enabled ? 'Enabled' : 'Disabled', 'success');
+            return true;
         } catch (e) {
             if (script) script.enabled = previousEnabled;
             if (control instanceof HTMLInputElement && control.isConnected) {
@@ -5286,6 +5889,7 @@
             }
             renderScriptTable();
             showToast('Failed to update script status', 'error');
+            return false;
         } finally {
             if (control?.matches('input, button') && control.isConnected) {
                 control.disabled = previousDisabled;
@@ -5364,7 +5968,8 @@
 
     async function deleteScript(scriptId, skipReload = false) {
         try {
-            await chrome.runtime.sendMessage({ action: 'deleteScript', scriptId });
+            const response = await chrome.runtime.sendMessage({ action: 'deleteScript', scriptId });
+            if (response?.error) throw new Error(response.error);
             // Clean up open tab if exists
             if (state.openTabs[scriptId]) {
                 delete state.openTabs[scriptId];
@@ -5386,8 +5991,10 @@
                 updateStats();
                 showToast('Deleted', 'success');
             }
+            return true;
         } catch (e) {
             if (!skipReload) showToast('Failed', 'error');
+            return false;
         }
     }
 
@@ -5659,7 +6266,9 @@
         if (_creatingScript) return;
 
         // Clear hash to prevent duplicate creation on refresh
-        history.replaceState(null, '', window.location.pathname);
+        const nextUrl = getDashboardUrl();
+        nextUrl.hash = '';
+        replaceDashboardUrl(nextUrl);
 
         const templateHtml = Object.entries(SCRIPT_TEMPLATES).map(([key, t]) => `
             <div class="template-card" data-template="${key}" tabindex="0" role="button">
@@ -6767,7 +7376,10 @@
         });
 
         // Scripts
-        elements.scriptSearch?.addEventListener('input', () => queueScriptTableRender());
+        elements.scriptSearch?.addEventListener('input', () => {
+            updateScriptSearchAffordances();
+            queueScriptTableRender();
+        });
         elements.scriptSearch?.addEventListener('keydown', e => {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -6779,6 +7391,30 @@
                 elements.scriptSearch.value = '';
                 queueScriptTableRender(true);
             }
+        });
+        elements.btnClearScriptSearch?.addEventListener('click', () => {
+            if (!elements.scriptSearch) return;
+            elements.scriptSearch.value = '';
+            updateScriptSearchAffordances();
+            queueScriptTableRender(true);
+            elements.scriptSearch.focus();
+        });
+        elements.scriptQuickFilters?.querySelectorAll('[data-filter-value]')?.forEach(button => {
+            button.addEventListener('click', () => {
+                if (!elements.filterSelect) return;
+                const nextFilter = button.dataset.filterValue || 'all';
+                if (!isValidScriptFilter(nextFilter)) return;
+                elements.filterSelect.value = nextFilter;
+                updateScriptQuickFilterButtons();
+                renderScriptTable();
+            });
+        });
+        elements.btnClearScriptWorkspace?.addEventListener('click', resetScriptWorkspaceView);
+        elements.btnViewToggle?.addEventListener('click', () => {
+            setTimeout(() => {
+                updateScriptResultsSummary(getFilteredScripts());
+                syncScriptWorkspaceStateToUrl();
+            }, 0);
         });
 
         // Column visibility toggle
@@ -6852,26 +7488,37 @@
         });
 
         // Bulk Actions (Tampermonkey-style)
-        elements.bulkSelectAll?.addEventListener('change', e => {
-            state.selectedScripts.clear();
-            if (e.target.checked) {
-                const filtered = getFilteredScripts();
-                filtered.forEach(s => state.selectedScripts.add(s.id));
+        const setVisibleScriptSelection = checked => {
+            const filtered = getFilteredScripts();
+            filtered.forEach(s => {
+                if (checked) state.selectedScripts.add(s.id);
+                else state.selectedScripts.delete(s.id);
+            });
+            if (!checked && state._lastCheckedId && !state.selectedScripts.has(state._lastCheckedId)) {
+                state._lastCheckedId = null;
             }
             updateBulkCheckboxes();
+        };
+        elements.bulkSelectAll?.addEventListener('change', e => {
+            setVisibleScriptSelection(e.target.checked);
         });
         
         // Table header checkbox (syncs with bulk toolbar)
         elements.selectAllScripts?.addEventListener('change', e => {
-            state.selectedScripts.clear();
-            if (e.target.checked) {
-                const filtered = getFilteredScripts();
-                filtered.forEach(s => state.selectedScripts.add(s.id));
-            }
-            updateBulkCheckboxes();
+            setVisibleScriptSelection(e.target.checked);
         });
         
-        elements.btnBulkApply?.addEventListener('click', executeBulkAction);
+        elements.bulkActionSelect?.addEventListener('change', () => {
+            updateBulkCheckboxes();
+        });
+        elements.btnClearSelection?.addEventListener('click', () => {
+            state.selectedScripts.clear();
+            state._lastCheckedId = null;
+            updateBulkCheckboxes();
+        });
+        elements.btnBulkApply?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, executeBulkAction, { busyLabel: 'Applying…' });
+        });
 
         // Sortable column headers
         document.querySelectorAll('.table-sort-button[data-sort]').forEach(button => {
@@ -6879,6 +7526,7 @@
         });
 
         elements.filterSelect?.addEventListener('change', () => {
+            updateScriptQuickFilterButtons();
             renderScriptTable(elements.scriptSearch?.value || '');
         });
         

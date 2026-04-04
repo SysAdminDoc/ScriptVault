@@ -694,3 +694,47 @@ All 4 bg/ modules migrated:
 
 **Totals:** 34 fixes across 18 files (Rounds 2-7). 486/486 tests green.
 - background.js: 16,728 lines
+
+### v2.0.4 Round 8 — Comprehensive QA Audit (2026-04-04)
+**6 parallel audit agents covering entire codebase: background.core.js, dashboard.js, modules/, dashboard modules, popup/sidepanel/install/content/offscreen, bg/shared/CSS**
+
+**Unhandled promise rejections (4 fixes in background.core.js):**
+- All 4 `chrome.tabs.reload(tab.id)` call sites lacked `.catch()` — if tab closed between query and reload, promise rejection was unhandled; added `.catch(() => {})` to all
+
+**CSS (1 fix):**
+- `dashboard.css` `--scrollbar-thumb-hover` variable referenced but never defined in `:root` — always fell back to hardcoded `#555`; added to `:root` variables
+
+**Crash prevention (2 fixes):**
+- `dashboard-gamification.js` `canvas.getContext('2d')` result not null-checked — subsequent calls crash if context unavailable; added early return guard
+- `dashboard-debugger.js` `renderVariableTable()` called via `setTimeout(..., 0)` could fire after `destroy()` nulled `_container` — added `if (!_container) return` guard
+
+**UX (2 fixes):**
+- `dashboard-diff.js` collapse toggle was expand-only — hidden lines inserted but `display:none` on container made re-collapse impossible; refactored to track expanded elements and toggle both directions
+- `popup-timeline.js` `insertBeforeEl.parentNode` not null-checked — crash if element detached from DOM; added `?.parentNode` guard
+
+**Dead code (1 fix):**
+- `quota-manager.js` `autoCleanup()` passed `analytics: true, perfHistory: true` to `cleanup()` but no handler existed for those options — aggressive cleanup was silently no-op; added handler that finds and removes matching storage keys
+
+**Totals:** 41 fixes across 24 files (Rounds 2-8). 499/499 tests green.
+- background.js: 16,744 lines
+
+### v2.0.4 Round 9 — Performance & Memory Leak Audit (2026-04-04)
+**5 parallel perf agents covering entire codebase**
+
+**O(N^2) sequential await elimination (2 fixes in background.core.js):**
+- `getAllScriptsValues` fetched each script's values sequentially with `await` in loop — O(N) serial storage reads; refactored to `Promise.all()` for parallel fetches
+- `switchProfile` wrote each script state sequentially with `await ScriptStorage.set()` in loop — O(N) serial writes; collected promises and used `Promise.all()`
+
+**Unbounded memory growth prevention (4 fixes):**
+- `background.core.js` `_notifCallbacks` Map grew without limit for long-running sessions — added 500-entry cap with oldest-first eviction
+- `background.core.js` `_openTabTrackers` Map grew without limit if tabs orphaned — added 1000-entry cap with oldest-first eviction
+- `resources.js` in-memory cache object grew without limit as URLs fetched — added 200-entry cap with oldest-timestamp eviction
+- `public-api.js` `_rateLimitMap` never evicted senders with expired/empty timestamp arrays — added periodic eviction when map exceeds 200 entries
+
+**Performance optimizations (3 fixes):**
+- `background.core.js` CSP reports used `splice(0, N)` (O(N) head-removal) — changed to `slice(-500)` with threshold buffer
+- `background.core.js` `_autoReloadScripts` array accumulated duplicates on rapid saves — replaced with `Map` keyed by scriptId for O(1) dedup
+- `error-log.js` FIFO trim used `splice(0, N)` (O(N) head-removal) — changed to `slice(-MAX_ENTRIES)` reassignment
+
+**Totals:** 50 fixes across 28 files (Rounds 2-9). 499/499 tests green.
+- background.js: 16,775 lines

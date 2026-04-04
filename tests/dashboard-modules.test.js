@@ -60,7 +60,7 @@ describe('dashboard surface modules', () => {
     }
   });
 
-  it('card view uses CSP-safe icon fallback and forwards controller context', async () => {
+  it('card view uses a semantic open surface, richer badges, and forwards controller context', async () => {
     const CardView = createCardView();
     const host = document.createElement('div');
     const table = document.createElement('div');
@@ -73,10 +73,20 @@ describe('dashboard surface modules', () => {
     const onUpdate = vi.fn();
     const onExport = vi.fn();
     const onDelete = vi.fn();
+    const onSelect = vi.fn((scriptId, selected) => {
+      if (selected) {
+        selectedIds.add(scriptId);
+      } else {
+        selectedIds.delete(scriptId);
+      }
+    });
+    const selectedIds = new Set(['script-1']);
 
     CardView.init(host, {
       tableContainer: table,
       toggleButton,
+      isSelected: (scriptId) => selectedIds.has(scriptId),
+      onSelect,
       onEdit,
       onToggle,
       onUpdate,
@@ -91,27 +101,58 @@ describe('dashboard surface modules', () => {
         name: 'Alpha Script',
         match: ['*://*.example.com/*'],
         icon: 'https://cdn.example.com/icon.png',
+        updateURL: 'https://greasyfork.org/scripts/1-alpha/code/alpha.user.js',
+        tag: ['ops'],
       },
+      settings: { pinned: true, userModified: true },
+      stats: { runs: 4, avgTime: 72, errors: 0 },
       updatedAt: Date.now() - 60_000,
     }]);
 
     const card = host.querySelector('.cv-card');
     const icon = card?.querySelector('.cv-icon');
     const fallback = card?.querySelector('.cv-icon-letter');
+    const openSurface = card?.querySelector('.cv-open-surface');
     const menuButtons = Array.from(card?.querySelectorAll('.cv-menu-item') || []);
     const updateButton = card?.querySelector('.cv-meta-button');
     const toggle = card?.querySelector('input[data-toggle-id="script-1"]');
     const menuButton = card?.querySelector('.cv-menu-btn');
+    const statePill = card?.querySelector('.cv-state-pill');
+    const badges = Array.from(card?.querySelectorAll('.cv-badge') || []);
+    const selectButton = card?.querySelector('.cv-select-btn');
 
     expect(menuButton?.getAttribute('type')).toBe('button');
+    expect(menuButton?.getAttribute('aria-controls')).toBeTruthy();
     expect(menuButtons.every((button) => button.getAttribute('type') === 'button')).toBe(true);
+    expect(menuButtons.map((button) => button.textContent?.trim())).toContain('Check for Updates');
+    expect(openSurface?.tagName).toBe('BUTTON');
+    expect(openSurface?.getAttribute('data-open-id')).toBe('script-1');
+    expect(statePill?.textContent).toBe('Enabled');
+    expect(badges.some((badge) => badge.textContent?.includes('Greasy Fork'))).toBe(true);
+    expect(badges.some((badge) => badge.textContent?.includes('Pinned'))).toBe(true);
+    expect(badges.some((badge) => badge.textContent?.includes('Local edits'))).toBe(true);
+    expect(card?.classList.contains('cv-selected')).toBe(true);
+    expect(selectButton?.getAttribute('aria-pressed')).toBe('true');
+    expect(selectButton?.textContent).toBe('Selected');
     expect(icon?.getAttribute('data-favicon-fallback')).toBe('true');
+    expect(icon?.getAttribute('width')).toBe('38');
+    expect(icon?.getAttribute('height')).toBe('38');
     expect(icon?.getAttribute('onerror')).toBeNull();
     expect(fallback?.hasAttribute('hidden')).toBe(true);
 
     icon?.dispatchEvent(new Event('error'));
     expect(icon?.hidden).toBe(true);
     expect(fallback?.hasAttribute('hidden')).toBe(false);
+
+    openSurface?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(onEdit).toHaveBeenCalledWith('script-1');
+
+    selectButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(onSelect).toHaveBeenCalledWith('script-1', false, expect.objectContaining({ triggerEl: selectButton }));
+    CardView.syncSelection();
+    expect(card?.classList.contains('cv-selected')).toBe(false);
+    expect(selectButton?.getAttribute('aria-pressed')).toBe('false');
+    expect(selectButton?.textContent).toBe('Select');
 
     updateButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(onUpdate).toHaveBeenCalledWith('script-1', expect.objectContaining({ triggerEl: updateButton }));
@@ -138,6 +179,10 @@ describe('dashboard surface modules', () => {
   });
 
   it('dashboard card view integration reuses guarded controller paths', () => {
+    expect(dashboardJs).toMatch(/isSelected: id => state\.selectedScripts\.has\(id\)/);
+    expect(dashboardJs).toMatch(/onSelect: \(id, selected\) => \{/);
+    expect(dashboardJs).toMatch(/if \(selected\) state\.selectedScripts\.add\(id\);/);
+    expect(dashboardJs).toMatch(/else state\.selectedScripts\.delete\(id\);/);
     expect(dashboardJs).toMatch(/onToggle: \(id, enabled, options = \{\}\) => toggleScriptEnabled\(id, enabled, options\)/);
     expect(dashboardJs).toMatch(/onUpdate: \(id, options = \{\}\) => checkScriptForUpdates\(id, \{ \.\.\.options \}\)/);
     expect(dashboardJs).toMatch(/await runButtonTask\(options\.triggerEl, exportTask, \{ busyLabel: 'Exporting…' \}\)/);
