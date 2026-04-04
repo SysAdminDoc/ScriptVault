@@ -576,3 +576,105 @@ All 4 bg/ modules migrated:
 
 **Totals:** 36 fixes across 16 files. 374/374 tests green.
 - background.js: 16,673 lines
+
+### v2.0.4 Round 2 — Deep Audit (2026-04-04)
+**6 bugs found and fixed across 4 files:**
+- `offscreen.js` `handleMerge()` rejected empty string code — `!base` is falsy for `""` which is valid code; changed to `== null` check
+- `public-api.js` `installScript` handler had `Array.isArray(data) ? data : data` no-op — removed dead variable, code below already handles both formats
+- `public-api.js` `toggleScript` handler had unused `scripts` variable (dead code from format normalization) — removed
+- `public-api.js` web install handler (`scriptvault:install`) assumed array storage format but `userscripts` is object → `.findIndex()` crash on object — now handles both array and object formats
+- `dashboard-heatmap.js` `destroy()` didn't clear `_dayMap` — stale pixel-to-date mappings leaked across re-inits
+- `quota-manager.js` `getUsage()` division by zero if `quotaLimit` resolved to 0 — added `> 0` guard
+
+**Totals:** 6 fixes across 4 files. 486/486 tests green.
+- background.js: 16,679 lines
+
+### v2.0.4 Round 3 — Deep Audit (2026-04-04)
+**8 bugs found and fixed across 5 files (8 parallel agents, full codebase scan):**
+
+**Cloud sync data integrity (4 fixes):**
+- `sync-providers.js` Dropbox `upload()` used null token from `getValidToken()` → `Bearer null` header silently failed — added null check + throw
+- `sync-easycloud.js` 3-way merge rejected empty string base code (`if (base && ...)` falsy for `""`) — changed to `base != null`
+- `sync-easycloud.js` merge failure fell back to last-write-wins without setting `mergeConflict` flag — user had no idea changes were lost; now flags conflict
+- `background.core.js` `mergeData()` iterated `local.scripts`/`remote.scripts` without null guard — malformed backup crashes sync; added `|| []`
+
+**Sync ghost scripts (1 fix):**
+- `background.core.js` `mergeData()` returned tombstoned scripts in output — deleted scripts reappeared after re-upload; now filters tombstoned entries from merged result
+
+**Badge + memory (2 fixes):**
+- `background.core.js` `importScripts()` called `registerAllScripts()` but not `updateBadge()` — badge count stale after JSON import; added
+- `background.core.js` `GM_notification` callback map entry leaked when `sendToBackground` failed (`.catch(() => {})` had no cleanup) — now deletes entry on failure
+
+**Defense-in-depth (1 fix):**
+- `dashboard-gamification.js` `a.icon` not escaped in badge `innerHTML` while `a.name`/`a.desc` were — inconsistent; now uses `esc(a.icon)`
+
+**Totals:** 14 fixes across 8 files (Rounds 2+3). 486/486 tests green.
+- background.js: 16,683 lines
+
+### v2.0.4 Round 4 — Protocol & Security Audit (2026-04-04)
+**6 agents: cross-file message protocol, HTML security, build system, URL matcher, GM wrapper injection, OAuth/PKCE**
+
+**Missing message handlers (5 fixes):**
+- `openDashboard` — sidepanel sent this action but no handler existed; dashboard never opened from sidepanel buttons — added handler
+- `factoryReset` — dashboard sent this but no handler existed; factory reset button was completely non-functional — added handler
+- `resetScriptSettings` — dashboard bulk action sent this but no handler existed; "Reset Settings" did nothing — added handler
+- `liveReloadEnabled`/`liveReloadDisabled` — debugger module sent wrong action names; background has `setLiveReload` handler — fixed callers to use correct action with `enabled` param
+
+**OAuth security (1 fix):**
+- `sync-providers.js` Google Drive token revocation passed token in URL query param (`/revoke?token=...`) exposing it in logs — changed to POST body
+
+**Build & manifest fixes (2 fixes):**
+- `manifest-firefox.json` version was `2.0.3` while Chrome manifest is `2.0.4` — synced to `2.0.4`
+- `package.json` `clean` script used `require()` in ESM context — crashes with `ReferenceError`; added `--input-type=commonjs` flag
+
+**Clean passes (no bugs found):**
+- HTML files: proper CSP, no inline handlers, all local resources, correct script load order
+- GM wrapper: all user data interpolated via JSON.stringify (safe), meta.delay pre-validated as integer
+- URL matcher: tested edge cases covered, no ReDoS found; `isRegexPattern` intentionally excludes `*`/`.` to prevent false positives on URL paths
+- OAuth/PKCE: PKCE correct (256-bit verifier, S256 challenge), state validated on Dropbox/OneDrive, scopes minimal
+
+**Totals:** 22 fixes across 12 files (Rounds 2-4). 486/486 tests green.
+- background.js: 16,717 lines
+
+### v2.0.4 Round 5 — Data Model & CSS Audit (2026-04-04)
+**5 agents: i18n consistency, build pipeline, CSS, storage data model, grep sweep**
+
+**Data model fixes (3 fixes in public-api.js):**
+- `getScriptStatus` read flat `script.name`/`script.version` instead of canonical `script.meta?.name`/`script.meta?.version` — returned undefined for all fields
+- `installScript` handler wrote flat structure (`name`, `version`, `matches` at top level) instead of canonical `meta: { name, version, match }` — scripts installed via API were corrupted, invisible to dashboard
+- `scriptvault:install` web handler had same flat structure bug — web-installed scripts corrupted
+
+**CSS fixes (3 fixes in dashboard.css):**
+- `.btn-danger:hover` used undefined `--accent-error` variable — hover had no background color; changed to `--accent-red`
+- Duplicate `.btn-danger` definition at line 546 overrode first definition's `border-color` and `filter: brightness` — removed duplicate
+- Missing `prefers-reduced-motion` support — added global media query to disable animations/transitions for users who request reduced motion
+
+**Clean passes:**
+- i18n: All 8 locales have identical 25-key sets, no orphaned/missing keys, no placeholder mismatches
+- Build pipeline: correct concatenation order, no forward references, all files present
+- TypeScript: `tsc --noEmit` passes clean
+- Grep sweep: no uncaught promises, no innerHTML XSS, no insecure HTTP loads, all `parseInt` safe
+
+**Totals:** 28 fixes across 14 files (Rounds 2-5). 486/486 tests green.
+- background.js: 16,723 lines
+
+### v2.0.4 Round 6 — Deep Targeted Audit (2026-04-04)
+**4 agents: popup+install, devtools+sidepanel, modules deep, registration flow**
+
+**Security (1 fix):**
+- `devtools-panel.js` HTTP header names unescaped in network detail innerHTML — XSS via malicious server response headers; both request and response header keys now use `escapeHtml(k)`
+
+**Robustness (1 fix):**
+- `background.core.js` `registerScript` catch block accessed `script.meta.name` without optional chaining — error handler itself would crash on malformed scripts; now uses `script.meta?.name || script.id`
+
+**Clean passes:**
+- popup.js: all DOM access null-safe, all innerHTML escaped, toggle/delete update state correctly
+- install.js: all user data escaped, downgrade detection correct, Enter key properly scoped
+- sidepanel.js: all innerHTML safe, toggle operations correct, URL validation present
+- error-log.js: FIFO cap correct, CSV fields are extension-controlled numbers (not injectable)
+- userstyles.js: variable substitution is UserCSS spec behavior (raw replacement intentional)
+- migration.js: reads correct storage key, idempotent via `if (!data.key)` guards
+- Registration flow: toggle→unregister→register→reload order correct, mutex prevents rapid-toggle races
+
+**Totals:** 30 fixes across 15 files (Rounds 2-6). 486/486 tests green.
+- background.js: 16,723 lines

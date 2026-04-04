@@ -43,7 +43,7 @@ const QuotaManager = (() => {
   async function getUsage() {
     const quotaLimit = await _getQuotaLimit();
     const bytesUsed = await chrome.storage.local.getBytesInUse(null);
-    const percentage = bytesUsed / quotaLimit;
+    const percentage = quotaLimit > 0 ? bytesUsed / quotaLimit : 0;
     const level = percentage >= CRITICAL_THRESHOLD ? 'critical'
       : percentage >= WARNING_THRESHOLD ? 'warning'
       : 'ok';

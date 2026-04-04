@@ -659,6 +659,7 @@ const ActivityHeatmap = (() => {
     _container = null;
     _canvas = null;
     _ctx = null;
+    _dayMap.clear();
     _initialized = false;
   }
 

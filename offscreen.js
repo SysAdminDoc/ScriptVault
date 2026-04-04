@@ -365,7 +365,7 @@ function generateSummary(riskLevel, findings) {
 // since the last known common ancestor (tracked via script.syncBase).
 
 function handleMerge(base, local, remote) {
-  if (!base || !local || !remote) return { error: 'Missing merge inputs' };
+  if (base == null || local == null || remote == null) return { error: 'Missing merge inputs' };
   if (local === remote) return { merged: local, conflicts: false };
   if (local === base) return { merged: remote, conflicts: false };
   if (remote === base) return { merged: local, conflicts: false };

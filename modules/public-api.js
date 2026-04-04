@@ -326,12 +326,12 @@ const PublicAPI = (() => {
 
       return {
         id: script.id,
-        name: script.name || script.id,
-        version: script.version || '1.0',
+        name: script.meta?.name || script.name || script.id,
+        version: script.meta?.version || script.version || '1.0',
         enabled: script.enabled !== false,
-        matches: script.matches || script.match || [],
-        lastModified: script.lastModified || null,
-        runAt: script.runAt || 'document_idle'
+        matches: script.meta?.match || script.matches || [],
+        lastModified: script.updatedAt || null,
+        runAt: script.meta?.['run-at'] || 'document_idle'
       };
     },
 
@@ -346,7 +346,6 @@ const PublicAPI = (() => {
       try {
         const result = await chrome.storage.local.get('userscripts');
         const data = result.userscripts || {};
-        const scripts = Array.isArray(data) ? data : Object.entries(data);
         let found = false;
         if (Array.isArray(data)) {
           const idx = data.findIndex(s => s.id === scriptId || s.meta?.name === scriptId);
@@ -385,41 +384,43 @@ const PublicAPI = (() => {
 
         const newScript = {
           id: scriptId,
-          name: meta.name || scriptId,
-          version: meta.version || '1.0',
-          description: meta.description || '',
-          matches: meta.match || ['*://*/*'],
           code,
+          meta: {
+            name: meta.name || scriptId,
+            version: meta.version || '1.0',
+            description: meta.description || '',
+            match: meta.match || ['*://*/*'],
+            'run-at': meta.runAt || 'document_idle'
+          },
           enabled: true,
-          installedAt: Date.now(),
-          installedBy: describeSender(sender),
-          runAt: meta.runAt || 'document_idle'
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          installedBy: describeSender(sender)
         };
 
         const result = await chrome.storage.local.get('userscripts');
         const data = result.userscripts || {};
-        const scripts = Array.isArray(data) ? data : data;
 
         // Check for duplicate — support both object and array formats
-        if (Array.isArray(scripts)) {
-          const existing = scripts.findIndex(s => s.id === scriptId);
+        if (Array.isArray(data)) {
+          const existing = data.findIndex(s => s.id === scriptId);
           if (existing !== -1) {
-            scripts[existing] = { ...scripts[existing], ...newScript, updatedAt: Date.now() };
+            data[existing] = { ...data[existing], ...newScript, updatedAt: Date.now() };
           } else {
-            scripts.push(newScript);
+            data.push(newScript);
           }
         } else {
-          if (scripts[scriptId]) {
-            scripts[scriptId] = { ...scripts[scriptId], ...newScript, updatedAt: Date.now() };
+          if (data[scriptId]) {
+            data[scriptId] = { ...data[scriptId], ...newScript, updatedAt: Date.now() };
           } else {
-            scripts[scriptId] = newScript;
+            data[scriptId] = newScript;
           }
         }
 
-        await chrome.storage.local.set({ userscripts: scripts });
+        await chrome.storage.local.set({ userscripts: data });
 
-        fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
-        return { ok: true, scriptId, name: newScript.name };
+        fireWebhook('script.installed', { scriptId, name: newScript.meta.name, version: newScript.meta.version });
+        return { ok: true, scriptId, name: newScript.meta.name };
       } catch (e) {
         return { error: 'Failed to install script', detail: e.message };
       }
@@ -532,31 +533,42 @@ const PublicAPI = (() => {
 
         const newScript = {
           id: scriptId,
-          name: meta.name || scriptId,
-          version: meta.version || '1.0',
-          description: meta.description || '',
-          matches: meta.match || ['*://*/*'],
           code,
+          meta: {
+            name: meta.name || scriptId,
+            version: meta.version || '1.0',
+            description: meta.description || '',
+            match: meta.match || ['*://*/*'],
+            'run-at': meta.runAt || 'document_idle'
+          },
           enabled: true,
-          installedAt: Date.now(),
-          installedBy: `origin:${origin}`,
-          runAt: meta.runAt || 'document_idle'
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          installedBy: `origin:${origin}`
         };
 
         const result = await chrome.storage.local.get('userscripts');
-        const scripts = result.userscripts || [];
+        const data = result.userscripts || {};
 
-        const existing = scripts.findIndex(s => s.id === scriptId);
-        if (existing !== -1) {
-          scripts[existing] = { ...scripts[existing], ...newScript, updatedAt: Date.now() };
+        if (Array.isArray(data)) {
+          const existing = data.findIndex(s => s.id === scriptId);
+          if (existing !== -1) {
+            data[existing] = { ...data[existing], ...newScript, updatedAt: Date.now() };
+          } else {
+            data.push(newScript);
+          }
         } else {
-          scripts.push(newScript);
+          if (data[scriptId]) {
+            data[scriptId] = { ...data[scriptId], ...newScript, updatedAt: Date.now() };
+          } else {
+            data[scriptId] = newScript;
+          }
         }
 
-        await chrome.storage.local.set({ userscripts: scripts });
+        await chrome.storage.local.set({ userscripts: data });
 
-        fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
-        return { type: 'scriptvault:install:response', ok: true, scriptId, name: newScript.name };
+        fireWebhook('script.installed', { scriptId, name: newScript.meta.name, version: newScript.meta.version });
+        return { type: 'scriptvault:install:response', ok: true, scriptId, name: newScript.meta.name };
       } catch (e) {
         return { type: 'scriptvault:install:response', error: 'Fetch failed', detail: e.message };
       }

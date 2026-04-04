@@ -11,6 +11,62 @@
   let filterText = '';
   let selectedRow = null;
   let refreshTimer = null;
+  let activeTab = 'network';
+
+  function setActiveTab(nextTab) {
+    activeTab = nextTab;
+    const panels = { network: $('panelNetwork'), execution: $('panelExecution'), console: $('panelConsole') };
+    document.querySelectorAll('.tab-btn').forEach((button) => {
+      const isActive = button.dataset.tab === nextTab;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-selected', String(isActive));
+      button.tabIndex = isActive ? 0 : -1;
+    });
+    Object.entries(panels).forEach(([name, panel]) => {
+      const isActive = name === nextTab;
+      panel.classList.toggle('active', isActive);
+      panel.hidden = !isActive;
+    });
+    if (nextTab !== 'network') closeDetail();
+    $('btnExportHAR').style.display = nextTab === 'network' ? '' : 'none';
+    updateToolbarContext();
+    if (nextTab === 'network') renderNetwork();
+    if (nextTab === 'execution') renderExecution();
+  }
+
+  function closeDetail() {
+    const detail = $('netDetail');
+    detail.classList.remove('open');
+    detail.hidden = true;
+    detail.setAttribute('aria-hidden', 'true');
+    document.querySelectorAll('#netTableBody tr').forEach((row) => row.classList.remove('selected'));
+    selectedRow = null;
+  }
+
+  function updateToolbarContext() {
+    const filterInput = $('filterInput');
+    const clearButton = $('btnClear');
+    if (activeTab === 'network') {
+      filterInput.disabled = false;
+      filterInput.placeholder = 'Filter requests, URLs, or scripts';
+      filterInput.setAttribute('aria-label', 'Filter network requests');
+      clearButton.hidden = false;
+      clearButton.textContent = 'Clear Requests';
+      clearButton.setAttribute('aria-label', 'Clear recorded network requests');
+      return;
+    }
+    if (activeTab === 'execution') {
+      filterInput.disabled = false;
+      filterInput.placeholder = 'Filter scripts in execution stats';
+      filterInput.setAttribute('aria-label', 'Filter execution statistics');
+      clearButton.hidden = true;
+      return;
+    }
+    filterInput.disabled = true;
+    filterInput.placeholder = 'Console search is unavailable in this panel';
+    filterInput.setAttribute('aria-label', 'Console search unavailable');
+    clearButton.hidden = true;
+  }
 
   // ── Init ─────────────────────────────────────────────────────────────────
   async function init() {
@@ -45,35 +101,53 @@
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
   function setupTabs() {
-    const panels = { network: $('panelNetwork'), execution: $('panelExecution'), console: $('panelConsole') };
-    document.querySelectorAll('.tab-btn').forEach(btn => {
+    const tabs = Array.from(document.querySelectorAll('.tab-btn'));
+    tabs.forEach((btn, index) => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        Object.values(panels).forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        const tab = btn.dataset.tab;
-        if (panels[tab]) panels[tab].classList.add('active');
-        $('btnExportHAR').style.display = tab === 'network' ? '' : 'none';
+        setActiveTab(btn.dataset.tab);
+      });
+      btn.addEventListener('keydown', (event) => {
+        const firstIndex = 0;
+        const lastIndex = tabs.length - 1;
+        let nextIndex = index;
+        if (event.key === 'ArrowRight') nextIndex = index === lastIndex ? firstIndex : index + 1;
+        else if (event.key === 'ArrowLeft') nextIndex = index === firstIndex ? lastIndex : index - 1;
+        else if (event.key === 'Home') nextIndex = firstIndex;
+        else if (event.key === 'End') nextIndex = lastIndex;
+        else return;
+        event.preventDefault();
+        tabs[nextIndex].focus();
+        tabs[nextIndex].click();
       });
     });
+    setActiveTab('network');
   }
 
   // ── Toolbar ───────────────────────────────────────────────────────────────
   function setupToolbar() {
     $('btnRefresh').addEventListener('click', refreshAll);
     $('btnClear').addEventListener('click', async () => {
+      if (activeTab !== 'network') return;
       await chrome.runtime.sendMessage({ action: 'clearNetworkLog' });
       netLog = [];
       renderNetwork();
     });
     $('btnExportHAR').addEventListener('click', exportHAR);
-    $('btnCloseDetail').addEventListener('click', () => {
-      $('netDetail').classList.remove('open');
-      selectedRow = null;
-    });
+    $('btnCloseDetail').addEventListener('click', closeDetail);
     $('filterInput').addEventListener('input', e => {
       filterText = e.target.value.toLowerCase();
-      renderNetwork();
+      if (activeTab === 'network') renderNetwork();
+      if (activeTab === 'execution') renderExecution();
+    });
+    $('filterInput').addEventListener('search', () => {
+      filterText = $('filterInput').value.toLowerCase();
+      if (activeTab === 'network') renderNetwork();
+      if (activeTab === 'execution') renderExecution();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && $('netDetail').classList.contains('open')) {
+        closeDetail();
+      }
     });
   }
 
@@ -96,6 +170,16 @@
     // Table
     const tbody = $('netTableBody');
     tbody.innerHTML = '';
+    if (!filtered.length) {
+      closeDetail();
+      const tr = document.createElement('tr');
+      const message = filterText
+        ? `No requests match "${filterText}".`
+        : 'No network requests yet. Open a page that runs userscripts to capture activity.';
+      tr.innerHTML = `<td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted)">${escapeHtml(message)}</td>`;
+      tbody.appendChild(tr);
+      return;
+    }
     for (const entry of filtered) {
       const tr = document.createElement('tr');
       tr.dataset.id = entry.id;
@@ -128,6 +212,8 @@
 
     const detail = $('netDetail');
     detail.classList.add('open');
+    detail.hidden = false;
+    detail.setAttribute('aria-hidden', 'false');
     $('netDetailTitle').textContent = (entry.method || 'GET') + ' ' + (entry.url || '').slice(0, 40) + '…';
 
     let html = '';
@@ -142,10 +228,10 @@
     ]);
 
     if (entry.requestHeaders) {
-      html += section('Request Headers', Object.entries(entry.requestHeaders).map(([k, v]) => [k, escapeHtml(String(v))]));
+      html += section('Request Headers', Object.entries(entry.requestHeaders).map(([k, v]) => [escapeHtml(k), escapeHtml(String(v))]));
     }
     if (entry.responseHeaders) {
-      html += section('Response Headers', Object.entries(entry.responseHeaders).map(([k, v]) => [k, escapeHtml(String(v))]));
+      html += section('Response Headers', Object.entries(entry.responseHeaders).map(([k, v]) => [escapeHtml(k), escapeHtml(String(v))]));
     }
     if (entry.error) {
       html += `<div class="net-detail-section"><div class="net-detail-section-title">Error</div><div style="color:var(--danger)">${escapeHtml(entry.error)}</div></div>`;
@@ -171,13 +257,20 @@
     const tbody = $('execTableBody');
     tbody.innerHTML = '';
 
-    const withStats = scripts.filter(s => s.stats && (s.stats.runs > 0));
+    const executionScripts = scripts.filter(s => s.stats && (s.stats.runs > 0));
+    const withStats = executionScripts.filter((script) => {
+      if (!filterText) return true;
+      return (script.meta?.name || script.id || '').toLowerCase().includes(filterText);
+    });
     withStats.sort((a, b) => (b.stats.totalTime || 0) - (a.stats.totalTime || 0));
     const maxTotal = withStats.reduce((m, s) => Math.max(m, s.stats.totalTime || 0), 1);
 
     if (!withStats.length) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted)">No execution data yet. Scripts will appear here after they run.</td>`;
+      const message = filterText && executionScripts.length
+        ? `No scripts match "${filterText}".`
+        : 'No execution data yet. Scripts will appear here after they run.';
+      tr.innerHTML = `<td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted)">${escapeHtml(message)}</td>`;
       tbody.appendChild(tr);
       return;
     }
