@@ -15,7 +15,7 @@
     "test:a11y": "vitest run tests/dashboard-a11y.test.js",
     "test:cov": "vitest run --coverage",
     "check": "tsc --noEmit && vitest run",
-    "clean": "node -e \"const fs=require('fs'); fs.rmSync('background.js',{force:true}); fs.rmSync('lib/monaco',{recursive:true,force:true});\""
+    "clean": "node --input-type=commonjs -e \"const fs=require('fs'); fs.rmSync('background.js',{force:true}); fs.rmSync('lib/monaco',{recursive:true,force:true});\""
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.2",

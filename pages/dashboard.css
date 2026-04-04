@@ -227,7 +227,7 @@ a:hover {
 }
 
 .btn-danger:hover {
-  background: var(--accent-error);
+  background: var(--accent-red);
   filter: brightness(1.15);
 }
 
@@ -541,18 +541,6 @@ input[type="checkbox"] {
 .btn-sm {
   padding: 3px 10px;
   font-size: 11px;
-}
-
-.btn-danger {
-  background: var(--accent-red);
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.btn-danger:hover {
-  opacity: 0.85;
 }
 
 /* ===== SITE ICONS ===== */
@@ -1864,4 +1852,12 @@ tr.row-over-budget {
   color: var(--text-muted);
   min-width: 65px;
   text-align: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
