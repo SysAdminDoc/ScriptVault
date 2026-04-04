@@ -73,6 +73,60 @@ describe("popup UX markup", () => {
     expect(dropdown?.hasAttribute("hidden")).toBe(true);
     expect([...dropdown?.querySelectorAll("button") || []].every((button) => button.getAttribute("role") === "menuitem")).toBe(true);
   });
+
+  test("popup script toolbar exposes search, quick filters, and reset controls", () => {
+    const doc = parsePopup();
+    const toolbar = doc.getElementById("popupScriptToolbar");
+    const search = doc.getElementById("popupScriptSearch");
+    const clearSearch = doc.getElementById("btnClearPopupScriptSearch");
+    const filters = doc.getElementById("popupScriptFilters");
+    const filterButtons = Array.from(doc.querySelectorAll("#popupScriptFilters [data-popup-filter]"));
+    const summary = doc.getElementById("popupListSummary");
+    const resetView = doc.getElementById("btnClearPopupScriptView");
+
+    expect(toolbar).not.toBeNull();
+
+    expect(search).not.toBeNull();
+    expect(search?.getAttribute("type")).toBe("search");
+    expect(search?.getAttribute("name")).toBe("popup_script_search");
+    expect(search?.getAttribute("autocomplete")).toBe("off");
+    expect(search?.getAttribute("spellcheck")).toBe("false");
+
+    expect(clearSearch).not.toBeNull();
+    expect(clearSearch?.getAttribute("type")).toBe("button");
+    expect(clearSearch?.getAttribute("aria-label")).toBe("Clear popup script search");
+    expect(clearSearch?.hasAttribute("hidden")).toBe(true);
+
+    expect(filters).not.toBeNull();
+    expect(filters?.getAttribute("role")).toBe("group");
+    expect(filters?.getAttribute("aria-label")).toBe("Script list filters");
+    expect(filterButtons.map((button) => button.getAttribute("data-popup-filter"))).toEqual([
+      "all",
+      "running",
+      "errors",
+      "pinned",
+      "paused",
+    ]);
+    expect(filterButtons.every((button) => button.getAttribute("type") === "button")).toBe(true);
+
+    expect(summary).not.toBeNull();
+    expect(summary?.getAttribute("role")).toBe("status");
+    expect(summary?.getAttribute("aria-live")).toBe("polite");
+    expect(summary?.getAttribute("aria-atomic")).toBe("true");
+
+    expect(resetView).not.toBeNull();
+    expect(resetView?.getAttribute("type")).toBe("button");
+    expect(resetView?.hasAttribute("hidden")).toBe(true);
+  });
+
+  test("popup script list exposes list semantics for keyboard scanning", () => {
+    const doc = parsePopup();
+    const scriptList = doc.getElementById("scriptList");
+
+    expect(scriptList).not.toBeNull();
+    expect(scriptList?.getAttribute("role")).toBe("list");
+    expect(scriptList?.getAttribute("aria-label")).toBe("Scripts for this page");
+  });
 });
 
 describe("popup UX controller", () => {
@@ -82,6 +136,10 @@ describe("popup UX controller", () => {
     expect(popupJs).toMatch(/const pendingScriptActions = new Set\(\);/);
     expect(popupJs).toMatch(/async function runBusyControl\(control, task\)/);
     expect(popupJs).toMatch(/async function runScriptAction\(scriptId, task\)/);
+    expect(popupJs).toMatch(/async function copyTextToClipboard\(text\)/);
+    expect(popupJs).toMatch(/function getDropdownMenuItems\(\)/);
+    expect(popupJs).toMatch(/function focusDropdownMenuItem\(target = 0\)/);
+    expect(popupJs).toMatch(/function openScriptDropdown\(scriptId, trigger, \{ focusTarget = 0 \} = \{\}\)/);
     expect(popupJs).toMatch(/function setUtilitiesSubmenuOpen\(isOpen, \{ restoreFocus = false \} = \{\}\)/);
     expect(popupJs).toMatch(/elements\.utilitiesSubmenu\.hidden = !isOpen;/);
     expect(popupJs).toMatch(/elements\.btnEmptyFindScripts\?\.addEventListener\('click', findScripts\)/);
@@ -92,6 +150,42 @@ describe("popup UX controller", () => {
     expect(popupJs).toMatch(/document\.addEventListener\('click', \(e\) => \{/);
     expect(popupJs).toMatch(/showPopupToast\('Checking for updates…'\)/);
     expect(popupJs).toMatch(/closeScriptDropdown\(\);[\s\S]*?elements\.scriptList\.innerHTML = displayScripts\.map/);
+    expect(popupJs).toMatch(/await copyTextToClipboard\(url\);/);
+    expect(popupJs).toMatch(/dropdown\.addEventListener\('keydown', \(e\) => \{/);
+    expect(popupJs).toMatch(/openScriptDropdown\(scriptId, moreBtn, \{ focusTarget: 0 \}\);/);
+    expect(popupJs).toMatch(/openScriptDropdown\(scriptId, moreBtn, \{ focusTarget: -1 \}\);/);
+  });
+
+  test("popup toolbar controller supports inline list filtering and keyboard search", () => {
+    expect(popupJs).toMatch(/function getPopupActiveFilter\(\)/);
+    expect(popupJs).toMatch(/function setPopupActiveFilter\(nextFilter = 'all'\)/);
+    expect(popupJs).toMatch(/function updatePopupListSummary\(displayScripts = pageScripts\)/);
+    expect(popupJs).toMatch(/function getPopupScriptRows\(\)/);
+    expect(popupJs).toMatch(/function focusPopupScriptRow\(row\)/);
+    expect(popupJs).toMatch(/function resetPopupScriptView\(\)/);
+    expect(popupJs).toMatch(/const hiddenCount = Math\.max\(0, totalMatched - visibleScripts\);/);
+    expect(popupJs).toMatch(/role="listitem" tabindex="0"/);
+    expect(popupJs).toMatch(/aria-posinset="\$\{i \+ 1\}" aria-setsize="\$\{displayScripts.length\}"/);
+    expect(popupJs).toMatch(/elements\.popupScriptSearch\?\.value\?\.trim\(\)\.toLowerCase\(\) \|\| ''/);
+    expect(popupJs).toMatch(/const activeFilter = getPopupActiveFilter\(\);/);
+    expect(popupJs).toMatch(/No scripts matched "\$\{elements\.popupScriptSearch\?\.value\?\.trim\(\) \|\| ''\}" in the current view\./);
+    expect(popupJs).toMatch(/elements\.popupScriptSearch\?\.addEventListener\('input', \(\) => \{/);
+    expect(popupJs).toMatch(/elements\.btnClearPopupScriptSearch\?\.addEventListener\('click', \(\) => \{/);
+    expect(popupJs).toMatch(/elements\.popupScriptFilters\?\.querySelectorAll\('\[data-popup-filter\]'\)\?\./);
+    expect(popupJs).toMatch(/elements\.btnClearPopupScriptView\?\.addEventListener\('click', resetPopupScriptView\);/);
+    expect(popupJs).toMatch(/if \(\(e\.ctrlKey \|\| e\.metaKey\) && e\.key\.toLowerCase\(\) === 'f'\) \{/);
+    expect(popupJs).toMatch(/elements\.popupScriptSearch\?\.focus\(\);/);
+    expect(popupJs).toMatch(/elements\.popupScriptSearch\?\.select\?\.\(\);/);
+    expect(popupJs).toMatch(/if \(\(e\.key === 'Enter' \|\| e\.key === ' '\) && e\.target === item\) \{/);
+    expect(popupJs).toMatch(/if \(e\.key === 'ArrowDown'\) \{/);
+    expect(popupJs).toMatch(/focusPopupScriptRow\(next\);/);
+    expect(popupJs).toMatch(/if \(e\.key === 'ArrowUp'\) \{/);
+    expect(popupJs).toMatch(/focusPopupScriptRow\(prev\);/);
+    expect(popupJs).toMatch(/if \(e\.key === 'Home'\) \{/);
+    expect(popupJs).toMatch(/focusPopupScriptRow\(items\[0\]\);/);
+    expect(popupJs).toMatch(/if \(e\.key === 'End'\) \{/);
+    expect(popupJs).toMatch(/focusPopupScriptRow\(items\[items.length - 1\]\);/);
+    expect(popupJs).toMatch(/} else if \(e\.key === 'Enter' && focusedRow\) \{/);
   });
 
   test("popup timeline uses real disclosure semantics", () => {

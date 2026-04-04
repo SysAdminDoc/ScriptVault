@@ -26,9 +26,10 @@ const ScriptDebugger = (() => {
   const CSS = `
     .dbg-root{font-family:system-ui,-apple-system,sans-serif;color:var(--text-primary,#e0e0e0);display:flex;flex-direction:column;height:100%}
     .dbg-tabs{display:flex;border-bottom:1px solid var(--border-color,#404040);gap:0;flex-shrink:0}
-    .dbg-tab{padding:8px 16px;font-size:12px;font-weight:500;color:var(--text-secondary,#a0a0a0);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;user-select:none}
+    .dbg-tab{padding:8px 16px;font-size:12px;font-weight:500;color:var(--text-secondary,#a0a0a0);cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;transition:color .15s,border-color .15s,background .15s;user-select:none}
     .dbg-tab:hover{color:var(--text-primary,#e0e0e0)}
     .dbg-tab.active{color:var(--accent-green,#4ade80);border-bottom-color:var(--accent-green,#4ade80)}
+    .dbg-tab:focus-visible,.dbg-btn:focus-visible,.dbg-toggle:focus-visible,.dbg-log-obj:focus-visible,.dbg-json-toggle:focus-visible,.dbg-error-line-link:focus-visible{outline:2px solid var(--accent-green,#4ade80);outline-offset:2px}
     .dbg-tab .badge{display:inline-block;background:var(--accent-red,#f87171);color:#fff;font-size:10px;border-radius:8px;padding:1px 6px;margin-left:4px;vertical-align:middle}
     .dbg-panel{flex:1;overflow:auto;padding:10px}
     .dbg-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
@@ -37,9 +38,9 @@ const ScriptDebugger = (() => {
     .dbg-btn.active{background:var(--accent-green-dark,#22c55e);border-color:var(--accent-green-dark,#22c55e);color:#fff}
     .dbg-btn-danger{color:var(--accent-red,#f87171)}
     .dbg-btn-danger:hover{border-color:var(--accent-red,#f87171)}
-    .dbg-input{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;color:var(--text-primary,#e0e0e0);padding:5px 10px;font-size:12px;outline:none;transition:border-color .2s}
-    .dbg-input:focus{border-color:var(--accent-green,#4ade80)}
-    .dbg-select{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;color:var(--text-primary,#e0e0e0);padding:5px 8px;font-size:12px;outline:none;cursor:pointer}
+    .dbg-input,.dbg-select{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;color:var(--text-primary,#e0e0e0);padding:5px 10px;font-size:12px;transition:border-color .2s,box-shadow .2s}
+    .dbg-select{padding:5px 8px;cursor:pointer}
+    .dbg-input:focus-visible,.dbg-select:focus-visible,.dbg-var-edit-input:focus-visible{border-color:var(--accent-green,#4ade80);box-shadow:0 0 0 3px rgba(74,222,128,0.12)}
 
     /* Console */
     .dbg-console{display:flex;flex-direction:column;gap:2px;font-family:'Cascadia Code','Fira Code',monospace;font-size:12px}
@@ -55,7 +56,7 @@ const ScriptDebugger = (() => {
     .dbg-log-level.error{color:var(--accent-red,#f87171)}
     .dbg-log-level.info{color:var(--accent-blue,#60a5fa)}
     .dbg-log-msg{flex:1;word-break:break-word;color:var(--text-primary,#e0e0e0);line-height:1.4}
-    .dbg-log-obj{cursor:pointer;color:var(--accent-purple,#c084fc);text-decoration:underline dotted}
+    .dbg-log-obj{padding:0;border:none;background:none;cursor:pointer;color:var(--accent-purple,#c084fc);text-decoration:underline dotted;font:inherit;text-align:left}
     .dbg-log-expanded{background:var(--bg-body,#1a1a1a);border:1px solid var(--border-color,#404040);border-radius:4px;padding:6px 8px;margin-top:4px;white-space:pre-wrap;font-size:11px;color:var(--text-secondary,#a0a0a0);max-height:200px;overflow:auto}
     .dbg-empty{color:var(--text-muted,#707070);font-size:12px;text-align:center;padding:24px}
 
@@ -64,7 +65,7 @@ const ScriptDebugger = (() => {
     @keyframes dbg-pulse{0%,100%{opacity:1}50%{opacity:.6}}
     .dbg-live-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-color,#404040)}
     .dbg-live-name{flex:1;font-size:13px}
-    .dbg-toggle{position:relative;width:36px;height:20px;border-radius:10px;background:var(--toggle-off,#555);cursor:pointer;transition:background .2s;flex-shrink:0}
+    .dbg-toggle{position:relative;width:36px;height:20px;border:none;border-radius:10px;background:var(--toggle-off,#555);cursor:pointer;transition:background .2s,box-shadow .2s;flex-shrink:0}
     .dbg-toggle.active{background:var(--toggle-on,#22c55e)}
     .dbg-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
     .dbg-toggle.active::after{transform:translateX(16px)}
@@ -79,14 +80,14 @@ const ScriptDebugger = (() => {
     .dbg-var-actions{display:flex;gap:4px}
     .dbg-var-delete{color:var(--accent-red,#f87171);cursor:pointer;font-size:14px}
     .dbg-var-delete:hover{color:#ff4444}
-    .dbg-var-edit-input{background:var(--bg-input,#333);border:1px solid var(--accent-green,#4ade80);border-radius:3px;color:var(--text-primary);padding:2px 6px;font-size:12px;font-family:'Cascadia Code','Fira Code',monospace;width:100%;outline:none}
+    .dbg-var-edit-input{background:var(--bg-input,#333);border:1px solid var(--accent-green,#4ade80);border-radius:3px;color:var(--text-primary);padding:2px 6px;font-size:12px;font-family:'Cascadia Code','Fira Code',monospace;width:100%}
     .dbg-json-tree{padding-left:16px}
     .dbg-json-key{color:var(--accent-blue,#60a5fa)}
     .dbg-json-string{color:var(--accent-green,#4ade80)}
     .dbg-json-number{color:var(--accent-yellow,#fbbf24)}
     .dbg-json-bool{color:var(--accent-orange,#fb923c)}
     .dbg-json-null{color:var(--text-muted,#707070)}
-    .dbg-json-toggle{cursor:pointer;user-select:none;color:var(--text-secondary)}
+    .dbg-json-toggle{padding:0;border:none;background:none;cursor:pointer;user-select:none;color:var(--text-secondary);font:inherit}
     .dbg-json-toggle:hover{color:var(--text-primary)}
 
     /* Error Timeline */
@@ -115,6 +116,9 @@ const ScriptDebugger = (() => {
 
   function el(tag, attrs = {}, children = []) {
     const e = document.createElement(tag);
+    if (tag === 'button' && attrs.type === undefined) {
+      e.type = 'button';
+    }
     for (const [k, v] of Object.entries(attrs)) {
       if (k === 'class') e.className = v;
       else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2).toLowerCase(), v);
@@ -151,7 +155,7 @@ const ScriptDebugger = (() => {
   }
 
   function buildJsonTree(value, depth = 0) {
-    if (depth > 6) return el('span', { class: 'dbg-json-null', text: '...' });
+    if (depth > 6) return el('span', { class: 'dbg-json-null', text: '…' });
 
     if (value === null) return el('span', { class: 'dbg-json-null', text: 'null' });
     if (value === undefined) return el('span', { class: 'dbg-json-null', text: 'undefined' });
@@ -168,7 +172,7 @@ const ScriptDebugger = (() => {
         container.appendChild(el('span', { text: '[]' }));
         return container;
       }
-      const toggle = el('span', { class: 'dbg-json-toggle', text: `Array(${value.length}) ` });
+      const toggle = el('button', { class: 'dbg-json-toggle', text: `Array(${value.length}) `, 'aria-expanded': 'false' });
       const bracket = el('span', { text: '[\u2026]', style: 'color:var(--text-muted)' });
       const inner = el('div', { class: 'dbg-json-tree', style: 'display:none' });
       value.forEach((item, i) => {
@@ -181,6 +185,7 @@ const ScriptDebugger = (() => {
         const visible = inner.style.display !== 'none';
         inner.style.display = visible ? 'none' : 'block';
         bracket.textContent = visible ? '[\u2026]' : '';
+        toggle.setAttribute('aria-expanded', String(!visible));
       });
       container.appendChild(toggle);
       container.appendChild(bracket);
@@ -195,7 +200,7 @@ const ScriptDebugger = (() => {
         container.appendChild(el('span', { text: '{}' }));
         return container;
       }
-      const toggle = el('span', { class: 'dbg-json-toggle', text: `Object(${keys.length}) ` });
+      const toggle = el('button', { class: 'dbg-json-toggle', text: `Object(${keys.length}) `, 'aria-expanded': 'false' });
       const bracket = el('span', { text: '{\u2026}', style: 'color:var(--text-muted)' });
       const inner = el('div', { class: 'dbg-json-tree', style: 'display:none' });
       keys.forEach(k => {
@@ -208,6 +213,7 @@ const ScriptDebugger = (() => {
         const visible = inner.style.display !== 'none';
         inner.style.display = visible ? 'none' : 'block';
         bracket.textContent = visible ? '{\u2026}' : '';
+        toggle.setAttribute('aria-expanded', String(!visible));
       });
       container.appendChild(toggle);
       container.appendChild(bracket);
@@ -227,7 +233,7 @@ const ScriptDebugger = (() => {
 
     root.appendChild(renderTabs());
 
-    const panel = el('div', { class: 'dbg-panel' });
+    const panel = el('div', { class: 'dbg-panel', id: `dbg-panel-${_activeTab}`, role: 'tabpanel' });
     switch (_activeTab) {
       case 'console':  panel.appendChild(renderConsolePanel()); break;
       case 'reload':   panel.appendChild(renderLiveReloadPanel()); break;
@@ -238,7 +244,7 @@ const ScriptDebugger = (() => {
   }
 
   function renderTabs() {
-    const bar = el('div', { class: 'dbg-tabs' });
+    const bar = el('div', { class: 'dbg-tabs', role: 'tablist', 'aria-label': 'Debugger views' });
     const tabs = [
       { id: 'console', label: 'Console', count: _activeScriptId ? (_consoleLogs[_activeScriptId] || []).filter(e => e.level === 'error').length : 0 },
       { id: 'reload',  label: 'Live Reload' },
@@ -246,9 +252,13 @@ const ScriptDebugger = (() => {
       { id: 'errors',  label: 'Errors', count: Object.values(_errorTimeline).flat().length },
     ];
     tabs.forEach(t => {
-      const tab = el('div', {
+      const tab = el('button', {
         class: 'dbg-tab' + (t.id === _activeTab ? ' active' : ''),
         text: t.label,
+        role: 'tab',
+        'aria-selected': String(t.id === _activeTab),
+        'aria-controls': `dbg-panel-${t.id}`,
+        tabindex: t.id === _activeTab ? '0' : '-1',
       });
       if (t.count) {
         tab.appendChild(el('span', { class: 'badge', text: String(t.count) }));
@@ -271,7 +281,7 @@ const ScriptDebugger = (() => {
     const scriptIds = Object.keys(_consoleLogs);
     if (scriptIds.length > 0) {
       const sel = el('select', { class: 'dbg-select' });
-      sel.appendChild(el('option', { value: '', text: 'Select script...' }));
+      sel.appendChild(el('option', { value: '', text: 'Select Script…' }));
       scriptIds.forEach(id => {
         const opt = el('option', { value: id, text: id });
         if (id === _activeScriptId) opt.selected = true;
@@ -321,11 +331,13 @@ const ScriptDebugger = (() => {
         // Check if any arg is an object for expandable view
         const hasObject = entry.args.some(a => a !== null && typeof a === 'object');
         if (hasObject) {
-          const summary = el('span', { class: 'dbg-log-obj', text: formattedText.substring(0, 120) + (formattedText.length > 120 ? '...' : '') });
+          const summary = el('button', { class: 'dbg-log-obj', text: formattedText.substring(0, 120) + (formattedText.length > 120 ? '…' : ''), 'aria-expanded': 'false' });
           const expanded = el('div', { class: 'dbg-log-expanded', style: 'display:none' });
           expanded.textContent = formattedText;
           summary.addEventListener('click', () => {
-            expanded.style.display = expanded.style.display === 'none' ? 'block' : 'none';
+            const nextVisible = expanded.style.display === 'none';
+            expanded.style.display = nextVisible ? 'block' : 'none';
+            summary.setAttribute('aria-expanded', String(nextVisible));
           });
           msgEl.appendChild(summary);
           msgEl.appendChild(expanded);
@@ -366,7 +378,11 @@ const ScriptDebugger = (() => {
         row.appendChild(el('span', { class: 'dbg-live-badge', text: 'LIVE RELOAD ON' }));
       }
 
-      const toggle = el('div', { class: 'dbg-toggle' + (_liveReload[id] ? ' active' : '') });
+      const toggle = el('button', {
+        class: 'dbg-toggle' + (_liveReload[id] ? ' active' : ''),
+        'aria-pressed': String(_liveReload[id]),
+        'aria-label': `${_liveReload[id] ? 'Disable' : 'Enable'} live reload for ${id}`,
+      });
       toggle.addEventListener('click', () => {
         _liveReload[id] = !_liveReload[id];
         if (_liveReload[id]) {
@@ -395,7 +411,7 @@ const ScriptDebugger = (() => {
     const scriptIds = Object.keys(_consoleLogs);
     if (scriptIds.length > 0) {
       const sel = el('select', { class: 'dbg-select' });
-      sel.appendChild(el('option', { value: '', text: 'Select script...' }));
+      sel.appendChild(el('option', { value: '', text: 'Select Script…' }));
       scriptIds.forEach(id => {
         const opt = el('option', { value: id, text: id });
         if (id === _activeScriptId) opt.selected = true;
@@ -408,8 +424,11 @@ const ScriptDebugger = (() => {
     // Search
     const searchInput = el('input', {
       class: 'dbg-input',
-      type: 'text',
-      placeholder: 'Search variables...',
+      type: 'search',
+      name: 'debugVariableSearch',
+      autocomplete: 'off',
+      spellcheck: 'false',
+      placeholder: 'Search Variables…',
       value: _variableSearch,
       style: 'flex:1;min-width:140px',
     });
@@ -434,6 +453,7 @@ const ScriptDebugger = (() => {
   }
 
   function renderVariableTable() {
+    if (!_container) return;
     const container = _container.querySelector('#dbg-var-container');
     if (!container) return;
     container.innerHTML = '';

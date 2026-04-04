@@ -17,14 +17,20 @@ describe("cross-surface UX audit", () => {
   test("install flow keeps expandable rule disclosures and live review status", () => {
     expect(installHtml).toContain(".match-list-toggle");
     expect(installHtml).toContain(".review-nav");
+    expect(installHtml).toContain(".review-nav-status");
     expect(installJs).toContain("function renderExpandablePatternSection");
     expect(installJs).toContain("function setupExpandablePatternSections");
     expect(installJs).toContain("function setupReviewNav");
     expect(installJs).toContain('id="reviewNav"');
+    expect(installJs).toContain('id="reviewNavStatus" role="status" aria-live="polite" aria-atomic="true"');
     expect(installJs).toContain("reviewSecurity");
     expect(installJs).toContain('id="reviewInstall"');
     expect(installJs).toContain('id="dep-status" role="status" aria-live="polite" aria-atomic="true"');
     expect(installJs).toContain('id="analysisStatus" role="status" aria-live="polite" aria-atomic="true"');
+    expect(installJs).toContain("button.setAttribute('aria-current', 'location')");
+    expect(installJs).toContain("event.key === 'ArrowRight'");
+    expect(installJs).toContain("event.key === 'Home'");
+    expect(installJs).toContain("event.key === 'End'");
     expect(installJs).toContain('rel="noopener noreferrer"');
   });
 
@@ -45,11 +51,25 @@ describe("cross-surface UX audit", () => {
     expect(searchStatus?.getAttribute("aria-live")).toBe("polite");
     expect(allSectionHeader?.getAttribute("aria-controls")).toBe("allScriptList");
     expect(allSectionHeader?.getAttribute("aria-expanded")).toBe("true");
-    expect(allScriptList?.getAttribute("role")).toBe("region");
+    expect(doc.getElementById("pageScriptList")?.getAttribute("role")).toBe("list");
+    expect(allScriptList?.getAttribute("role")).toBe("list");
     expect(allScriptList?.getAttribute("aria-labelledby")).toBe("allSectionHeader");
 
     expect(sidepanelJs).toContain("function updateSearchSummary");
     expect(sidepanelJs).toContain("function setAllScriptsCollapsed");
+    expect(sidepanelJs).toContain("const pendingScriptActions = new Set();");
+    expect(sidepanelJs).toContain("function setScriptRowsBusy(scriptId, isBusy)");
+    expect(sidepanelJs).toContain("function getScriptToggleLabel(script, enabled = script.enabled !== false)");
+    expect(sidepanelJs).toContain("function focusWithinScriptList(control, selector, direction)");
+    expect(sidepanelJs).toContain("input.setAttribute('aria-label', getScriptToggleLabel(script, enabled));");
+    expect(sidepanelJs).toContain("detailText = isPageScript");
+    expect(sidepanelJs).toContain("Available on this page");
+    expect(sidepanelJs).toContain("Paused for this page");
+    expect(sidepanelJs).toContain("if (pendingScriptActions.has(id)) return;");
+    expect(sidepanelJs).toContain("event.key === 'ArrowDown'");
+    expect(sidepanelJs).toContain("event.key === 'ArrowUp'");
+    expect(sidepanelJs).toContain("event.key === 'Home'");
+    expect(sidepanelJs).toContain("event.key === 'End'");
     expect(sidepanelJs).toContain('No scripts match "${searchQuery}".');
     expect(sidepanelJs).toContain("Find for ");
   });

@@ -220,6 +220,14 @@ const PublicAPI = (() => {
     }
 
     timestamps.push(now);
+
+    // Evict dead entries to prevent unbounded Map growth
+    if (_rateLimitMap.size > 200) {
+      for (const [key, ts] of _rateLimitMap) {
+        if (ts.length === 0 || ts[ts.length - 1] < cutoff) _rateLimitMap.delete(key);
+      }
+    }
+
     return true;
   }
 

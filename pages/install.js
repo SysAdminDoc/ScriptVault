@@ -803,9 +803,14 @@ function renderInstallUI(sourceUrl) {
               type="button"
               data-target="${item.id}"
               aria-pressed="${index === 0 ? 'true' : 'false'}"
+              aria-current="${index === 0 ? 'location' : 'false'}"
+              tabindex="${index === 0 ? '0' : '-1'}"
             >${escapeHtml(item.label)}</button>
           `).join('')}
         </nav>
+        <div class="review-nav-meta">
+          <p class="review-nav-status" id="reviewNavStatus" role="status" aria-live="polite" aria-atomic="true">Reviewing Summary. Use Left and Right arrow keys to move between sections.</p>
+        </div>
         <section class="review-section" id="reviewSummary">
           <div class="summary-grid">
             ${summaryCards.map(card => `
@@ -1178,25 +1183,60 @@ function setupReviewNav() {
   const nav = document.getElementById('reviewNav');
   if (!nav) return;
   const buttons = Array.from(nav.querySelectorAll('.review-nav-btn'));
+  const status = document.getElementById('reviewNavStatus');
   const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-  const setActiveTarget = (targetId) => {
+  const setActiveTarget = (targetId, { announce = false, moveFocus = false } = {}) => {
+    let activeButton = null;
     buttons.forEach((button) => {
       const isActive = button.dataset.target === targetId;
       button.classList.toggle('is-active', isActive);
       button.setAttribute('aria-pressed', String(isActive));
+      button.tabIndex = isActive ? 0 : -1;
+      if (isActive) {
+        button.setAttribute('aria-current', 'location');
+        activeButton = button;
+      } else {
+        button.removeAttribute('aria-current');
+      }
+    });
+    if (announce && status && activeButton) {
+      status.textContent = `Reviewing ${activeButton.textContent.trim()}. Use Left and Right arrow keys to move between sections.`;
+    }
+    if (moveFocus && activeButton) {
+      activeButton.focus({ preventScroll: true });
+    }
+  };
+
+  const activateButton = (button, { announce = true, moveFocus = false } = {}) => {
+    const target = document.getElementById(button.dataset.target || '');
+    if (!target) return;
+    setActiveTarget(button.dataset.target, { announce, moveFocus });
+    target.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'start'
     });
   };
 
-  buttons.forEach((button) => {
+  buttons.forEach((button, index) => {
     button.addEventListener('click', () => {
-      const target = document.getElementById(button.dataset.target || '');
-      if (!target) return;
-      setActiveTarget(button.dataset.target);
-      target.scrollIntoView({
-        behavior: prefersReducedMotion ? 'auto' : 'smooth',
-        block: 'start'
-      });
+      activateButton(button, { announce: true });
+    });
+
+    button.addEventListener('keydown', (event) => {
+      if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      let nextIndex = index;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+        nextIndex = (index + 1) % buttons.length;
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+        nextIndex = (index - 1 + buttons.length) % buttons.length;
+      } else if (event.key === 'Home') {
+        nextIndex = 0;
+      } else if (event.key === 'End') {
+        nextIndex = buttons.length - 1;
+      }
+      activateButton(buttons[nextIndex], { announce: true, moveFocus: true });
     });
   });
 
@@ -1205,7 +1245,7 @@ function setupReviewNav() {
     .filter(Boolean);
 
   if (!sections.length) return;
-  setActiveTarget(buttons[0]?.dataset.target || sections[0].id);
+  setActiveTarget(buttons[0]?.dataset.target || sections[0].id, { announce: true });
 
   if (!('IntersectionObserver' in window)) return;
 

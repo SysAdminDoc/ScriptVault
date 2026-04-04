@@ -925,7 +925,7 @@ const DependencyGraph = (() => {
         }
 
         // Open in Editor button
-        html += `<button class="dg-btn-open" data-action="open-editor">Open in Editor</button>`;
+        html += `<button class="dg-btn-open" data-action="open-editor" type="button">Open in Editor</button>`;
 
         body.innerHTML = html;
 
@@ -966,10 +966,10 @@ const DependencyGraph = (() => {
         const toolbar = document.createElement('div');
         toolbar.className = 'dg-toolbar';
         toolbar.innerHTML = `
-            <button data-action="reset-zoom" title="Reset view">Reset View</button>
-            <button data-action="reheat" title="Re-run layout">Re-layout</button>
-            <button data-action="export-png" title="Export as PNG">PNG</button>
-            <button data-action="export-svg" title="Export as SVG">SVG</button>
+            <button data-action="reset-zoom" title="Reset view" type="button">Reset View</button>
+            <button data-action="reheat" title="Re-run layout" type="button">Re-layout</button>
+            <button data-action="export-png" title="Export as PNG" type="button">PNG</button>
+            <button data-action="export-svg" title="Export as SVG" type="button">SVG</button>
         `;
         canvasArea.appendChild(toolbar);
 
@@ -993,7 +993,7 @@ const DependencyGraph = (() => {
         sidebar.innerHTML = `
             <div class="dg-sidebar-header">
                 <span>Details</span>
-                <button data-action="toggle-sidebar" title="Toggle sidebar">\u2715</button>
+                <button data-action="toggle-sidebar" title="Toggle sidebar" type="button" aria-label="Close details panel">\u2715</button>
             </div>
             <div class="dg-sidebar-body">
                 <div class="dg-empty">Select a node to view details</div>

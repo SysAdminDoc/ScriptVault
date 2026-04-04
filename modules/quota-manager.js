@@ -154,7 +154,23 @@ const QuotaManager = (() => {
       }
     }
 
-    // 7. Remove npm cache if critical
+    // 7. Clear analytics/perf history if requested
+    if (options.analytics || options.perfHistory) {
+      const keysToRemove = [];
+      const all = await chrome.storage.local.get(null);
+      for (const key of Object.keys(all)) {
+        if (key.startsWith('sv_analytics') || key === 'analytics' || key === 'perfHistory') {
+          keysToRemove.push(key);
+          freedBytes += JSON.stringify(all[key]).length;
+        }
+      }
+      if (keysToRemove.length > 0) {
+        await chrome.storage.local.remove(keysToRemove);
+        actions.push(`Cleared ${keysToRemove.length} analytics/perf entries`);
+      }
+    }
+
+    // 8. Remove npm cache if critical
     if (options.npmCache) {
       await chrome.storage.local.remove('npmCache');
       actions.push('Cleared npm package cache');

@@ -18,7 +18,7 @@ const ErrorLog = {
    * entry: { scriptId, scriptName?, error, stack?, url?, line?, col?, context? }
    */
   async log(entry) {
-    const entries = await this._load();
+    let entries = await this._load();
 
     const record = {
       id: crypto.randomUUID(),
@@ -47,7 +47,7 @@ const ErrorLog = {
 
     // FIFO: trim to max entries
     if (entries.length > this.MAX_ENTRIES) {
-      entries.splice(0, entries.length - this.MAX_ENTRIES);
+      entries = entries.slice(-this.MAX_ENTRIES);
     }
 
     this._cache = entries;

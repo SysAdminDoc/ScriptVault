@@ -157,6 +157,74 @@ describe("dashboard accessibility markup", () => {
     });
   });
 
+  test("bulk selection surface exposes a live summary and safe default states", () => {
+    const doc = parseDashboard();
+    const bulkCluster = doc.querySelector('.bulk-action-cluster[role="group"][aria-label="Bulk actions"]');
+    const bulkToggle = doc.querySelector('label.bulk-toggle[for="bulkSelectAll"]');
+    const bulkAction = doc.getElementById("bulkActionSelect");
+    const bulkApply = doc.getElementById("btnBulkApply");
+    const selectionRail = doc.getElementById("bulkSelectionRail");
+    const selectionSummary = doc.getElementById("bulkSelectionSummary");
+    const actionFeedback = doc.getElementById("bulkActionFeedback");
+    const clearSelection = doc.getElementById("btnClearSelection");
+
+    expect(bulkCluster).not.toBeNull();
+    expect(bulkToggle).not.toBeNull();
+    expect(bulkToggle?.textContent).toContain("Select Shown");
+    expect(bulkAction?.querySelector('option[value=""]')?.textContent?.trim()).toBe("Choose Action");
+    expect(bulkAction?.disabled).toBe(true);
+    expect(bulkApply?.disabled).toBe(true);
+
+    expect(selectionRail).not.toBeNull();
+    expect(selectionRail?.getAttribute("role")).toBe("group");
+    expect(selectionRail?.getAttribute("aria-label")).toBe("Selection summary");
+    expect(selectionSummary?.getAttribute("role")).toBe("status");
+    expect(selectionSummary?.getAttribute("aria-live")).toBe("polite");
+    expect(selectionSummary?.textContent?.trim()).toBe("No scripts selected");
+    expect(actionFeedback).not.toBeNull();
+    expect(actionFeedback?.getAttribute("role")).toBe("status");
+    expect(actionFeedback?.getAttribute("aria-live")).toBe("polite");
+    expect(actionFeedback?.hasAttribute("hidden")).toBe(true);
+    expect(doc.getElementById("bulkSelectionMeta")?.textContent).toContain("this view");
+    expect(clearSelection?.disabled).toBe(true);
+  });
+
+  test("script workspace exposes quick filters, live results summary, and reset affordances", () => {
+    const doc = parseDashboard();
+    const clearSearch = doc.getElementById("btnClearScriptSearch");
+    const quickFilters = doc.getElementById("scriptQuickFilters");
+    const filterButtons = Array.from(doc.querySelectorAll("#scriptQuickFilters [data-filter-value]"));
+    const summary = doc.getElementById("scriptResultsSummary");
+    const resetView = doc.getElementById("btnClearScriptWorkspace");
+
+    expect(clearSearch).not.toBeNull();
+    expect(clearSearch?.getAttribute("type")).toBe("button");
+    expect(clearSearch?.getAttribute("aria-label")).toBe("Clear script search");
+    expect(clearSearch?.hasAttribute("hidden")).toBe(true);
+
+    expect(quickFilters).not.toBeNull();
+    expect(quickFilters?.getAttribute("role")).toBe("group");
+    expect(quickFilters?.getAttribute("aria-label")).toBe("Script quick filters");
+    expect(filterButtons.map((button) => button.getAttribute("data-filter-value"))).toEqual([
+      "all",
+      "enabled",
+      "attention",
+      "pinned",
+      "local",
+      "remote",
+    ]);
+    expect(filterButtons.every((button) => button.getAttribute("type") === "button")).toBe(true);
+
+    expect(summary).not.toBeNull();
+    expect(summary?.getAttribute("role")).toBe("status");
+    expect(summary?.getAttribute("aria-live")).toBe("polite");
+    expect(summary?.getAttribute("aria-atomic")).toBe("true");
+
+    expect(resetView).not.toBeNull();
+    expect(resetView?.getAttribute("type")).toBe("button");
+    expect(resetView?.hasAttribute("hidden")).toBe(true);
+  });
+
   test("script tab strip exposes a labeled group container", () => {
     const doc = parseDashboard();
     const scriptTabsGroup = doc.getElementById("scriptTabsGroup");
@@ -450,6 +518,51 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/button\.addEventListener\('click', \(\) => handleSortClick\(button\.dataset\.sort\)\)/);
     expect(dashboardJs).toMatch(/const th = button\.closest\('th'\);/);
     expect(dashboardJs).toMatch(/button\.setAttribute\('aria-pressed', String\(isActive\)\)/);
+  });
+
+  test("bulk selection controller preserves hidden selections and syncs mixed state affordances", () => {
+    expect(dashboardJs).toMatch(/function pruneSelectedScripts/);
+    expect(dashboardJs).toMatch(/elements\.bulkActionFeedback = document\.getElementById\('bulkActionFeedback'\);/);
+    expect(dashboardJs).toMatch(/checkbox\.indeterminate = !allVisibleSelected && someVisibleSelected;/);
+    expect(dashboardJs).toMatch(/row\?\.classList\.toggle\('row-selected', isChecked\)/);
+    expect(dashboardJs).toMatch(/if \(typeof CardView !== 'undefined' && typeof CardView\.syncSelection === 'function'\) \{/);
+    expect(dashboardJs).toMatch(/elements\.bulkActionSelect\?\.addEventListener\('change', \(\) => \{\s*updateBulkCheckboxes\(\);\s*\}\);/);
+    expect(dashboardJs).toMatch(/filtered\.forEach\(s => \{\s*if \(checked\) state\.selectedScripts\.add\(s\.id\);\s*else state\.selectedScripts\.delete\(s\.id\);\s*\}\);/);
+    expect(dashboardJs).toMatch(/elements\.btnClearSelection\?\.addEventListener\('click', \(\) => \{\s*state\.selectedScripts\.clear\(\);/);
+    expect(dashboardJs).toMatch(/runButtonTask\(event\.currentTarget, executeBulkAction, \{ busyLabel: 'Applying…' \}\)/);
+    expect(dashboardJs).toMatch(/function setBulkActionFeedback\(summary = '', \{ tone = 'info', detail = '' \} = \{\}\)/);
+    expect(dashboardJs).toMatch(/function buildBulkActionFeedback\(action, result\)/);
+    expect(dashboardJs).toMatch(/async function runBulkScriptOperation\(ids, options\)/);
+    expect(dashboardJs).toMatch(/elements\.btnBulkApply\.textContent = hasAction \? getBulkActionButtonLabel\(elements\.bulkActionSelect\?\.value\) : 'Apply';/);
+    expect(dashboardJs).toMatch(/state\.selectedScripts = new Set\(ids\.filter\(id => !succeededIds\.includes\(id\)\)\);/);
+    expect(dashboardJs).toMatch(/setBulkActionFeedback\(feedback\.summary, \{ tone: feedback\.tone, detail: feedback\.detail \}\);/);
+    expect(dashboardJs).toMatch(/showToast\(feedback\.summary, feedback\.tone\);/);
+    expect(dashboardJs).toMatch(/aria-label="Select \$\{escapeHtml\(name\)\}"/);
+    expect(dashboardJs).toMatch(/aria-label="\$\{enabled \? 'Disable' : 'Enable'\} \$\{escapeHtml\(name\)\}"/);
+    expect(dashboardJs).toMatch(/const selectionHint = getCurrentScriptViewMode\(\) === 'card'/);
+    expect(dashboardJs).toMatch(/Use the Select control on each card to build a batch faster\./);
+  });
+
+  test("script workspace controller keeps URL-backed state and premium row affordances wired", () => {
+    expect(dashboardJs).toMatch(/function restoreScriptViewModeFromQuery\(\)/);
+    expect(dashboardJs).toMatch(/function restoreScriptWorkspaceStateFromQuery\(\)/);
+    expect(dashboardJs).toMatch(/function syncScriptWorkspaceStateToUrl\(\)/);
+    expect(dashboardJs).toMatch(/function updateScriptResultsSummary\(filtered = \[\]\)/);
+    expect(dashboardJs).toMatch(/function resetScriptWorkspaceView\(\)/);
+    expect(dashboardJs).toMatch(/elements\.btnClearScriptSearch = document\.getElementById\('btnClearScriptSearch'\);/);
+    expect(dashboardJs).toMatch(/elements\.scriptQuickFilters = document\.getElementById\('scriptQuickFilters'\);/);
+    expect(dashboardJs).toMatch(/elements\.scriptResultsSummary = document\.getElementById\('scriptResultsSummary'\);/);
+    expect(dashboardJs).toMatch(/elements\.btnClearScriptWorkspace = document\.getElementById\('btnClearScriptWorkspace'\);/);
+    expect(dashboardJs).toMatch(/restoreScriptWorkspaceStateFromQuery\(\);/);
+    expect(dashboardJs).toMatch(/updateScriptResultsSummary\(filtered\);/);
+    expect(dashboardJs).toMatch(/syncScriptWorkspaceStateToUrl\(\);/);
+    expect(dashboardJs).toMatch(/elements\.btnClearScriptSearch\?\.addEventListener\('click', \(\) => \{/);
+    expect(dashboardJs).toMatch(/elements\.scriptQuickFilters\?\.querySelectorAll\('\[data-filter-value\]'\)\?\./);
+    expect(dashboardJs).toMatch(/elements\.btnClearScriptWorkspace\?\.addEventListener\('click', resetScriptWorkspaceView\);/);
+    expect(dashboardJs).toMatch(/class="script-name-button"/);
+    expect(dashboardJs).toMatch(/tr\.querySelector\('\.script-name-button'\)\?\.addEventListener\('click', \(\) => openEditorForScript\(script\.id\)\);/);
+    expect(dashboardJs).toMatch(/rel="noopener noreferrer"/);
+    expect(dashboardJs).toMatch(/function describeScriptProvenance\(script\)/);
   });
 });
 
