@@ -461,7 +461,8 @@ const DevToolsV2 = (() => {
     .dtv2-console { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; background: var(--bg, #1e1e1e); overflow: hidden; }
     .dtv2-con-toolbar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--bg-raised, #252525); border-bottom: 1px solid var(--border, #3a3a3a); flex-shrink: 0; flex-wrap: wrap; }
     .dtv2-con-toolbar select { background: var(--bg-row, #282828); border: 1px solid var(--border, #3a3a3a); color: var(--text, #d4d4d4); padding: 2px 4px; border-radius: 3px; font-size: 11px; max-width: 160px; }
-    .dtv2-con-toolbar select:focus { outline: none; border-color: var(--accent, #4CAF50); }
+    .dtv2-con-toolbar select:focus,
+    .dtv2-con-toolbar select:focus-visible { outline: none; border-color: var(--accent, #4CAF50); box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.18); }
     .dtv2-con-toggle { display: inline-flex; align-items: center; gap: 2px; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; cursor: pointer; border: 1px solid var(--border, #3a3a3a); background: transparent; transition: opacity 0.15s; }
     .dtv2-con-toggle.off { opacity: 0.35; }
     .dtv2-con-toggle.log { color: var(--text-muted, #888); }
@@ -469,7 +470,8 @@ const DevToolsV2 = (() => {
     .dtv2-con-toggle.error { color: var(--danger, #ef4444); }
     .dtv2-con-toggle.info { color: var(--info, #60a5fa); }
     .dtv2-con-search { background: var(--bg-row, #282828); border: 1px solid var(--border, #3a3a3a); color: var(--text, #d4d4d4); padding: 2px 6px; border-radius: 3px; font-size: 11px; width: 140px; }
-    .dtv2-con-search:focus { outline: none; border-color: var(--accent, #4CAF50); }
+    .dtv2-con-search:focus,
+    .dtv2-con-search:focus-visible { outline: none; border-color: var(--accent, #4CAF50); box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.18); }
     .dtv2-con-btn { background: none; border: 1px solid var(--border, #3a3a3a); color: var(--text-muted, #888); cursor: pointer; padding: 2px 8px; border-radius: 3px; font-size: 11px; }
     .dtv2-con-btn:hover { color: var(--text, #d4d4d4); border-color: var(--text-muted, #888); }
     .dtv2-con-entries { flex: 1; overflow-y: auto; min-height: 0; font-family: Consolas, monospace; font-size: 11px; }

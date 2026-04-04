@@ -371,7 +371,7 @@ function getSourceSummary(sourceUrl) {
 
   try {
     const url = new URL(sourceUrl);
-    const shortPath = url.pathname.length > 28 ? `${url.pathname.slice(0, 28)}...` : url.pathname;
+    const shortPath = url.pathname.length > 28 ? `${url.pathname.slice(0, 28)}…` : url.pathname;
     return {
       host: url.host,
       label: url.toString(),
@@ -392,8 +392,45 @@ function renderExternalLink(url, label = truncateUrl(url)) {
   const safeUrl = sanitizeUrl(url);
   if (!url) return '-';
   return safeUrl
-    ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`
+    ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`
     : escapeHtml(url);
+}
+
+function renderExpandablePatternSection(sectionId, title, items, visibleCount) {
+  if (!items.length) return '';
+  const overflowItems = items.slice(visibleCount);
+  const overflowId = `${sectionId}-overflow`;
+  const toggleId = `${sectionId}-toggle`;
+
+  return `
+    <div class="section" data-expandable-section="${sectionId}">
+      <div class="section-title">
+        <span>${escapeHtml(title)}</span>
+        <span class="count">${numberFormatter.format(items.length)}</span>
+      </div>
+      <div class="match-list">
+        ${items.slice(0, visibleCount).map(item => `<div class="match-item">${escapeHtml(item)}</div>`).join('')}
+        ${overflowItems.length > 0 ? `
+          <div class="match-list-overflow" id="${overflowId}" hidden>
+            ${overflowItems.map(item => `<div class="match-item">${escapeHtml(item)}</div>`).join('')}
+          </div>
+        ` : ''}
+      </div>
+      ${overflowItems.length > 0 ? `
+        <div class="match-list-actions">
+          <button
+            class="match-list-toggle"
+            id="${toggleId}"
+            type="button"
+            aria-expanded="false"
+            aria-controls="${overflowId}"
+            data-show-label="Show ${numberFormatter.format(overflowItems.length)} more"
+            data-hide-label="Show fewer"
+          >Show ${numberFormatter.format(overflowItems.length)} more</button>
+        </div>
+      ` : ''}
+    </div>
+  `;
 }
 
 function extractSignatureInfo(code) {
@@ -731,13 +768,13 @@ function renderInstallUI(sourceUrl) {
         : `ScriptVault will add this as a new userscript from ${escapeHtml(source.host)}.`;
 
   const dependencyCard = dependencyCount > 0 ? `
-    <div class="surface-card analysis-card">
+    <div class="surface-card analysis-card review-section" id="reviewDependencies">
       <div class="install-card-header">
         <div>
           <div class="install-card-title">Dependency Reachability</div>
           <div class="install-card-subtitle">Check whether each @require URL can still be reached before install.</div>
         </div>
-        <span class="count status-neutral" id="dep-status">Checking...</span>
+        <span class="count status-neutral" id="dep-status" role="status" aria-live="polite" aria-atomic="true">Checking…</span>
       </div>
       <div class="tag-list" id="dep-list">
         ${scriptMeta.require.map(url => `<span class="tag" data-dep-url="${escapeHtml(url)}" title="${escapeHtml(url)}">${escapeHtml(getUrlFilename(url))}</span>`).join('')}
@@ -745,21 +782,43 @@ function renderInstallUI(sourceUrl) {
     </div>
   ` : '';
 
+  const reviewNavItems = [
+    { id: 'reviewSummary', label: 'Summary' },
+    { id: 'reviewDetails', label: 'Details' },
+    { id: 'reviewSecurity', label: 'Security' },
+    ...(dependencyCount > 0 ? [{ id: 'reviewDependencies', label: 'Dependencies' }] : []),
+    { id: 'reviewTrust', label: 'Trust' },
+    { id: 'reviewCode', label: 'Code' },
+    { id: 'reviewInstall', label: 'Install' }
+  ];
+
   const html = `
     <div class="install-layout">
       <div class="install-main stack">
         ${alerts.length > 0 ? `<div class="install-alert-stack">${alerts.join('')}</div>` : ''}
-        <div class="summary-grid">
-          ${summaryCards.map(card => `
-            <div class="surface-card summary-card">
-              <div class="summary-label">${escapeHtml(card.label)}</div>
-              <div class="summary-value">${escapeHtml(card.value)}</div>
-              <div class="summary-meta">${escapeHtml(card.meta)}</div>
-            </div>
+        <nav class="review-nav" id="reviewNav" aria-label="Review sections">
+          ${reviewNavItems.map((item, index) => `
+            <button
+              class="review-nav-btn${index === 0 ? ' is-active' : ''}"
+              type="button"
+              data-target="${item.id}"
+              aria-pressed="${index === 0 ? 'true' : 'false'}"
+            >${escapeHtml(item.label)}</button>
           `).join('')}
-        </div>
+        </nav>
+        <section class="review-section" id="reviewSummary">
+          <div class="summary-grid">
+            ${summaryCards.map(card => `
+              <div class="surface-card summary-card">
+                <div class="summary-label">${escapeHtml(card.label)}</div>
+                <div class="summary-value">${escapeHtml(card.value)}</div>
+                <div class="summary-meta">${escapeHtml(card.meta)}</div>
+              </div>
+            `).join('')}
+          </div>
+        </section>
 
-        <div class="script-card surface-card">
+        <div class="script-card surface-card review-section" id="reviewDetails">
       <div class="script-header">
         <div class="script-icon-row">
           <div class="script-icon">
@@ -837,31 +896,9 @@ function renderInstallUI(sourceUrl) {
         </div>
       </div>
 
-      ${matches.length > 0 ? `
-        <div class="section">
-          <div class="section-title">
-            <span>Runs on</span>
-            <span class="count">${matches.length}</span>
-          </div>
-          <div class="match-list">
-            ${matches.slice(0, 8).map(m => `<div class="match-item">${escapeHtml(m)}</div>`).join('')}
-            ${matches.length > 8 ? `<div class="match-item neutral">...and ${matches.length - 8} more</div>` : ''}
-          </div>
-        </div>
-      ` : ''}
+      ${renderExpandablePatternSection('matchRules', 'Runs on', matches, 8)}
 
-      ${excludes.length > 0 ? `
-        <div class="section">
-          <div class="section-title">
-            <span>Excludes</span>
-            <span class="count">${excludes.length}</span>
-          </div>
-          <div class="match-list">
-            ${excludes.slice(0, 3).map(m => `<div class="match-item">${escapeHtml(m)}</div>`).join('')}
-            ${excludes.length > 3 ? `<div class="match-item neutral">...and ${excludes.length - 3} more</div>` : ''}
-          </div>
-        </div>
-      ` : ''}
+      ${renderExpandablePatternSection('excludeRules', 'Excludes', excludes, 3)}
 
       <div class="section">
         <div class="section-title">
@@ -917,20 +954,20 @@ function renderInstallUI(sourceUrl) {
       ` : ''}
         </div>
 
-        <div class="surface-card analysis-card" id="analysisMount">
+        <div class="surface-card analysis-card review-section" id="reviewSecurity">
           <div class="install-card-header">
             <div>
               <div class="install-card-title">Security Analysis</div>
               <div class="install-card-subtitle">Scanning the script metadata and source for risky patterns.</div>
             </div>
-            <span class="count status-neutral" id="analysisStatus">Scanning</span>
+            <span class="count status-neutral" id="analysisStatus" role="status" aria-live="polite" aria-atomic="true">Scanning</span>
           </div>
           <div class="analysis-summary">Static analysis runs in the background so you can keep reviewing while ScriptVault checks the script.</div>
         </div>
 
       ${dependencyCard}
 
-        <div class="surface-card trust-card" id="trustMount">
+        <div class="surface-card trust-card review-section" id="reviewTrust">
           <div class="install-card-header">
             <div>
               <div class="install-card-title">Source & Trust</div>
@@ -941,7 +978,7 @@ function renderInstallUI(sourceUrl) {
           <div class="analysis-summary">${hasSignature ? 'ScriptVault is checking the embedded signature and signer trust.' : 'This script does not declare an embedded signature.'}</div>
         </div>
 
-      <div class="code-preview surface-card">
+      <div class="code-preview surface-card review-section" id="reviewCode">
           <div class="code-preview-header">
             <span class="code-preview-title">Script Code <span class="install-card-subtitle">(${numberFormatter.format(lineCount)} lines)</span></span>
         <button class="code-preview-toggle" id="toggle-code" type="button" aria-expanded="false" aria-controls="code-container">
@@ -956,7 +993,7 @@ function renderInstallUI(sourceUrl) {
       </div>
 
       <aside class="install-sidebar">
-        <div class="surface-card decision-card">
+        <div class="surface-card decision-card review-section" id="reviewInstall">
           <div class="decision-eyebrow">${escapeHtml(presentation.modeLabel)} • ${escapeHtml(source.host)}</div>
           <div class="decision-title">${escapeHtml(installTitle)}</div>
           <div class="decision-copy">${installCopy}</div>
@@ -1036,6 +1073,9 @@ function renderInstallUI(sourceUrl) {
   `;
 
   content.innerHTML = html;
+
+  setupExpandablePatternSections();
+  setupReviewNav();
 
   // Entrance animation
   const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -1117,6 +1157,71 @@ function setupCodePreview() {
   });
 
   codeEditor.setValue(scriptCode);
+}
+
+function setupExpandablePatternSections() {
+  document.querySelectorAll('.match-list-toggle').forEach((button) => {
+    const overflow = document.getElementById(button.getAttribute('aria-controls'));
+    if (!overflow) return;
+    const showLabel = button.dataset.showLabel || 'Show more';
+    const hideLabel = button.dataset.hideLabel || 'Show fewer';
+    button.addEventListener('click', () => {
+      const expanded = button.getAttribute('aria-expanded') === 'true';
+      overflow.hidden = expanded;
+      button.setAttribute('aria-expanded', String(!expanded));
+      button.textContent = expanded ? showLabel : hideLabel;
+    });
+  });
+}
+
+function setupReviewNav() {
+  const nav = document.getElementById('reviewNav');
+  if (!nav) return;
+  const buttons = Array.from(nav.querySelectorAll('.review-nav-btn'));
+  const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  const setActiveTarget = (targetId) => {
+    buttons.forEach((button) => {
+      const isActive = button.dataset.target === targetId;
+      button.classList.toggle('is-active', isActive);
+      button.setAttribute('aria-pressed', String(isActive));
+    });
+  };
+
+  buttons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const target = document.getElementById(button.dataset.target || '');
+      if (!target) return;
+      setActiveTarget(button.dataset.target);
+      target.scrollIntoView({
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        block: 'start'
+      });
+    });
+  });
+
+  const sections = buttons
+    .map((button) => document.getElementById(button.dataset.target || ''))
+    .filter(Boolean);
+
+  if (!sections.length) return;
+  setActiveTarget(buttons[0]?.dataset.target || sections[0].id);
+
+  if (!('IntersectionObserver' in window)) return;
+
+  const observer = new IntersectionObserver((entries) => {
+    const visible = entries
+      .filter((entry) => entry.isIntersecting)
+      .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+    if (visible[0]?.target?.id) {
+      setActiveTarget(visible[0].target.id);
+    }
+  }, {
+    rootMargin: '-24% 0px -58% 0px',
+    threshold: [0.18, 0.4, 0.7]
+  });
+
+  sections.forEach((section) => observer.observe(section));
 }
 
 function toggleCodePreview() {

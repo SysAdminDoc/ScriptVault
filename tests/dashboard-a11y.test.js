@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 
 const dashboardHtml = readFileSync(resolve(process.cwd(), "pages/dashboard.html"), "utf8");
 const dashboardJs = readFileSync(resolve(process.cwd(), "pages/dashboard.js"), "utf8");
+const viewSettingsController =
+  dashboardHtml.match(/<!-- View Settings Controller -->\s*<script>([\s\S]*?)<\/script>/)?.[1] ?? "";
 
 function parseDashboard() {
   return new DOMParser().parseFromString(dashboardHtml, "text/html");
@@ -128,6 +130,31 @@ describe("dashboard accessibility markup", () => {
     expect(helpPanel?.getAttribute("role")).toBe("region");
     expect(helpPanel?.getAttribute("aria-labelledby")).toBe("btnHelpTab");
     expect(helpPanel?.hasAttribute("hidden")).toBe(true);
+  });
+
+  test("scripts table sortable headers use real button controls", () => {
+    const doc = parseDashboard();
+    const sortableHeaders = Array.from(doc.querySelectorAll(".scripts-table th.sortable"));
+    const sortButtons = Array.from(doc.querySelectorAll(".scripts-table .table-sort-button[data-sort]"));
+
+    expect(sortableHeaders.length).toBe(8);
+    expect(sortButtons.map((button) => button.dataset.sort)).toEqual([
+      "order",
+      "enabled",
+      "name",
+      "version",
+      "size",
+      "lines",
+      "updated",
+      "perf",
+    ]);
+
+    sortButtons.forEach((button) => {
+      expect(button.getAttribute("type")).toBe("button");
+      expect(button.getAttribute("data-sort-label")).toBeTruthy();
+      expect(button.querySelector(".sort-indicator")).not.toBeNull();
+      expect(button.closest("th.sortable")).not.toBeNull();
+    });
   });
 
   test("script tab strip exposes a labeled group container", () => {
@@ -416,5 +443,79 @@ describe("dashboard accessibility markup", () => {
 
     expect(results).not.toBeNull();
     expect(results?.getAttribute("aria-live")).toBe("polite");
+  });
+
+  test("sort controller binds to dedicated table sort buttons", () => {
+    expect(dashboardJs).toMatch(/document\.querySelectorAll\('\.table-sort-button\[data-sort\]'\)\.forEach\(button => \{/);
+    expect(dashboardJs).toMatch(/button\.addEventListener\('click', \(\) => handleSortClick\(button\.dataset\.sort\)\)/);
+    expect(dashboardJs).toMatch(/const th = button\.closest\('th'\);/);
+    expect(dashboardJs).toMatch(/button\.setAttribute\('aria-pressed', String\(isActive\)\)/);
+  });
+});
+
+describe("dashboard view settings controller", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    document.body.innerHTML = "";
+    document.documentElement.removeAttribute("data-ui-scale");
+    document.documentElement.removeAttribute("data-density");
+    document.body.removeAttribute("data-ui-scale");
+    document.body.removeAttribute("data-density");
+  });
+
+  test("restores and persists zoom and density preferences", () => {
+    expect(viewSettingsController).toContain("applyViewSettings");
+
+    localStorage.setItem("sv_viewSettings", JSON.stringify({ scale: "1.25", density: "spacious" }));
+    document.body.innerHTML = parseDashboard().body.innerHTML;
+
+    new Function(viewSettingsController)();
+
+    const scaleSelect = document.getElementById("uiScaleSelect");
+    const compactButton = document.querySelector('.density-btn[data-density="compact"]');
+    const spaciousButton = document.querySelector('.density-btn[data-density="spacious"]');
+
+    expect(document.documentElement.getAttribute("data-ui-scale")).toBe("1.25");
+    expect(document.documentElement.getAttribute("data-density")).toBe("spacious");
+    expect(document.body.getAttribute("data-ui-scale")).toBe("1.25");
+    expect(document.body.getAttribute("data-density")).toBe("spacious");
+    expect(scaleSelect?.value).toBe("1.25");
+    expect(spaciousButton?.classList.contains("active")).toBe(true);
+    expect(spaciousButton?.getAttribute("aria-pressed")).toBe("true");
+
+    scaleSelect.value = "0.9";
+    scaleSelect.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(document.documentElement.getAttribute("data-ui-scale")).toBe("0.9");
+    expect(document.body.getAttribute("data-ui-scale")).toBe("0.9");
+    expect(JSON.parse(localStorage.getItem("sv_viewSettings"))).toEqual({
+      scale: "0.9",
+      density: "spacious",
+    });
+
+    compactButton.click();
+
+    expect(document.documentElement.getAttribute("data-density")).toBe("compact");
+    expect(document.body.getAttribute("data-density")).toBe("compact");
+    expect(compactButton?.classList.contains("active")).toBe(true);
+    expect(compactButton?.getAttribute("aria-pressed")).toBe("true");
+    expect(spaciousButton?.getAttribute("aria-pressed")).toBe("false");
+    expect(JSON.parse(localStorage.getItem("sv_viewSettings"))).toEqual({
+      scale: "0.9",
+      density: "compact",
+    });
+  });
+
+  test("invalid saved settings fall back to stable defaults", () => {
+    localStorage.setItem("sv_viewSettings", "{invalid-json");
+    document.body.innerHTML = parseDashboard().body.innerHTML;
+
+    expect(() => new Function(viewSettingsController)()).not.toThrow();
+
+    expect(document.documentElement.getAttribute("data-ui-scale")).toBe("1");
+    expect(document.documentElement.getAttribute("data-density")).toBe("comfortable");
+    expect(document.body.getAttribute("data-ui-scale")).toBe("1");
+    expect(document.body.getAttribute("data-density")).toBe("comfortable");
+    expect(document.querySelector('.density-btn[data-density="comfortable"]')?.getAttribute("aria-pressed")).toBe("true");
   });
 });
