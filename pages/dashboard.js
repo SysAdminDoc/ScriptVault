@@ -1648,6 +1648,58 @@
     }
 
     // Measure and set header height for editor overlay positioning
+    // ── View Settings: Zoom + Density ─────────────────────────────────────────
+    function initViewSettings() {
+        const root = document.documentElement;
+        const zoomSelect = document.getElementById('uiScaleSelect');
+        const densityBtns = document.querySelectorAll('.density-btn[data-density]');
+
+        // Restore from localStorage
+        const savedZoom = localStorage.getItem('sv_ui_scale');
+        const savedDensity = localStorage.getItem('sv_density');
+
+        if (savedZoom) {
+            root.setAttribute('data-ui-scale', savedZoom);
+            root.style.fontSize = `var(--base-font, 13px)`;
+            if (zoomSelect) zoomSelect.value = savedZoom;
+        }
+        if (savedDensity) {
+            root.setAttribute('data-density', savedDensity);
+            densityBtns.forEach(btn => {
+                const active = btn.dataset.density === savedDensity;
+                btn.classList.toggle('active', active);
+                btn.setAttribute('aria-pressed', String(active));
+            });
+        }
+
+        // Zoom select handler
+        if (zoomSelect) {
+            zoomSelect.addEventListener('change', () => {
+                const scale = zoomSelect.value;
+                root.setAttribute('data-ui-scale', scale);
+                localStorage.setItem('sv_ui_scale', scale);
+                // Update header height since font change affects layout
+                updateHeaderHeight();
+            });
+        }
+
+        // Density button handlers
+        densityBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const density = btn.dataset.density;
+                root.setAttribute('data-density', density);
+                localStorage.setItem('sv_density', density);
+                densityBtns.forEach(b => {
+                    const active = b.dataset.density === density;
+                    b.classList.toggle('active', active);
+                    b.setAttribute('aria-pressed', String(active));
+                });
+                // Update header height since padding changes affect layout
+                updateHeaderHeight();
+            });
+        });
+    }
+
     function updateHeaderHeight() {
         const header = document.querySelector('.tm-header');
         if (header) {
@@ -1670,6 +1722,7 @@
         if (aboutVer) aboutVer.textContent = 'Version ' + chrome.runtime.getManifest().version;
 
         cacheElements();
+        initViewSettings();
         initializeSettingsPanelControls();
         initializeUtilitiesPanelControls();
         initializeHelpPanelControls();
