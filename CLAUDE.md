@@ -678,3 +678,19 @@ All 4 bg/ modules migrated:
 
 **Totals:** 30 fixes across 15 files (Rounds 2-6). 486/486 tests green.
 - background.js: 16,723 lines
+
+### v2.0.4 Round 7 — Coverage-Driven Audit (2026-04-04)
+**Coverage analysis + 3 targeted agents on <50% branch coverage modules**
+
+**Critical (1 fix):**
+- `backup-scheduler.js` selective restore was broken — `options.scriptIds` from dashboard contains UUIDs but comparison only checked script names/namespaces; scripts never matched, selective restore silently restored nothing. Now also checks `optionsMeta.id`
+
+**Data integrity (1 fix):**
+- `storage.js` `FolderStorage.moveScript()` had no rollback on save failure unlike `addScript`/`removeScript` — cache corrupted on quota exceeded; added try/catch with rollback
+
+**Robustness (2 fixes):**
+- `userstyles.js` range variable parsing used `??` on `parseFloat()` results — NaN bypasses nullish coalescing, producing `NaN` in CSS; now converts NaN→undefined before `??`
+- `bg/signing.js` `parseInt(parts[2])` missing radix parameter — added `, 10`
+
+**Totals:** 34 fixes across 18 files (Rounds 2-7). 486/486 tests green.
+- background.js: 16,728 lines

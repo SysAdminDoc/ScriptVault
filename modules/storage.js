@@ -461,15 +461,19 @@ const FolderStorage = {
 
   async moveScript(scriptId, fromFolderId, toFolderId) {
     await this.init();
-    if (fromFolderId) {
-      const from = this.cache.find(f => f.id === fromFolderId);
-      if (from) from.scriptIds = from.scriptIds.filter(id => id !== scriptId);
+    const from = fromFolderId ? this.cache.find(f => f.id === fromFolderId) : null;
+    const to = toFolderId ? this.cache.find(f => f.id === toFolderId) : null;
+    const prevFrom = from ? [...from.scriptIds] : null;
+    const prevTo = to ? [...to.scriptIds] : null;
+    if (from) from.scriptIds = from.scriptIds.filter(id => id !== scriptId);
+    if (to && !to.scriptIds.includes(scriptId)) to.scriptIds.push(scriptId);
+    try {
+      await this.save();
+    } catch (e) {
+      if (from && prevFrom) from.scriptIds = prevFrom;
+      if (to && prevTo) to.scriptIds = prevTo;
+      throw e;
     }
-    if (toFolderId) {
-      const to = this.cache.find(f => f.id === toFolderId);
-      if (to && !to.scriptIds.includes(scriptId)) to.scriptIds.push(scriptId);
-    }
-    await this.save();
   },
 
   getFolderForScript(scriptId) {
