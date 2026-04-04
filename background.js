@@ -4545,15 +4545,19 @@ const FolderStorage = {
 
   async moveScript(scriptId, fromFolderId, toFolderId) {
     await this.init();
-    if (fromFolderId) {
-      const from = this.cache.find(f => f.id === fromFolderId);
-      if (from) from.scriptIds = from.scriptIds.filter(id => id !== scriptId);
+    const from = fromFolderId ? this.cache.find(f => f.id === fromFolderId) : null;
+    const to = toFolderId ? this.cache.find(f => f.id === toFolderId) : null;
+    const prevFrom = from ? [...from.scriptIds] : null;
+    const prevTo = to ? [...to.scriptIds] : null;
+    if (from) from.scriptIds = from.scriptIds.filter(id => id !== scriptId);
+    if (to && !to.scriptIds.includes(scriptId)) to.scriptIds.push(scriptId);
+    try {
+      await this.save();
+    } catch (e) {
+      if (from && prevFrom) from.scriptIds = prevFrom;
+      if (to && prevTo) to.scriptIds = prevTo;
+      throw e;
     }
-    if (toFolderId) {
-      const to = this.cache.find(f => f.id === toFolderId);
-      if (to && !to.scriptIds.includes(scriptId)) to.scriptIds.push(scriptId);
-    }
-    await this.save();
   },
 
   getFolderForScript(scriptId) {
@@ -7362,10 +7366,11 @@ const BackupScheduler = (() => {
               try { optionsMeta = JSON.parse(fflate.strFromU8(unzipped[optionsFile])); } catch (_) {}
             }
 
-            const scriptName = optionsMeta.meta?.name || baseName.replace(/^scripts\//, '');
+            const scriptId = optionsMeta.id || baseName.replace(/^scripts\//, '');
+            const scriptName = optionsMeta.meta?.name || scriptId;
             const scriptNs = optionsMeta.meta?.namespace || '';
             const scriptKey = scriptNs ? `${scriptName}::${scriptNs}` : scriptName;
-            if (!options.scriptIds.includes(scriptName) && !options.scriptIds.includes(scriptKey)) continue;
+            if (!options.scriptIds.includes(scriptId) && !options.scriptIds.includes(scriptName) && !options.scriptIds.includes(scriptKey)) continue;
 
             try {
               const meta = optionsMeta.meta || {};
@@ -7852,7 +7857,7 @@ const UserStylesEngine = (() => {
         // [min, max, step, default] e.g. [0, 100, 1, 50]
         const arrMatch = defaultVal.match(/^\[([\s\S]*)\]$/);
         if (arrMatch) {
-          const parts = arrMatch[1].split(',').map(s => parseFloat(s.trim()));
+          const parts = arrMatch[1].split(',').map(s => { const n = parseFloat(s.trim()); return Number.isNaN(n) ? undefined : n; });
           options = {
             min: parts[0] ?? 0,
             max: parts[1] ?? 100,
@@ -10107,7 +10112,7 @@ const ScriptSigning = {
     return {
       signature: parts[0],
       publicKey: parts[1],
-      timestamp: parts[2] ? parseInt(parts[2]) : null
+      timestamp: parts[2] ? parseInt(parts[2], 10) : null
     };
   },
 

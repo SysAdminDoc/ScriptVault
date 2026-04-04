@@ -417,10 +417,11 @@ const BackupScheduler = (() => {
               try { optionsMeta = JSON.parse(fflate.strFromU8(unzipped[optionsFile])); } catch (_) {}
             }
 
-            const scriptName = optionsMeta.meta?.name || baseName.replace(/^scripts\//, '');
+            const scriptId = optionsMeta.id || baseName.replace(/^scripts\//, '');
+            const scriptName = optionsMeta.meta?.name || scriptId;
             const scriptNs = optionsMeta.meta?.namespace || '';
             const scriptKey = scriptNs ? `${scriptName}::${scriptNs}` : scriptName;
-            if (!options.scriptIds.includes(scriptName) && !options.scriptIds.includes(scriptKey)) continue;
+            if (!options.scriptIds.includes(scriptId) && !options.scriptIds.includes(scriptName) && !options.scriptIds.includes(scriptKey)) continue;
 
             try {
               const meta = optionsMeta.meta || {};

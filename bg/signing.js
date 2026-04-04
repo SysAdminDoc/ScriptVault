@@ -169,7 +169,7 @@ const ScriptSigning = {
     return {
       signature: parts[0],
       publicKey: parts[1],
-      timestamp: parts[2] ? parseInt(parts[2]) : null
+      timestamp: parts[2] ? parseInt(parts[2], 10) : null
     };
   },
 
