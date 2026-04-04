@@ -17,6 +17,7 @@
   let noticeTimer = null;
   let searchRenderTimer = null;
   let currentPageCanRunScripts = false;
+  const pendingScriptActions = new Set();
   const SEARCH_RENDER_DEBOUNCE_MS = 90;
   const MATCHABLE_PROTOCOLS = new Set(['http:', 'https:', 'file:', 'ftp:']);
 
@@ -49,6 +50,65 @@
     if (script) script.enabled = enabled;
     const pageScript = pageScripts.find(s => s.id === scriptId);
     if (pageScript) pageScript.enabled = enabled;
+  }
+
+  function escapeSelectorValue(value) {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return CSS.escape(String(value));
+    }
+    return String(value).replace(/"/g, '\\"');
+  }
+
+  function getScriptRows(scriptId) {
+    if (!scriptId) return [];
+    return Array.from(document.querySelectorAll(`[data-script-id="${escapeSelectorValue(scriptId)}"]`));
+  }
+
+  function setScriptRowsBusy(scriptId, isBusy) {
+    getScriptRows(scriptId).forEach((row) => {
+      row.classList.toggle('busy', isBusy);
+      row.setAttribute('aria-busy', String(isBusy));
+      row.querySelectorAll('input, button').forEach((control) => {
+        control.disabled = isBusy;
+        if (isBusy) {
+          control.setAttribute('aria-disabled', 'true');
+        } else {
+          control.removeAttribute('aria-disabled');
+        }
+      });
+    });
+  }
+
+  function setPageScriptRowsBusy(isBusy) {
+    pageScripts.forEach((script) => setScriptRowsBusy(script.id, isBusy));
+  }
+
+  function getScriptToggleLabel(script, enabled = script.enabled !== false) {
+    const meta = script.meta || {};
+    const name = meta.name || script.id || 'script';
+    return `${enabled ? 'Disable' : 'Enable'} ${name}`;
+  }
+
+  function focusWithinScriptList(control, selector, direction) {
+    const container = control?.closest('.sp-list, .sp-all-list');
+    if (!container) return;
+    const controls = Array.from(container.querySelectorAll(selector));
+    if (!controls.length) return;
+    const currentIndex = controls.indexOf(control);
+    if (currentIndex === -1) return;
+
+    if (direction === 'start') {
+      controls[0]?.focus();
+      return;
+    }
+    if (direction === 'end') {
+      controls[controls.length - 1]?.focus();
+      return;
+    }
+
+    const nextIndex = currentIndex + direction;
+    if (nextIndex < 0 || nextIndex >= controls.length) return;
+    controls[nextIndex]?.focus();
   }
 
   function setListBusy(isBusy) {
@@ -387,12 +447,33 @@
     const stats = script.stats || {};
     const hasError = stats.errors > 0;
     const avgMs = stats.avgTime;
+    const detailText = isPageScript
+      ? (hasError
+          ? `${numberFormatter.format(stats.errors)} error${stats.errors === 1 ? '' : 's'} recorded`
+          : enabled
+            ? 'Available on this page'
+            : 'Paused for this page')
+      : (meta.description || '');
 
     const item = document.createElement('div');
     item.className = 'sp-item' +
       (hasError ? ' has-error' : '') +
       (!enabled ? ' not-running' : '');
     item.dataset.scriptId = script.id;
+    item.setAttribute('role', 'listitem');
+    item.setAttribute(
+      'aria-label',
+      [
+        meta.name || script.id,
+        enabled ? 'enabled' : 'disabled',
+        hasError ? `${stats.errors} errors` : '',
+        avgMs != null && enabled ? `average ${avgMs < 1000 ? `${avgMs.toFixed(0)} milliseconds` : `${(avgMs / 1000).toFixed(1)} seconds`}` : ''
+      ].filter(Boolean).join(', ')
+    );
+    if (pendingScriptActions.has(script.id)) {
+      item.classList.add('busy');
+      item.setAttribute('aria-busy', 'true');
+    }
 
     // Icon (validate URL to prevent XSS via javascript: URIs)
     const safeIcon = meta.icon && typeof sanitizeUrl === 'function' ? sanitizeUrl(meta.icon) : meta.icon;
@@ -417,19 +498,34 @@
 
     // Name + desc column
     const col = document.createElement('div');
-    col.style.cssText = 'flex:1;min-width:0;';
+    col.className = 'sp-item-main';
     const name = document.createElement('button');
     name.type = 'button';
     name.className = 'sp-item-name-btn';
     name.textContent = meta.name || script.id;
-    name.title = meta.description || '';
+    name.title = detailText || meta.description || '';
     name.setAttribute('aria-label', `Open ${meta.name || script.id} in editor`);
     name.addEventListener('click', () => openInEditor(script.id));
+    name.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        focusWithinScriptList(name, '.sp-item-name-btn', 1);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        focusWithinScriptList(name, '.sp-item-name-btn', -1);
+      } else if (event.key === 'Home') {
+        event.preventDefault();
+        focusWithinScriptList(name, '.sp-item-name-btn', 'start');
+      } else if (event.key === 'End') {
+        event.preventDefault();
+        focusWithinScriptList(name, '.sp-item-name-btn', 'end');
+      }
+    });
     col.appendChild(name);
-    if (meta.description && !isPageScript) {
+    if (detailText) {
       const desc = document.createElement('div');
       desc.className = 'sp-item-desc';
-      desc.textContent = meta.description;
+      desc.textContent = detailText;
       col.appendChild(desc);
     }
     item.appendChild(col);
@@ -458,7 +554,24 @@
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.checked = enabled;
+    input.setAttribute('aria-label', getScriptToggleLabel(script, enabled));
+    input.disabled = pendingScriptActions.has(script.id);
     input.addEventListener('change', () => toggleScript(script.id, input.checked));
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        focusWithinScriptList(input, '.sp-toggle input', 1);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        focusWithinScriptList(input, '.sp-toggle input', -1);
+      } else if (event.key === 'Home') {
+        event.preventDefault();
+        focusWithinScriptList(input, '.sp-toggle input', 'start');
+      } else if (event.key === 'End') {
+        event.preventDefault();
+        focusWithinScriptList(input, '.sp-toggle input', 'end');
+      }
+    });
     const slider = document.createElement('span');
     slider.className = 'sp-toggle-slider';
     label.appendChild(input);
@@ -470,6 +583,9 @@
 
   // ── Actions ──────────────────────────────────────────────────────────────
   async function toggleScript(id, enabled) {
+    if (pendingScriptActions.has(id)) return;
+    pendingScriptActions.add(id);
+    setScriptRowsBusy(id, true);
     try {
       const result = await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId: id, enabled });
       const error = getRuntimeError(result, 'Failed to update script');
@@ -480,12 +596,16 @@
     } catch (error) {
       showPanelNotice(error.message || 'Failed to update script', 'error');
       await refresh();
+    } finally {
+      pendingScriptActions.delete(id);
+      setScriptRowsBusy(id, false);
     }
   }
 
   async function toggleAll() {
     const toggleButton = document.getElementById('btnToggleAll');
     if (toggleButton) toggleButton.disabled = true;
+    setPageScriptRowsBusy(true);
     const anyEnabled = pageScripts.some(s => s.enabled !== false);
     const newState = !anyEnabled;
     try {
@@ -536,6 +656,7 @@
         `${newState ? 'Enabled' : 'Disabled'} ${numberFormatter.format(updated)} script${updated === 1 ? '' : 's'} on this page.`
       );
     } finally {
+      setPageScriptRowsBusy(false);
       if (toggleButton) toggleButton.disabled = false;
     }
   }

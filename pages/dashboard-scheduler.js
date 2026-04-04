@@ -104,8 +104,10 @@ const ScriptScheduler = (() => {
   border-radius: 4px;
   display: flex;
   align-items: center;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }
 .sv-sched-close:hover { color: var(--text-primary, #e0e0e0); background: var(--bg-button, #333); }
+.sv-sched-close:focus-visible,.sv-sched-type-tab:focus-visible,.sv-sched-day:focus-visible,.sv-sched-btn:focus-visible,.sv-sched-icon:focus-visible{outline:2px solid var(--accent-primary,#22c55e);outline-offset:2px}
 
 /* Modal Body */
 .sv-sched-body {
@@ -188,7 +190,7 @@ const ScriptScheduler = (() => {
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
   white-space: nowrap;
 }
 .sv-sched-type-tab:hover { color: var(--text-secondary, #a0a0a0); }
@@ -234,6 +236,10 @@ const ScriptScheduler = (() => {
 .sv-sched-row select:focus {
   outline: none;
   border-color: var(--accent-primary, #22c55e);
+}
+.sv-sched-row input:focus-visible,
+.sv-sched-row select:focus-visible {
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
 }
 
 /* Time range slider */
@@ -295,7 +301,7 @@ const ScriptScheduler = (() => {
   border: 1px solid var(--border-color, #444);
   color: var(--text-muted, #666);
   background: var(--bg-input, #1a1a1a);
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
   user-select: none;
 }
 .sv-sched-day.active {
@@ -340,7 +346,7 @@ const ScriptScheduler = (() => {
   border: 1px solid var(--border-color, #444);
   background: var(--bg-button, #333);
   color: var(--text-primary, #e0e0e0);
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s, box-shadow 0.15s;
 }
 .sv-sched-btn:hover { background: var(--bg-button-hover, #444); }
 .sv-sched-btn-primary {
@@ -368,7 +374,7 @@ const ScriptScheduler = (() => {
   border-radius: 4px;
   cursor: pointer;
   color: var(--text-muted, #666);
-  transition: all 0.15s;
+  transition: color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 .sv-sched-icon:hover { color: var(--text-secondary, #a0a0a0); background: var(--bg-button, #333); }
 .sv-sched-icon.active { color: var(--accent-primary, #22c55e); }
@@ -388,6 +394,9 @@ const ScriptScheduler = (() => {
 
   function el(tag, attrs = {}, children = []) {
     const e = document.createElement(tag);
+    if (tag === 'button' && attrs.type === undefined) {
+      e.type = 'button';
+    }
     for (const [k, v] of Object.entries(attrs)) {
       if (k === 'className') e.className = v;
       else if (k === 'innerHTML') e.innerHTML = v;
@@ -613,7 +622,7 @@ const ScriptScheduler = (() => {
     // Header
     const header = el('div', { className: 'sv-sched-header' }, [
       el('h3', { innerHTML: `${ICON_CLOCK} Script Schedule` }),
-      el('button', { className: 'sv-sched-close', innerHTML: ICON_CLOSE, onClick: () => closeModal() }),
+      el('button', { className: 'sv-sched-close', innerHTML: ICON_CLOSE, 'aria-label': 'Close schedule dialog', onClick: () => closeModal() }),
     ]);
 
     // Body
@@ -631,7 +640,7 @@ const ScriptScheduler = (() => {
     body.appendChild(enableRow);
 
     // Type tabs
-    const typeTabs = el('div', { className: 'sv-sched-type-tabs' });
+    const typeTabs = el('div', { className: 'sv-sched-type-tabs', role: 'tablist', 'aria-label': 'Schedule types' });
     const types = [
       { id: 'time', label: 'Time Range' },
       { id: 'day', label: 'Days' },
@@ -640,14 +649,14 @@ const ScriptScheduler = (() => {
       { id: 'oneTime', label: 'One-Time' },
     ];
     for (const t of types) {
-      const tab = el('button', { className: 'sv-sched-type-tab', 'data-type': t.id, textContent: t.label });
+      const tab = el('button', { className: 'sv-sched-type-tab', 'data-type': t.id, textContent: t.label, role: 'tab', 'aria-selected': 'false', tabindex: '-1', 'aria-controls': `sv-sched-section-${t.id}` });
       tab.addEventListener('click', () => selectType(t.id));
       typeTabs.appendChild(tab);
     }
     body.appendChild(typeTabs);
 
     // --- Time Range section ---
-    const timeSection = el('div', { className: 'sv-sched-section', 'data-section': 'time' });
+    const timeSection = el('div', { className: 'sv-sched-section', 'data-section': 'time', id: 'sv-sched-section-time', role: 'tabpanel' });
 
     // Visual time slider
     const slider = el('div', { className: 'sv-sched-time-slider', id: 'sv-sched-slider' });
@@ -680,13 +689,13 @@ const ScriptScheduler = (() => {
     body.appendChild(timeSection);
 
     // --- Day section ---
-    const daySection = el('div', { className: 'sv-sched-section', 'data-section': 'day' });
+    const daySection = el('div', { className: 'sv-sched-section', 'data-section': 'day', id: 'sv-sched-section-day', role: 'tabpanel', hidden: 'hidden' });
     const dayToggles = buildDayToggles('sv-sched-day-days');
     daySection.appendChild(dayToggles);
     body.appendChild(daySection);
 
     // --- Date Range section ---
-    const dateSection = el('div', { className: 'sv-sched-section', 'data-section': 'dateRange' });
+    const dateSection = el('div', { className: 'sv-sched-section', 'data-section': 'dateRange', id: 'sv-sched-section-dateRange', role: 'tabpanel', hidden: 'hidden' });
     dateSection.innerHTML = `
       <div class="sv-sched-row">
         <label>Start</label>
@@ -700,7 +709,7 @@ const ScriptScheduler = (() => {
     body.appendChild(dateSection);
 
     // --- Interval section ---
-    const intervalSection = el('div', { className: 'sv-sched-section', 'data-section': 'interval' });
+    const intervalSection = el('div', { className: 'sv-sched-section', 'data-section': 'interval', id: 'sv-sched-section-interval', role: 'tabpanel', hidden: 'hidden' });
     intervalSection.innerHTML = `
       <div class="sv-sched-row">
         <label>Every</label>
@@ -714,7 +723,7 @@ const ScriptScheduler = (() => {
     body.appendChild(intervalSection);
 
     // --- One-Time section ---
-    const oneTimeSection = el('div', { className: 'sv-sched-section', 'data-section': 'oneTime' });
+    const oneTimeSection = el('div', { className: 'sv-sched-section', 'data-section': 'oneTime', id: 'sv-sched-section-oneTime', role: 'tabpanel', hidden: 'hidden' });
     oneTimeSection.innerHTML = `
       <div class="sv-sched-row">
         <label>Run at</label>
@@ -730,9 +739,9 @@ const ScriptScheduler = (() => {
     // Footer
     const footer = el('div', { className: 'sv-sched-footer' });
     footer.innerHTML = `
-      <button class="sv-sched-btn sv-sched-btn-danger" id="sv-sched-clear">Clear</button>
-      <button class="sv-sched-btn" id="sv-sched-cancel">Cancel</button>
-      <button class="sv-sched-btn sv-sched-btn-primary" id="sv-sched-save">Save Schedule</button>
+      <button class="sv-sched-btn sv-sched-btn-danger" id="sv-sched-clear" type="button">Clear</button>
+      <button class="sv-sched-btn" id="sv-sched-cancel" type="button">Cancel</button>
+      <button class="sv-sched-btn sv-sched-btn-primary" id="sv-sched-save" type="button">Save Schedule</button>
     `;
 
     modal.appendChild(header);
@@ -752,13 +761,15 @@ const ScriptScheduler = (() => {
   function buildDayToggles(id) {
     const container = el('div', { className: 'sv-sched-days', id });
     for (let i = 0; i < 7; i++) {
-      const day = el('div', {
+      const day = el('button', {
         className: 'sv-sched-day',
         'data-day': String(i),
         textContent: DAY_NAMES[i],
+        'aria-pressed': 'false',
       });
       day.addEventListener('click', () => {
         day.classList.toggle('active');
+        day.setAttribute('aria-pressed', String(day.classList.contains('active')));
         updatePreview();
       });
       container.appendChild(day);
@@ -889,11 +900,16 @@ const ScriptScheduler = (() => {
   function selectType(type) {
     // Update tabs
     _modalEl.querySelectorAll('.sv-sched-type-tab').forEach(t => {
-      t.classList.toggle('active', t.dataset.type === type);
+      const isActive = t.dataset.type === type;
+      t.classList.toggle('active', isActive);
+      t.setAttribute('aria-selected', String(isActive));
+      t.tabIndex = isActive ? 0 : -1;
     });
     // Show/hide sections
     _modalEl.querySelectorAll('.sv-sched-section').forEach(s => {
-      s.classList.toggle('active', s.dataset.section === type);
+      const isActive = s.dataset.section === type;
+      s.classList.toggle('active', isActive);
+      s.hidden = !isActive;
     });
     updatePreview();
   }
@@ -913,7 +929,9 @@ const ScriptScheduler = (() => {
     const container = _modalEl.querySelector(`#${containerId}`);
     if (!container) return;
     container.querySelectorAll('.sv-sched-day').forEach(d => {
-      d.classList.toggle('active', days.includes(Number(d.dataset.day)));
+      const isActive = days.includes(Number(d.dataset.day));
+      d.classList.toggle('active', isActive);
+      d.setAttribute('aria-pressed', String(isActive));
     });
   }
 

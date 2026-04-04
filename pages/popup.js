@@ -40,6 +40,12 @@
         pageSummaryTitle: document.getElementById('pageSummaryTitle'),
         pageSummaryMeta: document.getElementById('pageSummaryMeta'),
         pageSummaryCount: document.getElementById('pageSummaryCount'),
+        popupScriptToolbar: document.getElementById('popupScriptToolbar'),
+        popupScriptSearch: document.getElementById('popupScriptSearch'),
+        btnClearPopupScriptSearch: document.getElementById('btnClearPopupScriptSearch'),
+        popupScriptFilters: document.getElementById('popupScriptFilters'),
+        popupListSummary: document.getElementById('popupListSummary'),
+        btnClearPopupScriptView: document.getElementById('btnClearPopupScriptView'),
         scriptList: document.getElementById('scriptList'),
         emptyState: document.getElementById('emptyState'),
         emptyStateIcon: document.getElementById('emptyStateIcon'),
@@ -152,6 +158,7 @@
         const row = getScriptRow(scriptId);
         if (!row) return;
         row.classList.toggle('busy', isBusy);
+        row.setAttribute('aria-busy', String(isBusy));
         row.querySelectorAll('input, button').forEach((control) => {
             control.disabled = isBusy;
             if (isBusy) {
@@ -189,6 +196,28 @@
                 control.classList.remove('is-busy');
                 control.removeAttribute('aria-busy');
             }
+        }
+    }
+
+    async function copyTextToClipboard(text) {
+        if (!text) throw new Error('Nothing to copy');
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return;
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', 'true');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.pointerEvents = 'none';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand?.('copy');
+        textarea.remove();
+        if (!copied) {
+            throw new Error('Copy failed');
         }
     }
 
@@ -237,7 +266,7 @@
         const runningCount = displayScripts.filter((script) => script.enabled !== false && script._matchesCurrent !== false).length;
         const pausedCount = displayScripts.filter((script) => script.enabled === false).length;
         const errorCount = displayScripts.filter((script) => Number(script?.stats?.errors || 0) > 0).length;
-        const hiddenCount = settings.hideDisabledPopup ? Math.max(0, totalMatched - visibleScripts) : 0;
+        const hiddenCount = Math.max(0, totalMatched - visibleScripts);
 
         elements.pageSummaryTitle.textContent = `${numberFormatter.format(totalMatched)} matching script${totalMatched === 1 ? '' : 's'}`;
         elements.pageSummaryCount.textContent = hiddenCount > 0
@@ -250,6 +279,87 @@
         if (errorCount > 0) parts.push(`${numberFormatter.format(errorCount)} with errors`);
         if (hiddenCount > 0) parts.push(`${numberFormatter.format(hiddenCount)} hidden`);
         elements.pageSummaryMeta.textContent = parts.join(' • ') || 'Ready to run on this page.';
+    }
+
+    function getPopupActiveFilter() {
+        return elements.popupScriptFilters?.querySelector('[data-popup-filter][aria-pressed="true"]')?.dataset.popupFilter || 'all';
+    }
+
+    function updatePopupSearchAffordances() {
+        if (!elements.btnClearPopupScriptSearch) return;
+        elements.btnClearPopupScriptSearch.hidden = !Boolean(elements.popupScriptSearch?.value?.trim());
+    }
+
+    function updatePopupFilterButtons() {
+        const activeFilter = getPopupActiveFilter();
+        elements.popupScriptFilters?.querySelectorAll('[data-popup-filter]').forEach((button) => {
+            const isActive = button.dataset.popupFilter === activeFilter;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-pressed', String(isActive));
+        });
+    }
+
+    function setPopupActiveFilter(nextFilter = 'all') {
+        const validFilters = new Set(['all', 'running', 'errors', 'pinned', 'paused']);
+        const normalizedFilter = validFilters.has(nextFilter) ? nextFilter : 'all';
+        elements.popupScriptFilters?.querySelectorAll('[data-popup-filter]').forEach((button) => {
+            const isActive = button.dataset.popupFilter === normalizedFilter;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-pressed', String(isActive));
+        });
+    }
+
+    function updatePopupListSummary(displayScripts = pageScripts) {
+        if (!elements.popupListSummary || !elements.btnClearPopupScriptView) return;
+        const total = Array.isArray(pageScripts) ? pageScripts.length : 0;
+        const visible = Array.isArray(displayScripts) ? displayScripts.length : 0;
+        const running = displayScripts.filter((script) => script.enabled !== false && script._matchesCurrent !== false).length;
+        const activeFilter = getPopupActiveFilter();
+        const searchValue = elements.popupScriptSearch?.value?.trim() || '';
+        const filterLabel = activeFilter === 'all'
+            ? ''
+            : activeFilter === 'running'
+                ? 'Running'
+                : activeFilter === 'errors'
+                    ? 'Errors'
+                    : activeFilter === 'pinned'
+                        ? 'Pinned'
+                        : 'Paused';
+        const parts = [`<strong>${numberFormatter.format(visible)}</strong> visible`];
+
+        if (total !== visible) {
+            parts.push(`${numberFormatter.format(total)} total`);
+        }
+        if (running > 0) {
+            parts.push(`${numberFormatter.format(running)} running`);
+        }
+        if (filterLabel) {
+            parts.push(`Filter: ${filterLabel}`);
+        }
+        if (searchValue) {
+            parts.push(`Search: ${escapeHtml(searchValue)}`);
+        }
+
+        elements.popupListSummary.innerHTML = parts.join(' • ') || '<strong>0</strong> visible';
+        elements.btnClearPopupScriptView.hidden = !(searchValue || activeFilter !== 'all');
+    }
+
+    function getPopupScriptRows() {
+        return [...document.querySelectorAll('.script-item')];
+    }
+
+    function focusPopupScriptRow(row) {
+        if (!(row instanceof HTMLElement)) return;
+        row.focus();
+        row.scrollIntoView?.({ block: 'nearest' });
+    }
+
+    function resetPopupScriptView() {
+        if (elements.popupScriptSearch) elements.popupScriptSearch.value = '';
+        updatePopupSearchAffordances();
+        setPopupActiveFilter('all');
+        updatePopupFilterButtons();
+        renderScriptList();
     }
 
     function updateEmptyStateActions({ showFindScripts = canMatchScriptsForUrl(currentUrl), showCreateScript = true } = {}) {
@@ -540,6 +650,42 @@
         }
     }
 
+    function getDropdownMenuItems() {
+        const dropdown = document.getElementById('scriptDropdown');
+        if (!dropdown) return [];
+        return Array.from(dropdown.querySelectorAll('[role="menuitem"]:not([disabled])'));
+    }
+
+    function focusDropdownMenuItem(target = 0) {
+        const items = getDropdownMenuItems();
+        if (!items.length) return;
+        const nextItem = typeof target === 'number'
+            ? (target < 0 ? items[items.length - 1] : items[target])
+            : target;
+        nextItem?.focus();
+    }
+
+    function openScriptDropdown(scriptId, trigger, { focusTarget = 0 } = {}) {
+        const dropdown = document.getElementById('scriptDropdown');
+        if (!dropdown || !scriptId || !trigger) return;
+        if (dropdown.classList.contains('open') && activeDropdownScriptId === scriptId) {
+            closeScriptDropdown({ restoreFocus: true });
+            return;
+        }
+        closeScriptDropdown();
+        activeDropdownScriptId = scriptId;
+        resetDropdownDeleteState();
+        populateMenuCommands(scriptId);
+        const rect = trigger.getBoundingClientRect();
+        dropdown.style.top = rect.bottom + 2 + 'px';
+        dropdown.style.right = (document.documentElement.clientWidth - rect.right) + 'px';
+        trigger.setAttribute('aria-expanded', 'true');
+        dropdown.hidden = false;
+        dropdown.setAttribute('aria-hidden', 'false');
+        dropdown.classList.add('open');
+        requestAnimationFrame(() => focusDropdownMenuItem(focusTarget));
+    }
+
     function armDropdownDelete(scriptId, name) {
         pendingDeleteScriptId = scriptId;
         const deleteBtn = getDropdownDeleteButton();
@@ -554,13 +700,47 @@
     function renderScriptList() {
         if (!elements.scriptList) return;
         closeScriptDropdown();
+        updatePopupSearchAffordances();
+        updatePopupFilterButtons();
 
         // Work on a copy to avoid mutating the canonical pageScripts array
         let displayScripts = [...pageScripts];
+        const searchValue = elements.popupScriptSearch?.value?.trim().toLowerCase() || '';
+        const activeFilter = getPopupActiveFilter();
 
         // Filter: hide disabled scripts if setting enabled
         if (settings.hideDisabledPopup) {
             displayScripts = displayScripts.filter(s => s.enabled !== false);
+        }
+
+        if (searchValue) {
+            displayScripts = displayScripts.filter((script) => {
+                const meta = script.metadata || script.meta || {};
+                const name = meta.name || '';
+                const description = meta.description || '';
+                const author = meta.author || '';
+                return name.toLowerCase().includes(searchValue)
+                    || description.toLowerCase().includes(searchValue)
+                    || author.toLowerCase().includes(searchValue);
+            });
+        }
+
+        if (activeFilter !== 'all') {
+            displayScripts = displayScripts.filter((script) => {
+                if (activeFilter === 'running') {
+                    return script.enabled !== false && script._matchesCurrent !== false;
+                }
+                if (activeFilter === 'errors') {
+                    return Number(script?.stats?.errors || 0) > 0;
+                }
+                if (activeFilter === 'pinned') {
+                    return script.settings?.pinned === true;
+                }
+                if (activeFilter === 'paused') {
+                    return script.enabled === false;
+                }
+                return true;
+            });
         }
 
         // Sort scripts based on scriptOrder setting
@@ -578,11 +758,23 @@
         // Always bump enabled scripts to the top
         displayScripts.sort((a, b) => (b.enabled !== false ? 1 : 0) - (a.enabled !== false ? 1 : 0));
         updatePageSummary(displayScripts);
+        updatePopupListSummary(displayScripts);
 
         const emptyState = document.getElementById('emptyState');
         if (displayScripts.length === 0) {
             elements.scriptList.innerHTML = '';
-            updateEmptyStateHint();
+            if (pageScripts.length > 0 && (searchValue || activeFilter !== 'all')) {
+                showPopupEmptyState(
+                    'Nothing matched',
+                    searchValue
+                        ? `No scripts matched "${elements.popupScriptSearch?.value?.trim() || ''}" in the current view.`
+                        : `No ${activeFilter} scripts are visible for this page right now.`,
+                    '🔎',
+                    { showFindScripts: false, showCreateScript: false }
+                );
+            } else {
+                updateEmptyStateHint();
+            }
             if (emptyState) emptyState.style.display = 'block';
             syncTimeline();
             return;
@@ -629,6 +821,12 @@
                 ? `${stats.errors} error(s)`
                 : (isRunning ? 'Running on this page' : (enabled ? 'Ready on this page' : 'Paused'));
             const stateLabel = stats?.errors > 0 ? 'Errors' : (isRunning ? 'Running' : (enabled ? 'Ready' : 'Paused'));
+            const rowLabel = [
+                name,
+                version ? `version ${version}` : '',
+                stateLabel,
+                secondaryText
+            ].filter(Boolean).join(', ');
 
             // Recently installed (< 1 hour ago)
             const isRecentlyInstalled = Boolean(script.installedAt && (Date.now() - script.installedAt < 3600000));
@@ -639,10 +837,10 @@
             const tagsHtml = tags.length ? `<div class="script-tags" aria-hidden="true">${tags.join('')}</div>` : '';
 
             return `
-                <div class="script-item${isRunning ? '' : ' not-running'}${recentClass}" data-script-id="${script.id}" ${animDelay}>
+                <div class="script-item${isRunning ? '' : ' not-running'}${recentClass}" data-script-id="${script.id}" role="listitem" tabindex="0" aria-posinset="${i + 1}" aria-setsize="${displayScripts.length}" aria-label="${escapeHtml(rowLabel)}" ${animDelay}>
                     <span class="script-status ${statusClass}" title="${statusTitle}"></span>
                     <label class="script-toggle">
-                        <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${script.id}">
+                        <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${script.id}" aria-label="${escapeHtml(enabled ? `Disable ${name}` : `Enable ${name}`)}">
                         <span class="slider"></span>
                     </label>
                     <div class="script-icon">${icon}</div>
@@ -699,6 +897,13 @@
                 openDashboard(scriptId);
             });
 
+            item.addEventListener('keydown', (e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && e.target === item) {
+                    e.preventDefault();
+                    openDashboard(scriptId);
+                }
+            });
+
             // Quick edit button opens editor directly
             item.querySelector('.script-quick-edit')?.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -709,21 +914,17 @@
             const moreBtn = item.querySelector('.script-more');
             moreBtn?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (dropdown.classList.contains('open') && activeDropdownScriptId === scriptId) {
-                    closeScriptDropdown({ restoreFocus: true });
-                    return;
+                openScriptDropdown(scriptId, moreBtn);
+            });
+
+            moreBtn?.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    openScriptDropdown(scriptId, moreBtn, { focusTarget: 0 });
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    openScriptDropdown(scriptId, moreBtn, { focusTarget: -1 });
                 }
-                closeScriptDropdown();
-                activeDropdownScriptId = scriptId;
-                resetDropdownDeleteState();
-                populateMenuCommands(scriptId);
-                const rect = moreBtn.getBoundingClientRect();
-                dropdown.style.top = rect.bottom + 2 + 'px';
-                dropdown.style.right = (document.documentElement.clientWidth - rect.right) + 'px';
-                moreBtn.setAttribute('aria-expanded', 'true');
-                dropdown.hidden = false;
-                dropdown.setAttribute('aria-hidden', 'false');
-                dropdown.classList.add('open');
             });
         });
 
@@ -769,7 +970,7 @@
                 const url = (script?.metadata || script?.meta || {}).downloadURL || (script?.metadata || script?.meta || {}).updateURL;
                 if (url) {
                     try {
-                        await navigator.clipboard.writeText(url);
+                        await copyTextToClipboard(url);
                         showPopupToast('Install URL copied');
                     } catch { showPopupToast('Copy failed', 'error'); }
                 } else {
@@ -819,6 +1020,30 @@
             // Close dropdown when clicking outside (but not inside it)
             document.addEventListener('click', (e) => {
                 if (!dropdown.contains(e.target) && !e.target.closest('.script-more')) {
+                    closeScriptDropdown();
+                }
+            });
+
+            dropdown.addEventListener('keydown', (e) => {
+                const items = getDropdownMenuItems();
+                if (!items.length) return;
+                const currentIndex = items.indexOf(document.activeElement);
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    focusDropdownMenuItem((currentIndex + 1 + items.length) % items.length);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    focusDropdownMenuItem((currentIndex - 1 + items.length) % items.length);
+                } else if (e.key === 'Home') {
+                    e.preventDefault();
+                    focusDropdownMenuItem(0);
+                } else if (e.key === 'End') {
+                    e.preventDefault();
+                    focusDropdownMenuItem(-1);
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeScriptDropdown({ restoreFocus: true });
+                } else if (e.key === 'Tab') {
                     closeScriptDropdown();
                 }
             });
@@ -1181,6 +1406,32 @@
             runBusyControl(elements.headerToggle, toggleGlobalEnabled);
         });
 
+        elements.popupScriptSearch?.addEventListener('input', () => {
+            updatePopupSearchAffordances();
+            renderScriptList();
+        });
+        elements.popupScriptSearch?.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && elements.popupScriptSearch?.value) {
+                e.preventDefault();
+                resetPopupScriptView();
+                elements.popupScriptSearch.focus();
+            }
+        });
+        elements.btnClearPopupScriptSearch?.addEventListener('click', () => {
+            if (!elements.popupScriptSearch) return;
+            elements.popupScriptSearch.value = '';
+            updatePopupSearchAffordances();
+            renderScriptList();
+            elements.popupScriptSearch.focus();
+        });
+        elements.popupScriptFilters?.querySelectorAll('[data-popup-filter]')?.forEach((button) => {
+            button.addEventListener('click', () => {
+                setPopupActiveFilter(button.dataset.popupFilter || 'all');
+                renderScriptList();
+            });
+        });
+        elements.btnClearPopupScriptView?.addEventListener('click', resetPopupScriptView);
+
         // Find scripts
         elements.btnFindScripts?.addEventListener('click', findScripts);
         elements.btnEmptyFindScripts?.addEventListener('click', findScripts);
@@ -1260,6 +1511,12 @@
 
         // Keyboard navigation for script list
         document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+                e.preventDefault();
+                elements.popupScriptSearch?.focus();
+                elements.popupScriptSearch?.select?.();
+                return;
+            }
             if (e.key === 'Escape' && document.getElementById('scriptDropdown')?.classList.contains('open')) {
                 e.preventDefault();
                 closeScriptDropdown({ restoreFocus: true });
@@ -1270,22 +1527,32 @@
                 setUtilitiesSubmenuOpen(false, { restoreFocus: true });
                 return;
             }
-            const items = [...document.querySelectorAll('.script-item')];
+            const items = getPopupScriptRows();
             if (!items.length) return;
-            const focused = document.activeElement?.closest('.script-item');
+            const activeEl = document.activeElement;
+            const focused = activeEl?.closest?.('.script-item');
             const idx = focused ? items.indexOf(focused) : -1;
+            const focusedRow = activeEl instanceof HTMLElement && activeEl.classList.contains('script-item')
+                ? activeEl
+                : null;
 
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 const next = items[idx + 1] || items[0];
-                next.querySelector('input[type="checkbox"]')?.focus();
+                focusPopupScriptRow(next);
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 const prev = items[idx - 1] || items[items.length - 1];
-                prev.querySelector('input[type="checkbox"]')?.focus();
-            } else if (e.key === 'Enter' && focused) {
+                focusPopupScriptRow(prev);
+            } else if (e.key === 'Home') {
                 e.preventDefault();
-                const sid = focused.dataset.scriptId;
+                focusPopupScriptRow(items[0]);
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                focusPopupScriptRow(items[items.length - 1]);
+            } else if (e.key === 'Enter' && focusedRow) {
+                e.preventDefault();
+                const sid = focusedRow.dataset.scriptId;
                 if (sid) openDashboard(sid);
             }
         });

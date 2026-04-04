@@ -813,10 +813,18 @@ $CURSOR$`
     border-radius: 6px;
     color: var(--text-primary, #e0e0e0);
     font-size: 13px;
-    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
-.snip-search:focus {
+.snip-search:focus-visible,
+.snip-modal input:focus-visible,
+.snip-modal select:focus-visible,
+.snip-modal textarea:focus-visible,
+.snip-btn-add:focus-visible,
+.snip-cat-btn:focus-visible,
+.snip-action-btn:focus-visible {
     border-color: var(--accent-green, #4ade80);
+    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.12);
+    outline: none;
 }
 .snip-search::placeholder {
     color: var(--text-muted, #707070);
@@ -852,7 +860,7 @@ $CURSOR$`
     cursor: pointer;
     font-size: 12px;
     white-space: nowrap;
-    transition: all 0.15s;
+    transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 .snip-cat-btn:hover {
     border-color: var(--accent-green, #4ade80);
@@ -942,7 +950,7 @@ $CURSOR$`
     color: var(--text-primary, #e0e0e0);
     cursor: pointer;
     font-size: 12px;
-    transition: all 0.15s;
+    transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 .snip-action-btn:hover {
     border-color: var(--accent-green, #4ade80);
@@ -1020,7 +1028,6 @@ $CURSOR$`
     border-radius: 6px;
     color: var(--text-primary, #e0e0e0);
     font-size: 13px;
-    outline: none;
 }
 .snip-modal input:focus,
 .snip-modal select:focus,
@@ -1143,7 +1150,7 @@ $CURSOR$`
 
         const catHTML = Object.entries(CATEGORIES).map(([key, cat]) => {
             const activeClass = _state.activeCategory === key ? ' active' : '';
-            return `<button class="snip-cat-btn${activeClass}" data-cat="${key}">${cat.icon} ${cat.label}</button>`;
+            return `<button class="snip-cat-btn${activeClass}" data-cat="${key}" type="button">${cat.icon} ${cat.label}</button>`;
         }).join('');
 
         const cardsHTML = snippets.length === 0
@@ -1154,8 +1161,8 @@ $CURSOR$`
                     ? highlightCode(s.code.replace(/\$CURSOR\$/g, '\u258E').replace(/\$SELECTION\$/g, '\u00ABselection\u00BB').replace(/\$(\d+)/g, '\u00ABtab$1\u00BB'))
                     : escapeHTML(previewLines(s.code));
                 const customBtns = s.isCustom
-                    ? `<button class="snip-action-btn" data-action="edit" data-id="${s.id}">Edit</button>
-                       <button class="snip-action-btn danger" data-action="delete" data-id="${s.id}">Delete</button>`
+                    ? `<button class="snip-action-btn" data-action="edit" data-id="${s.id}" type="button">Edit</button>
+                       <button class="snip-action-btn danger" data-action="delete" data-id="${s.id}" type="button">Delete</button>`
                     : '';
                 return `<div class="snip-card${expanded ? ' expanded' : ''}" data-id="${s.id}">
                     <div class="snip-card-title">
@@ -1165,8 +1172,8 @@ $CURSOR$`
                     <div class="snip-card-desc">${escapeHTML(s.description)}</div>
                     <pre class="snip-card-preview">${preview}</pre>
                     <div class="snip-card-actions">
-                        <button class="snip-action-btn primary" data-action="insert" data-id="${s.id}">Insert at Cursor</button>
-                        <button class="snip-action-btn" data-action="copy" data-id="${s.id}">Copy</button>
+                        <button class="snip-action-btn primary" data-action="insert" data-id="${s.id}" type="button">Insert at Cursor</button>
+                        <button class="snip-action-btn" data-action="copy" data-id="${s.id}" type="button">Copy</button>
                         ${customBtns}
                     </div>
                 </div>`;
@@ -1176,8 +1183,8 @@ $CURSOR$`
             <div class="snip-panel">
                 <div class="snip-header">
                     <h3>Snippets</h3>
-                    <input type="text" class="snip-search" placeholder="Search snippets..." value="${escapeHTML(_state.searchQuery)}">
-                    <button class="snip-btn-add">+ Custom</button>
+                    <input type="search" class="snip-search" name="snippetSearch" autocomplete="off" spellcheck="false" placeholder="Search Snippets…" value="${escapeHTML(_state.searchQuery)}">
+                    <button class="snip-btn-add" type="button">+ Custom</button>
                 </div>
                 <div class="snip-categories">${catHTML}</div>
                 <div class="snip-count">${snippets.length} snippet${snippets.length !== 1 ? 's' : ''}</div>
@@ -1352,19 +1359,19 @@ $CURSOR$`
             .join('');
 
         overlay.innerHTML = `
-            <div class="snip-modal">
+            <div class="snip-modal" role="dialog" aria-modal="true" aria-label="${existing ? 'Edit Custom Snippet' : 'New Custom Snippet'}">
                 <h3>${existing ? 'Edit' : 'New'} Custom Snippet</h3>
                 <label>Name</label>
-                <input type="text" id="snip-edit-name" value="${escapeHTML(existing?.title || '')}" placeholder="My Snippet">
+                <input type="text" id="snip-edit-name" name="snippetName" autocomplete="off" spellcheck="false" value="${escapeHTML(existing?.title || '')}" placeholder="My Snippet">
                 <label>Description</label>
-                <input type="text" id="snip-edit-desc" value="${escapeHTML(existing?.description || '')}" placeholder="What does it do?">
+                <input type="text" id="snip-edit-desc" name="snippetDescription" autocomplete="off" spellcheck="true" value="${escapeHTML(existing?.description || '')}" placeholder="What does it do?">
                 <label>Category</label>
-                <select id="snip-edit-cat">${catOptions}</select>
+                <select id="snip-edit-cat" name="snippetCategory">${catOptions}</select>
                 <label>Code (use $CURSOR$ for cursor position, $SELECTION$ for selected text)</label>
-                <textarea id="snip-edit-code" placeholder="// Your snippet code here">${escapeHTML(existing?.code || '')}</textarea>
+                <textarea id="snip-edit-code" name="snippetCode" spellcheck="false" placeholder="// Your snippet code here…">${escapeHTML(existing?.code || '')}</textarea>
                 <div class="snip-modal-btns">
-                    <button class="snip-action-btn" id="snip-edit-cancel">Cancel</button>
-                    <button class="snip-action-btn primary" id="snip-edit-save">Save</button>
+                    <button class="snip-action-btn" id="snip-edit-cancel" type="button">Cancel</button>
+                    <button class="snip-action-btn primary" id="snip-edit-save" type="button">Save</button>
                 </div>
             </div>`;
 
@@ -1418,14 +1425,14 @@ $CURSOR$`
         const overlay = document.createElement('div');
         overlay.className = 'snip-modal-overlay';
         overlay.innerHTML = `
-            <div class="snip-modal" style="width:400px">
+            <div class="snip-modal" style="width:400px" role="dialog" aria-modal="true" aria-label="Delete Snippet">
                 <h3>Delete Snippet</h3>
                 <p style="margin:12px 0;color:var(--text-secondary,#a0a0a0)">
                     Are you sure you want to delete "<strong>${escapeHTML(snippet.title)}</strong>"? This cannot be undone.
                 </p>
                 <div class="snip-modal-btns">
-                    <button class="snip-action-btn" id="snip-del-cancel">Cancel</button>
-                    <button class="snip-action-btn danger" id="snip-del-confirm">Delete</button>
+                    <button class="snip-action-btn" id="snip-del-cancel" type="button">Cancel</button>
+                    <button class="snip-action-btn danger" id="snip-del-confirm" type="button">Delete</button>
                 </div>
             </div>`;
 

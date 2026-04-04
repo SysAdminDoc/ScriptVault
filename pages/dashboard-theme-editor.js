@@ -263,10 +263,11 @@ const ThemeEditor = (() => {
   background: var(--bg-button, #333);
   color: var(--text-secondary, #a0a0a0);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
   white-space: nowrap;
 }
 .sv-te-toolbar-btn:hover { background: var(--bg-button-hover, #444); color: var(--text-primary, #e0e0e0); }
+.sv-te-toolbar-btn:focus-visible,.sv-te-section-header:focus-visible,.sv-te-preset:focus-visible,.sv-te-delete-custom:focus-visible,.sv-te-btn:focus-visible{outline:2px solid var(--accent-primary,#22c55e);outline-offset:2px}
 .sv-te-toolbar-btn.active {
   background: var(--accent-primary, #22c55e);
   color: var(--text-on-accent, #fff);
@@ -298,8 +299,9 @@ const ThemeEditor = (() => {
   border: 2px solid var(--border-color, #444);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
   background: transparent;
+  text-align: center;
 }
 .sv-te-preset:hover { border-color: var(--text-muted, #666); }
 .sv-te-preset.active { border-color: var(--accent-primary, #22c55e); }
@@ -331,6 +333,9 @@ const ThemeEditor = (() => {
   background: var(--bg-section-header, #2a2a2a);
   cursor: pointer;
   user-select: none;
+  border: none;
+  width: 100%;
+  text-align: left;
 }
 .sv-te-section-header h4 {
   font-size: 12px;
@@ -394,6 +399,13 @@ const ThemeEditor = (() => {
 .sv-te-color-input input[type="text"]:focus {
   outline: none;
   border-color: var(--accent-primary, #22c55e);
+}
+.sv-te-color-input input[type="text"]:focus-visible,
+.sv-te-font-row input:focus-visible,
+.sv-te-font-row select:focus-visible,
+.sv-te-raw-editor:focus-visible,
+.sv-te-save-dialog input:focus-visible {
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
 }
 
 /* Font controls */
@@ -509,7 +521,7 @@ const ThemeEditor = (() => {
   border: 1px solid var(--border-color, #444);
   background: var(--bg-button, #333);
   color: var(--text-primary, #e0e0e0);
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s, box-shadow 0.15s;
   white-space: nowrap;
 }
 .sv-te-btn:hover { background: var(--bg-button-hover, #444); }
@@ -566,7 +578,8 @@ const ThemeEditor = (() => {
   align-items: center;
   justify-content: center;
 }
-.sv-te-preset:hover .sv-te-delete-custom { display: flex; }
+.sv-te-preset:hover .sv-te-delete-custom,
+.sv-te-preset:focus-within .sv-te-delete-custom { display: flex; }
 
 /* Hidden file input */
 .sv-te-file-input { display: none; }
@@ -584,6 +597,9 @@ const ThemeEditor = (() => {
 
   function el(tag, attrs = {}, children = []) {
     const e = document.createElement(tag);
+    if (tag === 'button' && attrs.type === undefined) {
+      e.type = 'button';
+    }
     for (const [k, v] of Object.entries(attrs)) {
       if (k === 'className') e.className = v;
       else if (k === 'innerHTML') e.innerHTML = v;
@@ -596,6 +612,25 @@ const ThemeEditor = (() => {
       else if (c) e.appendChild(c);
     }
     return e;
+  }
+
+  function setSectionCollapsed(section, header, collapsed) {
+    section.classList.toggle('collapsed', collapsed);
+    if (header) {
+      header.setAttribute('aria-expanded', String(!collapsed));
+    }
+  }
+
+  function buildSectionHeader(title, section, startsExpanded = true) {
+    const header = el('button', {
+      className: 'sv-te-section-header',
+      html: `<h4>${title}</h4><span class="sv-te-chevron">&#9660;</span>`,
+      'aria-expanded': String(startsExpanded),
+    });
+    header.addEventListener('click', () => {
+      setSectionCollapsed(section, header, !section.classList.contains('collapsed'));
+    });
+    return header;
   }
 
   /**
@@ -756,9 +791,9 @@ const ThemeEditor = (() => {
     // Save-as dialog (hidden initially)
     const saveDialog = el('div', { className: 'sv-te-save-dialog', id: 'sv-te-save-dialog', style: 'display:none' });
     saveDialog.innerHTML = `
-      <input type="text" id="sv-te-save-name" placeholder="Custom theme name...">
-      <button class="sv-te-btn sv-te-btn-primary" id="sv-te-save-confirm">Save</button>
-      <button class="sv-te-btn" id="sv-te-save-cancel">Cancel</button>
+      <input type="text" id="sv-te-save-name" name="customThemeName" autocomplete="off" spellcheck="false" placeholder="Custom theme name…">
+      <button class="sv-te-btn sv-te-btn-primary" id="sv-te-save-confirm" type="button">Save</button>
+      <button class="sv-te-btn" id="sv-te-save-cancel" type="button">Cancel</button>
     `;
     panel.appendChild(saveDialog);
 
@@ -799,10 +834,7 @@ const ThemeEditor = (() => {
 
   function buildPresetsSection() {
     const section = el('div', { className: 'sv-te-section' });
-
-    const header = el('div', { className: 'sv-te-section-header' });
-    header.innerHTML = '<h4>Presets</h4><span class="sv-te-chevron">&#9660;</span>';
-    header.addEventListener('click', () => section.classList.toggle('collapsed'));
+    const header = buildSectionHeader('Presets', section);
     section.appendChild(header);
 
     const content = el('div', { className: 'sv-te-section-content' });
@@ -824,10 +856,12 @@ const ThemeEditor = (() => {
   }
 
   function buildPresetCard(key, preset, isCustom) {
-    const card = el('div', {
+    const card = el('button', {
       className: `sv-te-preset${_activePreset === key ? ' active' : ''}`,
       'data-preset': key,
       style: 'position:relative',
+      'aria-pressed': String(_activePreset === key),
+      'aria-label': `Apply ${preset.name} theme preset`,
     });
 
     // Color swatch (show 5 key colors)
@@ -852,7 +886,7 @@ const ThemeEditor = (() => {
     card.appendChild(labelEl);
 
     if (isCustom) {
-      const delBtn = el('button', { className: 'sv-te-delete-custom', textContent: 'x' });
+      const delBtn = el('button', { className: 'sv-te-delete-custom', textContent: 'x', 'aria-label': `Delete custom theme ${preset.name}`, title: `Delete ${preset.name}` });
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         deleteCustomTheme(key.replace('custom:', ''));
@@ -887,7 +921,9 @@ const ThemeEditor = (() => {
 
     // Update active state on cards
     _panelEl?.querySelectorAll('.sv-te-preset').forEach(c => {
-      c.classList.toggle('active', c.dataset.preset === key);
+      const isActive = c.dataset.preset === key;
+      c.classList.toggle('active', isActive);
+      c.setAttribute('aria-pressed', String(isActive));
     });
   }
 
@@ -897,10 +933,7 @@ const ThemeEditor = (() => {
 
   function buildColorSection(group) {
     const section = el('div', { className: 'sv-te-section' });
-
-    const header = el('div', { className: 'sv-te-section-header' });
-    header.innerHTML = `<h4>${group.label}</h4><span class="sv-te-chevron">&#9660;</span>`;
-    header.addEventListener('click', () => section.classList.toggle('collapsed'));
+    const header = buildSectionHeader(group.label, section);
     section.appendChild(header);
 
     const content = el('div', { className: 'sv-te-section-content' });
@@ -958,10 +991,7 @@ const ThemeEditor = (() => {
 
   function buildFontSection() {
     const section = el('div', { className: 'sv-te-section' });
-
-    const header = el('div', { className: 'sv-te-section-header' });
-    header.innerHTML = '<h4>Fonts</h4><span class="sv-te-chevron">&#9660;</span>';
-    header.addEventListener('click', () => section.classList.toggle('collapsed'));
+    const header = buildSectionHeader('Fonts', section);
     section.appendChild(header);
 
     const content = el('div', { className: 'sv-te-section-content' });
@@ -1100,10 +1130,7 @@ const ThemeEditor = (() => {
 
   function buildPreviewCardEl() {
     const wrapper = el('div', { className: 'sv-te-section' });
-
-    const header = el('div', { className: 'sv-te-section-header' });
-    header.innerHTML = '<h4>Preview</h4><span class="sv-te-chevron">&#9660;</span>';
-    header.addEventListener('click', () => wrapper.classList.toggle('collapsed'));
+    const header = buildSectionHeader('Preview', wrapper);
     wrapper.appendChild(header);
 
     const content = el('div', { className: 'sv-te-section-content' });
