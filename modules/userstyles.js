@@ -144,7 +144,7 @@ const UserStylesEngine = (() => {
         // [min, max, step, default] e.g. [0, 100, 1, 50]
         const arrMatch = defaultVal.match(/^\[([\s\S]*)\]$/);
         if (arrMatch) {
-          const parts = arrMatch[1].split(',').map(s => parseFloat(s.trim()));
+          const parts = arrMatch[1].split(',').map(s => { const n = parseFloat(s.trim()); return Number.isNaN(n) ? undefined : n; });
           options = {
             min: parts[0] ?? 0,
             max: parts[1] ?? 100,
