@@ -15,11 +15,15 @@
     "test:a11y": "vitest run tests/dashboard-a11y.test.js",
     "test:cov": "vitest run --coverage",
     "check": "tsc --noEmit && vitest run",
-    "clean": "node --input-type=commonjs -e \"const fs=require('fs'); fs.rmSync('background.js',{force:true}); fs.rmSync('lib/monaco',{recursive:true,force:true});\""
+    "clean": "node --input-type=commonjs -e \"const fs=require('fs'); fs.rmSync('background.js',{force:true}); fs.rmSync('lib/monaco',{recursive:true,force:true});\"",
+    "publish": "bash publish.sh",
+    "publish:draft": "bash publish.sh --draft",
+    "cws:setup": "bash cws-setup.sh"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.2",
     "chrome-types": "^0.1.425",
+    "chrome-webstore-upload-cli": "^3.5.0",
     "esbuild": "^0.27.4",
     "jsdom": "^29.0.1",
     "monaco-editor": "^0.52.0",
