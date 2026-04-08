@@ -92,6 +92,19 @@ let signatureDecisionState = {
 };
 let cancelReviewArmed = false;
 let cancelReviewTimer = null;
+let reviewExitGuardActive = false;
+let suppressExitGuard = false;
+
+function setReviewExitGuard(active) {
+  reviewExitGuardActive = active;
+  if (!active) {
+    suppressExitGuard = false;
+  }
+}
+
+function allowInstallExitOnce() {
+  suppressExitGuard = true;
+}
 
 function getDecisionToneClass(tone) {
   if (tone === 'good') return 'status-good';
@@ -141,9 +154,117 @@ function updateDecisionStates() {
   updateDecisionBadge('decisionRiskState', analysisDecisionState);
   updateDecisionBadge('decisionDependencyState', dependencyDecisionState);
   updateDecisionBadge('decisionSignatureState', signatureDecisionState);
+  updateDecisionHero();
+}
+
+function getDecisionHeroState() {
+  const states = [analysisDecisionState, dependencyDecisionState, signatureDecisionState];
+  const hasPendingCheck = states.some((state) => {
+    const label = String(state?.label || '');
+    return state?.tone === 'neutral' && /(Scanning|Checking|Verifying|Pending|Reviewing)/i.test(label);
+  });
+
+  if (hasPendingCheck) {
+    return {
+      tone: 'neutral',
+      badge: 'In review',
+      title: 'Checks are still running',
+      copy: 'ScriptVault is still scanning this install. You can keep reviewing permissions, scope, source, and code while the final checks finish.'
+    };
+  }
+
+  if (analysisDecisionState.tone === 'warn') {
+    return {
+      tone: 'warn',
+      badge: 'Needs review',
+      title: 'Proceed with caution',
+      copy: analysisDecisionState.detail || 'Static analysis surfaced findings that deserve review before installing.'
+    };
+  }
+
+  if (dependencyDecisionState.tone === 'warn') {
+    return {
+      tone: 'warn',
+      badge: 'Dependency issue',
+      title: 'Dependency checks failed',
+      copy: dependencyDecisionState.detail || 'One or more external dependencies failed to respond cleanly.'
+    };
+  }
+
+  if (signatureDecisionState.tone === 'warn') {
+    return {
+      tone: 'warn',
+      badge: 'Signature warning',
+      title: 'Signer trust needs attention',
+      copy: signatureDecisionState.detail || 'Signature verification surfaced a warning.'
+    };
+  }
+
+  if (signatureDecisionState.label === 'Trusted' && analysisDecisionState.tone === 'good' && dependencyDecisionState.tone === 'good') {
+    return {
+      tone: 'good',
+      badge: 'Ready',
+      title: 'Ready to install',
+      copy: 'Static analysis, dependency checks, and signer trust all look good for this install.'
+    };
+  }
+
+  if (signatureDecisionState.label === 'Valid') {
+    return {
+      tone: 'neutral',
+      badge: 'Review signer',
+      title: 'Install looks clean so far',
+      copy: 'The signature is valid, but this signer is not trusted in ScriptVault yet.'
+    };
+  }
+
+  if (signatureDecisionState.label === 'Unsigned') {
+    return {
+      tone: 'neutral',
+      badge: 'Unsigned',
+      title: 'Manual review recommended',
+      copy: 'This script does not declare an embedded signature, so source and code review matter more here.'
+    };
+  }
+
+  if (analysisDecisionState.tone === 'good' && dependencyDecisionState.tone !== 'warn') {
+    return {
+      tone: 'good',
+      badge: 'Review complete',
+      title: 'Ready for your decision',
+      copy: 'ScriptVault finished its checks. Review the install options and decide how you want this script to land.'
+    };
+  }
+
+  return {
+    tone: 'neutral',
+    badge: 'Review',
+    title: 'Keep reviewing',
+    copy: 'ScriptVault has enough detail to proceed, but this install still deserves a quick manual review.'
+  };
+}
+
+function updateDecisionHero() {
+  const hero = document.getElementById('decisionHero');
+  const badge = document.getElementById('decisionHeroBadge');
+  const title = document.getElementById('decisionHeroTitle');
+  const copy = document.getElementById('decisionHeroCopy');
+  if (!hero || !badge || !title || !copy) return;
+
+  const state = getDecisionHeroState();
+  hero.dataset.tone = state.tone;
+  badge.textContent = state.badge;
+  title.textContent = state.title;
+  copy.textContent = state.copy;
 }
 
 async function init() {
+  window.addEventListener('beforeunload', (event) => {
+    if (!reviewExitGuardActive || suppressExitGuard) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+
   // Event delegation for icon error handling (CSP-compliant)
   document.addEventListener('error', function(e) {
     if (e.target.tagName === 'IMG' && e.target.hasAttribute('data-icon-fallback')) {
@@ -650,6 +771,7 @@ function renderInstallUI(sourceUrl) {
   const content = document.getElementById('content');
   const badge = document.getElementById('install-type-badge');
   const presentation = getInstallPresentation();
+  setReviewExitGuard(true);
   badge.innerHTML = presentation.badgeHtml;
 
   const matches = [...scriptMeta.match, ...scriptMeta.include];
@@ -960,27 +1082,31 @@ function renderInstallUI(sourceUrl) {
         </div>
 
         <div class="surface-card analysis-card review-section" id="reviewSecurity">
-          <div class="install-card-header">
-            <div>
-              <div class="install-card-title">Security Analysis</div>
-              <div class="install-card-subtitle">Scanning the script metadata and source for risky patterns.</div>
+          <div id="analysisMount">
+            <div class="install-card-header">
+              <div>
+                <div class="install-card-title">Security Analysis</div>
+                <div class="install-card-subtitle">Scanning the script metadata and source for risky patterns.</div>
+              </div>
+              <span class="count status-neutral" id="analysisStatus" role="status" aria-live="polite" aria-atomic="true">Scanning</span>
             </div>
-            <span class="count status-neutral" id="analysisStatus" role="status" aria-live="polite" aria-atomic="true">Scanning</span>
+            <div class="analysis-summary">Static analysis runs in the background so you can keep reviewing while ScriptVault checks the script.</div>
           </div>
-          <div class="analysis-summary">Static analysis runs in the background so you can keep reviewing while ScriptVault checks the script.</div>
         </div>
 
       ${dependencyCard}
 
         <div class="surface-card trust-card review-section" id="reviewTrust">
-          <div class="install-card-header">
-            <div>
-              <div class="install-card-title">Source & Trust</div>
-              <div class="install-card-subtitle">Review where this script came from and whether its signer is already trusted.</div>
+          <div id="trustMount">
+            <div class="install-card-header">
+              <div>
+                <div class="install-card-title">Source & Trust</div>
+                <div class="install-card-subtitle">Review where this script came from and whether its signer is already trusted.</div>
+              </div>
+              <span class="count status-neutral">${hasSignature ? 'Verifying' : 'Unsigned'}</span>
             </div>
-            <span class="count status-neutral">${hasSignature ? 'Verifying' : 'Unsigned'}</span>
+            <div class="analysis-summary">${hasSignature ? 'ScriptVault is checking the embedded signature and signer trust.' : 'This script does not declare an embedded signature.'}</div>
           </div>
-          <div class="analysis-summary">${hasSignature ? 'ScriptVault is checking the embedded signature and signer trust.' : 'This script does not declare an embedded signature.'}</div>
         </div>
 
       <div class="code-preview surface-card review-section" id="reviewCode">
@@ -991,7 +1117,7 @@ function renderInstallUI(sourceUrl) {
           <span id="toggle-text">Show code</span>
         </button>
       </div>
-      <div class="code-container" id="code-container">
+      <div class="code-container" id="code-container" hidden aria-hidden="true">
         <textarea id="code-editor"></textarea>
       </div>
     </div>
@@ -1002,6 +1128,13 @@ function renderInstallUI(sourceUrl) {
           <div class="decision-eyebrow">${escapeHtml(presentation.modeLabel)} • ${escapeHtml(source.host)}</div>
           <div class="decision-title">${escapeHtml(installTitle)}</div>
           <div class="decision-copy">${installCopy}</div>
+          <div class="decision-hero" id="decisionHero" data-tone="neutral">
+            <div class="decision-hero-meta">
+              <span class="decision-hero-badge" id="decisionHeroBadge">In review</span>
+            </div>
+            <div class="decision-hero-title" id="decisionHeroTitle">Checks are still running</div>
+            <div class="decision-hero-copy" id="decisionHeroCopy" role="status" aria-live="polite" aria-atomic="true">ScriptVault is still scanning this install. You can keep reviewing permissions, scope, source, and code while the final checks finish.</div>
+          </div>
 
           <div class="decision-list">
             <div class="decision-row">
@@ -1108,12 +1241,14 @@ function renderInstallUI(sourceUrl) {
 
   document.getElementById('enable-install')?.addEventListener('change', (e) => {
     enableOnInstall = e.target.checked;
+    clearInstallError();
     setCancelReviewArmed(false);
     updateDecisionSummary();
   });
 
   document.getElementById('auto-update')?.addEventListener('change', (e) => {
     autoUpdate = e.target.checked;
+    clearInstallError();
     setCancelReviewArmed(false);
     updateDecisionSummary();
   });
@@ -1126,6 +1261,7 @@ function renderInstallUI(sourceUrl) {
   document.addEventListener('keydown', (e) => {
     const installButton = document.getElementById('btn-install');
     const cancelButton = document.getElementById('btn-cancel');
+    const codeContainer = document.getElementById('code-container');
     if (!installButton && !cancelButton) return;
 
     if (e.key === 'Enter' && !e.defaultPrevented) {
@@ -1140,6 +1276,11 @@ function renderInstallUI(sourceUrl) {
       }
     }
     if (e.key === 'Escape' && !e.defaultPrevented) {
+      if (codeContainer?.classList.contains('expanded')) {
+        e.preventDefault();
+        setCodePreviewExpanded(false, { restoreFocus: true });
+        return;
+      }
       e.preventDefault();
       requestCancelReview();
     }
@@ -1264,14 +1405,16 @@ function setupReviewNav() {
   sections.forEach((section) => observer.observe(section));
 }
 
-function toggleCodePreview() {
+function setCodePreviewExpanded(expanded, { restoreFocus = false } = {}) {
   const container = document.getElementById('code-container');
   const icon = document.getElementById('toggle-icon');
   const text = document.getElementById('toggle-text');
   const toggle = document.getElementById('toggle-code');
+  if (!container || !icon || !text) return false;
 
-  container.classList.toggle('expanded');
-  const expanded = container.classList.contains('expanded');
+  container.classList.toggle('expanded', expanded);
+  container.hidden = !expanded;
+  container.setAttribute('aria-hidden', String(!expanded));
 
   if (expanded) {
     icon.textContent = '\u25B2';
@@ -1282,11 +1425,23 @@ function toggleCodePreview() {
     text.textContent = 'Show code';
   }
   if (toggle) toggle.setAttribute('aria-expanded', String(expanded));
+  if (!expanded && restoreFocus) {
+    toggle?.focus({ preventScroll: true });
+  }
   setCancelReviewArmed(false);
+  return expanded;
+}
+
+function toggleCodePreview() {
+  const container = document.getElementById('code-container');
+  const expanded = !(container?.classList.contains('expanded'));
+  return setCodePreviewExpanded(expanded);
 }
 
 function handleCancel() {
   setCancelReviewArmed(false);
+  allowInstallExitOnce();
+  setReviewExitGuard(false);
   chrome.storage.local.remove('pendingInstall');
   if (history.length > 1) {
     history.back();
@@ -1308,6 +1463,7 @@ async function handleInstall() {
   const btn = document.getElementById('btn-install');
   const presentation = getInstallPresentation();
   setCancelReviewArmed(false);
+  clearInstallError();
   btn.disabled = true;
   btn.innerHTML = '<span class="loading-spinner install-inline-spinner"></span> Installing…';
 
@@ -1355,14 +1511,27 @@ function showInstallError(message) {
     const actions = document.querySelector('.actions');
     if (actions) actions.before(errorEl);
   }
+  errorEl.setAttribute('role', 'alert');
+  errorEl.setAttribute('aria-live', 'assertive');
+  errorEl.setAttribute('aria-atomic', 'true');
+  errorEl.tabIndex = -1;
   errorEl.innerHTML = `<span>\u26A0\uFE0F</span> ${escapeHtml(message)}`;
   errorEl.style.display = 'flex';
+  errorEl.focus({ preventScroll: true });
+}
+
+function clearInstallError() {
+  const errorEl = document.getElementById('installError') || document.querySelector('.install-error');
+  if (!errorEl) return;
+  errorEl.style.display = 'none';
+  errorEl.textContent = '';
 }
 
 function showError(title, message) {
+  setReviewExitGuard(false);
   const content = document.getElementById('content');
   content.innerHTML = `
-    <div class="error">
+    <div class="error" role="alert" aria-live="assertive">
       <div class="error-icon">\u274C</div>
       <div class="error-title">${escapeHtml(title)}</div>
       <div class="error-message">${escapeHtml(message)}</div>
@@ -1372,12 +1541,15 @@ function showError(title, message) {
     </div>
   `;
   document.getElementById('btnCloseError')?.addEventListener('click', () => {
+    allowInstallExitOnce();
     if (history.length > 1) history.back();
     else window.close();
   });
+  document.getElementById('btnCloseError')?.focus({ preventScroll: true });
 }
 
 function showSuccess(name, action, scriptId) {
+  setReviewExitGuard(false);
   const content = document.getElementById('content');
   const titleMap = {
     installed: 'Script Installed',
@@ -1386,7 +1558,7 @@ function showSuccess(name, action, scriptId) {
     reinstalled: 'Script Reinstalled'
   };
   content.innerHTML = `
-    <div class="success">
+    <div class="success" role="status" aria-live="polite" aria-atomic="true">
       <div class="success-icon">\u2705</div>
       <div class="success-title">${escapeHtml(titleMap[action] || 'Script Installed')}!</div>
       <div class="success-message">${escapeHtml(name)} is now ${enableOnInstall ? 'active' : 'installed but disabled'}.</div>
@@ -1398,15 +1570,18 @@ function showSuccess(name, action, scriptId) {
   `;
 
   document.getElementById('btnSuccessClose')?.addEventListener('click', () => {
+    allowInstallExitOnce();
     if (history.length > 1) history.back();
     else window.close();
   });
   document.getElementById('btnOpenDashboard')?.addEventListener('click', () => {
+    allowInstallExitOnce();
     const url = scriptId
       ? chrome.runtime.getURL(`pages/dashboard.html#script_${scriptId}`)
       : chrome.runtime.getURL('pages/dashboard.html');
     chrome.tabs.update({ url });
   });
+  document.getElementById('btnOpenDashboard')?.focus({ preventScroll: true });
 }
 
 // Utilities

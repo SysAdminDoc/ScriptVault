@@ -173,20 +173,20 @@
         :root {
             --ui-scale: 1;
             --base-font: 13px;
-            --density-toolbar-padding-y: 12px;
-            --density-toolbar-padding-x: 14px;
-            --density-toolbar-cluster-gap: 8px;
-            --density-filter-gap: 8px;
-            --density-summary-padding-y: 12px;
-            --density-summary-padding-x: 14px;
-            --density-control-height: 36px;
-            --density-control-padding-x: 12px;
-            --density-tab-padding-y: 10px;
-            --density-tab-padding-x: 14px;
-            --density-table-cell-padding-y: 9px;
-            --density-table-cell-padding-x: 10px;
-            --density-view-pill-height: 30px;
-            --density-view-pill-padding-x: 12px;
+            --density-toolbar-padding-y: 10px;
+            --density-toolbar-padding-x: 12px;
+            --density-toolbar-cluster-gap: 7px;
+            --density-filter-gap: 7px;
+            --density-summary-padding-y: 10px;
+            --density-summary-padding-x: 12px;
+            --density-control-height: 34px;
+            --density-control-padding-x: 11px;
+            --density-tab-padding-y: 9px;
+            --density-tab-padding-x: 12px;
+            --density-table-cell-padding-y: 8px;
+            --density-table-cell-padding-x: 9px;
+            --density-view-pill-height: 28px;
+            --density-view-pill-padding-x: 11px;
         }
         [data-ui-scale="0.85"] { --ui-scale: 0.85; --base-font: 11px; }
         [data-ui-scale="0.9"]  { --ui-scale: 0.9;  --base-font: 12px; }
@@ -197,37 +197,37 @@
 
         :root,
         [data-density="comfortable"] {
-            --density-toolbar-padding-y: 12px;
-            --density-toolbar-padding-x: 14px;
-            --density-toolbar-cluster-gap: 8px;
-            --density-filter-gap: 8px;
-            --density-summary-padding-y: 12px;
-            --density-summary-padding-x: 14px;
-            --density-control-height: 36px;
-            --density-control-padding-x: 12px;
-            --density-tab-padding-y: 10px;
-            --density-tab-padding-x: 14px;
-            --density-table-cell-padding-y: 9px;
-            --density-table-cell-padding-x: 10px;
-            --density-view-pill-height: 30px;
-            --density-view-pill-padding-x: 12px;
+            --density-toolbar-padding-y: 10px;
+            --density-toolbar-padding-x: 12px;
+            --density-toolbar-cluster-gap: 7px;
+            --density-filter-gap: 7px;
+            --density-summary-padding-y: 10px;
+            --density-summary-padding-x: 12px;
+            --density-control-height: 34px;
+            --density-control-padding-x: 11px;
+            --density-tab-padding-y: 9px;
+            --density-tab-padding-x: 12px;
+            --density-table-cell-padding-y: 8px;
+            --density-table-cell-padding-x: 9px;
+            --density-view-pill-height: 28px;
+            --density-view-pill-padding-x: 11px;
         }
 
         [data-density="compact"] {
-            --density-toolbar-padding-y: 9px;
-            --density-toolbar-padding-x: 11px;
-            --density-toolbar-cluster-gap: 6px;
-            --density-filter-gap: 6px;
-            --density-summary-padding-y: 9px;
-            --density-summary-padding-x: 11px;
-            --density-control-height: 32px;
-            --density-control-padding-x: 10px;
-            --density-tab-padding-y: 7px;
-            --density-tab-padding-x: 10px;
-            --density-table-cell-padding-y: 6px;
-            --density-table-cell-padding-x: 8px;
-            --density-view-pill-height: 28px;
-            --density-view-pill-padding-x: 10px;
+            --density-toolbar-padding-y: 7px;
+            --density-toolbar-padding-x: 9px;
+            --density-toolbar-cluster-gap: 5px;
+            --density-filter-gap: 5px;
+            --density-summary-padding-y: 7px;
+            --density-summary-padding-x: 9px;
+            --density-control-height: 30px;
+            --density-control-padding-x: 9px;
+            --density-tab-padding-y: 6px;
+            --density-tab-padding-x: 9px;
+            --density-table-cell-padding-y: 5px;
+            --density-table-cell-padding-x: 7px;
+            --density-view-pill-height: 26px;
+            --density-view-pill-padding-x: 9px;
         }
 
         [data-density="spacious"] {
@@ -1034,11 +1034,11 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
-            margin-top: 14px;
-            padding: 12px 14px;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 10px 12px;
             border: 1px solid rgba(127, 127, 127, 0.14);
-            border-radius: 18px;
+            border-radius: 16px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
                 rgba(0, 0, 0, 0.12);
@@ -1077,7 +1077,7 @@
         .bulk-selection-copy {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             min-width: 0;
             flex: 1 1 420px;
             flex-wrap: wrap;
@@ -1086,8 +1086,8 @@
         .bulk-selection-summary {
             display: inline-flex;
             align-items: center;
-            min-height: 30px;
-            padding: 0 12px;
+            min-height: 28px;
+            padding: 0 10px;
             border-radius: 999px;
             background: rgba(15, 23, 42, 0.36);
             border: 1px solid rgba(127, 127, 127, 0.14);
@@ -1115,8 +1115,8 @@
             min-width: 0;
             flex: 1 1 240px;
             color: var(--text-secondary);
-            font-size: 12px;
-            line-height: 1.45;
+            font-size: 11px;
+            line-height: 1.4;
             text-wrap: pretty;
         }
 
@@ -1124,14 +1124,14 @@
             flex: 1 1 100%;
             display: inline-flex;
             align-items: center;
-            min-height: 34px;
-            padding: 8px 12px;
-            border-radius: 14px;
+            min-height: 30px;
+            padding: 7px 10px;
+            border-radius: 12px;
             border: 1px solid rgba(127, 127, 127, 0.14);
             background: rgba(15, 23, 42, 0.3);
             color: var(--text-secondary);
-            font-size: 12px;
-            line-height: 1.45;
+            font-size: 11px;
+            line-height: 1.4;
             text-wrap: pretty;
         }
 
@@ -1162,14 +1162,14 @@
         .bulk-selection-actions {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
         }
 
         .scripts-quick-filters {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
             min-width: 0;
         }
@@ -1178,8 +1178,8 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-height: 32px;
-            padding: 0 12px;
+            min-height: 30px;
+            padding: 0 10px;
             border: 1px solid rgba(127, 127, 127, 0.18);
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.04);
@@ -1217,7 +1217,7 @@
             display: flex;
             align-items: center;
             justify-content: flex-end;
-            gap: 10px;
+            gap: 8px;
             flex: 1 1 320px;
             min-width: 0;
             flex-wrap: wrap;
@@ -1238,13 +1238,13 @@
         }
 
         .scripts-results-reset {
-            min-height: 32px;
-            padding: 0 12px;
+            min-height: 30px;
+            padding: 0 10px;
             border-radius: 999px;
         }
 
         .scripts-table-container {
-            margin-top: 14px;
+            margin-top: 12px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120px),
                 var(--bg-content);
@@ -5033,8 +5033,8 @@
         }
 
         .view-settings-bar {
-            gap: calc(12px * var(--ui-scale));
-            padding: calc(10px * var(--ui-scale)) calc(20px * var(--ui-scale)) 0;
+            gap: calc(10px * var(--ui-scale));
+            padding: calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale)) 0;
             font-size: max(11px, calc(11px * var(--ui-scale)));
         }
 
