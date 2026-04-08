@@ -39,13 +39,23 @@ const CardView = (() => {
 .cv-grid {
   display: grid;
   grid-template-columns: repeat(1, 1fr);
-  gap: 16px;
-  padding: 16px;
+  gap: 14px;
+  padding: 14px;
   opacity: 1;
   transition: opacity ${TRANSITION_MS}ms ease;
 }
 .cv-grid.cv-hidden { display: none; }
 .cv-grid.cv-fade-out { opacity: 0; }
+
+[data-density="compact"] .cv-grid {
+  gap: 12px;
+  padding: 12px;
+}
+
+[data-density="spacious"] .cv-grid {
+  gap: 16px;
+  padding: 16px;
+}
 
 @media (min-width: 560px)  { .cv-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 900px)  { .cv-grid { grid-template-columns: repeat(3, 1fr); } }
@@ -59,18 +69,34 @@ const CardView = (() => {
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
     var(--bg-row);
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-  border-radius: 24px;
-  padding: 18px;
+  border-radius: 22px;
+  padding: 16px;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-height: 188px;
+  gap: 10px;
+  min-height: 176px;
   overflow: hidden;
   content-visibility: auto;
-  contain-intrinsic-size: 240px;
+  contain-intrinsic-size: 224px;
   contain: layout style paint;
   box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
+}
+
+[data-density="compact"] .cv-card {
+  border-radius: 20px;
+  padding: 14px;
+  gap: 9px;
+  min-height: 164px;
+  contain-intrinsic-size: 208px;
+}
+
+[data-density="spacious"] .cv-card {
+  border-radius: 24px;
+  padding: 18px;
+  gap: 12px;
+  min-height: 188px;
+  contain-intrinsic-size: 240px;
 }
 .cv-card::before {
   content: '';
@@ -123,8 +149,8 @@ const CardView = (() => {
 /* Status dots */
 .cv-status-dots {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 12px;
+  right: 12px;
   display: flex;
   gap: 5px;
   align-items: center;
@@ -145,7 +171,7 @@ const CardView = (() => {
 .cv-header {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
   position: relative;
   z-index: 1;
@@ -154,9 +180,9 @@ const CardView = (() => {
   appearance: none;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  padding: 0 40px 0 0;
+  padding: 0 36px 0 0;
   border: 0;
   background: none;
   color: inherit;
@@ -170,7 +196,7 @@ const CardView = (() => {
 .cv-name-stack {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
   flex: 1;
 }
@@ -184,29 +210,29 @@ const CardView = (() => {
 
 /* Favicon / letter avatar */
 .cv-icon {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border-radius: 10px;
   flex-shrink: 0;
   object-fit: contain;
   box-shadow: 0 12px 18px rgba(0,0,0,0.18);
 }
 .cv-icon-letter {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border-radius: 10px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #fff;
   box-shadow: 0 12px 18px rgba(0,0,0,0.18);
 }
 
 .cv-name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -218,14 +244,14 @@ const CardView = (() => {
 .cv-domain {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   max-width: fit-content;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-secondary);
-  padding: 5px 9px;
+  padding: 4px 8px;
   border-radius: 999px;
   background: rgba(90, 140, 255, 0.12);
   border: 1px solid rgba(90, 140, 255, 0.18);
@@ -235,7 +261,7 @@ const CardView = (() => {
 .cv-status-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   min-width: 0;
   position: relative;
@@ -246,9 +272,9 @@ const CardView = (() => {
 .cv-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   max-width: 100%;
-  padding: 5px 9px;
+  padding: 4px 8px;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
@@ -276,7 +302,7 @@ const CardView = (() => {
 .cv-badges {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
   min-width: 0;
 }
@@ -310,7 +336,7 @@ const CardView = (() => {
 .cv-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 12px;
+  gap: 5px 10px;
   font-size: 11px;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
@@ -331,7 +357,7 @@ const CardView = (() => {
   font: inherit;
   font-size: 11px;
   border-radius: 999px;
-  padding: 5px 10px;
+  padding: 4px 8px;
   cursor: pointer;
   transition: color 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
@@ -352,7 +378,7 @@ const CardView = (() => {
 .cv-desc {
   font-size: 12px;
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.5;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -364,7 +390,7 @@ const CardView = (() => {
 .cv-summary {
   min-width: 0;
   font-size: 11px;
-  line-height: 1.55;
+  line-height: 1.45;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -378,7 +404,7 @@ const CardView = (() => {
   display: inline-block;
   font-size: 10px;
   font-weight: 700;
-  padding: 4px 8px;
+  padding: 3px 7px;
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -393,7 +419,7 @@ const CardView = (() => {
   align-items: center;
   justify-content: space-between;
   margin-top: auto;
-  padding-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid rgba(127, 127, 127, 0.14);
   position: relative;
   z-index: 1;
@@ -401,7 +427,7 @@ const CardView = (() => {
 .cv-footer-main {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 .cv-select-btn {
@@ -409,8 +435,8 @@ const CardView = (() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
-  padding: 0 12px;
+  min-height: 30px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid rgba(127,127,127,0.14);
   background: rgba(255,255,255,0.05);
@@ -499,7 +525,7 @@ const CardView = (() => {
   border: 1px solid rgba(127,127,127,0.14);
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 6px 8px;
+  padding: 5px 7px;
   border-radius: 10px;
   font-size: 16px;
   line-height: 1;
@@ -523,14 +549,14 @@ const CardView = (() => {
 
 .cv-menu {
   position: absolute;
-  right: 16px;
-  bottom: 50px;
+  right: 14px;
+  bottom: 46px;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
     var(--bg-header);
   border: 1px solid var(--panel-border-strong, rgba(148,163,184,0.28));
-  border-radius: 16px;
-  padding: 6px;
+  border-radius: 14px;
+  padding: 5px;
   min-width: 160px;
   z-index: 1000;
   box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 24px 40px rgba(0,0,0,.28);
@@ -541,7 +567,7 @@ const CardView = (() => {
 .cv-menu-item {
   display: block;
   width: 100%;
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: none;
   border: none;
   color: var(--text-primary);
@@ -557,10 +583,10 @@ const CardView = (() => {
 .cv-empty {
   display: grid;
   place-items: center;
-  min-height: 240px;
-  padding: 40px 28px;
+  min-height: 210px;
+  padding: 32px 24px;
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-  border-radius: 24px;
+  border-radius: 22px;
   background:
     radial-gradient(circle at top, rgba(90, 140, 255, 0.16), transparent 58%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
@@ -590,7 +616,7 @@ const CardView = (() => {
     var(--bg-input);
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
   border-radius: 14px;
-  padding: 8px 12px;
+  padding: 7px 10px;
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
@@ -618,13 +644,13 @@ const CardView = (() => {
 
 @media (max-width: 768px) {
   .cv-grid {
-    gap: 14px;
-    padding: 14px;
+    gap: 12px;
+    padding: 12px;
   }
 
   .cv-card {
     border-radius: 20px;
-    padding: 16px;
+    padding: 14px;
   }
 }
 `;

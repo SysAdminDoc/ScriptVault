@@ -171,6 +171,13 @@ const GistIntegration = (() => {
         return (name || 'script').replace(/[^a-zA-Z0-9_-]/g, '_') + '.user.js';
     }
 
+    function closeModal() {
+        if (_state.modalEl) {
+            _state.modalEl.remove();
+            _state.modalEl = null;
+        }
+    }
+
     // =========================================
     // Token verification
     // =========================================
@@ -863,18 +870,23 @@ const GistIntegration = (() => {
         row.className = 'gi-input-group';
         const input = document.createElement('input');
         input.className = 'gi-input';
-        input.type = 'text';
-        input.placeholder = 'Paste Gist URL or ID (e.g. gist.github.com/user/abc123)';
+        input.type = 'url';
+        input.name = 'gistImportUrl';
+        input.autocomplete = 'off';
+        input.spellcheck = false;
+        input.placeholder = 'Paste Gist URL or ID (e.g. gist.github.com/user/abc123)…';
         row.appendChild(input);
 
         const btn = document.createElement('button');
         btn.className = 'gi-btn gi-btn-primary';
+        btn.type = 'button';
         btn.textContent = 'Fetch';
-        btn.onclick = async () => {
+        btn.addEventListener('click', async () => {
             const url = input.value.trim();
             if (!url) return;
             btn.disabled = true;
-            btn.innerHTML = '<span class="gi-spinner"></span>Fetching...';
+            btn.setAttribute('aria-busy', 'true');
+            btn.innerHTML = '<span class="gi-spinner"></span>Fetching…';
             try {
                 const scripts = await importFromGist(url);
                 showImportPreview(scripts);
@@ -882,9 +894,10 @@ const GistIntegration = (() => {
                 toast(e.message, 'error');
             } finally {
                 btn.disabled = false;
+                btn.removeAttribute('aria-busy');
                 btn.textContent = 'Fetch';
             }
-        };
+        });
         row.appendChild(btn);
         section.appendChild(row);
 
@@ -897,14 +910,19 @@ const GistIntegration = (() => {
     }
 
     function showImportPreview(scripts) {
-        if (_state.modalEl) _state.modalEl.remove();
+        closeModal();
 
         const overlay = document.createElement('div');
         overlay.className = 'gi-preview-overlay';
-        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeModal();
+        });
 
         const modal = document.createElement('div');
         modal.className = 'gi-preview-modal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-label', `Import Scripts (${scripts.length} found)`);
 
         // Header
         const header = document.createElement('div');
@@ -912,8 +930,10 @@ const GistIntegration = (() => {
         header.innerHTML = `<h3>Import Scripts (${scripts.length} found)</h3>`;
         const closeBtn = document.createElement('button');
         closeBtn.className = 'gi-preview-close';
+        closeBtn.type = 'button';
+        closeBtn.setAttribute('aria-label', 'Close import preview');
         closeBtn.innerHTML = '&times;';
-        closeBtn.onclick = () => overlay.remove();
+        closeBtn.addEventListener('click', closeModal);
         header.appendChild(closeBtn);
         modal.appendChild(header);
 
@@ -950,8 +970,9 @@ const GistIntegration = (() => {
 
             const installBtn = document.createElement('button');
             installBtn.className = `gi-btn ${script.installed ? 'gi-btn-secondary' : 'gi-btn-primary'} gi-btn-sm`;
+            installBtn.type = 'button';
             installBtn.textContent = script.installed ? 'Reinstall' : 'Install';
-            installBtn.onclick = async () => {
+            installBtn.addEventListener('click', async () => {
                 if (!_state.onInstallScript) {
                     toast('Install integration is unavailable right now', 'error');
                     return;
@@ -981,7 +1002,7 @@ const GistIntegration = (() => {
                     installBtn.textContent = originalText;
                     toast(e.message || 'Install failed', 'error');
                 }
-            };
+            });
             actions.appendChild(installBtn);
             card.appendChild(actions);
             body.appendChild(card);
@@ -994,14 +1015,16 @@ const GistIntegration = (() => {
         footer.className = 'gi-preview-footer';
         const closeFooter = document.createElement('button');
         closeFooter.className = 'gi-btn gi-btn-secondary';
+        closeFooter.type = 'button';
         closeFooter.textContent = 'Close';
-        closeFooter.onclick = () => overlay.remove();
+        closeFooter.addEventListener('click', closeModal);
         footer.appendChild(closeFooter);
         modal.appendChild(footer);
 
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
         _state.modalEl = overlay;
+        closeBtn.focus({ preventScroll: true });
     }
 
     function renderBrowseTab(container) {
@@ -1012,7 +1035,7 @@ const GistIntegration = (() => {
 
         const loading = document.createElement('div');
         loading.className = 'gi-loading';
-        loading.innerHTML = '<span class="gi-spinner"></span> Loading your Gists...';
+        loading.innerHTML = '<span class="gi-spinner"></span> Loading your Gists…';
         container.appendChild(loading);
 
         listUserGists().then(gists => {
@@ -1028,14 +1051,18 @@ const GistIntegration = (() => {
             searchRow.style.marginBottom = '16px';
             const searchInput = document.createElement('input');
             searchInput.className = 'gi-input';
-            searchInput.placeholder = 'Search Gists...';
-            searchInput.oninput = () => {
+            searchInput.type = 'search';
+            searchInput.name = 'gistSearch';
+            searchInput.autocomplete = 'off';
+            searchInput.spellcheck = false;
+            searchInput.placeholder = 'Search Gists…';
+            searchInput.addEventListener('input', () => {
                 const q = searchInput.value.toLowerCase();
                 const cards = listEl.querySelectorAll('.gi-gist-card');
                 cards.forEach(c => {
                     c.style.display = c.dataset.search.includes(q) ? '' : 'none';
                 });
-            };
+            });
             searchRow.appendChild(searchInput);
             container.appendChild(searchRow);
 

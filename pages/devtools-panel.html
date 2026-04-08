@@ -52,12 +52,13 @@
         .toolbar-title { font-weight: 600; color: var(--accent); font-size: 12px; }
         .toolbar-sep { width: 1px; height: 16px; background: var(--border); }
         .toolbar-tabs { display: inline-flex; align-items: center; gap: 4px; }
-        .tab-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 3px 8px; border-radius: 3px; font-size: 12px; transition: color 0.15s; }
+        .tab-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 3px 8px; border-radius: 3px; font-size: 12px; transition: color 0.15s, background-color 0.15s; }
         .tab-btn:hover { color: var(--text); background: var(--bg-hover); }
         .tab-btn.active { color: var(--accent); background: var(--bg-hover); }
         .spacer { flex: 1; }
         .toolbar-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; padding: 2px 8px; border-radius: 3px; font-size: 11px; }
         .toolbar-btn:hover { color: var(--text); border-color: var(--text-muted); }
+        .toolbar-status { min-width: 0; max-width: 240px; color: var(--text-muted); font-size: 11px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .filter-input { background: var(--bg-row); border: 1px solid var(--border); color: var(--text); padding: 2px 6px; border-radius: 3px; font-size: 11px; width: 180px; }
         .filter-input:focus,
         .filter-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.18); }
@@ -78,6 +79,7 @@
         .net-table td { padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; vertical-align: middle; }
         .net-table tr:hover td { background: var(--bg-hover); }
         .net-table tr.selected td { background: var(--bg-hover); outline: 1px solid var(--accent); }
+        .net-table tr:focus-visible td { background: var(--bg-hover); outline: 1px solid rgba(76, 175, 80, 0.45); }
 
         .method-badge { font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 2px; }
         .method-GET { color: var(--method-get); }
@@ -133,6 +135,9 @@
         /* Empty state */
         .empty-state { flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 6px; color: var(--text-muted); }
         .empty-icon { font-size: 28px; }
+        .empty-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+        .empty-action { background: none; border: 1px solid var(--border); color: var(--text); cursor: pointer; padding: 5px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; transition: border-color 0.15s, background-color 0.15s, color 0.15s, transform 0.15s; }
+        .empty-action:hover { border-color: var(--accent); background: var(--bg-hover); color: var(--accent); transform: translateY(-1px); }
     </style>
 </head>
 <body>
@@ -146,7 +151,8 @@
         </div>
         <div class="spacer"></div>
         <label class="sr-only" for="filterInput">Filter network requests</label>
-        <input class="filter-input" id="filterInput" type="search" placeholder="Filter requests, URLs, or scripts" aria-describedby="devtoolsStatus" autocomplete="off" spellcheck="false">
+        <input class="filter-input" id="filterInput" type="search" placeholder="Filter requests, URLs, or scripts…" aria-describedby="toolbarStatus" autocomplete="off" spellcheck="false">
+        <span class="toolbar-status" id="toolbarStatus" role="status" aria-live="polite" aria-atomic="true"></span>
         <button class="toolbar-btn" id="btnClear" type="button">Clear</button>
         <button class="toolbar-btn" id="btnExportHAR" type="button" style="display:none">Export HAR</button>
         <button class="toolbar-btn" id="btnRefresh" type="button">Refresh</button>
@@ -211,6 +217,10 @@
                 <div class="empty-icon">🖥️</div>
                 <div>Console messages from user scripts will appear here when capture is available</div>
                 <div style="font-size:10px;margin-top:4px">This panel currently focuses on network and execution insight first.</div>
+                <div class="empty-actions">
+                    <button class="empty-action" id="btnConsoleToNetwork" type="button">Open Network</button>
+                    <button class="empty-action" id="btnConsoleToExecution" type="button">Open Execution</button>
+                </div>
             </div>
         </div>
     </div>
