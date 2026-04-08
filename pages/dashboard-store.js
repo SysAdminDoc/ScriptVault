@@ -26,6 +26,7 @@ const ScriptStore = (() => {
         getInstalledScripts: null, // fn supplied by caller
         onInstalled: null,         // callback after successful install
         searchUiBusy: false,
+        pendingFocusRestore: null,
     };
 
     const CATEGORIES = {
@@ -116,6 +117,9 @@ const ScriptStore = (() => {
     cursor: pointer;
     white-space: nowrap;
     transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+.ss-btn[href] {
+    text-decoration: none;
 }
 .ss-btn:hover {
     background: var(--bg-button-hover);
@@ -344,7 +348,8 @@ const ScriptStore = (() => {
     font-family: 'Courier New', monospace;
     font-size: 11px;
     line-height: 1.4;
-    white-space: pre;
+    white-space: pre-wrap;
+    word-break: break-word;
     color: var(--text-secondary);
 }
 .ss-card-preview.open { display: block; }
@@ -415,21 +420,21 @@ const ScriptStore = (() => {
     font-size: 13px;
 }
 .ss-shell {
-    padding: 22px;
+    padding: 18px;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 14px;
 }
 .ss-hero {
     position: relative;
     display: flex;
     align-items: stretch;
     justify-content: space-between;
-    gap: 20px;
+    gap: 16px;
     flex-wrap: wrap;
-    padding: 26px 28px;
+    padding: 20px 22px;
     border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-    border-radius: 28px;
+    border-radius: 24px;
     background:
         radial-gradient(circle at top right, rgba(96, 165, 250, 0.2), transparent 16rem),
         linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02) 58%, transparent),
@@ -472,7 +477,7 @@ const ScriptStore = (() => {
     margin-top: 8px;
     max-width: 700px;
     font-size: 13px;
-    line-height: 1.7;
+    line-height: 1.55;
     color: var(--text-secondary);
 }
 .ss-overview {
@@ -482,9 +487,9 @@ const ScriptStore = (() => {
 }
 .ss-summary {
     min-width: 118px;
-    padding: 12px 14px;
+    padding: 10px 12px;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 18px;
+    border-radius: 16px;
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)),
         rgba(255, 255, 255, 0.02);
@@ -502,7 +507,7 @@ const ScriptStore = (() => {
 }
 .ss-summary strong {
     display: block;
-    margin-top: 8px;
+    margin-top: 6px;
     font-size: 16px;
     font-weight: 700;
     letter-spacing: -0.03em;
@@ -512,11 +517,11 @@ const ScriptStore = (() => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
-    padding: 14px 16px;
+    padding: 12px 14px;
     border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-    border-radius: 22px;
+    border-radius: 18px;
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
         var(--bg-section-header);
@@ -528,10 +533,10 @@ const ScriptStore = (() => {
     flex: 1 1 320px;
     min-width: 0;
     align-items: center;
-    padding: 0 14px;
-    gap: 10px;
+    padding: 0 12px;
+    gap: 8px;
     border: 1px solid rgba(127, 127, 127, 0.14);
-    border-radius: 18px;
+    border-radius: 16px;
     background: rgba(0, 0, 0, 0.12);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
@@ -544,17 +549,17 @@ const ScriptStore = (() => {
     min-width: 0;
     border: none;
     background: transparent;
-    padding: 12px 0;
+    padding: 10px 0;
     font-size: 13px;
 }
 .ss-toolbar-actions {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
 }
 .ss-btn {
-    padding: 9px 14px;
-    border-radius: 14px;
+    padding: 8px 12px;
+    border-radius: 12px;
     font-size: 12px;
     font-weight: 600;
     gap: 6px;
@@ -595,9 +600,9 @@ const ScriptStore = (() => {
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 14px 24px rgba(96, 165, 250, 0.16);
 }
 .ss-nav {
-    padding: 14px 16px;
+    padding: 12px 14px;
     border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-    border-radius: 22px;
+    border-radius: 18px;
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
         var(--bg-content);
@@ -612,7 +617,7 @@ const ScriptStore = (() => {
     text-transform: uppercase;
 }
 .ss-chip {
-    padding: 8px 13px;
+    padding: 7px 11px;
     border-radius: 999px;
     font-size: 11px;
     font-weight: 600;
@@ -632,9 +637,9 @@ const ScriptStore = (() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
-    padding: 0 4px;
+    padding: 0 2px;
     font-size: 12px;
     line-height: 1.5;
     color: var(--text-muted);
@@ -645,8 +650,8 @@ const ScriptStore = (() => {
 .ss-status-summary {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 6px;
+    padding: 7px 10px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(127, 127, 127, 0.14);
@@ -661,14 +666,14 @@ const ScriptStore = (() => {
 .ss-results-inner {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 .ss-empty,
 .ss-error,
 .ss-loading {
-    padding: 34px 24px;
+    padding: 26px 20px;
     border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-    border-radius: 24px;
+    border-radius: 20px;
     background:
         radial-gradient(circle at top center, rgba(96, 165, 250, 0.12), transparent 48%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
@@ -702,7 +707,7 @@ const ScriptStore = (() => {
     background: transparent;
 }
 .ss-source-stat {
-    padding: 7px 11px;
+    padding: 6px 10px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(127, 127, 127, 0.14);
@@ -711,10 +716,10 @@ const ScriptStore = (() => {
 }
 .ss-card {
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 16px;
-    padding: 16px;
+    gap: 12px;
+    padding: 14px;
     margin-bottom: 0;
-    border-radius: 24px;
+    border-radius: 20px;
     border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
     background:
         radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 35%),
@@ -722,7 +727,7 @@ const ScriptStore = (() => {
         var(--bg-content);
     box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
     content-visibility: auto;
-    contain-intrinsic-size: 188px;
+    contain-intrinsic-size: 176px;
     contain: layout style paint;
 }
 .ss-card:hover {
@@ -751,7 +756,7 @@ const ScriptStore = (() => {
 }
 .ss-card-name {
     margin-bottom: 6px;
-    gap: 8px;
+    gap: 6px;
 }
 .ss-card-name a {
     color: var(--text-primary);
@@ -760,7 +765,7 @@ const ScriptStore = (() => {
 .ss-card-version,
 .ss-installed-badge,
 .ss-source-badge {
-    padding: 4px 9px;
+    padding: 3px 8px;
     border-radius: 999px;
     font-size: 10px;
     font-weight: 700;
@@ -777,9 +782,9 @@ const ScriptStore = (() => {
     background: rgba(52, 211, 153, 0.14);
 }
 .ss-card-desc {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     font-size: 12px;
-    line-height: 1.6;
+    line-height: 1.5;
     white-space: normal;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -787,11 +792,11 @@ const ScriptStore = (() => {
     -webkit-box-orient: vertical;
 }
 .ss-card-meta {
-    gap: 8px;
+    gap: 6px;
     font-size: 11px;
 }
 .ss-card-meta span {
-    padding: 6px 10px;
+    padding: 5px 8px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(127, 127, 127, 0.12);
@@ -802,14 +807,14 @@ const ScriptStore = (() => {
     justify-content: flex-end;
     align-items: center;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     align-self: flex-start;
 }
 .ss-card-preview {
     max-height: 360px;
-    margin-top: 14px;
-    padding: 14px 16px;
-    border-radius: 18px;
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-radius: 16px;
     border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255,255,255,0.02)),
@@ -834,11 +839,11 @@ const ScriptStore = (() => {
 }
 @media (max-width: 900px) {
     .ss-shell {
-        padding: 16px;
+        padding: 14px;
     }
     .ss-hero {
-        padding: 20px;
-        border-radius: 24px;
+        padding: 16px;
+        border-radius: 20px;
     }
     .ss-toolbar,
     .ss-status {
@@ -853,6 +858,59 @@ const ScriptStore = (() => {
     .ss-card-actions {
         justify-content: flex-start;
     }
+}
+[data-density="compact"] .ss-shell {
+    padding: 14px;
+    gap: 12px;
+}
+[data-density="compact"] .ss-hero {
+    gap: 14px;
+    padding: 16px 18px;
+    border-radius: 20px;
+}
+[data-density="compact"] .ss-summary,
+[data-density="compact"] .ss-status-summary {
+    padding: 6px 9px;
+}
+[data-density="compact"] .ss-toolbar,
+[data-density="compact"] .ss-nav {
+    padding: 10px 12px;
+    border-radius: 16px;
+}
+[data-density="compact"] .ss-search-bar {
+    padding: 0 10px;
+    gap: 7px;
+    border-radius: 14px;
+}
+[data-density="compact"] .ss-search-input {
+    padding: 9px 0;
+}
+[data-density="compact"] .ss-btn {
+    padding: 7px 11px;
+    border-radius: 11px;
+}
+[data-density="compact"] .ss-chip {
+    padding: 6px 10px;
+}
+[data-density="compact"] .ss-results-inner {
+    gap: 8px;
+}
+[data-density="compact"] .ss-card {
+    gap: 10px;
+    padding: 12px;
+    border-radius: 18px;
+    contain-intrinsic-size: 164px;
+}
+[data-density="compact"] .ss-card-preview {
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-radius: 14px;
+}
+[data-density="compact"] .ss-empty,
+[data-density="compact"] .ss-error,
+[data-density="compact"] .ss-loading {
+    padding: 22px 18px;
+    border-radius: 18px;
 }
 @media (prefers-reduced-motion: reduce) {
     .ss-btn,
@@ -920,6 +978,61 @@ const ScriptStore = (() => {
         const helper = _state.container?.querySelector('.ss-status-hint');
         if (status) status.textContent = message;
         if (helper) helper.textContent = hint;
+    }
+
+    function getPreviewId(name, page, index) {
+        const slug = normalizeIdentityPart(name).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 28) || 'script';
+        return `ss-preview-${page}-${index}-${slug}`;
+    }
+
+    function resetPreviewState(preview, btn) {
+        if (!preview || !btn) return;
+        preview.classList.remove('open');
+        preview.hidden = true;
+        btn.textContent = 'Preview Code';
+        btn.setAttribute('aria-expanded', 'false');
+    }
+
+    function closeOtherPreviews(currentCard = null) {
+        _state.container?.querySelectorAll('.ss-card').forEach((card) => {
+            if (currentCard && card === currentCard) return;
+            const preview = card.querySelector('.ss-card-preview');
+            const button = card.querySelector('[data-action="preview"]');
+            if (!(preview instanceof HTMLElement) || !(button instanceof HTMLButtonElement)) return;
+            if (!preview.classList.contains('open')) return;
+            resetPreviewState(preview, button);
+        });
+    }
+
+    function closeOpenPreview({ restoreFocus = false } = {}) {
+        const openPreview = _state.container?.querySelector('.ss-card-preview.open');
+        if (!(openPreview instanceof HTMLElement)) return false;
+        const card = openPreview.closest('.ss-card');
+        const button = card?.querySelector('[data-action="preview"]');
+        if (!(button instanceof HTMLButtonElement)) return false;
+        resetPreviewState(openPreview, button);
+        setStatus(_state.lastContextLabel, `${_state.lastResultsCount} script${_state.lastResultsCount === 1 ? '' : 's'} ready to preview or install.`);
+        if (restoreFocus) {
+            button.focus({ preventScroll: true });
+        }
+        return true;
+    }
+
+    function markCardInstalled(card, installButton = null) {
+        if (!card) return;
+        card.classList.add('installed');
+        const nameEl = card.querySelector('.ss-card-name');
+        if (nameEl && !nameEl.querySelector('.ss-installed-badge')) {
+            const badge = document.createElement('span');
+            badge.className = 'ss-installed-badge';
+            badge.textContent = 'Installed';
+            nameEl.appendChild(badge);
+        }
+        if (installButton instanceof HTMLButtonElement) {
+            installButton.textContent = 'Reinstall';
+            installButton.disabled = false;
+            installButton.removeAttribute('aria-busy');
+        }
     }
 
     function getStoreSearchControls() {
@@ -1202,8 +1315,11 @@ const ScriptStore = (() => {
         }
     }
 
-    function showEmpty(message = 'No scripts found') {
+    function showEmpty(message = 'No scripts found', focusDescriptor = _state.pendingFocusRestore) {
         const el = getResultsEl();
+        if (focusDescriptor) {
+            _state.pendingFocusRestore = null;
+        }
         _state.lastResultsCount = 0;
         updateOverview();
         setStatus('No scripts matched this view.', 'Try another query, category, or source mix.');
@@ -1212,10 +1328,16 @@ const ScriptStore = (() => {
             el.dataset.listSize = 'empty';
             el.innerHTML = `<div class="ss-empty"><strong>No scripts matched</strong><span>${escapeHtml(message)}</span></div>`;
         }
+        if (focusDescriptor) {
+            queueMicrotask(() => restoreStoreFallbackFocus());
+        }
     }
 
-    function showError(message) {
+    function showError(message, focusDescriptor = _state.pendingFocusRestore) {
         const el = getResultsEl();
+        if (focusDescriptor) {
+            _state.pendingFocusRestore = null;
+        }
         _state.lastResultsCount = 0;
         updateOverview();
         setStatus('Store search failed.', 'Check the active sources or try again in a moment.');
@@ -1224,6 +1346,9 @@ const ScriptStore = (() => {
             el.dataset.listSize = 'empty';
             el.innerHTML = `<div class="ss-error"><strong>Search failed</strong><span>${escapeHtml(message)}</span></div>`;
         }
+        if (focusDescriptor) {
+            queueMicrotask(() => restoreStoreFallbackFocus());
+        }
     }
 
     function updateFooter(text) {
@@ -1231,12 +1356,102 @@ const ScriptStore = (() => {
         if (footer) footer.textContent = text;
     }
 
+    function restoreStoreFallbackFocus() {
+        const searchInput = _state.container?.querySelector('.ss-search-input');
+        if (searchInput instanceof HTMLInputElement && !searchInput.disabled) {
+            searchInput.focus({ preventScroll: true });
+            searchInput.select?.();
+            return;
+        }
+        const target = _state.container?.querySelector('.ss-chip.active, .ss-source-chip[aria-pressed="true"], .ss-search-control:not([disabled])');
+        if (target instanceof HTMLElement) {
+            target.focus({ preventScroll: true });
+        }
+    }
+
+    function getStoreFocusDescriptor(control = document.activeElement) {
+        const results = getResultsEl();
+        if (!results || !(control instanceof HTMLElement) || !results.contains(control)) return null;
+
+        const paginationButton = control.closest('.ss-pagination .ss-search-control[data-action="page"]');
+        if (paginationButton instanceof HTMLButtonElement) {
+            return {
+                type: 'pagination',
+                label: paginationButton.textContent?.trim() || ''
+            };
+        }
+
+        const card = control.closest('.ss-card');
+        if (card instanceof HTMLElement) {
+            const scriptName = card.dataset.scriptName || '';
+            const actionButton = control.closest('[data-action]');
+            if (actionButton instanceof HTMLElement) {
+                return {
+                    type: 'card-action',
+                    scriptName,
+                    action: actionButton.dataset.action || ''
+                };
+            }
+            const titleLink = control.closest('.ss-card-name a');
+            if (titleLink instanceof HTMLAnchorElement) {
+                return {
+                    type: 'card-link',
+                    scriptName
+                };
+            }
+        }
+
+        return { type: 'results' };
+    }
+
+    function resolveStoreFocusTarget(descriptor) {
+        if (!descriptor) return null;
+        const results = getResultsEl();
+        if (!results) return null;
+
+        if (descriptor.type === 'pagination') {
+            return results.querySelector(`.ss-pagination .ss-search-control[data-action="page"]:not([disabled])`)?.textContent?.trim() === descriptor.label
+                ? results.querySelector(`.ss-pagination .ss-search-control[data-action="page"]:not([disabled])`)
+                : Array.from(results.querySelectorAll('.ss-pagination .ss-search-control[data-action="page"]:not([disabled])'))
+                    .find((button) => button.textContent?.trim() === descriptor.label)
+                    || results.querySelector('.ss-pagination .ss-search-control[data-action="page"]:not([disabled])');
+        }
+
+        if (descriptor.type === 'card-action') {
+            return results.querySelector(`.ss-card[data-script-name="${CSS.escape(descriptor.scriptName || '')}"] [data-action="${descriptor.action}"]`)
+                || results.querySelector('.ss-card [data-action="install"]:not([disabled])')
+                || results.querySelector('.ss-card [data-action="preview"]:not([disabled])');
+        }
+
+        if (descriptor.type === 'card-link') {
+            return results.querySelector(`.ss-card[data-script-name="${CSS.escape(descriptor.scriptName || '')}"] .ss-card-name a`)
+                || results.querySelector('.ss-card .ss-card-name a');
+        }
+
+        return results.querySelector('.ss-card [data-action="install"]:not([disabled])')
+            || results.querySelector('.ss-card [data-action="preview"]:not([disabled])')
+            || results.querySelector('.ss-pagination .ss-search-control[data-action="page"]:not([disabled])');
+    }
+
+    function restoreStoreFocus(descriptor) {
+        const target = resolveStoreFocusTarget(descriptor);
+        if (!(target instanceof HTMLElement)) return;
+        target.focus({ preventScroll: true });
+        target.scrollIntoView?.({ block: 'nearest' });
+    }
+
+    function queueStoreFocusRestore(descriptor) {
+        _state.pendingFocusRestore = descriptor || null;
+    }
+
     function renderCards(scripts, page, contextLabel, sourceStats, hasMore = false) {
         const el = getResultsEl();
         if (!el) return;
+        const focusDescriptor = _state.pendingFocusRestore;
+        _state.pendingFocusRestore = null;
 
         if (!scripts || scripts.length === 0) {
-            showEmpty('No scripts found. Try a different search.');
+            showEmpty('No scripts found. Try a different search.', focusDescriptor);
             return;
         }
 
@@ -1269,7 +1484,7 @@ const ScriptStore = (() => {
             html += `<div class="ss-result-count">Page ${page} · ${scripts.length} results</div>`;
         }
 
-        scripts.forEach(s => {
+        scripts.forEach((s, index) => {
             // Unified format — works with both old GF format and new normalized format
             const name = s.name || 'Unnamed';
             const author = s.author || s.users?.[0]?.name || 'Unknown';
@@ -1285,12 +1500,17 @@ const ScriptStore = (() => {
             const source = s.source || 'greasyfork';
             const srcDef = SOURCES[source];
             const sourceBadge = srcDef ? `<span class="ss-source-badge" style="background:${srcDef.color};color:#fff">${srcDef.label}</span>` : '';
+            const previewId = getPreviewId(name, page, index);
+            const canInstall = Boolean(codeUrl);
+            const installLabel = installed ? 'Reinstall' : 'Install';
 
             html += `
 <div class="ss-card${installed ? ' installed' : ''}" data-script-name="${escapeHtml(name)}">
     <div class="ss-card-info">
         <div class="ss-card-name">
-            <a href="${escapeHtml(pageUrl)}" target="_blank" rel="noopener">${escapeHtml(name)}</a>
+            ${pageUrl
+                ? `<a href="${escapeHtml(pageUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(name)}</a>`
+                : `<span>${escapeHtml(name)}</span>`}
             ${version ? `<span class="ss-card-version">v${escapeHtml(version)}</span>` : ''}
             ${sourceBadge}
             ${installed ? '<span class="ss-installed-badge">Installed</span>' : ''}
@@ -1305,11 +1525,13 @@ const ScriptStore = (() => {
         </div>
     </div>
     <div class="ss-card-actions">
-        <button type="button" class="ss-btn primary small" data-action="install" data-url="${escapeHtml(codeUrl)}">${installed ? 'Reinstall' : 'Install'}</button>
-        <button type="button" class="ss-btn small" data-action="preview" data-url="${escapeHtml(codeUrl)}">Preview Code</button>
-        <button type="button" class="ss-btn small" data-action="view" data-url="${escapeHtml(pageUrl)}">Open Page</button>
+        <button type="button" class="ss-btn primary small" data-action="install" data-url="${escapeHtml(codeUrl)}" ${canInstall ? '' : 'disabled aria-disabled="true" title="This source did not expose an install URL."'}>${canInstall ? installLabel : 'Install Unavailable'}</button>
+        <button type="button" class="ss-btn small" data-action="preview" data-url="${escapeHtml(codeUrl)}" aria-expanded="false" aria-controls="${previewId}" ${canInstall ? '' : 'disabled aria-disabled="true" title="This source did not expose previewable code."'}>Preview Code</button>
+        ${pageUrl
+            ? `<a class="ss-btn small" href="${escapeHtml(pageUrl)}" target="_blank" rel="noopener noreferrer">Open Page</a>`
+            : '<button type="button" class="ss-btn small" disabled aria-disabled="true" title="This source did not expose a listing page.">Open Page</button>'}
     </div>
-    <div class="ss-card-preview"></div>
+    <div class="ss-card-preview" id="${previewId}" role="region" aria-label="Source preview for ${escapeHtml(name)}" tabindex="-1" hidden></div>
 </div>`;
         });
 
@@ -1329,6 +1551,9 @@ const ScriptStore = (() => {
         el.innerHTML = html;
         bindCardActions(el);
         updateFooter(`${scripts.length} scripts loaded · ${getActiveSourceSummary()}`);
+        if (focusDescriptor) {
+            queueMicrotask(() => restoreStoreFocus(focusDescriptor));
+        }
     }
 
     // =========================================
@@ -1351,10 +1576,8 @@ const ScriptStore = (() => {
                 case 'preview':
                     await handlePreview(btn, url);
                     break;
-                case 'view':
-                    if (url) chrome.tabs.create({ url });
-                    break;
                 case 'page':
+                    queueStoreFocusRestore(getStoreFocusDescriptor(btn));
                     await navigatePage(parseInt(btn.dataset.page, 10));
                     break;
             }
@@ -1362,7 +1585,10 @@ const ScriptStore = (() => {
     }
 
     async function handleInstall(btn, url) {
-        if (!url) return;
+        if (!url) {
+            setStatus('Install unavailable.', 'This result did not expose a direct install URL.');
+            return;
+        }
         const originalText = btn.textContent;
         btn.textContent = 'Installing…';
         btn.disabled = true;
@@ -1371,7 +1597,6 @@ const ScriptStore = (() => {
         try {
             const res = await chrome.runtime.sendMessage({ action: 'installFromUrl', url });
             if (res?.success) {
-                btn.textContent = 'Installed';
                 btn.classList.remove('primary');
                 // Update installed set
                 await refreshInstalledNames();
@@ -1379,16 +1604,7 @@ const ScriptStore = (() => {
                 setStatus('Script installed.', 'The dashboard list will refresh in place.');
                 // Mark the card
                 const card = btn.closest('.ss-card');
-                if (card) {
-                    card.classList.add('installed');
-                    const nameEl = card.querySelector('.ss-card-name');
-                    if (nameEl && !nameEl.querySelector('.ss-installed-badge')) {
-                        const badge = document.createElement('span');
-                        badge.className = 'ss-installed-badge';
-                        badge.textContent = 'Installed';
-                        nameEl.appendChild(badge);
-                    }
-                }
+                markCardInstalled(card, btn);
                 if (typeof _state.onInstalled === 'function') {
                     await Promise.resolve(_state.onInstalled());
                 }
@@ -1411,24 +1627,27 @@ const ScriptStore = (() => {
             }, 2000);
         }
 
-        if (btn.textContent === 'Installed') {
+        if (btn.textContent === 'Reinstall') {
             btn.removeAttribute('aria-busy');
         }
     }
 
     async function handlePreview(btn, url) {
-        if (!url) return;
+        if (!url) {
+            setStatus('Preview unavailable.', 'This result did not expose source code for inline preview.');
+            return;
+        }
         const card = btn.closest('.ss-card');
         const preview = card?.querySelector('.ss-card-preview');
         if (!preview) return;
 
         if (preview.classList.contains('open')) {
-            preview.classList.remove('open');
-            btn.textContent = 'Preview Code';
+            resetPreviewState(preview, btn);
             setStatus(_state.lastContextLabel, `${_state.lastResultsCount} script${_state.lastResultsCount === 1 ? '' : 's'} ready to preview or install.`);
             return;
         }
 
+        closeOtherPreviews(card);
         btn.textContent = 'Loading…';
         btn.disabled = true;
         btn.setAttribute('aria-busy', 'true');
@@ -1440,13 +1659,19 @@ const ScriptStore = (() => {
             const code = await resp.text();
             preview.textContent = code;
             preview.classList.add('open');
-            btn.textContent = 'Hide';
+            preview.hidden = false;
+            btn.textContent = 'Hide Preview';
+            btn.setAttribute('aria-expanded', 'true');
             setStatus('Inline code preview open.', 'You can inspect the source without leaving the store.');
+            preview.focus({ preventScroll: true });
         } catch {
             preview.textContent = 'Failed to load script code.';
             preview.classList.add('open');
-            btn.textContent = 'Preview Code';
+            preview.hidden = false;
+            btn.textContent = 'Hide Preview';
+            btn.setAttribute('aria-expanded', 'true');
             setStatus('Preview failed.', 'The source script could not be fetched right now.');
+            preview.focus({ preventScroll: true });
         }
         btn.disabled = false;
         btn.removeAttribute('aria-busy');
@@ -1610,7 +1835,7 @@ const ScriptStore = (() => {
         <button type="button" class="ss-btn ghost ss-search-control" data-action="discover-popular">Popular</button>
     </div>
     </div>
-    <div class="ss-status" role="status" aria-live="polite">
+    <div class="ss-status" role="status" aria-live="polite" aria-atomic="true">
         <span class="ss-status-summary"><strong class="ss-status-text">Trending scripts ready.</strong></span>
         <span class="ss-status-hint">Search by keyword or domain, then preview or install inline.</span>
     </div>
@@ -1645,6 +1870,13 @@ const ScriptStore = (() => {
         const searchBtn = container.querySelector('[data-action="search"]');
         const trendingBtn = container.querySelector('[data-action="discover-trending"]');
         const popularBtn = container.querySelector('[data-action="discover-popular"]');
+        const runDiscoveryMode = (sortMode = 'daily_installs') => {
+            resetState();
+            _state.sortMode = sortMode;
+            if (searchInput) searchInput.value = '';
+            updateActiveChips();
+            executeSearch();
+        };
 
         searchBtn?.addEventListener('click', () => {
             if (_state.searchUiBusy) return;
@@ -1677,25 +1909,32 @@ const ScriptStore = (() => {
         searchInput?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 searchBtn?.click();
+            } else if (e.key === 'Escape' && searchInput?.value) {
+                e.preventDefault();
+                runDiscoveryMode('daily_installs');
+            }
+        });
+
+        container.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+                e.preventDefault();
+                searchInput?.focus();
+                searchInput?.select?.();
+                return;
+            }
+            if (e.key === 'Escape' && closeOpenPreview({ restoreFocus: true })) {
+                e.preventDefault();
             }
         });
 
         trendingBtn?.addEventListener('click', () => {
             if (_state.searchUiBusy) return;
-            resetState();
-            _state.sortMode = 'daily_installs';
-            if (searchInput) searchInput.value = '';
-            updateActiveChips();
-            executeSearch();
+            runDiscoveryMode('daily_installs');
         });
 
         popularBtn?.addEventListener('click', () => {
             if (_state.searchUiBusy) return;
-            resetState();
-            _state.sortMode = 'total_installs';
-            if (searchInput) searchInput.value = '';
-            updateActiveChips();
-            executeSearch();
+            runDiscoveryMode('total_installs');
         });
 
         // Category chips
@@ -1727,7 +1966,10 @@ const ScriptStore = (() => {
                 const src = chip.dataset.source;
                 if (_activeSources.has(src)) {
                     // Don't allow disabling all sources
-                    if (_activeSources.size <= 1) return;
+                    if (_activeSources.size <= 1) {
+                        setStatus('At least one source must stay active.', 'Enable another source before turning this one off.');
+                        return;
+                    }
                     _activeSources.delete(src);
                     chip.classList.remove('active');
                     chip.setAttribute('aria-pressed', 'false');

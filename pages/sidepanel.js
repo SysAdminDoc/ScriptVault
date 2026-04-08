@@ -111,6 +111,75 @@
     controls[nextIndex]?.focus();
   }
 
+  function getSidepanelFocusDescriptor(control = document.activeElement) {
+    const row = control?.closest?.('[data-script-id]');
+    if (!(row instanceof HTMLElement)) return null;
+    const list = row.closest('#pageScriptList') ? 'page' : row.closest('#allScriptList') ? 'all' : '';
+    if (!list) return null;
+    const container = list === 'page' ? $('pageScriptList') : $('allScriptList');
+    const rows = Array.from(container.querySelectorAll('[data-script-id]'));
+    const rowIndex = rows.indexOf(row);
+    let target = 'row';
+    if (control.matches?.('.sp-toggle input')) {
+      target = 'toggle';
+    } else if (control.matches?.('.sp-item-name-btn')) {
+      target = 'name';
+    }
+    return {
+      list,
+      scriptId: row.dataset.scriptId || '',
+      rowIndex: rowIndex >= 0 ? rowIndex : 0,
+      target
+    };
+  }
+
+  function resolveSidepanelFocusTarget(descriptor) {
+    if (!descriptor) return null;
+    const container = descriptor.list === 'page' ? $('pageScriptList') : $('allScriptList');
+    const rows = Array.from(container.querySelectorAll('[data-script-id]'));
+    if (!rows.length) return null;
+    const row = rows.find((item) => item.dataset.scriptId === descriptor.scriptId)
+      || rows[Math.min(descriptor.rowIndex ?? 0, rows.length - 1)]
+      || rows[0];
+    if (!(row instanceof HTMLElement)) return null;
+    if (descriptor.target === 'toggle') {
+      return row.querySelector('.sp-toggle input') || row;
+    }
+    if (descriptor.target === 'name') {
+      return row.querySelector('.sp-item-name-btn') || row;
+    }
+    return row;
+  }
+
+  function restoreSidepanelFocus(descriptor) {
+    const target = resolveSidepanelFocusTarget(descriptor);
+    if (!(target instanceof HTMLElement)) return;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView?.({ block: 'nearest' });
+  }
+
+  function restoreSidepanelFallbackFocus(listName) {
+    const searchInput = $('spSearch');
+    if (listName === 'all') {
+      if (searchInput instanceof HTMLInputElement) {
+        searchInput.focus({ preventScroll: true });
+        if (searchQuery) {
+          searchInput.select?.();
+        }
+        return;
+      }
+      $('allSectionHeader')?.focus?.({ preventScroll: true });
+      return;
+    }
+
+    const target = $('pageScriptList')?.querySelector('.sp-empty-link')
+      || $('btnRefresh')
+      || $('btnDashboard')
+      || searchInput;
+    if (!(target instanceof HTMLElement)) return;
+    target.focus({ preventScroll: true });
+  }
+
   function setListBusy(isBusy) {
     $('pageScriptList').setAttribute('aria-busy', String(isBusy));
     $('allScriptList').setAttribute('aria-busy', String(isBusy));
@@ -307,6 +376,7 @@
   // ── Render page scripts ──────────────────────────────────────────────────
   function renderPageScripts() {
     const list = $('pageScriptList');
+    const focusDescriptor = list.contains(document.activeElement) ? getSidepanelFocusDescriptor(document.activeElement) : null;
     $('pageScriptCount').textContent = numberFormatter.format(pageScripts.length);
 
     if (!currentPageCanRunScripts) {
@@ -324,6 +394,9 @@
       empty.append(icon, msg, detail);
       list.replaceChildren(empty);
       updatePageActions();
+      if (focusDescriptor) {
+        requestAnimationFrame(() => restoreSidepanelFallbackFocus('page'));
+      }
       return;
     }
 
@@ -356,6 +429,9 @@
       empty.appendChild(link);
       list.replaceChildren(empty);
       updatePageActions();
+      if (focusDescriptor) {
+        requestAnimationFrame(() => restoreSidepanelFallbackFocus('page'));
+      }
       return;
     }
 
@@ -365,11 +441,15 @@
     }
     list.replaceChildren(fragment);
     updatePageActions();
+    if (focusDescriptor) {
+      requestAnimationFrame(() => restoreSidepanelFocus(focusDescriptor));
+    }
   }
 
   // ── Render all scripts ────────────────────────────────────────────────────
   function renderAllScripts() {
     const list = $('allScriptList');
+    const focusDescriptor = list.contains(document.activeElement) ? getSidepanelFocusDescriptor(document.activeElement) : null;
     let filtered = [...allScripts];
 
     // Apply search filter
@@ -429,6 +509,9 @@
       list.replaceChildren(empty);
       updateSearchSummary(0);
       setAllScriptsCollapsed(allCollapsed);
+      if (focusDescriptor) {
+        requestAnimationFrame(() => restoreSidepanelFallbackFocus('all'));
+      }
       return;
     }
 
@@ -439,6 +522,9 @@
     list.replaceChildren(fragment);
     updateSearchSummary(sorted.length);
     setAllScriptsCollapsed(allCollapsed);
+    if (focusDescriptor) {
+      requestAnimationFrame(() => restoreSidepanelFocus(focusDescriptor));
+    }
   }
 
   function buildScriptItem(script, isPageScript) {

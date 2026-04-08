@@ -5,11 +5,17 @@
   'use strict';
 
   const $ = id => document.getElementById(id) || document.createElement('div'); // null-safe
+  const timeFormatter = new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit'
+  });
 
   let netLog = [];
   let scripts = [];
   let filterText = '';
   let selectedRow = null;
+  let focusedRow = null;
   let refreshTimer = null;
   let activeTab = 'network';
 
@@ -32,15 +38,104 @@
     updateToolbarContext();
     if (nextTab === 'network') renderNetwork();
     if (nextTab === 'execution') renderExecution();
+    if (nextTab === 'console') renderConsoleState();
   }
 
-  function closeDetail() {
+  function setToolbarStatus(message) {
+    $('toolbarStatus').textContent = message;
+  }
+
+  function clearFilter({ focus = false } = {}) {
+    const filterInput = $('filterInput');
+    filterInput.value = '';
+    filterText = '';
+    if (activeTab === 'network') renderNetwork();
+    if (activeTab === 'execution') renderExecution();
+    if (focus) {
+      filterInput.focus();
+      filterInput.select?.();
+    }
+  }
+
+  function getNetworkRows() {
+    return Array.from(document.querySelectorAll('#netTableBody tr[data-id]'));
+  }
+
+  function renderDetailContent(entry) {
+    $('netDetailTitle').textContent = (entry.method || 'GET') + ' ' + (entry.url || '').slice(0, 40) + '…';
+
+    let html = '';
+    html += section('General', [
+      ['URL', escapeHtml(entry.url || '')],
+      ['Method', entry.method || 'GET'],
+      ['Status', entry.status ? `${entry.status} ${entry.statusText || ''}` : 'Error'],
+      ['Duration', formatDuration(entry.duration)],
+      ['Size', formatBytes(entry.responseSize)],
+      ['Script', escapeHtml(entry.scriptName || '')],
+      ['Time', timeFormatter.format(new Date(entry.timestamp))]
+    ]);
+
+    if (entry.requestHeaders) {
+      html += section('Request Headers', Object.entries(entry.requestHeaders).map(([k, v]) => [escapeHtml(k), escapeHtml(String(v))]));
+    }
+    if (entry.responseHeaders) {
+      html += section('Response Headers', Object.entries(entry.responseHeaders).map(([k, v]) => [escapeHtml(k), escapeHtml(String(v))]));
+    }
+    if (entry.error) {
+      html += `<div class="net-detail-section"><div class="net-detail-section-title">Error</div><div style="color:var(--danger)">${escapeHtml(entry.error)}</div></div>`;
+    }
+    if (entry.responsePreview) {
+      html += `<div class="net-detail-section"><div class="net-detail-section-title">Response Preview</div><pre class="net-body-pre">${escapeHtml(String(entry.responsePreview).slice(0, 2000))}</pre></div>`;
+    }
+
+    $('netDetailBody').innerHTML = html;
+  }
+
+  function syncNetworkRowState() {
+    const rows = getNetworkRows();
+    if (!rows.length) return;
+    const activeRowId = String(focusedRow ?? selectedRow ?? rows[0].dataset.id);
+    rows.forEach((row) => {
+      const isFocused = row.dataset.id === activeRowId;
+      const isSelected = row.dataset.id === String(selectedRow);
+      row.tabIndex = isFocused ? 0 : -1;
+      row.classList.toggle('selected', isSelected);
+      row.setAttribute('aria-selected', String(isSelected));
+    });
+  }
+
+  function focusNetworkRow(target) {
+    const rows = getNetworkRows();
+    if (!rows.length) return;
+    const nextRow = typeof target === 'number'
+      ? rows[Math.max(0, Math.min(rows.length - 1, target))]
+      : target;
+    if (!nextRow) return;
+    focusedRow = nextRow.dataset.id;
+    syncNetworkRowState();
+    nextRow.focus();
+    nextRow.scrollIntoView({ block: 'nearest' });
+  }
+
+  function moveNetworkRowFocus(currentRow, delta) {
+    const rows = getNetworkRows();
+    if (!rows.length) return;
+    const currentIndex = rows.indexOf(currentRow);
+    if (currentIndex === -1) return;
+    focusNetworkRow(currentIndex + delta);
+  }
+
+  function closeDetail({ restoreFocus = false } = {}) {
     const detail = $('netDetail');
     detail.classList.remove('open');
     detail.hidden = true;
     detail.setAttribute('aria-hidden', 'true');
-    document.querySelectorAll('#netTableBody tr').forEach((row) => row.classList.remove('selected'));
     selectedRow = null;
+    syncNetworkRowState();
+    if (restoreFocus) {
+      const activeRow = getNetworkRows().find((row) => row.dataset.id === String(focusedRow));
+      activeRow?.focus();
+    }
   }
 
   function updateToolbarContext() {
@@ -48,24 +143,29 @@
     const clearButton = $('btnClear');
     if (activeTab === 'network') {
       filterInput.disabled = false;
-      filterInput.placeholder = 'Filter requests, URLs, or scripts';
+      filterInput.placeholder = 'Filter requests, URLs, or scripts…';
       filterInput.setAttribute('aria-label', 'Filter network requests');
       clearButton.hidden = false;
       clearButton.textContent = 'Clear Requests';
       clearButton.setAttribute('aria-label', 'Clear recorded network requests');
+      clearButton.disabled = netLog.length === 0;
       return;
     }
     if (activeTab === 'execution') {
       filterInput.disabled = false;
-      filterInput.placeholder = 'Filter scripts in execution stats';
+      filterInput.placeholder = 'Filter scripts in execution stats…';
       filterInput.setAttribute('aria-label', 'Filter execution statistics');
-      clearButton.hidden = true;
+      clearButton.hidden = false;
+      clearButton.textContent = 'Reset Filter';
+      clearButton.setAttribute('aria-label', 'Reset execution filter');
+      clearButton.disabled = !filterText;
       return;
     }
     filterInput.disabled = true;
     filterInput.placeholder = 'Console search is unavailable in this panel';
     filterInput.setAttribute('aria-label', 'Console search unavailable');
     clearButton.hidden = true;
+    setToolbarStatus('Console capture isn’t available here yet. Use Network or Execution for current insight.');
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────
@@ -127,13 +227,22 @@
   function setupToolbar() {
     $('btnRefresh').addEventListener('click', refreshAll);
     $('btnClear').addEventListener('click', async () => {
-      if (activeTab !== 'network') return;
-      await chrome.runtime.sendMessage({ action: 'clearNetworkLog' });
-      netLog = [];
-      renderNetwork();
+      if (activeTab === 'network') {
+        await chrome.runtime.sendMessage({ action: 'clearNetworkLog' });
+        netLog = [];
+        selectedRow = null;
+        focusedRow = null;
+        renderNetwork();
+        return;
+      }
+      if (activeTab === 'execution') {
+        clearFilter({ focus: true });
+      }
     });
     $('btnExportHAR').addEventListener('click', exportHAR);
-    $('btnCloseDetail').addEventListener('click', closeDetail);
+    $('btnCloseDetail').addEventListener('click', () => closeDetail({ restoreFocus: true }));
+    $('btnConsoleToNetwork').addEventListener('click', () => setActiveTab('network'));
+    $('btnConsoleToExecution').addEventListener('click', () => setActiveTab('execution'));
     $('filterInput').addEventListener('input', e => {
       filterText = e.target.value.toLowerCase();
       if (activeTab === 'network') renderNetwork();
@@ -146,13 +255,30 @@
     });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && $('netDetail').classList.contains('open')) {
-        closeDetail();
+        closeDetail({ restoreFocus: true });
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && activeTab !== 'console') {
+        event.preventDefault();
+        $('filterInput').focus();
+        $('filterInput').select?.();
+        return;
+      }
+      if (event.key === 'Escape' && document.activeElement === $('filterInput') && $('filterInput').value) {
+        event.preventDefault();
+        clearFilter({ focus: true });
       }
     });
   }
 
   // ── Network rendering ─────────────────────────────────────────────────────
   function renderNetwork() {
+    const activeElement = document.activeElement;
+    const restoreTableFocus = Boolean(activeElement?.closest?.('#netTableBody'));
+    const activeInDetail = Boolean(activeElement?.closest?.('#netDetail'));
+    const previousFocusedId = restoreTableFocus
+      ? String(activeElement.closest('tr[data-id]')?.dataset.id || focusedRow || selectedRow || '')
+      : '';
     const filtered = netLog.filter(e => {
       if (!filterText) return true;
       return (e.url || '').toLowerCase().includes(filterText) ||
@@ -166,12 +292,23 @@
     $('netTotal').textContent = filtered.length;
     $('netErrors').textContent = errors;
     $('netBytes').textContent = formatBytes(bytes);
+    setToolbarStatus(
+      filtered.length
+        ? `${filtered.length} request${filtered.length === 1 ? '' : 's'} visible • ${errors} error${errors === 1 ? '' : 's'} • ${formatBytes(bytes)} transferred`
+        : (filterText
+            ? `No requests match “${filterText}”.`
+            : 'No network requests yet. Open a page that runs userscripts to capture activity.')
+    );
+    $('btnClear').disabled = netLog.length === 0;
 
     // Table
     const tbody = $('netTableBody');
     tbody.innerHTML = '';
     if (!filtered.length) {
       closeDetail();
+      if (activeInDetail) {
+        $('filterInput').focus({ preventScroll: true });
+      }
       const tr = document.createElement('tr');
       const message = filterText
         ? `No requests match "${filterText}".`
@@ -180,10 +317,15 @@
       tbody.appendChild(tr);
       return;
     }
+    if (!filtered.some((entry) => String(entry.id) === String(focusedRow))) {
+      focusedRow = filtered[0]?.id ?? null;
+    }
     for (const entry of filtered) {
       const tr = document.createElement('tr');
       tr.dataset.id = entry.id;
-      if (selectedRow === entry.id) tr.classList.add('selected');
+      tr.tabIndex = -1;
+      tr.setAttribute('aria-selected', String(selectedRow === entry.id));
+      tr.setAttribute('aria-label', `${(entry.method || 'GET').toUpperCase()} ${entry.url || ''}`);
 
       const method = (entry.method || 'GET').toUpperCase();
       const statusCode = entry.status || 0;
@@ -200,47 +342,61 @@
         <td title="${escapeHtml(entry.scriptName || '')}">${escapeHtml((entry.scriptName || '').slice(0, 20))}</td>
       `;
 
-      tr.addEventListener('click', () => showDetail(entry, tr));
+      tr.addEventListener('focus', () => {
+        focusedRow = entry.id;
+        syncNetworkRowState();
+      });
+      tr.addEventListener('click', () => {
+        focusedRow = entry.id;
+        showDetail(entry, tr);
+      });
+      tr.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          showDetail(entry, tr, { moveFocus: true });
+        } else if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          moveNetworkRowFocus(tr, 1);
+        } else if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          moveNetworkRowFocus(tr, -1);
+        } else if (event.key === 'Home') {
+          event.preventDefault();
+          focusNetworkRow(0);
+        } else if (event.key === 'End') {
+          event.preventDefault();
+          focusNetworkRow(getNetworkRows().length - 1);
+        }
+      });
       tbody.appendChild(tr);
+    }
+    syncNetworkRowState();
+    const selectedEntry = filtered.find((entry) => String(entry.id) === String(selectedRow));
+    if (selectedEntry && $('netDetail').classList.contains('open')) {
+      renderDetailContent(selectedEntry);
+    } else if (activeInDetail && !selectedEntry) {
+      closeDetail();
+      $('filterInput').focus({ preventScroll: true });
+    }
+    if (restoreTableFocus) {
+      const rowToFocus = getNetworkRows().find((row) => row.dataset.id === previousFocusedId) || getNetworkRows()[0];
+      rowToFocus?.focus({ preventScroll: true });
     }
   }
 
-  function showDetail(entry, tr) {
+  function showDetail(entry, tr, { moveFocus = false } = {}) {
     selectedRow = entry.id;
-    document.querySelectorAll('#netTableBody tr').forEach(r => r.classList.remove('selected'));
-    tr.classList.add('selected');
+    focusedRow = entry.id;
+    syncNetworkRowState();
 
     const detail = $('netDetail');
     detail.classList.add('open');
     detail.hidden = false;
     detail.setAttribute('aria-hidden', 'false');
-    $('netDetailTitle').textContent = (entry.method || 'GET') + ' ' + (entry.url || '').slice(0, 40) + '…';
-
-    let html = '';
-    html += section('General', [
-      ['URL', escapeHtml(entry.url || '')],
-      ['Method', entry.method || 'GET'],
-      ['Status', entry.status ? `${entry.status} ${entry.statusText || ''}` : 'Error'],
-      ['Duration', formatDuration(entry.duration)],
-      ['Size', formatBytes(entry.responseSize)],
-      ['Script', escapeHtml(entry.scriptName || '')],
-      ['Time', new Date(entry.timestamp).toLocaleTimeString()]
-    ]);
-
-    if (entry.requestHeaders) {
-      html += section('Request Headers', Object.entries(entry.requestHeaders).map(([k, v]) => [escapeHtml(k), escapeHtml(String(v))]));
+    renderDetailContent(entry);
+    if (moveFocus) {
+      $('btnCloseDetail').focus({ preventScroll: true });
     }
-    if (entry.responseHeaders) {
-      html += section('Response Headers', Object.entries(entry.responseHeaders).map(([k, v]) => [escapeHtml(k), escapeHtml(String(v))]));
-    }
-    if (entry.error) {
-      html += `<div class="net-detail-section"><div class="net-detail-section-title">Error</div><div style="color:var(--danger)">${escapeHtml(entry.error)}</div></div>`;
-    }
-    if (entry.responsePreview) {
-      html += `<div class="net-detail-section"><div class="net-detail-section-title">Response Preview</div><pre class="net-body-pre">${escapeHtml(String(entry.responsePreview).slice(0, 2000))}</pre></div>`;
-    }
-
-    $('netDetailBody').innerHTML = html;
   }
 
   function section(title, rows) {
@@ -264,6 +420,14 @@
     });
     withStats.sort((a, b) => (b.stats.totalTime || 0) - (a.stats.totalTime || 0));
     const maxTotal = withStats.reduce((m, s) => Math.max(m, s.stats.totalTime || 0), 1);
+    setToolbarStatus(
+      withStats.length
+        ? `Showing ${withStats.length} script${withStats.length === 1 ? '' : 's'} with execution data`
+        : (filterText && executionScripts.length
+            ? `No scripts match “${filterText}”.`
+            : 'No execution data yet. Scripts will appear here after they run.')
+    );
+    $('btnClear').disabled = !filterText;
 
     if (!withStats.length) {
       const tr = document.createElement('tr');
@@ -293,6 +457,10 @@
       `;
       tbody.appendChild(tr);
     }
+  }
+
+  function renderConsoleState() {
+    setToolbarStatus('Console capture isn’t available here yet. Use Network or Execution for current insight.');
   }
 
   // ── HAR Export ────────────────────────────────────────────────────────────

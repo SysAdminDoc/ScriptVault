@@ -93,6 +93,9 @@ beforeEach(() => {
   chrome.offscreen.createDocument.mockResolvedValue();
   chrome.tabs.query.mockResolvedValue([]);
   chrome.tabs.sendMessage.mockResolvedValue({});
+  globalThis.registerAllScripts = vi.fn().mockResolvedValue();
+  globalThis.updateBadge = vi.fn().mockResolvedValue();
+  globalThis.autoReloadMatchingTabs = vi.fn().mockResolvedValue();
   vi.clearAllMocks();
   vi.useRealTimers();
 });
@@ -365,6 +368,9 @@ describe('source public api module', () => {
     expect(result.ok).toBe(true);
     expect(stored.userscripts.script_alpha.enabled).toBe(false);
     expect(stored.userscripts.script_alpha.meta.name).toBe('Alpha');
+    expect(globalThis.registerAllScripts).toHaveBeenCalledTimes(1);
+    expect(globalThis.updateBadge).toHaveBeenCalledTimes(1);
+    expect(globalThis.autoReloadMatchingTabs).not.toHaveBeenCalled();
   });
 
   it('installs new scripts into object-map storage with nested metadata', async () => {
@@ -394,5 +400,14 @@ describe('source public api module', () => {
     expect(stored.userscripts.script_beta.meta.version).toBe('2.1.0');
     expect(stored.userscripts.script_beta.meta.match).toEqual(['https://example.com/*']);
     expect(stored.userscripts.script_beta.code).toContain('console.log("beta")');
+    expect(globalThis.registerAllScripts).toHaveBeenCalledTimes(1);
+    expect(globalThis.updateBadge).toHaveBeenCalledTimes(1);
+    expect(globalThis.autoReloadMatchingTabs).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'script_beta',
+      name: 'Script Beta',
+      meta: expect.objectContaining({
+        match: ['https://example.com/*'],
+      }),
+    }));
   });
 });

@@ -108,6 +108,12 @@ interface ScriptStoreSnapshot {
   scripts: FlatScript[];
 }
 
+interface RuntimeHooks {
+  registerAllScripts?: () => Promise<void>;
+  updateBadge?: (tabId?: number | null) => Promise<void>;
+  autoReloadMatchingTabs?: (script: FlatScript & { meta?: ParsedMeta; settings?: Record<string, unknown> }) => Promise<void>;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
@@ -131,6 +137,10 @@ let _webhooks: Record<string, WebhookConfig> = {};
 let _trustedOrigins: string[] = [];
 let _initialized = false;
 const _rateLimitMap = new Map<string, number[]>();
+
+function getRuntimeHooks(): RuntimeHooks {
+  return globalThis as RuntimeHooks;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Default Permissions                                                */
@@ -599,6 +609,52 @@ function upsertScriptStore(
   return record;
 }
 
+function toRuntimeScriptShape(script: FlatScript, meta: ParsedMeta): FlatScript & { meta: ParsedMeta; settings: Record<string, unknown> } {
+  return {
+    ...script,
+    meta: {
+      ...meta,
+      name: script.name ?? meta.name ?? script.id,
+      version: script.version ?? meta.version ?? '1.0',
+      description: script.description ?? meta.description ?? '',
+      match: Array.isArray(meta.match) && meta.match.length > 0 ? [...meta.match] : ['*://*/*'],
+      'run-at': script.runAt ?? meta.runAt ?? 'document_idle',
+    },
+    settings: {},
+  };
+}
+
+async function refreshRuntimeAfterMutation(
+  script?: FlatScript,
+  meta: ParsedMeta = {},
+): Promise<void> {
+  const hooks = getRuntimeHooks();
+
+  if (typeof hooks.registerAllScripts === 'function') {
+    try {
+      await hooks.registerAllScripts();
+    } catch (e: unknown) {
+      console.warn('[PublicAPI] Failed to refresh registered scripts:', e);
+    }
+  }
+
+  if (typeof hooks.updateBadge === 'function') {
+    try {
+      await hooks.updateBadge();
+    } catch (e: unknown) {
+      console.warn('[PublicAPI] Failed to refresh badge state:', e);
+    }
+  }
+
+  if (script && typeof hooks.autoReloadMatchingTabs === 'function') {
+    try {
+      await hooks.autoReloadMatchingTabs(toRuntimeScriptShape(script, meta));
+    } catch (e: unknown) {
+      console.warn('[PublicAPI] Failed to auto-reload matching tabs:', e);
+    }
+  }
+}
+
 async function getExtensionVersion(): Promise<string> {
   try {
     const manifest = chrome.runtime.getManifest();
@@ -680,6 +736,7 @@ const HANDLERS: Record<string, HandlerFn> = {
       }
 
       await chrome.storage.local.set({ userscripts: updatedStore });
+      await refreshRuntimeAfterMutation();
 
       void fireWebhook('script.toggled', { scriptId, enabled });
       return { ok: true, scriptId, enabled };
@@ -719,6 +776,7 @@ const HANDLERS: Record<string, HandlerFn> = {
       const updatedStore = upsertScriptStore(store, newScript, meta, describeSender(sender));
 
       await chrome.storage.local.set({ userscripts: updatedStore });
+      await refreshRuntimeAfterMutation(newScript, meta);
 
       void fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
       return { ok: true, scriptId, name: newScript.name };
@@ -835,6 +893,7 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
       const updatedStore = upsertScriptStore(store, newScript, meta, `origin:${origin}`);
 
       await chrome.storage.local.set({ userscripts: updatedStore });
+      await refreshRuntimeAfterMutation(newScript, meta);
 
       void fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
       return { type: 'scriptvault:install:response', ok: true, scriptId, name: newScript.name };
