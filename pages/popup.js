@@ -348,6 +348,87 @@
         return [...document.querySelectorAll('.script-item')];
     }
 
+    function getPopupFocusDescriptor(control = document.activeElement) {
+        const row = control?.closest?.('.script-item');
+        if (!(row instanceof HTMLElement)) return null;
+        const rows = getPopupScriptRows();
+        const rowIndex = rows.indexOf(row);
+        let target = 'row';
+        if (control.matches?.('input[data-toggle-id]')) {
+            target = 'toggle';
+        } else if (control.matches?.('.script-name-btn')) {
+            target = 'name';
+        } else if (control.matches?.('.script-quick-edit')) {
+            target = 'quickedit';
+        } else if (control.matches?.('.script-more')) {
+            target = 'more';
+        }
+        return {
+            scriptId: row.dataset.scriptId || '',
+            rowIndex: rowIndex >= 0 ? rowIndex : 0,
+            target
+        };
+    }
+
+    function resolvePopupFocusTarget(descriptor) {
+        if (!descriptor) return null;
+        const rows = getPopupScriptRows();
+        if (!rows.length) return null;
+        const row = rows.find((item) => item.dataset.scriptId === descriptor.scriptId)
+            || rows[Math.min(descriptor.rowIndex ?? 0, rows.length - 1)]
+            || rows[0];
+        if (!(row instanceof HTMLElement)) return null;
+
+        if (descriptor.target === 'toggle') {
+            return row.querySelector('input[data-toggle-id]') || row;
+        }
+        if (descriptor.target === 'name') {
+            return row.querySelector('.script-name-btn') || row;
+        }
+        if (descriptor.target === 'quickedit') {
+            return row.querySelector('.script-quick-edit') || row;
+        }
+        if (descriptor.target === 'more') {
+            return row.querySelector('.script-more') || row;
+        }
+        return row;
+    }
+
+    function restorePopupFocus(descriptor) {
+        const target = resolvePopupFocusTarget(descriptor);
+        if (!(target instanceof HTMLElement)) return;
+        target.focus({ preventScroll: true });
+        target.scrollIntoView?.({ block: 'nearest' });
+    }
+
+    function restorePopupFallbackFocus() {
+        const searchInput = elements.popupScriptSearch;
+        const resetButton = elements.btnClearPopupScriptView;
+        const hasSearch = Boolean(searchInput?.value?.trim());
+        const hasFilter = getPopupActiveFilter() !== 'all';
+        const target = hasSearch && searchInput instanceof HTMLInputElement
+            ? searchInput
+            : hasFilter && resetButton instanceof HTMLButtonElement && !resetButton.hidden
+                ? resetButton
+                : elements.btnEmptyFindScripts instanceof HTMLButtonElement && !elements.btnEmptyFindScripts.hidden
+                    ? elements.btnEmptyFindScripts
+                    : elements.btnEmptyNewScript instanceof HTMLButtonElement && !elements.btnEmptyNewScript.hidden
+                        ? elements.btnEmptyNewScript
+                        : searchInput instanceof HTMLInputElement
+                            ? searchInput
+                            : null;
+        if (!(target instanceof HTMLElement)) return;
+        target.focus({ preventScroll: true });
+        if (target instanceof HTMLInputElement) {
+            target.select?.();
+        }
+    }
+
+    function queuePopupFocusRestore(descriptor) {
+        if (!descriptor) return;
+        pendingPopupFocusDescriptor = descriptor;
+    }
+
     function focusPopupScriptRow(row) {
         if (!(row instanceof HTMLElement)) return;
         row.focus();
@@ -613,6 +694,7 @@
     let activeDropdownScriptId = null;
     let dropdownListenersAttached = false;
     let pendingDeleteScriptId = null;
+    let pendingPopupFocusDescriptor = null;
 
     function getDropdownDeleteButton() {
         return document.querySelector('#scriptDropdown [data-action="delete"]');
@@ -656,6 +738,109 @@
         return Array.from(dropdown.querySelectorAll('[role="menuitem"]:not([disabled])'));
     }
 
+    function derivePopupHomepageUrl(url) {
+        if (!url) return '';
+        try {
+            const parsed = new URL(url);
+            if (/raw\.githubusercontent\.com/i.test(parsed.hostname)) {
+                const parts = parsed.pathname.split('/').filter(Boolean);
+                if (parts.length >= 4) {
+                    return `https://github.com/${parts[0]}/${parts[1]}`;
+                }
+            }
+            parsed.search = '';
+            parsed.hash = '';
+            return `${parsed.protocol}//${parsed.host}`;
+        } catch {
+            return '';
+        }
+    }
+
+    function describePopupScriptProvenance(script) {
+        const metadata = script?.metadata || script?.meta || {};
+        const downloadUrl = metadata.downloadURL || '';
+        const updateUrl = metadata.updateURL || '';
+        const homepageUrl = metadata.homepage || metadata.homepageURL || derivePopupHomepageUrl(downloadUrl) || derivePopupHomepageUrl(updateUrl) || '';
+        const primaryUrl = downloadUrl || updateUrl || homepageUrl || '';
+        const provenance = {
+            label: 'Local',
+            detail: 'No remote update channel is declared.',
+            sourceUrl: primaryUrl
+        };
+
+        if (primaryUrl) {
+            try {
+                const host = new URL(primaryUrl).hostname.replace(/^www\./, '');
+                provenance.label = host;
+                provenance.detail = downloadUrl && updateUrl && downloadUrl !== updateUrl
+                    ? 'Separate install and update channels are declared.'
+                    : (downloadUrl || updateUrl)
+                        ? 'Remote update channel declared in metadata.'
+                        : 'Linked from metadata only.';
+            } catch {
+                provenance.label = 'Remote';
+                provenance.detail = 'Metadata includes an external source URL.';
+            }
+        }
+
+        if (/greasyfork\.org/i.test(primaryUrl)) {
+            provenance.label = 'Greasy Fork';
+            provenance.detail = 'Remote update channel declared on Greasy Fork.';
+        } else if (/openuserjs\.org/i.test(primaryUrl)) {
+            provenance.label = 'OpenUserJS';
+            provenance.detail = 'Remote update channel declared on OpenUserJS.';
+        } else if (/(github\.com|raw\.githubusercontent\.com)/i.test(primaryUrl)) {
+            provenance.label = 'GitHub';
+            provenance.detail = 'Script metadata points to GitHub-hosted source.';
+        } else if (/gitlab\.com/i.test(primaryUrl)) {
+            provenance.label = 'GitLab';
+            provenance.detail = 'Script metadata points to GitLab-hosted source.';
+        }
+
+        if (script?.settings?.userModified) {
+            provenance.detail = primaryUrl
+                ? 'Local edits are present; review remote URLs before trusting future updates.'
+                : 'Local edits are present and no remote source is declared.';
+        }
+
+        return provenance;
+    }
+
+    function configureScriptDropdown(scriptId) {
+        const dropdown = document.getElementById('scriptDropdown');
+        if (!dropdown) return;
+        const script = pageScripts.find((item) => item.id === scriptId) || allScripts.find((item) => item.id === scriptId);
+        const meta = script?.metadata || script?.meta || {};
+        const name = meta.name || 'this script';
+        const hasUpdateUrl = Boolean(meta.updateURL || meta.downloadURL);
+        const installUrl = meta.downloadURL || meta.updateURL || '';
+        const updateBtn = dropdown.querySelector('[data-action="update"]');
+        const copyUrlBtn = dropdown.querySelector('[data-action="copyUrl"]');
+        const pinBtn = dropdown.querySelector('[data-action="pin"]');
+
+        dropdown.setAttribute('aria-label', `Actions for ${name}`);
+
+        if (updateBtn) {
+            updateBtn.disabled = !hasUpdateUrl;
+            updateBtn.textContent = hasUpdateUrl ? 'Check for Update' : 'No Update Channel';
+            updateBtn.title = hasUpdateUrl
+                ? `Check ${name} against its remote update URL.`
+                : `${name} does not declare @updateURL or @downloadURL metadata.`;
+        }
+
+        if (copyUrlBtn) {
+            copyUrlBtn.disabled = !installUrl;
+            copyUrlBtn.textContent = installUrl ? 'Copy Install URL' : 'No Install URL';
+            copyUrlBtn.title = installUrl
+                ? `Copy ${name}'s remote install URL.`
+                : `${name} does not declare a remote install URL.`;
+        }
+
+        if (pinBtn) {
+            pinBtn.textContent = script?.settings?.pinned ? 'Unpin Script' : 'Pin Script';
+        }
+    }
+
     function focusDropdownMenuItem(target = 0) {
         const items = getDropdownMenuItems();
         if (!items.length) return;
@@ -675,6 +860,7 @@
         closeScriptDropdown();
         activeDropdownScriptId = scriptId;
         resetDropdownDeleteState();
+        configureScriptDropdown(scriptId);
         populateMenuCommands(scriptId);
         const rect = trigger.getBoundingClientRect();
         dropdown.style.top = rect.bottom + 2 + 'px';
@@ -699,6 +885,9 @@
     // Render script list
     function renderScriptList() {
         if (!elements.scriptList) return;
+        const focusDescriptor = pendingPopupFocusDescriptor
+            || (elements.scriptList.contains(document.activeElement) ? getPopupFocusDescriptor(document.activeElement) : null);
+        pendingPopupFocusDescriptor = null;
         closeScriptDropdown();
         updatePopupSearchAffordances();
         updatePopupFilterButtons();
@@ -777,6 +966,9 @@
             }
             if (emptyState) emptyState.style.display = 'block';
             syncTimeline();
+            if (focusDescriptor) {
+                requestAnimationFrame(() => restorePopupFallbackFocus());
+            }
             return;
         }
         if (emptyState) emptyState.style.display = 'none';
@@ -804,6 +996,9 @@
             const updatedAgo = script.updatedAt ? timeAgo(script.updatedAt) : '';
             const tooltipParts = [description, updatedAgo ? `Updated ${updatedAgo}` : ''].filter(Boolean).join('\n');
             const descAttr = tooltipParts ? ` title="${escapeHtml(tooltipParts)}"` : '';
+            const provenance = describePopupScriptProvenance(script);
+            const hasRemoteSource = Boolean(provenance.sourceUrl);
+            const isStale = Boolean(hasRemoteSource && script.updatedAt && (Date.now() - script.updatedAt > 180 * 24 * 60 * 60 * 1000));
             const secondaryText = description
                 || [
                     updatedAgo ? `Updated ${updatedAgo}` : '',
@@ -834,6 +1029,12 @@
             const tags = [];
             if (script.settings?.pinned) tags.push('<span class="script-tag pinned">Pinned</span>');
             if (isRecentlyInstalled) tags.push('<span class="script-tag recent">New</span>');
+            if (script.settings?.userModified) tags.push('<span class="script-tag edited">Edited</span>');
+            if (isStale) {
+                tags.push('<span class="script-tag stale">Stale</span>');
+            } else if (provenance.label) {
+                tags.push(`<span class="script-tag source" title="${escapeHtml(provenance.detail)}">${escapeHtml(provenance.label)}</span>`);
+            }
             const tagsHtml = tags.length ? `<div class="script-tags" aria-hidden="true">${tags.join('')}</div>` : '';
 
             return `
@@ -942,6 +1143,7 @@
             dropdown.querySelector('[data-action="update"]')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const scriptId = activeDropdownScriptId;
+                queuePopupFocusRestore(getPopupFocusDescriptor(getDropdownTriggerButton(scriptId)));
                 closeScriptDropdown();
                 if (!scriptId) return;
                 await runScriptAction(scriptId, async () => {
@@ -981,6 +1183,7 @@
             dropdown.querySelector('[data-action="pin"]')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const scriptId = activeDropdownScriptId;
+                queuePopupFocusRestore(getPopupFocusDescriptor(getDropdownTriggerButton(scriptId)));
                 closeScriptDropdown();
                 if (!scriptId) return;
                 await runScriptAction(scriptId, async () => {
@@ -1013,6 +1216,7 @@
                     armDropdownDelete(scriptId, name);
                     return;
                 }
+                queuePopupFocusRestore(getPopupFocusDescriptor(getDropdownTriggerButton(scriptId)));
                 closeScriptDropdown();
                 deleteScript(scriptId);
             });
@@ -1050,6 +1254,9 @@
         }
 
         syncTimeline();
+        if (focusDescriptor) {
+            requestAnimationFrame(() => restorePopupFocus(focusDescriptor));
+        }
     }
 
     // Populate per-script menu commands in the dropdown

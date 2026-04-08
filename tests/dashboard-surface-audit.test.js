@@ -117,16 +117,276 @@ describe('dashboard audit surfaces', () => {
     expect(searchInput?.disabled).toBe(false);
     expect(controls.every((control) => !control.disabled)).toBe(true);
 
+    const titleLink = container.querySelector('.ss-card-name a');
+    const pageLink = container.querySelector('.ss-card-actions a.ss-btn');
     const previewButton = container.querySelector('[data-action="preview"]');
+    const preview = container.querySelector('.ss-card-preview');
+    expect(titleLink?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(pageLink?.tagName).toBe('A');
+    expect(pageLink?.getAttribute('target')).toBe('_blank');
+    expect(pageLink?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(preview?.getAttribute('role')).toBe('region');
+    expect(preview?.getAttribute('tabindex')).toBe('-1');
+    expect(preview?.hasAttribute('hidden')).toBe(true);
+    expect(previewButton?.getAttribute('aria-expanded')).toBe('false');
+
     previewButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushPromises();
 
-    const preview = container.querySelector('.ss-card-preview');
     expect(preview?.classList.contains('open')).toBe(true);
+    expect(preview?.hasAttribute('hidden')).toBe(false);
     expect(preview?.textContent).toContain('Failed to load script code.');
-    expect(previewButton?.textContent).toBe('Preview Code');
+    expect(previewButton?.textContent).toBe('Hide Preview');
+    expect(previewButton?.getAttribute('aria-expanded')).toBe('true');
     expect(container.querySelector('.ss-status-text')?.textContent).toBe('Preview failed.');
     expect(container.querySelector('.ss-results')?.getAttribute('aria-busy')).toBe('false');
+
+    previewButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    expect(preview?.classList.contains('open')).toBe(false);
+    expect(preview?.hasAttribute('hidden')).toBe(true);
+    expect(previewButton?.textContent).toBe('Preview Code');
+    expect(previewButton?.getAttribute('aria-expanded')).toBe('false');
+
+    ScriptStore.destroy();
+  });
+
+  it('store preview closes with Escape and restores focus to the trigger', async () => {
+    const ScriptStore = createScriptStore();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{
+          id: 4,
+          name: 'Delta Script',
+          users: [{ name: 'Dana' }],
+          description: 'Keyboard preview',
+          version: '1.0.0',
+          total_installs: 120,
+          daily_installs: 5,
+          code_updated_at: '2026-04-02T12:00:00Z',
+          code_url: 'https://example.com/delta.user.js',
+          url: 'https://greasyfork.org/en/scripts/4-delta-script',
+        }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () => '// ==UserScript==',
+      });
+
+    ScriptStore.init(container, {
+      getInstalledScripts: async () => [],
+    });
+    await flushPromises();
+
+    const previewButton = container.querySelector('[data-action="preview"]');
+    const preview = container.querySelector('.ss-card-preview');
+
+    previewButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    expect(preview?.classList.contains('open')).toBe(true);
+    expect(document.activeElement).toBe(preview);
+
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await flushPromises();
+
+    expect(preview?.classList.contains('open')).toBe(false);
+    expect(previewButton?.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(previewButton);
+
+    ScriptStore.destroy();
+  });
+
+  it('store keeps one source active and disables actions when install URLs are missing', async () => {
+    const ScriptStore = createScriptStore();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{
+        id: 2,
+        name: 'Beta Script',
+        users: [{ name: 'Bea' }],
+        description: 'No direct code URL',
+        version: '2.0.0',
+        total_installs: 42,
+        daily_installs: 0,
+        code_updated_at: '2026-03-31T12:00:00Z',
+        url: 'https://greasyfork.org/en/scripts/2-beta-script',
+      }],
+    });
+
+    ScriptStore.init(container, {
+      getInstalledScripts: async () => [],
+    });
+    await flushPromises();
+
+    const installButton = container.querySelector('[data-action="install"]');
+    const previewButton = container.querySelector('[data-action="preview"]');
+    const pageLink = container.querySelector('.ss-card-actions a.ss-btn');
+    const sourceChips = Array.from(container.querySelectorAll('.ss-source-chip[data-source]'));
+
+    expect(installButton?.disabled).toBe(true);
+    expect(previewButton?.disabled).toBe(true);
+    expect(pageLink?.tagName).toBe('A');
+
+    sourceChips[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(sourceChips[0]?.getAttribute('aria-pressed')).toBe('false');
+
+    sourceChips[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(sourceChips[1]?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.ss-status-text')?.textContent).toBe('At least one source must stay active.');
+    expect(container.querySelector('.ss-status-hint')?.textContent).toContain('Enable another source');
+
+    ScriptStore.destroy();
+  });
+
+  it('store keeps install actions consistent after a successful install', async () => {
+    const ScriptStore = createScriptStore();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{
+        id: 3,
+        name: 'Gamma Script',
+        users: [{ name: 'Gia' }],
+        description: 'Install me',
+        version: '1.2.3',
+        total_installs: 90,
+        daily_installs: 3,
+        code_updated_at: '2026-04-01T12:00:00Z',
+        code_url: 'https://example.com/gamma.user.js',
+        url: 'https://greasyfork.org/en/scripts/3-gamma-script',
+      }],
+    });
+
+    chrome.runtime.sendMessage = vi.fn((message) => {
+      if (message.action === 'installFromUrl') {
+        return Promise.resolve({ success: true });
+      }
+      return Promise.resolve({});
+    });
+
+    ScriptStore.init(container, {
+      getInstalledScripts: async () => [],
+    });
+    await flushPromises();
+
+    const installButton = container.querySelector('[data-action="install"]');
+    installButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    expect(installButton?.textContent).toBe('Reinstall');
+    expect(installButton?.disabled).toBe(false);
+    expect(installButton?.getAttribute('aria-busy')).toBeNull();
+    expect(container.querySelector('.ss-card')?.classList.contains('installed')).toBe(true);
+    expect(container.querySelector('.ss-installed-badge')?.textContent).toBe('Installed');
+
+    ScriptStore.destroy();
+  });
+
+  it('store keeps keyboard focus on pagination controls after results rerender', async () => {
+    const ScriptStore = createScriptStore();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    const pageOne = Array.from({ length: 10 }, (_, index) => ({
+      id: index + 1,
+      name: `Page One ${index + 1}`,
+      users: [{ name: 'Nia' }],
+      description: 'First page result',
+      version: '1.0.0',
+      total_installs: 100 - index,
+      daily_installs: 5,
+      code_updated_at: '2026-04-01T12:00:00Z',
+      code_url: `https://example.com/one-${index + 1}.user.js`,
+      url: `https://greasyfork.org/en/scripts/${index + 1}-page-one`,
+    }));
+    const pageTwo = Array.from({ length: 10 }, (_, index) => ({
+      id: index + 11,
+      name: `Page Two ${index + 1}`,
+      users: [{ name: 'Nia' }],
+      description: 'Second page result',
+      version: '1.0.0',
+      total_installs: 90 - index,
+      daily_installs: 4,
+      code_updated_at: '2026-04-02T12:00:00Z',
+      code_url: `https://example.com/two-${index + 1}.user.js`,
+      url: `https://greasyfork.org/en/scripts/${index + 11}-page-two`,
+    }));
+
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => pageOne })
+      .mockResolvedValueOnce({ ok: true, json: async () => pageTwo });
+
+    ScriptStore.init(container, {
+      getInstalledScripts: async () => [],
+    });
+    await flushPromises();
+
+    const nextButton = Array.from(container.querySelectorAll('.ss-pagination .ss-search-control'))
+      .find((button) => button.textContent?.trim() === 'Next');
+    expect(nextButton).toBeTruthy();
+
+    nextButton?.focus();
+    nextButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    const activePaginationButton = document.activeElement;
+    expect(activePaginationButton?.textContent?.trim()).toBe('Next');
+    expect(activePaginationButton?.closest('.ss-pagination')).not.toBeNull();
+
+    ScriptStore.destroy();
+  });
+
+  it('store falls back to the search input when a results rerender becomes empty', async () => {
+    const ScriptStore = createScriptStore();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    const pageOne = Array.from({ length: 10 }, (_, index) => ({
+      id: index + 1,
+      name: `Page One ${index + 1}`,
+      users: [{ name: 'Nia' }],
+      description: 'First page result',
+      version: '1.0.0',
+      total_installs: 100 - index,
+      daily_installs: 5,
+      code_updated_at: '2026-04-01T12:00:00Z',
+      code_url: `https://example.com/one-${index + 1}.user.js`,
+      url: `https://greasyfork.org/en/scripts/${index + 1}-page-one`,
+    }));
+
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => pageOne })
+      .mockResolvedValueOnce({ ok: true, json: async () => [] });
+
+    ScriptStore.init(container, {
+      getInstalledScripts: async () => [],
+    });
+    await flushPromises();
+
+    const nextButton = Array.from(container.querySelectorAll('.ss-pagination .ss-search-control'))
+      .find((button) => button.textContent?.trim() === 'Next');
+    const searchInput = container.querySelector('.ss-search-input');
+
+    expect(nextButton).toBeTruthy();
+    expect(searchInput).toBeTruthy();
+
+    nextButton?.focus();
+    nextButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    expect(document.activeElement).toBe(searchInput);
+    expect(container.querySelector('.ss-empty')?.textContent).toContain('No scripts matched');
 
     ScriptStore.destroy();
   });
