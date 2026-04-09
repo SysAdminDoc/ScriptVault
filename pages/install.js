@@ -1577,7 +1577,7 @@ function showSuccess(name, action, scriptId) {
   document.getElementById('btnOpenDashboard')?.addEventListener('click', () => {
     allowInstallExitOnce();
     const url = scriptId
-      ? chrome.runtime.getURL(`pages/dashboard.html#script_${scriptId}`)
+      ? chrome.runtime.getURL(`pages/dashboard.html#script_${encodeURIComponent(scriptId)}`)
       : chrome.runtime.getURL('pages/dashboard.html');
     chrome.tabs.update({ url });
   });

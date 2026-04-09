@@ -1160,11 +1160,12 @@ $CURSOR$`
                 const preview = expanded
                     ? highlightCode(s.code.replace(/\$CURSOR\$/g, '\u258E').replace(/\$SELECTION\$/g, '\u00ABselection\u00BB').replace(/\$(\d+)/g, '\u00ABtab$1\u00BB'))
                     : escapeHTML(previewLines(s.code));
+                const snippetIdAttr = escapeHTML(s.id);
                 const customBtns = s.isCustom
-                    ? `<button class="snip-action-btn" data-action="edit" data-id="${s.id}" type="button">Edit</button>
-                       <button class="snip-action-btn danger" data-action="delete" data-id="${s.id}" type="button">Delete</button>`
+                    ? `<button class="snip-action-btn" data-action="edit" data-id="${snippetIdAttr}" type="button">Edit</button>
+                       <button class="snip-action-btn danger" data-action="delete" data-id="${snippetIdAttr}" type="button">Delete</button>`
                     : '';
-                return `<div class="snip-card${expanded ? ' expanded' : ''}" data-id="${s.id}">
+                return `<div class="snip-card${expanded ? ' expanded' : ''}" data-id="${snippetIdAttr}">
                     <div class="snip-card-title">
                         <span>${escapeHTML(s.title)}</span>
                         <span class="snip-card-cat">${escapeHTML(CATEGORIES[s.category]?.label || s.category)}</span>
@@ -1172,8 +1173,8 @@ $CURSOR$`
                     <div class="snip-card-desc">${escapeHTML(s.description)}</div>
                     <pre class="snip-card-preview">${preview}</pre>
                     <div class="snip-card-actions">
-                        <button class="snip-action-btn primary" data-action="insert" data-id="${s.id}" type="button">Insert at Cursor</button>
-                        <button class="snip-action-btn" data-action="copy" data-id="${s.id}" type="button">Copy</button>
+                        <button class="snip-action-btn primary" data-action="insert" data-id="${snippetIdAttr}" type="button">Insert at Cursor</button>
+                        <button class="snip-action-btn" data-action="copy" data-id="${snippetIdAttr}" type="button">Copy</button>
                         ${customBtns}
                     </div>
                 </div>`;
@@ -1198,6 +1199,13 @@ $CURSOR$`
         const d = document.createElement('div');
         d.textContent = str;
         return d.innerHTML;
+    }
+
+    function escapeSelectorValue(value) {
+        if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+            return CSS.escape(String(value));
+        }
+        return String(value).replace(/"/g, '\\"');
     }
 
     // =========================================
@@ -1331,7 +1339,8 @@ $CURSOR$`
     }
 
     function showCopyFeedback(snippetId) {
-        const btn = _state.container.querySelector(`.snip-action-btn[data-action="copy"][data-id="${snippetId}"]`);
+        const selectorId = escapeSelectorValue(snippetId);
+        const btn = _state.container.querySelector(`.snip-action-btn[data-action="copy"][data-id="${selectorId}"]`);
         if (!btn) return;
         const orig = btn.textContent;
         btn.textContent = 'Copied!';

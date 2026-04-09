@@ -4,7 +4,15 @@ import { resolve } from 'node:path';
 
 const cardViewCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-cardview.js'), 'utf8');
 const collectionCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-collections.js'), 'utf8');
+const cspCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-csp.js'), 'utf8');
 const dashboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), 'utf8');
+const dashboardKeyboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard-keyboard.js'), 'utf8');
+const profilesCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-profiles.js'), 'utf8');
+const snippetsCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-snippets.js'), 'utf8');
+const backgroundCoreJs = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
+const popupJs = readFileSync(resolve(process.cwd(), 'pages/popup.js'), 'utf8');
+const installJs = readFileSync(resolve(process.cwd(), 'pages/install.js'), 'utf8');
+const notificationsModuleJs = readFileSync(resolve(process.cwd(), 'modules/notifications.js'), 'utf8');
 
 function createCardView() {
   const fn = new Function(cardViewCode + '\nreturn CardView;');
@@ -14,6 +22,30 @@ function createCardView() {
 function createCollectionManager() {
   const fn = new Function(collectionCode + '\nreturn CollectionManager;');
   return fn();
+}
+
+function createCSPReporter() {
+  const fn = new Function(cspCode + '\nreturn CSPReporter;');
+  return fn();
+}
+
+function createProfileManager() {
+  const fn = new Function(profilesCode + '\nreturn ProfileManager;');
+  return fn();
+}
+
+function createSnippetLibrary() {
+  const fn = new Function(snippetsCode + '\nreturn SnippetLibrary;');
+  return fn();
+}
+
+function createDashboardRouteParser() {
+  const match = dashboardJs.match(/function getDashboardRoute\(\) \{[\s\S]*?\n    \}/);
+  if (!match) {
+    throw new Error('Unable to locate getDashboardRoute in dashboard.js');
+  }
+  const fn = new Function('window', 'DASHBOARD_TABS', `${match[0]}; return getDashboardRoute;`);
+  return fn(window, ['scripts', 'settings', 'utilities', 'trash', 'store']);
 }
 
 function createDeferred() {
@@ -178,6 +210,73 @@ describe('dashboard surface modules', () => {
     CardView.destroy();
   });
 
+  it('card view action lookups handle quoted script ids without breaking markup', async () => {
+    const CardView = createCardView();
+    const host = document.createElement('div');
+    const table = document.createElement('div');
+    const toggleButton = document.createElement('button');
+    toggleButton.type = 'button';
+    document.body.append(host, table, toggleButton);
+
+    const onEdit = vi.fn();
+    const onToggle = vi.fn();
+    const onUpdate = vi.fn();
+    const onExport = vi.fn();
+    const onDelete = vi.fn();
+    const onSelect = vi.fn();
+
+    CardView.init(host, {
+      tableContainer: table,
+      toggleButton,
+      isSelected: () => false,
+      onSelect,
+      onEdit,
+      onToggle,
+      onUpdate,
+      onExport,
+      onDelete,
+    });
+
+    CardView.render([{
+      id: 'script "alpha"/beta',
+      enabled: true,
+      metadata: {
+        name: 'Selector Script',
+        match: ['*://*.example.com/*'],
+      },
+      settings: {},
+      stats: { runs: 0, avgTime: 0, errors: 0 },
+      updatedAt: Date.now(),
+    }]);
+
+    const card = host.querySelector('.cv-card');
+    const openSurface = card?.querySelector('.cv-open-surface');
+    const updateButton = card?.querySelector('.cv-meta-button');
+    const selectButton = card?.querySelector('.cv-select-btn');
+    const toggle = card?.querySelector('.cv-toggle input[type="checkbox"]');
+    const menuButton = card?.querySelector('.cv-menu-btn');
+
+    openSurface?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    updateButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    selectButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    if (toggle instanceof HTMLInputElement) {
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    menuButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    card?.querySelector('[data-action="export"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    card?.querySelector('[data-action="delete"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(onEdit).toHaveBeenCalledWith('script "alpha"/beta');
+    expect(onUpdate).toHaveBeenCalledWith('script "alpha"/beta', expect.any(Object));
+    expect(onSelect).toHaveBeenCalledWith('script "alpha"/beta', true, expect.any(Object));
+    expect(onToggle).toHaveBeenCalledWith('script "alpha"/beta', false, expect.any(Object));
+    expect(onExport).toHaveBeenCalledWith('script "alpha"/beta', expect.any(Object));
+    expect(onDelete).toHaveBeenCalledWith('script "alpha"/beta', expect.any(Object));
+
+    CardView.destroy();
+  });
+
   it('dashboard card view integration reuses guarded controller paths', () => {
     expect(dashboardJs).toMatch(/isSelected: id => state\.selectedScripts\.has\(id\)/);
     expect(dashboardJs).toMatch(/onSelect: \(id, selected\) => \{/);
@@ -188,6 +287,105 @@ describe('dashboard surface modules', () => {
     expect(dashboardJs).toMatch(/await runButtonTask\(options\.triggerEl, exportTask, \{ busyLabel: 'Exporting…' \}\)/);
     expect(dashboardJs).toMatch(/await runButtonTask\(options\.triggerEl, deleteTask, \{ busyLabel: 'Deleting…' \}\)/);
     expect(dashboardJs).toMatch(/await deleteScript\(id\);/);
+  });
+
+  it('dashboard route parser accepts both current and legacy editor hashes', () => {
+    const getDashboardRoute = createDashboardRouteParser();
+    const originalHash = window.location.hash;
+
+    window.location.hash = '#script_script_alpha';
+    expect(getDashboardRoute()).toEqual({ type: 'script', scriptId: 'script_alpha' });
+
+    window.location.hash = '#script=script_beta';
+    expect(getDashboardRoute()).toEqual({ type: 'script', scriptId: 'script_beta' });
+
+    window.location.hash = '#edit=script_gamma';
+    expect(getDashboardRoute()).toEqual({ type: 'script', scriptId: 'script_gamma' });
+
+    window.location.hash = '#new';
+    expect(getDashboardRoute()).toEqual({ type: 'new' });
+
+    window.location.hash = originalHash;
+  });
+
+  it('background dashboard launcher uses the current editor hash format', () => {
+    expect(backgroundCoreJs).toContain('#script_${encodeURIComponent(data.scriptId)}');
+    expect(backgroundCoreJs).toContain("#new_script");
+    expect(backgroundCoreJs).not.toContain('#edit=${data.scriptId}');
+    expect(backgroundCoreJs).not.toContain("#new'");
+  });
+
+  it('secondary dashboard launchers and notifications follow the canonical editor route contract', () => {
+    expect(popupJs).toContain("action: 'openDashboard'");
+    expect(popupJs).toContain('data: scriptId ? { scriptId } : {}');
+    expect(popupJs).toContain('data: { newScript: true }');
+    expect(popupJs).toContain('encodeURIComponent(scriptId)');
+    expect(popupJs).not.toContain('pages/dashboard.html#script_${scriptId}');
+
+    expect(installJs).toContain('encodeURIComponent(scriptId)');
+    expect(installJs).not.toContain('pages/dashboard.html#script_${scriptId}');
+
+    expect(notificationsModuleJs).toContain('const sessionStorage = chrome.storage.session;');
+    expect(notificationsModuleJs).toContain('Promise.allSettled(cleanup)');
+    expect(notificationsModuleJs).toContain('#script_${encodeURIComponent(ctx.scriptId)}');
+    expect(notificationsModuleJs).not.toContain('#script=${ctx.scriptId}');
+  });
+
+  it('dashboard editor routes and selector lookups escape script ids consistently', () => {
+    expect(dashboardJs).toContain('function escapeSelectorValue(value)');
+    expect(dashboardJs).toContain('function getScriptTabElement(scriptId)');
+    expect(dashboardJs).toContain('const scriptIdAttr = escapeHtml(String(script.id));');
+    expect(dashboardJs).toContain('setDashboardHash(`script_${encodeURIComponent(scriptId)}`);');
+    expect(dashboardJs).not.toContain('.tm-tab[data-script-id="${scriptId}"]');
+    expect(dashboardJs).not.toContain('.tm-tab.script-tab[data-script-id="${scriptId}"]');
+
+    expect(dashboardKeyboardJs).toContain('CSS.escape(String(scriptId))');
+    expect(dashboardKeyboardJs).toContain('document.querySelector(`[data-script-id="${selectorId}"]`)');
+    expect(dashboardKeyboardJs).not.toContain('document.querySelector(`[data-script-id="${scriptId}"]`)');
+    expect(cardViewCode).toContain('const scriptIdAttr = escapeHtml(String(script.id));');
+    expect(profilesCode).toContain('function _buildInputId(prefix, value, index)');
+  });
+
+  it('profile editor keeps checkbox labels working for quoted script ids', async () => {
+    const ProfileManager = createProfileManager();
+    const container = document.createElement('div');
+    container.innerHTML = '<div class="sv-profile-header-anchor"></div>';
+    document.body.appendChild(container);
+
+    const sendMessageMock = vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(async (message) => {
+      if (message?.action === 'getScripts') {
+        return {
+          scripts: [
+            { id: 'script "alpha"/beta', meta: { name: 'Quoted Script' }, enabled: true },
+          ],
+        };
+      }
+      return {};
+    });
+
+    ProfileManager.init(container);
+    await flushPromises();
+
+    container.querySelector('.sv-profile-add-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    const checkbox = document.querySelector('#svProfileScripts input[type="checkbox"]');
+    const label = document.querySelector('#svProfileScripts label');
+
+    if (!(checkbox instanceof HTMLInputElement) || !(label instanceof HTMLLabelElement)) {
+      throw new Error('Expected profile script checkbox and label');
+    }
+
+    expect(checkbox.dataset.scriptId).toBe('script "alpha"/beta');
+    expect(checkbox.id).not.toContain('"');
+    expect(label.getAttribute('for')).toBe(checkbox.id);
+
+    checkbox.checked = true;
+    label.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(checkbox.checked).toBe(false);
+
+    sendMessageMock.mockRestore();
+    ProfileManager.destroy();
   });
 
   it('collections render accessible controls and await async per-script toggles', async () => {
@@ -295,5 +493,73 @@ describe('dashboard surface modules', () => {
     expect(document.querySelector('.sv-coll-toast')?.textContent).toContain('Shareable link copied to clipboard');
 
     CollectionManager.destroy();
+  });
+
+  it('collections preserve notes for script ids with selector characters', async () => {
+    const CollectionManager = createCollectionManager();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+
+    const installed = [{ id: 'script alpha/beta', name: 'Alpha Script', enabled: true, code: '// test' }];
+
+    await CollectionManager.init(host, { scripts: installed, onToggle: vi.fn() });
+
+    host.querySelector('[data-action="create"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const nameInput = document.getElementById('sv-coll-name');
+    const checkbox = document.querySelector('#sv-coll-picker input[type="checkbox"]');
+    const noteInput = document.querySelector('.sv-coll-script-pick-note');
+    const saveButton = document.querySelector('.sv-coll-modal [data-action="save"]');
+
+    if (!(nameInput instanceof HTMLInputElement) || !(checkbox instanceof HTMLInputElement) || !(noteInput instanceof HTMLInputElement)) {
+      throw new Error('Expected collection editor fields');
+    }
+
+    nameInput.value = 'Selector Collection';
+    checkbox.checked = true;
+    noteInput.value = 'Keep this note';
+    saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    const created = CollectionManager.getCollections().find((entry) => entry.name === 'Selector Collection');
+    expect(created?.scripts).toEqual([
+      expect.objectContaining({
+        scriptId: 'script alpha/beta',
+        note: 'Keep this note',
+      }),
+    ]);
+
+    CollectionManager.destroy();
+  });
+
+  it('snippet library escapes custom snippet ids in markup and feedback selectors', () => {
+    expect(snippetsCode).toContain('function escapeSelectorValue(value)');
+    expect(snippetsCode).toContain('const snippetIdAttr = escapeHTML(s.id);');
+    expect(snippetsCode).toContain('data-id="${snippetIdAttr}"');
+    expect(snippetsCode).toContain('const selectorId = escapeSelectorValue(snippetId);');
+    expect(snippetsCode).toContain('data-id="${selectorId}"]`');
+  });
+
+  it('csp fix disclosure toggles for row keys with selector characters', async () => {
+    const CSPReporter = createCSPReporter();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+
+    await chrome.storage.local.set({ sv_csp_reports: [] });
+    await CSPReporter.init(host);
+    await CSPReporter.recordFailure('https://example.com', 'script-1', "script-src 'unsafe-inline'", {
+      scriptName: 'Alpha Script',
+    });
+
+    const fixButton = host.querySelector('[data-show-fix]');
+    const suggestionRow = host.querySelector('.sv-csp-suggestion-row');
+
+    expect(suggestionRow?.classList.contains('visible')).toBe(false);
+
+    fixButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(suggestionRow?.classList.contains('visible')).toBe(true);
+
+    CSPReporter.destroy();
   });
 });

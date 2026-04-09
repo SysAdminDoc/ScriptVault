@@ -3142,8 +3142,8 @@ async function handleMessage(message, sender) {
 
       case 'openDashboard': {
         const dashUrl = chrome.runtime.getURL('pages/dashboard.html');
-        const scriptParam = data.scriptId ? `#edit=${data.scriptId}` : '';
-        const newParam = data.newScript ? '#new' : '';
+        const scriptParam = data.scriptId ? `#script_${encodeURIComponent(data.scriptId)}` : '';
+        const newParam = data.newScript ? '#new_script' : '';
         await chrome.tabs.create({ url: dashUrl + (scriptParam || newParam) });
         return { success: true };
       }
