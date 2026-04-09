@@ -526,7 +526,7 @@ const NotificationSystem = {
 
     if (ctx.action === 'openScript' && ctx.scriptId) {
       try {
-        await chrome.tabs.create({ url: `${dashboardUrl}#script_${ctx.scriptId}` });
+        await chrome.tabs.create({ url: `${dashboardUrl}#script_${encodeURIComponent(ctx.scriptId)}` });
       } catch (_) {
         await chrome.tabs.create({ url: dashboardUrl });
       }

@@ -221,7 +221,10 @@ tr.kn-focused td {
   function dispatchAction(action, scriptId) {
     if (!scriptId) return;
     // Find and click the action button in the row/card
-    const row = document.querySelector(`[data-script-id="${scriptId}"]`);
+    const selectorId = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+      ? CSS.escape(String(scriptId))
+      : String(scriptId).replace(/"/g, '\\"');
+    const row = document.querySelector(`[data-script-id="${selectorId}"]`);
     if (!row) return;
 
     switch (action) {

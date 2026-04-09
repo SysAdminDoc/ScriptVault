@@ -522,7 +522,7 @@ const TemplateManager = (() => {
     font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
-    transition: all 0.15s;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .tm-cat-btn:hover {
     color: var(--text-primary, #e0e0e0);
