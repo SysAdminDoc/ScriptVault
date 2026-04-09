@@ -1046,126 +1046,6 @@
             flex-wrap: wrap;
         }
 
-        .bulk-selection-rail {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-top: 14px;
-            padding: 12px 14px;
-            border: 1px solid rgba(127, 127, 127, 0.14);
-            border-radius: 18px;
-            background:
-                linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(96, 165, 250, 0.06) 58%, rgba(255, 255, 255, 0.02)),
-                rgba(0, 0, 0, 0.14);
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-            flex-wrap: wrap;
-        }
-
-        .bulk-selection-rail[data-selection-state="active"] {
-            border-color: rgba(34, 197, 94, 0.2);
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 30px rgba(15, 23, 42, 0.18);
-        }
-
-        .bulk-selection-rail[data-selection-state="mixed"] {
-            border-color: rgba(251, 191, 36, 0.24);
-            background:
-                linear-gradient(135deg, rgba(251, 191, 36, 0.13), rgba(96, 165, 250, 0.07) 60%, rgba(255, 255, 255, 0.02)),
-                rgba(0, 0, 0, 0.14);
-        }
-
-        .bulk-selection-copy {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            min-width: 0;
-            flex: 1 1 420px;
-            flex-wrap: wrap;
-        }
-
-        .bulk-selection-summary {
-            display: inline-flex;
-            align-items: center;
-            min-height: 28px;
-            padding: 0 10px;
-            border-radius: 999px;
-            background: rgba(15, 23, 42, 0.36);
-            border: 1px solid rgba(127, 127, 127, 0.14);
-            color: var(--text-primary);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.03em;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
-
-        .bulk-selection-summary[data-selection-state="active"] {
-            background: rgba(34, 197, 94, 0.15);
-            border-color: rgba(34, 197, 94, 0.22);
-            color: var(--accent-primary);
-        }
-
-        .bulk-selection-summary[data-selection-state="mixed"] {
-            background: rgba(251, 191, 36, 0.14);
-            border-color: rgba(251, 191, 36, 0.24);
-            color: #fbbf24;
-        }
-
-        .bulk-selection-meta {
-            min-width: 0;
-            flex: 1 1 240px;
-            color: var(--text-secondary);
-            font-size: 11px;
-            line-height: 1.4;
-            text-wrap: pretty;
-        }
-
-        .bulk-action-feedback {
-            flex: 1 1 100%;
-            display: inline-flex;
-            align-items: center;
-            min-height: 30px;
-            padding: 7px 10px;
-            border-radius: 12px;
-            border: 1px solid rgba(127, 127, 127, 0.14);
-            background: rgba(15, 23, 42, 0.3);
-            color: var(--text-secondary);
-            font-size: 11px;
-            line-height: 1.4;
-            text-wrap: pretty;
-        }
-
-        .bulk-action-feedback[data-tone="success"] {
-            border-color: rgba(34, 197, 94, 0.2);
-            background: rgba(34, 197, 94, 0.12);
-            color: var(--accent-primary);
-        }
-
-        .bulk-action-feedback[data-tone="info"] {
-            border-color: rgba(96, 165, 250, 0.22);
-            background: rgba(96, 165, 250, 0.12);
-            color: #bfdbfe;
-        }
-
-        .bulk-action-feedback[data-tone="warning"] {
-            border-color: rgba(251, 191, 36, 0.24);
-            background: rgba(251, 191, 36, 0.12);
-            color: #fcd34d;
-        }
-
-        .bulk-action-feedback[data-tone="error"] {
-            border-color: rgba(248, 113, 113, 0.24);
-            background: rgba(248, 113, 113, 0.12);
-            color: #fca5a5;
-        }
-
-        .bulk-selection-actions {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            flex-wrap: wrap;
-        }
-
         .scripts-quick-filters {
             display: flex;
             align-items: center;
@@ -1249,7 +1129,7 @@
                 linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120px),
                 var(--bg-content);
             border: 1px solid rgba(127, 127, 127, 0.18);
-            border-radius: 24px;
+            border-radius: 12px 12px 24px 24px;
             box-shadow: 0 22px 44px rgba(0, 0, 0, 0.18);
             overflow: clip;
         }
@@ -4535,7 +4415,7 @@
             #scriptsPanel { padding: 16px 10px 0; }
             .scripts-shell-copy h2 { font-size: 24px; }
             .scripts-toolbar { padding: 10px; border-radius: 18px; }
-            .scripts-table-container { border-radius: 20px; overflow-x: auto; }
+            .scripts-table-container { border-radius: 10px 10px 20px 20px; overflow-x: auto; }
             .scripts-table .col-source,
             .scripts-table .col-runs { display: none; }
             .search-box { max-width: none; flex-basis: 100%; }
@@ -5047,7 +4927,7 @@
 
         .scripts-table-container {
             border-color: var(--panel-border-soft);
-            border-radius: 28px;
+            border-radius: 14px 14px 28px 28px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 150px),
                 var(--bg-content);
@@ -5441,16 +5321,6 @@
                     <button type="button" class="toolbar-btn compact" id="btnColumnToggle" title="Show/hide columns" aria-label="Show or hide columns" aria-haspopup="dialog">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M12 3v18M3 12h18M3 6h18M3 18h18"/></svg>
                     </button>
-                </div>
-            </div>
-            <div class="bulk-selection-rail" id="bulkSelectionRail" role="group" aria-label="Selection summary">
-                <div class="bulk-selection-copy">
-                    <span class="bulk-selection-summary" id="bulkSelectionSummary" role="status" aria-live="polite" aria-atomic="true" data-selection-state="idle">No scripts selected</span>
-                    <span class="bulk-selection-meta" id="bulkSelectionMeta">Select scripts in this view to enable, export, update, reset, or delete them in batches.</span>
-                    <span class="bulk-action-feedback" id="bulkActionFeedback" role="status" aria-live="polite" aria-atomic="true" hidden></span>
-                </div>
-                <div class="bulk-selection-actions">
-                    <button type="button" class="toolbar-btn compact" id="btnClearSelection" disabled>Clear Selection</button>
                 </div>
             </div>
             <div class="scripts-results-bar">

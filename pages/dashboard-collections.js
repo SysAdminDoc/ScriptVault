@@ -615,9 +615,19 @@ const CollectionManager = (() => {
   }
 
   function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function escapeSelectorValue(value) {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return CSS.escape(String(value));
+    }
+    return String(value).replace(/"/g, '\\"');
   }
 
   function formatBytes(bytes) {
@@ -888,11 +898,11 @@ const CollectionManager = (() => {
       const scriptName = escapeHtml(s.name || s.scriptId || 'Unknown');
 
       html += `
-        <div class="sv-coll-script-row" data-script-id="${s.scriptId || ''}" data-gf-id="${s.greasyForkId || ''}">
+        <div class="sv-coll-script-row" data-script-id="${escapeHtml(s.scriptId || '')}" data-gf-id="${escapeHtml(s.greasyForkId || '')}">
           <span class="sv-coll-script-name">${scriptName}</span>
           ${s.note ? `<span class="sv-coll-script-note" title="${escapeHtml(s.note)}">${escapeHtml(s.note)}</span>` : ''}
           ${isInstalled
-            ? `<button type="button" class="sv-coll-script-toggle ${isEnabled ? 'on' : ''}" data-toggle-id="${s.scriptId}" aria-pressed="${String(isEnabled)}" aria-label="${isEnabled ? 'Disable' : 'Enable'} ${scriptName}" title="${isEnabled ? 'Disable' : 'Enable'} ${scriptName}"></button>`
+            ? `<button type="button" class="sv-coll-script-toggle ${isEnabled ? 'on' : ''}" data-toggle-id="${escapeHtml(s.scriptId)}" aria-pressed="${String(isEnabled)}" aria-label="${isEnabled ? 'Disable' : 'Enable'} ${scriptName}" title="${isEnabled ? 'Disable' : 'Enable'} ${scriptName}"></button>`
             : `<button type="button" class="sv-coll-btn inline-install" data-install-gf="${s.greasyForkId || ''}" data-install-name="${escapeHtml(s.name || '')}">Install</button>`}
         </div>
       `;
@@ -1118,9 +1128,9 @@ const CollectionManager = (() => {
             <div class="sv-coll-script-picker" id="sv-coll-picker">
               ${(installed || []).map(s => `
                 <div class="sv-coll-script-pick-row">
-                  <input type="checkbox" value="${s.id}" ${selectedIds.includes(s.id) ? 'checked' : ''}>
+                  <input type="checkbox" value="${escapeHtml(s.id)}" ${selectedIds.includes(s.id) ? 'checked' : ''}>
                   <span style="flex:1;color:var(--text-primary)">${escapeHtml(s.name || s.id)}</span>
-                  <input type="text" class="sv-coll-script-pick-note" data-sid="${s.id}"
+                  <input type="text" class="sv-coll-script-pick-note" data-sid="${escapeHtml(s.id)}"
                          placeholder="Note\u2026" value="${escapeHtml(notes[s.id] || '')}">
                 </div>
               `).join('')}
@@ -1158,7 +1168,7 @@ const CollectionManager = (() => {
       const checked = overlay.querySelectorAll('#sv-coll-picker input[type="checkbox"]:checked');
       const scripts = [];
       checked.forEach(cb => {
-        const noteInput = overlay.querySelector(`.sv-coll-script-pick-note[data-sid="${cb.value}"]`);
+        const noteInput = overlay.querySelector(`.sv-coll-script-pick-note[data-sid="${escapeSelectorValue(cb.value)}"]`);
         const inst = (installed || []).find(i => i.id === cb.value);
         scripts.push({
           scriptId: cb.value,

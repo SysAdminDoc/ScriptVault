@@ -157,16 +157,12 @@ describe("dashboard accessibility markup", () => {
     });
   });
 
-  test("bulk selection surface exposes a live summary and safe default states", () => {
+  test("bulk selection controls stay safe by default without the old selection rail", () => {
     const doc = parseDashboard();
     const bulkCluster = doc.querySelector('.bulk-action-cluster[role="group"][aria-label="Bulk actions"]');
     const bulkToggle = doc.querySelector('label.bulk-toggle[for="bulkSelectAll"]');
     const bulkAction = doc.getElementById("bulkActionSelect");
     const bulkApply = doc.getElementById("btnBulkApply");
-    const selectionRail = doc.getElementById("bulkSelectionRail");
-    const selectionSummary = doc.getElementById("bulkSelectionSummary");
-    const actionFeedback = doc.getElementById("bulkActionFeedback");
-    const clearSelection = doc.getElementById("btnClearSelection");
 
     expect(bulkCluster).not.toBeNull();
     expect(bulkToggle).not.toBeNull();
@@ -174,19 +170,11 @@ describe("dashboard accessibility markup", () => {
     expect(bulkAction?.querySelector('option[value=""]')?.textContent?.trim()).toBe("Choose Action");
     expect(bulkAction?.disabled).toBe(true);
     expect(bulkApply?.disabled).toBe(true);
-
-    expect(selectionRail).not.toBeNull();
-    expect(selectionRail?.getAttribute("role")).toBe("group");
-    expect(selectionRail?.getAttribute("aria-label")).toBe("Selection summary");
-    expect(selectionSummary?.getAttribute("role")).toBe("status");
-    expect(selectionSummary?.getAttribute("aria-live")).toBe("polite");
-    expect(selectionSummary?.textContent?.trim()).toBe("No scripts selected");
-    expect(actionFeedback).not.toBeNull();
-    expect(actionFeedback?.getAttribute("role")).toBe("status");
-    expect(actionFeedback?.getAttribute("aria-live")).toBe("polite");
-    expect(actionFeedback?.hasAttribute("hidden")).toBe(true);
-    expect(doc.getElementById("bulkSelectionMeta")?.textContent).toContain("this view");
-    expect(clearSelection?.disabled).toBe(true);
+    expect(doc.getElementById("bulkSelectionRail")).toBeNull();
+    expect(doc.getElementById("bulkSelectionSummary")).toBeNull();
+    expect(doc.getElementById("bulkSelectionMeta")).toBeNull();
+    expect(doc.getElementById("bulkActionFeedback")).toBeNull();
+    expect(doc.getElementById("btnClearSelection")).toBeNull();
   });
 
   test("script workspace exposes quick filters, live results summary, and reset affordances", () => {

@@ -245,7 +245,7 @@ const AdvancedLinter = (() => {
   background: transparent;
   color: var(--text-secondary, #a0a0a0);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .sv-lint-filter-btn.active {
   background: var(--bg-row-selected, #2d3a4d);

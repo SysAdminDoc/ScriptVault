@@ -245,18 +245,44 @@
         replaceDashboardUrl(url);
     }
 
+    function escapeSelectorValue(value) {
+        if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+            return CSS.escape(String(value));
+        }
+        return String(value).replace(/"/g, '\\"');
+    }
+
+    function getScriptTabElement(scriptId) {
+        if (!scriptId) return null;
+        return document.querySelector(`.tm-tab.script-tab[data-script-id="${escapeSelectorValue(scriptId)}"]`);
+    }
+
     function getDashboardRoute() {
         const hash = window.location.hash.slice(1);
+        const decodeRouteValue = (value) => {
+            if (!value) return '';
+            try {
+                return decodeURIComponent(value);
+            } catch {
+                return value;
+            }
+        };
         if (!hash) return { type: 'tab', tab: 'scripts' };
-        if (hash === 'new_script') return { type: 'new' };
+        if (hash === 'new_script' || hash === 'new') return { type: 'new' };
         if (hash.startsWith('tab=')) {
             const tab = hash.slice(4);
             return { type: 'tab', tab: DASHBOARD_TABS.includes(tab) ? tab : 'scripts' };
         }
         if (hash.startsWith('script_')) {
-            return { type: 'script', scriptId: hash.slice(7) };
+            return { type: 'script', scriptId: decodeRouteValue(hash.slice(7)) };
         }
-        return { type: 'script', scriptId: hash };
+        if (hash.startsWith('script=')) {
+            return { type: 'script', scriptId: decodeRouteValue(hash.slice(7)) };
+        }
+        if (hash.startsWith('edit=')) {
+            return { type: 'script', scriptId: decodeRouteValue(hash.slice(5)) };
+        }
+        return { type: 'script', scriptId: decodeRouteValue(hash) };
     }
 
     function getCurrentScriptViewMode() {
@@ -4640,14 +4666,15 @@
         if (isStale) tr.classList.add('row-stale');
         if (overBudget) tr.classList.add('row-over-budget');
 
+        const scriptIdAttr = escapeHtml(String(script.id));
         tr.draggable = true;
         tr.dataset.scriptId = script.id;
         tr.innerHTML = `
-            <td class="center"><input type="checkbox" class="script-checkbox" data-id="${script.id}" aria-label="Select ${escapeHtml(name)}"></td>
+            <td class="center"><input type="checkbox" class="script-checkbox" data-id="${scriptIdAttr}" aria-label="Select ${escapeHtml(name)}"></td>
             <td class="center drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text-muted)">⠿</td>
             <td class="center">
                 <label class="toggle-switch">
-                    <input type="checkbox" class="script-toggle" data-id="${script.id}" ${enabled ? 'checked' : ''} aria-label="${enabled ? 'Disable' : 'Enable'} ${escapeHtml(name)}">
+                    <input type="checkbox" class="script-toggle" data-id="${scriptIdAttr}" ${enabled ? 'checked' : ''} aria-label="${enabled ? 'Disable' : 'Enable'} ${escapeHtml(name)}">
                     <span class="toggle-slider"></span>
                 </label>
             </td>
@@ -4656,7 +4683,7 @@
                     ${faviconHtml}
                     <div class="script-name-stack">
                         <div class="script-name-row">
-                            <button type="button" class="script-name-button" data-id="${script.id}" title="${escapeHtml(script.metadata?.description || '')}" aria-label="Open ${escapeHtml(name)} in the editor">
+                            <button type="button" class="script-name-button" data-id="${scriptIdAttr}" title="${escapeHtml(script.metadata?.description || '')}" aria-label="Open ${escapeHtml(name)} in the editor">
                                 <span class="script-name-button-text">${escapeHtml(name)}${isBroadMatch(matches) ? ' <span title="Runs on all or most sites" style="opacity:0.58">🌐</span>' : ''}</span>
                             </button>
                             ${script.metadata?.author ? `<span class="script-author">by ${escapeHtml(script.metadata.author)}</span>` : ''}
@@ -4682,29 +4709,29 @@
                 <div class="feature-badges">${features.map(f => `<span class="badge ${f.c}">${f.l}</span>`).join('')}</div>
             </td>
             <td class="center">${homepage ? `<a href="${escapeHtml(homepage)}" target="_blank" rel="noopener noreferrer" aria-label="Open homepage for ${escapeHtml(name)}">🔗</a>` : '-'}</td>
-            <td class="center"><button type="button" class="updated-link" data-action="checkUpdate" data-id="${script.id}" title="Check for updates" aria-label="Check for updates for ${escapeHtml(name)}">${updated}</button></td>
+            <td class="center"><button type="button" class="updated-link" data-action="checkUpdate" data-id="${scriptIdAttr}" title="Check for updates" aria-label="Check for updates for ${escapeHtml(name)}">${updated}</button></td>
             <td class="center">${statsHtml}</td>
             <td class="center">
                 <div class="action-icons">
-                    <button type="button" class="action-icon ${script.settings?.pinned ? 'pinned' : ''}" title="${script.settings?.pinned ? 'Unpin' : 'Pin to top'}" aria-label="${script.settings?.pinned ? 'Unpin' : 'Pin'} ${escapeHtml(name)}" data-action="pin" data-id="${script.id}">
+                    <button type="button" class="action-icon ${script.settings?.pinned ? 'pinned' : ''}" title="${script.settings?.pinned ? 'Unpin' : 'Pin to top'}" aria-label="${script.settings?.pinned ? 'Unpin' : 'Pin'} ${escapeHtml(name)}" data-action="pin" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="${script.settings?.pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M12 2L9.1 8.6 2 9.2l5.5 4.8L5.8 21 12 17.3 18.2 21l-1.7-7 5.5-4.8-7.1-.6z"/></svg>
                     </button>
-                    <button type="button" class="action-icon" title="Edit" aria-label="Edit ${escapeHtml(name)}" data-action="edit" data-id="${script.id}">
+                    <button type="button" class="action-icon" title="Edit" aria-label="Edit ${escapeHtml(name)}" data-action="edit" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
-                    <button type="button" class="action-icon" title="Check for update (right-click: force update)" aria-label="Check for updates for ${escapeHtml(name)}" data-action="updateScript" data-id="${script.id}">
+                    <button type="button" class="action-icon" title="Check for update (right-click: force update)" aria-label="Check for updates for ${escapeHtml(name)}" data-action="updateScript" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                     </button>
-                    <button type="button" class="action-icon" title="Export" aria-label="Export ${escapeHtml(name)}" data-action="exportScript" data-id="${script.id}">
+                    <button type="button" class="action-icon" title="Export" aria-label="Export ${escapeHtml(name)}" data-action="exportScript" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     </button>${(script.metadata?.downloadURL || script.metadata?.updateURL) ? `
-                    <button type="button" class="action-icon" title="Copy install URL" aria-label="Copy install URL for ${escapeHtml(name)}" data-action="copyUrl" data-id="${script.id}" data-url="${escapeHtml(script.metadata.downloadURL || script.metadata.updateURL)}">
+                    <button type="button" class="action-icon" title="Copy install URL" aria-label="Copy install URL for ${escapeHtml(name)}" data-action="copyUrl" data-id="${scriptIdAttr}" data-url="${escapeHtml(script.metadata.downloadURL || script.metadata.updateURL)}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                     </button>` : ''}
-                    <button type="button" class="action-icon" title="Move to folder" aria-label="Move ${escapeHtml(name)} to folder" data-action="moveFolder" data-id="${script.id}">
+                    <button type="button" class="action-icon" title="Move to folder" aria-label="Move ${escapeHtml(name)} to folder" data-action="moveFolder" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                     </button>
-                    <button type="button" class="action-icon" title="Delete" aria-label="Delete ${escapeHtml(name)}" data-action="delete" data-id="${script.id}">
+                    <button type="button" class="action-icon" title="Delete" aria-label="Delete ${escapeHtml(name)}" data-action="delete" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                     </button>
                 </div>
@@ -5194,7 +5221,7 @@
     }
 
     function updateScriptTabVisual(scriptId, isDirty) {
-        const tab = document.querySelector(`.tm-tab[data-script-id="${scriptId}"]`);
+        const tab = getScriptTabElement(scriptId);
         if (tab) {
             tab.classList.toggle('unsaved', !!isDirty);
             syncScriptTabAccessibility(tab, { isDirty });
@@ -5366,7 +5393,7 @@
         closeFindScripts();
 
         // Activate script tab
-        const tab = document.querySelector(`.tm-tab[data-script-id="${scriptId}"]`);
+        const tab = getScriptTabElement(scriptId);
         if (tab) {
             tab.classList.add('active');
             syncScriptTabAccessibility(tab, { isActive: true });
@@ -5397,7 +5424,7 @@
         loadExternals(script);
         openEditorOverlay();
         if (updateRoute) {
-            setDashboardHash(`script_${scriptId}`);
+            setDashboardHash(`script_${encodeURIComponent(scriptId)}`);
         }
         setTimeout(() => state.editor?.focus(), 100);
     }
@@ -5407,7 +5434,7 @@
         const tabData = state.openTabs[scriptId];
         const doClose = () => {
             // Remove tab element
-            const tab = document.querySelector(`.tm-tab[data-script-id="${scriptId}"]`);
+            const tab = getScriptTabElement(scriptId);
             if (tab) tab.remove();
 
             delete state.openTabs[scriptId];
@@ -5444,7 +5471,7 @@
 
             if (focusFallbackScriptId) {
                 setTimeout(() => {
-                    const fallbackTab = document.querySelector(`.tm-tab.script-tab[data-script-id="${focusFallbackScriptId}"]`);
+                    const fallbackTab = getScriptTabElement(focusFallbackScriptId);
                     if (fallbackTab instanceof HTMLElement) {
                         fallbackTab.focus();
                         return;
@@ -5984,7 +6011,7 @@
                 const name = script.metadata?.name || 'Edit Script';
                 if (state.currentScriptId === savingScriptId && elements.editorTitle) elements.editorTitle.textContent = name;
                 // Update tab name
-                const tab = document.querySelector(`.tm-tab[data-script-id="${savingScriptId}"]`);
+                const tab = getScriptTabElement(savingScriptId);
                 if (tab) {
                     tab.classList.remove('unsaved');
                     const tabName = tab.querySelector('.tab-name');
@@ -6026,7 +6053,7 @@
             // Clean up open tab if exists
             if (state.openTabs[scriptId]) {
                 delete state.openTabs[scriptId];
-                document.querySelector(`.tm-tab.script-tab[data-script-id="${scriptId}"]`)?.remove();
+                getScriptTabElement(scriptId)?.remove();
             }
             if (scriptId === state.currentScriptId) {
                 state.currentScriptId = null;

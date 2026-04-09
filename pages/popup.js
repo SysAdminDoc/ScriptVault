@@ -1414,18 +1414,32 @@
     }
 
     // Open dashboard
-    function openDashboard(scriptId = null) {
-        const url = scriptId 
-            ? chrome.runtime.getURL(`pages/dashboard.html#script_${scriptId}`)
-            : chrome.runtime.getURL('pages/dashboard.html');
-        chrome.tabs.create({ url });
+    async function openDashboard(scriptId = null) {
+        try {
+            await chrome.runtime.sendMessage({
+                action: 'openDashboard',
+                data: scriptId ? { scriptId } : {}
+            });
+        } catch (error) {
+            const url = scriptId
+                ? chrome.runtime.getURL(`pages/dashboard.html#script_${encodeURIComponent(scriptId)}`)
+                : chrome.runtime.getURL('pages/dashboard.html');
+            await chrome.tabs.create({ url });
+        }
         window.close();
     }
 
     // Create new script - opens dashboard new script editor
-    function createNewScript() {
-        const url = chrome.runtime.getURL('pages/dashboard.html#new_script');
-        chrome.tabs.create({ url });
+    async function createNewScript() {
+        try {
+            await chrome.runtime.sendMessage({
+                action: 'openDashboard',
+                data: { newScript: true }
+            });
+        } catch (error) {
+            const url = chrome.runtime.getURL('pages/dashboard.html#new_script');
+            await chrome.tabs.create({ url });
+        }
         window.close();
     }
 

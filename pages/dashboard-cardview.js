@@ -30,6 +30,13 @@ const CardView = (() => {
   let _activeMenuId = null;
   let _tableContainer = null;
 
+  function escapeSelectorValue(value) {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return CSS.escape(String(value));
+    }
+    return String(value).replace(/"/g, '\\"');
+  }
+
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
   /* ------------------------------------------------------------------ */
@@ -911,6 +918,7 @@ const CardView = (() => {
     if (overBudget)  dots.push('<span class="cv-dot cv-dot-budget" title="Over perf budget"></span>');
 
     const iconHtml = createCardIconHtml(name, iconUrl);
+    const scriptIdAttr = escapeHtml(String(script.id));
 
     // Perf badge
     let perfHtml = '';
@@ -922,7 +930,7 @@ const CardView = (() => {
 
     card.innerHTML = `
       <div class="cv-status-dots">${dots.join('')}</div>
-      <button type="button" class="cv-open-surface" data-open-id="${script.id}" aria-label="Open ${escapeHtml(name)} in the editor" aria-describedby="${cardSummaryId}">
+      <button type="button" class="cv-open-surface" data-open-id="${scriptIdAttr}" aria-label="Open ${escapeHtml(name)} in the editor" aria-describedby="${cardSummaryId}">
         <div class="cv-header">
           ${iconHtml}
           <div class="cv-name-stack">
@@ -939,24 +947,24 @@ const CardView = (() => {
       </button>
       <div class="cv-meta">
         <span class="cv-meta-item"><span class="cv-meta-label">v</span>${escapeHtml(version)}</span>
-        <button type="button" class="cv-meta-button" data-update-id="${script.id}" aria-label="Check for updates for ${escapeHtml(name)}. Last updated ${escapeHtml(formatRelativeTime(script.updatedAt))}" title="Check for updates. Last updated ${escapeHtml(formatRelativeTime(script.updatedAt))}">${formatRelativeTime(script.updatedAt)}</button>
+        <button type="button" class="cv-meta-button" data-update-id="${scriptIdAttr}" aria-label="Check for updates for ${escapeHtml(name)}. Last updated ${escapeHtml(formatRelativeTime(script.updatedAt))}" title="Check for updates. Last updated ${escapeHtml(formatRelativeTime(script.updatedAt))}">${formatRelativeTime(script.updatedAt)}</button>
         ${perfHtml}
       </div>
       <div class="cv-footer">
         <div class="cv-footer-main">
-          <button type="button" class="cv-select-btn" data-select-id="${script.id}" aria-pressed="${selected ? 'true' : 'false'}" aria-label="${selected ? 'Unselect' : 'Select'} ${escapeHtml(name)}">${selected ? 'Selected' : 'Select'}</button>
+          <button type="button" class="cv-select-btn" data-select-id="${scriptIdAttr}" aria-pressed="${selected ? 'true' : 'false'}" aria-label="${selected ? 'Unselect' : 'Select'} ${escapeHtml(name)}">${selected ? 'Selected' : 'Select'}</button>
           <label class="cv-toggle" title="${enabled ? 'Enabled' : 'Disabled'}">
-            <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${script.id}" aria-label="${enabled ? 'Disable' : 'Enable'} ${escapeHtml(name)}">
+            <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${scriptIdAttr}" aria-label="${enabled ? 'Disable' : 'Enable'} ${escapeHtml(name)}">
             <span class="cv-toggle-slider"></span>
           </label>
         </div>
-        <button type="button" class="cv-menu-btn" data-menu-id="${script.id}" title="Actions" aria-label="Script actions for ${escapeHtml(name)}" aria-haspopup="menu" aria-controls="${cardMenuId}" aria-expanded="false">\u22EF</button>
-        <div class="cv-menu cv-hidden" id="${cardMenuId}" data-menu-for="${script.id}" role="menu" aria-label="Actions for ${escapeHtml(name)}">
-          <button type="button" class="cv-menu-item" data-action="edit" data-id="${script.id}">Edit</button>
-          <button type="button" class="cv-menu-item" data-action="toggle" data-id="${script.id}">${enabled ? 'Disable' : 'Enable'}</button>
-          <button type="button" class="cv-menu-item" data-action="update" data-id="${script.id}">Check for Updates</button>
-          <button type="button" class="cv-menu-item" data-action="export" data-id="${script.id}">Export</button>
-          <button type="button" class="cv-menu-item danger" data-action="delete" data-id="${script.id}">Delete</button>
+        <button type="button" class="cv-menu-btn" data-menu-id="${scriptIdAttr}" title="Actions" aria-label="Script actions for ${escapeHtml(name)}" aria-haspopup="menu" aria-controls="${cardMenuId}" aria-expanded="false">\u22EF</button>
+        <div class="cv-menu cv-hidden" id="${cardMenuId}" data-menu-for="${scriptIdAttr}" role="menu" aria-label="Actions for ${escapeHtml(name)}">
+          <button type="button" class="cv-menu-item" data-action="edit" data-id="${scriptIdAttr}">Edit</button>
+          <button type="button" class="cv-menu-item" data-action="toggle" data-id="${scriptIdAttr}">${enabled ? 'Disable' : 'Enable'}</button>
+          <button type="button" class="cv-menu-item" data-action="update" data-id="${scriptIdAttr}">Check for Updates</button>
+          <button type="button" class="cv-menu-item" data-action="export" data-id="${scriptIdAttr}">Export</button>
+          <button type="button" class="cv-menu-item danger" data-action="delete" data-id="${scriptIdAttr}">Delete</button>
         </div>
       </div>
     `;
@@ -966,25 +974,27 @@ const CardView = (() => {
 
     // -- Event listeners --
 
-    const openBtn = card.querySelector(`[data-open-id="${script.id}"]`);
+    const selectorId = escapeSelectorValue(script.id);
+
+    const openBtn = card.querySelector(`[data-open-id="${selectorId}"]`);
     openBtn?.addEventListener('click', () => {
       invokeCardAction(_options.onEdit, script.id);
     });
 
-    const updateBtn = card.querySelector(`[data-update-id="${script.id}"]`);
+    const updateBtn = card.querySelector(`[data-update-id="${selectorId}"]`);
     updateBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       invokeCardAction(_options.onUpdate, script.id, { triggerEl: updateBtn });
     });
 
-    const selectBtn = card.querySelector(`[data-select-id="${script.id}"]`);
+    const selectBtn = card.querySelector(`[data-select-id="${selectorId}"]`);
     selectBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       invokeCardAction(_options.onSelect, script.id, !selected, { triggerEl: selectBtn });
     });
 
     // Toggle switch
-    const toggle = card.querySelector(`[data-toggle-id="${script.id}"]`);
+    const toggle = card.querySelector(`[data-toggle-id="${selectorId}"]`);
     toggle?.addEventListener('change', (e) => {
       e.stopPropagation();
       invokeCardAction(_options.onToggle, script.id, e.target.checked, { control: toggle });
@@ -992,12 +1002,12 @@ const CardView = (() => {
     toggle?.addEventListener('click', (e) => e.stopPropagation());
 
     // Three-dot menu
-    const menuBtn = card.querySelector(`[data-menu-id="${script.id}"]`);
+    const menuBtn = card.querySelector(`[data-menu-id="${selectorId}"]`);
     menuBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       toggleCardMenu(script.id);
     });
-    const menu = card.querySelector(`[data-menu-for="${script.id}"]`);
+    const menu = card.querySelector(`[data-menu-for="${selectorId}"]`);
     menu?.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -1034,8 +1044,9 @@ const CardView = (() => {
     const wasOpen = _activeMenuId === id;
     closeAllMenus();
     if (wasOpen) return;
-    const menu = _cardGrid?.querySelector(`[data-menu-for="${id}"]`);
-    const menuBtn = _cardGrid?.querySelector(`[data-menu-id="${id}"]`);
+    const selectorId = escapeSelectorValue(id);
+    const menu = _cardGrid?.querySelector(`[data-menu-for="${selectorId}"]`);
+    const menuBtn = _cardGrid?.querySelector(`[data-menu-id="${selectorId}"]`);
     if (menu) {
       menu.classList.remove('cv-hidden');
       _activeMenuId = id;
@@ -1057,7 +1068,7 @@ const CardView = (() => {
       card.classList.toggle('cv-selected', selected);
       card.dataset.selected = String(selected);
 
-      const selectBtn = card.querySelector(`[data-select-id="${id}"]`);
+      const selectBtn = card.querySelector(`[data-select-id="${escapeSelectorValue(id)}"]`);
       if (selectBtn) {
         selectBtn.setAttribute('aria-pressed', selected ? 'true' : 'false');
         selectBtn.setAttribute('aria-label', `${selected ? 'Unselect' : 'Select'} ${selectBtn.closest('.cv-card')?.querySelector('.cv-name')?.textContent?.trim() || 'script'}`);
