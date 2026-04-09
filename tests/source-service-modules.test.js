@@ -41,7 +41,7 @@ describe('source notification system module', () => {
     const NotificationSystem = await loadFreshNotificationSystem();
 
     await NotificationSystem.notifyUpdate({
-      id: 'script_alpha',
+      id: 'script alpha/beta',
       name: 'Alpha',
       version: '1.2.0',
     });
@@ -51,14 +51,14 @@ describe('source notification system module', () => {
 
     expect((await chrome.storage.session.get(key))[key]).toEqual({
       action: 'openScript',
-      scriptId: 'script_alpha',
+      scriptId: 'script alpha/beta',
     });
 
     await NotificationSystem.handleClick(notifId);
 
     expect(chrome.notifications.clear).toHaveBeenCalledWith(notifId);
     expect(chrome.tabs.create).toHaveBeenCalledWith({
-      url: 'chrome-extension://test-extension-id/pages/dashboard.html#script_script_alpha',
+      url: 'chrome-extension://test-extension-id/pages/dashboard.html#script_script%20alpha%2Fbeta',
     });
     expect((await chrome.storage.session.get(key))[key]).toBeUndefined();
   });

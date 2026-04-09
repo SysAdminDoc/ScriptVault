@@ -465,9 +465,20 @@ const ProfileManager = (() => {
   }
 
   function _escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function _buildInputId(prefix, value, index) {
+    const normalized = String(value ?? '')
+      .replace(/[^a-zA-Z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48);
+    return `${prefix}-${index}-${normalized || 'item'}`;
   }
 
   function _injectStyles() {
@@ -660,7 +671,7 @@ const ProfileManager = (() => {
         <button type="button"
               class="sv-profile-chip${isActive ? ' active' : ''}"
               style="--color: ${p.color}"
-              data-profile-id="${p.id}"
+              data-profile-id="${_escapeHtml(p.id)}"
               aria-pressed="${isActive ? 'true' : 'false'}"
               aria-current="${isActive ? 'true' : 'false'}"
               title="${_escapeHtml(p.name)}${shortcut ? ' (' + shortcut + ')' : ''}">
@@ -896,12 +907,14 @@ const ProfileManager = (() => {
           <div class="sv-profile-field">
             <label>Script States</label>
             <div class="sv-profile-scripts" id="svProfileScripts">
-              ${scripts.map(s => {
+              ${scripts.map((s, idx) => {
                 const checked = editing.scriptStates[s.id] !== false;
+                const scriptInputId = _buildInputId('sv-ps', s.id, idx);
+                const scriptIdAttr = _escapeHtml(s.id);
                 return `
                   <div class="sv-profile-script-row">
-                    <input type="checkbox" id="sv-ps-${s.id}" data-script-id="${s.id}" ${checked ? 'checked' : ''} />
-                    <label for="sv-ps-${s.id}">${_escapeHtml(s.meta?.name || s.id)}</label>
+                    <input type="checkbox" id="${scriptInputId}" data-script-id="${scriptIdAttr}" ${checked ? 'checked' : ''} />
+                    <label for="${scriptInputId}">${_escapeHtml(s.meta?.name || s.id)}</label>
                   </div>`;
               }).join('')}
               ${scripts.length === 0 ? '<div style="padding:12px;color:var(--text-muted)">No scripts installed</div>' : ''}

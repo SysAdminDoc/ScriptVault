@@ -423,6 +423,13 @@ const CSPReporter = (() => {
     return div.innerHTML;
   }
 
+  function escapeSelectorValue(value) {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return CSS.escape(String(value));
+    }
+    return String(value).replace(/"/g, '\\"');
+  }
+
   function extractHostname(url) {
     try {
       return new URL(url).hostname;
@@ -626,16 +633,16 @@ const CSPReporter = (() => {
     for (const row of filtered) {
       const sev = getSeverity(row.directive);
       html += `
-        <tr data-row-id="${row.key}">
+        <tr data-row-id="${escapeHtml(row.key)}">
           <td><span class="sv-csp-directive">${escapeHtml(row.hostname)}</span></td>
           <td><span class="sv-csp-directive">${escapeHtml(row.directive)}</span></td>
           <td><span class="sv-csp-severity" style="background:${sev.color};color:#000">${sev.label}</span></td>
           <td>${escapeHtml(row.scriptNames)}</td>
           <td>${row.count}</td>
           <td>${formatDate(row.lastSeen)}</td>
-          <td><button class="sv-csp-btn" data-show-fix="${row.directive}" data-row="${row.key}" style="padding:3px 8px;font-size:10px">\u{1F527} Fix</button></td>
+          <td><button class="sv-csp-btn" data-show-fix="${escapeHtml(row.directive)}" data-row="${escapeHtml(row.key)}" style="padding:3px 8px;font-size:10px">\u{1F527} Fix</button></td>
         </tr>
-        <tr class="sv-csp-suggestion-row" data-suggestion-for="${row.key}">
+        <tr class="sv-csp-suggestion-row" data-suggestion-for="${escapeHtml(row.key)}">
           <td colspan="7">${renderSuggestions(row.directive)}</td>
         </tr>
       `;
@@ -662,7 +669,7 @@ const CSPReporter = (() => {
     wrap.querySelectorAll('[data-show-fix]').forEach(btn => {
       btn.addEventListener('click', () => {
         const rowKey = btn.dataset.row;
-        const suggRow = wrap.querySelector(`[data-suggestion-for="${rowKey}"]`);
+        const suggRow = wrap.querySelector(`[data-suggestion-for="${escapeSelectorValue(rowKey)}"]`);
         if (suggRow) suggRow.classList.toggle('visible');
       });
     });
