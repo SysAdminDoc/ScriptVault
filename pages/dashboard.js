@@ -4555,9 +4555,6 @@
         // @tag badges
         const tags = script.metadata?.tag || script.metadata?.tags || [];
         const tagHtml = tags.map(t => `<span class="script-tag">${escapeHtml(t)}</span>`).join('');
-        const provenance = describeScriptProvenance(script);
-        const hasRemoteSource = Boolean(script.metadata?.updateURL || script.metadata?.downloadURL);
-        const provenanceBadgeHtml = `<span class="script-origin-badge ${hasRemoteSource ? 'remote' : 'local'}" title="${escapeHtml(provenance.detail || provenance.label)}">${escapeHtml(provenance.label)}</span>`;
 
         // Conflict detection for table row
         const conflicts = findConflictingScripts(script.id, matches);
@@ -4613,7 +4610,6 @@
                             ${script.metadata?.author ? `<span class="script-author">by ${escapeHtml(script.metadata.author)}</span>` : ''}
                         </div>
                         <div class="script-name-badges">
-                            ${provenanceBadgeHtml}
                             ${localEditsHtml}
                             ${errorHtml}
                             ${slowHtml}
