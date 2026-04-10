@@ -197,11 +197,15 @@
 
     // applyEditorSettings: called from dashboard initEditor
     applySettings(s) {
+      // editorFontSize is a percentage (100 = 100%); Monaco wants a pixel value.
+      // Same conversion used by setFontSize().
+      const pct = parseInt(s.editorFontSize) || 100;
+      const fontPx = Math.max(8, Math.min(Math.round(13 * (pct / 100)), 32));
       const opts = {
         tabSize: parseInt(s.tabSize || s.editorTabSize) || 4,
         insertSpaces: (s.indentWith || 'spaces') === 'spaces',
         wordWrap: s.wordWrap !== undefined ? s.wordWrap : (s.editorWordWrap !== false),
-        fontSize: parseInt(s.editorFontSize) || 100,
+        fontSize: fontPx,
         theme: s.editorTheme || 'dark',
         lineNumbers: true,
         minimap: s.editorMinimap !== false
