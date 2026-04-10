@@ -73,11 +73,14 @@
 
   function sendToFrame(msg) {
     if (_useFallback || !frame?.contentWindow) return;
+    // The iframe is sandboxed via manifest.json → opaque "null" origin. A
+    // targetOrigin of the iframe's URL-computed origin (e.g. chrome-extension://...)
+    // does NOT match and postMessage silently drops the message. Always use '*'
+    // — this channel is private between the dashboard and the Monaco iframe.
     try {
-      const origin = new URL(frame.src, location.href).origin;
-      frame.contentWindow.postMessage(msg, (origin && origin !== 'null') ? origin : '*');
-    } catch {
       frame.contentWindow.postMessage(msg, '*');
+    } catch {
+      // Fire-and-forget: iframe may have navigated or been detached.
     }
   }
 
