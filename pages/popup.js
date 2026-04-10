@@ -54,6 +54,7 @@
         emptyStateActions: document.getElementById('emptyStateActions'),
         btnEmptyFindScripts: document.getElementById('btnEmptyFindScripts'),
         btnEmptyNewScript: document.getElementById('btnEmptyNewScript'),
+        menuSection: document.getElementById('menuSection'),
         btnFindScripts: document.getElementById('btnFindScripts'),
         btnNewScript: document.getElementById('btnNewScript'),
         btnUtilities: document.getElementById('btnUtilities'),
@@ -290,6 +291,37 @@
         elements.btnClearPopupScriptSearch.hidden = !Boolean(elements.popupScriptSearch?.value?.trim());
     }
 
+    function updatePopupToolbarVisibility(displayScripts = pageScripts) {
+        if (!elements.popupScriptToolbar) return;
+        const totalMatched = Array.isArray(pageScripts) ? pageScripts.length : 0;
+        const hasSearch = Boolean(elements.popupScriptSearch?.value?.trim());
+        const hasFilter = getPopupActiveFilter() !== 'all';
+        const shouldShowToolbar = Boolean(currentUrl)
+            && canMatchScriptsForUrl(currentUrl)
+            && (totalMatched > 0 || hasSearch || hasFilter);
+        elements.popupScriptToolbar.hidden = !shouldShowToolbar;
+    }
+
+    function updatePrimaryActionMenuVisibility() {
+        const canFind = canMatchScriptsForUrl(currentUrl);
+        const emptyVisible = Boolean(elements.emptyState && elements.emptyState.style.display !== 'none');
+        const emptyFindVisible = emptyVisible && Boolean(elements.btnEmptyFindScripts && !elements.btnEmptyFindScripts.hidden);
+        const emptyCreateVisible = emptyVisible && Boolean(elements.btnEmptyNewScript && !elements.btnEmptyNewScript.hidden);
+
+        if (elements.btnFindScripts) {
+            elements.btnFindScripts.hidden = !canFind || emptyFindVisible;
+        }
+        if (elements.btnNewScript) {
+            elements.btnNewScript.hidden = emptyCreateVisible;
+        }
+        if (elements.menuSection) {
+            const primaryVisibleCount = [elements.btnFindScripts, elements.btnNewScript]
+                .filter((button) => button && !button.hidden)
+                .length;
+            elements.menuSection.classList.toggle('secondary-only', primaryVisibleCount === 0);
+        }
+    }
+
     function updatePopupFilterButtons() {
         const activeFilter = getPopupActiveFilter();
         elements.popupScriptFilters?.querySelectorAll('[data-popup-filter]').forEach((button) => {
@@ -449,6 +481,7 @@
         if (elements.emptyStateActions) {
             elements.emptyStateActions.hidden = !showFindScripts && !showCreateScript;
         }
+        updatePrimaryActionMenuVisibility();
     }
 
     // Contextual empty state hint
@@ -513,6 +546,7 @@
             showCreateScript: true,
             ...options
         });
+        updatePrimaryActionMenuVisibility();
     }
 
     function getDomainBadgeLabel(domain, maxLetters = 2) {
@@ -948,9 +982,11 @@
         displayScripts.sort((a, b) => (b.enabled !== false ? 1 : 0) - (a.enabled !== false ? 1 : 0));
         updatePageSummary(displayScripts);
         updatePopupListSummary(displayScripts);
+        updatePopupToolbarVisibility(displayScripts);
 
         const emptyState = document.getElementById('emptyState');
         if (displayScripts.length === 0) {
+            if (elements.scriptList) elements.scriptList.hidden = true;
             elements.scriptList.innerHTML = '';
             if (pageScripts.length > 0 && (searchValue || activeFilter !== 'all')) {
                 showPopupEmptyState(
@@ -962,9 +998,11 @@
                     { showFindScripts: false, showCreateScript: false }
                 );
             } else {
+                if (emptyState) emptyState.style.display = 'block';
                 updateEmptyStateHint();
             }
             if (emptyState) emptyState.style.display = 'block';
+            updatePrimaryActionMenuVisibility();
             syncTimeline();
             if (focusDescriptor) {
                 requestAnimationFrame(() => restorePopupFallbackFocus());
@@ -972,6 +1010,8 @@
             return;
         }
         if (emptyState) emptyState.style.display = 'none';
+        if (elements.scriptList) elements.scriptList.hidden = false;
+        updatePrimaryActionMenuVisibility();
 
         elements.scriptList.innerHTML = displayScripts.map((script, i) => {
             const meta = script.metadata || script.meta || {};
