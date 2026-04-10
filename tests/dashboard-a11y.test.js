@@ -177,40 +177,28 @@ describe("dashboard accessibility markup", () => {
     expect(doc.getElementById("btnClearSelection")).toBeNull();
   });
 
-  test("script workspace exposes quick filters, live results summary, and reset affordances", () => {
+  test("script workspace search and filter controls live in the toolbar without a secondary results bar", () => {
     const doc = parseDashboard();
     const clearSearch = doc.getElementById("btnClearScriptSearch");
-    const quickFilters = doc.getElementById("scriptQuickFilters");
-    const filterButtons = Array.from(doc.querySelectorAll("#scriptQuickFilters [data-filter-value]"));
-    const summary = doc.getElementById("scriptResultsSummary");
-    const resetView = doc.getElementById("btnClearScriptWorkspace");
+    const filterSelect = doc.getElementById("filterSelect");
+    const counter = doc.getElementById("scriptCounter");
+    const search = doc.getElementById("scriptSearch");
 
     expect(clearSearch).not.toBeNull();
     expect(clearSearch?.getAttribute("type")).toBe("button");
     expect(clearSearch?.getAttribute("aria-label")).toBe("Clear script search");
     expect(clearSearch?.hasAttribute("hidden")).toBe(true);
 
-    expect(quickFilters).not.toBeNull();
-    expect(quickFilters?.getAttribute("role")).toBe("group");
-    expect(quickFilters?.getAttribute("aria-label")).toBe("Script quick filters");
-    expect(filterButtons.map((button) => button.getAttribute("data-filter-value"))).toEqual([
-      "all",
-      "enabled",
-      "attention",
-      "pinned",
-      "local",
-      "remote",
-    ]);
-    expect(filterButtons.every((button) => button.getAttribute("type") === "button")).toBe(true);
+    expect(filterSelect).not.toBeNull();
+    expect(search).not.toBeNull();
+    expect(counter).not.toBeNull();
 
-    expect(summary).not.toBeNull();
-    expect(summary?.getAttribute("role")).toBe("status");
-    expect(summary?.getAttribute("aria-live")).toBe("polite");
-    expect(summary?.getAttribute("aria-atomic")).toBe("true");
-
-    expect(resetView).not.toBeNull();
-    expect(resetView?.getAttribute("type")).toBe("button");
-    expect(resetView?.hasAttribute("hidden")).toBe(true);
+    // Debloated away
+    expect(doc.getElementById("scriptQuickFilters")).toBeNull();
+    expect(doc.getElementById("scriptResultsSummary")).toBeNull();
+    expect(doc.getElementById("btnClearScriptWorkspace")).toBeNull();
+    expect(doc.querySelector(".scripts-results-bar")).toBeNull();
+    expect(doc.querySelector(".scripts-toolbar-right")).toBeNull();
   });
 
   test("script tab strip exposes a labeled group container", () => {
@@ -535,22 +523,22 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/function restoreScriptViewModeFromQuery\(\)/);
     expect(dashboardJs).toMatch(/function restoreScriptWorkspaceStateFromQuery\(\)/);
     expect(dashboardJs).toMatch(/function syncScriptWorkspaceStateToUrl\(\)/);
-    expect(dashboardJs).toMatch(/function updateScriptResultsSummary\(filtered = \[\]\)/);
-    expect(dashboardJs).toMatch(/function resetScriptWorkspaceView\(\)/);
     expect(dashboardJs).toMatch(/elements\.btnClearScriptSearch = document\.getElementById\('btnClearScriptSearch'\);/);
-    expect(dashboardJs).toMatch(/elements\.scriptQuickFilters = document\.getElementById\('scriptQuickFilters'\);/);
-    expect(dashboardJs).toMatch(/elements\.scriptResultsSummary = document\.getElementById\('scriptResultsSummary'\);/);
-    expect(dashboardJs).toMatch(/elements\.btnClearScriptWorkspace = document\.getElementById\('btnClearScriptWorkspace'\);/);
     expect(dashboardJs).toMatch(/restoreScriptWorkspaceStateFromQuery\(\);/);
-    expect(dashboardJs).toMatch(/updateScriptResultsSummary\(filtered\);/);
     expect(dashboardJs).toMatch(/syncScriptWorkspaceStateToUrl\(\);/);
     expect(dashboardJs).toMatch(/elements\.btnClearScriptSearch\?\.addEventListener\('click', \(\) => \{/);
-    expect(dashboardJs).toMatch(/elements\.scriptQuickFilters\?\.querySelectorAll\('\[data-filter-value\]'\)\?\./);
-    expect(dashboardJs).toMatch(/elements\.btnClearScriptWorkspace\?\.addEventListener\('click', resetScriptWorkspaceView\);/);
     expect(dashboardJs).toMatch(/class="script-name-button"/);
     expect(dashboardJs).toMatch(/tr\.querySelector\('\.script-name-button'\)\?\.addEventListener\('click', \(\) => openEditorForScript\(script\.id\)\);/);
     expect(dashboardJs).toMatch(/rel="noopener noreferrer"/);
     expect(dashboardJs).toMatch(/function describeScriptProvenance\(script\)/);
+
+    // Removed in the debloat pass
+    expect(dashboardJs).not.toMatch(/updateScriptResultsSummary/);
+    expect(dashboardJs).not.toMatch(/updateScriptQuickFilterButtons/);
+    expect(dashboardJs).not.toMatch(/resetScriptWorkspaceView/);
+    expect(dashboardJs).not.toMatch(/scriptQuickFilters/);
+    expect(dashboardJs).not.toMatch(/scriptResultsSummary/);
+    expect(dashboardJs).not.toMatch(/btnClearScriptWorkspace/);
   });
 });
 

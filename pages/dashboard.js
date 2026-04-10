@@ -82,24 +82,6 @@
         cloud: 'cloud utilities',
         diagnostics: 'diagnostic utilities'
     };
-    const SCRIPT_FILTER_LABELS = {
-        all: 'All Scripts',
-        enabled: 'Enabled',
-        disabled: 'Disabled',
-        attention: 'Needs Review',
-        pinned: 'Pinned',
-        local: 'Local Edits',
-        remote: 'Remote Source',
-        'has-errors': 'Has Errors',
-        'has-updates': 'Has Update URL',
-        'no-url': 'No Update URL',
-        'grant:xhr': 'Uses XHR',
-        'grant:storage': 'Uses Storage',
-        'grant:style': 'Uses AddStyle',
-        'grant:none': 'Grant None',
-        'scope:broad': 'Broad Match',
-        'scope:single': 'Single Site'
-    };
     const SCRIPT_SORT_LABELS = {
         order: 'Manual Order',
         enabled: 'Enabled',
@@ -507,7 +489,6 @@
         state.sortColumn = sort;
         state.sortDirection = dir;
         updateScriptSearchAffordances();
-        updateScriptQuickFilterButtons();
     }
 
     function syncScriptWorkspaceStateToUrl() {
@@ -538,80 +519,6 @@
         if (!elements.btnClearScriptSearch) return;
         const hasSearch = Boolean(elements.scriptSearch?.value?.trim());
         elements.btnClearScriptSearch.hidden = !hasSearch;
-    }
-
-    function updateScriptQuickFilterButtons() {
-        const activeFilter = elements.filterSelect?.value || 'all';
-        document.querySelectorAll('#scriptQuickFilters .script-filter-chip[data-filter-value]').forEach(button => {
-            const isActive = button.dataset.filterValue === activeFilter;
-            button.classList.toggle('active', isActive);
-            button.setAttribute('aria-pressed', String(isActive));
-        });
-    }
-
-    function updateScriptResultsSummary(filtered = []) {
-        if (!elements.scriptResultsSummary) return;
-
-        const total = state.scripts.length;
-        const shown = filtered.length;
-        const enabledCount = filtered.filter(script => script.enabled !== false).length;
-        const pinnedCount = filtered.filter(script => script.settings?.pinned).length;
-        const filterValue = elements.filterSelect?.value || 'all';
-        const searchValue = elements.scriptSearch?.value?.trim() || '';
-        const sortLabel = SCRIPT_SORT_LABELS[state.sortColumn] || 'Updated';
-        const sortDirectionLabel = state.sortDirection === 'asc' ? 'Ascending' : 'Descending';
-        const viewLabel = getCurrentScriptViewMode() === 'card' ? 'Cards' : 'Table';
-        const fragments = [
-            `<strong>${numberFormatter.format(shown)}</strong> visible`
-        ];
-
-        if (total !== shown) {
-            fragments.push(`${numberFormatter.format(total)} total`);
-        }
-        fragments.push(`${numberFormatter.format(enabledCount)} enabled`);
-        if (pinnedCount > 0) {
-            fragments.push(`${numberFormatter.format(pinnedCount)} pinned`);
-        }
-        fragments.push(`${sortLabel} ${state.sortDirection === 'asc' ? '↑' : '↓'}`);
-        if (filterValue !== 'all') {
-            fragments.push(`Filter: ${escapeHtml(SCRIPT_FILTER_LABELS[filterValue] || filterValue)}`);
-        }
-        if (searchValue) {
-            fragments.push(`Search: ${escapeHtml(searchValue)}`);
-        }
-        fragments.push(`View: ${viewLabel}`);
-
-        elements.scriptResultsSummary.innerHTML = fragments.join(' • ');
-
-        if (elements.btnClearScriptWorkspace) {
-            elements.btnClearScriptWorkspace.hidden = !(
-                searchValue ||
-                filterValue !== 'all' ||
-                state.sortColumn !== 'updated' ||
-                state.sortDirection !== 'desc' ||
-                viewLabel === 'Cards'
-            );
-        }
-    }
-
-    function resetScriptWorkspaceView() {
-        if (elements.scriptSearch) elements.scriptSearch.value = '';
-        if (elements.filterSelect) elements.filterSelect.value = 'all';
-        state.sortColumn = 'updated';
-        state.sortDirection = 'desc';
-        if (typeof CardView !== 'undefined' && typeof CardView.setViewMode === 'function') {
-            CardView.setViewMode('table');
-        } else {
-            try {
-                localStorage.setItem('sv_viewMode', 'table');
-            } catch {
-                // Ignore localStorage failures
-            }
-        }
-        updateSortIndicators();
-        updateScriptSearchAffordances();
-        updateScriptQuickFilterButtons();
-        renderScriptTable();
     }
 
     function getTransferPreferences() {
@@ -1290,9 +1197,6 @@
         elements.btnBulkApply = document.getElementById('btnBulkApply');
         elements.filterSelect = document.getElementById('filterSelect');
         elements.scriptCounter = document.getElementById('scriptCounter');
-        elements.scriptQuickFilters = document.getElementById('scriptQuickFilters');
-        elements.scriptResultsSummary = document.getElementById('scriptResultsSummary');
-        elements.btnClearScriptWorkspace = document.getElementById('btnClearScriptWorkspace');
 
         // Help button (header icon)
         elements.btnHelpTab = document.getElementById('btnHelpTab');
@@ -1708,15 +1612,11 @@
         if (!header) return;
         const headerH = header.offsetHeight;
         root.style.setProperty('--header-height', headerH + 'px');
-        // Stack the scripts toolbar + results bar under the sticky header so the
-        // table thead can dock right below all of them.
+        // Stack the scripts toolbar under the sticky header so the table thead
+        // can dock right below both.
         const toolbar = document.querySelector('.scripts-toolbar');
         const toolbarH = toolbar ? toolbar.offsetHeight : 0;
-        const toolbarBottom = headerH + toolbarH;
-        root.style.setProperty('--toolbar-bottom', toolbarBottom + 'px');
-        const resultsBar = document.querySelector('.scripts-results-bar');
-        const resultsH = resultsBar ? resultsBar.offsetHeight : 0;
-        root.style.setProperty('--results-bar-bottom', (toolbarBottom + resultsH) + 'px');
+        root.style.setProperty('--toolbar-bottom', (headerH + toolbarH) + 'px');
     }
 
     // Initialize
@@ -4409,8 +4309,7 @@
         syncScriptTableListSize(filtered.length);
         syncCardView(filtered);
         updateScriptSearchAffordances();
-        updateScriptQuickFilterButtons();
-        
+
         // Update script counter
         if (elements.scriptCounter) {
             const total = state.scripts.length;
@@ -4419,7 +4318,6 @@
             const formattedShown = numberFormatter.format(shown);
             elements.scriptCounter.textContent = total === shown ? `All ${formattedTotal} scripts` : `Showing ${formattedShown} of ${formattedTotal}`;
         }
-        updateScriptResultsSummary(filtered);
         syncScriptWorkspaceStateToUrl();
 
         if (filtered.length === 0) {
@@ -4556,15 +4454,6 @@
         const tags = script.metadata?.tag || script.metadata?.tags || [];
         const tagHtml = tags.map(t => `<span class="script-tag">${escapeHtml(t)}</span>`).join('');
 
-        // Conflict detection for table row
-        const conflicts = findConflictingScripts(script.id, matches);
-        const conflictHtml = conflicts.length > 0
-          ? `<span class="conflict-badge" title="Overlaps with: ${escapeHtml(conflicts.map(c => c.name).join(', '))}">! ${conflicts.length}</span>`
-          : '';
-        const syncConflictHtml = script.settings?.mergeConflict
-          ? '<span class="conflict-badge sync-conflict" title="Cloud merge conflict detected. Review this script in the info panel and save it once you are happy with the code.">Sync conflict</span>'
-          : '';
-
         // Health indicators
         const hasErrors = script.stats?.errors > 0;
         const daysSinceUpdate = script.updatedAt ? Math.floor((Date.now() - script.updatedAt) / 86400000) : 0;
@@ -4615,8 +4504,6 @@
                             ${slowHtml}
                             ${staleHtml}
                             ${tagHtml ? `<div class="script-tags">${tagHtml}</div>` : ''}
-                            ${conflictHtml}
-                            ${syncConflictHtml}
                         </div>
                     </div>
                 </div>
@@ -7399,20 +7286,8 @@
             queueScriptTableRender(true);
             elements.scriptSearch.focus();
         });
-        elements.scriptQuickFilters?.querySelectorAll('[data-filter-value]')?.forEach(button => {
-            button.addEventListener('click', () => {
-                if (!elements.filterSelect) return;
-                const nextFilter = button.dataset.filterValue || 'all';
-                if (!isValidScriptFilter(nextFilter)) return;
-                elements.filterSelect.value = nextFilter;
-                updateScriptQuickFilterButtons();
-                renderScriptTable();
-            });
-        });
-        elements.btnClearScriptWorkspace?.addEventListener('click', resetScriptWorkspaceView);
         elements.btnViewToggle?.addEventListener('click', () => {
             setTimeout(() => {
-                updateScriptResultsSummary(getFilteredScripts());
                 syncScriptWorkspaceStateToUrl();
             }, 0);
         });
@@ -7521,7 +7396,6 @@
         });
 
         elements.filterSelect?.addEventListener('change', () => {
-            updateScriptQuickFilterButtons();
             renderScriptTable(elements.scriptSearch?.value || '');
         });
         
