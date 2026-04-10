@@ -825,95 +825,6 @@
             transform: translateX(-50%) translateY(0);
         }
 
-        /* URL bar */
-        .url-bar {
-            display: none;
-            align-items: center;
-            gap: 8px;
-            padding: 4px 7px;
-            font-size: 11px;
-            color: var(--popup-text-dim);
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--popup-border);
-            border-radius: 13px;
-            overflow: hidden;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-        }
-
-        .url-bar.has-url {
-            display: flex;
-        }
-
-        .url-host {
-            flex-shrink: 0;
-            max-width: 45%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            color: var(--popup-text);
-            font-weight: 600;
-            padding: 2px 7px;
-            border-radius: 999px;
-            background: rgba(76, 175, 80, 0.12);
-        }
-
-        .url-path {
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            color: var(--popup-text-muted);
-        }
-
-        .page-summary {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            padding: 7px 9px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--popup-border);
-            border-radius: 13px;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-        }
-
-        .page-summary-copy {
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 1px;
-        }
-
-        .page-summary-title {
-            color: var(--popup-text);
-            font-size: 11.5px;
-            font-weight: 600;
-            letter-spacing: 0.01em;
-        }
-
-        .page-summary-meta {
-            color: var(--popup-text-muted);
-            font-size: 10.5px;
-            line-height: 1.25;
-            min-width: 0;
-            text-wrap: pretty;
-        }
-
-        .page-summary-count {
-            flex-shrink: 0;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 28px;
-            padding: 2px 7px;
-            border-radius: 999px;
-            background: rgba(76, 175, 80, 0.12);
-            color: var(--popup-text);
-            font-size: 10px;
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-        }
-
         .popup-script-toolbar {
             display: flex;
             flex-direction: column;
@@ -1038,54 +949,9 @@
             color: var(--popup-text);
         }
 
-        .popup-filter-chip:focus-visible,
-        .popup-toolbar-clear:focus-visible {
+        .popup-filter-chip:focus-visible {
             outline: 2px solid var(--popup-accent);
             outline-offset: 1px;
-        }
-
-        .popup-list-summary {
-            flex: 1 1 160px;
-            min-width: 0;
-            color: var(--popup-text-muted);
-            font-size: 10.5px;
-            line-height: 1.25;
-            text-wrap: pretty;
-        }
-
-        .popup-list-summary strong {
-            color: var(--popup-text);
-            font-weight: 600;
-        }
-
-        .popup-toolbar-clear {
-            min-height: 24px;
-            padding: 0 8px;
-            border: 1px solid var(--popup-border);
-            border-radius: 999px;
-            background: var(--popup-bg-raised);
-            color: var(--popup-text);
-            font: inherit;
-            font-size: 10.5px;
-            cursor: pointer;
-            transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
-        }
-
-        .popup-toolbar-clear:hover {
-            background: var(--popup-bg-hover);
-            border-color: rgba(76, 175, 80, 0.26);
-            transform: translateY(-1px);
-        }
-
-        /* Footer total count */
-        .footer-count {
-            margin-left: auto;
-            font-size: 11px;
-            font-variant-numeric: tabular-nums;
-            color: var(--popup-text-muted);
-            padding: 2px 7px;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.06);
         }
 
         /* Error indicator on script item */
@@ -1247,7 +1113,6 @@
 
         .header:disabled,
         .menu-item:disabled,
-        .empty-state-action:disabled,
         .script-more:disabled,
         .script-quick-edit:disabled {
             opacity: 0.58;
@@ -1258,33 +1123,6 @@
             .script-quick-edit {
                 opacity: 1;
             }
-        }
-
-        .feedback-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            color: var(--popup-text-muted);
-            font: inherit;
-            transition: color 0.15s;
-            text-decoration: none;
-        }
-
-        .feedback-link:hover,
-        .feedback-link:focus-visible {
-            color: var(--popup-accent);
-            text-decoration: underline;
-            text-decoration-color: rgba(76, 175, 80, 0.4);
-            text-underline-offset: 2px;
-        }
-
-        .popup-meta {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 2px;
-            font-size: 10px;
-            color: var(--popup-text-dim);
         }
 
         #emptyState {
@@ -1316,43 +1154,6 @@
             max-width: 290px;
             margin: 0 auto;
         }
-
-        .empty-state-actions {
-            display: flex;
-            justify-content: center;
-            gap: 6px;
-            flex-wrap: wrap;
-            margin-top: 8px;
-        }
-
-        .empty-state-action {
-            min-height: 28px;
-            padding: 0 11px;
-            border: 1px solid var(--popup-border);
-            border-radius: 999px;
-            background: var(--popup-bg-raised);
-            color: var(--popup-text);
-            font: inherit;
-            font-size: 11.5px;
-            cursor: pointer;
-            transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
-        }
-
-        .empty-state-action:hover {
-            background: var(--popup-bg-hover);
-            border-color: rgba(76, 175, 80, 0.28);
-            transform: translateY(-1px);
-        }
-
-        .empty-state-action.primary {
-            background: linear-gradient(135deg, rgba(76, 175, 80, 0.9), rgba(96, 165, 250, 0.85));
-            border-color: rgba(76, 175, 80, 0.4);
-            color: #fff;
-        }
-
-        .empty-state-action.primary:hover {
-            background: linear-gradient(135deg, rgba(76, 175, 80, 1), rgba(96, 165, 250, 0.92));
-        }
     </style>
 </head>
 <body>
@@ -1364,20 +1165,6 @@
         <span class="header-text">ScriptVault</span>
         <span class="header-count" id="headerCount"></span>
     </button>
-    <!-- Current URL bar -->
-    <div class="url-bar" id="urlBar">
-        <span class="url-host" id="urlHost"></span>
-        <span class="url-path" id="urlPath"></span>
-    </div>
-
-    <div class="page-summary" id="pageSummary" role="status" aria-live="polite" aria-atomic="true">
-        <div class="page-summary-copy">
-            <span class="page-summary-title" id="pageSummaryTitle">Checking this page…</span>
-            <span class="page-summary-meta" id="pageSummaryMeta">Loading matching scripts & current status.</span>
-        </div>
-        <span class="page-summary-count" id="pageSummaryCount">…</span>
-    </div>
-
     <div class="popup-script-toolbar" id="popupScriptToolbar" hidden>
         <label class="popup-search" for="popupScriptSearch">
             <svg class="popup-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1392,14 +1179,10 @@
                 <button type="button" class="popup-filter-chip active" data-popup-filter="all" aria-pressed="true">All</button>
                 <button type="button" class="popup-filter-chip" data-popup-filter="running" aria-pressed="false">Running</button>
                 <button type="button" class="popup-filter-chip" data-popup-filter="errors" aria-pressed="false">Errors</button>
-                <button type="button" class="popup-filter-chip" data-popup-filter="pinned" aria-pressed="false">Pinned</button>
-                <button type="button" class="popup-filter-chip" data-popup-filter="paused" aria-pressed="false">Paused</button>
             </div>
-            <span class="popup-list-summary" id="popupListSummary" role="status" aria-live="polite" aria-atomic="true">Loading scripts…</span>
-            <button type="button" class="popup-toolbar-clear" id="btnClearPopupScriptView" hidden>Reset</button>
         </div>
     </div>
-    
+
     <!-- Setup Warning Banner (Chrome 138+) -->
     <div class="setup-warning" id="setupWarning" role="status" aria-live="polite" aria-atomic="true">
         <div class="setup-warning-title">
@@ -1420,10 +1203,6 @@
             <div class="empty-state-icon" id="emptyStateIcon" aria-hidden="true">📜</div>
             <div class="empty-state-title" id="emptyStateTitle">No scripts for this page</div>
             <div class="empty-state-hint" id="emptyStateHint">Find scripts on GreasyFork or create your own</div>
-            <div class="empty-state-actions" id="emptyStateActions">
-                <button class="empty-state-action primary" id="btnEmptyFindScripts" type="button">Find Scripts…</button>
-                <button class="empty-state-action" id="btnEmptyNewScript" type="button">Create Script…</button>
-            </div>
         </div>
 
     <!-- Menu items -->
@@ -1489,14 +1268,7 @@
             </svg>
         </div>
         <span class="footer-text">Dashboard</span>
-        <span class="footer-count" id="footerTotalCount"></span>
     </button>
-
-    <!-- Shortcut hint & feedback -->
-    <div class="popup-meta">
-        <span>Alt+Shift+D Dashboard</span>
-        <a id="btnFeedback" class="feedback-link" href="https://github.com/SysAdminDoc/ScriptVault/issues/new" target="_blank" rel="noopener noreferrer">Feedback</a>
-    </div>
 
     <!-- Shared dropdown (positioned at body level to avoid overflow clipping) -->
     <div class="script-dropdown" id="scriptDropdown" role="menu" aria-label="Script actions" aria-hidden="true" hidden>
@@ -1509,7 +1281,6 @@
     </div>
 
     <script src="../shared/utils.js"></script>
-    <script src="popup-timeline.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>
