@@ -50,50 +50,24 @@ describe("popup UX markup", () => {
     expect([...dropdown?.querySelectorAll("button") || []].every((button) => button.getAttribute("role") === "menuitem")).toBe(true);
   });
 
-  test("popup script toolbar exposes search and quick filters", () => {
+  test("debloated popup drops the search toolbar, filter chips, page chrome, and timeline", () => {
     const doc = parsePopup();
-    const toolbar = doc.getElementById("popupScriptToolbar");
-    const search = doc.getElementById("popupScriptSearch");
-    const clearSearch = doc.getElementById("btnClearPopupScriptSearch");
-    const filters = doc.getElementById("popupScriptFilters");
-    const filterButtons = Array.from(doc.querySelectorAll("#popupScriptFilters [data-popup-filter]"));
-
-    expect(toolbar).not.toBeNull();
-    expect(toolbar?.hasAttribute("hidden")).toBe(true);
-
-    expect(search).not.toBeNull();
-    expect(search?.getAttribute("type")).toBe("search");
-    expect(search?.getAttribute("name")).toBe("popup_script_search");
-    expect(search?.getAttribute("autocomplete")).toBe("off");
-    expect(search?.getAttribute("spellcheck")).toBe("false");
-
-    expect(clearSearch).not.toBeNull();
-    expect(clearSearch?.getAttribute("type")).toBe("button");
-    expect(clearSearch?.getAttribute("aria-label")).toBe("Clear popup script search");
-    expect(clearSearch?.hasAttribute("hidden")).toBe(true);
-
-    expect(filters).not.toBeNull();
-    expect(filters?.getAttribute("role")).toBe("group");
-    expect(filters?.getAttribute("aria-label")).toBe("Script list filters");
-    expect(filterButtons.map((button) => button.getAttribute("data-popup-filter"))).toEqual([
-      "all",
-      "running",
-      "errors",
-    ]);
-    expect(filterButtons.every((button) => button.getAttribute("type") === "button")).toBe(true);
-
-    expect(doc.getElementById("popupListSummary")).toBeNull();
-    expect(doc.getElementById("btnClearPopupScriptView")).toBeNull();
-  });
-
-  test("debloated popup drops url bar, page summary, footer total, feedback link, and timeline", () => {
-    const doc = parsePopup();
+    expect(doc.getElementById("popupScriptToolbar")).toBeNull();
+    expect(doc.getElementById("popupScriptSearch")).toBeNull();
+    expect(doc.getElementById("btnClearPopupScriptSearch")).toBeNull();
+    expect(doc.getElementById("popupScriptFilters")).toBeNull();
+    expect(doc.querySelectorAll('[data-popup-filter]').length).toBe(0);
     expect(doc.getElementById("urlBar")).toBeNull();
     expect(doc.getElementById("pageSummary")).toBeNull();
     expect(doc.getElementById("footerTotalCount")).toBeNull();
     expect(doc.getElementById("btnFeedback")).toBeNull();
     expect(doc.querySelector(".popup-meta")).toBeNull();
     expect(popupHtml).not.toMatch(/popup-timeline\.js/);
+    expect(popupHtml).not.toMatch(/\.script-state-pill/);
+    expect(popupHtml).not.toMatch(/\.script-secondary/);
+    expect(popupHtml).not.toMatch(/\.script-perf/);
+    expect(popupHtml).not.toMatch(/\.script-status/);
+    expect(popupHtml).not.toMatch(/\.script-tag/);
   });
 
   test("popup script list exposes list semantics for keyboard scanning", () => {
@@ -108,29 +82,24 @@ describe("popup UX markup", () => {
 });
 
 describe("popup UX controller", () => {
-  test("popup controller centralizes toolbar, busy states, and submenu state", () => {
-    expect(popupJs).toMatch(/function updatePopupToolbarVisibility\(\)/);
+  test("popup controller centralizes busy states, focus, and submenu state", () => {
     expect(popupJs).toMatch(/function updatePrimaryActionMenuVisibility\(\)/);
     expect(popupJs).toMatch(/const busyControls = new WeakSet\(\);/);
     expect(popupJs).toMatch(/const pendingScriptActions = new Set\(\);/);
     expect(popupJs).toMatch(/async function runBusyControl\(control, task\)/);
     expect(popupJs).toMatch(/async function runScriptAction\(scriptId, task\)/);
     expect(popupJs).toMatch(/async function copyTextToClipboard\(text\)/);
-    expect(popupJs).toMatch(/function derivePopupHomepageUrl\(url\)/);
-    expect(popupJs).toMatch(/function describePopupScriptProvenance\(script\)/);
     expect(popupJs).toMatch(/function configureScriptDropdown\(scriptId\)/);
     expect(popupJs).toMatch(/let pendingPopupFocusDescriptor = null;/);
     expect(popupJs).toMatch(/function getDropdownMenuItems\(\)/);
     expect(popupJs).toMatch(/function getPopupFocusDescriptor\(control = document\.activeElement\)/);
     expect(popupJs).toMatch(/function resolvePopupFocusTarget\(descriptor\)/);
     expect(popupJs).toMatch(/function restorePopupFocus\(descriptor\)/);
-    expect(popupJs).toMatch(/function restorePopupFallbackFocus\(\)/);
     expect(popupJs).toMatch(/function queuePopupFocusRestore\(descriptor\)/);
     expect(popupJs).toMatch(/function focusDropdownMenuItem\(target = 0\)/);
     expect(popupJs).toMatch(/function openScriptDropdown\(scriptId, trigger, \{ focusTarget = 0 \} = \{\}\)/);
     expect(popupJs).toMatch(/function setUtilitiesSubmenuOpen\(isOpen, \{ restoreFocus = false \} = \{\}\)/);
     expect(popupJs).toMatch(/elements\.utilitiesSubmenu\.hidden = !isOpen;/);
-    expect(popupJs).toMatch(/elements\.popupScriptToolbar\.hidden = !shouldShowToolbar;/);
     expect(popupJs).toMatch(/elements\.btnFindScripts\.hidden = !canFind;/);
     expect(popupJs).toMatch(/if \(elements\.scriptList\) elements\.scriptList\.hidden = true;/);
     expect(popupJs).toMatch(/if \(elements\.scriptList\) elements\.scriptList\.hidden = false;/);
@@ -151,30 +120,23 @@ describe("popup UX controller", () => {
     expect(popupJs).toMatch(/openScriptDropdown\(scriptId, moreBtn, \{ focusTarget: -1 \}\);/);
   });
 
-  test("popup toolbar controller supports inline list filtering and keyboard search", () => {
-    expect(popupJs).toMatch(/function getPopupActiveFilter\(\)/);
-    expect(popupJs).toMatch(/function setPopupActiveFilter\(nextFilter = 'all'\)/);
+  test("popup script rows render only essential controls and keyboard navigation", () => {
     expect(popupJs).toMatch(/function getPopupScriptRows\(\)/);
     expect(popupJs).toMatch(/function focusPopupScriptRow\(row\)/);
-    expect(popupJs).toMatch(/function resetPopupScriptView\(\)/);
     expect(popupJs).toMatch(/role="listitem" tabindex="0"/);
     expect(popupJs).toMatch(/aria-posinset="\$\{i \+ 1\}" aria-setsize="\$\{displayScripts.length\}"/);
-    expect(popupJs).toMatch(/const provenance = describePopupScriptProvenance\(script\);/);
-    expect(popupJs).toMatch(/<span class="script-tag edited">Edited<\/span>/);
-    expect(popupJs).toMatch(/<span class="script-tag stale">Stale<\/span>/);
-    expect(popupJs).toMatch(/<span class="script-tag source"/);
+    expect(popupJs).not.toMatch(/script-state-pill/);
+    expect(popupJs).not.toMatch(/script-secondary/);
+    expect(popupJs).not.toMatch(/script-perf/);
+    expect(popupJs).not.toMatch(/script-status/);
+    expect(popupJs).not.toMatch(/script-tag/);
+    expect(popupJs).not.toMatch(/script-meta-row/);
+    expect(popupJs).not.toMatch(/describePopupScriptProvenance/);
+    expect(popupJs).not.toMatch(/popupScriptSearch/);
+    expect(popupJs).not.toMatch(/popupScriptFilters/);
+    expect(popupJs).not.toMatch(/getPopupActiveFilter/);
     expect(popupJs).toMatch(/const focusDescriptor = pendingPopupFocusDescriptor/);
     expect(popupJs).toMatch(/requestAnimationFrame\(\(\) => restorePopupFocus\(focusDescriptor\)\);/);
-    expect(popupJs).toMatch(/requestAnimationFrame\(\(\) => restorePopupFallbackFocus\(\)\);/);
-    expect(popupJs).toMatch(/elements\.popupScriptSearch\?\.value\?\.trim\(\)\.toLowerCase\(\) \|\| ''/);
-    expect(popupJs).toMatch(/const activeFilter = getPopupActiveFilter\(\);/);
-    expect(popupJs).toMatch(/No scripts matched "\$\{elements\.popupScriptSearch\?\.value\?\.trim\(\) \|\| ''\}" in the current view\./);
-    expect(popupJs).toMatch(/elements\.popupScriptSearch\?\.addEventListener\('input', \(\) => \{/);
-    expect(popupJs).toMatch(/elements\.btnClearPopupScriptSearch\?\.addEventListener\('click', \(\) => \{/);
-    expect(popupJs).toMatch(/elements\.popupScriptFilters\?\.querySelectorAll\('\[data-popup-filter\]'\)\?\./);
-    expect(popupJs).toMatch(/if \(\(e\.ctrlKey \|\| e\.metaKey\) && e\.key\.toLowerCase\(\) === 'f'\) \{/);
-    expect(popupJs).toMatch(/elements\.popupScriptSearch\?\.focus\(\);/);
-    expect(popupJs).toMatch(/elements\.popupScriptSearch\?\.select\?\.\(\);/);
     expect(popupJs).toMatch(/if \(\(e\.key === 'Enter' \|\| e\.key === ' '\) && e\.target === item\) \{/);
     expect(popupJs).toMatch(/if \(e\.key === 'ArrowDown'\) \{/);
     expect(popupJs).toMatch(/focusPopupScriptRow\(next\);/);
