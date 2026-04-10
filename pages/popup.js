@@ -36,24 +36,15 @@
     const elements = {
         headerToggle: document.getElementById('headerToggle'),
         headerCheckIcon: document.getElementById('headerCheckIcon'),
-        pageSummary: document.getElementById('pageSummary'),
-        pageSummaryTitle: document.getElementById('pageSummaryTitle'),
-        pageSummaryMeta: document.getElementById('pageSummaryMeta'),
-        pageSummaryCount: document.getElementById('pageSummaryCount'),
         popupScriptToolbar: document.getElementById('popupScriptToolbar'),
         popupScriptSearch: document.getElementById('popupScriptSearch'),
         btnClearPopupScriptSearch: document.getElementById('btnClearPopupScriptSearch'),
         popupScriptFilters: document.getElementById('popupScriptFilters'),
-        popupListSummary: document.getElementById('popupListSummary'),
-        btnClearPopupScriptView: document.getElementById('btnClearPopupScriptView'),
         scriptList: document.getElementById('scriptList'),
         emptyState: document.getElementById('emptyState'),
         emptyStateIcon: document.getElementById('emptyStateIcon'),
         emptyStateTitle: document.getElementById('emptyStateTitle'),
         emptyStateHint: document.getElementById('emptyStateHint'),
-        emptyStateActions: document.getElementById('emptyStateActions'),
-        btnEmptyFindScripts: document.getElementById('btnEmptyFindScripts'),
-        btnEmptyNewScript: document.getElementById('btnEmptyNewScript'),
         menuSection: document.getElementById('menuSection'),
         btnFindScripts: document.getElementById('btnFindScripts'),
         btnNewScript: document.getElementById('btnNewScript'),
@@ -84,19 +75,7 @@
         if (elements.scriptList) elements.scriptList.style.opacity = '1';
         setupEventListeners();
         updateEnabledState();
-        updateUrlBar();
-        updateFooterCount();
         updateEmptyStateHint();
-        updatePageSummary();
-
-        // v2.0: Initialize execution timeline
-        if (typeof PopupTimeline !== 'undefined') {
-            const footer = document.querySelector('.footer');
-            if (footer) {
-                PopupTimeline.init(footer, pageScripts);
-                syncTimeline();
-            }
-        }
     }
 
     // Load all scripts for total count
@@ -106,40 +85,6 @@
             allScripts = response?.scripts || [];
         } catch (e) {
             allScripts = [];
-        }
-    }
-
-    // Show current URL
-    function updateUrlBar() {
-        const urlBar = document.getElementById('urlBar');
-        const urlHost = document.getElementById('urlHost');
-        const urlPath = document.getElementById('urlPath');
-        if (urlBar && currentUrl) {
-            try {
-                const u = new URL(currentUrl);
-                const path = (u.pathname || '/') + (u.search || '');
-                if (urlHost) urlHost.textContent = u.hostname;
-                if (urlPath) urlPath.textContent = path;
-                urlBar.classList.add('has-url');
-            } catch {
-                if (urlHost) urlHost.textContent = '';
-                if (urlPath) urlPath.textContent = '';
-                urlBar.classList.remove('has-url');
-            }
-        } else if (urlBar) {
-            if (urlHost) urlHost.textContent = '';
-            if (urlPath) urlPath.textContent = '';
-            urlBar.classList.remove('has-url');
-        }
-    }
-
-    // Show total count in footer
-    function updateFooterCount() {
-        const el = document.getElementById('footerTotalCount');
-        if (el) {
-            const total = allScripts.length;
-            const active = allScripts.filter(s => s.enabled !== false).length;
-            el.textContent = `${numberFormatter.format(active)}/${numberFormatter.format(total)} scripts`;
         }
     }
 
@@ -222,66 +167,6 @@
         }
     }
 
-    function syncTimeline() {
-        if (typeof PopupTimeline !== 'undefined' && typeof PopupTimeline.update === 'function') {
-            PopupTimeline.update(pageScripts);
-        }
-    }
-
-    function updatePageSummary(displayScripts = pageScripts) {
-        if (!elements.pageSummaryTitle || !elements.pageSummaryMeta || !elements.pageSummaryCount) return;
-
-        if (!currentUrl) {
-            elements.pageSummaryTitle.textContent = 'No page selected';
-            elements.pageSummaryMeta.textContent = 'Open a website or local file to review matching scripts here.';
-            elements.pageSummaryCount.textContent = '0';
-            return;
-        }
-
-        if (!canMatchScriptsForUrl(currentUrl)) {
-            elements.pageSummaryTitle.textContent = 'Protected surface';
-            elements.pageSummaryMeta.textContent = 'Userscripts cannot run on browser, extension, and similar internal pages.';
-            elements.pageSummaryCount.textContent = 'Read-only';
-            return;
-        }
-
-        const totalMatched = Array.isArray(pageScripts) ? pageScripts.length : 0;
-        const visibleScripts = Array.isArray(displayScripts) ? displayScripts.length : totalMatched;
-
-        if (settings.enabled === false) {
-            elements.pageSummaryTitle.textContent = 'ScriptVault paused';
-            elements.pageSummaryMeta.textContent = totalMatched > 0
-                ? `${numberFormatter.format(totalMatched)} matching script${totalMatched === 1 ? '' : 's'} will resume when ScriptVault is enabled again.`
-                : 'Enable ScriptVault to run matching scripts on this page.';
-            elements.pageSummaryCount.textContent = 'Paused';
-            return;
-        }
-
-        if (totalMatched === 0) {
-            elements.pageSummaryTitle.textContent = 'No matching scripts';
-            elements.pageSummaryMeta.textContent = 'Search for a script for this site or create a new one for this page.';
-            elements.pageSummaryCount.textContent = '0';
-            return;
-        }
-
-        const runningCount = displayScripts.filter((script) => script.enabled !== false && script._matchesCurrent !== false).length;
-        const pausedCount = displayScripts.filter((script) => script.enabled === false).length;
-        const errorCount = displayScripts.filter((script) => Number(script?.stats?.errors || 0) > 0).length;
-        const hiddenCount = Math.max(0, totalMatched - visibleScripts);
-
-        elements.pageSummaryTitle.textContent = `${numberFormatter.format(totalMatched)} matching script${totalMatched === 1 ? '' : 's'}`;
-        elements.pageSummaryCount.textContent = hiddenCount > 0
-            ? `${numberFormatter.format(visibleScripts)}/${numberFormatter.format(totalMatched)}`
-            : numberFormatter.format(totalMatched);
-
-        const parts = [];
-        if (runningCount > 0) parts.push(`${numberFormatter.format(runningCount)} running`);
-        if (pausedCount > 0) parts.push(`${numberFormatter.format(pausedCount)} paused`);
-        if (errorCount > 0) parts.push(`${numberFormatter.format(errorCount)} with errors`);
-        if (hiddenCount > 0) parts.push(`${numberFormatter.format(hiddenCount)} hidden`);
-        elements.pageSummaryMeta.textContent = parts.join(' • ') || 'Ready to run on this page.';
-    }
-
     function getPopupActiveFilter() {
         return elements.popupScriptFilters?.querySelector('[data-popup-filter][aria-pressed="true"]')?.dataset.popupFilter || 'all';
     }
@@ -291,28 +176,25 @@
         elements.btnClearPopupScriptSearch.hidden = !Boolean(elements.popupScriptSearch?.value?.trim());
     }
 
-    function updatePopupToolbarVisibility(displayScripts = pageScripts) {
+    function updatePopupToolbarVisibility() {
         if (!elements.popupScriptToolbar) return;
         const totalMatched = Array.isArray(pageScripts) ? pageScripts.length : 0;
         const hasSearch = Boolean(elements.popupScriptSearch?.value?.trim());
         const hasFilter = getPopupActiveFilter() !== 'all';
+        // Gate toolbar on script count >= 6 (or active search/filter state)
         const shouldShowToolbar = Boolean(currentUrl)
             && canMatchScriptsForUrl(currentUrl)
-            && (totalMatched > 0 || hasSearch || hasFilter);
+            && (totalMatched >= 6 || hasSearch || hasFilter);
         elements.popupScriptToolbar.hidden = !shouldShowToolbar;
     }
 
     function updatePrimaryActionMenuVisibility() {
         const canFind = canMatchScriptsForUrl(currentUrl);
-        const emptyVisible = Boolean(elements.emptyState && elements.emptyState.style.display !== 'none');
-        const emptyFindVisible = emptyVisible && Boolean(elements.btnEmptyFindScripts && !elements.btnEmptyFindScripts.hidden);
-        const emptyCreateVisible = emptyVisible && Boolean(elements.btnEmptyNewScript && !elements.btnEmptyNewScript.hidden);
-
         if (elements.btnFindScripts) {
-            elements.btnFindScripts.hidden = !canFind || emptyFindVisible;
+            elements.btnFindScripts.hidden = !canFind;
         }
         if (elements.btnNewScript) {
-            elements.btnNewScript.hidden = emptyCreateVisible;
+            elements.btnNewScript.hidden = false;
         }
         if (elements.menuSection) {
             const primaryVisibleCount = [elements.btnFindScripts, elements.btnNewScript]
@@ -332,48 +214,13 @@
     }
 
     function setPopupActiveFilter(nextFilter = 'all') {
-        const validFilters = new Set(['all', 'running', 'errors', 'pinned', 'paused']);
+        const validFilters = new Set(['all', 'running', 'errors']);
         const normalizedFilter = validFilters.has(nextFilter) ? nextFilter : 'all';
         elements.popupScriptFilters?.querySelectorAll('[data-popup-filter]').forEach((button) => {
             const isActive = button.dataset.popupFilter === normalizedFilter;
             button.classList.toggle('active', isActive);
             button.setAttribute('aria-pressed', String(isActive));
         });
-    }
-
-    function updatePopupListSummary(displayScripts = pageScripts) {
-        if (!elements.popupListSummary || !elements.btnClearPopupScriptView) return;
-        const total = Array.isArray(pageScripts) ? pageScripts.length : 0;
-        const visible = Array.isArray(displayScripts) ? displayScripts.length : 0;
-        const running = displayScripts.filter((script) => script.enabled !== false && script._matchesCurrent !== false).length;
-        const activeFilter = getPopupActiveFilter();
-        const searchValue = elements.popupScriptSearch?.value?.trim() || '';
-        const filterLabel = activeFilter === 'all'
-            ? ''
-            : activeFilter === 'running'
-                ? 'Running'
-                : activeFilter === 'errors'
-                    ? 'Errors'
-                    : activeFilter === 'pinned'
-                        ? 'Pinned'
-                        : 'Paused';
-        const parts = [`<strong>${numberFormatter.format(visible)}</strong> visible`];
-
-        if (total !== visible) {
-            parts.push(`${numberFormatter.format(total)} total`);
-        }
-        if (running > 0) {
-            parts.push(`${numberFormatter.format(running)} running`);
-        }
-        if (filterLabel) {
-            parts.push(`Filter: ${filterLabel}`);
-        }
-        if (searchValue) {
-            parts.push(`Search: ${escapeHtml(searchValue)}`);
-        }
-
-        elements.popupListSummary.innerHTML = parts.join(' • ') || '<strong>0</strong> visible';
-        elements.btnClearPopupScriptView.hidden = !(searchValue || activeFilter !== 'all');
     }
 
     function getPopupScriptRows() {
@@ -435,20 +282,7 @@
 
     function restorePopupFallbackFocus() {
         const searchInput = elements.popupScriptSearch;
-        const resetButton = elements.btnClearPopupScriptView;
-        const hasSearch = Boolean(searchInput?.value?.trim());
-        const hasFilter = getPopupActiveFilter() !== 'all';
-        const target = hasSearch && searchInput instanceof HTMLInputElement
-            ? searchInput
-            : hasFilter && resetButton instanceof HTMLButtonElement && !resetButton.hidden
-                ? resetButton
-                : elements.btnEmptyFindScripts instanceof HTMLButtonElement && !elements.btnEmptyFindScripts.hidden
-                    ? elements.btnEmptyFindScripts
-                    : elements.btnEmptyNewScript instanceof HTMLButtonElement && !elements.btnEmptyNewScript.hidden
-                        ? elements.btnEmptyNewScript
-                        : searchInput instanceof HTMLInputElement
-                            ? searchInput
-                            : null;
+        const target = searchInput instanceof HTMLInputElement ? searchInput : null;
         if (!(target instanceof HTMLElement)) return;
         target.focus({ preventScroll: true });
         if (target instanceof HTMLInputElement) {
@@ -475,24 +309,14 @@
         renderScriptList();
     }
 
-    function updateEmptyStateActions({ showFindScripts = canMatchScriptsForUrl(currentUrl), showCreateScript = true } = {}) {
-        if (elements.btnEmptyFindScripts) elements.btnEmptyFindScripts.hidden = !showFindScripts;
-        if (elements.btnEmptyNewScript) elements.btnEmptyNewScript.hidden = !showCreateScript;
-        if (elements.emptyStateActions) {
-            elements.emptyStateActions.hidden = !showFindScripts && !showCreateScript;
-        }
-        updatePrimaryActionMenuVisibility();
-    }
-
     // Contextual empty state hint
     function updateEmptyStateHint() {
         const el = elements.emptyStateHint;
         if (!el) return;
         el.textContent = 'Find scripts on GreasyFork or create your own.';
-        updateEmptyStateActions();
+        updatePrimaryActionMenuVisibility();
         if (!canMatchScriptsForUrl(currentUrl)) {
             el.textContent = 'Switch to a regular website or local file to search for matching scripts.';
-            updateEmptyStateActions({ showFindScripts: false, showCreateScript: true });
             return;
         }
         try {
@@ -534,18 +358,13 @@
         }
     }
 
-    function showPopupEmptyState(title, description, iconText = '\uD83D\uDCDC', options = {}) {
+    function showPopupEmptyState(title, description, iconText = '\uD83D\uDCDC') {
         const emptyState = elements.emptyState;
         if (!emptyState) return;
         emptyState.style.display = 'block';
         if (elements.emptyStateIcon) elements.emptyStateIcon.textContent = iconText;
         if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = title;
         if (elements.emptyStateHint) elements.emptyStateHint.textContent = description;
-        updateEmptyStateActions({
-            showFindScripts: canMatchScriptsForUrl(currentUrl),
-            showCreateScript: true,
-            ...options
-        });
         updatePrimaryActionMenuVisibility();
     }
 
@@ -956,12 +775,6 @@
                 if (activeFilter === 'errors') {
                     return Number(script?.stats?.errors || 0) > 0;
                 }
-                if (activeFilter === 'pinned') {
-                    return script.settings?.pinned === true;
-                }
-                if (activeFilter === 'paused') {
-                    return script.enabled === false;
-                }
                 return true;
             });
         }
@@ -980,9 +793,7 @@
 
         // Always bump enabled scripts to the top
         displayScripts.sort((a, b) => (b.enabled !== false ? 1 : 0) - (a.enabled !== false ? 1 : 0));
-        updatePageSummary(displayScripts);
-        updatePopupListSummary(displayScripts);
-        updatePopupToolbarVisibility(displayScripts);
+        updatePopupToolbarVisibility();
 
         const emptyState = document.getElementById('emptyState');
         if (displayScripts.length === 0) {
@@ -994,8 +805,7 @@
                     searchValue
                         ? `No scripts matched "${elements.popupScriptSearch?.value?.trim() || ''}" in the current view.`
                         : `No ${activeFilter} scripts are visible for this page right now.`,
-                    '🔎',
-                    { showFindScripts: false, showCreateScript: false }
+                    '🔎'
                 );
             } else {
                 if (emptyState) emptyState.style.display = 'block';
@@ -1003,7 +813,6 @@
             }
             if (emptyState) emptyState.style.display = 'block';
             updatePrimaryActionMenuVisibility();
-            syncTimeline();
             if (focusDescriptor) {
                 requestAnimationFrame(() => restorePopupFallbackFocus());
             }
@@ -1293,7 +1102,6 @@
             });
         }
 
-        syncTimeline();
         if (focusDescriptor) {
             requestAnimationFrame(() => restorePopupFocus(focusDescriptor));
         }
@@ -1379,7 +1187,6 @@
                 // Re-render so enabled sort + visual state updates
                 renderScriptList();
                 updateEnabledState();
-                updateFooterCount();
                 updateBadgeForTab();
             } catch (error) {
                 console.error('Failed to toggle script:', error);
@@ -1404,7 +1211,6 @@
                 allScripts = allScripts.filter(s => s.id !== scriptId);
                 renderScriptList();
                 updateEnabledState();
-                updateFooterCount();
                 updateBadgeForTab();
                 const deletedName = result?.scriptName || 'Script deleted';
                 showPopupToast(`Deleted ${deletedName}`);
@@ -1429,8 +1235,7 @@
 
             settings.enabled = result?.enabled ?? newEnabled;
             updateEnabledState();
-            updatePageSummary();
-            
+
             // Update badge
             updateBadgeForTab();
             showPopupToast(settings.enabled === false ? 'ScriptVault paused' : 'ScriptVault enabled');
@@ -1573,7 +1378,6 @@
                 // Reload and close
                 await loadAllScripts();
                 await loadPageScripts();
-                updateFooterCount();
                 updateBadgeForTab();
                 showPopupToast(formatImportSummary(result) || `Imported ${file.name}`);
             } catch (error) {
@@ -1691,15 +1495,12 @@
                 renderScriptList();
             });
         });
-        elements.btnClearPopupScriptView?.addEventListener('click', resetPopupScriptView);
 
         // Find scripts
         elements.btnFindScripts?.addEventListener('click', findScripts);
-        elements.btnEmptyFindScripts?.addEventListener('click', findScripts);
 
         // New script
         elements.btnNewScript?.addEventListener('click', createNewScript);
-        elements.btnEmptyNewScript?.addEventListener('click', createNewScript);
 
         // Utilities submenu toggle
         elements.btnUtilities?.addEventListener('click', async () => {
