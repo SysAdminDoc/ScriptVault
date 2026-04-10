@@ -35,8 +35,7 @@
             lastRuntimeRepairAt: 0
         },
         backups: [],
-        backupSettings: null,
-        bulkActionFeedback: null
+        backupSettings: null
     };
 
     // DOM Elements
@@ -317,24 +316,7 @@
         return BULK_ACTION_LABELS[action] || 'Apply';
     }
 
-    function setBulkActionFeedback(summary = '', { tone = 'info', detail = '' } = {}) {
-        state.bulkActionFeedback = summary ? { summary, detail, tone } : null;
-        if (!elements.bulkActionFeedback) return;
-
-        const hasFeedback = Boolean(summary);
-        elements.bulkActionFeedback.hidden = !hasFeedback;
-        elements.bulkActionFeedback.dataset.tone = hasFeedback ? tone : 'idle';
-
-        const nextText = detail ? `${summary} ${detail}` : summary;
-        elements.bulkActionFeedback.textContent = nextText;
-        if (hasFeedback) {
-            elements.bulkActionFeedback.title = nextText;
-        } else {
-            elements.bulkActionFeedback.removeAttribute('title');
-        }
-    }
-
-    function buildBulkActionFeedback(action, result) {
+    function buildBulkActionToast(action, result) {
         const totalCount = result.totalCount || 0;
         const successCount = result.successCount || 0;
         const failureCount = result.failureCount || 0;
@@ -470,7 +452,7 @@
                 }
             }
 
-            const feedback = buildBulkActionFeedback(action, {
+            const feedback = buildBulkActionToast(action, {
                 totalCount: ids.length,
                 successCount: succeededIds.length,
                 failureCount: failures.length,
@@ -478,7 +460,6 @@
                 failures,
                 skipped,
             });
-            setBulkActionFeedback(feedback.summary, { tone: feedback.tone, detail: feedback.detail });
             showToast(feedback.summary, feedback.tone);
             return { succeededIds, failures, skipped, feedback };
         } finally {
@@ -1307,11 +1288,6 @@
         elements.bulkSelectAll = document.getElementById('bulkSelectAll');
         elements.bulkActionSelect = document.getElementById('bulkActionSelect');
         elements.btnBulkApply = document.getElementById('btnBulkApply');
-        elements.bulkSelectionRail = document.getElementById('bulkSelectionRail');
-        elements.bulkSelectionSummary = document.getElementById('bulkSelectionSummary');
-        elements.bulkSelectionMeta = document.getElementById('bulkSelectionMeta');
-        elements.bulkActionFeedback = document.getElementById('bulkActionFeedback');
-        elements.btnClearSelection = document.getElementById('btnClearSelection');
         elements.filterSelect = document.getElementById('filterSelect');
         elements.scriptCounter = document.getElementById('scriptCounter');
         elements.scriptQuickFilters = document.getElementById('scriptQuickFilters');
@@ -4128,9 +4104,6 @@
         }
         const hasAction = Boolean(elements.bulkActionSelect?.value);
         const formattedTotalSelected = numberFormatter.format(totalSelectedCount);
-        const formattedVisibleSelected = numberFormatter.format(visibleSelectedCount);
-        const formattedHiddenSelected = numberFormatter.format(hiddenSelectedCount);
-        const formattedFiltered = numberFormatter.format(filteredCount);
         const selectionLabel = totalSelectedCount === 1 ? 'script' : 'scripts';
 
         if (elements.bulkActionSelect) {
@@ -4155,56 +4128,6 @@
             elements.btnBulkApply.setAttribute('aria-label', elements.btnBulkApply.title);
         }
 
-        if (elements.btnClearSelection) {
-            elements.btnClearSelection.disabled = !hasSelection;
-            elements.btnClearSelection.setAttribute('aria-disabled', String(!hasSelection));
-        }
-
-        if (elements.bulkSelectionRail) {
-            const selectionStateValue = !hasSelection ? 'idle' : hiddenSelectedCount > 0 ? 'mixed' : 'active';
-            elements.bulkSelectionRail.hidden = state.scripts.length === 0;
-            elements.bulkSelectionRail.dataset.selectionState = selectionStateValue;
-        }
-
-        if (elements.bulkSelectionSummary) {
-            const selectionStateValue = !hasSelection ? 'idle' : hiddenSelectedCount > 0 ? 'mixed' : 'active';
-            elements.bulkSelectionSummary.dataset.selectionState = selectionStateValue;
-            elements.bulkSelectionSummary.textContent = !hasSelection
-                ? 'No scripts selected'
-                : hiddenSelectedCount > 0
-                    ? `${formattedTotalSelected} selected across the workspace`
-                    : `${formattedTotalSelected} selected`;
-        }
-
-        if (elements.bulkSelectionMeta) {
-            if (!hasSelection) {
-                elements.bulkSelectionMeta.textContent = hasVisibleScripts
-                    ? 'Select scripts in this view to enable, export, update, reset, or delete them in batches.'
-                    : 'Adjust the current search or filter to reveal scripts before selecting them.';
-                return;
-            }
-
-            if (!hasVisibleScripts && hiddenSelectedCount > 0) {
-                elements.bulkSelectionMeta.textContent = `${formattedHiddenSelected} selected ${hiddenSelectedCount === 1 ? 'script is' : 'scripts are'} hidden by the current search or filter. Clear the view or clear the selection before applying an action.`;
-                return;
-            }
-
-            if (hiddenSelectedCount > 0) {
-                elements.bulkSelectionMeta.textContent = `${formattedVisibleSelected} shown in this view and ${formattedHiddenSelected} hidden by the current search or filter.`;
-                return;
-            }
-
-            const selectionHint = getCurrentScriptViewMode() === 'card'
-                ? 'Use the Select control on each card to build a batch faster.'
-                : 'Shift-click a checkbox to select a range faster.';
-
-            if (allVisibleSelected && filteredCount > 0) {
-                elements.bulkSelectionMeta.textContent = `All ${formattedFiltered} shown ${filteredCount === 1 ? 'script is' : 'scripts are'} selected. ${selectionHint}`;
-                return;
-            }
-
-            elements.bulkSelectionMeta.textContent = `${formattedVisibleSelected} of ${formattedFiltered} shown ${filteredCount === 1 ? 'script is' : 'scripts are'} selected. ${selectionHint}`;
-        }
     }
     
     // Update bulk selection checkboxes
@@ -4316,10 +4239,6 @@
                 a.download = `scriptvault-export-${Date.now()}.json`;
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
-                setBulkActionFeedback(`Exported ${numberFormatter.format(exportData.scripts.length)} ${exportData.scripts.length === 1 ? 'script' : 'scripts'}.`, {
-                    tone: 'success',
-                    detail: 'Ready to import or archive.',
-                });
                 showToast(`Exported ${numberFormatter.format(exportData.scripts.length)} ${exportData.scripts.length === 1 ? 'script' : 'scripts'}`, 'success');
                 break;
             }
@@ -7589,11 +7508,6 @@
         });
         
         elements.bulkActionSelect?.addEventListener('change', () => {
-            updateBulkCheckboxes();
-        });
-        elements.btnClearSelection?.addEventListener('click', () => {
-            state.selectedScripts.clear();
-            state._lastCheckedId = null;
             updateBulkCheckboxes();
         });
         elements.btnBulkApply?.addEventListener('click', async event => {
