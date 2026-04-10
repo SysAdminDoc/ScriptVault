@@ -1129,15 +1129,16 @@
                 linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120px),
                 var(--bg-content);
             border: 1px solid rgba(127, 127, 127, 0.18);
-            border-radius: 12px 12px 24px 24px;
+            border-radius: 8px 8px 24px 24px;
             box-shadow: 0 22px 44px rgba(0, 0, 0, 0.18);
-            overflow: clip;
+            overflow: hidden;
         }
 
         /* Table */
         .scripts-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             background: transparent;
         }
 
@@ -1158,6 +1159,14 @@
             color: var(--text-muted);
             border-bottom: 2px solid var(--border-section);
             font-variant-numeric: tabular-nums;
+        }
+
+        .scripts-table thead th:first-child {
+            border-top-left-radius: 7px;
+        }
+
+        .scripts-table thead th:last-child {
+            border-top-right-radius: 7px;
         }
 
         .scripts-table th.sortable {
@@ -4415,7 +4424,7 @@
             #scriptsPanel { padding: 16px 10px 0; }
             .scripts-shell-copy h2 { font-size: 24px; }
             .scripts-toolbar { padding: 10px; border-radius: 18px; }
-            .scripts-table-container { border-radius: 10px 10px 20px 20px; overflow-x: auto; }
+            .scripts-table-container { border-radius: 8px 8px 20px 20px; overflow-x: auto; overflow-y: hidden; }
             .scripts-table .col-source,
             .scripts-table .col-runs { display: none; }
             .search-box { max-width: none; flex-basis: 100%; }
@@ -4927,7 +4936,7 @@
 
         .scripts-table-container {
             border-color: var(--panel-border-soft);
-            border-radius: 14px 14px 28px 28px;
+            border-radius: 10px 10px 28px 28px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 150px),
                 var(--bg-content);
