@@ -36,10 +36,6 @@
     const elements = {
         headerToggle: document.getElementById('headerToggle'),
         headerCheckIcon: document.getElementById('headerCheckIcon'),
-        popupScriptToolbar: document.getElementById('popupScriptToolbar'),
-        popupScriptSearch: document.getElementById('popupScriptSearch'),
-        btnClearPopupScriptSearch: document.getElementById('btnClearPopupScriptSearch'),
-        popupScriptFilters: document.getElementById('popupScriptFilters'),
         scriptList: document.getElementById('scriptList'),
         emptyState: document.getElementById('emptyState'),
         emptyStateIcon: document.getElementById('emptyStateIcon'),
@@ -167,27 +163,6 @@
         }
     }
 
-    function getPopupActiveFilter() {
-        return elements.popupScriptFilters?.querySelector('[data-popup-filter][aria-pressed="true"]')?.dataset.popupFilter || 'all';
-    }
-
-    function updatePopupSearchAffordances() {
-        if (!elements.btnClearPopupScriptSearch) return;
-        elements.btnClearPopupScriptSearch.hidden = !Boolean(elements.popupScriptSearch?.value?.trim());
-    }
-
-    function updatePopupToolbarVisibility() {
-        if (!elements.popupScriptToolbar) return;
-        const totalMatched = Array.isArray(pageScripts) ? pageScripts.length : 0;
-        const hasSearch = Boolean(elements.popupScriptSearch?.value?.trim());
-        const hasFilter = getPopupActiveFilter() !== 'all';
-        // Gate toolbar on script count >= 6 (or active search/filter state)
-        const shouldShowToolbar = Boolean(currentUrl)
-            && canMatchScriptsForUrl(currentUrl)
-            && (totalMatched >= 6 || hasSearch || hasFilter);
-        elements.popupScriptToolbar.hidden = !shouldShowToolbar;
-    }
-
     function updatePrimaryActionMenuVisibility() {
         const canFind = canMatchScriptsForUrl(currentUrl);
         if (elements.btnFindScripts) {
@@ -202,25 +177,6 @@
                 .length;
             elements.menuSection.classList.toggle('secondary-only', primaryVisibleCount === 0);
         }
-    }
-
-    function updatePopupFilterButtons() {
-        const activeFilter = getPopupActiveFilter();
-        elements.popupScriptFilters?.querySelectorAll('[data-popup-filter]').forEach((button) => {
-            const isActive = button.dataset.popupFilter === activeFilter;
-            button.classList.toggle('active', isActive);
-            button.setAttribute('aria-pressed', String(isActive));
-        });
-    }
-
-    function setPopupActiveFilter(nextFilter = 'all') {
-        const validFilters = new Set(['all', 'running', 'errors']);
-        const normalizedFilter = validFilters.has(nextFilter) ? nextFilter : 'all';
-        elements.popupScriptFilters?.querySelectorAll('[data-popup-filter]').forEach((button) => {
-            const isActive = button.dataset.popupFilter === normalizedFilter;
-            button.classList.toggle('active', isActive);
-            button.setAttribute('aria-pressed', String(isActive));
-        });
     }
 
     function getPopupScriptRows() {
@@ -280,16 +236,6 @@
         target.scrollIntoView?.({ block: 'nearest' });
     }
 
-    function restorePopupFallbackFocus() {
-        const searchInput = elements.popupScriptSearch;
-        const target = searchInput instanceof HTMLInputElement ? searchInput : null;
-        if (!(target instanceof HTMLElement)) return;
-        target.focus({ preventScroll: true });
-        if (target instanceof HTMLInputElement) {
-            target.select?.();
-        }
-    }
-
     function queuePopupFocusRestore(descriptor) {
         if (!descriptor) return;
         pendingPopupFocusDescriptor = descriptor;
@@ -299,14 +245,6 @@
         if (!(row instanceof HTMLElement)) return;
         row.focus();
         row.scrollIntoView?.({ block: 'nearest' });
-    }
-
-    function resetPopupScriptView() {
-        if (elements.popupScriptSearch) elements.popupScriptSearch.value = '';
-        updatePopupSearchAffordances();
-        setPopupActiveFilter('all');
-        updatePopupFilterButtons();
-        renderScriptList();
     }
 
     // Contextual empty state hint
@@ -591,74 +529,6 @@
         return Array.from(dropdown.querySelectorAll('[role="menuitem"]:not([disabled])'));
     }
 
-    function derivePopupHomepageUrl(url) {
-        if (!url) return '';
-        try {
-            const parsed = new URL(url);
-            if (/raw\.githubusercontent\.com/i.test(parsed.hostname)) {
-                const parts = parsed.pathname.split('/').filter(Boolean);
-                if (parts.length >= 4) {
-                    return `https://github.com/${parts[0]}/${parts[1]}`;
-                }
-            }
-            parsed.search = '';
-            parsed.hash = '';
-            return `${parsed.protocol}//${parsed.host}`;
-        } catch {
-            return '';
-        }
-    }
-
-    function describePopupScriptProvenance(script) {
-        const metadata = script?.metadata || script?.meta || {};
-        const downloadUrl = metadata.downloadURL || '';
-        const updateUrl = metadata.updateURL || '';
-        const homepageUrl = metadata.homepage || metadata.homepageURL || derivePopupHomepageUrl(downloadUrl) || derivePopupHomepageUrl(updateUrl) || '';
-        const primaryUrl = downloadUrl || updateUrl || homepageUrl || '';
-        const provenance = {
-            label: 'Local',
-            detail: 'No remote update channel is declared.',
-            sourceUrl: primaryUrl
-        };
-
-        if (primaryUrl) {
-            try {
-                const host = new URL(primaryUrl).hostname.replace(/^www\./, '');
-                provenance.label = host;
-                provenance.detail = downloadUrl && updateUrl && downloadUrl !== updateUrl
-                    ? 'Separate install and update channels are declared.'
-                    : (downloadUrl || updateUrl)
-                        ? 'Remote update channel declared in metadata.'
-                        : 'Linked from metadata only.';
-            } catch {
-                provenance.label = 'Remote';
-                provenance.detail = 'Metadata includes an external source URL.';
-            }
-        }
-
-        if (/greasyfork\.org/i.test(primaryUrl)) {
-            provenance.label = 'Greasy Fork';
-            provenance.detail = 'Remote update channel declared on Greasy Fork.';
-        } else if (/openuserjs\.org/i.test(primaryUrl)) {
-            provenance.label = 'OpenUserJS';
-            provenance.detail = 'Remote update channel declared on OpenUserJS.';
-        } else if (/(github\.com|raw\.githubusercontent\.com)/i.test(primaryUrl)) {
-            provenance.label = 'GitHub';
-            provenance.detail = 'Script metadata points to GitHub-hosted source.';
-        } else if (/gitlab\.com/i.test(primaryUrl)) {
-            provenance.label = 'GitLab';
-            provenance.detail = 'Script metadata points to GitLab-hosted source.';
-        }
-
-        if (script?.settings?.userModified) {
-            provenance.detail = primaryUrl
-                ? 'Local edits are present; review remote URLs before trusting future updates.'
-                : 'Local edits are present and no remote source is declared.';
-        }
-
-        return provenance;
-    }
-
     function configureScriptDropdown(scriptId) {
         const dropdown = document.getElementById('scriptDropdown');
         if (!dropdown) return;
@@ -742,41 +612,13 @@
             || (elements.scriptList.contains(document.activeElement) ? getPopupFocusDescriptor(document.activeElement) : null);
         pendingPopupFocusDescriptor = null;
         closeScriptDropdown();
-        updatePopupSearchAffordances();
-        updatePopupFilterButtons();
 
         // Work on a copy to avoid mutating the canonical pageScripts array
         let displayScripts = [...pageScripts];
-        const searchValue = elements.popupScriptSearch?.value?.trim().toLowerCase() || '';
-        const activeFilter = getPopupActiveFilter();
 
         // Filter: hide disabled scripts if setting enabled
         if (settings.hideDisabledPopup) {
             displayScripts = displayScripts.filter(s => s.enabled !== false);
-        }
-
-        if (searchValue) {
-            displayScripts = displayScripts.filter((script) => {
-                const meta = script.metadata || script.meta || {};
-                const name = meta.name || '';
-                const description = meta.description || '';
-                const author = meta.author || '';
-                return name.toLowerCase().includes(searchValue)
-                    || description.toLowerCase().includes(searchValue)
-                    || author.toLowerCase().includes(searchValue);
-            });
-        }
-
-        if (activeFilter !== 'all') {
-            displayScripts = displayScripts.filter((script) => {
-                if (activeFilter === 'running') {
-                    return script.enabled !== false && script._matchesCurrent !== false;
-                }
-                if (activeFilter === 'errors') {
-                    return Number(script?.stats?.errors || 0) > 0;
-                }
-                return true;
-            });
         }
 
         // Sort scripts based on scriptOrder setting
@@ -793,29 +635,14 @@
 
         // Always bump enabled scripts to the top
         displayScripts.sort((a, b) => (b.enabled !== false ? 1 : 0) - (a.enabled !== false ? 1 : 0));
-        updatePopupToolbarVisibility();
 
         const emptyState = document.getElementById('emptyState');
         if (displayScripts.length === 0) {
             if (elements.scriptList) elements.scriptList.hidden = true;
             elements.scriptList.innerHTML = '';
-            if (pageScripts.length > 0 && (searchValue || activeFilter !== 'all')) {
-                showPopupEmptyState(
-                    'Nothing matched',
-                    searchValue
-                        ? `No scripts matched "${elements.popupScriptSearch?.value?.trim() || ''}" in the current view.`
-                        : `No ${activeFilter} scripts are visible for this page right now.`,
-                    '🔎'
-                );
-            } else {
-                if (emptyState) emptyState.style.display = 'block';
-                updateEmptyStateHint();
-            }
             if (emptyState) emptyState.style.display = 'block';
+            updateEmptyStateHint();
             updatePrimaryActionMenuVisibility();
-            if (focusDescriptor) {
-                requestAnimationFrame(() => restorePopupFallbackFocus());
-            }
             return;
         }
         if (emptyState) emptyState.style.display = 'none';
@@ -826,69 +653,13 @@
             const meta = script.metadata || script.meta || {};
             const name = meta.name || 'Unnamed Script';
             const version = meta.version || '';
-            const description = meta.description || '';
             const enabled = script.enabled !== false;
             const icon = getScriptIcon(script);
-
-            // Running indicator — script is enabled AND matches current URL
-            const isRunning = enabled && script._matchesCurrent !== false;
-
-            // Perf badge
-            const stats = script.stats;
-            const perfHtml = stats && stats.runs > 0
-                ? `<span class="script-perf ${stats.avgTime < 50 ? 'fast' : stats.avgTime < 200 ? 'medium' : 'slow'}" title="Avg: ${stats.avgTime}ms (${stats.runs} runs${stats.errors ? ', ' + stats.errors + ' errors' : ''})">${stats.avgTime}ms</span>`
-                : '';
-
-            // Error dot
-            const errorDot = stats?.errors > 0 ? `<span class="script-error-dot" title="${stats.errors} error(s)"></span>` : '';
-
-            const updatedAgo = script.updatedAt ? timeAgo(script.updatedAt) : '';
-            const tooltipParts = [description, updatedAgo ? `Updated ${updatedAgo}` : ''].filter(Boolean).join('\n');
-            const descAttr = tooltipParts ? ` title="${escapeHtml(tooltipParts)}"` : '';
-            const provenance = describePopupScriptProvenance(script);
-            const hasRemoteSource = Boolean(provenance.sourceUrl);
-            const isStale = Boolean(hasRemoteSource && script.updatedAt && (Date.now() - script.updatedAt > 180 * 24 * 60 * 60 * 1000));
-            const secondaryText = description
-                || [
-                    updatedAgo ? `Updated ${updatedAgo}` : '',
-                    stats?.runs > 0 ? `${numberFormatter.format(stats.runs)} run${stats.runs === 1 ? '' : 's'}` : ''
-                ].filter(Boolean).join(' • ')
-                || 'No recent activity yet';
-
-            // Stagger animation delay
             const animDelay = `style="animation-delay: ${i * 30}ms"`;
-
-            // Running status indicator
-            const statusClass = stats?.errors > 0 ? 'error' : (isRunning ? 'running' : 'idle');
-            const stateTone = stats?.errors > 0 ? 'error' : enabled ? (isRunning ? 'running' : 'ready') : 'paused';
-            const statusTitle = stats?.errors > 0
-                ? `${stats.errors} error(s)`
-                : (isRunning ? 'Running on this page' : (enabled ? 'Ready on this page' : 'Paused'));
-            const stateLabel = stats?.errors > 0 ? 'Errors' : (isRunning ? 'Running' : (enabled ? 'Ready' : 'Paused'));
-            const rowLabel = [
-                name,
-                version ? `version ${version}` : '',
-                stateLabel,
-                secondaryText
-            ].filter(Boolean).join(', ');
-
-            // Recently installed (< 1 hour ago)
-            const isRecentlyInstalled = Boolean(script.installedAt && (Date.now() - script.installedAt < 3600000));
-            const recentClass = isRecentlyInstalled ? ' recently-installed' : '';
-            const tags = [];
-            if (script.settings?.pinned) tags.push('<span class="script-tag pinned">Pinned</span>');
-            if (isRecentlyInstalled) tags.push('<span class="script-tag recent">New</span>');
-            if (script.settings?.userModified) tags.push('<span class="script-tag edited">Edited</span>');
-            if (isStale) {
-                tags.push('<span class="script-tag stale">Stale</span>');
-            } else if (provenance.label) {
-                tags.push(`<span class="script-tag source" title="${escapeHtml(provenance.detail)}">${escapeHtml(provenance.label)}</span>`);
-            }
-            const tagsHtml = tags.length ? `<div class="script-tags" aria-hidden="true">${tags.join('')}</div>` : '';
+            const rowLabel = [name, version ? `version ${version}` : ''].filter(Boolean).join(', ');
 
             return `
-                <div class="script-item${isRunning ? '' : ' not-running'}${recentClass}" data-script-id="${script.id}" role="listitem" tabindex="0" aria-posinset="${i + 1}" aria-setsize="${displayScripts.length}" aria-label="${escapeHtml(rowLabel)}" ${animDelay}>
-                    <span class="script-status ${statusClass}" title="${statusTitle}"></span>
+                <div class="script-item${enabled ? '' : ' not-running'}" data-script-id="${script.id}" role="listitem" tabindex="0" aria-posinset="${i + 1}" aria-setsize="${displayScripts.length}" aria-label="${escapeHtml(rowLabel)}" ${animDelay}>
                     <label class="script-toggle">
                         <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${script.id}" aria-label="${escapeHtml(enabled ? `Disable ${name}` : `Enable ${name}`)}">
                         <span class="slider"></span>
@@ -898,14 +669,7 @@
                         <button class="script-name-btn" data-edit-id="${script.id}" type="button" aria-label="Open ${escapeHtml(name)} in editor">
                             <span class="script-name-label">${escapeHtml(name)}</span>${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}
                         </button>
-                        <div class="script-meta-row">
-                            <span class="script-state-pill ${stateTone}" title="${statusTitle}">${stateLabel}</span>
-                            <span class="script-secondary"${descAttr}>${escapeHtml(secondaryText)}</span>
-                            ${tagsHtml}
-                        </div>
                     </div>
-                    ${errorDot}
-                    ${perfHtml}
                     <button class="script-quick-edit" data-quickedit-id="${script.id}" type="button" aria-label="Quick edit ${escapeHtml(name)}" title="Quick edit">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -1471,31 +1235,6 @@
             runBusyControl(elements.headerToggle, toggleGlobalEnabled);
         });
 
-        elements.popupScriptSearch?.addEventListener('input', () => {
-            updatePopupSearchAffordances();
-            renderScriptList();
-        });
-        elements.popupScriptSearch?.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && elements.popupScriptSearch?.value) {
-                e.preventDefault();
-                resetPopupScriptView();
-                elements.popupScriptSearch.focus();
-            }
-        });
-        elements.btnClearPopupScriptSearch?.addEventListener('click', () => {
-            if (!elements.popupScriptSearch) return;
-            elements.popupScriptSearch.value = '';
-            updatePopupSearchAffordances();
-            renderScriptList();
-            elements.popupScriptSearch.focus();
-        });
-        elements.popupScriptFilters?.querySelectorAll('[data-popup-filter]')?.forEach((button) => {
-            button.addEventListener('click', () => {
-                setPopupActiveFilter(button.dataset.popupFilter || 'all');
-                renderScriptList();
-            });
-        });
-
         // Find scripts
         elements.btnFindScripts?.addEventListener('click', findScripts);
 
@@ -1573,12 +1312,6 @@
 
         // Keyboard navigation for script list
         document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
-                e.preventDefault();
-                elements.popupScriptSearch?.focus();
-                elements.popupScriptSearch?.select?.();
-                return;
-            }
             if (e.key === 'Escape' && document.getElementById('scriptDropdown')?.classList.contains('open')) {
                 e.preventDefault();
                 closeScriptDropdown({ restoreFocus: true });
