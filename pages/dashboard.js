@@ -1703,15 +1703,20 @@
     }
 
     function updateHeaderHeight() {
+        const root = document.documentElement;
         const header = document.querySelector('.tm-header');
-        if (header) {
-            const h = header.offsetHeight;
-            document.documentElement.style.setProperty('--header-height', h + 'px');
-            const toolbar = document.querySelector('.scripts-toolbar');
-            if (toolbar) {
-                document.documentElement.style.setProperty('--toolbar-bottom', (h + toolbar.offsetHeight) + 'px');
-            }
-        }
+        if (!header) return;
+        const headerH = header.offsetHeight;
+        root.style.setProperty('--header-height', headerH + 'px');
+        // Stack the scripts toolbar + results bar under the sticky header so the
+        // table thead can dock right below all of them.
+        const toolbar = document.querySelector('.scripts-toolbar');
+        const toolbarH = toolbar ? toolbar.offsetHeight : 0;
+        const toolbarBottom = headerH + toolbarH;
+        root.style.setProperty('--toolbar-bottom', toolbarBottom + 'px');
+        const resultsBar = document.querySelector('.scripts-results-bar');
+        const resultsH = resultsBar ? resultsBar.offsetHeight : 0;
+        root.style.setProperty('--results-bar-bottom', (toolbarBottom + resultsH) + 'px');
     }
 
     // Initialize
@@ -4447,7 +4452,7 @@
                 const folderTr = document.createElement('tr');
                 folderTr.className = `folder-row${collapsed ? ' collapsed' : ''}`;
                 folderTr.dataset.folderId = folder.id;
-                folderTr.innerHTML = `<td colspan="14">
+                folderTr.innerHTML = `<td colspan="13">
                     <span class="folder-icon">\u25BC</span>
                     <span class="folder-color" style="background:${escapeHtml(folder.color)}"></span>
                     ${escapeHtml(folder.name)} <span class="folder-count">(${folderScripts.length})</span>
@@ -4482,7 +4487,7 @@
             if (unassigned.length > 0 && assignedIds.size > 0) {
                 const headerTr = document.createElement('tr');
                 headerTr.className = 'folder-row';
-                headerTr.innerHTML = `<td colspan="14">
+                headerTr.innerHTML = `<td colspan="13">
                     <span class="folder-icon">\u25BC</span>
                     Uncategorized <span class="folder-count">(${unassigned.length})</span>
                 </td>`;
