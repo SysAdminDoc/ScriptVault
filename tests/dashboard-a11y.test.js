@@ -510,25 +510,25 @@ describe("dashboard accessibility markup", () => {
 
   test("bulk selection controller preserves hidden selections and syncs mixed state affordances", () => {
     expect(dashboardJs).toMatch(/function pruneSelectedScripts/);
-    expect(dashboardJs).toMatch(/elements\.bulkActionFeedback = document\.getElementById\('bulkActionFeedback'\);/);
+    expect(dashboardJs).not.toContain("bulkSelectionRail");
+    expect(dashboardJs).not.toContain("bulkSelectionSummary");
+    expect(dashboardJs).not.toContain("bulkSelectionMeta");
+    expect(dashboardJs).not.toContain("bulkActionFeedback");
+    expect(dashboardJs).not.toContain("btnClearSelection");
+    expect(dashboardJs).not.toContain("setBulkActionFeedback");
+    expect(dashboardJs).not.toContain("buildBulkActionFeedback");
     expect(dashboardJs).toMatch(/checkbox\.indeterminate = !allVisibleSelected && someVisibleSelected;/);
     expect(dashboardJs).toMatch(/row\?\.classList\.toggle\('row-selected', isChecked\)/);
     expect(dashboardJs).toMatch(/if \(typeof CardView !== 'undefined' && typeof CardView\.syncSelection === 'function'\) \{/);
     expect(dashboardJs).toMatch(/elements\.bulkActionSelect\?\.addEventListener\('change', \(\) => \{\s*updateBulkCheckboxes\(\);\s*\}\);/);
     expect(dashboardJs).toMatch(/filtered\.forEach\(s => \{\s*if \(checked\) state\.selectedScripts\.add\(s\.id\);\s*else state\.selectedScripts\.delete\(s\.id\);\s*\}\);/);
-    expect(dashboardJs).toMatch(/elements\.btnClearSelection\?\.addEventListener\('click', \(\) => \{\s*state\.selectedScripts\.clear\(\);/);
     expect(dashboardJs).toMatch(/runButtonTask\(event\.currentTarget, executeBulkAction, \{ busyLabel: 'Applying…' \}\)/);
-    expect(dashboardJs).toMatch(/function setBulkActionFeedback\(summary = '', \{ tone = 'info', detail = '' \} = \{\}\)/);
-    expect(dashboardJs).toMatch(/function buildBulkActionFeedback\(action, result\)/);
     expect(dashboardJs).toMatch(/async function runBulkScriptOperation\(ids, options\)/);
     expect(dashboardJs).toMatch(/elements\.btnBulkApply\.textContent = hasAction \? getBulkActionButtonLabel\(elements\.bulkActionSelect\?\.value\) : 'Apply';/);
     expect(dashboardJs).toMatch(/state\.selectedScripts = new Set\(ids\.filter\(id => !succeededIds\.includes\(id\)\)\);/);
-    expect(dashboardJs).toMatch(/setBulkActionFeedback\(feedback\.summary, \{ tone: feedback\.tone, detail: feedback\.detail \}\);/);
     expect(dashboardJs).toMatch(/showToast\(feedback\.summary, feedback\.tone\);/);
     expect(dashboardJs).toMatch(/aria-label="Select \$\{escapeHtml\(name\)\}"/);
     expect(dashboardJs).toMatch(/aria-label="\$\{enabled \? 'Disable' : 'Enable'\} \$\{escapeHtml\(name\)\}"/);
-    expect(dashboardJs).toMatch(/const selectionHint = getCurrentScriptViewMode\(\) === 'card'/);
-    expect(dashboardJs).toMatch(/Use the Select control on each card to build a batch faster\./);
   });
 
   test("script workspace controller keeps URL-backed state and premium row affordances wired", () => {

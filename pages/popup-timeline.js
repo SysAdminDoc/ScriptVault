@@ -14,13 +14,13 @@ const PopupTimeline = (() => {
     style.textContent = `
       .ptl-panel { display:none; border-top:1px solid var(--popup-border); max-height:200px; overflow-y:auto; overscroll-behavior:contain; }
       .ptl-panel.open { display:block; }
-      .ptl-header { display:flex; align-items:center; justify-content:space-between; width:100%; padding:4px 12px; background:var(--popup-bg-raised); border:none; border-bottom:1px solid var(--popup-border-subtle); cursor:pointer; color:inherit; font:inherit; text-align:left; transition:background 0.18s ease; }
+      .ptl-header { display:flex; align-items:center; justify-content:space-between; width:100%; padding:3px 10px; background:var(--popup-bg-raised); border:none; border-bottom:1px solid var(--popup-border-subtle); cursor:pointer; color:inherit; font:inherit; text-align:left; transition:background 0.18s ease; }
       .ptl-header:hover { background:var(--popup-bg-hover); }
       .ptl-header:focus-visible { outline:2px solid var(--popup-accent); outline-offset:-2px; }
-      .ptl-title { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--popup-text-muted); }
+      .ptl-title { font-size:9.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--popup-text-muted); }
       .ptl-toggle { font-size:10px; color:var(--popup-text-dim); }
-      .ptl-list { padding:4px 0; }
-      .ptl-item { display:flex; align-items:center; gap:6px; padding:3px 12px; font-size:11px; }
+      .ptl-list { padding:3px 0; }
+      .ptl-item { display:flex; align-items:center; gap:6px; padding:3px 10px; font-size:11px; }
       .ptl-time { color:var(--popup-text-dim); font-size:10px; min-width:40px; font-variant-numeric:tabular-nums; }
       .ptl-bar-wrap { flex:1; height:6px; background:var(--popup-bg); border-radius:3px; overflow:hidden; min-width:40px; }
       .ptl-bar { height:100%; border-radius:3px; transition:width 0.3s ease; }
@@ -29,8 +29,8 @@ const PopupTimeline = (() => {
       .ptl-bar.slow { background:var(--popup-danger); }
       .ptl-name { color:var(--popup-text); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:120px; }
       .ptl-dur { color:var(--popup-text-muted); font-size:10px; min-width:35px; text-align:right; font-variant-numeric:tabular-nums; }
-      .ptl-empty { padding:8px 12px; text-align:center; color:var(--popup-text-dim); font-size:11px; }
-      .ptl-summary { display:flex; gap:8px; padding:4px 12px; font-size:10px; color:var(--popup-text-muted); border-top:1px solid var(--popup-border-subtle); }
+      .ptl-empty { padding:7px 10px; text-align:center; color:var(--popup-text-dim); font-size:10.5px; }
+      .ptl-summary { display:flex; gap:8px; padding:3px 10px; font-size:10px; color:var(--popup-text-muted); border-top:1px solid var(--popup-border-subtle); }
       .ptl-stat { display:flex; align-items:center; gap:3px; }
       .ptl-dot { width:6px; height:6px; border-radius:50%; }
       @media (prefers-reduced-motion: reduce) {
@@ -40,15 +40,16 @@ const PopupTimeline = (() => {
     document.head.appendChild(style);
   }
 
-  function _render(scripts) {
-    if (!_container) return;
+    function _render(scripts) {
+      if (!_container) return;
 
-    const withStats = scripts.filter(s => s.stats && s.stats.runs > 0 && s.enabled !== false);
-    if (withStats.length === 0) {
-      _container.querySelector('.ptl-list').innerHTML = '<div class="ptl-empty">No execution data for this page yet</div>';
-      _container.querySelector('.ptl-summary').innerHTML = '';
-      return;
-    }
+      const withStats = scripts.filter(s => s.stats && s.stats.runs > 0 && s.enabled !== false);
+      _container.hidden = withStats.length === 0;
+      if (withStats.length === 0) {
+        _container.querySelector('.ptl-list').innerHTML = '<div class="ptl-empty">No execution data for this page yet</div>';
+        _container.querySelector('.ptl-summary').innerHTML = '';
+        return;
+      }
 
     // Sort by avg time descending (slowest first)
     withStats.sort((a, b) => (b.stats.avgTime || 0) - (a.stats.avgTime || 0));

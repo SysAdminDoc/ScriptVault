@@ -85,6 +85,7 @@ describe("popup UX markup", () => {
     const resetView = doc.getElementById("btnClearPopupScriptView");
 
     expect(toolbar).not.toBeNull();
+    expect(toolbar?.hasAttribute("hidden")).toBe(true);
 
     expect(search).not.toBeNull();
     expect(search?.getAttribute("type")).toBe("search");
@@ -124,6 +125,7 @@ describe("popup UX markup", () => {
     const scriptList = doc.getElementById("scriptList");
 
     expect(scriptList).not.toBeNull();
+    expect(scriptList?.hasAttribute("hidden")).toBe(true);
     expect(scriptList?.getAttribute("role")).toBe("list");
     expect(scriptList?.getAttribute("aria-label")).toBe("Scripts for this page");
   });
@@ -132,6 +134,8 @@ describe("popup UX markup", () => {
 describe("popup UX controller", () => {
   test("popup controller centralizes popup summary, busy states, and submenu state", () => {
     expect(popupJs).toMatch(/function updatePageSummary\(displayScripts = pageScripts\)/);
+    expect(popupJs).toMatch(/function updatePopupToolbarVisibility\(displayScripts = pageScripts\)/);
+    expect(popupJs).toMatch(/function updatePrimaryActionMenuVisibility\(\)/);
     expect(popupJs).toMatch(/const busyControls = new WeakSet\(\);/);
     expect(popupJs).toMatch(/const pendingScriptActions = new Set\(\);/);
     expect(popupJs).toMatch(/async function runBusyControl\(control, task\)/);
@@ -153,6 +157,11 @@ describe("popup UX controller", () => {
     expect(popupJs).toMatch(/elements\.utilitiesSubmenu\.hidden = !isOpen;/);
     expect(popupJs).toMatch(/elements\.btnEmptyFindScripts\?\.addEventListener\('click', findScripts\)/);
     expect(popupJs).toMatch(/elements\.btnEmptyNewScript\?\.addEventListener\('click', createNewScript\)/);
+    expect(popupJs).toMatch(/elements\.popupScriptToolbar\.hidden = !shouldShowToolbar;/);
+    expect(popupJs).toMatch(/elements\.btnFindScripts\.hidden = !canFind \|\| emptyFindVisible;/);
+    expect(popupJs).toMatch(/elements\.btnNewScript\.hidden = emptyCreateVisible;/);
+    expect(popupJs).toMatch(/if \(elements\.scriptList\) elements\.scriptList\.hidden = true;/);
+    expect(popupJs).toMatch(/if \(elements\.scriptList\) elements\.scriptList\.hidden = false;/);
     expect(popupJs).toMatch(/setUtilitiesSubmenuOpen\(false\);\s+await loadPageScripts\(\);/);
     expect(popupJs).toMatch(/if \(e\.key === 'Escape' && elements\.utilitiesSubmenu\?\.classList\.contains\('open'\)\)/);
     expect(popupJs).toMatch(/if \(e\.key === 'Escape' && document\.getElementById\('scriptDropdown'\)\?\.classList\.contains\('open'\)\)/);
@@ -212,6 +221,7 @@ describe("popup UX controller", () => {
   test("popup timeline uses real disclosure semantics", () => {
     expect(popupTimelineJs).toMatch(/<button class="ptl-header" id="ptlToggle" type="button" aria-expanded="false" aria-controls="ptlPanel">/);
     expect(popupTimelineJs).toMatch(/<div class="ptl-panel" id="ptlPanel" role="region" aria-label="Execution timeline" hidden>/);
+    expect(popupTimelineJs).toMatch(/_container\.hidden = withStats\.length === 0;/);
     expect(popupTimelineJs).toMatch(/panel\.hidden = !_visible;/);
     expect(popupTimelineJs).toMatch(/toggle\.setAttribute\('aria-expanded', String\(_visible\)\)/);
   });
