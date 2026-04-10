@@ -3,39 +3,23 @@ import { resolve } from "node:path";
 
 const popupHtml = readFileSync(resolve(process.cwd(), "pages/popup.html"), "utf8");
 const popupJs = readFileSync(resolve(process.cwd(), "pages/popup.js"), "utf8");
-const popupTimelineJs = readFileSync(resolve(process.cwd(), "pages/popup-timeline.js"), "utf8");
 
 function parsePopup() {
   return new DOMParser().parseFromString(popupHtml, "text/html");
 }
 
 describe("popup UX markup", () => {
-  test("feedback uses real link semantics to the new issue form", () => {
-    const doc = parsePopup();
-    const feedback = doc.getElementById("btnFeedback");
-
-    expect(feedback).not.toBeNull();
-    expect(feedback?.tagName).toBe("A");
-    expect(feedback?.getAttribute("href")).toBe("https://github.com/SysAdminDoc/ScriptVault/issues/new");
-    expect(feedback?.getAttribute("target")).toBe("_blank");
-    expect(feedback?.getAttribute("rel")).toBe("noopener noreferrer");
-  });
-
-  test("empty state exposes actionable recovery buttons", () => {
+  test("empty state exposes title, hint, and icon without redundant action buttons", () => {
     const doc = parsePopup();
     const emptyState = doc.getElementById("emptyState");
-    const findButton = doc.getElementById("btnEmptyFindScripts");
-    const createButton = doc.getElementById("btnEmptyNewScript");
 
     expect(emptyState).not.toBeNull();
     expect(doc.getElementById("emptyStateIcon")).not.toBeNull();
     expect(doc.getElementById("emptyStateTitle")).not.toBeNull();
     expect(doc.getElementById("emptyStateHint")).not.toBeNull();
-    expect(doc.getElementById("emptyStateActions")).not.toBeNull();
-    expect(findButton?.getAttribute("type")).toBe("button");
-    expect(createButton?.getAttribute("type")).toBe("button");
-    expect(findButton?.textContent).toContain("Find Scripts");
-    expect(createButton?.textContent).toContain("Create Script");
+    expect(doc.getElementById("emptyStateActions")).toBeNull();
+    expect(doc.getElementById("btnEmptyFindScripts")).toBeNull();
+    expect(doc.getElementById("btnEmptyNewScript")).toBeNull();
   });
 
   test("utilities submenu starts as a hidden grouped action cluster", () => {
@@ -54,17 +38,9 @@ describe("popup UX markup", () => {
     expect(submenu?.getAttribute("aria-label")).toBe("Utility actions");
   });
 
-  test("page summary and shared script menu expose live status and menu semantics", () => {
+  test("shared script action dropdown exposes menu semantics", () => {
     const doc = parsePopup();
-    const summary = doc.getElementById("pageSummary");
     const dropdown = doc.getElementById("scriptDropdown");
-
-    expect(summary).not.toBeNull();
-    expect(summary?.getAttribute("role")).toBe("status");
-    expect(summary?.getAttribute("aria-live")).toBe("polite");
-    expect(doc.getElementById("pageSummaryTitle")).not.toBeNull();
-    expect(doc.getElementById("pageSummaryMeta")).not.toBeNull();
-    expect(doc.getElementById("pageSummaryCount")).not.toBeNull();
 
     expect(dropdown).not.toBeNull();
     expect(dropdown?.getAttribute("role")).toBe("menu");
@@ -74,15 +50,13 @@ describe("popup UX markup", () => {
     expect([...dropdown?.querySelectorAll("button") || []].every((button) => button.getAttribute("role") === "menuitem")).toBe(true);
   });
 
-  test("popup script toolbar exposes search, quick filters, and reset controls", () => {
+  test("popup script toolbar exposes search and quick filters", () => {
     const doc = parsePopup();
     const toolbar = doc.getElementById("popupScriptToolbar");
     const search = doc.getElementById("popupScriptSearch");
     const clearSearch = doc.getElementById("btnClearPopupScriptSearch");
     const filters = doc.getElementById("popupScriptFilters");
     const filterButtons = Array.from(doc.querySelectorAll("#popupScriptFilters [data-popup-filter]"));
-    const summary = doc.getElementById("popupListSummary");
-    const resetView = doc.getElementById("btnClearPopupScriptView");
 
     expect(toolbar).not.toBeNull();
     expect(toolbar?.hasAttribute("hidden")).toBe(true);
@@ -105,19 +79,21 @@ describe("popup UX markup", () => {
       "all",
       "running",
       "errors",
-      "pinned",
-      "paused",
     ]);
     expect(filterButtons.every((button) => button.getAttribute("type") === "button")).toBe(true);
 
-    expect(summary).not.toBeNull();
-    expect(summary?.getAttribute("role")).toBe("status");
-    expect(summary?.getAttribute("aria-live")).toBe("polite");
-    expect(summary?.getAttribute("aria-atomic")).toBe("true");
+    expect(doc.getElementById("popupListSummary")).toBeNull();
+    expect(doc.getElementById("btnClearPopupScriptView")).toBeNull();
+  });
 
-    expect(resetView).not.toBeNull();
-    expect(resetView?.getAttribute("type")).toBe("button");
-    expect(resetView?.hasAttribute("hidden")).toBe(true);
+  test("debloated popup drops url bar, page summary, footer total, feedback link, and timeline", () => {
+    const doc = parsePopup();
+    expect(doc.getElementById("urlBar")).toBeNull();
+    expect(doc.getElementById("pageSummary")).toBeNull();
+    expect(doc.getElementById("footerTotalCount")).toBeNull();
+    expect(doc.getElementById("btnFeedback")).toBeNull();
+    expect(doc.querySelector(".popup-meta")).toBeNull();
+    expect(popupHtml).not.toMatch(/popup-timeline\.js/);
   });
 
   test("popup script list exposes list semantics for keyboard scanning", () => {
@@ -132,9 +108,8 @@ describe("popup UX markup", () => {
 });
 
 describe("popup UX controller", () => {
-  test("popup controller centralizes popup summary, busy states, and submenu state", () => {
-    expect(popupJs).toMatch(/function updatePageSummary\(displayScripts = pageScripts\)/);
-    expect(popupJs).toMatch(/function updatePopupToolbarVisibility\(displayScripts = pageScripts\)/);
+  test("popup controller centralizes toolbar, busy states, and submenu state", () => {
+    expect(popupJs).toMatch(/function updatePopupToolbarVisibility\(\)/);
     expect(popupJs).toMatch(/function updatePrimaryActionMenuVisibility\(\)/);
     expect(popupJs).toMatch(/const busyControls = new WeakSet\(\);/);
     expect(popupJs).toMatch(/const pendingScriptActions = new Set\(\);/);
@@ -155,11 +130,8 @@ describe("popup UX controller", () => {
     expect(popupJs).toMatch(/function openScriptDropdown\(scriptId, trigger, \{ focusTarget = 0 \} = \{\}\)/);
     expect(popupJs).toMatch(/function setUtilitiesSubmenuOpen\(isOpen, \{ restoreFocus = false \} = \{\}\)/);
     expect(popupJs).toMatch(/elements\.utilitiesSubmenu\.hidden = !isOpen;/);
-    expect(popupJs).toMatch(/elements\.btnEmptyFindScripts\?\.addEventListener\('click', findScripts\)/);
-    expect(popupJs).toMatch(/elements\.btnEmptyNewScript\?\.addEventListener\('click', createNewScript\)/);
     expect(popupJs).toMatch(/elements\.popupScriptToolbar\.hidden = !shouldShowToolbar;/);
-    expect(popupJs).toMatch(/elements\.btnFindScripts\.hidden = !canFind \|\| emptyFindVisible;/);
-    expect(popupJs).toMatch(/elements\.btnNewScript\.hidden = emptyCreateVisible;/);
+    expect(popupJs).toMatch(/elements\.btnFindScripts\.hidden = !canFind;/);
     expect(popupJs).toMatch(/if \(elements\.scriptList\) elements\.scriptList\.hidden = true;/);
     expect(popupJs).toMatch(/if \(elements\.scriptList\) elements\.scriptList\.hidden = false;/);
     expect(popupJs).toMatch(/setUtilitiesSubmenuOpen\(false\);\s+await loadPageScripts\(\);/);
@@ -182,11 +154,9 @@ describe("popup UX controller", () => {
   test("popup toolbar controller supports inline list filtering and keyboard search", () => {
     expect(popupJs).toMatch(/function getPopupActiveFilter\(\)/);
     expect(popupJs).toMatch(/function setPopupActiveFilter\(nextFilter = 'all'\)/);
-    expect(popupJs).toMatch(/function updatePopupListSummary\(displayScripts = pageScripts\)/);
     expect(popupJs).toMatch(/function getPopupScriptRows\(\)/);
     expect(popupJs).toMatch(/function focusPopupScriptRow\(row\)/);
     expect(popupJs).toMatch(/function resetPopupScriptView\(\)/);
-    expect(popupJs).toMatch(/const hiddenCount = Math\.max\(0, totalMatched - visibleScripts\);/);
     expect(popupJs).toMatch(/role="listitem" tabindex="0"/);
     expect(popupJs).toMatch(/aria-posinset="\$\{i \+ 1\}" aria-setsize="\$\{displayScripts.length\}"/);
     expect(popupJs).toMatch(/const provenance = describePopupScriptProvenance\(script\);/);
@@ -202,7 +172,6 @@ describe("popup UX controller", () => {
     expect(popupJs).toMatch(/elements\.popupScriptSearch\?\.addEventListener\('input', \(\) => \{/);
     expect(popupJs).toMatch(/elements\.btnClearPopupScriptSearch\?\.addEventListener\('click', \(\) => \{/);
     expect(popupJs).toMatch(/elements\.popupScriptFilters\?\.querySelectorAll\('\[data-popup-filter\]'\)\?\./);
-    expect(popupJs).toMatch(/elements\.btnClearPopupScriptView\?\.addEventListener\('click', resetPopupScriptView\);/);
     expect(popupJs).toMatch(/if \(\(e\.ctrlKey \|\| e\.metaKey\) && e\.key\.toLowerCase\(\) === 'f'\) \{/);
     expect(popupJs).toMatch(/elements\.popupScriptSearch\?\.focus\(\);/);
     expect(popupJs).toMatch(/elements\.popupScriptSearch\?\.select\?\.\(\);/);
@@ -216,13 +185,5 @@ describe("popup UX controller", () => {
     expect(popupJs).toMatch(/if \(e\.key === 'End'\) \{/);
     expect(popupJs).toMatch(/focusPopupScriptRow\(items\[items.length - 1\]\);/);
     expect(popupJs).toMatch(/} else if \(e\.key === 'Enter' && focusedRow\) \{/);
-  });
-
-  test("popup timeline uses real disclosure semantics", () => {
-    expect(popupTimelineJs).toMatch(/<button class="ptl-header" id="ptlToggle" type="button" aria-expanded="false" aria-controls="ptlPanel">/);
-    expect(popupTimelineJs).toMatch(/<div class="ptl-panel" id="ptlPanel" role="region" aria-label="Execution timeline" hidden>/);
-    expect(popupTimelineJs).toMatch(/_container\.hidden = withStats\.length === 0;/);
-    expect(popupTimelineJs).toMatch(/panel\.hidden = !_visible;/);
-    expect(popupTimelineJs).toMatch(/toggle\.setAttribute\('aria-expanded', String\(_visible\)\)/);
   });
 });
