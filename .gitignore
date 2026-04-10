@@ -1,6 +1,7 @@
 # Build artifacts
 *.zip
 *.crx
+*.xpi
 build/
 dist/
 background.js

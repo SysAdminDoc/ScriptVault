@@ -3,6 +3,9 @@
 ## Overview
 Modern userscript manager built with Chrome Manifest V3. Tampermonkey-inspired functionality with cloud sync, auto-updates, a full dashboard, Monaco editor, DevTools panel, and a persistent side panel.
 
+## Active multi-session project
+**Firefox port** — roadmap and session log in [`FIREFOX-PORT.md`](./FIREFOX-PORT.md). Check it before resuming Firefox work; update it at the end of every Firefox-port session. Current phase: **Phase 1 — Clean temporary sideload**, not yet started.
+
 ## Version
 v2.1.7
 
