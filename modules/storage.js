@@ -45,12 +45,9 @@ const SettingsManager = {
   }
 };
 
-// Debug logging helper - only logs when debugMode is enabled
-function debugLog(...args) {
-  if (SettingsManager.cache?.debugMode) {
-    console.log('[ScriptVault]', ...args);
-  }
-}
+// Debug logging helper defined in background.core.js (concatenated later)
+// Using a placeholder function that's overridden at runtime via hoisting in script mode.
+// (In module mode, see Firefox manifest note — background.js is kept as non-module.)
 
 // ============================================================================
 // Script Storage
@@ -358,31 +355,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 });
 
-// Notification click/close listeners for GM_notification callbacks
-chrome.notifications.onClicked.addListener((notifId) => {
-  if (!self._notifCallbacks) return;
-  const info = self._notifCallbacks.get(notifId);
-  if (!info) return;
-  if (info.hasOnclick) {
-    chrome.tabs.sendMessage(info.tabId, {
-      action: 'notificationEvent',
-      data: { notifId, scriptId: info.scriptId, type: 'click' }
-    }).catch(() => {});
-  }
-});
-
-chrome.notifications.onClosed.addListener((notifId, byUser) => {
-  if (!self._notifCallbacks) return;
-  const info = self._notifCallbacks.get(notifId);
-  if (!info) return;
-  if (info.hasOndone) {
-    chrome.tabs.sendMessage(info.tabId, {
-      action: 'notificationEvent',
-      data: { notifId, scriptId: info.scriptId, type: 'done' }
-    }).catch(() => {});
-  }
-  self._notifCallbacks.delete(notifId);
-});
+// Notification click/close listeners are registered in background.core.js
+// to avoid duplicate callback firing (previously both this file AND background.core.js
+// added listeners, causing GM_notification onclick/ondone callbacks to fire twice).
 
 // ============================================================================
 // Folder Storage

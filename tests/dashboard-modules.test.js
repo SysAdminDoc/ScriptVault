@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 const cardViewCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-cardview.js'), 'utf8');
 const collectionCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-collections.js'), 'utf8');
 const cspCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-csp.js'), 'utf8');
+const dashboardA11yCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-a11y.js'), 'utf8');
+const dashboardCss = readFileSync(resolve(process.cwd(), 'pages/dashboard.css'), 'utf8');
 const dashboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), 'utf8');
 const dashboardKeyboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard-keyboard.js'), 'utf8');
 const profilesCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-profiles.js'), 'utf8');
@@ -386,6 +388,31 @@ describe('dashboard surface modules', () => {
 
     sendMessageMock.mockRestore();
     ProfileManager.destroy();
+  });
+
+  it('dashboard workspace and trash markup escape ids before writing data attributes', () => {
+    expect(dashboardJs).toContain('const scriptIdAttr = escapeHtml(script.id);');
+    expect(dashboardJs).toContain('data-trash-restore="${scriptIdAttr}"');
+    expect(dashboardJs).toContain('data-trash-delete="${scriptIdAttr}"');
+    expect(dashboardJs).toContain('const folderIdAttr = escapeHtml(folder.id);');
+    expect(dashboardJs).toContain('data-folder-delete="${folderIdAttr}"');
+    expect(dashboardJs).toContain('data-ws-id="${escapeHtml(ws.id)}"');
+    expect(dashboardJs).toContain('data-ws-activate="${escapeHtml(ws.id)}"');
+    expect(dashboardJs).toContain('data-ws-save="${escapeHtml(ws.id)}"');
+    expect(dashboardJs).toContain('data-ws-delete="${escapeHtml(ws.id)}"');
+  });
+
+  it('dashboard accessibility helper escapes input ids before querying labels', () => {
+    expect(dashboardA11yCode).toContain('function escapeSelectorValue(value)');
+    expect(dashboardA11yCode).toContain('label[for="${escapeSelectorValue(id)}"]');
+  });
+
+  it('legacy dashboard stylesheet avoids transition-all on shared controls', () => {
+    expect(dashboardCss).not.toMatch(/transition:\s*all/i);
+    expect(dashboardCss).toContain('transition: background 0.15s, color 0.15s, border-color 0.15s;');
+    expect(dashboardCss).toContain('transition: background 0.15s, color 0.15s, opacity 0.15s;');
+    expect(dashboardCss).toContain('transition: transform 0.3s, opacity 0.3s;');
+    expect(dashboardCss).toContain('transition: opacity 0.2s, visibility 0.2s;');
   });
 
   it('collections render accessible controls and await async per-script toggles', async () => {

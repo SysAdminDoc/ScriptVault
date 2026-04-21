@@ -909,10 +909,34 @@ const AdvancedLinter = (() => {
     document.body.appendChild(overlay);
   }
 
+  // Hash-based line diff fallback for large files. Mirrors dashboard-diff.js's
+  // `_computeSimpleDiff` but emits the linter's op schema `{type, text}` with
+  // `ctx`/`add`/`remove` values. Used when the LCS table would allocate too much.
+  function _computeSimpleDiff(a, b) {
+    const ops = [];
+    let ai = 0, bi = 0;
+    while (ai < a.length && bi < b.length) {
+      if (a[ai] === b[bi]) {
+        ops.push({ type: 'ctx', text: a[ai] });
+        ai++; bi++;
+      } else {
+        ops.push({ type: 'remove', text: a[ai] });
+        ai++;
+      }
+    }
+    while (ai < a.length) { ops.push({ type: 'remove', text: a[ai] }); ai++; }
+    while (bi < b.length) { ops.push({ type: 'add',    text: b[bi] }); bi++; }
+    return ops;
+  }
+
   function _computeDiff(a, b) {
     // Myers-like simple diff
     const result = [];
     const n = a.length, m = b.length;
+    // Size guard: LCS table allocates ~4*(n+1)*(m+1) bytes; cap at 5M cells
+    // to match dashboard-diff.js. For oversized inputs, fall back to a linear
+    // hash-based diff that still produces useful ctx/add/remove lines.
+    if (n * m > 5000000) return _computeSimpleDiff(a, b);
     // Build LCS table
     const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
     for (let i = 1; i <= n; i++) {

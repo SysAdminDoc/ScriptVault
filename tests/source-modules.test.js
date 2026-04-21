@@ -130,6 +130,14 @@ describe('source utils', () => {
 });
 
 describe('source analyzer', () => {
+  beforeEach(() => {
+    // Reset cached offscreen-init promise between cases so each test sees a
+    // clean createDocument/hasDocument call count (ScriptAnalyzer memoizes the
+    // offscreen document creation in production — good for runtime, bad for
+    // isolated assertions).
+    ScriptAnalyzer._offscreenPromise = null;
+  });
+
   it('analyzes code via regex fallback when offscreen dispatch fails', async () => {
     chrome.runtime.sendMessage.mockRejectedValue(new Error('offscreen unavailable'));
 

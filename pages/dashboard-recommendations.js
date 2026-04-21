@@ -429,7 +429,7 @@ const Recommendations = (() => {
     }
 
     // Add usage-based recommendations
-    _addUsageRecommendations(scored, scripts);
+    await _addUsageRecommendations(scored, scripts);
 
     // Sort by score descending
     scored.sort((a, b) => b.score - a.score);
@@ -446,7 +446,7 @@ const Recommendations = (() => {
     return 'category';
   }
 
-  function _addUsageRecommendations(scored, installedScripts) {
+  async function _addUsageRecommendations(scored, installedScripts) {
     // Check for outdated scripts
     for (const script of installedScripts) {
       if (script.hasUpdate || script.outdated) {
@@ -736,13 +736,13 @@ const Recommendations = (() => {
     _buildUI();
   }
 
-  function _refresh() {
-    _recommendations = _generateRecommendations();
+  async function _refresh() {
+    _recommendations = await _generateRecommendations();
     _buildUI();
   }
 
-  function refresh() {
-    _refresh();
+  async function refresh() {
+    await _refresh();
   }
 
   function destroy() {

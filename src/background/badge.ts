@@ -39,6 +39,14 @@ export async function updateBadge(tabId: number | null = null): Promise<void> {
     }
     return;
   }
+
+  // Specific tab: fetch its current URL then delegate to updateBadgeForTab
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    await updateBadgeForTab(tabId, tab.url, settings);
+  } catch (_e) {
+    // Tab may have been closed — ignore
+  }
 }
 
 /**

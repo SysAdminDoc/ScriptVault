@@ -881,7 +881,11 @@ const ThemeEditor = (() => {
     const labelEl = el('span', { className: 'sv-te-preset-label' });
     labelEl.textContent = preset.name;
     if (isCustom) {
-      labelEl.innerHTML += ' <span class="sv-te-custom-tag">custom</span>';
+      const tag = document.createElement('span');
+      tag.className = 'sv-te-custom-tag';
+      tag.textContent = 'custom';
+      labelEl.appendChild(document.createTextNode(' '));
+      labelEl.appendChild(tag);
     }
     card.appendChild(labelEl);
 
