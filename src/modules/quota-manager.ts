@@ -188,7 +188,7 @@ async function cleanup(options: CleanupOptions = {}): Promise<CleanupResult> {
     }
   }
 
-  // 5. Trim CSP reports to 100
+  // 3. Trim CSP reports to 100
   if (options.cspReports !== false) {
     const cspReports = all.sv_csp_reports as unknown[] | undefined;
     if (cspReports && cspReports.length > 100) {
@@ -199,7 +199,7 @@ async function cleanup(options: CleanupOptions = {}): Promise<CleanupResult> {
     }
   }
 
-  // 6. Clear old sync tombstones (>30 days)
+  // 4. Clear old sync tombstones (>30 days)
   if (options.tombstones !== false) {
     const syncTombstones = all.syncTombstones as Record<string, number> | undefined;
     if (syncTombstones) {
@@ -222,14 +222,14 @@ async function cleanup(options: CleanupOptions = {}): Promise<CleanupResult> {
     }
   }
 
-  // 7. Remove npm cache if critical
+  // 5. Remove npm cache if critical
   if (options.npmCache) {
     if (scheduleRemoval('npmCache')) {
       actions.push('Cleared npm package cache');
     }
   }
 
-  // 8. Remove analytics data when asked
+  // 6. Remove analytics data when asked
   if (options.analytics) {
     const analyticsKeys = Object.keys(all).filter((key) => key === 'analytics' || key.startsWith('sv_analytics'));
     const removedAnalytics = analyticsKeys.filter((key) => scheduleRemoval(key));
@@ -238,7 +238,7 @@ async function cleanup(options: CleanupOptions = {}): Promise<CleanupResult> {
     }
   }
 
-  // 9. Remove performance history when asked
+  // 7. Remove performance history when asked
   if (options.perfHistory) {
     if (scheduleRemoval('perfHistory')) {
       actions.push('Cleared performance history');
