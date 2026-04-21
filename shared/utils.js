@@ -34,8 +34,13 @@ function generateId() {
  */
 function sanitizeUrl(url) {
   if (!url) return null;
-  const trimmed = url.trim();
-  if (/^(javascript|data|vbscript|blob):/i.test(trimmed)) return null;
+  // Strip C0 controls (incl. NUL) and whitespace BEFORE scheme detection —
+  // browsers' URL parser silently removes these when resolving href, so
+  // `\x00javascript:alert(1)` would otherwise bypass the blocklist and
+  // execute on click.
+  const trimmed = String(url).replace(/[\u0000-\u0020\u007f]+/g, '');
+  if (!trimmed) return null;
+  if (/^(javascript|data|vbscript|blob|file):/i.test(trimmed)) return null;
   if (/^(https?|ftp|mailto):/i.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('#')) {
     return trimmed;
   }

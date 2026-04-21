@@ -15,11 +15,9 @@
   let _value = '';
   let _isReady = false;
   let _pendingReady = [];
-  let _valueCallbacks = new Map(); // requestId → resolve
   let _changeListeners = [];
   let _cursorListeners = [];
   let _useFallback = false;
-  let _reqId = 0;
   let _lastScriptId = null;
 
   // ── Message listener ────────────────────────────────────────────────────────
@@ -48,10 +46,6 @@
         break;
       case 'close':
         if (typeof closeEditor === 'function') closeEditor();
-        break;
-      case 'value':
-        const cb = _valueCallbacks.get(msg.requestId);
-        if (cb) { _valueCallbacks.delete(msg.requestId); cb(msg.value); }
         break;
     }
   });

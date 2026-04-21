@@ -238,7 +238,8 @@ export const CloudSync = {
             existing.code !== remoteScript.code &&
             existing.code !== localScript.code) {
           const base: string = existing.syncBaseCode ?? existing.code;
-          if (base && base !== localScript.code && base !== remoteScript.code) {
+          // Allow empty-string base (valid code); only skip if truly missing
+          if (base != null && base !== localScript.code && base !== remoteScript.code) {
             try {
               await ScriptAnalyzer._ensureOffscreen();
               const mergeResult: MergeResult = await chrome.runtime.sendMessage({
@@ -309,24 +310,33 @@ export const CloudSync = {
   mergeData(local: SyncEnvelope, remote: SyncEnvelope): SyncEnvelope {
     const scriptsMap = new Map<string, SyncScript>();
 
-    // Add all local scripts
-    for (const script of local.scripts) {
+    // Add all local scripts (guard against malformed envelopes)
+    for (const script of (local.scripts || [])) {
       scriptsMap.set(script.id, script);
     }
 
     // Merge remote scripts (prefer newer)
-    for (const script of remote.scripts) {
+    for (const script of (remote.scripts || [])) {
       const existing = scriptsMap.get(script.id);
       if (!existing || script.updatedAt > existing.updatedAt) {
         scriptsMap.set(script.id, script);
       }
     }
 
+    // Filter out tombstoned entries so deleted scripts don't resurrect
+    const mergedTombstones: Record<string, unknown> = {
+      ...(local.tombstones ?? {}),
+      ...(remote.tombstones ?? {}),
+    };
+    const merged: SyncScript[] = Array.from(scriptsMap.values()).filter(
+      (s) => !mergedTombstones[s.id],
+    );
+
     return {
       version: 1,
       timestamp: Date.now(),
-      scripts: Array.from(scriptsMap.values()),
-      tombstones: {}
+      scripts: merged,
+      tombstones: mergedTombstones
     };
   }
 };

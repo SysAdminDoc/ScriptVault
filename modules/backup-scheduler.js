@@ -491,22 +491,32 @@ const BackupScheduler = (() => {
             }
           }
 
-          // Restore folders
+          // Restore folders. We write via chrome.storage.local to preserve
+          // the exact restored shape, then invalidate FolderStorage's in-memory
+          // cache so the next FolderStorage.getAll() reloads from storage.
+          // Without this, the cached (pre-restore) list is returned forever.
           if (unzipped['folders.json']) {
             try {
               const folders = JSON.parse(fflate.strFromU8(unzipped['folders.json']));
               await chrome.storage.local.set({ scriptFolders: folders });
+              if (typeof FolderStorage !== 'undefined') {
+                FolderStorage.cache = null;
+              }
               restoredFolders = true;
             } catch (foldersErr) {
               errors.push({ name: 'folders.json', error: foldersErr.message || String(foldersErr) });
             }
           }
 
-          // Restore workspaces
+          // Restore workspaces — invalidate WorkspaceManager cache same as above.
           if (unzipped['workspaces.json']) {
             try {
               const workspaces = JSON.parse(fflate.strFromU8(unzipped['workspaces.json']));
               await chrome.storage.local.set({ workspaces });
+              if (typeof WorkspaceManager !== 'undefined') {
+                WorkspaceManager._cache = null;
+                WorkspaceManager._initPromise = null;
+              }
               restoredWorkspaces = true;
             } catch (workspacesErr) {
               errors.push({ name: 'workspaces.json', error: workspacesErr.message || String(workspacesErr) });

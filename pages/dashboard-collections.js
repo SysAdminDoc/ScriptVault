@@ -903,7 +903,7 @@ const CollectionManager = (() => {
           ${s.note ? `<span class="sv-coll-script-note" title="${escapeHtml(s.note)}">${escapeHtml(s.note)}</span>` : ''}
           ${isInstalled
             ? `<button type="button" class="sv-coll-script-toggle ${isEnabled ? 'on' : ''}" data-toggle-id="${escapeHtml(s.scriptId)}" aria-pressed="${String(isEnabled)}" aria-label="${isEnabled ? 'Disable' : 'Enable'} ${scriptName}" title="${isEnabled ? 'Disable' : 'Enable'} ${scriptName}"></button>`
-            : `<button type="button" class="sv-coll-btn inline-install" data-install-gf="${s.greasyForkId || ''}" data-install-name="${escapeHtml(s.name || '')}">Install</button>`}
+            : `<button type="button" class="sv-coll-btn inline-install" data-install-gf="${escapeHtml(s.greasyForkId || '')}" data-install-name="${escapeHtml(s.name || '')}">Install</button>`}
         </div>
       `;
     }

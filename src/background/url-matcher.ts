@@ -242,8 +242,11 @@ export function matchIncludePattern(pattern: string, url: string, urlObj: URL): 
       return re ? re.test(url) : false;
     }
 
-    // Convert glob to regex
-    let regex = pattern
+    // Convert glob to regex. Collapse consecutive `*` before conversion so
+    // patterns like `***abc***.tld` don't produce `(.*){N}` which is a
+    // catastrophic-backtracking ReDoS vector.
+    const collapsed: string = pattern.replace(/\*+/g, '*');
+    let regex = collapsed
       .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape special chars
       .replace(/\*/g, '.*') // * -> .*
       .replace(/\?/g, '.'); // ? -> .

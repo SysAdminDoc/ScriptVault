@@ -371,19 +371,18 @@ function handleMerge(base, local, remote) {
   if (remote === base) return { merged: local, conflicts: false };
 
   try {
-    // Diff computes local patch and remote patch against base, then merges
-    const localPatch = Diff.structuredPatch('base', 'local', base, local, '', '', { context: 3 });
-    const remotePatch = Diff.structuredPatch('base', 'remote', base, remote, '', '', { context: 3 });
-    const merged = Diff.merge(localPatch, remotePatch, base);
-    const hasConflicts = merged.conflict === true || (Array.isArray(merged.hunks) && merged.hunks.some(h => h.conflict));
+    // Diff.merge(mine, theirs, base) — all args are text strings, returns a structured patch
+    const merged = Diff.merge(local, remote, base);
+    const hasConflicts = Array.isArray(merged.hunks) && merged.hunks.some(h =>
+      Array.isArray(h.lines) && h.lines.some(l => typeof l === 'object' && l.conflict)
+    );
 
     if (hasConflicts) {
       // Produce conflict markers like git
-      const result = resolveWithMarkers(base, local, remote);
-      return { merged: result, conflicts: true };
+      return { merged: resolveWithMarkers(base, local, remote), conflicts: true };
     }
 
-    // Convert merged patch object back to string
+    // Apply the merged patch onto the base text
     const mergedText = Diff.applyPatch(base, merged);
     if (mergedText === false) {
       // Patch apply failed — produce conflict markers

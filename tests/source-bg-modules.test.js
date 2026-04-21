@@ -19,6 +19,14 @@ async function loadFreshWorkspaceManager(scripts) {
   const scriptCache = Object.fromEntries(scriptList.map((script) => [script.id, script]));
   const save = vi.fn().mockResolvedValue();
   const getAll = vi.fn().mockImplementation(async () => scriptList);
+  // activate() uses ScriptStorage.set() per script (matches bg/workspaces.js
+  // rollback-safe pattern). Mock set to also update the live scriptList/cache
+  // so downstream assertions observe the mutation.
+  const set = vi.fn().mockImplementation(async (id, script) => {
+    scriptCache[id] = script;
+    const idx = scriptList.findIndex((s) => s.id === id);
+    if (idx >= 0) scriptList[idx] = script;
+  });
   const registerAllScripts = vi.fn().mockResolvedValue();
   const updateBadge = vi.fn().mockResolvedValue();
 
@@ -27,6 +35,7 @@ async function loadFreshWorkspaceManager(scripts) {
       cache: scriptCache,
       getAll,
       save,
+      set,
     },
   }));
   vi.doMock('../src/background/registration.ts', () => ({ registerAllScripts }));
@@ -38,6 +47,7 @@ async function loadFreshWorkspaceManager(scripts) {
     scriptCache,
     scriptList,
     save,
+    set,
     registerAllScripts,
     updateBadge,
   };
@@ -111,7 +121,7 @@ describe('source workspace manager module', () => {
       { id: 'alpha', enabled: true, updatedAt: 1 },
       { id: 'beta', enabled: true, updatedAt: 1 },
     ]);
-    const { WorkspaceManager, scriptCache, save, registerAllScripts, updateBadge } = harness;
+    const { WorkspaceManager, scriptCache, set, registerAllScripts, updateBadge } = harness;
 
     const workspace = await WorkspaceManager.create('Minimal');
     workspace.snapshot.beta = false;
@@ -120,7 +130,10 @@ describe('source workspace manager module', () => {
 
     expect(result).toEqual({ success: true, name: 'Minimal' });
     expect(scriptCache.beta.enabled).toBe(false);
-    expect(save).toHaveBeenCalledTimes(1);
+    // Only beta's state actually changed, so set() should be invoked once
+    // (alpha stays enabled). rollback-safe per-script write path.
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledWith('beta', expect.objectContaining({ id: 'beta', enabled: false }));
     expect(registerAllScripts).toHaveBeenCalledTimes(1);
     expect(updateBadge).toHaveBeenCalledTimes(1);
     expect((await WorkspaceManager.getAll()).active).toBe(workspace.id);

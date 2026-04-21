@@ -50,7 +50,8 @@ interface VerifyResultValid {
 type VerifyResult = VerifyResultInvalid | VerifyResultValid;
 
 interface TrustResult {
-  success: true;
+  success?: true;
+  error?: string;
 }
 
 type TrustedKeysMap = Record<string, { name: string; addedAt: number }>;
@@ -172,6 +173,9 @@ export const ScriptSigning = {
   // ── Trust management ──────────────────────────────────────────────────────
 
   async trustKey(publicKey: string, name: string): Promise<TrustResult> {
+    if (['__proto__', 'constructor', 'prototype'].includes(publicKey)) {
+      return { error: 'Invalid key' };
+    }
     const settings: Settings = await SettingsManager.get();
     const trustedKeys: TrustedKeysMap = settings.trustedSigningKeys ?? {};
     trustedKeys[publicKey] = { name: name || publicKey.slice(0, 12) + '\u2026', addedAt: Date.now() };
@@ -197,20 +201,20 @@ export const ScriptSigning = {
   // Format: @signature <base64signature>|<base64pubkey>|<timestamp>
 
   async signAndEmbedInCode(code: string): Promise<string> {
-    // Strip any existing signature tag
-    const stripped: string = code.replace(/\/\/\s*@signature\s+[^\n]+\n/g, '');
+    // Strip any existing signature tag (CRLF-safe, optional trailing newline)
+    const stripped: string = code.replace(/\/\/\s*@signature\s+[^\r\n]+\r?\n?/g, '');
     const sig: SignResult = await this.signScript(stripped);
     const sigLine = `// @signature ${sig.signature}|${sig.publicKey}|${sig.timestamp}`;
 
-    // Insert just before ==/UserScript==
+    // Insert just before ==/UserScript== (tolerate whitespace variants)
     if (stripped.includes('==/UserScript==')) {
-      return stripped.replace('// ==/UserScript==', sigLine + '\n// ==/UserScript==');
+      return stripped.replace(/(\/\/\s*==\/UserScript==)/, sigLine + '\n$1');
     }
     return sigLine + '\n' + stripped;
   },
 
   extractSignatureFromCode(code: string): SignatureInfo | null {
-    const match: RegExpMatchArray | null = code.match(/\/\/\s*@signature\s+([^\n]+)/);
+    const match: RegExpMatchArray | null = code.match(/\/\/\s*@signature\s+([^\r\n]+)/);
     if (!match) return null;
     const matchedGroup: string | undefined = match[1];
     if (!matchedGroup) return null;
@@ -222,15 +226,15 @@ export const ScriptSigning = {
     return {
       signature: sig,
       publicKey: pub,
-      timestamp: tsStr ? parseInt(tsStr) : null
+      timestamp: tsStr ? parseInt(tsStr, 10) : null
     };
   },
 
   async verifyCodeSignature(code: string): Promise<VerifyResult> {
     const sigInfo: SignatureInfo | null = this.extractSignatureFromCode(code);
     if (!sigInfo) return { valid: false, reason: 'No signature found in script' };
-    // Strip the signature line before verifying (we signed the code without it)
-    const strippedCode: string = code.replace(/\/\/\s*@signature\s+[^\n]+\n?/g, '');
+    // Strip the signature line before verifying (we signed the code without it) — CRLF-safe
+    const strippedCode: string = code.replace(/\/\/\s*@signature\s+[^\r\n]+\r?\n?/g, '');
     return this.verifyScript(strippedCode, sigInfo);
   }
 };

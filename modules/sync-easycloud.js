@@ -769,8 +769,12 @@ var EasyCloudSync = (() => {
         if (_cachedToken) {
           try {
             await chrome.identity.removeCachedAuthToken({ token: _cachedToken });
-            await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${_cachedToken}`)
-              .catch(() => {});
+            // Use POST with body — never put tokens in URL query strings
+            await fetch('https://oauth2.googleapis.com/revoke', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ token: _cachedToken })
+            }).catch(() => {});
           } catch (_) { /* best effort */ }
           _cachedToken = null;
         }
