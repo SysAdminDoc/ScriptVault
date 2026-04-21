@@ -1,4 +1,4 @@
-// ScriptVault v2.0.3 - Content Script Bridge
+// ScriptVault v2.1.8 - Content Script Bridge
 // Bridges messages between userscripts (USER_SCRIPT world) and background service worker
 
 (function() {
@@ -13,22 +13,50 @@
   
   // Unique channel ID to prevent conflicts with other extensions
   const CHANNEL_ID = 'ScriptVault_' + chrome.runtime.id;
-  
+
+  // Security allowlist — the bridge receives window.postMessage events that
+  // any page script can forge (channel ID is derived from the public extension
+  // ID). Only permit GM_* actions and the two telemetry hooks the userscript
+  // wrapper uses; block everything else (factoryReset, deleteScript,
+  // importScripts, setSettings, etc.) from being dispatched via the bridge.
+  const ALLOWED_BRIDGE_ACTIONS = new Set([
+    'netlog_record',
+    'reportExecError',
+    'reportExecTime'
+  ]);
+  function isAllowedBridgeAction(action) {
+    if (typeof action !== 'string') return false;
+    if (action.startsWith('GM_') || action.startsWith('GM.')) return true;
+    return ALLOWED_BRIDGE_ACTIONS.has(action);
+  }
+
   // Listen for messages from userscript world (USER_SCRIPT or page context)
   window.addEventListener('message', async (event) => {
     // Security: Only accept messages from same window
     if (event.source !== window) return;
-    
+
     const msg = event.data;
-    
+
     // Check for our message type
     if (!msg || typeof msg !== 'object') return;
     if (msg.channel !== CHANNEL_ID) return;
     if (msg.direction !== 'to-background') return;
-    
+
     const msgId = msg.id;
     const action = msg.action;
-    
+
+    // Security: reject any action that isn't a known userscript-safe action
+    if (!isAllowedBridgeAction(action)) {
+      window.postMessage({
+        channel: CHANNEL_ID,
+        direction: 'to-userscript',
+        id: msgId,
+        error: 'Action not permitted via userscript bridge',
+        success: false
+      }, '*');
+      return;
+    }
+
     try {
       // Forward to background script and wait for response
       const result = await chrome.runtime.sendMessage({

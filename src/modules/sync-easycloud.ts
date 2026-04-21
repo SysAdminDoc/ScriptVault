@@ -181,6 +181,26 @@ let _initialized = false;
 // Helpers
 // ============================================================================
 
+/**
+ * Wraps `fetch` with an AbortController timeout to prevent service worker hangs.
+ * @param url - Request URL
+ * @param options - Standard RequestInit (do not include a signal — one is added here)
+ * @param timeoutMs - Abort after this many milliseconds (default: 30 000)
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 30_000,
+): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 function log(...args: unknown[]): void {
   console.log(TAG, ...args);
 }
@@ -354,9 +374,9 @@ async function _getValidToken(): Promise<string | null> {
 
 async function _testToken(token: string): Promise<boolean> {
   try {
-    const resp = await fetch(`${DRIVE_API}/about?fields=user`, {
+    const resp = await fetchWithTimeout(`${DRIVE_API}/about?fields=user`, {
       headers: { 'Authorization': `Bearer ${token}` },
-    });
+    }, 10_000);
     return resp.ok;
   } catch (_) {
     return false;
@@ -375,9 +395,10 @@ async function _findSyncFile(token: string): Promise<string | null> {
   if (_cachedFileId) {
     // Verify it still exists
     try {
-      const resp = await fetch(
+      const resp = await fetchWithTimeout(
         `${DRIVE_API}/files/${_cachedFileId}?fields=id,modifiedTime`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
+        { headers: { 'Authorization': `Bearer ${token}` } },
+        10_000,
       );
       if (resp.ok) return _cachedFileId;
     } catch (_) { /* fall through to search */ }
@@ -386,9 +407,10 @@ async function _findSyncFile(token: string): Promise<string | null> {
 
   // Search for the file
   const query = encodeURIComponent(`name='${SYNC_FILE_NAME}' and trashed=false`);
-  const resp = await fetch(
+  const resp = await fetchWithTimeout(
     `${DRIVE_API}/files?q=${query}&spaces=appDataFolder&fields=files(id,modifiedTime)`,
-    { headers: { 'Authorization': `Bearer ${token}` } }
+    { headers: { 'Authorization': `Bearer ${token}` } },
+    15_000,
   );
 
   if (!resp.ok) {
@@ -411,9 +433,10 @@ async function _downloadFromDrive(token: string): Promise<SyncEnvelope | null> {
   const fileId = await _findSyncFile(token);
   if (!fileId) return null;
 
-  const resp = await fetch(
+  const resp = await fetchWithTimeout(
     `${DRIVE_API}/files/${fileId}?alt=media`,
-    { headers: { 'Authorization': `Bearer ${token}` } }
+    { headers: { 'Authorization': `Bearer ${token}` } },
+    60_000,
   );
 
   if (resp.status === 404) {
@@ -459,14 +482,14 @@ async function _uploadToDrive(token: string, data: SyncEnvelope): Promise<void> 
     ? `${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=multipart`
     : `${DRIVE_UPLOAD_API}/files?uploadType=multipart`;
 
-  const resp = await fetch(url, {
+  const resp = await fetchWithTimeout(url, {
     method: fileId ? 'PATCH' : 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': `multipart/related; boundary=${boundary}`,
     },
     body,
-  });
+  }, 60_000);
 
   if (!resp.ok) {
     const errText = await resp.text().catch(() => '');
@@ -935,9 +958,9 @@ export const EasyCloudSync: EasyCloudSyncAPI = {
       // Fetch user info
       let user: UserInfoResult = {};
       try {
-        const resp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        const resp = await fetchWithTimeout('https://www.googleapis.com/oauth2/v2/userinfo', {
           headers: { 'Authorization': `Bearer ${token}` },
-        });
+        }, 10_000);
         if (resp.ok) {
           user = await resp.json() as UserInfoResult;
         }
@@ -981,7 +1004,7 @@ export const EasyCloudSync: EasyCloudSyncAPI = {
       if (_cachedToken) {
         try {
           await chrome.identity.removeCachedAuthToken({ token: _cachedToken });
-          await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${_cachedToken}`)
+          fetchWithTimeout(`https://accounts.google.com/o/oauth2/revoke?token=${_cachedToken}`, {}, 10_000)
             .catch(() => {});
         } catch (_) { /* best effort */ }
         _cachedToken = null;

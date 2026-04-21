@@ -56,6 +56,13 @@ declare const self: typeof globalThis & {
 // Settings Manager
 // ============================================================================
 
+// Pending init promise — ensures concurrent callers share one storage read
+let _settingsInitPromise: Promise<void> | null = null;
+// Pending init promise for ScriptStorage
+let _scriptsInitPromise: Promise<void> | null = null;
+// Pending init promise for FolderStorage
+let _foldersInitPromise: Promise<void> | null = null;
+
 function cloneDefaultSettings(): Settings {
   if (typeof structuredClone === 'function') {
     return structuredClone(settingsDefaultsData) as Settings;
@@ -81,9 +88,14 @@ export const SettingsManager = {
 
   async init(): Promise<void> {
     if (this.cache !== null) return;
-    const data = await chrome.storage.local.get('settings');
-    this.cache = { ...cloneDefaultSettings(), ...(data['settings'] as Partial<Settings> | undefined) };
-    console.log('[ScriptVault] Settings loaded');
+    if (!_settingsInitPromise) {
+      _settingsInitPromise = (async () => {
+        const data = await chrome.storage.local.get('settings');
+        this.cache = { ...cloneDefaultSettings(), ...(data['settings'] as Partial<Settings> | undefined) };
+        console.log('[ScriptVault] Settings loaded');
+      })();
+    }
+    return _settingsInitPromise;
   },
 
   get: getSettingsValue,
@@ -123,9 +135,14 @@ export const ScriptStorage = {
 
   async init(): Promise<void> {
     if (this.cache !== null) return;
-    const data = await chrome.storage.local.get('userscripts');
-    this.cache = (data['userscripts'] as Record<string, Script> | undefined) || {};
-    console.log('[ScriptVault] Loaded', Object.keys(this.cache).length, 'scripts');
+    if (!_scriptsInitPromise) {
+      _scriptsInitPromise = (async () => {
+        const data = await chrome.storage.local.get('userscripts');
+        this.cache = (data['userscripts'] as Record<string, Script> | undefined) || {};
+        console.log('[ScriptVault] Loaded', Object.keys(this.cache).length, 'scripts');
+      })();
+    }
+    return _scriptsInitPromise;
   },
 
   async save(): Promise<void> {
@@ -175,6 +192,16 @@ export const ScriptStorage = {
   async clear(): Promise<void> {
     this.cache = {};
     await this.save();
+  },
+
+  /**
+   * Drop the in-memory cache so the next read forces a fresh load from storage.
+   * Call this after any out-of-band write to the 'userscripts' storage key
+   * (e.g., legacy code that writes directly via chrome.storage.local.set).
+   */
+  invalidateCache(): void {
+    this.cache = null;
+    _scriptsInitPromise = null;
   },
 
   async search(query: string): Promise<Script[]> {
@@ -235,12 +262,23 @@ export const ScriptValues = {
   cache: {} as Record<string, Record<string, unknown>>,
   listeners: new Map<string, ValueChangeListener>(),
   pendingNotifications: new Map<string, PendingNotification>(), // Debounce notifications only (not saves!)
+  _initPromises: new Map<string, Promise<void>>(),
 
   async init(scriptId: string): Promise<void> {
     if (this.cache[scriptId]) return;
-    const storageKey = `values_${scriptId}`;
-    const data = await chrome.storage.local.get(storageKey);
-    this.cache[scriptId] = (data[storageKey] as Record<string, unknown> | undefined) || {};
+    const existing = this._initPromises.get(scriptId);
+    if (existing) return existing;
+    const p = (async () => {
+      const storageKey = `values_${scriptId}`;
+      const data = await chrome.storage.local.get(storageKey);
+      this.cache[scriptId] = (data[storageKey] as Record<string, unknown> | undefined) || {};
+    })();
+    this._initPromises.set(scriptId, p);
+    try {
+      await p;
+    } finally {
+      this._initPromises.delete(scriptId);
+    }
   },
 
   async get(scriptId: string, key: string, defaultValue: unknown): Promise<unknown> {
@@ -469,8 +507,13 @@ export const FolderStorage = {
 
   async init(): Promise<void> {
     if (this.cache !== null) return;
-    const data = await chrome.storage.local.get('scriptFolders');
-    this.cache = (data['scriptFolders'] as Folder[] | undefined) || [];
+    if (!_foldersInitPromise) {
+      _foldersInitPromise = (async () => {
+        const data = await chrome.storage.local.get('scriptFolders');
+        this.cache = (data['scriptFolders'] as Folder[] | undefined) || [];
+      })();
+    }
+    return _foldersInitPromise;
   },
 
   async save(): Promise<void> {

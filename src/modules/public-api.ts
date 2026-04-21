@@ -2,6 +2,8 @@
 // Allows other extensions and web pages to interact with ScriptVault.
 // Designed for service worker (no DOM dependencies).
 
+import { ScriptStorage } from './storage';
+
 /* ------------------------------------------------------------------ */
 /*  Local Types                                                        */
 /* ------------------------------------------------------------------ */
@@ -136,7 +138,13 @@ let _auditLog: AuditEntry[] = [];
 let _webhooks: Record<string, WebhookConfig> = {};
 let _trustedOrigins: string[] = [];
 let _initialized = false;
+let _initPromise: Promise<void> | null = null;
 const _rateLimitMap = new Map<string, number[]>();
+
+// Max size for externally-supplied script code (5 MB)
+const MAX_CODE_SIZE = 5 * 1024 * 1024;
+// Max size for scripts fetched via web install (5 MB)
+const MAX_FETCH_SIZE = 5 * 1024 * 1024;
 
 function getRuntimeHooks(): RuntimeHooks {
   return globalThis as RuntimeHooks;
@@ -717,25 +725,37 @@ const HANDLERS: Record<string, HandlerFn> = {
     if (!allowed) return { error: 'Permission denied', action: 'toggleScript' };
 
     try {
-      const store = await getScriptStore();
-      let updatedStore: StoredUserscripts | null = null;
+      // Use ScriptStorage to keep the in-memory cache coherent.
+      // Direct chrome.storage.local writes would leave the cache stale, causing
+      // registerAllScripts() to re-register scripts with the old enabled value.
+      const script = await ScriptStorage.get(scriptId);
+      if (!script) {
+        // Fall back to legacy-format path for backwards compatibility
+        const store = await getScriptStore();
+        let updatedStore: StoredUserscripts | null = null;
 
-      if (store.mode === 'array') {
-        const scripts = Array.isArray(store.raw) ? [...store.raw] : [];
-        const idx = findArrayScriptIndex(scripts, scriptId);
-        if (idx === -1) return { error: 'Script not found', scriptId };
-        const current = scripts[idx]!;
-        scripts[idx] = { ...current, enabled, updatedAt: Date.now() };
-        updatedStore = scripts;
+        if (store.mode === 'array') {
+          const scripts = Array.isArray(store.raw) ? [...store.raw] : [];
+          const idx = findArrayScriptIndex(scripts, scriptId);
+          if (idx === -1) return { error: 'Script not found', scriptId };
+          const current = scripts[idx]!;
+          scripts[idx] = { ...current, enabled, updatedAt: Date.now() };
+          updatedStore = scripts;
+        } else {
+          const record = !Array.isArray(store.raw) ? { ...store.raw } : {};
+          const entry = findRecordScriptEntry(record, scriptId);
+          if (!entry) return { error: 'Script not found', scriptId };
+          record[entry.key] = { ...entry.value, enabled, updatedAt: Date.now() };
+          updatedStore = record;
+        }
+
+        await chrome.storage.local.set({ userscripts: updatedStore });
+        // Invalidate the ScriptStorage cache since we wrote to storage directly
+        ScriptStorage.invalidateCache();
       } else {
-        const record = !Array.isArray(store.raw) ? { ...store.raw } : {};
-        const entry = findRecordScriptEntry(record, scriptId);
-        if (!entry) return { error: 'Script not found', scriptId };
-        record[entry.key] = { ...entry.value, enabled, updatedAt: Date.now() };
-        updatedStore = record;
+        await ScriptStorage.set(scriptId, { ...script, enabled, updatedAt: Date.now() });
       }
 
-      await chrome.storage.local.set({ userscripts: updatedStore });
       await refreshRuntimeAfterMutation();
 
       void fireWebhook('script.toggled', { scriptId, enabled });
@@ -748,6 +768,8 @@ const HANDLERS: Record<string, HandlerFn> = {
   async installScript(msg: ExternalMessage, sender: SenderLike): Promise<Record<string, unknown>> {
     const code = msg.code;
     if (!code || typeof code !== 'string') return { error: 'Missing or invalid code parameter' };
+    if (code.length > MAX_CODE_SIZE) return { error: 'Script code exceeds maximum allowed size (5 MB)' };
+    if (!code.includes('==UserScript==')) return { error: 'Not a valid userscript (missing ==UserScript== header)' };
 
     const allowed = await authorize('installScript', sender);
     if (!allowed) return { error: 'Permission denied', action: 'installScript' };
@@ -755,9 +777,19 @@ const HANDLERS: Record<string, HandlerFn> = {
     try {
       // Parse basic userscript metadata
       const meta = parseUserscriptMeta(code);
-      const scriptId: string = meta.name
+
+      // Derive a script ID that is unique among existing scripts
+      const baseId: string = meta.name
         ? meta.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase()
         : `ext_${Date.now()}`;
+      const existingScripts = await ScriptStorage.getAll();
+      const usedIds = new Set(existingScripts.map(s => s.id));
+      let scriptId = baseId;
+      if (usedIds.has(scriptId)) {
+        let counter = 2;
+        while (usedIds.has(`${baseId}_${counter}`)) counter++;
+        scriptId = `${baseId}_${counter}`;
+      }
 
       const newScript: FlatScript = {
         id: scriptId,
@@ -776,6 +808,8 @@ const HANDLERS: Record<string, HandlerFn> = {
       const updatedStore = upsertScriptStore(store, newScript, meta, describeSender(sender));
 
       await chrome.storage.local.set({ userscripts: updatedStore });
+      // Invalidate ScriptStorage cache so registerAllScripts() picks up the new script
+      ScriptStorage.invalidateCache();
       await refreshRuntimeAfterMutation(newScript, meta);
 
       void fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
@@ -858,6 +892,17 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
       return { type: 'scriptvault:install:response', error: 'Missing or invalid url' };
     }
 
+    // Validate URL — only allow https: to prevent SSRF to local/internal resources
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return { type: 'scriptvault:install:response', error: 'Invalid URL' };
+    }
+    if (parsedUrl.protocol !== 'https:') {
+      return { type: 'scriptvault:install:response', error: 'Only https:// URLs are allowed for script installation' };
+    }
+
     // Authorize before fetching to prevent SSRF
     const allowed = await authorize('installScript', { origin });
     if (!allowed) {
@@ -866,15 +911,44 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
 
     // Fetch the script only after authorization
     try {
-      const resp = await fetch(url);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15_000);
+      let resp: Response;
+      try {
+        resp = await fetch(url, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      // Enforce size limit before reading the full body
+      const contentLength = resp.headers.get('content-length');
+      if (contentLength && parseInt(contentLength, 10) > MAX_FETCH_SIZE) {
+        throw new Error('Script file exceeds maximum allowed size (5 MB)');
+      }
       const code = await resp.text();
+      if (code.length > MAX_FETCH_SIZE) {
+        throw new Error('Script file exceeds maximum allowed size (5 MB)');
+      }
+      if (!code.includes('==UserScript==')) {
+        throw new Error('Not a valid userscript (missing ==UserScript== header)');
+      }
 
       // Parse and install directly (authorization already checked above)
       const meta = parseUserscriptMeta(code);
-      const scriptId: string = meta.name
+
+      // Derive a unique script ID
+      const baseId: string = meta.name
         ? meta.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase()
         : `ext_${Date.now()}`;
+      const existingScripts = await ScriptStorage.getAll();
+      const usedIds = new Set(existingScripts.map(s => s.id));
+      let scriptId = baseId;
+      if (usedIds.has(scriptId)) {
+        let counter = 2;
+        while (usedIds.has(`${baseId}_${counter}`)) counter++;
+        scriptId = `${baseId}_${counter}`;
+      }
 
       const newScript: FlatScript = {
         id: scriptId,
@@ -893,6 +967,8 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
       const updatedStore = upsertScriptStore(store, newScript, meta, `origin:${origin}`);
 
       await chrome.storage.local.set({ userscripts: updatedStore });
+      // Invalidate ScriptStorage cache so registerAllScripts() picks up the new script
+      ScriptStorage.invalidateCache();
       await refreshRuntimeAfterMutation(newScript, meta);
 
       void fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
@@ -918,14 +994,19 @@ async function fireWebhook(eventType: string, payload: Record<string, unknown>):
     data: payload
   };
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
   try {
     await fetch(hook.url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal
     });
   } catch (e: unknown) {
     console.warn(`[PublicAPI] webhook ${eventType} failed:`, e);
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -1032,24 +1113,29 @@ const PublicAPI = {
   /**
    * Initialize the Public API: load state, register listeners.
    * Safe for service workers (no DOM).
+   * Concurrent callers share one init promise to prevent double-registration.
    */
   async init(): Promise<void> {
     if (_initialized) return;
+    if (!_initPromise) {
+      _initPromise = (async () => {
+        await loadState();
 
-    await loadState();
+        // Register external message listener
+        if (chrome.runtime.onMessageExternal) {
+          chrome.runtime.onMessageExternal.addListener(onExternalMessage);
+        }
 
-    // Register external message listener
-    if (chrome.runtime.onMessageExternal) {
-      chrome.runtime.onMessageExternal.addListener(onExternalMessage);
+        // Register web page message listener (only in contexts that have window)
+        if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
+          self.addEventListener('message', dispatchWebMessage);
+        }
+
+        _initialized = true;
+        console.log('[PublicAPI] initialized, version', API_VERSION);
+      })();
     }
-
-    // Register web page message listener (only in contexts that have window)
-    if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
-      self.addEventListener('message', dispatchWebMessage);
-    }
-
-    _initialized = true;
-    console.log('[PublicAPI] initialized, version', API_VERSION);
+    return _initPromise;
   },
 
   /**

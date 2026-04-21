@@ -153,9 +153,15 @@ export function registerContextMenuClickListener(): void {
     async (info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab) => {
       switch (info.menuItemId) {
         case 'scriptvault-new': {
-          const url = new URL(tab!.url!);
+          // new URL() throws on some internal tabs (about:, chrome-error://, ...)
+          let host = '';
+          try {
+            if (tab?.url) host = new URL(tab.url).hostname;
+          } catch (_e) {
+            // Invalid tab URL — fall back to empty host
+          }
           chrome.tabs.create({
-            url: `pages/dashboard.html?new=1&host=${encodeURIComponent(url.hostname)}`,
+            url: `pages/dashboard.html?new=1&host=${encodeURIComponent(host)}`,
           });
           break;
         }
@@ -174,7 +180,14 @@ export function registerContextMenuClickListener(): void {
           const linkUrl: string | undefined = info.linkUrl;
           if (linkUrl) {
             try {
-              const response: Response = await fetch(linkUrl);
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 20_000);
+              let response: Response;
+              try {
+                response = await fetch(linkUrl, { signal: controller.signal });
+              } finally {
+                clearTimeout(timeoutId);
+              }
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               const code: string = await response.text();
               if (code.includes('==UserScript==')) {
