@@ -87,6 +87,8 @@ const MAX_ENTRIES = 500;
 
 // In-memory cache; loaded on first access
 let _cache: ErrorLogRecord[] | null = null;
+// Pending load promise — ensures concurrent callers share one storage read
+let _loadPromise: Promise<ErrorLogRecord[]> | null = null;
 
 // ---------------------------------------------------------------------------
 // Internal Storage
@@ -94,9 +96,14 @@ let _cache: ErrorLogRecord[] | null = null;
 
 async function _load(): Promise<ErrorLogRecord[]> {
   if (_cache) return _cache;
-  const data = await chrome.storage.local.get(STORAGE_KEY);
-  _cache = (data[STORAGE_KEY] as ErrorLogRecord[] | undefined) || [];
-  return _cache;
+  if (!_loadPromise) {
+    _loadPromise = (async () => {
+      const data = await chrome.storage.local.get(STORAGE_KEY);
+      _cache = (data[STORAGE_KEY] as ErrorLogRecord[] | undefined) || [];
+      return _cache;
+    })();
+  }
+  return _loadPromise;
 }
 
 async function _save(): Promise<void> {

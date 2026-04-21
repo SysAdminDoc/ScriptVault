@@ -186,7 +186,9 @@ export async function fetchRequireScript(url: string): Promise<string | null> {
       const age = Date.now() - (entry.timestamp ?? 0);
       if (age < 7 * 24 * 60 * 60 * 1000) {
         debugLog('Using persistent cached @require:', url);
-        requireCache.set(url, entry.code);
+        // Use fetchUrl (without SRI fragment) as the in-memory cache key so
+        // subsequent lookups at line `requireCache.has(fetchUrl)` hit.
+        requireCache.set(fetchUrl, entry.code);
         return entry.code;
       }
     }
@@ -249,9 +251,10 @@ export async function fetchRequireScript(url: string): Promise<string | null> {
 
 export async function fetchWithRetry(url: string, retries: number = 2): Promise<string | null> {
   for (let i = 0; i <= retries; i++) {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
       const response = await fetch(url, {
         method: 'GET',
@@ -290,6 +293,7 @@ export async function fetchWithRetry(url: string, retries: number = 2): Promise<
 
       throw new Error('Empty response');
     } catch (e) {
+      clearTimeout(timeoutId); // Always clear to prevent dangling timers on network errors
       if (i === retries) {
         throw e;
       }
