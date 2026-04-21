@@ -657,25 +657,26 @@
             const icon = getScriptIcon(script);
             const animDelay = `style="animation-delay: ${i * 30}ms"`;
             const rowLabel = [name, version ? `version ${version}` : ''].filter(Boolean).join(', ');
+            const scriptIdAttr = escapeHtml(script.id);
 
             return `
-                <div class="script-item${enabled ? '' : ' not-running'}" data-script-id="${script.id}" role="listitem" tabindex="0" aria-posinset="${i + 1}" aria-setsize="${displayScripts.length}" aria-label="${escapeHtml(rowLabel)}" ${animDelay}>
+                <div class="script-item${enabled ? '' : ' not-running'}" data-script-id="${scriptIdAttr}" role="listitem" tabindex="0" aria-posinset="${i + 1}" aria-setsize="${displayScripts.length}" aria-label="${escapeHtml(rowLabel)}" ${animDelay}>
                     <label class="script-toggle">
-                        <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${script.id}" aria-label="${escapeHtml(enabled ? `Disable ${name}` : `Enable ${name}`)}">
+                        <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${scriptIdAttr}" aria-label="${escapeHtml(enabled ? `Disable ${name}` : `Enable ${name}`)}">
                         <span class="slider"></span>
                     </label>
                     <div class="script-icon">${icon}</div>
                     <div class="script-main">
-                        <button class="script-name-btn" data-edit-id="${script.id}" type="button" aria-label="Open ${escapeHtml(name)} in editor">
+                        <button class="script-name-btn" data-edit-id="${scriptIdAttr}" type="button" aria-label="Open ${escapeHtml(name)} in editor">
                             <span class="script-name-label">${escapeHtml(name)}</span>${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}
                         </button>
                     </div>
-                    <button class="script-quick-edit" data-quickedit-id="${script.id}" type="button" aria-label="Quick edit ${escapeHtml(name)}" title="Quick edit">
+                    <button class="script-quick-edit" data-quickedit-id="${scriptIdAttr}" type="button" aria-label="Quick edit ${escapeHtml(name)}" title="Quick edit">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
                         </svg>
                     </button>
-                    <button class="script-more" data-more-id="${script.id}" type="button" aria-label="More actions for ${escapeHtml(name)}" aria-haspopup="menu" aria-controls="scriptDropdown" aria-expanded="false">
+                    <button class="script-more" data-more-id="${scriptIdAttr}" type="button" aria-label="More actions for ${escapeHtml(name)}" aria-haspopup="menu" aria-controls="scriptDropdown" aria-expanded="false">
                         <svg viewBox="0 0 24 24" fill="currentColor">
                             <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
                         </svg>

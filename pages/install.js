@@ -330,7 +330,7 @@ async function init() {
     const response = await chrome.runtime.sendMessage({ action: 'getScripts' });
     const scripts = response?.scripts || [];
     existingScript = scripts.find(s =>
-      s.meta.name === scriptMeta.name &&
+      s && s.meta && s.meta.name === scriptMeta.name &&
       (s.meta.namespace === scriptMeta.namespace || (!s.meta.namespace && !scriptMeta.namespace))
     );
 
@@ -400,9 +400,9 @@ function parseMetadata(code) {
       if (resourceMatch && !['__proto__', 'constructor', 'prototype'].includes(resourceMatch[1])) {
         meta.resource[resourceMatch[1]] = resourceMatch[2];
       }
-    } else if (Array.isArray(meta[key])) {
+    } else if (Object.prototype.hasOwnProperty.call(meta, key) && Array.isArray(meta[key])) {
       meta[key].push(val);
-    } else if (key in meta) {
+    } else if (Object.prototype.hasOwnProperty.call(meta, key)) {
       meta[key] = val;
     }
   }
@@ -1470,16 +1470,33 @@ async function handleInstall() {
   try {
     const scriptId = existingScript?.id || null;
 
+    // Round 11: The background saveScript handler doesn't read the `autoUpdate`
+    // flag — the canonical per-script update opt-out is `@nodownload` in the
+    // metadata block, which the update-checker honors. If the user toggled
+    // auto-update OFF on the install page and the script doesn't already
+    // declare @nodownload, inject it into the header so the preference
+    // actually takes effect.
+    let codeToSave = scriptCode;
+    if (autoUpdate === false && !scriptMeta.nodownload) {
+      codeToSave = codeToSave.replace(
+        /(\/\/\s*==UserScript==\s*\r?\n)/,
+        '$1// @nodownload\n'
+      );
+    }
+
     const result = await chrome.runtime.sendMessage({
       action: 'saveScript',
       data: {
-        code: scriptCode,
+        code: codeToSave,
         id: scriptId,
         enabled: enableOnInstall,
         autoUpdate: autoUpdate
       }
     });
 
+    if (!result) {
+      throw new Error('No response from background (service worker may have stopped)');
+    }
     if (result.error) {
       throw new Error(result.error);
     }
@@ -1493,7 +1510,7 @@ async function handleInstall() {
         : existingScript
           ? 'updated'
           : 'installed';
-    showSuccess(scriptMeta.name, successAction, result.scriptId);
+    showSuccess(scriptMeta.name, successAction, result?.scriptId);
 
   } catch (e) {
     console.error('Install failed:', e);

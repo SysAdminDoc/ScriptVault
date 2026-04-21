@@ -15,7 +15,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { context, build } from "esbuild";
+import { build } from "esbuild";
 
 const ROOT = resolve(import.meta.dirname || ".");
 const args = process.argv.slice(2);
@@ -165,26 +165,9 @@ async function startWatch() {
   const watchDirs = ["shared", "modules", "lib", "bg"];
   const watchFiles = ["background.core.js", "manifest.json"];
 
-  // Use esbuild's context for efficient rebuilds via a dummy entrypoint
-  // that triggers our concat build
-  const ctx = await context({
-    entryPoints: [],
-    write: false,
-    logLevel: "silent",
-    plugins: [
-      {
-        name: "scriptvault-watch",
-        setup(pluginBuild) {
-          // Watch source files for changes
-          pluginBuild.onStart(() => {
-            buildBackground().catch(console.error);
-          });
-        },
-      },
-    ],
-  });
-
-  // We do a manual FS poll approach since we are concatenating, not bundling
+  // Manual FS watch approach since we are concatenating source files,
+  // not bundling through esbuild. (A previous revision also spawned an
+  // unused esbuild context here which leaked a child process.)
   const { watch: fsWatch } = await import("node:fs");
   const rebuild = debounce(() => {
     buildBackground().catch(console.error);

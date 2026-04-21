@@ -1,16 +1,16 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "2.1.7",
+  "version": "2.1.8",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "minimum_chrome_version": "120",
   "homepage_url": "https://github.com/SysAdminDoc/ScriptVault",
   "icons": {
-    "16": "images/icon16.png",
-    "32": "images/icon32.png",
-    "48": "images/icon48.png",
-    "128": "images/icon128.png"
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
   },
   "permissions": [
     "storage",
@@ -42,8 +42,10 @@
   },
   "action": {
     "default_icon": {
-      "16": "images/icon16.png",
-      "32": "images/icon32.png"
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
     },
     "default_title": "__MSG_extName__",
     "default_popup": "pages/popup.html"
@@ -57,22 +59,36 @@
     "open_in_tab": true
   },
   "sandbox": {
-    "pages": ["pages/editor-sandbox.html"]
+    "pages": [
+      "pages/editor-sandbox.html"
+    ]
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self';",
     "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; object-src 'self';"
   },
-  "content_scripts": [{
-    "matches": ["<all_urls>"],
-    "js": ["content.js"],
-    "run_at": "document_start",
-    "all_frames": true
-  }],
-  "web_accessible_resources": [{
-    "resources": ["pages/install.html"],
-    "matches": ["<all_urls>"]
-  }],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "pages/install.html"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
   "commands": {
     "_execute_action": {
       "suggested_key": {

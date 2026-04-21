@@ -14,7 +14,8 @@ declare function doesScriptMatchUrl(script: Script, url: string): boolean;
 // ---------------------------------------------------------------------------
 
 let _autoReloadTimer: ReturnType<typeof setTimeout> | null = null;
-let _autoReloadScripts: Script[] = [];
+// Keyed by script id so rapid saves of the same script don't accumulate duplicates.
+const _autoReloadScripts: Map<string, Script> = new Map();
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -24,12 +25,12 @@ export async function autoReloadMatchingTabs(script: Script): Promise<void> {
   const settings = await SettingsManager.get() as unknown as Settings;
   if (!settings.autoReload) return;
 
-  _autoReloadScripts.push(script);
+  _autoReloadScripts.set(script.id, script);
   if (_autoReloadTimer) clearTimeout(_autoReloadTimer);
 
   _autoReloadTimer = setTimeout(async () => {
-    const scripts = _autoReloadScripts;
-    _autoReloadScripts = [];
+    const scripts = Array.from(_autoReloadScripts.values());
+    _autoReloadScripts.clear();
     _autoReloadTimer = null;
 
     try {
@@ -38,7 +39,8 @@ export async function autoReloadMatchingTabs(script: Script): Promise<void> {
       for (const tab of tabs) {
         if (tab.id === undefined || reloaded.has(tab.id)) continue;
         if (tab.url && scripts.some(s => doesScriptMatchUrl(s, tab.url!))) {
-          chrome.tabs.reload(tab.id);
+          // Tab may have been closed since query — swallow rejection
+          chrome.tabs.reload(tab.id).catch(() => {});
           reloaded.add(tab.id);
         }
       }

@@ -123,6 +123,13 @@ describe("popup UX controller", () => {
   test("popup script rows render only essential controls and keyboard navigation", () => {
     expect(popupJs).toMatch(/function getPopupScriptRows\(\)/);
     expect(popupJs).toMatch(/function focusPopupScriptRow\(row\)/);
+    expect(popupJs).toMatch(/const scriptIdAttr = escapeHtml\(script\.id\);/);
+    expect(popupJs).toMatch(/data-script-id="\$\{scriptIdAttr\}"/);
+    expect(popupJs).toMatch(/data-toggle-id="\$\{scriptIdAttr\}"/);
+    expect(popupJs).toMatch(/data-edit-id="\$\{scriptIdAttr\}"/);
+    expect(popupJs).toMatch(/data-quickedit-id="\$\{scriptIdAttr\}"/);
+    expect(popupJs).toMatch(/data-more-id="\$\{scriptIdAttr\}"/);
+    expect(popupJs).not.toContain('data-script-id="${script.id}"');
     expect(popupJs).toMatch(/role="listitem" tabindex="0"/);
     expect(popupJs).toMatch(/aria-posinset="\$\{i \+ 1\}" aria-setsize="\$\{displayScripts.length\}"/);
     expect(popupJs).not.toMatch(/script-state-pill/);

@@ -184,6 +184,7 @@ export async function importScripts(
 
   // Re-register all scripts after import
   await registerAllScripts();
+  await updateBadge();
 
   return results;
 }

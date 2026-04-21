@@ -667,15 +667,17 @@ const ProfileManager = (() => {
     _profiles.forEach((p, idx) => {
       const isActive = p.id === _activeProfileId;
       const shortcut = idx < 9 ? `Alt+${idx + 1}` : '';
+      // Validate color against a hex/named-color pattern to prevent style-attr breakout
+      const safeColor = /^(#[0-9a-f]{3,8}|[a-z]+)$/i.test(String(p.color || '')) ? p.color : '#6b7280';
       html += `
         <button type="button"
               class="sv-profile-chip${isActive ? ' active' : ''}"
-              style="--color: ${p.color}"
+              style="--color: ${safeColor}"
               data-profile-id="${_escapeHtml(p.id)}"
               aria-pressed="${isActive ? 'true' : 'false'}"
               aria-current="${isActive ? 'true' : 'false'}"
               title="${_escapeHtml(p.name)}${shortcut ? ' (' + shortcut + ')' : ''}">
-          <span class="sv-chip-emoji">${p.emoji || ''}</span>
+          <span class="sv-chip-emoji">${_escapeHtml(p.emoji || '')}</span>
           <span>${_escapeHtml(p.name)}</span>
           ${shortcut ? `<span class="sv-chip-shortcut">${shortcut}</span>` : ''}
         </button>`;

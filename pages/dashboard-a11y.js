@@ -127,6 +127,12 @@ const A11y = (() => {
 
   function qs(sel) { return document.querySelector(sel); }
   function qsa(sel) { return [...document.querySelectorAll(sel)]; }
+  function escapeSelectorValue(value) {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return CSS.escape(String(value));
+    }
+    return String(value).replace(/"/g, '\\"');
+  }
 
   /* ------------------------------------------------------------------ */
   /*  Live regions                                                       */
@@ -313,7 +319,7 @@ const A11y = (() => {
     // Ensure labeled inputs via id have proper for association
     qsa('input[id], select[id], textarea[id]').forEach(input => {
       const id = input.id;
-      if (!qs(`label[for="${id}"]`) && !input.getAttribute('aria-label') && !input.getAttribute('aria-labelledby')) {
+      if (!qs(`label[for="${escapeSelectorValue(id)}"]`) && !input.getAttribute('aria-label') && !input.getAttribute('aria-labelledby')) {
         // Try to find a nearby label text
         const prev = input.previousElementSibling;
         const parent = input.parentElement;

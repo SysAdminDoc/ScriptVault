@@ -67,8 +67,8 @@
     let html = '';
     html += section('General', [
       ['URL', escapeHtml(entry.url || '')],
-      ['Method', entry.method || 'GET'],
-      ['Status', entry.status ? `${entry.status} ${entry.statusText || ''}` : 'Error'],
+      ['Method', escapeHtml(entry.method || 'GET')],
+      ['Status', entry.status ? `${Number(entry.status) || 0} ${escapeHtml(entry.statusText || '')}` : 'Error'],
       ['Duration', formatDuration(entry.duration)],
       ['Size', formatBytes(entry.responseSize)],
       ['Script', escapeHtml(entry.scriptName || '')],
@@ -327,14 +327,20 @@
       tr.setAttribute('aria-selected', String(selectedRow === entry.id));
       tr.setAttribute('aria-label', `${(entry.method || 'GET').toUpperCase()} ${entry.url || ''}`);
 
-      const method = (entry.method || 'GET').toUpperCase();
+      const rawMethod = (entry.method || 'GET').toUpperCase();
+      // Constrain method to a safe token — HTTP methods are [A-Z]+, but
+      // netlog records whatever the userscript passed. Unescaped content
+      // lands inside both a class attribute and text, so enforce the
+      // alphanumeric subset and escape the visible copy for display.
+      const methodClass = /^[A-Z0-9_-]{1,16}$/.test(rawMethod) ? rawMethod : 'OTHER';
+      const method = escapeHtml(rawMethod);
       const statusCode = entry.status || 0;
       const duration = entry.duration;
       let hostname = '';
       try { hostname = new URL(entry.url).hostname; } catch {}
 
       tr.innerHTML = `
-        <td><span class="method-badge method-${method}">${method}</span></td>
+        <td><span class="method-badge method-${methodClass}">${method}</span></td>
         <td title="${escapeHtml(entry.url || '')}">${escapeHtml(hostname + (entry.url || '').replace(/^https?:\/\/[^/]+/, '').slice(0, 60))}</td>
         <td class="${statusClass(statusCode)}">${statusCode || '—'}</td>
         <td class="${durationClass(duration)}">${formatDuration(duration)}</td>

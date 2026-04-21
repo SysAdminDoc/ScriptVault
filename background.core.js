@@ -881,8 +881,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // USER_SCRIPT world message listener (for GM_* APIs)
 // This is SEPARATE from onMessage and required for messaging: true to work
+//
+// Security: userscripts are semi-trusted code. Restrict this path to the
+// action set the GM_* wrapper actually needs. Without this allowlist a
+// malicious userscript could invoke privileged dashboard actions like
+// factoryReset, deleteScript, importScripts, or setSettings.
+const USER_SCRIPT_ALLOWED_EXTRAS = new Set([
+  'netlog_record',
+  'reportExecError',
+  'reportExecTime'
+]);
+function isUserScriptAllowedAction(action) {
+  if (typeof action !== 'string') return false;
+  if (action.startsWith('GM_') || action.startsWith('GM.')) return true;
+  return USER_SCRIPT_ALLOWED_EXTRAS.has(action);
+}
 if (chrome.runtime.onUserScriptMessage) {
   chrome.runtime.onUserScriptMessage.addListener((message, sender, sendResponse) => {
+    if (!message || !isUserScriptAllowedAction(message.action)) {
+      sendResponse({ error: 'Action not permitted from user script' });
+      return false;
+    }
     handleMessage(message, sender)
       .then(sendResponse)
       .catch(e => {
@@ -895,6 +914,12 @@ if (chrome.runtime.onUserScriptMessage) {
 }
 
 async function handleMessage(message, sender) {
+  // Wait for SW init (SettingsManager/ScriptStorage) to finish before handling
+  // any message. Without this, fast popup/dashboard opens after wake can hit
+  // handlers with uninitialised state and return empty results or throw.
+  if (self._initPromise) {
+    try { await self._initPromise; } catch (e) { /* init failure is logged in init() */ }
+  }
   const { action } = message;
   // Support both patterns: { action, data: { ... } } and { action, prop1, prop2, ... }
   const data = message.data || message;
@@ -1189,7 +1214,11 @@ async function handleMessage(message, sender) {
       case 'duplicateScript': {
         const newScript = await ScriptStorage.duplicate(data.id);
         if (newScript) {
-          await registerScript(newScript);
+          // Honor the duplicated script's `enabled` state — duplicating a disabled
+          // script was silently re-enabling it because register was unconditional.
+          if (newScript.enabled !== false) {
+            await registerScript(newScript);
+          }
           await updateBadge();
           // Return with metadata property for dashboard compatibility
           return { success: true, script: { ...newScript, metadata: newScript.meta } };
@@ -1664,10 +1693,14 @@ async function handleMessage(message, sender) {
           return { success: true };
         }
 
-        // Only re-register if execution-affecting settings changed
+        // Only re-register if execution-affecting settings changed.
+        // Guard with `k in data.settings` — otherwise comparing `oldSettings[k]`
+        // against `undefined` (from an unrelated partial update) triggers a needless
+        // re-register cycle every time any other setting is changed.
         const EXEC_KEYS = ['runAt', 'injectInto', 'useOriginalMatches', 'useOriginalIncludes',
                            'useOriginalExcludes', 'userMatches', 'userIncludes', 'userExcludes'];
         const needsReregister = EXEC_KEYS.some(k =>
+          k in data.settings &&
           JSON.stringify(oldSettings[k]) !== JSON.stringify(data.settings[k])
         );
         if (needsReregister && script.enabled !== false) {
@@ -3707,6 +3740,7 @@ function _debouncedStatsSave() {
 }
 
 let _backgroundTaskRunning = false;
+let _backgroundTaskToken = 0;
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   // Handle notification auto-close alarms
   if (alarm.name.startsWith('notif_clear_')) {
@@ -3729,8 +3763,14 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
   _backgroundTaskRunning = true;
-  // Safety timeout: release mutex after 5 minutes even if task hangs
-  const safetyTimer = setTimeout(() => { _backgroundTaskRunning = false; }, 300000);
+  // Safety timeout: release mutex after 5 minutes even if the task hangs.
+  // Each task gets a unique token so the late-finishing task can tell whether
+  // the safety timer has already released the mutex for the next task — if so,
+  // the stale finally block must NOT clobber the new task's `true` flag.
+  const myToken = ++_backgroundTaskToken;
+  const safetyTimer = setTimeout(() => {
+    if (_backgroundTaskToken === myToken) _backgroundTaskRunning = false;
+  }, 300000);
   try {
     if (alarm.name === 'autoUpdate') {
       await UpdateSystem.autoUpdate();
@@ -3741,7 +3781,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     console.error('[ScriptVault] Alarm handler error:', e);
   } finally {
     clearTimeout(safetyTimer);
-    _backgroundTaskRunning = false;
+    if (_backgroundTaskToken === myToken) _backgroundTaskRunning = false;
   }
 });
 
@@ -4028,6 +4068,16 @@ async function installFromUrl(url) {
 
 async function init() {
   await SettingsManager.init();
+
+  // v2.0: Run migration BEFORE ScriptStorage.init() so that any migration-driven
+  // rewrites of `userscripts` storage are visible to the in-memory cache. Running
+  // it after ScriptStorage.init() left the cache pinned to pre-migration data,
+  // causing every subsequent cached read (dashboard, registration, badge) to see
+  // the old shape until the next SW cold start.
+  if (typeof Migration !== 'undefined') {
+    try { await Migration.run(); } catch (e) { console.error('[ScriptVault] Migration error:', e); }
+  }
+
   await ScriptStorage.init();
 
   // Apply language setting to I18n
@@ -4042,19 +4092,28 @@ async function init() {
   // Setup context menus
   await setupContextMenus();
 
-  // Register all enabled scripts (skip if already registered from a previous SW lifecycle)
-  await registerAllScripts();
+  // Register all enabled scripts — force re-registration on extension install/update
+  // (new GM_* wrappers / match patterns require rewriting all registered scripts).
+  // On plain SW wake within the same extension version, skip the destructive cycle.
+  let needsForceReregister = false;
+  try {
+    const currentVersion = chrome.runtime.getManifest().version;
+    const stored = await chrome.storage.local.get('_lastRegisteredVersion');
+    if (stored._lastRegisteredVersion !== currentVersion) {
+      needsForceReregister = true;
+      await chrome.storage.local.set({ _lastRegisteredVersion: currentVersion });
+    }
+  } catch (e) {
+    // Unable to read version — force re-register to be safe on update
+    needsForceReregister = true;
+  }
+  await registerAllScripts(needsForceReregister);
 
   await updateBadge();
   await setupAlarms();
 
   // Clean up stale persistent caches (require_cache_, res_cache_)
   cleanupStaleCaches();
-
-  // v2.0: Run migration if needed
-  if (typeof Migration !== 'undefined') {
-    try { await Migration.run(); } catch (e) { console.error('[ScriptVault] Migration error:', e); }
-  }
 
   // v2.0: Auto-cleanup storage if above threshold
   if (typeof QuotaManager !== 'undefined') {
@@ -4064,6 +4123,25 @@ async function init() {
   // v2.0: Register global error handlers for ErrorLog
   if (typeof ErrorLog !== 'undefined' && typeof ErrorLog.registerGlobalHandlers === 'function') {
     ErrorLog.registerGlobalHandlers();
+  }
+
+  // v2.0 module initializers: these register alarm/message listeners and
+  // load per-module state. Previously they were only called from
+  // chrome.runtime.onInstalled, which only fires at install/update — after
+  // the first SW shutdown (~30s idle) the listeners were gone and modules
+  // were dormant until the next extension update. Each module is
+  // `_initialized`-guarded so calling them every wake is cheap and safe.
+  if (typeof BackupScheduler !== 'undefined') {
+    try { await BackupScheduler.init(); } catch (e) { console.error('[ScriptVault] BackupScheduler init error:', e); }
+  }
+  if (typeof NotificationSystem !== 'undefined' && typeof NotificationSystem.init === 'function') {
+    try { await NotificationSystem.init(); } catch (e) { console.error('[ScriptVault] NotificationSystem init error:', e); }
+  }
+  if (typeof PublicAPI !== 'undefined') {
+    try { await PublicAPI.init(); } catch (e) { console.error('[ScriptVault] PublicAPI init error:', e); }
+  }
+  if (typeof EasyCloudSync !== 'undefined') {
+    try { await EasyCloudSync.init(); } catch (e) { console.error('[ScriptVault] EasyCloudSync init error:', e); }
   }
 
   console.log('[ScriptVault] Service worker ready');
@@ -4178,11 +4256,48 @@ async function registerAllScripts(forceReregister = false) {
     // On normal SW wake, check if scripts are already registered to avoid
     // the destructive unregister→register cycle that creates a gap where
     // scripts aren't active on page navigations.
+    //
+    // Round 11: Compute a diff between enabled-in-storage and currently-registered.
+    // If a previous `Promise.allSettled` registration partially failed, the registered
+    // set may be missing some scripts indefinitely — register just the missing subset
+    // rather than short-circuiting the whole call.
     if (!forceReregister) {
       try {
         const existing = await chrome.userScripts.getScripts();
         if (existing && existing.length > 0) {
-          debugLog(`Skipping re-registration: ${existing.length} scripts already registered`);
+          const settings = await SettingsManager.get();
+          if (!settings.enabled) {
+            debugLog(`Skipping re-registration: scripts globally disabled`);
+            return;
+          }
+          const scripts = await ScriptStorage.getAll();
+          const enabledScripts = scripts.filter(s => s.enabled !== false);
+          const registeredIds = new Set(existing.map(s => s.id));
+          const missing = enabledScripts.filter(s => !registeredIds.has(s.id));
+
+          if (missing.length === 0) {
+            debugLog(`Skipping re-registration: ${existing.length} scripts already registered, none missing`);
+            return;
+          }
+
+          // Preload @require deps for the missing subset in parallel
+          const missingRequires = new Set();
+          for (const script of missing) {
+            for (const req of (script.meta?.require || [])) {
+              missingRequires.add(req);
+            }
+          }
+          if (missingRequires.size > 0) {
+            debugLog(`Preloading ${missingRequires.size} @require deps for ${missing.length} missing scripts`);
+            await Promise.allSettled([...missingRequires].map(url => fetchRequireScript(url)));
+          }
+
+          debugLog(`Registering ${missing.length} missing script(s) (diff from ${existing.length} already registered)`);
+          const diffResults = await Promise.allSettled(missing.map(script => registerScript(script)));
+          const diffFailures = diffResults.filter(r => r.status === 'rejected');
+          if (diffFailures.length > 0) {
+            console.warn(`[ScriptVault] ${diffFailures.length} missing script(s) failed to register:`, diffFailures.map(r => r.reason?.message || r.reason));
+          }
           return;
         }
       } catch (e) {
@@ -4783,7 +4898,49 @@ async function fetchWithRetry(url, retries = 2) {
 // ============================================================================
 
 // Maps scriptId -> array of rule IDs applied via @webRequest / GM_webRequest
+// Round 11: Persisted to chrome.storage.local under `_webRequestRuleMap` so the
+// map survives SW shutdown. Without persistence, once the SW is killed,
+// `removeWebRequestRules` can no longer clean up rules inserted by prior SW
+// generations — script deletion would leak DNR rules permanently.
 const _webRequestRuleMap = new Map();
+let _webRequestRuleMapHydrated = false;
+let _webRequestRuleMapHydratingPromise = null;
+
+async function _hydrateWebRequestRuleMap() {
+  if (_webRequestRuleMapHydrated) return;
+  if (_webRequestRuleMapHydratingPromise) return _webRequestRuleMapHydratingPromise;
+  _webRequestRuleMapHydratingPromise = (async () => {
+    try {
+      const result = await chrome.storage.local.get('_webRequestRuleMap');
+      const stored = result?._webRequestRuleMap;
+      if (stored && typeof stored === 'object') {
+        for (const [scriptId, ruleIds] of Object.entries(stored)) {
+          if (Array.isArray(ruleIds) && ruleIds.length > 0) {
+            _webRequestRuleMap.set(scriptId, ruleIds);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[ScriptVault] Failed to hydrate _webRequestRuleMap:', e?.message || e);
+    } finally {
+      _webRequestRuleMapHydrated = true;
+      _webRequestRuleMapHydratingPromise = null;
+    }
+  })();
+  return _webRequestRuleMapHydratingPromise;
+}
+
+async function _persistWebRequestRuleMap() {
+  try {
+    const obj = {};
+    for (const [scriptId, ruleIds] of _webRequestRuleMap.entries()) {
+      obj[scriptId] = ruleIds;
+    }
+    await chrome.storage.local.set({ _webRequestRuleMap: obj });
+  } catch (e) {
+    console.warn('[ScriptVault] Failed to persist _webRequestRuleMap:', e?.message || e);
+  }
+}
 
 // Stable numeric rule ID from a string (scriptId + rule index)
 function _makeRuleId(scriptId, index) {
@@ -4845,6 +5002,8 @@ function _translateWebRequestRule(rule, ruleId) {
 async function applyWebRequestRules(scriptId, rules) {
   if (!chrome.declarativeNetRequest || !Array.isArray(rules) || rules.length === 0) return;
   try {
+    // Round 11: Ensure map is rehydrated from storage before mutating (SW may have restarted)
+    await _hydrateWebRequestRuleMap();
     // Remove any existing rules for this script first
     await removeWebRequestRules(scriptId);
 
@@ -4868,6 +5027,7 @@ async function applyWebRequestRules(scriptId, rules) {
       }
       await chrome.declarativeNetRequest.updateDynamicRules({ addRules: dnrRules });
       _webRequestRuleMap.set(scriptId, ruleIds);
+      await _persistWebRequestRuleMap();
       debugLog(`[GM_webRequest] Applied ${dnrRules.length} rules for script ${scriptId}`);
     }
   } catch (e) {
@@ -4877,12 +5037,17 @@ async function applyWebRequestRules(scriptId, rules) {
 
 async function removeWebRequestRules(scriptId) {
   if (!chrome.declarativeNetRequest) return;
+  // Round 11: Rehydrate from storage before reading — the SW may have restarted
+  // since the rules were originally inserted, and without this the in-memory Map
+  // would be empty and we'd silently leak the DNR rules.
+  await _hydrateWebRequestRuleMap();
   const existing = _webRequestRuleMap.get(scriptId);
   if (existing && existing.length > 0) {
     try {
       await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing });
     } catch (e) {}
     _webRequestRuleMap.delete(scriptId);
+    await _persistWebRequestRuleMap();
   }
 }
 

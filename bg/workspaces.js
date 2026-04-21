@@ -3,11 +3,24 @@
 
 const WorkspaceManager = {
   _cache: null,
+  _initPromise: null,
 
   async _init() {
     if (this._cache !== null) return;
-    const data = await chrome.storage.local.get('workspaces');
-    this._cache = data.workspaces || { active: null, list: [] };
+    // Serialize concurrent cold-start callers so a late-resolving get()
+    // can't clobber mutations already applied to _cache by an earlier caller.
+    if (!this._initPromise) {
+      this._initPromise = (async () => {
+        const data = await chrome.storage.local.get('workspaces');
+        if (this._cache === null) {
+          this._cache = data.workspaces || { active: null, list: [] };
+        }
+      })().catch(e => {
+        this._initPromise = null;
+        throw e;
+      });
+    }
+    return this._initPromise;
   },
 
   async _save() {

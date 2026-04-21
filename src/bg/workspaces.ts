@@ -92,20 +92,15 @@ export const WorkspaceManager = {
     const ws: Workspace | undefined = this._cache!.list.find(w => w.id === id);
     if (!ws) return { error: 'Workspace not found' };
 
-    // Apply snapshot — mutate cache directly, then flush once to avoid N storage writes
+    // Apply snapshot — use ScriptStorage.set() per changed script for rollback safety
     const scripts: Script[] = await ScriptStorage.getAll();
-    let changed: boolean = false;
     const now: number = Date.now();
     for (const s of scripts) {
       const shouldBeEnabled: boolean | undefined = ws.snapshot[s.id];
       if (shouldBeEnabled !== undefined && (s.enabled !== false) !== shouldBeEnabled) {
-        s.enabled = shouldBeEnabled;
-        s.updatedAt = now;
-        ScriptStorage.cache![s.id] = s;
-        changed = true;
+        await ScriptStorage.set(s.id, { ...s, enabled: shouldBeEnabled, updatedAt: now });
       }
     }
-    if (changed) await ScriptStorage.save();
 
     this._cache!.active = id;
     await this._save();

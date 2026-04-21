@@ -117,7 +117,7 @@ a:hover {
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 .tab:hover {
@@ -629,7 +629,7 @@ input[type="checkbox"] {
   border-radius: 4px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
 }
 
 .action-btn:hover {
@@ -700,13 +700,14 @@ input[type="checkbox"] {
   border: 1px solid var(--border-color);
   padding: 12px 18px;
   border-radius: 6px;
+  /* Raised above modal-overlay (z-index 1000) so toasts remain visible when modal is open */
   display: flex;
   align-items: center;
   gap: 10px;
   transform: translateY(80px);
   opacity: 0;
-  transition: all 0.3s;
-  z-index: 1000;
+  transition: transform 0.3s, opacity 0.3s;
+  z-index: 1100;
 }
 
 .toast.show {
@@ -727,7 +728,7 @@ input[type="checkbox"] {
   justify-content: center;
   opacity: 0;
   visibility: hidden;
-  transition: all 0.2s;
+  transition: opacity 0.2s, visibility 0.2s;
   z-index: 1000;
 }
 

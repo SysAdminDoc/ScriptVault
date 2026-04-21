@@ -6,6 +6,7 @@
     <title>ScriptVault Dashboard</title>
     <!-- CodeMirror minimal (lint CSS only — editor is now Monaco via sandboxed iframe) -->
     <link rel="stylesheet" href="../lib/codemirror/addon/lint/lint.css">
+    <link rel="stylesheet" href="dashboard.css">
     <style>
         /* ============================================
            Tampermonkey-Style Dark Theme
@@ -125,6 +126,12 @@
             --scrollbar-thumb: rgba(205,214,244,0.15);
             --scrollbar-thumb-hover: rgba(205,214,244,0.25);
             --canvas-grid: rgba(205, 214, 244, 0.035);
+            --panel-border-soft: rgba(166, 173, 200, 0.18);
+            --panel-border-strong: rgba(166, 173, 200, 0.32);
+            --panel-sheen: inset 0 1px 0 rgba(205, 214, 244, 0.06);
+            --panel-shadow: 0 18px 40px rgba(0, 0, 0, 0.26);
+            --panel-shadow-lg: 0 28px 70px rgba(0, 0, 0, 0.34);
+            --panel-shadow-xl: 0 40px 120px rgba(0, 0, 0, 0.44);
         }
 
         [data-theme="oled"] {
@@ -160,6 +167,9 @@
             --scrollbar-thumb: rgba(255,255,255,0.1);
             --scrollbar-thumb-hover: rgba(255,255,255,0.2);
             --canvas-grid: rgba(255, 255, 255, 0.02);
+            --panel-border-soft: rgba(148, 163, 184, 0.12);
+            --panel-border-strong: rgba(148, 163, 184, 0.22);
+            --panel-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.04);
             --panel-shadow: 0 22px 52px rgba(0, 0, 0, 0.32);
             --panel-shadow-lg: 0 34px 82px rgba(0, 0, 0, 0.4);
             --panel-shadow-xl: 0 48px 140px rgba(0, 0, 0, 0.5);
@@ -5843,15 +5853,15 @@
                     <div id="syncWebdavSettings" class="sync-provider-settings" style="display:none; margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 4px;">
                         <div class="setting-row">
                             <span class="label-text">WebDAV URL:</span>
-                            <input type="text" class="input-field wide" id="settingsWebdavUrl" placeholder="https://your-server.com/dav/">
+                            <input type="text" class="input-field wide" id="settingsWebdavUrl" placeholder="https://your-server.com/dav/" aria-label="WebDAV URL">
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Username:</span>
-                            <input type="text" class="input-field" id="settingsWebdavUsername" style="width:200px">
+                            <input type="text" class="input-field" id="settingsWebdavUsername" style="width:200px" aria-label="WebDAV username" autocomplete="username">
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Password:</span>
-                            <input type="password" class="input-field" id="settingsWebdavPassword" style="width:200px">
+                            <input type="password" class="input-field" id="settingsWebdavPassword" style="width:200px" aria-label="WebDAV password" autocomplete="current-password">
                         </div>
                     </div>
                     

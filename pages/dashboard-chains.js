@@ -531,8 +531,11 @@ const ScriptChains = (() => {
 
   async function _loadAvailableScripts() {
     try {
-      const data = await chrome.storage.local.get('scripts');
-      const scripts = data.scripts || {};
+      // Storage key is `userscripts` (see modules/storage.js), not `scripts`.
+      // Reading the wrong key left `_availableScripts` empty, so chain step
+      // dropdowns had no scripts to pick from.
+      const data = await chrome.storage.local.get('userscripts');
+      const scripts = data.userscripts || {};
       _availableScripts = Object.entries(scripts).map(([id, s]) => ({
         id,
         name: (s.meta && s.meta.name) || s.name || id,

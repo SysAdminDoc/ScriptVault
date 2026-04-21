@@ -614,7 +614,16 @@ const ScriptScheduler = (() => {
   /* ------------------------------------------------------------------ */
 
   function buildModal() {
-    if (_modalEl) _modalEl.remove();
+    if (_modalEl) {
+      // Rebuilding while a previous modal is still mounted would leak the
+      // prior keydown listener (registered below) and leave a stale closure
+      // pointing at the detached element. Tear it down cleanly first.
+      if (_modalEl._keyHandler) {
+        document.removeEventListener('keydown', _modalEl._keyHandler);
+      }
+      _modalEl.remove();
+      _modalEl = null;
+    }
 
     const overlay = el('div', { className: 'sv-sched-overlay' });
     const modal = el('div', { className: 'sv-sched-modal' });

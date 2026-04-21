@@ -90,10 +90,18 @@ const ScriptAnalyzer = {
     }
     const longStrings = strippedCode.match(/['"][^'"]{80,}['"]/g);
     if (longStrings && longStrings.length > 0) {
-      const entropy = this.calculateEntropy(longStrings[0]);
-      const threshold = longStrings[0].length >= 200 ? 4.5 : 5.2;
-      if (entropy > threshold) {
-        findings.push({ id: 'high-entropy', label: 'High-entropy string detected', category: 'obfuscation', desc: `Found ${longStrings.length} long string(s) with high randomness (entropy: ${entropy.toFixed(1)})`, risk: 20, count: longStrings.length, adjustedRisk: 20 });
+      // Check ALL long strings, not just the first — find the highest-entropy one
+      // (matches offscreen.js AST path; prevents a benign first string from
+      // masking an obfuscated blob later in the file).
+      let maxEntropy = 0;
+      let maxStr = longStrings[0];
+      for (const s of longStrings) {
+        const e = this.calculateEntropy(s);
+        if (e > maxEntropy) { maxEntropy = e; maxStr = s; }
+      }
+      const threshold = maxStr.length >= 200 ? 4.5 : 5.2;
+      if (maxEntropy > threshold) {
+        findings.push({ id: 'high-entropy', label: 'High-entropy string detected', category: 'obfuscation', desc: `Found ${longStrings.length} long string(s) with high randomness (entropy: ${maxEntropy.toFixed(1)})`, risk: 20, count: longStrings.length, adjustedRisk: 20 });
         totalRisk += 20;
       }
     }

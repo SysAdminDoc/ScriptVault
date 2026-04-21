@@ -397,7 +397,7 @@ export async function registerScript(script: Script): Promise<void> {
       await applyWebRequestRules(script.id, rules);
     }
   } catch (e: unknown) {
-    console.error(`[ScriptVault] Failed to register ${script.meta.name}:`, e);
+    console.error(`[ScriptVault] Failed to register ${script.meta?.name || script.id}:`, e);
     // Mark script with registration failure for UI display
     try {
       script.settings = script.settings || {};

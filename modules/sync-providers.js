@@ -140,9 +140,10 @@ var CloudSyncProviders = {
           'https://www.googleapis.com/auth/userinfo.profile'
         ].join(' ');
 
-        // PKCE code verifier
+        // PKCE code verifier + state for CSRF protection
         const codeVerifier = Array.from(crypto.getRandomValues(new Uint8Array(32)),
           b => b.toString(16).padStart(2, '0')).join('');
+        const state = crypto.randomUUID();
         const encoder = new TextEncoder();
         const digest = await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier));
         const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
@@ -155,6 +156,7 @@ var CloudSyncProviders = {
           scope: scopes,
           access_type: 'offline',
           prompt: 'consent',
+          state,
           code_challenge: codeChallenge,
           code_challenge_method: 'S256'
         }).toString();
@@ -165,6 +167,9 @@ var CloudSyncProviders = {
         });
 
         const url = new URL(responseUrl);
+        if (url.searchParams.get('state') !== state) {
+          throw new Error('OAuth state mismatch — possible CSRF');
+        }
         const code = url.searchParams.get('code');
         if (!code) throw new Error('No authorization code received');
 
@@ -512,11 +517,15 @@ var CloudSyncProviders = {
     
     async download(settings) {
       if (!settings.dropboxToken) throw new Error('Not authenticated with Dropbox');
-      
+
+      // Ensure token is fresh before download (mirrors upload() refresh logic)
+      const token = await this.getValidToken(settings);
+      if (!token) throw new Error('Dropbox token expired. Please reconnect.');
+
       const response = await fetch('https://content.dropboxapi.com/2/files/download', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${settings.dropboxToken}`,
+          'Authorization': `Bearer ${token}`,
           'Dropbox-API-Arg': JSON.stringify({ path: this.fileName })
         }
       });

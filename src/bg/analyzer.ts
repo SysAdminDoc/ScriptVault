@@ -60,14 +60,25 @@ async function _ensureOffscreen(): Promise<void> {
     Reason: { DOM_SCRAPING: string };
   };
   if (!offscreen) throw new Error('Offscreen API not available');
-  const existing: boolean = await offscreen.hasDocument().catch(() => false);
-  if (!existing) {
-    await chrome.offscreen.createDocument({
-      url: chrome.runtime.getURL('offscreen.html'),
-      reasons: ['DOM_SCRAPING'] as unknown as chrome.offscreen.CreateParameters['reasons'],
-      justification: 'AST-based script analysis with Acorn parser'
+  // Cached on ScriptAnalyzer so tests can reset it between cases (matches
+  // runtime bg/analyzer.js pattern, which also stores the promise on the
+  // ScriptAnalyzer object).
+  if (!ScriptAnalyzer._offscreenPromise) {
+    ScriptAnalyzer._offscreenPromise = (async (): Promise<void> => {
+      const existing: boolean = await offscreen.hasDocument().catch(() => false);
+      if (!existing) {
+        await chrome.offscreen.createDocument({
+          url: chrome.runtime.getURL('offscreen.html'),
+          reasons: ['DOM_SCRAPING'] as unknown as chrome.offscreen.CreateParameters['reasons'],
+          justification: 'AST-based script analysis with Acorn parser'
+        });
+      }
+    })().catch((e: unknown) => {
+      ScriptAnalyzer._offscreenPromise = null;
+      throw e;
     });
   }
+  return ScriptAnalyzer._offscreenPromise;
 }
 
 // ── Regex fallback (kept for parity & offline use) ─────────────────────────
@@ -156,9 +167,20 @@ function generateSummary(riskLevel: string, findings: Finding[]): string {
   return `Found ${findings.length} pattern(s) involving ${cats.map((c: string) => catLabels[c] ?? c).join(', ')}.`;
 }
 
-export const ScriptAnalyzer = {
+interface ScriptAnalyzerShape {
+  analyzeAsync: typeof analyzeAsync;
+  _ensureOffscreen: typeof _ensureOffscreen;
+  _offscreenPromise: Promise<void> | null;
+  patterns: typeof patterns;
+  analyze: typeof analyze;
+  calculateEntropy: typeof calculateEntropy;
+  generateSummary: typeof generateSummary;
+}
+
+export const ScriptAnalyzer: ScriptAnalyzerShape = {
   analyzeAsync,
   _ensureOffscreen,
+  _offscreenPromise: null,
   patterns,
   analyze,
   calculateEntropy,

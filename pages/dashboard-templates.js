@@ -886,7 +886,9 @@ const TemplateManager = (() => {
 
         const header = document.createElement('div');
         header.className = 'tm-modal-header';
-        header.innerHTML = `<h3>${title}</h3>`;
+        const headerH3 = document.createElement('h3');
+        headerH3.textContent = title;
+        header.appendChild(headerH3);
         const closeBtn = document.createElement('button');
         closeBtn.className = 'tm-modal-close';
         closeBtn.innerHTML = '&times;';
@@ -1163,6 +1165,7 @@ const TemplateManager = (() => {
             createBtn.className = 'tm-btn tm-btn-primary';
             createBtn.textContent = 'Create Script';
             createBtn.onclick = () => {
+                if (!_state.modalEl) return;
                 const finalValues = {};
                 _state.modalEl.querySelectorAll('.tm-var-input').forEach(inp => {
                     const key = inp.dataset.varKey;

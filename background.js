@@ -1,4 +1,4 @@
-// ScriptVault v2.1.7 - Background Service Worker
+// ScriptVault v2.1.8 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -39,8 +39,13 @@ function generateId() {
  */
 function sanitizeUrl(url) {
   if (!url) return null;
-  const trimmed = url.trim();
-  if (/^(javascript|data|vbscript|blob):/i.test(trimmed)) return null;
+  // Strip C0 controls (incl. NUL) and whitespace BEFORE scheme detection —
+  // browsers' URL parser silently removes these when resolving href, so
+  // `\x00javascript:alert(1)` would otherwise bypass the blocklist and
+  // execute on click.
+  const trimmed = String(url).replace(/[\u0000-\u0020\u007f]+/g, '');
+  if (!trimmed) return null;
+  if (/^(javascript|data|vbscript|blob|file):/i.test(trimmed)) return null;
   if (/^(https?|ftp|mailto):/i.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('#')) {
     return trimmed;
   }
@@ -2959,9 +2964,10 @@ var CloudSyncProviders = {
           'https://www.googleapis.com/auth/userinfo.profile'
         ].join(' ');
 
-        // PKCE code verifier
+        // PKCE code verifier + state for CSRF protection
         const codeVerifier = Array.from(crypto.getRandomValues(new Uint8Array(32)),
           b => b.toString(16).padStart(2, '0')).join('');
+        const state = crypto.randomUUID();
         const encoder = new TextEncoder();
         const digest = await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier));
         const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
@@ -2974,6 +2980,7 @@ var CloudSyncProviders = {
           scope: scopes,
           access_type: 'offline',
           prompt: 'consent',
+          state,
           code_challenge: codeChallenge,
           code_challenge_method: 'S256'
         }).toString();
@@ -2984,6 +2991,9 @@ var CloudSyncProviders = {
         });
 
         const url = new URL(responseUrl);
+        if (url.searchParams.get('state') !== state) {
+          throw new Error('OAuth state mismatch — possible CSRF');
+        }
         const code = url.searchParams.get('code');
         if (!code) throw new Error('No authorization code received');
 
@@ -3331,11 +3341,15 @@ var CloudSyncProviders = {
     
     async download(settings) {
       if (!settings.dropboxToken) throw new Error('Not authenticated with Dropbox');
-      
+
+      // Ensure token is fresh before download (mirrors upload() refresh logic)
+      const token = await this.getValidToken(settings);
+      if (!token) throw new Error('Dropbox token expired. Please reconnect.');
+
       const response = await fetch('https://content.dropboxapi.com/2/files/download', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${settings.dropboxToken}`,
+          'Authorization': `Bearer ${token}`,
           'Dropbox-API-Arg': JSON.stringify({ path: this.fileName })
         }
       });
@@ -4129,12 +4143,9 @@ const SettingsManager = {
   }
 };
 
-// Debug logging helper - only logs when debugMode is enabled
-function debugLog(...args) {
-  if (SettingsManager.cache?.debugMode) {
-    console.log('[ScriptVault]', ...args);
-  }
-}
+// Debug logging helper defined in background.core.js (concatenated later)
+// Using a placeholder function that's overridden at runtime via hoisting in script mode.
+// (In module mode, see Firefox manifest note — background.js is kept as non-module.)
 
 // ============================================================================
 // Script Storage
@@ -4442,31 +4453,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 });
 
-// Notification click/close listeners for GM_notification callbacks
-chrome.notifications.onClicked.addListener((notifId) => {
-  if (!self._notifCallbacks) return;
-  const info = self._notifCallbacks.get(notifId);
-  if (!info) return;
-  if (info.hasOnclick) {
-    chrome.tabs.sendMessage(info.tabId, {
-      action: 'notificationEvent',
-      data: { notifId, scriptId: info.scriptId, type: 'click' }
-    }).catch(() => {});
-  }
-});
-
-chrome.notifications.onClosed.addListener((notifId, byUser) => {
-  if (!self._notifCallbacks) return;
-  const info = self._notifCallbacks.get(notifId);
-  if (!info) return;
-  if (info.hasOndone) {
-    chrome.tabs.sendMessage(info.tabId, {
-      action: 'notificationEvent',
-      data: { notifId, scriptId: info.scriptId, type: 'done' }
-    }).catch(() => {});
-  }
-  self._notifCallbacks.delete(notifId);
-});
+// Notification click/close listeners are registered in background.core.js
+// to avoid duplicate callback firing (previously both this file AND background.core.js
+// added listeners, causing GM_notification onclick/ondone callbacks to fire twice).
 
 // ============================================================================
 // Folder Storage
@@ -6789,8 +6778,12 @@ var EasyCloudSync = (() => {
         if (_cachedToken) {
           try {
             await chrome.identity.removeCachedAuthToken({ token: _cachedToken });
-            await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${_cachedToken}`)
-              .catch(() => {});
+            // Use POST with body — never put tokens in URL query strings
+            await fetch('https://oauth2.googleapis.com/revoke', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ token: _cachedToken })
+            }).catch(() => {});
           } catch (_) { /* best effort */ }
           _cachedToken = null;
         }
@@ -7462,22 +7455,32 @@ const BackupScheduler = (() => {
             }
           }
 
-          // Restore folders
+          // Restore folders. We write via chrome.storage.local to preserve
+          // the exact restored shape, then invalidate FolderStorage's in-memory
+          // cache so the next FolderStorage.getAll() reloads from storage.
+          // Without this, the cached (pre-restore) list is returned forever.
           if (unzipped['folders.json']) {
             try {
               const folders = JSON.parse(fflate.strFromU8(unzipped['folders.json']));
               await chrome.storage.local.set({ scriptFolders: folders });
+              if (typeof FolderStorage !== 'undefined') {
+                FolderStorage.cache = null;
+              }
               restoredFolders = true;
             } catch (foldersErr) {
               errors.push({ name: 'folders.json', error: foldersErr.message || String(foldersErr) });
             }
           }
 
-          // Restore workspaces
+          // Restore workspaces — invalidate WorkspaceManager cache same as above.
           if (unzipped['workspaces.json']) {
             try {
               const workspaces = JSON.parse(fflate.strFromU8(unzipped['workspaces.json']));
               await chrome.storage.local.set({ workspaces });
+              if (typeof WorkspaceManager !== 'undefined') {
+                WorkspaceManager._cache = null;
+                WorkspaceManager._initPromise = null;
+              }
               restoredWorkspaces = true;
             } catch (workspacesErr) {
               errors.push({ name: 'workspaces.json', error: workspacesErr.message || String(workspacesErr) });
@@ -8586,6 +8589,75 @@ const PublicAPI = (() => {
   let _rateLimitMap = new Map(); // senderId -> [timestamps]
 
   /* ------------------------------------------------------------------ */
+  /*  SSRF guard — internal/private/link-local/CGNAT host detection      */
+  /* ------------------------------------------------------------------ */
+
+  // Returns true if the given hostname resolves to (or is) an address we
+  // refuse to fetch from the web-install handler. Covers IPv4 private ranges,
+  // IPv4 link-local (incl. AWS/GCP metadata), IPv4 loopback/unspecified,
+  // CGNAT (100.64.0.0/10), IPv6 loopback/unspecified, IPv6 ULA (fc00::/7),
+  // and IPv6 link-local (fe80::/10).
+  function _isInternalHost(rawHost) {
+    if (!rawHost || typeof rawHost !== 'string') return true;
+    // Normalize: lowercase, strip IPv6 brackets
+    let h = rawHost.toLowerCase();
+    if (h.startsWith('[') && h.endsWith(']')) h = h.slice(1, -1);
+
+    // Hostname aliases
+    if (h === 'localhost' || h === 'localhost.localdomain' || h === 'ip6-localhost' || h === 'ip6-loopback') return true;
+
+    // IPv6 — hex + colons (possibly with trailing :port not expected here since
+    // URL.hostname strips the port, but be defensive).
+    if (h.includes(':')) {
+      // Canonical loopback / unspecified
+      if (h === '::1' || h === '::' || h === '::0' || h === '0:0:0:0:0:0:0:0' || h === '0:0:0:0:0:0:0:1') return true;
+      // fe80::/10 link-local — any address whose first 10 bits are 1111111010
+      // In textual form this is fe80..febf (first hextet high byte 0xfe, low-nibble 8-b)
+      if (/^fe[89ab][0-9a-f]?:/.test(h)) return true;
+      // fc00::/7 ULA — first 7 bits 1111110, textual first byte is fc or fd
+      if (/^f[cd][0-9a-f]{0,2}:/.test(h)) return true;
+      // IPv4-mapped IPv6: ::ffff:a.b.c.d — extract the trailing v4 literal
+      const v4Mapped = h.match(/^::ffff:([0-9.]+)$/);
+      if (v4Mapped) return _isInternalIPv4(v4Mapped[1]);
+      // Any other IPv6 literal — treat any `0:0:...` as unspecified-ish, otherwise allow
+      return false;
+    }
+
+    // IPv4 literal: 4 dot-decimal octets
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) {
+      return _isInternalIPv4(h);
+    }
+
+    // Hostname is a regular DNS name — let DNS resolve it. We can't block
+    // by resolution here without an extra round-trip; the explicit blocklist
+    // of aliases above catches the obvious cases.
+    return false;
+  }
+
+  function _isInternalIPv4(ip) {
+    const parts = ip.split('.').map(p => parseInt(p, 10));
+    if (parts.length !== 4 || parts.some(p => !Number.isFinite(p) || p < 0 || p > 255)) return true;
+    const [a, b, c, d] = parts;
+    // 0.0.0.0/8 unspecified
+    if (a === 0) return true;
+    // 10.0.0.0/8
+    if (a === 10) return true;
+    // 127.0.0.0/8 loopback
+    if (a === 127) return true;
+    // 169.254.0.0/16 link-local (AWS/GCP metadata 169.254.169.254)
+    if (a === 169 && b === 254) return true;
+    // 172.16.0.0/12 — octets 172.16..172.31
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    // 192.168.0.0/16
+    if (a === 192 && b === 168) return true;
+    // 100.64.0.0/10 CGNAT — 100.64..100.127
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    // 255.255.255.255 broadcast
+    if (a === 255 && b === 255 && c === 255 && d === 255) return true;
+    return false;
+  }
+
+  /* ------------------------------------------------------------------ */
   /*  Default Permissions                                                */
   /* ------------------------------------------------------------------ */
 
@@ -8908,25 +8980,26 @@ const PublicAPI = (() => {
       if (!allowed) return { error: 'Permission denied', action: 'toggleScript' };
 
       try {
-        const result = await chrome.storage.local.get('userscripts');
-        const data = result.userscripts || {};
-        let found = false;
-        if (Array.isArray(data)) {
-          const idx = data.findIndex(s => s.id === scriptId || s.meta?.name === scriptId);
-          if (idx === -1) return { error: 'Script not found', scriptId };
-          data[idx].enabled = enabled;
-          found = true;
-        } else {
-          const entry = Object.entries(data).find(([k, s]) => k === scriptId || s.id === scriptId || s.meta?.name === scriptId);
-          if (!entry) return { error: 'Script not found', scriptId };
-          data[entry[0]].enabled = enabled;
-          found = true;
+        // Route through ScriptStorage so the in-memory cache stays coherent.
+        // Previously the API wrote `userscripts` directly via chrome.storage.local.set,
+        // leaving ScriptStorage.cache (used by dashboard, popup, sidepanel, registration)
+        // pinned to the pre-toggle state until the next SW cold start.
+        if (typeof ScriptStorage === 'undefined') {
+          return { error: 'Script storage not available' };
         }
-        if (!found) return { error: 'Script not found', scriptId };
-        await chrome.storage.local.set({ userscripts: data });
+        const all = await ScriptStorage.getAll();
+        const target = all.find(s =>
+          s.id === scriptId ||
+          s.meta?.name === scriptId
+        );
+        if (!target) return { error: 'Script not found', scriptId };
 
-        fireWebhook('script.toggled', { scriptId, enabled });
-        return { ok: true, scriptId, enabled };
+        target.enabled = enabled;
+        target.updatedAt = Date.now();
+        await ScriptStorage.set(target.id, target);
+
+        fireWebhook('script.toggled', { scriptId: target.id, enabled });
+        return { ok: true, scriptId: target.id, enabled };
       } catch (e) {
         return { error: 'Failed to toggle script', detail: e.message };
       }
@@ -8942,9 +9015,8 @@ const PublicAPI = (() => {
       try {
         // Parse basic userscript metadata
         const meta = parseUserscriptMeta(code);
-        const scriptId = meta.name
-          ? meta.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase()
-          : `ext_${Date.now()}`;
+        // Use a collision-free UUID instead of name-normalized ID (which collided on special chars)
+        const scriptId = (crypto.randomUUID && crypto.randomUUID()) || `ext_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
         const newScript = {
           id: scriptId,
@@ -8954,6 +9026,7 @@ const PublicAPI = (() => {
             version: meta.version || '1.0',
             description: meta.description || '',
             match: meta.match || ['*://*/*'],
+            include: meta.include || [],
             'run-at': meta.runAt || 'document_idle'
           },
           enabled: true,
@@ -8962,26 +9035,14 @@ const PublicAPI = (() => {
           installedBy: describeSender(sender)
         };
 
-        const result = await chrome.storage.local.get('userscripts');
-        const data = result.userscripts || {};
-
-        // Check for duplicate — support both object and array formats
-        if (Array.isArray(data)) {
-          const existing = data.findIndex(s => s.id === scriptId);
-          if (existing !== -1) {
-            data[existing] = { ...data[existing], ...newScript, updatedAt: Date.now() };
-          } else {
-            data.push(newScript);
-          }
-        } else {
-          if (data[scriptId]) {
-            data[scriptId] = { ...data[scriptId], ...newScript, updatedAt: Date.now() };
-          } else {
-            data[scriptId] = newScript;
-          }
+        // Route through ScriptStorage so the in-memory cache stays coherent
+        // with chrome.storage.local. A direct chrome.storage.local.set leaves
+        // ScriptStorage.cache unaware of the new script until SW cold start,
+        // which breaks dashboard listing, registration, and badge counting.
+        if (typeof ScriptStorage === 'undefined') {
+          return { error: 'Script storage not available' };
         }
-
-        await chrome.storage.local.set({ userscripts: data });
+        await ScriptStorage.set(scriptId, newScript);
 
         fireWebhook('script.installed', { scriptId, name: newScript.meta.name, version: newScript.meta.version });
         return { ok: true, scriptId, name: newScript.meta.name };
@@ -9011,9 +9072,12 @@ const PublicAPI = (() => {
       const key = m[1].trim();
       const val = m[2].trim();
 
-      if (key === 'match' || key === 'include') {
+      if (key === 'match') {
         if (!meta.match) meta.match = [];
         meta.match.push(val);
+      } else if (key === 'include') {
+        if (!meta.include) meta.include = [];
+        meta.include.push(val);
       } else if (key === 'run-at') {
         meta.runAt = val.replace(/-/g, '_');
       } else {
@@ -9033,8 +9097,8 @@ const PublicAPI = (() => {
       return {
         type: 'scriptvault:getScripts:response',
         scripts: scripts.map(s => ({
-          name: s.name || s.id,
-          version: s.version || '1.0',
+          name: s.meta?.name || s.id,
+          version: s.meta?.version || '1.0',
           enabled: s.enabled !== false
         }))
       };
@@ -9042,18 +9106,18 @@ const PublicAPI = (() => {
 
     'scriptvault:isInstalled': async (data, origin) => {
       const name = data.name;
-      if (!name) return { type: 'scriptvault:isInstalled:response', error: 'Missing name' };
+      if (!name || typeof name !== 'string') return { type: 'scriptvault:isInstalled:response', error: 'Missing name' };
 
       const scripts = await getScripts();
       const found = scripts.find(s =>
-        (s.name || '').toLowerCase() === name.toLowerCase() ||
+        (s.meta?.name || '').toLowerCase() === name.toLowerCase() ||
         (s.id || '').toLowerCase() === name.toLowerCase()
       );
       return {
         type: 'scriptvault:isInstalled:response',
         installed: !!found,
         name,
-        version: found ? (found.version || '1.0') : null
+        version: found ? (found.meta?.version || '1.0') : null
       };
     },
 
@@ -9069,14 +9133,13 @@ const PublicAPI = (() => {
         return { type: 'scriptvault:install:response', error: 'Permission denied', action: 'installScript' };
       }
 
-      // Validate URL - only allow https:// from known userscript hosts
+      // Validate URL - only allow https:// and reject internal/private/link-local hosts
       try {
         const parsedUrl = new URL(url);
         if (parsedUrl.protocol !== 'https:') {
           return { type: 'scriptvault:install:response', error: 'Only HTTPS URLs are allowed' };
         }
-        const h = parsedUrl.hostname;
-        if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.startsWith('192.168.') || h.startsWith('10.') || h.startsWith('172.')) {
+        if (_isInternalHost(parsedUrl.hostname)) {
           return { type: 'scriptvault:install:response', error: 'Internal URLs are not allowed' };
         }
       } catch {
@@ -9091,9 +9154,9 @@ const PublicAPI = (() => {
 
         // Parse and install directly (authorization already checked above)
         const meta = parseUserscriptMeta(code);
-        const scriptId = meta.name
-          ? meta.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase()
-          : `ext_${Date.now()}`;
+        // Use a collision-free UUID (name-normalized IDs collide AND enable
+        // prototype pollution via reserved keys like __proto__/constructor).
+        const scriptId = (crypto.randomUUID && crypto.randomUUID()) || `ext_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
         const newScript = {
           id: scriptId,
@@ -9111,25 +9174,12 @@ const PublicAPI = (() => {
           installedBy: `origin:${origin}`
         };
 
-        const result = await chrome.storage.local.get('userscripts');
-        const data = result.userscripts || {};
-
-        if (Array.isArray(data)) {
-          const existing = data.findIndex(s => s.id === scriptId);
-          if (existing !== -1) {
-            data[existing] = { ...data[existing], ...newScript, updatedAt: Date.now() };
-          } else {
-            data.push(newScript);
-          }
-        } else {
-          if (data[scriptId]) {
-            data[scriptId] = { ...data[scriptId], ...newScript, updatedAt: Date.now() };
-          } else {
-            data[scriptId] = newScript;
-          }
+        // Route through ScriptStorage to keep the in-memory cache coherent
+        // (see comment on the companion `installScript` HANDLER above).
+        if (typeof ScriptStorage === 'undefined') {
+          return { type: 'scriptvault:install:response', error: 'Script storage not available' };
         }
-
-        await chrome.storage.local.set({ userscripts: data });
+        await ScriptStorage.set(scriptId, newScript);
 
         fireWebhook('script.installed', { scriptId, name: newScript.meta.name, version: newScript.meta.version });
         return { type: 'scriptvault:install:response', ok: true, scriptId, name: newScript.meta.name };
@@ -9870,10 +9920,18 @@ const ScriptAnalyzer = {
     }
     const longStrings = strippedCode.match(/['"][^'"]{80,}['"]/g);
     if (longStrings && longStrings.length > 0) {
-      const entropy = this.calculateEntropy(longStrings[0]);
-      const threshold = longStrings[0].length >= 200 ? 4.5 : 5.2;
-      if (entropy > threshold) {
-        findings.push({ id: 'high-entropy', label: 'High-entropy string detected', category: 'obfuscation', desc: `Found ${longStrings.length} long string(s) with high randomness (entropy: ${entropy.toFixed(1)})`, risk: 20, count: longStrings.length, adjustedRisk: 20 });
+      // Check ALL long strings, not just the first — find the highest-entropy one
+      // (matches offscreen.js AST path; prevents a benign first string from
+      // masking an obfuscated blob later in the file).
+      let maxEntropy = 0;
+      let maxStr = longStrings[0];
+      for (const s of longStrings) {
+        const e = this.calculateEntropy(s);
+        if (e > maxEntropy) { maxEntropy = e; maxStr = s; }
+      }
+      const threshold = maxStr.length >= 200 ? 4.5 : 5.2;
+      if (maxEntropy > threshold) {
+        findings.push({ id: 'high-entropy', label: 'High-entropy string detected', category: 'obfuscation', desc: `Found ${longStrings.length} long string(s) with high randomness (entropy: ${maxEntropy.toFixed(1)})`, risk: 20, count: longStrings.length, adjustedRisk: 20 });
         totalRisk += 20;
       }
     }
@@ -10176,11 +10234,24 @@ const ScriptSigning = {
 
 const WorkspaceManager = {
   _cache: null,
+  _initPromise: null,
 
   async _init() {
     if (this._cache !== null) return;
-    const data = await chrome.storage.local.get('workspaces');
-    this._cache = data.workspaces || { active: null, list: [] };
+    // Serialize concurrent cold-start callers so a late-resolving get()
+    // can't clobber mutations already applied to _cache by an earlier caller.
+    if (!this._initPromise) {
+      this._initPromise = (async () => {
+        const data = await chrome.storage.local.get('workspaces');
+        if (this._cache === null) {
+          this._cache = data.workspaces || { active: null, list: [] };
+        }
+      })().catch(e => {
+        this._initPromise = null;
+        throw e;
+      });
+    }
+    return this._initPromise;
   },
 
   async _save() {
@@ -11156,8 +11227,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // USER_SCRIPT world message listener (for GM_* APIs)
 // This is SEPARATE from onMessage and required for messaging: true to work
+//
+// Security: userscripts are semi-trusted code. Restrict this path to the
+// action set the GM_* wrapper actually needs. Without this allowlist a
+// malicious userscript could invoke privileged dashboard actions like
+// factoryReset, deleteScript, importScripts, or setSettings.
+const USER_SCRIPT_ALLOWED_EXTRAS = new Set([
+  'netlog_record',
+  'reportExecError',
+  'reportExecTime'
+]);
+function isUserScriptAllowedAction(action) {
+  if (typeof action !== 'string') return false;
+  if (action.startsWith('GM_') || action.startsWith('GM.')) return true;
+  return USER_SCRIPT_ALLOWED_EXTRAS.has(action);
+}
 if (chrome.runtime.onUserScriptMessage) {
   chrome.runtime.onUserScriptMessage.addListener((message, sender, sendResponse) => {
+    if (!message || !isUserScriptAllowedAction(message.action)) {
+      sendResponse({ error: 'Action not permitted from user script' });
+      return false;
+    }
     handleMessage(message, sender)
       .then(sendResponse)
       .catch(e => {
@@ -11170,6 +11260,12 @@ if (chrome.runtime.onUserScriptMessage) {
 }
 
 async function handleMessage(message, sender) {
+  // Wait for SW init (SettingsManager/ScriptStorage) to finish before handling
+  // any message. Without this, fast popup/dashboard opens after wake can hit
+  // handlers with uninitialised state and return empty results or throw.
+  if (self._initPromise) {
+    try { await self._initPromise; } catch (e) { /* init failure is logged in init() */ }
+  }
   const { action } = message;
   // Support both patterns: { action, data: { ... } } and { action, prop1, prop2, ... }
   const data = message.data || message;
@@ -11464,7 +11560,11 @@ async function handleMessage(message, sender) {
       case 'duplicateScript': {
         const newScript = await ScriptStorage.duplicate(data.id);
         if (newScript) {
-          await registerScript(newScript);
+          // Honor the duplicated script's `enabled` state — duplicating a disabled
+          // script was silently re-enabling it because register was unconditional.
+          if (newScript.enabled !== false) {
+            await registerScript(newScript);
+          }
           await updateBadge();
           // Return with metadata property for dashboard compatibility
           return { success: true, script: { ...newScript, metadata: newScript.meta } };
@@ -11939,10 +12039,14 @@ async function handleMessage(message, sender) {
           return { success: true };
         }
 
-        // Only re-register if execution-affecting settings changed
+        // Only re-register if execution-affecting settings changed.
+        // Guard with `k in data.settings` — otherwise comparing `oldSettings[k]`
+        // against `undefined` (from an unrelated partial update) triggers a needless
+        // re-register cycle every time any other setting is changed.
         const EXEC_KEYS = ['runAt', 'injectInto', 'useOriginalMatches', 'useOriginalIncludes',
                            'useOriginalExcludes', 'userMatches', 'userIncludes', 'userExcludes'];
         const needsReregister = EXEC_KEYS.some(k =>
+          k in data.settings &&
           JSON.stringify(oldSettings[k]) !== JSON.stringify(data.settings[k])
         );
         if (needsReregister && script.enabled !== false) {
@@ -13982,6 +14086,7 @@ function _debouncedStatsSave() {
 }
 
 let _backgroundTaskRunning = false;
+let _backgroundTaskToken = 0;
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   // Handle notification auto-close alarms
   if (alarm.name.startsWith('notif_clear_')) {
@@ -14004,8 +14109,14 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
   _backgroundTaskRunning = true;
-  // Safety timeout: release mutex after 5 minutes even if task hangs
-  const safetyTimer = setTimeout(() => { _backgroundTaskRunning = false; }, 300000);
+  // Safety timeout: release mutex after 5 minutes even if the task hangs.
+  // Each task gets a unique token so the late-finishing task can tell whether
+  // the safety timer has already released the mutex for the next task — if so,
+  // the stale finally block must NOT clobber the new task's `true` flag.
+  const myToken = ++_backgroundTaskToken;
+  const safetyTimer = setTimeout(() => {
+    if (_backgroundTaskToken === myToken) _backgroundTaskRunning = false;
+  }, 300000);
   try {
     if (alarm.name === 'autoUpdate') {
       await UpdateSystem.autoUpdate();
@@ -14016,7 +14127,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     console.error('[ScriptVault] Alarm handler error:', e);
   } finally {
     clearTimeout(safetyTimer);
-    _backgroundTaskRunning = false;
+    if (_backgroundTaskToken === myToken) _backgroundTaskRunning = false;
   }
 });
 
@@ -14303,6 +14414,16 @@ async function installFromUrl(url) {
 
 async function init() {
   await SettingsManager.init();
+
+  // v2.0: Run migration BEFORE ScriptStorage.init() so that any migration-driven
+  // rewrites of `userscripts` storage are visible to the in-memory cache. Running
+  // it after ScriptStorage.init() left the cache pinned to pre-migration data,
+  // causing every subsequent cached read (dashboard, registration, badge) to see
+  // the old shape until the next SW cold start.
+  if (typeof Migration !== 'undefined') {
+    try { await Migration.run(); } catch (e) { console.error('[ScriptVault] Migration error:', e); }
+  }
+
   await ScriptStorage.init();
 
   // Apply language setting to I18n
@@ -14317,19 +14438,28 @@ async function init() {
   // Setup context menus
   await setupContextMenus();
 
-  // Register all enabled scripts (skip if already registered from a previous SW lifecycle)
-  await registerAllScripts();
+  // Register all enabled scripts — force re-registration on extension install/update
+  // (new GM_* wrappers / match patterns require rewriting all registered scripts).
+  // On plain SW wake within the same extension version, skip the destructive cycle.
+  let needsForceReregister = false;
+  try {
+    const currentVersion = chrome.runtime.getManifest().version;
+    const stored = await chrome.storage.local.get('_lastRegisteredVersion');
+    if (stored._lastRegisteredVersion !== currentVersion) {
+      needsForceReregister = true;
+      await chrome.storage.local.set({ _lastRegisteredVersion: currentVersion });
+    }
+  } catch (e) {
+    // Unable to read version — force re-register to be safe on update
+    needsForceReregister = true;
+  }
+  await registerAllScripts(needsForceReregister);
 
   await updateBadge();
   await setupAlarms();
 
   // Clean up stale persistent caches (require_cache_, res_cache_)
   cleanupStaleCaches();
-
-  // v2.0: Run migration if needed
-  if (typeof Migration !== 'undefined') {
-    try { await Migration.run(); } catch (e) { console.error('[ScriptVault] Migration error:', e); }
-  }
 
   // v2.0: Auto-cleanup storage if above threshold
   if (typeof QuotaManager !== 'undefined') {
@@ -14339,6 +14469,25 @@ async function init() {
   // v2.0: Register global error handlers for ErrorLog
   if (typeof ErrorLog !== 'undefined' && typeof ErrorLog.registerGlobalHandlers === 'function') {
     ErrorLog.registerGlobalHandlers();
+  }
+
+  // v2.0 module initializers: these register alarm/message listeners and
+  // load per-module state. Previously they were only called from
+  // chrome.runtime.onInstalled, which only fires at install/update — after
+  // the first SW shutdown (~30s idle) the listeners were gone and modules
+  // were dormant until the next extension update. Each module is
+  // `_initialized`-guarded so calling them every wake is cheap and safe.
+  if (typeof BackupScheduler !== 'undefined') {
+    try { await BackupScheduler.init(); } catch (e) { console.error('[ScriptVault] BackupScheduler init error:', e); }
+  }
+  if (typeof NotificationSystem !== 'undefined' && typeof NotificationSystem.init === 'function') {
+    try { await NotificationSystem.init(); } catch (e) { console.error('[ScriptVault] NotificationSystem init error:', e); }
+  }
+  if (typeof PublicAPI !== 'undefined') {
+    try { await PublicAPI.init(); } catch (e) { console.error('[ScriptVault] PublicAPI init error:', e); }
+  }
+  if (typeof EasyCloudSync !== 'undefined') {
+    try { await EasyCloudSync.init(); } catch (e) { console.error('[ScriptVault] EasyCloudSync init error:', e); }
   }
 
   console.log('[ScriptVault] Service worker ready');
@@ -14453,11 +14602,48 @@ async function registerAllScripts(forceReregister = false) {
     // On normal SW wake, check if scripts are already registered to avoid
     // the destructive unregister→register cycle that creates a gap where
     // scripts aren't active on page navigations.
+    //
+    // Round 11: Compute a diff between enabled-in-storage and currently-registered.
+    // If a previous `Promise.allSettled` registration partially failed, the registered
+    // set may be missing some scripts indefinitely — register just the missing subset
+    // rather than short-circuiting the whole call.
     if (!forceReregister) {
       try {
         const existing = await chrome.userScripts.getScripts();
         if (existing && existing.length > 0) {
-          debugLog(`Skipping re-registration: ${existing.length} scripts already registered`);
+          const settings = await SettingsManager.get();
+          if (!settings.enabled) {
+            debugLog(`Skipping re-registration: scripts globally disabled`);
+            return;
+          }
+          const scripts = await ScriptStorage.getAll();
+          const enabledScripts = scripts.filter(s => s.enabled !== false);
+          const registeredIds = new Set(existing.map(s => s.id));
+          const missing = enabledScripts.filter(s => !registeredIds.has(s.id));
+
+          if (missing.length === 0) {
+            debugLog(`Skipping re-registration: ${existing.length} scripts already registered, none missing`);
+            return;
+          }
+
+          // Preload @require deps for the missing subset in parallel
+          const missingRequires = new Set();
+          for (const script of missing) {
+            for (const req of (script.meta?.require || [])) {
+              missingRequires.add(req);
+            }
+          }
+          if (missingRequires.size > 0) {
+            debugLog(`Preloading ${missingRequires.size} @require deps for ${missing.length} missing scripts`);
+            await Promise.allSettled([...missingRequires].map(url => fetchRequireScript(url)));
+          }
+
+          debugLog(`Registering ${missing.length} missing script(s) (diff from ${existing.length} already registered)`);
+          const diffResults = await Promise.allSettled(missing.map(script => registerScript(script)));
+          const diffFailures = diffResults.filter(r => r.status === 'rejected');
+          if (diffFailures.length > 0) {
+            console.warn(`[ScriptVault] ${diffFailures.length} missing script(s) failed to register:`, diffFailures.map(r => r.reason?.message || r.reason));
+          }
           return;
         }
       } catch (e) {
@@ -15058,7 +15244,49 @@ async function fetchWithRetry(url, retries = 2) {
 // ============================================================================
 
 // Maps scriptId -> array of rule IDs applied via @webRequest / GM_webRequest
+// Round 11: Persisted to chrome.storage.local under `_webRequestRuleMap` so the
+// map survives SW shutdown. Without persistence, once the SW is killed,
+// `removeWebRequestRules` can no longer clean up rules inserted by prior SW
+// generations — script deletion would leak DNR rules permanently.
 const _webRequestRuleMap = new Map();
+let _webRequestRuleMapHydrated = false;
+let _webRequestRuleMapHydratingPromise = null;
+
+async function _hydrateWebRequestRuleMap() {
+  if (_webRequestRuleMapHydrated) return;
+  if (_webRequestRuleMapHydratingPromise) return _webRequestRuleMapHydratingPromise;
+  _webRequestRuleMapHydratingPromise = (async () => {
+    try {
+      const result = await chrome.storage.local.get('_webRequestRuleMap');
+      const stored = result?._webRequestRuleMap;
+      if (stored && typeof stored === 'object') {
+        for (const [scriptId, ruleIds] of Object.entries(stored)) {
+          if (Array.isArray(ruleIds) && ruleIds.length > 0) {
+            _webRequestRuleMap.set(scriptId, ruleIds);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[ScriptVault] Failed to hydrate _webRequestRuleMap:', e?.message || e);
+    } finally {
+      _webRequestRuleMapHydrated = true;
+      _webRequestRuleMapHydratingPromise = null;
+    }
+  })();
+  return _webRequestRuleMapHydratingPromise;
+}
+
+async function _persistWebRequestRuleMap() {
+  try {
+    const obj = {};
+    for (const [scriptId, ruleIds] of _webRequestRuleMap.entries()) {
+      obj[scriptId] = ruleIds;
+    }
+    await chrome.storage.local.set({ _webRequestRuleMap: obj });
+  } catch (e) {
+    console.warn('[ScriptVault] Failed to persist _webRequestRuleMap:', e?.message || e);
+  }
+}
 
 // Stable numeric rule ID from a string (scriptId + rule index)
 function _makeRuleId(scriptId, index) {
@@ -15120,6 +15348,8 @@ function _translateWebRequestRule(rule, ruleId) {
 async function applyWebRequestRules(scriptId, rules) {
   if (!chrome.declarativeNetRequest || !Array.isArray(rules) || rules.length === 0) return;
   try {
+    // Round 11: Ensure map is rehydrated from storage before mutating (SW may have restarted)
+    await _hydrateWebRequestRuleMap();
     // Remove any existing rules for this script first
     await removeWebRequestRules(scriptId);
 
@@ -15143,6 +15373,7 @@ async function applyWebRequestRules(scriptId, rules) {
       }
       await chrome.declarativeNetRequest.updateDynamicRules({ addRules: dnrRules });
       _webRequestRuleMap.set(scriptId, ruleIds);
+      await _persistWebRequestRuleMap();
       debugLog(`[GM_webRequest] Applied ${dnrRules.length} rules for script ${scriptId}`);
     }
   } catch (e) {
@@ -15152,12 +15383,17 @@ async function applyWebRequestRules(scriptId, rules) {
 
 async function removeWebRequestRules(scriptId) {
   if (!chrome.declarativeNetRequest) return;
+  // Round 11: Rehydrate from storage before reading — the SW may have restarted
+  // since the rules were originally inserted, and without this the in-memory Map
+  // would be empty and we'd silently leak the DNR rules.
+  await _hydrateWebRequestRuleMap();
   const existing = _webRequestRuleMap.get(scriptId);
   if (existing && existing.length > 0) {
     try {
       await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing });
     } catch (e) {}
     _webRequestRuleMap.delete(scriptId);
+    await _persistWebRequestRuleMap();
   }
 }
 

@@ -58,14 +58,17 @@ const _webRequestRuleMap = new Map<string, number[]>();
 
 /**
  * Stable numeric rule ID derived from a scriptId string and a rule index.
- * Uses a hash-like approach: sum of char codes * position, mod safe range.
+ * 21-bit hash (0..2097151) * 1024 + 10-bit index (0..1023) yields ids up to ~2.1B,
+ * within Chrome's safe integer DNR rule id range. Adds (index + 1) so that a
+ * zero-hash never collapses to 0 and to guarantee distinct ids for indices on
+ * the same script.
  */
 export function _makeRuleId(scriptId: string, index: number): number {
   let h = 0;
   for (let i = 0; i < scriptId.length; i++) {
     h = (h * 31 + scriptId.charCodeAt(i)) & 0x7fffffff;
   }
-  return ((h % 100000) * 100 + (index % 100)) || (index + 1);
+  return ((h & 0x1fffff) * 1024 + (index & 0x3ff)) + (index + 1);
 }
 
 /**

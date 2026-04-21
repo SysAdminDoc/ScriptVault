@@ -3589,6 +3589,7 @@
             const deletedAt = getTrashTimestamp(script);
             const deletedLabel = deletedAt ? formatRelativeTimeLabel(deletedAt) : 'Unknown';
             const deletedExact = deletedAt ? dateTimeFormatter.format(new Date(deletedAt)) : 'Unknown time';
+            const scriptIdAttr = escapeHtml(script.id);
             const item = document.createElement('article');
             item.className = 'trash-item';
             item.innerHTML = `
@@ -3605,8 +3606,8 @@
                     </div>
                 </div>
                 <div class="trash-item-actions">
-                    <button type="button" class="btn" data-trash-restore="${script.id}">Restore</button>
-                    <button type="button" class="btn btn-danger" data-trash-delete="${script.id}">Delete Forever</button>
+                    <button type="button" class="btn" data-trash-restore="${scriptIdAttr}">Restore</button>
+                    <button type="button" class="btn btn-danger" data-trash-delete="${scriptIdAttr}">Delete Forever</button>
                 </div>
             `;
 
@@ -4350,12 +4351,13 @@
                 const folderTr = document.createElement('tr');
                 folderTr.className = `folder-row${collapsed ? ' collapsed' : ''}`;
                 folderTr.dataset.folderId = folder.id;
+                const folderIdAttr = escapeHtml(folder.id);
                 folderTr.innerHTML = `<td colspan="13">
                     <span class="folder-icon">\u25BC</span>
                     <span class="folder-color" style="background:${escapeHtml(folder.color)}"></span>
                     ${escapeHtml(folder.name)} <span class="folder-count">(${folderScripts.length})</span>
                     <span class="folder-actions">
-                        <button type="button" data-folder-delete="${folder.id}" title="Delete folder" aria-label="Delete folder ${escapeHtml(folder.name)}">Delete</button>
+                        <button type="button" data-folder-delete="${folderIdAttr}" title="Delete folder" aria-label="Delete folder ${escapeHtml(folder.name)}">Delete</button>
                     </span>
                 </td>`;
                 folderTr.addEventListener('click', async (e) => {
@@ -4515,7 +4517,7 @@
             <td class="center">
                 <div class="feature-badges">${features.map(f => `<span class="badge ${f.c}">${f.l}</span>`).join('')}</div>
             </td>
-            <td class="center">${homepage ? `<a href="${escapeHtml(homepage)}" target="_blank" rel="noopener noreferrer" aria-label="Open homepage for ${escapeHtml(name)}">🔗</a>` : '-'}</td>
+            <td class="center">${(() => { const safe = homepage ? sanitizeUrl(homepage) : null; return safe ? `<a href="${escapeHtml(safe)}" target="_blank" rel="noopener noreferrer" aria-label="Open homepage for ${escapeHtml(name)}">🔗</a>` : '-'; })()}</td>
             <td class="center"><button type="button" class="updated-link" data-action="checkUpdate" data-id="${scriptIdAttr}" title="Check for updates" aria-label="Check for updates for ${escapeHtml(name)}">${updated}</button></td>
             <td class="center">${statsHtml}</td>
             <td class="center">
@@ -4763,9 +4765,10 @@
             : getScriptBadgeLabel(scriptName, maxLetters);
         const fallbackSeed = firstDomain || scriptName || 'scriptvault';
         const fallbackHue = hashMarkerSeed(fallbackSeed);
-        if (iconUrl) {
+        const safeIconUrl = iconUrl ? sanitizeUrl(iconUrl) : null;
+        if (safeIconUrl) {
             // Use the script's @icon directly
-            return `<span class="script-favicon" data-fallback-label="${escapeHtml(fallbackLabel)}" data-fallback-hue="${fallbackHue}" data-fallback-mode="${mode}"><img src="${escapeHtml(iconUrl)}" width="16" height="16" alt="" loading="lazy" data-favicon-fallback="true"></span>`;
+            return `<span class="script-favicon" data-fallback-label="${escapeHtml(fallbackLabel)}" data-fallback-hue="${fallbackHue}" data-fallback-mode="${mode}"><img src="${escapeHtml(safeIconUrl)}" width="16" height="16" alt="" loading="lazy" data-favicon-fallback="true"></span>`;
         }
         return renderMarkerBadge('script-favicon', fallbackLabel, fallbackSeed, firstDomain || scriptName || 'Script', mode);
     }
@@ -5187,6 +5190,17 @@
         if (!script) return;
 
         const previousScriptId = state.currentScriptId;
+        // Persist the outgoing tab's in-progress code before switching.
+        // Most callers already do this, but Ctrl+Tab cycling and programmatic
+        // switches (e.g., closeScriptTab fallback) skip it — leaving unsaved
+        // edits to be overwritten when the user cycles back.
+        if (previousScriptId && previousScriptId !== scriptId
+            && state.editor && state.openTabs[previousScriptId]) {
+            try {
+                state.openTabs[previousScriptId].code = state.editor.getValue();
+                state.openTabs[previousScriptId].unsaved = state.unsavedChanges;
+            } catch {}
+        }
         state.currentScriptId = scriptId;
         const tabData = ensureOpenTabStatus(scriptId, script);
         state.unsavedChanges = tabData?.unsaved || false;
@@ -6287,8 +6301,15 @@
             }
         });
 
-        const cmEl = document.querySelector('.CodeMirror');
-        if (cmEl) cmEl.style.fontSize = (s.editorFontSize || 100) + '%';
+        if (state.editor?.isMonaco) {
+            // Monaco: apply saved font-size percentage (13px * pct / 100, clamped).
+            // The .CodeMirror-style fontSize line below is a no-op under Monaco
+            // (the noop element the adapter appends is display:none).
+            try { state.editor.setFontSize(parseInt(s.editorFontSize) || 100); } catch {}
+        } else {
+            const cmEl = document.querySelector('.CodeMirror');
+            if (cmEl) cmEl.style.fontSize = (s.editorFontSize || 100) + '%';
+        }
 
         // Cursor position tracking
         state.editor.on('cursorActivity', updateCursorPos);
@@ -9597,13 +9618,13 @@
                 return;
             }
             container.innerHTML = list.map(ws => `
-                <div class="workspace-item${ws.id === active ? ' active' : ''}" data-ws-id="${ws.id}">
+                <div class="workspace-item${ws.id === active ? ' active' : ''}" data-ws-id="${escapeHtml(ws.id)}">
                     <span class="workspace-name">${escapeHtml(ws.name)}</span>
                     <span class="workspace-scripts">${Object.keys(ws.snapshot || {}).length} scripts</span>
                     <div class="workspace-actions">
-                        <button type="button" class="toolbar-btn${ws.id === active ? ' primary' : ''}" data-ws-activate="${ws.id}"${ws.id === active ? ' disabled aria-current="true" title="Current workspace"' : ' title="Switch to workspace"'}>${ws.id === active ? 'Active' : 'Switch'}</button>
-                        <button type="button" class="toolbar-btn" data-ws-save="${ws.id}" title="Update with current state">Save</button>
-                        <button type="button" class="toolbar-btn" data-ws-delete="${ws.id}" title="Delete workspace">Delete</button>
+                        <button type="button" class="toolbar-btn${ws.id === active ? ' primary' : ''}" data-ws-activate="${escapeHtml(ws.id)}"${ws.id === active ? ' disabled aria-current="true" title="Current workspace"' : ' title="Switch to workspace"'}>${ws.id === active ? 'Active' : 'Switch'}</button>
+                        <button type="button" class="toolbar-btn" data-ws-save="${escapeHtml(ws.id)}" title="Update with current state">Save</button>
+                        <button type="button" class="toolbar-btn" data-ws-delete="${escapeHtml(ws.id)}" title="Delete workspace">Delete</button>
                     </div>
                 </div>
             `).join('');

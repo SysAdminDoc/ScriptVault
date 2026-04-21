@@ -30,6 +30,75 @@ const PublicAPI = (() => {
   let _rateLimitMap = new Map(); // senderId -> [timestamps]
 
   /* ------------------------------------------------------------------ */
+  /*  SSRF guard — internal/private/link-local/CGNAT host detection      */
+  /* ------------------------------------------------------------------ */
+
+  // Returns true if the given hostname resolves to (or is) an address we
+  // refuse to fetch from the web-install handler. Covers IPv4 private ranges,
+  // IPv4 link-local (incl. AWS/GCP metadata), IPv4 loopback/unspecified,
+  // CGNAT (100.64.0.0/10), IPv6 loopback/unspecified, IPv6 ULA (fc00::/7),
+  // and IPv6 link-local (fe80::/10).
+  function _isInternalHost(rawHost) {
+    if (!rawHost || typeof rawHost !== 'string') return true;
+    // Normalize: lowercase, strip IPv6 brackets
+    let h = rawHost.toLowerCase();
+    if (h.startsWith('[') && h.endsWith(']')) h = h.slice(1, -1);
+
+    // Hostname aliases
+    if (h === 'localhost' || h === 'localhost.localdomain' || h === 'ip6-localhost' || h === 'ip6-loopback') return true;
+
+    // IPv6 — hex + colons (possibly with trailing :port not expected here since
+    // URL.hostname strips the port, but be defensive).
+    if (h.includes(':')) {
+      // Canonical loopback / unspecified
+      if (h === '::1' || h === '::' || h === '::0' || h === '0:0:0:0:0:0:0:0' || h === '0:0:0:0:0:0:0:1') return true;
+      // fe80::/10 link-local — any address whose first 10 bits are 1111111010
+      // In textual form this is fe80..febf (first hextet high byte 0xfe, low-nibble 8-b)
+      if (/^fe[89ab][0-9a-f]?:/.test(h)) return true;
+      // fc00::/7 ULA — first 7 bits 1111110, textual first byte is fc or fd
+      if (/^f[cd][0-9a-f]{0,2}:/.test(h)) return true;
+      // IPv4-mapped IPv6: ::ffff:a.b.c.d — extract the trailing v4 literal
+      const v4Mapped = h.match(/^::ffff:([0-9.]+)$/);
+      if (v4Mapped) return _isInternalIPv4(v4Mapped[1]);
+      // Any other IPv6 literal — treat any `0:0:...` as unspecified-ish, otherwise allow
+      return false;
+    }
+
+    // IPv4 literal: 4 dot-decimal octets
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) {
+      return _isInternalIPv4(h);
+    }
+
+    // Hostname is a regular DNS name — let DNS resolve it. We can't block
+    // by resolution here without an extra round-trip; the explicit blocklist
+    // of aliases above catches the obvious cases.
+    return false;
+  }
+
+  function _isInternalIPv4(ip) {
+    const parts = ip.split('.').map(p => parseInt(p, 10));
+    if (parts.length !== 4 || parts.some(p => !Number.isFinite(p) || p < 0 || p > 255)) return true;
+    const [a, b, c, d] = parts;
+    // 0.0.0.0/8 unspecified
+    if (a === 0) return true;
+    // 10.0.0.0/8
+    if (a === 10) return true;
+    // 127.0.0.0/8 loopback
+    if (a === 127) return true;
+    // 169.254.0.0/16 link-local (AWS/GCP metadata 169.254.169.254)
+    if (a === 169 && b === 254) return true;
+    // 172.16.0.0/12 — octets 172.16..172.31
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    // 192.168.0.0/16
+    if (a === 192 && b === 168) return true;
+    // 100.64.0.0/10 CGNAT — 100.64..100.127
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    // 255.255.255.255 broadcast
+    if (a === 255 && b === 255 && c === 255 && d === 255) return true;
+    return false;
+  }
+
+  /* ------------------------------------------------------------------ */
   /*  Default Permissions                                                */
   /* ------------------------------------------------------------------ */
 
@@ -352,25 +421,26 @@ const PublicAPI = (() => {
       if (!allowed) return { error: 'Permission denied', action: 'toggleScript' };
 
       try {
-        const result = await chrome.storage.local.get('userscripts');
-        const data = result.userscripts || {};
-        let found = false;
-        if (Array.isArray(data)) {
-          const idx = data.findIndex(s => s.id === scriptId || s.meta?.name === scriptId);
-          if (idx === -1) return { error: 'Script not found', scriptId };
-          data[idx].enabled = enabled;
-          found = true;
-        } else {
-          const entry = Object.entries(data).find(([k, s]) => k === scriptId || s.id === scriptId || s.meta?.name === scriptId);
-          if (!entry) return { error: 'Script not found', scriptId };
-          data[entry[0]].enabled = enabled;
-          found = true;
+        // Route through ScriptStorage so the in-memory cache stays coherent.
+        // Previously the API wrote `userscripts` directly via chrome.storage.local.set,
+        // leaving ScriptStorage.cache (used by dashboard, popup, sidepanel, registration)
+        // pinned to the pre-toggle state until the next SW cold start.
+        if (typeof ScriptStorage === 'undefined') {
+          return { error: 'Script storage not available' };
         }
-        if (!found) return { error: 'Script not found', scriptId };
-        await chrome.storage.local.set({ userscripts: data });
+        const all = await ScriptStorage.getAll();
+        const target = all.find(s =>
+          s.id === scriptId ||
+          s.meta?.name === scriptId
+        );
+        if (!target) return { error: 'Script not found', scriptId };
 
-        fireWebhook('script.toggled', { scriptId, enabled });
-        return { ok: true, scriptId, enabled };
+        target.enabled = enabled;
+        target.updatedAt = Date.now();
+        await ScriptStorage.set(target.id, target);
+
+        fireWebhook('script.toggled', { scriptId: target.id, enabled });
+        return { ok: true, scriptId: target.id, enabled };
       } catch (e) {
         return { error: 'Failed to toggle script', detail: e.message };
       }
@@ -386,9 +456,8 @@ const PublicAPI = (() => {
       try {
         // Parse basic userscript metadata
         const meta = parseUserscriptMeta(code);
-        const scriptId = meta.name
-          ? meta.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase()
-          : `ext_${Date.now()}`;
+        // Use a collision-free UUID instead of name-normalized ID (which collided on special chars)
+        const scriptId = (crypto.randomUUID && crypto.randomUUID()) || `ext_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
         const newScript = {
           id: scriptId,
@@ -398,6 +467,7 @@ const PublicAPI = (() => {
             version: meta.version || '1.0',
             description: meta.description || '',
             match: meta.match || ['*://*/*'],
+            include: meta.include || [],
             'run-at': meta.runAt || 'document_idle'
           },
           enabled: true,
@@ -406,26 +476,14 @@ const PublicAPI = (() => {
           installedBy: describeSender(sender)
         };
 
-        const result = await chrome.storage.local.get('userscripts');
-        const data = result.userscripts || {};
-
-        // Check for duplicate — support both object and array formats
-        if (Array.isArray(data)) {
-          const existing = data.findIndex(s => s.id === scriptId);
-          if (existing !== -1) {
-            data[existing] = { ...data[existing], ...newScript, updatedAt: Date.now() };
-          } else {
-            data.push(newScript);
-          }
-        } else {
-          if (data[scriptId]) {
-            data[scriptId] = { ...data[scriptId], ...newScript, updatedAt: Date.now() };
-          } else {
-            data[scriptId] = newScript;
-          }
+        // Route through ScriptStorage so the in-memory cache stays coherent
+        // with chrome.storage.local. A direct chrome.storage.local.set leaves
+        // ScriptStorage.cache unaware of the new script until SW cold start,
+        // which breaks dashboard listing, registration, and badge counting.
+        if (typeof ScriptStorage === 'undefined') {
+          return { error: 'Script storage not available' };
         }
-
-        await chrome.storage.local.set({ userscripts: data });
+        await ScriptStorage.set(scriptId, newScript);
 
         fireWebhook('script.installed', { scriptId, name: newScript.meta.name, version: newScript.meta.version });
         return { ok: true, scriptId, name: newScript.meta.name };
@@ -455,9 +513,12 @@ const PublicAPI = (() => {
       const key = m[1].trim();
       const val = m[2].trim();
 
-      if (key === 'match' || key === 'include') {
+      if (key === 'match') {
         if (!meta.match) meta.match = [];
         meta.match.push(val);
+      } else if (key === 'include') {
+        if (!meta.include) meta.include = [];
+        meta.include.push(val);
       } else if (key === 'run-at') {
         meta.runAt = val.replace(/-/g, '_');
       } else {
@@ -477,8 +538,8 @@ const PublicAPI = (() => {
       return {
         type: 'scriptvault:getScripts:response',
         scripts: scripts.map(s => ({
-          name: s.name || s.id,
-          version: s.version || '1.0',
+          name: s.meta?.name || s.id,
+          version: s.meta?.version || '1.0',
           enabled: s.enabled !== false
         }))
       };
@@ -486,18 +547,18 @@ const PublicAPI = (() => {
 
     'scriptvault:isInstalled': async (data, origin) => {
       const name = data.name;
-      if (!name) return { type: 'scriptvault:isInstalled:response', error: 'Missing name' };
+      if (!name || typeof name !== 'string') return { type: 'scriptvault:isInstalled:response', error: 'Missing name' };
 
       const scripts = await getScripts();
       const found = scripts.find(s =>
-        (s.name || '').toLowerCase() === name.toLowerCase() ||
+        (s.meta?.name || '').toLowerCase() === name.toLowerCase() ||
         (s.id || '').toLowerCase() === name.toLowerCase()
       );
       return {
         type: 'scriptvault:isInstalled:response',
         installed: !!found,
         name,
-        version: found ? (found.version || '1.0') : null
+        version: found ? (found.meta?.version || '1.0') : null
       };
     },
 
@@ -513,14 +574,13 @@ const PublicAPI = (() => {
         return { type: 'scriptvault:install:response', error: 'Permission denied', action: 'installScript' };
       }
 
-      // Validate URL - only allow https:// from known userscript hosts
+      // Validate URL - only allow https:// and reject internal/private/link-local hosts
       try {
         const parsedUrl = new URL(url);
         if (parsedUrl.protocol !== 'https:') {
           return { type: 'scriptvault:install:response', error: 'Only HTTPS URLs are allowed' };
         }
-        const h = parsedUrl.hostname;
-        if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.startsWith('192.168.') || h.startsWith('10.') || h.startsWith('172.')) {
+        if (_isInternalHost(parsedUrl.hostname)) {
           return { type: 'scriptvault:install:response', error: 'Internal URLs are not allowed' };
         }
       } catch {
@@ -535,9 +595,9 @@ const PublicAPI = (() => {
 
         // Parse and install directly (authorization already checked above)
         const meta = parseUserscriptMeta(code);
-        const scriptId = meta.name
-          ? meta.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase()
-          : `ext_${Date.now()}`;
+        // Use a collision-free UUID (name-normalized IDs collide AND enable
+        // prototype pollution via reserved keys like __proto__/constructor).
+        const scriptId = (crypto.randomUUID && crypto.randomUUID()) || `ext_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
         const newScript = {
           id: scriptId,
@@ -555,25 +615,12 @@ const PublicAPI = (() => {
           installedBy: `origin:${origin}`
         };
 
-        const result = await chrome.storage.local.get('userscripts');
-        const data = result.userscripts || {};
-
-        if (Array.isArray(data)) {
-          const existing = data.findIndex(s => s.id === scriptId);
-          if (existing !== -1) {
-            data[existing] = { ...data[existing], ...newScript, updatedAt: Date.now() };
-          } else {
-            data.push(newScript);
-          }
-        } else {
-          if (data[scriptId]) {
-            data[scriptId] = { ...data[scriptId], ...newScript, updatedAt: Date.now() };
-          } else {
-            data[scriptId] = newScript;
-          }
+        // Route through ScriptStorage to keep the in-memory cache coherent
+        // (see comment on the companion `installScript` HANDLER above).
+        if (typeof ScriptStorage === 'undefined') {
+          return { type: 'scriptvault:install:response', error: 'Script storage not available' };
         }
-
-        await chrome.storage.local.set({ userscripts: data });
+        await ScriptStorage.set(scriptId, newScript);
 
         fireWebhook('script.installed', { scriptId, name: newScript.meta.name, version: newScript.meta.version });
         return { type: 'scriptvault:install:response', ok: true, scriptId, name: newScript.meta.name };

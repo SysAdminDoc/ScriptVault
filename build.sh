@@ -10,6 +10,13 @@ ZIP_NAME="ScriptVault-v$(grep -o '"version": "[^"]*"' "$SCRIPT_DIR/manifest.json
 
 echo "Building ScriptVault..."
 
+# Build background.js + ensure lib/monaco is populated before packaging.
+# Without this, edits to source modules wouldn't propagate to the shipped
+# background.js, and a fresh checkout would ship with an empty lib/monaco.
+if [ -f "$SCRIPT_DIR/esbuild.config.mjs" ]; then
+  node "$SCRIPT_DIR/esbuild.config.mjs"
+fi
+
 # Clean previous build
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"

@@ -54,14 +54,16 @@ export const NetworkLog = {
       timestamp: Date.now(),
       ...entry
     };
-    this._log.unshift(full);
+    // O(1) push; reversed on read in getAll()
+    this._log.push(full);
     if (this._log.length > this._maxEntries) {
-      this._log = this._log.slice(0, this._maxEntries);
+      this._log = this._log.slice(-this._maxEntries);
     }
   },
 
   getAll(filters: NetLogFilters = {}): NetLogEntry[] {
-    let results: NetLogEntry[] = this._log;
+    // Newest first (log stored oldest-first for O(1) push)
+    let results: NetLogEntry[] = [...this._log].reverse();
     if (filters.scriptId) {
       const scriptId: string = filters.scriptId;
       results = results.filter((e: NetLogEntry) => e.scriptId === scriptId);
