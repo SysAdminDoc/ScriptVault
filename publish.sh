@@ -39,7 +39,10 @@ echo ""
 
 # ── Build ────────────────────────────────────────────────────────────────────
 echo "[1/3] Building extension ZIP..."
-npm run build:bg --silent
+# Full build: concatenates background.js AND copies Monaco to lib/monaco.
+# Publishing with a stale/empty lib/monaco would ship a broken editor because
+# the sandbox CSP blocks the CDN fallback (no external script-src allowed).
+npm run build --silent
 
 BUILD_DIR="$SCRIPT_DIR/_cws_build"
 rm -rf "$BUILD_DIR"

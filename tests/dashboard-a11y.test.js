@@ -414,7 +414,7 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/runButtonTask\(button, async \(\) => \{\s*try \{\s*const response = await chrome\.runtime\.sendMessage\(\{ action: 'restoreFromTrash', scriptId: script\.id \}\);/);
     expect(dashboardJs).toMatch(/await Promise\.all\(\[loadTrash\(\), loadScripts\(\)\]\);\s*updateStats\(\);\s*showToast\('Script restored', 'success'\);/);
     expect(dashboardJs).toMatch(/runButtonTask\(button, async \(\) => \{\s*const confirm = await showConfirmModal\(\s*'Delete Forever'/);
-    expect(dashboardJs).toMatch(/<button type="button" class="toolbar-btn\$\{ws\.id === active \? ' primary' : ''\}" data-ws-activate="\$\{ws\.id\}"\$\{ws\.id === active \? ' disabled aria-current="true" title="Current workspace"' : ' title="Switch to workspace"'}/);
+    expect(dashboardJs).toMatch(/<button type="button" class="toolbar-btn\$\{ws\.id === active \? ' primary' : ''\}" data-ws-activate="\$\{escapeHtml\(ws\.id\)\}"\$\{ws\.id === active \? ' disabled aria-current="true" title="Current workspace"' : ' title="Switch to workspace"'}/);
     expect(dashboardJs).toMatch(/showToast\('Switching workspace…', 'info'\);/);
     expect(dashboardJs).toMatch(/await Promise\.all\(\[loadScripts\(\), loadWorkspaces\(\)\]\);\s*updateStats\(\);\s*showToast\(`Workspace "\$\{res\.name\}" activated`, 'success'\);/);
     expect(dashboardJs).toMatch(/runButtonTask\(btn, async \(\) => \{\s*const workspaceName = btn\.closest/);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "2.1.7",
+  "version": "2.1.8",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "homepage_url": "https://github.com/SysAdminDoc/ScriptVault",
@@ -41,8 +41,7 @@
     "<all_urls>"
   ],
   "background": {
-    "scripts": ["background.js"],
-    "type": "module"
+    "scripts": ["background.js"]
   },
   "action": {
     "default_icon": {

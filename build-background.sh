@@ -1,14 +1,32 @@
 #!/bin/bash
 # ScriptVault - Background Service Worker Builder
-# Concatenates source modules into a single background.js file
-# Chrome MV3 service workers don't support importScripts reliably,
-# so we inline everything into one file.
+# Concatenates source modules into a single background.js file.
+#
+# DEPRECATED: This legacy shell script cannot inline the
+# SCRIPTVAULT_SETTINGS_DEFAULTS constant that modules/storage.js now
+# requires, so it would produce a broken background.js. It now
+# delegates to the Node-based builder in esbuild.config.mjs, which is
+# the authoritative build and the only path guaranteed to stay in sync
+# with the source module layout.
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [ -f "$SCRIPT_DIR/esbuild.config.mjs" ]; then
+  exec node "$SCRIPT_DIR/esbuild.config.mjs" --bg-only
+fi
+
+# ─────────────────────────────────────────────────────────────────────
+# Fallback (esbuild.config.mjs missing): legacy bash concatenation.
+# This path is kept only for emergency bring-up and WILL produce a
+# background.js missing SCRIPTVAULT_SETTINGS_DEFAULTS. Treat any output
+# from this branch as broken until esbuild.config.mjs is restored.
+# ─────────────────────────────────────────────────────────────────────
+
 OUT="$SCRIPT_DIR/background.js"
 VERSION=$(grep -o '"version": "[^"]*"' "$SCRIPT_DIR/manifest.json" | cut -d'"' -f4)
 
+echo "WARNING: esbuild.config.mjs missing — falling back to legacy concat."
 echo "Building background.js v$VERSION..."
 
 {
