@@ -87,6 +87,10 @@ export const UpdateSystem = {
 
     for (const script of scripts) {
       if (!script.meta.updateURL && !script.meta.downloadURL) continue;
+      // Skip scripts flagged @nodownload (auto-updates disabled)
+      if ((script.meta as unknown as { nodownload?: boolean }).nodownload) continue;
+      // Skip user-modified scripts so local edits aren't clobbered
+      if (script.settings?.userModified) continue;
 
       try {
         const updateUrl: string = script.meta.updateURL || script.meta.downloadURL;
@@ -96,7 +100,14 @@ export const UpdateSystem = {
         if (script._httpEtag) headers['If-None-Match'] = script._httpEtag;
         if (script._httpLastModified) headers['If-Modified-Since'] = script._httpLastModified;
 
-        const response: Response = await fetch(updateUrl, { headers });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        let response: Response;
+        try {
+          response = await fetch(updateUrl, { headers, signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
         // 304 Not Modified - no update needed
         if (response.status === 304) continue;
@@ -189,7 +200,8 @@ export const UpdateSystem = {
     script.meta = parsedMeta;
     script.updatedAt = Date.now();
 
-    // Re-register FIRST so we can verify the new code works before persisting
+    // Re-register the script after updating (persist happens below; registration errors
+    // are recorded on the script so the UI can surface them, but don't block save)
     try {
       await unregisterScript(scriptId);
       if (script.enabled !== false) {

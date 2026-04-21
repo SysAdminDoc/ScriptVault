@@ -4,7 +4,7 @@
 
 import type { ScriptSettings, ScriptStats, ScriptMeta } from '../types/index';
 
-const CURRENT_VERSION = '2.0.0';
+const CURRENT_VERSION = '2.1.8';
 const MIGRATION_KEY = 'sv_lastMigratedVersion';
 
 /** Notification preferences stored in chrome.storage.local. */

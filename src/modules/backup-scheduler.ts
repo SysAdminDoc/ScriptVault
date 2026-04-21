@@ -123,6 +123,7 @@ const DEFAULT_SETTINGS: BackupSchedulerSettings = {
 
 let _settings: BackupSchedulerSettings | null = null;
 let _initialized = false;
+let _settingsLoadPromise: Promise<BackupSchedulerSettings> | null = null;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -196,18 +197,23 @@ function _notify(
 
 async function _loadSettings(): Promise<BackupSchedulerSettings> {
   if (_settings) return _settings;
-  const data = await chrome.storage.local.get(STORAGE_KEY_SETTINGS);
-  const stored = data[STORAGE_KEY_SETTINGS] as
-    | Partial<BackupSchedulerSettings>
-    | undefined;
-  _settings = { ...DEFAULT_SETTINGS, ...(stored ?? {}) };
-  return _settings;
+  if (_settingsLoadPromise) return _settingsLoadPromise;
+  _settingsLoadPromise = (async () => {
+    const data = await chrome.storage.local.get(STORAGE_KEY_SETTINGS);
+    const stored = data[STORAGE_KEY_SETTINGS] as
+      | Partial<BackupSchedulerSettings>
+      | undefined;
+    _settings = { ...DEFAULT_SETTINGS, ...(stored ?? {}) };
+    return _settings;
+  })();
+  return _settingsLoadPromise;
 }
 
 async function _saveSettings(
   settings: BackupSchedulerSettings,
 ): Promise<void> {
   _settings = { ...DEFAULT_SETTINGS, ...settings };
+  _settingsLoadPromise = null; // allow next _loadSettings to re-read from storage
   await chrome.storage.local.set({ [STORAGE_KEY_SETTINGS]: _settings });
 }
 

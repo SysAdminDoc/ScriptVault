@@ -254,8 +254,8 @@ ${req.code}
 
     // Handle menu command execution
     if (msg.type === 'menuCommand' && msg.scriptId === scriptId) {
-      const cb = _menuCmds.get(msg.commandId);
-      if (cb) try { cb(); } catch(err) { /* silently ignore menu command errors */ }
+      const cmd = _menuCmds.get(msg.commandId);
+      if (cmd?.callback) try { cmd.callback(); } catch(err) { /* silently ignore menu command errors */ }
     }
 
     // Handle value change notifications (cross-tab sync)
@@ -453,14 +453,18 @@ ${req.code}
 
       window.addEventListener('message', handler);
 
-      // Send to content script bridge
+      // Send to content script bridge.
+      // targetOrigin must be '*' because opaque origins (data:, blob:, about:blank)
+      // cannot match any specific origin and rejecting them would break scripts
+      // that run in sandboxed frames. Channel-ID authentication protects the
+      // channel (see bridge init in content.js).
       window.postMessage({
         channel: CHANNEL_ID,
         direction: 'to-background',
         id: id,
         action: action,
         data: data
-      }, '/');
+      }, '*');
     });
   }
 
@@ -870,7 +874,7 @@ ${req.code}
       opts = accessKeyOrOptions;
     }
     const id = opts.id || Math.random().toString(36).substring(2);
-    _menuCmds.set(id, callback);
+    _menuCmds.set(id, { callback, caption });
     sendToBackground('GM_registerMenuCommand', {
       scriptId, commandId: id, caption,
       accessKey: opts.accessKey || '',
@@ -889,7 +893,7 @@ ${req.code}
 
   function GM_getMenuCommands() {
     if (!hasGrant('GM_registerMenuCommand') && !hasGrant('GM.registerMenuCommand')) return [];
-    return Array.from(_menuCmds.entries()).map(([id, cb]) => ({ id, name: id }));
+    return Array.from(_menuCmds.entries()).map(([id, entry]) => ({ id, name: entry.caption || id, caption: entry.caption || id }));
   }
 
   // GM_getResourceText / GM_getResourceURL

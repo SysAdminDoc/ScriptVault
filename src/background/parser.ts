@@ -193,6 +193,16 @@ export function parseUserscript(code: string): ParseResult {
         case 'priority':
           meta.priority = parseInt(value, 10) || 0;
           break;
+        case 'nodownload':
+          (meta as unknown as { nodownload?: boolean }).nodownload = true;
+          break;
+        case 'delay': {
+          const ms: number = parseInt(value, 10);
+          if (Number.isFinite(ms)) {
+            (meta as unknown as { delay?: number }).delay = Math.max(0, ms);
+          }
+          break;
+        }
         case 'webRequest':
           try {
             meta.webRequest = JSON.parse(value) as WebRequestRule[] | null;
@@ -201,12 +211,18 @@ export function parseUserscript(code: string): ParseResult {
           }
           break;
         default:
-          // Handle localized metadata like @name:ja
-          if (key.includes(':')) {
-            const [baseKey, locale] = key.split(':') as [string, string];
-            if (!meta.localized) meta.localized = {};
-            if (!meta.localized[locale]) meta.localized[locale] = {};
-            meta.localized[locale]![baseKey] = value;
+          // Handle localized metadata like @name:ja or @name:zh-Hans.
+          // Use indexOf/slice to preserve multi-segment locale tags — split(':')
+          // would truncate "zh-Hans" or similar hyphenated subtags.
+          {
+            const colonIdx: number = key.indexOf(':');
+            if (colonIdx > 0) {
+              const baseKey: string = key.slice(0, colonIdx);
+              const locale: string = key.slice(colonIdx + 1);
+              if (!meta.localized) meta.localized = {};
+              if (!meta.localized[locale]) meta.localized[locale] = {};
+              meta.localized[locale]![baseKey] = value;
+            }
           }
       }
     }

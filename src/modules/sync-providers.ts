@@ -72,6 +72,27 @@ function generateOAuthState(): string {
   ).join('');
 }
 
+/**
+ * Wraps `fetch` with an AbortController timeout.
+ * Prevents service worker hangs caused by slow or unresponsive cloud API endpoints.
+ * @param url - Request URL
+ * @param options - Standard RequestInit options (do not include a signal — one is added here)
+ * @param timeoutMs - Abort after this many milliseconds (default: 30 000)
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 30_000,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 // ============================================================================
 // WebDAV Provider
 // ============================================================================
@@ -85,14 +106,14 @@ const webdav = {
     const url = `${getRequiredWebDavBaseUrl(settings)}/scriptvault-backup.json`;
     const auth = getWebDavAuthHeader(settings);
 
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'PUT',
       headers: {
         'Authorization': auth,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(data),
-    });
+    }, 60_000);
 
     if (!response.ok) throw new Error(`WebDAV upload failed: HTTP ${response.status}`);
     return { success: true, timestamp: Date.now() };
@@ -102,10 +123,10 @@ const webdav = {
     const url = `${getRequiredWebDavBaseUrl(settings)}/scriptvault-backup.json`;
     const auth = getWebDavAuthHeader(settings);
 
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'GET',
       headers: { 'Authorization': auth },
-    });
+    }, 60_000);
 
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`WebDAV download failed: HTTP ${response.status}`);
@@ -118,10 +139,10 @@ const webdav = {
       const url = getRequiredWebDavBaseUrl(settings);
       const auth = getWebDavAuthHeader(settings);
 
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         method: 'PROPFIND',
         headers: { 'Authorization': auth, 'Depth': '0' },
-      });
+      }, 15_000);
 
       return { success: response.ok || response.status === 207 };
     } catch (e: unknown) {
@@ -155,7 +176,7 @@ const googledrive = {
     if (!refreshTok) return null;
 
     const clientId = currentSettings.googleClientId || this.clientId;
-    const resp = await fetch('https://oauth2.googleapis.com/token', {
+    const resp = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -163,7 +184,7 @@ const googledrive = {
         grant_type: 'refresh_token',
         refresh_token: refreshTok,
       }),
-    });
+    }, 15_000);
 
     if (!resp.ok) {
       console.warn('[CloudSync] Google token refresh failed:', resp.status);
@@ -192,9 +213,9 @@ const googledrive = {
 
     try {
       // Test if token is still valid
-      const test = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+      const test = await fetchWithTimeout('https://www.googleapis.com/drive/v3/about?fields=user', {
         headers: { 'Authorization': `Bearer ${token}` },
-      });
+      }, 10_000);
 
       if (test.ok) return token;
       if (test.status === 401 || test.status === 403) {
@@ -259,7 +280,7 @@ const googledrive = {
       if (!code) throw new Error('No authorization code received');
 
       // Exchange code for tokens
-      const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+      const tokenResp = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -269,7 +290,7 @@ const googledrive = {
           grant_type: 'authorization_code',
           redirect_uri: redirectUri,
         }),
-      });
+      }, 15_000);
 
       if (!tokenResp.ok) {
         const err = await tokenResp.text();
@@ -279,9 +300,9 @@ const googledrive = {
       const tokens: { access_token: string; refresh_token?: string } = await tokenResp.json();
 
       // Get user info
-      const userResp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      const userResp = await fetchWithTimeout('https://www.googleapis.com/oauth2/v2/userinfo', {
         headers: { 'Authorization': `Bearer ${tokens.access_token}` },
-      });
+      }, 10_000);
       const user: { email?: string; name?: string; picture?: string } = userResp.ok
         ? await userResp.json()
         : {};
@@ -308,7 +329,7 @@ const googledrive = {
     try {
       const token = await this.getToken();
       if (token) {
-        await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`).catch(
+        fetchWithTimeout(`https://accounts.google.com/o/oauth2/revoke?token=${token}`, {}, 10_000).catch(
           () => {},
         );
       }
@@ -327,9 +348,10 @@ const googledrive = {
   async findFile(token: string): Promise<GoogleDriveFile | null> {
     // Search in root and appDataFolder
     const query = encodeURIComponent(`name='${this.fileName}' and trashed=false`);
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime)&spaces=drive`,
       { headers: { 'Authorization': `Bearer ${token}` } },
+      15_000,
     );
 
     if (!response.ok) throw new Error(`Failed to search files: ${response.status}`);
@@ -368,14 +390,14 @@ const googledrive = {
       ? `https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=multipart`
       : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
 
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: existingFile ? 'PATCH' : 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': `multipart/related; boundary=${boundary}`,
       },
       body,
-    });
+    }, 60_000);
 
     if (!response.ok) {
       const error = await response.text();
@@ -392,9 +414,10 @@ const googledrive = {
     const file = await this.findFile(token);
     if (!file) return null;
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
       { headers: { 'Authorization': `Bearer ${token}` } },
+      60_000,
     );
 
     if (!response.ok) throw new Error(`Download failed: ${response.status}`);
@@ -406,9 +429,10 @@ const googledrive = {
       const token = await this.getValidToken(settings);
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         'https://www.googleapis.com/drive/v3/about?fields=user',
         { headers: { 'Authorization': `Bearer ${token}` } },
+        15_000,
       );
 
       return { success: response.ok };
@@ -428,9 +452,10 @@ const googledrive = {
       const token = await this.getValidToken(s);
       if (!token) return { connected: false };
 
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         'https://www.googleapis.com/oauth2/v2/userinfo',
         { headers: { 'Authorization': `Bearer ${token}` } },
+        10_000,
       );
 
       if (!response.ok) return { connected: false };
@@ -508,7 +533,7 @@ const dropbox = {
     if (!code) throw new Error('No authorization code received');
 
     // Exchange code for tokens
-    const tokenResp = await fetch('https://api.dropboxapi.com/oauth2/token', {
+    const tokenResp = await fetchWithTimeout('https://api.dropboxapi.com/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -518,7 +543,7 @@ const dropbox = {
         grant_type: 'authorization_code',
         redirect_uri: redirectUri,
       }),
-    });
+    }, 15_000);
 
     if (!tokenResp.ok) {
       const err = await tokenResp.text();
@@ -538,7 +563,7 @@ const dropbox = {
     const clientId = settings.dropboxClientId;
     if (!refreshTok || !clientId) return null;
 
-    const resp = await fetch('https://api.dropboxapi.com/oauth2/token', {
+    const resp = await fetchWithTimeout('https://api.dropboxapi.com/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -546,7 +571,7 @@ const dropbox = {
         grant_type: 'refresh_token',
         refresh_token: refreshTok,
       }),
-    });
+    }, 15_000);
 
     if (!resp.ok) {
       console.warn('[CloudSync] Dropbox token refresh failed:', resp.status);
@@ -563,10 +588,14 @@ const dropbox = {
   async getValidToken(settings: Settings): Promise<string | null> {
     if (settings.dropboxToken) {
       try {
-        const test = await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${settings.dropboxToken}` },
-        });
+        const test = await fetchWithTimeout(
+          'https://api.dropboxapi.com/2/users/get_current_account',
+          {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${settings.dropboxToken}` },
+          },
+          10_000,
+        );
         if (test.ok) return settings.dropboxToken;
         if (test.status !== 401 && test.status !== 403) return settings.dropboxToken;
       } catch (_e: unknown) {
@@ -579,10 +608,10 @@ const dropbox = {
   async disconnect(settings: Settings): Promise<SyncDisconnectResult> {
     if (settings.dropboxToken) {
       try {
-        await fetch('https://api.dropboxapi.com/2/auth/token/revoke', {
+        await fetchWithTimeout('https://api.dropboxapi.com/2/auth/token/revoke', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${settings.dropboxToken}` },
-        });
+        }, 10_000);
       } catch (e: unknown) {
         console.warn('[CloudSync] Dropbox revoke error:', e);
       }
@@ -599,7 +628,7 @@ const dropbox = {
     const token = await this.getValidToken(settings);
     if (!token) throw new Error('Not authenticated with Dropbox');
 
-    const response = await fetch('https://content.dropboxapi.com/2/files/upload', {
+    const response = await fetchWithTimeout('https://content.dropboxapi.com/2/files/upload', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -612,7 +641,7 @@ const dropbox = {
         'Content-Type': 'application/octet-stream',
       },
       body: JSON.stringify(data),
-    });
+    }, 60_000);
 
     if (response.status === 401) throw new Error('Dropbox token expired. Please reconnect.');
     if (!response.ok) {
@@ -627,13 +656,13 @@ const dropbox = {
     const token = await this.getValidToken(settings);
     if (!token) throw new Error('Not authenticated with Dropbox');
 
-    const response = await fetch('https://content.dropboxapi.com/2/files/download', {
+    const response = await fetchWithTimeout('https://content.dropboxapi.com/2/files/download', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Dropbox-API-Arg': JSON.stringify({ path: this.fileName }),
       },
-    });
+    }, 60_000);
 
     if (response.status === 409) return null; // File not found
     if (response.status === 401) throw new Error('Dropbox token expired. Please reconnect.');
@@ -647,12 +676,13 @@ const dropbox = {
       const token = await this.getValidToken(settings);
       if (!token) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         'https://api.dropboxapi.com/2/users/get_current_account',
         {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
         },
+        15_000,
       );
 
       if (response.status === 401) return { success: false, error: 'Token expired' };
@@ -671,12 +701,13 @@ const dropbox = {
       const token = await this.getValidToken(s);
       if (!token) return { connected: false };
 
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         'https://api.dropboxapi.com/2/users/get_current_account',
         {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
         },
+        15_000,
       );
 
       if (!response.ok) return { connected: false };
@@ -759,7 +790,7 @@ const onedrive = {
     const code = url.searchParams.get('code');
     if (!code) throw new Error('No authorization code received');
 
-    const tokenResp = await fetch(
+    const tokenResp = await fetchWithTimeout(
       'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
       {
         method: 'POST',
@@ -773,14 +804,15 @@ const onedrive = {
           scope: scopes,
         }),
       },
+      15_000,
     );
 
     if (!tokenResp.ok) throw new Error('Token exchange failed: ' + (await tokenResp.text()));
     const tokens: { access_token: string; refresh_token?: string } = await tokenResp.json();
 
-    const userResp = await fetch('https://graph.microsoft.com/v1.0/me', {
+    const userResp = await fetchWithTimeout('https://graph.microsoft.com/v1.0/me', {
       headers: { 'Authorization': `Bearer ${tokens.access_token}` },
-    });
+    }, 10_000);
     const user: { mail?: string; userPrincipalName?: string; displayName?: string } =
       userResp.ok ? await userResp.json() : {};
 
@@ -809,7 +841,7 @@ const onedrive = {
     const clientId = currentSettings.onedriveClientId;
     if (!refreshTok || !clientId) return null;
 
-    const resp = await fetch(
+    const resp = await fetchWithTimeout(
       'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
       {
         method: 'POST',
@@ -821,6 +853,7 @@ const onedrive = {
           scope: 'Files.ReadWrite.AppFolder User.Read offline_access',
         }),
       },
+      15_000,
     );
 
     if (!resp.ok) return null;
@@ -844,9 +877,9 @@ const onedrive = {
     }
 
     try {
-      const test = await fetch('https://graph.microsoft.com/v1.0/me', {
+      const test = await fetchWithTimeout('https://graph.microsoft.com/v1.0/me', {
         headers: { 'Authorization': `Bearer ${token}` },
-      });
+      }, 10_000);
       if (test.ok) return token;
       if (test.status === 401 || test.status === 403) {
         return await this.refreshToken(currentSettings);
@@ -872,7 +905,7 @@ const onedrive = {
     if (!token) throw new Error('Not authenticated with OneDrive');
     if (!data || typeof data !== 'object') throw new Error('Invalid backup data');
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,
       {
         method: 'PUT',
@@ -882,6 +915,7 @@ const onedrive = {
         },
         body: JSON.stringify(data),
       },
+      60_000,
     );
 
     if (!response.ok) throw new Error('Upload failed: ' + (await response.text()));
@@ -892,9 +926,10 @@ const onedrive = {
     const token = await this.getValidToken(settings);
     if (!token) throw new Error('Not authenticated with OneDrive');
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,
       { headers: { 'Authorization': `Bearer ${token}` } },
+      60_000,
     );
 
     if (response.status === 404) return null;
@@ -906,9 +941,9 @@ const onedrive = {
     try {
       const token = await this.getValidToken(settings);
       if (!token) return { success: false, error: 'Not authenticated' };
-      const response = await fetch('https://graph.microsoft.com/v1.0/me', {
+      const response = await fetchWithTimeout('https://graph.microsoft.com/v1.0/me', {
         headers: { 'Authorization': `Bearer ${token}` },
-      });
+      }, 15_000);
       return { success: response.ok };
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
@@ -922,9 +957,9 @@ const onedrive = {
       if (!s.onedriveToken && !s.onedriveRefreshToken) return { connected: false };
       const token = await this.getValidToken(s);
       if (!token) return { connected: false };
-      const response = await fetch('https://graph.microsoft.com/v1.0/me', {
+      const response = await fetchWithTimeout('https://graph.microsoft.com/v1.0/me', {
         headers: { 'Authorization': `Bearer ${token}` },
-      });
+      }, 15_000);
       if (!response.ok) return { connected: false };
       const user: { mail?: string; userPrincipalName?: string; displayName?: string } =
         await response.json();
