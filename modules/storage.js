@@ -97,9 +97,10 @@ const ScriptStorage = {
     const prev = this.cache[id];
     delete this.cache[id];
     try {
-      // Also delete associated values
-      await ScriptValues.deleteAll(id);
       await this.save();
+      // Delete associated values AFTER script removal persists
+      // (if save fails, rollback below restores the script; values stay intact)
+      await ScriptValues.deleteAll(id);
     } catch (e) {
       // Rollback cache on failure
       if (prev !== undefined) this.cache[id] = prev;
@@ -154,8 +155,7 @@ const ScriptStorage = {
       updatedAt: Date.now()
     };
     
-    this.cache[newId] = newScript;
-    await this.save();
+    await this.set(newId, newScript);
     return newScript;
   }
 };
@@ -183,7 +183,7 @@ const ScriptValues = {
   
   // FIXED: Save immediately to prevent data loss on service worker termination
   // MV3 service workers can be killed at any time - setTimeout-based debouncing is unsafe
-  async set(scriptId, key, value) {
+  async set(scriptId, key, value, senderTabId = null) {
     await this.init(scriptId);
     const oldValue = this.cache[scriptId][key];
     
@@ -197,13 +197,13 @@ const ScriptValues = {
     });
     
     // Debounce notifications only (these are less critical)
-    this.scheduleNotification(scriptId, key, oldValue, value);
+    this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
     
     return value;
   },
   
   // Debounced notifications - batches rapid changes (notification loss is acceptable)
-  scheduleNotification(scriptId, key, oldValue, newValue) {
+  scheduleNotification(scriptId, key, oldValue, newValue, senderTabId = null) {
     const notifKey = `${scriptId}_${key}`;
     const existing = this.pendingNotifications.get(notifKey);
     if (existing) {
@@ -214,13 +214,13 @@ const ScriptValues = {
     
     const timeout = setTimeout(() => {
       this.pendingNotifications.delete(notifKey);
-      this.notifyChange(scriptId, key, oldValue, newValue, false);
+      this.notifyChange(scriptId, key, oldValue, newValue, false, senderTabId);
     }, 100);
     
-    this.pendingNotifications.set(notifKey, { timeout, oldValue });
+    this.pendingNotifications.set(notifKey, { timeout, oldValue, senderTabId });
   },
   
-  async delete(scriptId, key) {
+  async delete(scriptId, key, senderTabId = null) {
     await this.init(scriptId);
     const oldValue = this.cache[scriptId][key];
     delete this.cache[scriptId][key];
@@ -228,7 +228,7 @@ const ScriptValues = {
     await chrome.storage.local.set({ 
       [`values_${scriptId}`]: this.cache[scriptId] 
     });
-    this.scheduleNotification(scriptId, key, oldValue, undefined);
+    this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
   },
   
   async list(scriptId) {
@@ -241,12 +241,12 @@ const ScriptValues = {
     return { ...this.cache[scriptId] };
   },
   
-  async setAll(scriptId, values) {
+  async setAll(scriptId, values, senderTabId = null) {
     await this.init(scriptId);
     for (const [key, value] of Object.entries(values)) {
       const oldValue = this.cache[scriptId][key];
       this.cache[scriptId][key] = value;
-      this.scheduleNotification(scriptId, key, oldValue, value);
+      this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
     }
     // Save immediately
     await chrome.storage.local.set({ 
@@ -260,12 +260,12 @@ const ScriptValues = {
   },
   
   // Delete multiple specific keys at once
-  async deleteMultiple(scriptId, keys) {
+  async deleteMultiple(scriptId, keys, senderTabId = null) {
     await this.init(scriptId);
     for (const key of keys) {
       const oldValue = this.cache[scriptId][key];
       delete this.cache[scriptId][key];
-      this.scheduleNotification(scriptId, key, oldValue, undefined);
+      this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
     }
     // Save immediately
     await chrome.storage.local.set({ 
@@ -288,7 +288,7 @@ const ScriptValues = {
     this.listeners.delete(key);
   },
   
-  notifyChange(scriptId, key, oldValue, newValue, remote) {
+  notifyChange(scriptId, key, oldValue, newValue, remote, senderTabId = null) {
     // Skip if value didn't actually change
     if (oldValue === newValue) return;
     
@@ -303,10 +303,13 @@ const ScriptValues = {
       }
     });
     
-    // Broadcast value change to all loaded tabs
+    // Broadcast value change to all loaded tabs.
+    // remote is true for every tab except the one that originated the change,
+    // matching the Tampermonkey GM_addValueChangeListener spec.
     chrome.tabs.query({ status: 'complete' }).then(tabs => {
-      const msg = { action: 'valueChanged', data: { scriptId, key, oldValue, newValue, remote: true } };
       for (const tab of tabs) {
+        const isOriginTab = senderTabId !== null && tab.id === senderTabId;
+        const msg = { action: 'valueChanged', data: { scriptId, key, oldValue, newValue, remote: !isOriginTab } };
         chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
       }
     }).catch(() => {});

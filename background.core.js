@@ -78,7 +78,8 @@ function parseUserscript(code) {
     compatible: [],
     incompatible: [],
     webRequest: null,
-    priority: 0
+    priority: 0,
+    crontab: ''
   };
 
   const metaBlock = metaBlockMatch[1];
@@ -113,6 +114,7 @@ function parseUserscript(code) {
       case 'license':
       case 'copyright':
       case 'contributionURL':
+      case 'crontab':
         meta[key] = value;
         break;
       case 'match':
@@ -267,11 +269,11 @@ const UpdateSystem = {
     return 0;
   },
   
-  async applyUpdate(scriptId, newCode) {
+  async applyUpdate(scriptId, newCode, { force = false } = {}) {
     const script = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
-    // Don't auto-update scripts the user has locally edited
-    if (script.settings?.userModified) return { skipped: true, reason: 'user-modified' };
+    // Don't auto-update scripts the user has locally edited (unless force=true from forceUpdate)
+    if (!force && script.settings?.userModified) return { skipped: true, reason: 'user-modified' };
 
     const parsed = parseUserscript(newCode);
     if (parsed.error) return parsed;
@@ -540,6 +542,9 @@ async function exportAllScripts(options = {}) {
     if (includeSettings && s.settings && typeof s.settings === 'object') {
       entry.settings = { ...s.settings };
     }
+    if (s.versionHistory && s.versionHistory.length > 0) {
+      entry.versionHistory = s.versionHistory;
+    }
     if (includeStorage) {
       const values = await ScriptValues.getAll(s.id);
       if (values && Object.keys(values).length > 0) {
@@ -596,7 +601,7 @@ async function importScripts(data, options = {}) {
         ? { ...script.settings }
         : { ...(existing?.settings || {}) };
 
-      await ScriptStorage.set(script.id, {
+      const importEntry = {
         id: script.id,
         code: script.code,
         meta: parsed.meta,
@@ -605,7 +610,11 @@ async function importScripts(data, options = {}) {
         position: script.position ?? _importPosition++,
         createdAt: script.createdAt || Date.now(),
         updatedAt: script.updatedAt || Date.now()
-      });
+      };
+      if (script.versionHistory && Array.isArray(script.versionHistory)) {
+        importEntry.versionHistory = script.versionHistory;
+      }
+      await ScriptStorage.set(script.id, importEntry);
       if (importStorage) {
         const storedValues = script.storage && typeof script.storage === 'object' ? script.storage : {};
         if (Object.keys(storedValues).length > 0) {
@@ -661,7 +670,7 @@ async function exportToZip(options = {}) {
     files[`${safeName}.user.js`] = fflate.strToU8(script.code);
     
     // Add options.json (Tampermonkey format)
-    const options = {
+    const scriptOptions = {
       settings: {
         enabled: script.enabled,
         'run-at': script.meta['run-at'] || 'document-idle',
@@ -690,7 +699,7 @@ async function exportToZip(options = {}) {
         resource: script.meta.resource || {}
       }
     };
-    files[`${safeName}.options.json`] = fflate.strToU8(JSON.stringify(options, null, 2));
+    files[`${safeName}.options.json`] = fflate.strToU8(JSON.stringify(scriptOptions, null, 2));
     
     // Add storage.json if script has stored values
     const values = includeStorage ? await ScriptValues.getAll(script.id) : null;
@@ -970,26 +979,31 @@ async function handleMessage(message, sender) {
         
         await ScriptStorage.set(id, script);
         await updateBadge();
-        await autoReloadMatchingTabs(script);
 
-        // v2.0: Live reload — also reload if script has live reload enabled
+        // Re-register BEFORE reloading tabs so reloaded pages pick up the new script
+        await unregisterScript(id);
+        if (script.enabled !== false) {
+          await registerScript(script);
+        }
+
+        // Live reload takes priority over debounced auto-reload (prevents double reload)
         try {
           const lrData = await chrome.storage.local.get('liveReloadScripts');
           if (lrData.liveReloadScripts?.[id]) {
-            // Force reload all matching tabs immediately (bypass debounce)
+            // Force reload all matching tabs immediately (new registration already active)
             const allTabs = await chrome.tabs.query({});
             for (const tab of allTabs) {
               if (tab.url && doesScriptMatchUrl(script, tab.url)) {
                 try { chrome.tabs.reload(tab.id).catch(() => {}); } catch {}
               }
             }
+          } else {
+            // Debounced auto-reload for normal saves (gated by settings.autoReload)
+            await autoReloadMatchingTabs(script);
           }
-        } catch {}
-
-        // Re-register the script with userScripts API
-        await unregisterScript(id);
-        if (script.enabled !== false) {
-          await registerScript(script);
+        } catch {
+          // Fallback: attempt debounced auto-reload if live-reload check failed
+          await autoReloadMatchingTabs(script);
         }
 
         const settings = await SettingsManager.get();
@@ -1240,9 +1254,12 @@ async function handleMessage(message, sender) {
         return await ScriptValues.get(data.scriptId, data.key, data.defaultValue);
         
       case 'GM_setValue':
-        return await ScriptValues.set(data.scriptId, data.key, data.value);
+        return await ScriptValues.set(data.scriptId, data.key, data.value, sender.tab?.id ?? null);
         
       case 'GM_deleteValue':
+        await ScriptValues.delete(data.scriptId, data.key, sender.tab?.id ?? null);
+        return { success: true };
+
       case 'deleteScriptValue':
         await ScriptValues.delete(data.scriptId, data.key);
         return { success: true };
@@ -1254,11 +1271,11 @@ async function handleMessage(message, sender) {
         return await ScriptValues.getAll(data.scriptId);
         
       case 'GM_setValues':
-        await ScriptValues.setAll(data.scriptId, data.values);
+        await ScriptValues.setAll(data.scriptId, data.values, sender.tab?.id ?? null);
         return { success: true };
         
       case 'GM_deleteValues':
-        await ScriptValues.deleteMultiple(data.scriptId, data.keys);
+        await ScriptValues.deleteMultiple(data.scriptId, data.keys, sender.tab?.id ?? null);
         return { success: true };
         
       case 'getScriptStorage':
@@ -1276,10 +1293,12 @@ async function handleMessage(message, sender) {
         
       // Tab Storage
       case 'GM_getTab':
-        return TabStorage.get(sender.tab?.id);
+        if (!sender.tab?.id) return {};
+        return TabStorage.get(sender.tab.id);
         
       case 'GM_saveTab':
-        TabStorage.set(sender.tab?.id, data.data);
+        if (!sender.tab?.id) return { error: 'GM_saveTab requires a tab context' };
+        TabStorage.set(sender.tab.id, data.data);
         return { success: true };
         
       case 'GM_getTabs':
@@ -1405,8 +1424,8 @@ async function handleMessage(message, sender) {
           const newCode = await response.text();
           const parsed = parseUserscript(newCode);
           if (parsed.error) return parsed;
-          // Apply as update (saves version history)
-          return await UpdateSystem.applyUpdate(scriptId, newCode);
+          // Apply as update (force=true bypasses userModified guard)
+          return await UpdateSystem.applyUpdate(scriptId, newCode, { force: true });
         } catch (e) {
           return { error: e.message };
         }
@@ -1628,12 +1647,6 @@ async function handleMessage(message, sender) {
         return { success: true };
       }
       
-      // Values Editor - Delete a value
-      case 'deleteScriptValue': {
-        await ScriptValues.delete(data.scriptId, data.key);
-        return { success: true };
-      }
-      
       // Values Editor - Clear all values for a script
       case 'clearScriptStorage': {
         await ScriptValues.deleteAll(data.scriptId);
@@ -1646,6 +1659,8 @@ async function handleMessage(message, sender) {
         if (!scriptId || !oldKey || !newKey || oldKey === newKey) return { error: 'Invalid rename parameters' };
         const current = await ScriptValues.get(scriptId, oldKey);
         if (current === undefined) return { error: 'Key not found' };
+        const existingNew = await ScriptValues.get(scriptId, newKey);
+        if (existingNew !== undefined) return { error: `Key "${newKey}" already exists` };
         await ScriptValues.set(scriptId, newKey, current);
         await ScriptValues.delete(scriptId, oldKey);
         return { success: true };
@@ -2349,9 +2364,32 @@ async function handleMessage(message, sender) {
             credentials: data.anonymous ? 'omit' : 'include'
           };
 
-          // Add body for non-GET/HEAD requests
+          // Add body for non-GET/HEAD requests; deserialize tagged body objects
           if (data.data && method !== 'GET' && method !== 'HEAD') {
-            fetchOptions.body = data.data;
+            const rawBody = data.data;
+            if (rawBody && typeof rawBody === 'object' && !ArrayBuffer.isView(rawBody) && !(rawBody instanceof ArrayBuffer)) {
+              if (rawBody.__sv_blob__) {
+                const bytes = Uint8Array.from(atob(rawBody.b64), c => c.charCodeAt(0));
+                fetchOptions.body = rawBody.name
+                  ? new File([bytes], rawBody.name, { type: rawBody.type || '' })
+                  : new Blob([bytes], { type: rawBody.type || '' });
+              } else if (rawBody.__sv_formdata__) {
+                const fd = new FormData();
+                for (const entry of rawBody.entries) {
+                  if (entry.b64 !== undefined) {
+                    const bytes = Uint8Array.from(atob(entry.b64), c => c.charCodeAt(0));
+                    fd.append(entry.name, new Blob([bytes], { type: entry.type || '' }), entry.filename || 'blob');
+                  } else {
+                    fd.append(entry.name, entry.value);
+                  }
+                }
+                fetchOptions.body = fd;
+              } else {
+                fetchOptions.body = rawBody;
+              }
+            } else {
+              fetchOptions.body = rawBody;
+            }
           }
           
           // Set timeout
@@ -3757,6 +3795,13 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
 
+  // Handle @crontab script execution alarms (independent of the update/sync mutex)
+  if (alarm.name.startsWith('crontab_')) {
+    const scriptId = alarm.name.slice('crontab_'.length);
+    handleCrontabAlarm(scriptId).catch(e => console.error('[ScriptVault] Crontab alarm error:', e));
+    return;
+  }
+
   // Mutual exclusion — don't run update and sync concurrently
   if (_backgroundTaskRunning) {
     debugLog('Skipping alarm', alarm.name, '- another task is running');
@@ -3785,6 +3830,109 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
+// ============================================================================
+// @crontab Support
+// ============================================================================
+
+/**
+ * Convert a simplified cron expression to a period in minutes.
+ * Chrome alarms have a minimum of 1 minute.
+ * Supports: "*/n * * * *" (every n min), "0 * * * *" (hourly),
+ * "0 */n * * *" (every n hours), "0 0 * * *" (daily).
+ * Falls back to 1 minute for complex expressions.
+ */
+function parseCronToMinutes(expr) {
+  if (!expr || typeof expr !== 'string') return 60;
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length < 5) return 60;
+  const [min, hour, dom, month, dow] = parts;
+  if (min.startsWith('*/') && hour === '*' && dom === '*' && month === '*' && dow === '*') {
+    const n = parseInt(min.slice(2), 10);
+    return isNaN(n) || n < 1 ? 1 : Math.min(n, 1440);
+  }
+  if (min === '0' && hour.startsWith('*/') && dom === '*' && month === '*' && dow === '*') {
+    const n = parseInt(hour.slice(2), 10);
+    return isNaN(n) || n < 1 ? 60 : Math.min(n * 60, 1440);
+  }
+  if (min === '0' && hour === '*' && dom === '*' && month === '*' && dow === '*') {
+    return 60;
+  }
+  if (min === '0' && hour === '0' && dom === '*' && month === '*' && dow === '*') {
+    return 1440;
+  }
+  // Complex expression not supported by simplified parser — fall back to hourly
+  debugLog(`[parseCronToMinutes] Unrecognized cron expression: "${expr}", defaulting to 60 min`);
+  return 60;
+}
+
+/** Execute a @crontab script in all currently-open matching tabs. */
+async function handleCrontabAlarm(scriptId) {
+  const script = await ScriptStorage.get(scriptId);
+  if (!script || !script.enabled || !script.meta?.crontab) {
+    chrome.alarms.clear('crontab_' + scriptId).catch(() => {});
+    return;
+  }
+
+  const meta = script.meta;
+  const hasMatches = (meta.match && meta.match.length > 0) || (meta.include && meta.include.length > 0);
+  if (!hasMatches) {
+    debugLog(`@crontab script ${meta.name} has no @match patterns, skipping`);
+    return;
+  }
+
+  // Fetch @require scripts
+  const requireScripts = [];
+  const requires = Array.isArray(meta.require) ? meta.require : (meta.require ? [meta.require] : []);
+  for (const url of requires) {
+    try {
+      const code = await fetchRequireScript(url);
+      if (code) requireScripts.push({ url, code });
+    } catch (e) {}
+  }
+
+  const storedValues = await ScriptValues.getAll(script.id) || {};
+  // Extract regex @include/@exclude patterns for runtime URL guard in wrapper
+  const regexIncludes = [];
+  const regexExcludes = [];
+  for (const inc of (meta.include || [])) {
+    if (/^\/.*\/$|^\/.*\/[gimsuy]+$/.test(inc)) regexIncludes.push(inc);
+  }
+  for (const exc of (meta.exclude || [])) {
+    if (/^\/.*\/$|^\/.*\/[gimsuy]+$/.test(exc)) regexExcludes.push(exc);
+  }
+  const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
+
+  const tabs = await chrome.tabs.query({ status: 'complete' });
+  for (const tab of tabs) {
+    if (!tab.url || !tab.id) continue;
+    if (!doesScriptMatchUrl(script, tab.url)) continue;
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (code) => { (new Function(code))(); },
+        args: [wrappedCode],
+        world: 'ISOLATED'
+      });
+      debugLog(`@crontab ${meta.name}: executed in tab ${tab.id}`);
+    } catch (e) {
+      debugLog(`@crontab ${meta.name}: failed in tab ${tab.id}: ${e.message}`);
+    }
+  }
+}
+
+/** Create/refresh chrome alarms for all enabled @crontab scripts. */
+async function setupCrontabAlarms() {
+  const scripts = await ScriptStorage.getAll();
+  for (const script of scripts) {
+    const alarmName = 'crontab_' + script.id;
+    await chrome.alarms.clear(alarmName).catch(() => {});
+    if (script.enabled && script.meta?.crontab) {
+      const minutes = Math.max(1, parseCronToMinutes(script.meta.crontab));
+      chrome.alarms.create(alarmName, { periodInMinutes: minutes });
+    }
+  }
+}
+
 async function setupAlarms() {
   const settings = await SettingsManager.get();
   
@@ -3810,6 +3958,9 @@ async function setupAlarms() {
       periodInMinutes: Math.max(1, syncMs / 60000)
     });
   }
+
+  // Setup @crontab alarms for all enabled scripts
+  await setupCrontabAlarms();
 }
 
 // ============================================================================
@@ -4357,10 +4508,21 @@ async function registerAllScripts(forceReregister = false) {
 // Register a single script
 async function registerScript(script) {
   try {
-    if (!chrome.userScripts) return;
-    
     const meta = script.meta;
     const settings = script.settings || {};
+
+    // @crontab scripts execute on a schedule rather than on page load.
+    // Register a chrome alarm instead of a chrome.userScripts entry.
+    if (meta.crontab) {
+      const alarmName = 'crontab_' + script.id;
+      await chrome.alarms.clear(alarmName).catch(() => {});
+      const minutes = Math.max(1, parseCronToMinutes(meta.crontab));
+      chrome.alarms.create(alarmName, { periodInMinutes: minutes });
+      debugLog(`Registered @crontab: ${meta.name} (every ${minutes} min)`);
+      return;
+    }
+
+    if (!chrome.userScripts) return;
     
     // Build match patterns with URL override support
     const matches = [];
@@ -5052,6 +5214,8 @@ async function removeWebRequestRules(scriptId) {
 }
 
 async function unregisterScript(scriptId) {
+  // Clear @crontab alarm if present
+  chrome.alarms.clear('crontab_' + scriptId).catch(() => {});
   // Remove any @webRequest declarativeNetRequest rules
   await removeWebRequestRules(scriptId);
   try {
@@ -5237,6 +5401,7 @@ ${req.code}
     version: ${JSON.stringify(chrome.runtime.getManifest().version)},
     scriptWillUpdate: !!(meta.updateURL || meta.downloadURL),
     isIncognito: typeof chrome !== 'undefined' && chrome.extension ? chrome.extension.inIncognitoContext : false,
+    injectInto: ${JSON.stringify(meta['inject-into'] || 'auto')},
     downloadMode: 'browser',
     platform: {
       os: navigator.userAgentData?.platform || navigator.platform || 'unknown',
@@ -5683,40 +5848,72 @@ ${req.code}
       }
     };
 
-    // Start the request
-    sendToBackground('GM_xmlhttpRequest', {
-      scriptId,
-      method: details.method || 'GET',
-      url: details.url,
-      headers: details.headers,
-      data: details.data,
-      timeout: details.timeout,
-      responseType: details.responseType,
-      overrideMimeType: details.overrideMimeType,
-      user: details.user,
-      password: details.password,
-      context: details.context,
-      anonymous: details.anonymous,
-      // Track which callbacks are registered so background knows what to send
-      hasCallbacks: {
-        onload: !!details.onload,
-        onerror: !!details.onerror,
-        onprogress: !!details.onprogress,
-        onreadystatechange: !!details.onreadystatechange,
-        ontimeout: !!details.ontimeout,
-        onabort: !!details.onabort,
-        onloadstart: !!details.onloadstart,
-        onloadend: !!details.onloadend,
-        upload: !!(details.upload && (
-          details.upload.onprogress || 
-          details.upload.onloadstart || 
-          details.upload.onload || 
-          details.upload.onerror
-        ))
+    // Serialize request body to a structured-clone-safe format.
+    // Blob/File/FormData cannot cross the extension messaging boundary natively.
+    async function _serializeBody(d) {
+      if (!d || typeof d === 'string' || d instanceof ArrayBuffer || ArrayBuffer.isView(d)) return d;
+      if (d instanceof URLSearchParams) return d.toString();
+      function _ab2b64(buf) {
+        const bytes = new Uint8Array(buf), chunk = 8192;
+        let s = '';
+        for (let i = 0; i < bytes.length; i += chunk) s += String.fromCharCode(...bytes.subarray(i, i + chunk));
+        return btoa(s);
       }
-    }).then(response => {
+      if (d instanceof Blob || d instanceof File) {
+        const buf = await d.arrayBuffer();
+        return { __sv_blob__: true, b64: _ab2b64(buf), type: d.type, name: d instanceof File ? d.name : undefined };
+      }
+      if (d instanceof FormData) {
+        const entries = [];
+        for (const [name, val] of d.entries()) {
+          if (val instanceof Blob || val instanceof File) {
+            const buf = await val.arrayBuffer();
+            entries.push({ name, b64: _ab2b64(buf), type: val.type, filename: val instanceof File ? val.name : 'blob' });
+          } else {
+            entries.push({ name, value: val });
+          }
+        }
+        return { __sv_formdata__: true, entries };
+      }
+      return d;
+    }
+
+    // Start the request (async to allow body serialization)
+    (async () => {
+      const serializedData = await _serializeBody(details.data);
+      const response = await sendToBackground('GM_xmlhttpRequest', {
+        scriptId,
+        method: details.method || 'GET',
+        url: details.url,
+        headers: details.headers,
+        data: serializedData,
+        timeout: details.timeout,
+        responseType: details.responseType,
+        overrideMimeType: details.overrideMimeType,
+        user: details.user,
+        password: details.password,
+        context: details.context,
+        anonymous: details.anonymous,
+        // Track which callbacks are registered so background knows what to send
+        hasCallbacks: {
+          onload: !!details.onload,
+          onerror: !!details.onerror,
+          onprogress: !!details.onprogress,
+          onreadystatechange: !!details.onreadystatechange,
+          ontimeout: !!details.ontimeout,
+          onabort: !!details.onabort,
+          onloadstart: !!details.onloadstart,
+          onloadend: !!details.onloadend,
+          upload: !!(details.upload && (
+            details.upload.onprogress || 
+            details.upload.onloadstart || 
+            details.upload.onload || 
+            details.upload.onerror
+          ))
+        }
+      });
       if (aborted) return;
-      
+
       if (!response) {
         // No response (bridge failure)
         if (details.onerror) details.onerror({ error: 'Request failed - no response', status: 0 });
@@ -5732,7 +5929,7 @@ ${req.code}
         _xhrRequests.delete(localId);
         currentMapKey = requestId;
       }
-    }).catch(err => {
+    })().catch(err => {
       if (aborted) return;
       if (details.onerror) details.onerror({ error: err.message || 'Request failed', status: 0 });
       _xhrRequests.delete(currentMapKey);
