@@ -3802,6 +3802,20 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
 
+  // Delegate to NotificationSystem for weekly-digest + internal context alarms.
+  // Without this dispatch the `scriptvault-weekly-digest` alarm would fire into
+  // nothing (the branches below only handle autoUpdate/autoSync), so the digest
+  // notification — which users explicitly opt into via prefs.digest — would
+  // silently never generate.
+  if (typeof NotificationSystem !== 'undefined' && typeof NotificationSystem.handleAlarm === 'function') {
+    try {
+      const handled = await NotificationSystem.handleAlarm(alarm);
+      if (handled) return;
+    } catch (e) {
+      console.error('[ScriptVault] NotificationSystem alarm error:', e);
+    }
+  }
+
   // Mutual exclusion — don't run update and sync concurrently
   if (_backgroundTaskRunning) {
     debugLog('Skipping alarm', alarm.name, '- another task is running');
@@ -6183,7 +6197,20 @@ ${req.code}
           });
           el.innerHTML = temp.innerHTML;
         }
-        else el.setAttribute(k, v);
+        else {
+          // Apply the same defensive sanitization to direct attribute sets so
+          // this path stays consistent with the innerHTML branch above: drop
+          // inline event handlers (onclick/onerror/...) and reject javascript:
+          // or vbscript: URLs regardless of attribute name (covers href, src,
+          // formaction, xlink:href, poster, action, etc.). The tradeoff is
+          // bare minimum — this is not a full HTML sanitizer, just matching the
+          // innerHTML branch's baseline.
+          const lowerName = String(k).toLowerCase();
+          if (lowerName.startsWith('on')) return;
+          const lowerValue = String(v ?? '').trim().toLowerCase();
+          if (lowerValue.startsWith('javascript:') || lowerValue.startsWith('vbscript:')) return;
+          try { el.setAttribute(k, v); } catch { /* ignore invalid attribute names */ }
+        }
       });
     }
     if (parent) parent.appendChild(el);

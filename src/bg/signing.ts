@@ -152,10 +152,15 @@ export const ScriptSigning = {
 
       if (!valid) return { valid: false, reason: 'Signature verification failed' };
 
-      // Check if this public key is in the trust store
+      // Check if this public key is in the trust store. Use Object.hasOwn so a
+      // malicious signature whose publicKey field collides with an inherited
+      // Object.prototype method (toString, hasOwnProperty, etc.) can't resolve
+      // passively and be reported as `trusted: true`.
       const settings: Settings = await SettingsManager.get();
       const trustedKeys: TrustedKeysMap = settings.trustedSigningKeys ?? {};
-      const trusted = trustedKeys[signatureInfo.publicKey];
+      const trusted = Object.hasOwn(trustedKeys, signatureInfo.publicKey)
+        ? trustedKeys[signatureInfo.publicKey]
+        : undefined;
 
       return {
         valid: true,

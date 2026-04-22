@@ -224,4 +224,62 @@ describe('FolderStorage', () => {
     const all = await FolderStorage.getAll();
     expect(all).toHaveLength(0);
   });
+
+  it('update() rolls back on persist failure without clobbering other fields', async () => {
+    const folder = await FolderStorage.create('Original', '#111111');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(FolderStorage.update(folder.id, { name: 'Changed', color: '#222222' }))
+      .rejects.toThrow('QUOTA');
+    const after = (await FolderStorage.getAll()).find(f => f.id === folder.id);
+    expect(after.name).toBe('Original');
+    expect(after.color).toBe('#111111');
+  });
+});
+
+// ── ScriptValues rollback (rounds 2+ added rollback to set/delete/setAll) ─
+describe('ScriptValues rollback', () => {
+  it('set() rolls back cache on persist failure', async () => {
+    await ScriptValues.set('s1', 'key', 'original');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(ScriptValues.set('s1', 'key', 'new'))
+      .rejects.toThrow('QUOTA');
+    expect(await ScriptValues.get('s1', 'key')).toBe('original');
+  });
+
+  it('set() rolls back newly-added key on persist failure', async () => {
+    await ScriptValues.init('s1');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(ScriptValues.set('s1', 'fresh', 'v'))
+      .rejects.toThrow('QUOTA');
+    expect(await ScriptValues.get('s1', 'fresh', 'DEFAULT')).toBe('DEFAULT');
+  });
+
+  it('delete() rolls back on persist failure', async () => {
+    await ScriptValues.set('s1', 'key', 'original');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(ScriptValues.delete('s1', 'key'))
+      .rejects.toThrow('QUOTA');
+    expect(await ScriptValues.get('s1', 'key')).toBe('original');
+  });
+
+  it('setAll() rolls back entire batch on persist failure', async () => {
+    await ScriptValues.set('s1', 'a', 1);
+    await ScriptValues.set('s1', 'b', 2);
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(ScriptValues.setAll('s1', { a: 99, b: 99, c: 99 }))
+      .rejects.toThrow('QUOTA');
+    expect(await ScriptValues.get('s1', 'a')).toBe(1);
+    expect(await ScriptValues.get('s1', 'b')).toBe(2);
+    expect(await ScriptValues.get('s1', 'c', 'MISSING')).toBe('MISSING');
+  });
+
+  it('deleteMultiple() rolls back on persist failure', async () => {
+    await ScriptValues.set('s1', 'a', 1);
+    await ScriptValues.set('s1', 'b', 2);
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(ScriptValues.deleteMultiple('s1', ['a', 'b']))
+      .rejects.toThrow('QUOTA');
+    expect(await ScriptValues.get('s1', 'a')).toBe(1);
+    expect(await ScriptValues.get('s1', 'b')).toBe(2);
+  });
 });

@@ -109,8 +109,15 @@ const ScriptStorage = {
   },
   
   async clear() {
+    const prev = this.cache;
     this.cache = {};
-    await this.save();
+    try {
+      await this.save();
+    } catch (e) {
+      // Rollback so cache reflects what's actually persisted
+      this.cache = prev;
+      throw e;
+    }
   },
   
   async search(query) {
@@ -186,19 +193,29 @@ const ScriptValues = {
   async set(scriptId, key, value, senderTabId = null) {
     await this.init(scriptId);
     const oldValue = this.cache[scriptId][key];
-    
+    const hadKey = Object.hasOwn(this.cache[scriptId], key);
+
     // Update cache immediately
     this.cache[scriptId][key] = value;
-    
+
     // Save IMMEDIATELY - don't debounce persistence in MV3!
-    // Service workers can be terminated at any time, losing unsaved data
-    await chrome.storage.local.set({ 
-      [`values_${scriptId}`]: this.cache[scriptId] 
-    });
-    
+    // Service workers can be terminated at any time, losing unsaved data.
+    // Roll back the cache mutation if persistence fails (quota exceeded,
+    // transient storage errors) so callers observe a consistent state and
+    // no change notification is emitted for a write that never landed.
+    try {
+      await chrome.storage.local.set({
+        [`values_${scriptId}`]: this.cache[scriptId]
+      });
+    } catch (e) {
+      if (hadKey) this.cache[scriptId][key] = oldValue;
+      else delete this.cache[scriptId][key];
+      throw e;
+    }
+
     // Debounce notifications only (these are less critical)
     this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
-    
+
     return value;
   },
   
@@ -222,12 +239,19 @@ const ScriptValues = {
   
   async delete(scriptId, key, senderTabId = null) {
     await this.init(scriptId);
+    if (!Object.hasOwn(this.cache[scriptId], key)) return;
     const oldValue = this.cache[scriptId][key];
     delete this.cache[scriptId][key];
-    // Save immediately
-    await chrome.storage.local.set({ 
-      [`values_${scriptId}`]: this.cache[scriptId] 
-    });
+    // Save immediately with rollback on failure — otherwise the cache shows
+    // the key gone while storage still holds it, drifting on SW restart.
+    try {
+      await chrome.storage.local.set({
+        [`values_${scriptId}`]: this.cache[scriptId]
+      });
+    } catch (e) {
+      this.cache[scriptId][key] = oldValue;
+      throw e;
+    }
     this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
   },
   
@@ -243,15 +267,27 @@ const ScriptValues = {
   
   async setAll(scriptId, values, senderTabId = null) {
     await this.init(scriptId);
+    // Snapshot prior state so we can roll back the cache on persist failure
+    // (quota exceeded, etc.) and only fire change notifications for writes
+    // that actually committed to storage.
+    const snapshot = { ...this.cache[scriptId] };
+    const changes = [];
     for (const [key, value] of Object.entries(values)) {
       const oldValue = this.cache[scriptId][key];
       this.cache[scriptId][key] = value;
-      this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
+      changes.push([key, oldValue, value]);
     }
-    // Save immediately
-    await chrome.storage.local.set({ 
-      [`values_${scriptId}`]: this.cache[scriptId] 
-    });
+    try {
+      await chrome.storage.local.set({
+        [`values_${scriptId}`]: this.cache[scriptId]
+      });
+    } catch (e) {
+      this.cache[scriptId] = snapshot;
+      throw e;
+    }
+    for (const [key, oldValue, newValue] of changes) {
+      this.scheduleNotification(scriptId, key, oldValue, newValue, senderTabId);
+    }
   },
   
   async deleteAll(scriptId) {
@@ -262,15 +298,26 @@ const ScriptValues = {
   // Delete multiple specific keys at once
   async deleteMultiple(scriptId, keys, senderTabId = null) {
     await this.init(scriptId);
+    const snapshot = { ...this.cache[scriptId] };
+    const changes = [];
     for (const key of keys) {
+      if (!Object.hasOwn(this.cache[scriptId], key)) continue;
       const oldValue = this.cache[scriptId][key];
       delete this.cache[scriptId][key];
+      changes.push([key, oldValue]);
+    }
+    if (changes.length === 0) return;
+    try {
+      await chrome.storage.local.set({
+        [`values_${scriptId}`]: this.cache[scriptId]
+      });
+    } catch (e) {
+      this.cache[scriptId] = snapshot;
+      throw e;
+    }
+    for (const [key, oldValue] of changes) {
       this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
     }
-    // Save immediately
-    await chrome.storage.local.set({ 
-      [`values_${scriptId}`]: this.cache[scriptId] 
-    });
   },
   
   async getStorageSize(scriptId) {
@@ -395,9 +442,19 @@ const FolderStorage = {
   async update(id, updates) {
     await this.init();
     const folder = this.cache.find(f => f.id === id);
-    if (folder) {
-      Object.assign(folder, updates);
+    if (!folder) return null;
+    // Snapshot only the fields being updated so rollback doesn't clobber
+    // concurrent writes to unrelated fields.
+    const prev = {};
+    for (const k of Object.keys(updates)) {
+      prev[k] = folder[k];
+    }
+    Object.assign(folder, updates);
+    try {
       await this.save();
+    } catch (e) {
+      Object.assign(folder, prev);
+      throw e;
     }
     return folder;
   },
