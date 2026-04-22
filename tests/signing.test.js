@@ -77,6 +77,50 @@ describe('ScriptSigning', () => {
     });
   });
 
+  describe('trust-store prototype lookup', () => {
+    it('does not resolve inherited Object.prototype property names as trusted', async () => {
+      // Shape the crypto.subtle.verify mock to return `true` so verification
+      // succeeds, isolating the trust-store lookup path. The publicKey field is
+      // controlled by the signed script's metadata — if `trustedKeys[key]` were
+      // looked up without an own-property guard, `toString`/`hasOwnProperty`
+      // etc. would resolve to their inherited functions and report `trusted: true`.
+      const origVerify = crypto.subtle.verify;
+      const origImport = crypto.subtle.importKey;
+      crypto.subtle.verify = async () => true;
+      crypto.subtle.importKey = async () => ({});
+      try {
+        const result = await ScriptSigning.verifyScript('code', {
+          signature: 'AA', publicKey: 'toString'
+        });
+        expect(result.valid).toBe(true);
+        expect(result.trusted).toBe(false);
+        expect(result.trustedName).toBeNull();
+      } finally {
+        crypto.subtle.verify = origVerify;
+        crypto.subtle.importKey = origImport;
+      }
+    });
+
+    it('still reports trusted: true for keys explicitly added to the trust store', async () => {
+      const origVerify = crypto.subtle.verify;
+      const origImport = crypto.subtle.importKey;
+      crypto.subtle.verify = async () => true;
+      crypto.subtle.importKey = async () => ({});
+      try {
+        await ScriptSigning.trustKey('legitpubkey', 'Alice');
+        const result = await ScriptSigning.verifyScript('code', {
+          signature: 'AA', publicKey: 'legitpubkey'
+        });
+        expect(result.valid).toBe(true);
+        expect(result.trusted).toBe(true);
+        expect(result.trustedName).toBe('Alice');
+      } finally {
+        crypto.subtle.verify = origVerify;
+        crypto.subtle.importKey = origImport;
+      }
+    });
+  });
+
   describe('extractSignatureFromCode', () => {
     it('parses signature from metadata', () => {
       const code = `// ==UserScript==
