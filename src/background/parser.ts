@@ -40,7 +40,8 @@ type StringMetaKey =
   | 'run-in'
   | 'license'
   | 'copyright'
-  | 'contributionURL';
+  | 'contributionURL'
+  | 'crontab';
 
 const STRING_KEYS: ReadonlySet<string> = new Set<StringMetaKey>([
   'name',
@@ -64,6 +65,7 @@ const STRING_KEYS: ReadonlySet<string> = new Set<StringMetaKey>([
   'license',
   'copyright',
   'contributionURL',
+  'crontab',
 ]);
 
 /** Array‐valued metadata keys that map directly to ScriptMeta */

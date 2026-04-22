@@ -1,4 +1,4 @@
-// ScriptVault Popup v2.0.0
+﻿// ScriptVault Popup v2.2.0
 // Tampermonkey-style popup interface
 
 (function() {
@@ -405,7 +405,7 @@
             pageScripts = [];
             renderScriptList();
             updateEnabledState();
-            showPopupEmptyState('No page selected', 'Open a tab to see which scripts match it.', '\uD83D\uDCDC', { showFindScripts: false, showCreateScript: true });
+            showPopupEmptyState('No page selected', 'Open a tab to see which scripts match it.', '\uD83D\uDCDC');
             return;
         }
 
@@ -413,7 +413,7 @@
             pageScripts = [];
             renderScriptList();
             updateEnabledState();
-            showPopupEmptyState('Scripts don’t run here', 'Browser pages, extension pages, and other internal surfaces block userscripts.', '\uD83D\uDEE1\uFE0F', { showFindScripts: false, showCreateScript: true });
+            showPopupEmptyState('Scripts don’t run here', 'Browser pages, extension pages, and other internal surfaces block userscripts.', '\uD83D\uDEE1\uFE0F');
             return;
         }
 
@@ -433,12 +433,11 @@
             updateEnabledState();
             const isTimeout = error.message === 'timeout';
             showPopupEmptyState(
-                isTimeout ? 'ScriptVault is loading…' : 'Connection error',
+                isTimeout ? 'ScriptVault is loading\u2026' : 'Connection error',
                 isTimeout
                     ? 'The background service is still starting up. Try again in a moment.'
                     : 'Could not connect to the ScriptVault background service.',
-                '\u26A0',
-                { showFindScripts: false, showCreateScript: true }
+                '\u26A0'
             );
         }
     }
@@ -1119,9 +1118,12 @@
                 
                 if (isZip) {
                     const arrayBuffer = await file.arrayBuffer();
-                    const base64 = btoa(
-                        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-                    );
+                    const bytes = new Uint8Array(arrayBuffer);
+                    let binary = '';
+                    for (let i = 0; i < bytes.length; i += 8192) {
+                        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+                    }
+                    const base64 = btoa(binary);
                     
                     result = await chrome.runtime.sendMessage({
                         action: 'importFromZip',
