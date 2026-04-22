@@ -4790,7 +4790,16 @@ async function registerScript(script) {
 }
 
 // Cache for @require scripts (in-memory for current session)
+// Capped at 500 entries to prevent unbounded memory growth; evicts oldest entry on overflow.
 const requireCache = new Map();
+const REQUIRE_CACHE_MAX = 500;
+
+function requireCacheSet(key, value) {
+  if (!requireCache.has(key) && requireCache.size >= REQUIRE_CACHE_MAX) {
+    requireCache.delete(requireCache.keys().next().value);
+  }
+  requireCache.set(key, value);
+}
 
 // Common library fallback URLs
 const LIBRARY_FALLBACKS = {
@@ -4891,13 +4900,17 @@ async function verifySRI(code, hashStr) {
   const match = hashStr.match(/^(sha256|sha384|sha512|md5)[-=](.+)$/i);
   if (!match) return true; // Unknown format, skip verification
   const [, algo, expected] = match;
-  if (algo.toLowerCase() === 'md5') return true; // Can't verify MD5 with SubtleCrypto
+  if (algo.toLowerCase() === 'md5') {
+    console.warn('[ScriptVault] SRI: MD5 hash cannot be verified with SubtleCrypto; skipping integrity check for', hashStr);
+    return true; // Can't verify MD5 with SubtleCrypto
+  }
   const algoMap = { sha256: 'SHA-256', sha384: 'SHA-384', sha512: 'SHA-512' };
   try {
     const digest = await crypto.subtle.digest(algoMap[algo.toLowerCase()], new TextEncoder().encode(code));
     const actual = btoa(String.fromCharCode(...new Uint8Array(digest)));
     return actual === expected;
   } catch (e) {
+    console.warn('[ScriptVault] SRI verification error for hash', hashStr, '—', e.message, '; allowing require');
     return true; // Verification not possible, allow
   }
 }
@@ -4944,7 +4957,7 @@ async function fetchRequireScript(url) {
       const age = Date.now() - (cached[cacheKey].timestamp || 0);
       if (age < 7 * 24 * 60 * 60 * 1000) {
         debugLog('Using persistent cached @require:', url);
-        requireCache.set(fetchUrl, cached[cacheKey].code);
+        requireCacheSet(fetchUrl, cached[cacheKey].code);
         return cached[cacheKey].code;
       }
     }
@@ -4971,7 +4984,7 @@ async function fetchRequireScript(url) {
           }
         }
         // Store in both caches
-        requireCache.set(fetchUrl, code);
+        requireCacheSet(fetchUrl, code);
         
         // Store in persistent cache
         try {
