@@ -755,14 +755,16 @@
   }
 
   function openInEditor(id) {
-    chrome.runtime.sendMessage({ action: 'openDashboard', scriptId: id });
+    // Swallow rejection — the user will see the dashboard tab open (or not) and
+    // nothing else depends on the response here.
+    chrome.runtime.sendMessage({ action: 'openDashboard', scriptId: id }).catch(() => {});
   }
 
   // ── Event listeners ───────────────────────────────────────────────────────
   function setupEventListeners() {
     $('btnRefresh').addEventListener('click', refresh);
-    $('btnDashboard').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }));
-    $('btnNewScript').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard', data: { newScript: true } }));
+    $('btnDashboard').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }).catch(() => {}));
+    $('btnNewScript').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard', data: { newScript: true } }).catch(() => {}));
     $('btnFindScripts').addEventListener('click', () => {
       let hostname = '';
       if (canMatchScriptsForUrl(currentTab?.url || '')) {
@@ -773,7 +775,7 @@
         : 'https://greasyfork.org/en/scripts';
       chrome.tabs.create({ url });
     });
-    $('btnOpenDash').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }));
+    $('btnOpenDash').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }).catch(() => {}));
     $('btnToggleAll').addEventListener('click', toggleAll);
     $('allSectionHeader').addEventListener('click', () => {
       setAllScriptsCollapsed(!allCollapsed);

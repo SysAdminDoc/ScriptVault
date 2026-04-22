@@ -770,6 +770,13 @@ function updateDecisionSummary() {
 function renderInstallUI(sourceUrl) {
   const content = document.getElementById('content');
   const badge = document.getElementById('install-type-badge');
+  // Defensive: the install page HTML could be out of sync with this renderer
+  // (corrupted cache, user-modified pages/install.html, future refactor); a
+  // null here used to throw and leave the install page blank with no feedback.
+  if (!content || !badge) {
+    showInstallError('Install page is missing required UI. Please reload.');
+    return;
+  }
   const presentation = getInstallPresentation();
   setReviewExitGuard(true);
   badge.innerHTML = presentation.badgeHtml;
