@@ -126,7 +126,12 @@ const NpmResolver = {
     const url = `${this.REGISTRY_URL}/${encodeURIComponent(sanitized).replace('%40', '@')}/latest`;
 
     const response = await this._fetchWithTimeout(url, { isJson: true });
-    const data = JSON.parse(response);
+    let data;
+    try {
+      data = JSON.parse(response);
+    } catch (e) {
+      throw new Error(`Invalid response from npm registry for "${packageName}"`);
+    }
 
     return {
       name: data.name,

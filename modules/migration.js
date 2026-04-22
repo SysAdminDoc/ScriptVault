@@ -1,11 +1,11 @@
-// ScriptVault v2.0.0 — Migration System
-// Handles data migration from v1.x to v2.0.0 on first run after update.
+// ScriptVault v2.3.0 — Migration System
+// Handles data migration from v1.x to current version on first run after update.
 // Runs in the service worker context (no DOM).
 
 const Migration = (() => {
   'use strict';
 
-  const CURRENT_VERSION = '2.0.0';
+  const CURRENT_VERSION = '2.3.0';
   const MIGRATION_KEY = 'sv_lastMigratedVersion';
 
   /**

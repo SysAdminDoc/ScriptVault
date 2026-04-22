@@ -1,4 +1,4 @@
-// ScriptVault Dashboard v2.2.0 - Full-Featured Controller
+// ScriptVault Dashboard v2.3.0 - Full-Featured Controller
 (function() {
     'use strict';
 
