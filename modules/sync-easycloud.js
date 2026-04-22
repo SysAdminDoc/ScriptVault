@@ -535,10 +535,34 @@ var EasyCloudSync = (() => {
           }
         }
 
+        // Re-register scripts that were updated by sync so new code takes effect immediately
+        try {
+          if (typeof registerAllScripts === 'function') {
+            await registerAllScripts(true);
+            if (typeof updateBadge === 'function') await updateBadge();
+          }
+        } catch (e) {
+          warn('Post-sync re-registration failed:', e.message);
+        }
+
         // Persist merged tombstones
         const mergedTombstones = merged.tombstones || {};
         if (Object.keys(mergedTombstones).length > Object.keys(tombstones).length) {
           await chrome.storage.local.set({ syncTombstones: mergedTombstones });
+        }
+
+        // Apply remote tombstone deletions locally (propagate remote deletes)
+        for (const tombstonedId of Object.keys(mergedTombstones)) {
+          if (tombstones[tombstonedId]) continue; // Already deleted locally — skip
+          const existing = await ScriptStorage.get(tombstonedId);
+          if (existing && !existing.settings?.userModified) {
+            // Delete locally: unregister first, then remove from storage
+            try {
+              if (typeof unregisterScript === 'function') await unregisterScript(tombstonedId);
+            } catch (_) { /* best effort */ }
+            await ScriptStorage.delete(tombstonedId);
+            log(`Applied remote deletion for script ${tombstonedId}`);
+          }
         }
 
         // Upload merged data
@@ -636,7 +660,7 @@ var EasyCloudSync = (() => {
 
       // Check if userscripts data changed (ScriptStorage uses 'userscripts' key)
       if (changes.userscripts) {
-        const data = _getStorageValues([KEYS.CONNECTED]).then(d => {
+        _getStorageValues([KEYS.CONNECTED]).then(d => {
           if (d[KEYS.CONNECTED]) {
             _debouncedSync();
           }

@@ -149,6 +149,12 @@
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Slash, () => {
         editor.getAction('editor.action.commentLine')?.run();
       });
+      editor.addCommand(monaco.KeyCode.F8, () => {
+        editor.getAction('editor.action.marker.next')?.run();
+      });
+      editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.F8, () => {
+        editor.getAction('editor.action.marker.prev')?.run();
+      });
 
       // ── Change tracking ────────────────────────────────────────────────────
       editor.onDidChangeModelContent(() => {

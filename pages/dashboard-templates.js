@@ -38,7 +38,8 @@ const TemplateManager = (() => {
         { key: '{{SCRIPT_NAME}}', label: 'Script Name', default: 'My Script' },
         { key: '{{AUTHOR}}', label: 'Author', default: 'Anonymous' },
         { key: '{{MATCH_PATTERN}}', label: 'Match Pattern', default: '*://*/*' },
-        { key: '{{DESCRIPTION}}', label: 'Description', default: 'A userscript' }
+        { key: '{{DESCRIPTION}}', label: 'Description', default: 'A userscript' },
+        { key: '$DATETIME$', label: 'Date', default: '' }
     ];
 
     // =========================================
@@ -421,6 +422,10 @@ const TemplateManager = (() => {
         for (const [key, val] of Object.entries(values)) {
             result = result.split(key).join(val);
         }
+        // Always substitute $DATETIME$ with today's date if still present
+        if (result.includes('$DATETIME$')) {
+            result = result.split('$DATETIME$').join(new Date().toISOString().split('T')[0]);
+        }
         return result;
     }
 
@@ -435,6 +440,8 @@ const TemplateManager = (() => {
 
     async function getSmartDefaults() {
         const defaults = {};
+        // Auto-fill $DATETIME$ with today's date (ISO format without time)
+        defaults['$DATETIME$'] = new Date().toISOString().split('T')[0];
         try {
             if (_state.getCurrentTabUrl) {
                 const url = await _state.getCurrentTabUrl();
