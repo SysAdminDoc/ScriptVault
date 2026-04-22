@@ -51,6 +51,8 @@ export interface ScriptMeta {
   compatible: string[];
   incompatible: string[];
 
+  crontab?: string;
+
   // Localization (@name:ja, @description:fr, etc.)
   localized?: Record<string, Record<string, string>>;
 }

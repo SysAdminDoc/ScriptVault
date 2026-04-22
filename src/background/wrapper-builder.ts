@@ -221,6 +221,7 @@ ${req.code}
     version: ${JSON.stringify(manifestVersion)},
     scriptWillUpdate: !!(meta.updateURL || meta.downloadURL),
     isIncognito: typeof chrome !== 'undefined' && chrome.extension ? chrome.extension.inIncognitoContext : false,
+    injectInto: ${JSON.stringify(meta['inject-into'] || 'auto')},
     downloadMode: 'browser',
     platform: {
       os: navigator.userAgentData?.platform || navigator.platform || 'unknown',
@@ -671,38 +672,70 @@ ${req.code}
       }
     };
 
-    // Start the request
-    sendToBackground('GM_xmlhttpRequest', {
-      scriptId,
-      method: details.method || 'GET',
-      url: details.url,
-      headers: details.headers,
-      data: details.data,
-      timeout: details.timeout,
-      responseType: details.responseType,
-      overrideMimeType: details.overrideMimeType,
-      user: details.user,
-      password: details.password,
-      context: details.context,
-      anonymous: details.anonymous,
-      // Track which callbacks are registered so background knows what to send
-      hasCallbacks: {
-        onload: !!details.onload,
-        onerror: !!details.onerror,
-        onprogress: !!details.onprogress,
-        onreadystatechange: !!details.onreadystatechange,
-        ontimeout: !!details.ontimeout,
-        onabort: !!details.onabort,
-        onloadstart: !!details.onloadstart,
-        onloadend: !!details.onloadend,
-        upload: !!(details.upload && (
-          details.upload.onprogress ||
-          details.upload.onloadstart ||
-          details.upload.onload ||
-          details.upload.onerror
-        ))
+    // Serialize request body to a structured-clone-safe format.
+    // Blob/File/FormData cannot cross the extension messaging boundary natively.
+    async function _serializeBody(d) {
+      if (!d || typeof d === 'string' || d instanceof ArrayBuffer || ArrayBuffer.isView(d)) return d;
+      if (d instanceof URLSearchParams) return d.toString();
+      function _ab2b64(buf) {
+        const bytes = new Uint8Array(buf), chunk = 8192;
+        let s = '';
+        for (let i = 0; i < bytes.length; i += chunk) s += String.fromCharCode(...bytes.subarray(i, i + chunk));
+        return btoa(s);
       }
-    }).then(response => {
+      if (d instanceof Blob || d instanceof File) {
+        const buf = await d.arrayBuffer();
+        return { __sv_blob__: true, b64: _ab2b64(buf), type: d.type, name: d instanceof File ? d.name : undefined };
+      }
+      if (d instanceof FormData) {
+        const entries = [];
+        for (const [name, val] of d.entries()) {
+          if (val instanceof Blob || val instanceof File) {
+            const buf = await val.arrayBuffer();
+            entries.push({ name, b64: _ab2b64(buf), type: val.type, filename: val instanceof File ? val.name : 'blob' });
+          } else {
+            entries.push({ name, value: val });
+          }
+        }
+        return { __sv_formdata__: true, entries };
+      }
+      return d;
+    }
+
+    // Start the request (async to allow body serialization)
+    (async () => {
+      const serializedData = await _serializeBody(details.data);
+      const response = await sendToBackground('GM_xmlhttpRequest', {
+        scriptId,
+        method: details.method || 'GET',
+        url: details.url,
+        headers: details.headers,
+        data: serializedData,
+        timeout: details.timeout,
+        responseType: details.responseType,
+        overrideMimeType: details.overrideMimeType,
+        user: details.user,
+        password: details.password,
+        context: details.context,
+        anonymous: details.anonymous,
+        // Track which callbacks are registered so background knows what to send
+        hasCallbacks: {
+          onload: !!details.onload,
+          onerror: !!details.onerror,
+          onprogress: !!details.onprogress,
+          onreadystatechange: !!details.onreadystatechange,
+          ontimeout: !!details.ontimeout,
+          onabort: !!details.onabort,
+          onloadstart: !!details.onloadstart,
+          onloadend: !!details.onloadend,
+          upload: !!(details.upload && (
+            details.upload.onprogress ||
+            details.upload.onloadstart ||
+            details.upload.onload ||
+            details.upload.onerror
+          ))
+        }
+      });
       if (aborted) return;
 
       if (!response) {
@@ -720,7 +753,7 @@ ${req.code}
         _xhrRequests.delete(localId);
         currentMapKey = requestId;
       }
-    }).catch(err => {
+    })().catch(err => {
       if (aborted) return;
       if (details.onerror) details.onerror({ error: err.message || 'Request failed', status: 0 });
       _xhrRequests.delete(currentMapKey);
