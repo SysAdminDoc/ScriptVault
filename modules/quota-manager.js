@@ -66,8 +66,9 @@ const QuotaManager = (() => {
       other: { count: 0, bytes: 0 }
     };
 
+    const _enc = new TextEncoder();
     for (const [key, value] of Object.entries(all)) {
-      const size = JSON.stringify(value).length;
+      const size = _enc.encode(JSON.stringify(value)).length;
       if (key === 'userscripts' || key.startsWith('script_')) { categories.scripts.count++; categories.scripts.bytes += size; }
       else if (key.startsWith('values_') || key.startsWith('SV_GM_')) { categories.scriptValues.count++; categories.scriptValues.bytes += size; }
       else if (key.startsWith('require_cache_')) { categories.requireCache.count++; categories.requireCache.bytes += size; }
