@@ -83,8 +83,14 @@ cd "$BUILD_DIR"
 rm -f "$SCRIPT_DIR/$ZIP_NAME"
 if command -v zip &> /dev/null; then
   zip -r "$SCRIPT_DIR/$ZIP_NAME" . -x "*.DS_Store" "*Thumbs.db" > /dev/null
+elif [ -x "/c/Windows/System32/tar.exe" ]; then
+  # bsdtar writes POSIX-style entries (forward slashes); PowerShell
+  # Compress-Archive writes Windows-style backslash entries that Chrome
+  # cannot match against manifest paths — never use it.
+  /c/Windows/System32/tar.exe -a -c -f "$SCRIPT_DIR/$ZIP_NAME" *
 else
-  powershell.exe -NoProfile -Command "Compress-Archive -Path '$(pwd -W)\\*' -DestinationPath '$(cd "$SCRIPT_DIR" && pwd -W)\\${ZIP_NAME}' -Force"
+  echo "ERROR: no zip or bsdtar available"
+  exit 1
 fi
 cd "$SCRIPT_DIR"
 rm -rf "$BUILD_DIR"
