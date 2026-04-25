@@ -1,4 +1,4 @@
-// ScriptVault v2.3.1 - Background Service Worker
+// ScriptVault v2.3.2 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -14292,13 +14292,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 // @crontab Support
 // ============================================================================
 
-/**
- * Convert a simplified cron expression to a period in minutes.
- * Chrome alarms have a minimum of 1 minute.
- * Supports: "*/n * * * *" (every n min), "0 * * * *" (hourly),
- * "0 */n * * *" (every n hours), "0 0 * * *" (daily).
- * Falls back to 1 minute for complex expressions.
- */
+// Convert a simplified cron expression to a period in minutes.
+// Chrome alarms have a minimum of 1 minute.
+// Supports: every-N-minutes, hourly, every-N-hours, daily.
+// Falls back to 1 minute for complex expressions.
 function parseCronToMinutes(expr) {
   if (!expr || typeof expr !== 'string') return 60;
   const parts = expr.trim().split(/\s+/);
