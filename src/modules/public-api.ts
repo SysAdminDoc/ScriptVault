@@ -365,7 +365,7 @@ async function requestUserApproval(apiName: string, sender: SenderLike | null, _
       const notifId = `sv-api-approval-${Date.now()}`;
       await chrome.notifications.create(notifId, {
         type: 'basic',
-        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+        iconUrl: chrome.runtime.getURL('images/icon128.png'),
         title: 'ScriptVault API Request',
         message: `External request: ${apiName} from ${describeSender(sender)}. Pre-approve via settings to allow.`,
         priority: 2

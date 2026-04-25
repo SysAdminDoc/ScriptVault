@@ -1,16 +1,16 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "minimum_chrome_version": "120",
   "homepage_url": "https://github.com/SysAdminDoc/ScriptVault",
   "icons": {
-    "16": "icons/16.png",
-    "32": "icons/32.png",
-    "48": "icons/48.png",
-    "128": "icons/128.png"
+    "16": "images/icon16.png",
+    "32": "images/icon32.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
   },
   "permissions": [
     "storage",
@@ -42,10 +42,10 @@
   },
   "action": {
     "default_icon": {
-      "16": "icons/16.png",
-      "32": "icons/32.png",
-      "48": "icons/48.png",
-      "128": "icons/128.png"
+      "16": "images/icon16.png",
+      "32": "images/icon32.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
     },
     "default_title": "__MSG_extName__",
     "default_popup": "pages/popup.html"

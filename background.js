@@ -1,4 +1,4 @@
-// ScriptVault v2.3.0 - Background Service Worker
+// ScriptVault v2.3.1 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -7130,7 +7130,7 @@ const BackupScheduler = (() => {
     try {
       chrome.notifications.create({
         type: 'basic',
-        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+        iconUrl: chrome.runtime.getURL('images/icon128.png'),
         title: `ScriptVault — ${title}`,
         message
       });
@@ -8969,7 +8969,7 @@ const PublicAPI = (() => {
         const notifId = `sv-api-approval-${Date.now()}`;
         await chrome.notifications.create(notifId, {
           type: 'basic',
-          iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+          iconUrl: chrome.runtime.getURL('images/icon128.png'),
           title: 'ScriptVault API Request',
           message: `External request: ${apiName} from ${describeSender(sender)}. Pre-approve via settings to allow.`,
           priority: 2
