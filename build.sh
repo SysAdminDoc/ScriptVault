@@ -59,9 +59,14 @@ rm -f "$SCRIPT_DIR/$ZIP_NAME"
 
 if command -v zip &> /dev/null; then
   zip -r "$SCRIPT_DIR/$ZIP_NAME" . -x "*.DS_Store" "*Thumbs.db"
+elif [ -x "/c/Windows/System32/tar.exe" ]; then
+  # Windows 10/11 ships bsdtar as tar.exe — produces POSIX-style entries
+  # (forward slashes). PowerShell Compress-Archive writes Windows-style
+  # backslash entries which Chrome cannot match against manifest paths.
+  /c/Windows/System32/tar.exe -a -c -f "$SCRIPT_DIR/$ZIP_NAME" *
 else
-  # Fallback for Windows (PowerShell)
-  powershell.exe -NoProfile -Command "Compress-Archive -Path '$BUILD_DIR\*' -DestinationPath '$SCRIPT_DIR\\$ZIP_NAME' -Force"
+  echo "ERROR: no zip or bsdtar available"
+  exit 1
 fi
 
 echo ""
