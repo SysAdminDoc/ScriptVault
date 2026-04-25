@@ -1,4 +1,4 @@
-// ScriptVault v2.3.2 - Background Service Worker
+// ScriptVault v2.3.3 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -11760,9 +11760,27 @@ async function handleMessage(message, sender) {
       }
 
       case 'getExtensionStatus': {
-        const settings = await SettingsManager.get();
-        const ver = settings._chromeVersion || _getChromeVersion();
-        const userScriptsAvailable = settings._userScriptsAvailable !== false && !!chrome.userScripts;
+        const ver = _getChromeVersion();
+        // Live probe — the cached flag in settings can drift after the user
+        // toggles "Allow User Scripts" in chrome://extensions because Chrome
+        // doesn't always cycle the SW. Trust the runtime check, then refresh
+        // the cache so other paths agree.
+        let userScriptsAvailable = !!chrome.userScripts;
+        if (userScriptsAvailable) {
+          try {
+            await chrome.userScripts.getScripts();
+          } catch (e) {
+            userScriptsAvailable = false;
+          }
+        }
+        if (userScriptsAvailable) {
+          await SettingsManager.set({ _userScriptsAvailable: true, _chromeVersion: ver });
+          // The toggle may have flipped on while the SW was already running —
+          // configure the world now so script registration works on next save.
+          try { await configureUserScriptsWorld(); } catch (e) {}
+        } else {
+          await SettingsManager.set({ _userScriptsAvailable: false, _chromeVersion: ver });
+        }
         let setupRequired = false;
         let setupMessage = '';
         if (!userScriptsAvailable) {
