@@ -36,6 +36,15 @@ jobs:
       - name: Build extension bundle
         run: npm run build
 
+      - name: Set up Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Smoke test dashboard
+        run: npm run smoke:dashboard
+        env:
+          SCRIPT_VAULT_CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+
       - name: Package Chrome extension
         run: bash build.sh
 
