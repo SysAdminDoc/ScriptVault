@@ -717,6 +717,24 @@ input[type="checkbox"] {
 
 .toast.success { border-color: var(--accent-green); }
 .toast.error { border-color: var(--accent-red); }
+.toast.warning,
+.toast.toast-warning { border-color: var(--accent-yellow); }
+.toast-action {
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+.toast-action:hover,
+.toast-action:focus-visible {
+  border-color: var(--accent-blue);
+  outline: none;
+}
 
 /* ===== MODAL ===== */
 .modal-overlay {
