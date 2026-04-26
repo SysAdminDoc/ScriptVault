@@ -29,9 +29,11 @@
 **2026-04-26 note:** Added `.github/workflows/ci.yml` to run `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, package with `bash build.sh`, and upload the Chrome ZIP artifact on push/PR.
 
 ### 0.4 Smoke Test Harness
-- Install Puppeteer or Playwright
-- Write a minimal E2E test: load extension → open dashboard → verify scripts tab renders
-- Wire into CI
+- [x] Install Puppeteer Core
+- [x] Write a minimal E2E test: load extension → open dashboard → verify scripts tab renders
+- [x] Wire into CI
+
+**2026-04-26 note:** Added `npm run smoke:dashboard`, which loads the unpacked extension in Chrome, opens the dashboard, and verifies the installed-scripts surface. CI now provisions Chrome and runs the smoke check after the build.
 
 **Exit criteria:** `npm test` passes, Monaco loads locally, CI is green, one E2E test exists.
 
