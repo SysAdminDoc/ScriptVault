@@ -298,6 +298,35 @@
         return BULK_ACTION_LABELS[action] || 'Apply';
     }
 
+    function getBulkDeleteDialogCopy(count) {
+        const formattedCount = numberFormatter.format(count);
+        const plural = count === 1 ? 'script' : 'scripts';
+        const retentionLabel = formatTrashRetention(state.settings?.trashMode || '30');
+        const isPermanent = retentionLabel === 'Disabled';
+
+        if (isPermanent) {
+            return {
+                title: 'Delete Scripts',
+                message: `Permanently delete ${formattedCount} selected ${plural}? Trash is disabled, so this cannot be undone.`,
+                progressTitle: `Deleting ${formattedCount} ${plural}…`,
+                toastOptions: null,
+            };
+        }
+
+        return {
+            title: 'Move to Trash',
+            message: `Move ${formattedCount} selected ${plural} to Trash? You can restore them from the Trash tab for ${retentionLabel.toLowerCase()}.`,
+            progressTitle: `Moving ${formattedCount} ${plural} to Trash…`,
+            toastOptions: result => result.succeededIds.length > 0
+                ? {
+                    actionLabel: 'Open Trash',
+                    duration: 6500,
+                    action: () => switchTab('trash', { focusControl: true }),
+                }
+                : null,
+        };
+    }
+
     function buildBulkActionToast(action, result) {
         const totalCount = result.totalCount || 0;
         const successCount = result.successCount || 0;
@@ -348,12 +377,13 @@
             };
         }
 
+        const deleteSuccessLabel = formatTrashRetention(state.settings?.trashMode || '30') === 'Disabled' ? 'Deleted' : 'Moved to Trash';
         const actionCopy = {
             enable: { success: 'Enabled', failure: 'enable' },
             disable: { success: 'Disabled', failure: 'disable' },
             export: { success: 'Exported', failure: 'export' },
             reset: { success: 'Reset', failure: 'reset' },
-            delete: { success: 'Deleted', failure: 'delete' }
+            delete: { success: deleteSuccessLabel, failure: 'delete' }
         }[action];
 
         if (!actionCopy) {
@@ -398,6 +428,7 @@
             reloadAfter = true,
             refreshStats = false,
             keepFailedSelection = false,
+            toastOptions = null,
         } = options;
 
         showProgress(progressTitle);
@@ -442,8 +473,10 @@
                 failures,
                 skipped,
             });
-            showToast(feedback.summary, feedback.tone);
-            return { succeededIds, failures, skipped, feedback };
+            const result = { succeededIds, failures, skipped, feedback };
+            const resolvedToastOptions = typeof toastOptions === 'function' ? toastOptions(result) : toastOptions;
+            showToast(feedback.summary, feedback.tone, resolvedToastOptions || {});
+            return result;
         } finally {
             hideProgress();
         }
@@ -4178,12 +4211,14 @@
                 break;
 
             case 'delete':
-                if (!await showConfirmModal('Delete Scripts', `Permanently delete ${ids.length} selected script(s)? This cannot be undone.`)) return;
+                const deleteCopy = getBulkDeleteDialogCopy(ids.length);
+                if (!await showConfirmModal(deleteCopy.title, deleteCopy.message)) return;
                 await runBulkScriptOperation(ids, {
                     action,
-                    progressTitle: `Deleting ${ids.length} scripts…`,
+                    progressTitle: deleteCopy.progressTitle,
                     refreshStats: true,
                     keepFailedSelection: true,
+                    toastOptions: deleteCopy.toastOptions,
                     task: async scriptId => {
                         const deleted = await deleteScript(scriptId, true);
                         if (!deleted) throw new Error('Delete failed');
@@ -6885,18 +6920,48 @@
         });
     }
 
-    function showToast(msg, type = 'info') {
+    function showToast(msg, type = 'info', options = {}) {
         if (!elements.toastContainer) return;
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
+        toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
         const icons = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
-        toast.innerHTML = `<span class="toast-icon">${icons[type]}</span><span class="toast-message">${escapeHtml(msg)}</span>`;
+        const icon = document.createElement('span');
+        icon.className = 'toast-icon';
+        icon.textContent = icons[type] || icons.info;
+        const message = document.createElement('span');
+        message.className = 'toast-message';
+        message.textContent = msg;
+        toast.append(icon, message);
+
+        const dismissToast = () => {
+            clearTimeout(dismissTimer);
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        };
+
+        if (options?.actionLabel && typeof options.action === 'function') {
+            const actionButton = document.createElement('button');
+            actionButton.type = 'button';
+            actionButton.className = 'toast-action';
+            actionButton.textContent = options.actionLabel;
+            actionButton.addEventListener('click', event => {
+                event.preventDefault();
+                Promise.resolve(options.action(event)).catch(error => {
+                    console.warn('[ScriptVault] Toast action failed:', error);
+                });
+                dismissToast();
+            });
+            toast.appendChild(actionButton);
+        }
+
         elements.toastContainer.appendChild(toast);
         if (typeof A11y !== 'undefined' && typeof A11y.announce === 'function') {
             A11y.announce(msg, type === 'error' ? 'assertive' : 'polite');
         }
         requestAnimationFrame(() => toast.classList.add('show'));
-        setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000);
+        const dismissTimer = setTimeout(dismissToast, Number.isFinite(options?.duration) ? options.duration : 3000);
 
         // Log to activity log
         logActivity(msg, type);
