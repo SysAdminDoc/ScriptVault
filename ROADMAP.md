@@ -22,9 +22,11 @@
 - Verify editor loads and all 8 themes work
 
 ### 0.3 CI Pipeline
-- Add GitHub Actions workflow: `npm test` on push/PR
-- Add build step: verify `node esbuild.config.mjs` succeeds
-- Add artifact: upload built extension ZIP
+- [x] Add GitHub Actions workflow: `npm test` on push/PR
+- [x] Add build step: verify `node esbuild.config.mjs` succeeds
+- [x] Add artifact: upload built extension ZIP
+
+**2026-04-26 note:** Added `.github/workflows/ci.yml` to run `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, package with `bash build.sh`, and upload the Chrome ZIP artifact on push/PR.
 
 ### 0.4 Smoke Test Harness
 - Install Puppeteer or Playwright
@@ -387,10 +389,12 @@ class MatchSet {
 - Global undo for destructive operations (delete, bulk actions) with toast + undo button
 
 ### 7.4 Bulk Action Safety
-- Confirmation dialog for bulk delete (currently missing, unlike bulk reset)
+- [x] Confirmation dialog for bulk delete, with Trash-aware recovery copy when retention is enabled and permanent-delete copy when Trash is disabled
 - "Undo" toast for 5 seconds after bulk delete (deferred actual deletion)
 - Select-all checkbox in table header
 - Shift-click range selection: handle filtered-out `lastCheckedId` gracefully (fall back to single-select)
+
+**2026-04-26 note:** Bulk delete now says "Move to Trash" when recovery is available, keeps destructive copy only when Trash is disabled, and offers an "Open Trash" toast action after successful recovery-backed deletes. Deferred true undo remains open.
 
 ### 7.5 Beautify Cursor Preservation
 - After beautify, find the equivalent position in the new code by character offset mapping

@@ -3,8 +3,7 @@ import { resolve } from "node:path";
 
 const dashboardHtml = readFileSync(resolve(process.cwd(), "pages/dashboard.html"), "utf8");
 const dashboardJs = readFileSync(resolve(process.cwd(), "pages/dashboard.js"), "utf8");
-const viewSettingsController =
-  dashboardHtml.match(/<!-- View Settings Controller -->\s*<script>([\s\S]*?)<\/script>/)?.[1] ?? "";
+const viewSettingsController = readFileSync(resolve(process.cwd(), "pages/dashboard-viewsettings.js"), "utf8");
 
 function parseDashboard() {
   return new DOMParser().parseFromString(dashboardHtml, "text/html");
@@ -514,9 +513,23 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/async function runBulkScriptOperation\(ids, options\)/);
     expect(dashboardJs).toMatch(/elements\.btnBulkApply\.textContent = hasAction \? getBulkActionButtonLabel\(elements\.bulkActionSelect\?\.value\) : 'Apply';/);
     expect(dashboardJs).toMatch(/state\.selectedScripts = new Set\(ids\.filter\(id => !succeededIds\.includes\(id\)\)\);/);
-    expect(dashboardJs).toMatch(/showToast\(feedback\.summary, feedback\.tone\);/);
+    expect(dashboardJs).toMatch(/showToast\(feedback\.summary, feedback\.tone, resolvedToastOptions \|\| \{\}\);/);
     expect(dashboardJs).toMatch(/aria-label="Select \$\{escapeHtml\(name\)\}"/);
     expect(dashboardJs).toMatch(/aria-label="\$\{enabled \? 'Disable' : 'Enable'\} \$\{escapeHtml\(name\)\}"/);
+  });
+
+  test("bulk delete flow uses trash-aware recovery copy and action toast", () => {
+    expect(dashboardJs).toMatch(/function getBulkDeleteDialogCopy\(count\)/);
+    expect(dashboardJs).toMatch(/Move to Trash/);
+    expect(dashboardJs).toMatch(/Trash is disabled, so this cannot be undone/);
+    expect(dashboardJs).toMatch(/deleteSuccessLabel/);
+    expect(dashboardJs).toMatch(/toastOptions: deleteCopy\.toastOptions/);
+    expect(dashboardJs).toMatch(/actionLabel: 'Open Trash'/);
+    expect(dashboardJs).toMatch(/switchTab\('trash', \{ focusControl: true \}\)/);
+    expect(dashboardJs).toMatch(/function showToast\(msg, type = 'info', options = \{\}\)/);
+    expect(dashboardJs).toMatch(/className = 'toast-action'/);
+    expect(dashboardHtml).toMatch(/\.toast-warning/);
+    expect(dashboardHtml).toMatch(/\.toast-action/);
   });
 
   test("script workspace controller keeps URL-backed state and premium row affordances wired", () => {
