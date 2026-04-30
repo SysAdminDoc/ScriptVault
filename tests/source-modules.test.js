@@ -427,6 +427,14 @@ describe('source public api module', () => {
           '// @version 2.1.0',
           '// @description Installed through API',
           '// @match https://example.com/*',
+          '// @include https://include.example/*',
+          '// @exclude https://exclude.example/*',
+          '// @grant GM_getValue',
+          '// @grant GM_setValue',
+          '// @require https://cdn.example/lib.js',
+          '// @resource logo https://cdn.example/logo.png',
+          '// @connect api.example',
+          '// @noframes',
           '// ==/UserScript==',
           'console.log("beta");',
         ].join('\n'),
@@ -439,6 +447,13 @@ describe('source public api module', () => {
     expect(stored.userscripts.script_beta.meta.name).toBe('Script Beta');
     expect(stored.userscripts.script_beta.meta.version).toBe('2.1.0');
     expect(stored.userscripts.script_beta.meta.match).toEqual(['https://example.com/*']);
+    expect(stored.userscripts.script_beta.meta.include).toEqual(['https://include.example/*']);
+    expect(stored.userscripts.script_beta.meta.exclude).toEqual(['https://exclude.example/*']);
+    expect(stored.userscripts.script_beta.meta.grant).toEqual(['GM_getValue', 'GM_setValue']);
+    expect(stored.userscripts.script_beta.meta.require).toEqual(['https://cdn.example/lib.js']);
+    expect(stored.userscripts.script_beta.meta.resource).toEqual({ logo: 'https://cdn.example/logo.png' });
+    expect(stored.userscripts.script_beta.meta.connect).toEqual(['api.example']);
+    expect(stored.userscripts.script_beta.meta.noframes).toBe(true);
     expect(stored.userscripts.script_beta.code).toContain('console.log("beta")');
     expect(globalThis.registerAllScripts).toHaveBeenCalledTimes(1);
     expect(globalThis.updateBadge).toHaveBeenCalledTimes(1);

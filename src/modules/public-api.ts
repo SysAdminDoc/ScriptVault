@@ -95,10 +95,26 @@ type WebHandlerFn = (data: WebPageMessage, origin: string) => Promise<Record<str
 
 interface ParsedMeta {
   name?: string;
+  namespace?: string;
   version?: string;
   description?: string;
+  author?: string;
   match?: string[];
+  include?: string[];
+  exclude?: string[];
+  excludeMatch?: string[];
+  grant?: string[];
+  require?: string[];
+  connect?: string[];
+  tag?: string[];
+  compatible?: string[];
+  incompatible?: string[];
+  antifeature?: string[];
+  resource?: Record<string, string>;
   runAt?: string;
+  noframes?: boolean;
+  unwrap?: boolean;
+  'top-level-await'?: boolean;
   [key: string]: unknown;
 }
 
@@ -204,6 +220,30 @@ function isInternalHost(rawHost: string): boolean {
   }
 
   return false;
+}
+
+const ARRAY_META_KEYS: Record<string, keyof ParsedMeta> = {
+  match: 'match',
+  include: 'include',
+  exclude: 'exclude',
+  'exclude-match': 'excludeMatch',
+  grant: 'grant',
+  require: 'require',
+  connect: 'connect',
+  tag: 'tag',
+  compatible: 'compatible',
+  incompatible: 'incompatible',
+  antifeature: 'antifeature',
+};
+const BOOLEAN_META_KEYS = new Set(['noframes', 'unwrap', 'top-level-await']);
+
+function appendMetaValue(meta: ParsedMeta, key: keyof ParsedMeta, value: string): void {
+  const current = meta[key];
+  if (Array.isArray(current)) {
+    current.push(value);
+  } else {
+    (meta as Record<string, unknown>)[key] = [value];
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -471,6 +511,33 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function getMetaString(
+  meta: ParsedMeta,
+  existingMeta: Record<string, unknown>,
+  key: string,
+  fallback = '',
+): string {
+  const value = meta[key] ?? existingMeta[key];
+  return typeof value === 'string' ? value : fallback;
+}
+
+function getMetaArray(
+  meta: ParsedMeta,
+  existingMeta: Record<string, unknown>,
+  key: string,
+): string[] {
+  return asStringArray(meta[key] ?? existingMeta[key]);
+}
+
+function getMetaBoolean(
+  meta: ParsedMeta,
+  existingMeta: Record<string, unknown>,
+  key: string,
+): boolean {
+  const value = meta[key] ?? existingMeta[key];
+  return value === true;
+}
+
 function normalizeStoredScript(raw: unknown): FlatScript | null {
   if (!raw || typeof raw !== 'object') return null;
 
@@ -579,6 +646,11 @@ function createNestedStoredScript(
     ? existingRecord.meta as Record<string, unknown>
     : {};
   const matches = asStringArray(newScript.matches ?? newScript.match ?? meta.match ?? ['*://*/*']);
+  const resources = meta.resource && typeof meta.resource === 'object'
+    ? meta.resource
+    : existingMeta.resource && typeof existingMeta.resource === 'object'
+      ? existingMeta.resource as Record<string, unknown>
+      : {};
 
   return {
     ...existingRecord,
@@ -589,48 +661,46 @@ function createNestedStoredScript(
     meta: {
       ...existingMeta,
       name: newScript.name ?? newScript.id,
-      namespace: typeof existingMeta.namespace === 'string' ? existingMeta.namespace : '',
+      namespace: getMetaString(meta, existingMeta, 'namespace'),
       version: newScript.version ?? '1.0',
       description: newScript.description ?? '',
-      author: typeof existingMeta.author === 'string' ? existingMeta.author : '',
-      icon: typeof existingMeta.icon === 'string' ? existingMeta.icon : '',
-      icon64: typeof existingMeta.icon64 === 'string' ? existingMeta.icon64 : '',
-      homepage: typeof existingMeta.homepage === 'string' ? existingMeta.homepage : '',
-      homepageURL: typeof existingMeta.homepageURL === 'string' ? existingMeta.homepageURL : '',
-      website: typeof existingMeta.website === 'string' ? existingMeta.website : '',
-      source: typeof existingMeta.source === 'string' ? existingMeta.source : '',
-      updateURL: typeof existingMeta.updateURL === 'string' ? existingMeta.updateURL : '',
-      downloadURL: typeof existingMeta.downloadURL === 'string' ? existingMeta.downloadURL : '',
-      supportURL: typeof existingMeta.supportURL === 'string' ? existingMeta.supportURL : '',
-      license: typeof existingMeta.license === 'string' ? existingMeta.license : '',
-      copyright: typeof existingMeta.copyright === 'string' ? existingMeta.copyright : '',
-      contributionURL: typeof existingMeta.contributionURL === 'string' ? existingMeta.contributionURL : '',
+      author: getMetaString(meta, existingMeta, 'author'),
+      icon: getMetaString(meta, existingMeta, 'icon'),
+      icon64: getMetaString(meta, existingMeta, 'icon64'),
+      homepage: getMetaString(meta, existingMeta, 'homepage'),
+      homepageURL: getMetaString(meta, existingMeta, 'homepageURL'),
+      website: getMetaString(meta, existingMeta, 'website'),
+      source: getMetaString(meta, existingMeta, 'source'),
+      updateURL: getMetaString(meta, existingMeta, 'updateURL'),
+      downloadURL: getMetaString(meta, existingMeta, 'downloadURL'),
+      supportURL: getMetaString(meta, existingMeta, 'supportURL'),
+      license: getMetaString(meta, existingMeta, 'license'),
+      copyright: getMetaString(meta, existingMeta, 'copyright'),
+      contributionURL: getMetaString(meta, existingMeta, 'contributionURL'),
       match: matches.length > 0 ? matches : ['*://*/*'],
-      include: asStringArray(existingMeta.include),
-      exclude: asStringArray(existingMeta.exclude),
-      excludeMatch: asStringArray(existingMeta.excludeMatch),
+      include: getMetaArray(meta, existingMeta, 'include'),
+      exclude: getMetaArray(meta, existingMeta, 'exclude'),
+      excludeMatch: getMetaArray(meta, existingMeta, 'excludeMatch'),
       'run-at': (newScript.runAt ?? meta.runAt ?? 'document_idle').replace(/_/g, '-'),
-      'inject-into': typeof existingMeta['inject-into'] === 'string' ? existingMeta['inject-into'] : 'auto',
-      noframes: Boolean(existingMeta.noframes),
-      unwrap: Boolean(existingMeta.unwrap),
-      sandbox: typeof existingMeta.sandbox === 'string' ? existingMeta.sandbox : '',
-      'run-in': typeof existingMeta['run-in'] === 'string' ? existingMeta['run-in'] : '',
+      'inject-into': getMetaString(meta, existingMeta, 'inject-into', 'auto') || 'auto',
+      noframes: getMetaBoolean(meta, existingMeta, 'noframes'),
+      unwrap: getMetaBoolean(meta, existingMeta, 'unwrap'),
+      sandbox: getMetaString(meta, existingMeta, 'sandbox'),
+      'run-in': getMetaString(meta, existingMeta, 'run-in'),
       grant: (() => {
-        const grants = asStringArray(existingMeta.grant);
+        const grants = getMetaArray(meta, existingMeta, 'grant');
         return grants.length > 0 ? grants : ['none'];
       })(),
-      require: asStringArray(existingMeta.require),
-      resource: existingMeta.resource && typeof existingMeta.resource === 'object'
-        ? existingMeta.resource as Record<string, unknown>
-        : {},
-      connect: asStringArray(existingMeta.connect),
-      'top-level-await': Boolean(existingMeta['top-level-await']),
+      require: getMetaArray(meta, existingMeta, 'require'),
+      resource: resources,
+      connect: getMetaArray(meta, existingMeta, 'connect'),
+      'top-level-await': getMetaBoolean(meta, existingMeta, 'top-level-await'),
       webRequest: existingMeta.webRequest ?? null,
       priority: asNumber(existingMeta.priority) ?? 0,
-      antifeature: asStringArray(existingMeta.antifeature),
-      tag: asStringArray(existingMeta.tag),
-      compatible: asStringArray(existingMeta.compatible),
-      incompatible: asStringArray(existingMeta.incompatible)
+      antifeature: getMetaArray(meta, existingMeta, 'antifeature'),
+      tag: getMetaArray(meta, existingMeta, 'tag'),
+      compatible: getMetaArray(meta, existingMeta, 'compatible'),
+      incompatible: getMetaArray(meta, existingMeta, 'incompatible')
     },
     settings: existingRecord.settings && typeof existingRecord.settings === 'object'
       ? existingRecord.settings
@@ -682,6 +752,13 @@ function toRuntimeScriptShape(script: FlatScript, meta: ParsedMeta): FlatScript 
       version: script.version ?? meta.version ?? '1.0',
       description: script.description ?? meta.description ?? '',
       match: Array.isArray(meta.match) && meta.match.length > 0 ? [...meta.match] : ['*://*/*'],
+      include: Array.isArray(meta.include) ? [...meta.include] : [],
+      exclude: Array.isArray(meta.exclude) ? [...meta.exclude] : [],
+      excludeMatch: Array.isArray(meta.excludeMatch) ? [...meta.excludeMatch] : [],
+      grant: Array.isArray(meta.grant) && meta.grant.length > 0 ? [...meta.grant] : ['none'],
+      require: Array.isArray(meta.require) ? [...meta.require] : [],
+      resource: meta.resource ?? {},
+      connect: Array.isArray(meta.connect) ? [...meta.connect] : [],
       'run-at': script.runAt ?? meta.runAt ?? 'document_idle',
     },
     settings: {},
@@ -891,18 +968,25 @@ function parseUserscriptMeta(code: string): ParsedMeta {
 
   const lines = headerMatch[1].split('\n');
   for (const line of lines) {
-    const m = line.match(/\/\/\s*@(\S+)\s+(.*)/);
-    if (!m?.[1] || !m[2]) continue;
+    const m = line.match(/\/\/\s*@(\S+)(?:\s+(.*))?/);
+    if (!m?.[1]) continue;
     const key = m[1].trim();
-    const val = m[2].trim();
+    const val = (m[2] || '').trim();
 
-    if (key === 'match' || key === 'include') {
-      if (!meta.match) meta.match = [];
-      meta.match.push(val);
+    if (BOOLEAN_META_KEYS.has(key)) {
+      (meta as Record<string, unknown>)[key] = true;
+    } else if (ARRAY_META_KEYS[key]) {
+      if (val) appendMetaValue(meta, ARRAY_META_KEYS[key], val);
+    } else if (key === 'resource') {
+      const resourceMatch = val.match(/^(\S+)\s+(.+)$/);
+      if (resourceMatch?.[1] && resourceMatch[2]) {
+        meta.resource = meta.resource ?? {};
+        meta.resource[resourceMatch[1]] = resourceMatch[2];
+      }
     } else if (key === 'run-at') {
-      meta.runAt = val.replace(/-/g, '_');
+      if (val) meta.runAt = val.replace(/-/g, '_');
     } else {
-      meta[key] = val;
+      if (val) meta[key] = val;
     }
   }
   return meta;
