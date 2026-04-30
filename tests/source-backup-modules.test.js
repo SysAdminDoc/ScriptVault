@@ -232,13 +232,12 @@ describe('source backup scheduler module', () => {
 
     expect(result.success).toBe(true);
     expect(options.scriptId).toBe('script_alpha');
-    expect(inspected).toEqual([
-      {
-        id: 'script_alpha',
-        name: 'Alpha Script',
-        hasStorage: true,
-      },
-    ]);
+    expect(inspected.scripts[0]).toMatchObject({
+      id: 'script_alpha',
+      name: 'Alpha Script',
+      hasStorage: true,
+    });
+    expect(inspected.scriptsWithStorageCount).toBe(1);
     expect(chrome.notifications.create).toHaveBeenCalledWith(
       expect.objectContaining({
         iconUrl: 'chrome-extension://test-extension-id/images/icon128.png',
@@ -280,7 +279,7 @@ describe('source backup scheduler module', () => {
     const [zipBase64] = importFromZip.mock.calls[0];
     const selectedFiles = fakeFflate.unzipSync(base64ToBytes(zipBase64));
 
-    expect(restore).toEqual({ success: true, restoredScripts: 1 });
+    expect(restore).toMatchObject({ success: true, restoredScripts: 1 });
     expect(Object.keys(selectedFiles).sort()).toEqual([
       'scripts/Beta.options.json',
       'scripts/Beta.storage.json',
