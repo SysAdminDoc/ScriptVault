@@ -358,6 +358,17 @@ describe('source xhr manager module', () => {
     XhrManager.abortByTab(1);
     expect(XhrManager.getActiveCount()).toBe(0);
   });
+
+  it('auto-cleans abandoned requests after the cleanup delay', () => {
+    vi.useFakeTimers();
+    const request = XhrManager.create(1, 'script_alpha', { url: 'https://a.example' });
+
+    vi.advanceTimersByTime(XhrManager.cleanupDelayMs - 1);
+    expect(XhrManager.get(request.id)).toBe(request);
+
+    vi.advanceTimersByTime(1);
+    expect(XhrManager.get(request.id)).toBeUndefined();
+  });
 });
 
 describe('source npm resolver module', () => {
