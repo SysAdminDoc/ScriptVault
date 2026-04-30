@@ -5,11 +5,28 @@ import { resolve } from 'path';
 const code = readFileSync(resolve(__dirname, '../modules/public-api.js'), 'utf8');
 
 let PublicAPI;
-function createFreshAPI() {
-  const fn = new Function('chrome', 'console', 'crypto', 'fetch',
+function createFreshAPI({ fetchMock, ScriptStorage } = {}) {
+  const storage = ScriptStorage || {
+    getAll: vi.fn().mockResolvedValue([]),
+    set: vi.fn().mockResolvedValue(),
+  };
+  const fn = new Function('chrome', 'console', 'crypto', 'fetch', 'ScriptStorage', 'AbortController',
     code + '\nreturn PublicAPI;'
   );
-  return fn(globalThis.chrome, console, globalThis.crypto, vi.fn().mockResolvedValue({ ok: true }));
+  return fn(
+    globalThis.chrome,
+    console,
+    globalThis.crypto,
+    fetchMock || vi.fn().mockResolvedValue({ ok: true }),
+    storage,
+    globalThis.AbortController,
+  );
+}
+
+async function flushPromises() {
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await Promise.resolve();
 }
 
 beforeEach(() => {
@@ -22,6 +39,23 @@ describe('PublicAPI', () => {
   it('init() loads state from storage', async () => {
     await PublicAPI.init();
     expect(chrome.storage.local.get).toHaveBeenCalled();
+  });
+
+  it('shares concurrent init so listeners are only registered once', async () => {
+    await Promise.all([PublicAPI.init(), PublicAPI.init(), PublicAPI.init()]);
+
+    expect(chrome.runtime.onMessageExternal.addListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows init retry after a transient listener registration failure', async () => {
+    chrome.runtime.onMessageExternal.addListener.mockImplementationOnce(() => {
+      throw new Error('listener unavailable');
+    });
+
+    await expect(PublicAPI.init()).rejects.toThrow('listener unavailable');
+    await PublicAPI.init();
+
+    expect(chrome.runtime.onMessageExternal.addListener).toHaveBeenCalledTimes(2);
   });
 
   describe('getAPISchema', () => {
@@ -71,6 +105,20 @@ describe('PublicAPI', () => {
       }
       const result = await PublicAPI.handleExternalMessage({ action: 'ping' }, sender);
       expect(result.error).toContain('Rate limited');
+    });
+
+    it('rejects arbitrary or oversized external install source before permission checks', async () => {
+      const invalid = await PublicAPI.handleExternalMessage(
+        { action: 'installScript', code: 'console.log("not a userscript");' },
+        { id: 'test-ext' },
+      );
+      const oversized = await PublicAPI.handleExternalMessage(
+        { action: 'installScript', code: `${'x'.repeat(5 * 1024 * 1024 + 1)}==UserScript==` },
+        { id: 'test-ext-2' },
+      );
+
+      expect(invalid.error).toContain('missing ==UserScript==');
+      expect(oversized.error).toContain('exceeds maximum allowed size');
     });
   });
 
@@ -141,6 +189,88 @@ describe('PublicAPI', () => {
       const origins = PublicAPI.getTrustedOrigins();
       origins.push('https://injected.com');
       expect(PublicAPI.getTrustedOrigins()).toHaveLength(1);
+    });
+  });
+
+  describe('web install hardening', () => {
+    it('rejects internal install URLs after authorization', async () => {
+      const source = { postMessage: vi.fn() };
+
+      await PublicAPI.init();
+      await PublicAPI.setPermissions({ installScript: 'allow' });
+      await PublicAPI.setTrustedOrigins(['https://trusted.example']);
+      PublicAPI.handleWebMessage({
+        origin: 'https://trusted.example',
+        data: {
+          type: 'scriptvault:install',
+          url: 'https://localhost/script.user.js',
+        },
+        source,
+      });
+      await flushPromises();
+
+      expect(source.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'scriptvault:install:response',
+          error: 'Internal URLs are not allowed',
+        }),
+        'https://trusted.example',
+      );
+    });
+
+    it('enforces fetched script size and userscript header validation', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: { get: vi.fn(() => String(5 * 1024 * 1024 + 1)) },
+          text: vi.fn(),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: { get: vi.fn(() => null) },
+          text: vi.fn().mockResolvedValue('console.log("plain js");'),
+        });
+      PublicAPI = createFreshAPI({ fetchMock });
+      const source = { postMessage: vi.fn() };
+
+      await PublicAPI.init();
+      await PublicAPI.setPermissions({ installScript: 'allow' });
+      await PublicAPI.setTrustedOrigins(['https://trusted.example']);
+
+      PublicAPI.handleWebMessage({
+        origin: 'https://trusted.example',
+        data: {
+          type: 'scriptvault:install',
+          url: 'https://cdn.example/big.user.js',
+        },
+        source,
+      });
+      await flushPromises();
+
+      PublicAPI.handleWebMessage({
+        origin: 'https://trusted.example',
+        data: {
+          type: 'scriptvault:install',
+          url: 'https://cdn.example/plain.user.js',
+        },
+        source,
+      });
+      await flushPromises();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://cdn.example/big.user.js',
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+      expect(source.postMessage.mock.calls[0][0]).toMatchObject({
+        type: 'scriptvault:install:response',
+        error: 'Fetch failed',
+        detail: 'Script file exceeds maximum allowed size (5 MB)',
+      });
+      expect(source.postMessage.mock.calls[1][0]).toMatchObject({
+        type: 'scriptvault:install:response',
+        error: 'Fetch failed',
+        detail: 'Not a valid userscript (missing ==UserScript== header)',
+      });
     });
   });
 

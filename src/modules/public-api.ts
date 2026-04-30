@@ -145,9 +145,65 @@ const _rateLimitMap = new Map<string, number[]>();
 const MAX_CODE_SIZE = 5 * 1024 * 1024;
 // Max size for scripts fetched via web install (5 MB)
 const MAX_FETCH_SIZE = 5 * 1024 * 1024;
+const FETCH_TIMEOUT_MS = 15_000;
+const WEBHOOK_TIMEOUT_MS = 10_000;
 
 function getRuntimeHooks(): RuntimeHooks {
   return globalThis as RuntimeHooks;
+}
+
+function isInternalIPv4(ip: string): boolean {
+  const parts = ip.split('.').map((part) => parseInt(part, 10));
+  if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part) || part < 0 || part > 255)) {
+    return true;
+  }
+  const [a, b, c, d] = parts as [number, number, number, number];
+  if (a === 0) return true;
+  if (a === 10) return true;
+  if (a === 127) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a === 255 && b === 255 && c === 255 && d === 255) return true;
+  return false;
+}
+
+function isInternalHost(rawHost: string): boolean {
+  if (!rawHost || typeof rawHost !== 'string') return true;
+  let host = rawHost.toLowerCase();
+  if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+
+  if (
+    host === 'localhost' ||
+    host === 'localhost.localdomain' ||
+    host === 'ip6-localhost' ||
+    host === 'ip6-loopback'
+  ) {
+    return true;
+  }
+
+  if (host.includes(':')) {
+    if (
+      host === '::1' ||
+      host === '::' ||
+      host === '::0' ||
+      host === '0:0:0:0:0:0:0:0' ||
+      host === '0:0:0:0:0:0:0:1'
+    ) {
+      return true;
+    }
+    if (/^fe[89ab][0-9a-f]?:/.test(host)) return true;
+    if (/^f[cd][0-9a-f]{0,2}:/.test(host)) return true;
+    const v4Mapped = host.match(/^::ffff:([0-9.]+)$/);
+    return v4Mapped ? isInternalIPv4(v4Mapped[1]!) : false;
+  }
+
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+    return isInternalIPv4(host);
+  }
+
+  return false;
 }
 
 /* ------------------------------------------------------------------ */
@@ -902,6 +958,9 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
     if (parsedUrl.protocol !== 'https:') {
       return { type: 'scriptvault:install:response', error: 'Only https:// URLs are allowed for script installation' };
     }
+    if (isInternalHost(parsedUrl.hostname)) {
+      return { type: 'scriptvault:install:response', error: 'Internal URLs are not allowed' };
+    }
 
     // Authorize before fetching to prevent SSRF
     const allowed = await authorize('installScript', { origin });
@@ -912,7 +971,7 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
     // Fetch the script only after authorization
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15_000);
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
       let resp: Response;
       try {
         resp = await fetch(url, { signal: controller.signal });
@@ -995,7 +1054,7 @@ async function fireWebhook(eventType: string, payload: Record<string, unknown>):
   };
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
   try {
     await fetch(hook.url, {
       method: 'POST',
@@ -1116,26 +1175,31 @@ const PublicAPI = {
    * Concurrent callers share one init promise to prevent double-registration.
    */
   async init(): Promise<void> {
-    if (_initialized) return;
-    if (!_initPromise) {
-      _initPromise = (async () => {
-        await loadState();
+      if (_initialized) return;
+      if (!_initPromise) {
+        _initPromise = (async () => {
+          try {
+            await loadState();
 
-        // Register external message listener
-        if (chrome.runtime.onMessageExternal) {
-          chrome.runtime.onMessageExternal.addListener(onExternalMessage);
-        }
+            // Register external message listener
+            if (chrome.runtime.onMessageExternal) {
+              chrome.runtime.onMessageExternal.addListener(onExternalMessage);
+            }
 
-        // Register web page message listener (only in contexts that have window)
-        if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
-          self.addEventListener('message', dispatchWebMessage);
-        }
+            // Register web page message listener (only in contexts that have window)
+            if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
+              self.addEventListener('message', dispatchWebMessage);
+            }
 
-        _initialized = true;
-        console.log('[PublicAPI] initialized, version', API_VERSION);
-      })();
-    }
-    return _initPromise;
+            _initialized = true;
+            console.log('[PublicAPI] initialized, version', API_VERSION);
+          } catch (err) {
+            _initPromise = null;
+            throw err;
+          }
+        })();
+      }
+      return _initPromise;
   },
 
   /**

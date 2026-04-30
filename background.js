@@ -7106,6 +7106,15 @@ const BackupScheduler = (() => {
     return (bytes / 1048576).toFixed(2) + ' MB';
   }
 
+  function _zipBytesToBase64(zipData) {
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < zipData.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, Array.from(zipData.subarray(i, i + chunkSize)));
+    }
+    return btoa(binary);
+  }
+
   /** Compute the next Date for a given hour (and optional dayOfWeek). */
   function _nextScheduledTime(hour, dayOfWeek) {
     const now = new Date();
@@ -7187,6 +7196,7 @@ const BackupScheduler = (() => {
 
       // Options / metadata
       const options = {
+        scriptId: script.id,
         settings: {
           enabled: script.enabled,
           'run-at': script.meta?.['run-at'] || 'document-idle'
@@ -7247,13 +7257,8 @@ const BackupScheduler = (() => {
 
     // Compress
     const zipData = fflate.zipSync(files, { level: 6 });
-    let binary = '';
-    const chunkSize = 8192;
-    for (let i = 0; i < zipData.length; i += chunkSize) {
-      binary += String.fromCharCode.apply(null, zipData.subarray(i, i + chunkSize));
-    }
     return {
-      base64: btoa(binary),
+      base64: _zipBytesToBase64(zipData),
       scriptCount: scripts.length,
       hasGlobalSettings,
       hasFolders,
@@ -7461,61 +7466,74 @@ const BackupScheduler = (() => {
         const userScripts = fileNames.filter(n => n.endsWith('.user.js'));
 
         if (options.selective && Array.isArray(options.scriptIds)) {
-          // Selective restore: import matching scripts individually
-          for (const filename of userScripts) {
-            const code = fflate.strFromU8(unzipped[filename]);
-            const baseName = filename.replace(/\.user\.js$/, '');
+          const selectedRefs = new Set(options.scriptIds);
+          const selectedFiles = {};
 
-            // Parse metadata to get script identity
+          for (const filename of userScripts) {
+            const baseName = filename.replace(/\.user\.js$/, '');
+            const displayName = baseName.replace(/^scripts\//, '');
+
+            // Parse metadata to match IDs for new backups and names for legacy backups.
+            let scriptId = '';
+            let scriptName = displayName;
+            let scriptNs = '';
             let optionsMeta = {};
             const optionsFile = `${baseName}.options.json`;
-            if (unzipped[optionsFile]) {
-              try { optionsMeta = JSON.parse(fflate.strFromU8(unzipped[optionsFile])); } catch (_) {}
+            const optionsFileData = unzipped[optionsFile];
+            if (optionsFileData) {
+              try {
+                optionsMeta = JSON.parse(fflate.strFromU8(optionsFileData));
+                scriptId = typeof optionsMeta.scriptId === 'string' ? optionsMeta.scriptId : '';
+                scriptName = optionsMeta.meta?.name || displayName;
+                scriptNs = optionsMeta.meta?.namespace || '';
+              } catch (_) {}
             }
 
-            const scriptId = optionsMeta.id || baseName.replace(/^scripts\//, '');
-            const scriptName = optionsMeta.meta?.name || scriptId;
-            const scriptNs = optionsMeta.meta?.namespace || '';
             const scriptKey = scriptNs ? `${scriptName}::${scriptNs}` : scriptName;
-            if (!options.scriptIds.includes(scriptId) && !options.scriptIds.includes(scriptName) && !options.scriptIds.includes(scriptKey)) continue;
+            const matchesSelection =
+              selectedRefs.has(scriptName) ||
+              selectedRefs.has(displayName) ||
+              selectedRefs.has(scriptKey) ||
+              (scriptId ? selectedRefs.has(scriptId) : false);
+            if (!matchesSelection) continue;
 
-            try {
-              const meta = optionsMeta.meta || {};
-              const settings = optionsMeta.settings || {};
-
-              // Find existing script or generate new ID
-              const allScripts = await ScriptStorage.getAll();
-              const existing = allScripts.find(s => s.meta?.name === meta.name && s.meta?.namespace === meta.namespace);
-              const scriptId = existing ? existing.id : generateId();
-
-              await ScriptStorage.set(scriptId, {
-                id: scriptId,
-                code,
-                meta,
-                enabled: settings.enabled !== false,
-                settings: settings,
-                position: existing ? existing.position : allScripts.length,
-                createdAt: existing ? existing.createdAt : Date.now(),
-                updatedAt: Date.now()
-              });
-              restoredScripts++;
-
-              // Restore script values if present
-              const storageFile = `${baseName}.storage.json`;
-              if (unzipped[storageFile]) {
-                try {
-                  const storageData = JSON.parse(fflate.strFromU8(unzipped[storageFile]));
-                  if (storageData.data) {
-                    await ScriptValues.setAll(scriptId, storageData.data);
-                  }
-                } catch (storageErr) {
-                  errors.push({ name: scriptName, error: storageErr.message || String(storageErr) });
-                }
-              }
-            } catch (importErr) {
-              console.warn('[BackupScheduler] Script import error:', filename, importErr);
-              errors.push({ name: filename, error: importErr.message || String(importErr) });
+            const scriptFile = unzipped[filename];
+            if (scriptFile) {
+              selectedFiles[filename] = scriptFile;
             }
+            if (optionsFileData) {
+              selectedFiles[optionsFile] = optionsFileData;
+            }
+            const storageFile = `${baseName}.storage.json`;
+            const storageFileData = unzipped[storageFile];
+            if (storageFileData) {
+              selectedFiles[storageFile] = storageFileData;
+            }
+          }
+
+          if (Object.keys(selectedFiles).length === 0) {
+            return {
+              success: true,
+              restoredScripts: 0,
+              skippedScripts: 0,
+              restoredSettings: false,
+              restoredFolders: false,
+              restoredWorkspaces: false,
+              errors: []
+            };
+          }
+
+          const importResult = await importFromZip(
+            _zipBytesToBase64(fflate.zipSync(selectedFiles, { level: 6 })),
+            { overwrite: true }
+          );
+          if (importResult?.error) {
+            errors.push({ name: 'archive', error: importResult.error });
+          }
+          restoredScripts = importResult?.imported || 0;
+          skippedScripts = importResult?.skipped || 0;
+          if (Array.isArray(importResult?.errors)) {
+            errors.push(...importResult.errors);
           }
         } else {
           // Full restore: use importFromZip for all scripts at once
@@ -7776,16 +7794,19 @@ const BackupScheduler = (() => {
             const baseName = n.replace(/\.user\.js$/, '');
             const displayName = baseName.replace(/^scripts\//, '');
             let meta = {};
+            let scriptId = '';
             const optionsFile = `${baseName}.options.json`;
             if (unzipped[optionsFile]) {
               try {
-                meta = JSON.parse(fflate.strFromU8(unzipped[optionsFile]))?.meta || {};
+                const optionsData = JSON.parse(fflate.strFromU8(unzipped[optionsFile]));
+                meta = optionsData?.meta || {};
+                scriptId = typeof optionsData?.scriptId === 'string' ? optionsData.scriptId : '';
               } catch (_) {}
             }
             const name = meta.name || displayName;
             const namespace = meta.namespace || '';
             return {
-              id: namespace ? `${name}::${namespace}` : name,
+              id: scriptId || (namespace ? `${name}::${namespace}` : name),
               name,
               namespace,
               hasStorage: !!unzipped[`${baseName}.storage.json`]
@@ -8668,6 +8689,10 @@ const PublicAPI = (() => {
   const MAX_AUDIT_ENTRIES = 500;
   const RATE_LIMIT_WINDOW = 1000; // ms
   const RATE_LIMIT_MAX = 10;      // requests per window
+  const MAX_CODE_SIZE = 5 * 1024 * 1024; // 5 MB externally supplied source limit
+  const MAX_FETCH_SIZE = 5 * 1024 * 1024; // 5 MB fetched source limit
+  const FETCH_TIMEOUT_MS = 15000;
+  const WEBHOOK_TIMEOUT_MS = 10000;
 
   /* ------------------------------------------------------------------ */
   /*  State                                                              */
@@ -8678,6 +8703,7 @@ const PublicAPI = (() => {
   let _webhooks = {};         // { [eventType]: { url, enabled } }
   let _trustedOrigins = [];
   let _initialized = false;
+  let _initPromise = null;
   let _rateLimitMap = new Map(); // senderId -> [timestamps]
 
   /* ------------------------------------------------------------------ */
@@ -8899,7 +8925,7 @@ const PublicAPI = (() => {
       timestamp: Date.now(),
       action,
       sender: describeSender(sender),
-      details: details || null,
+      details: details ?? null,
       result: result || 'ok'
     };
     _auditLog.push(entry);
@@ -9100,6 +9126,8 @@ const PublicAPI = (() => {
     async installScript(msg, sender) {
       const code = msg.code;
       if (!code || typeof code !== 'string') return { error: 'Missing or invalid code parameter' };
+      if (code.length > MAX_CODE_SIZE) return { error: 'Script code exceeds maximum allowed size (5 MB)' };
+      if (!code.includes('==UserScript==')) return { error: 'Not a valid userscript (missing ==UserScript== header)' };
 
       const allowed = await authorize('installScript', sender);
       if (!allowed) return { error: 'Permission denied', action: 'installScript' };
@@ -9240,9 +9268,27 @@ const PublicAPI = (() => {
 
       // Fetch the script only after authorization and URL validation
       try {
-        const resp = await fetch(url);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+        let resp;
+        try {
+          resp = await fetch(url, { signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+        const contentLength = resp.headers?.get?.('content-length');
+        if (contentLength && parseInt(contentLength, 10) > MAX_FETCH_SIZE) {
+          throw new Error('Script file exceeds maximum allowed size (5 MB)');
+        }
         const code = await resp.text();
+        if (code.length > MAX_FETCH_SIZE) {
+          throw new Error('Script file exceeds maximum allowed size (5 MB)');
+        }
+        if (!code.includes('==UserScript==')) {
+          throw new Error('Not a valid userscript (missing ==UserScript== header)');
+        }
 
         // Parse and install directly (authorization already checked above)
         const meta = parseUserscriptMeta(code);
@@ -9296,14 +9342,19 @@ const PublicAPI = (() => {
       data: payload
     };
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
     try {
       await fetch(hook.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: controller.signal
       });
     } catch (e) {
       console.warn(`[PublicAPI] webhook ${eventType} failed:`, e);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -9404,21 +9455,30 @@ const PublicAPI = (() => {
      */
     async init() {
       if (_initialized) return;
+      if (!_initPromise) {
+        _initPromise = (async () => {
+          try {
+            await loadState();
 
-      await loadState();
+            // Register external message listener
+            if (chrome.runtime.onMessageExternal) {
+              chrome.runtime.onMessageExternal.addListener(onExternalMessage);
+            }
 
-      // Register external message listener
-      if (chrome.runtime.onMessageExternal) {
-        chrome.runtime.onMessageExternal.addListener(onExternalMessage);
+            // Register web page message listener (only in contexts that have window)
+            if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
+              self.addEventListener('message', dispatchWebMessage);
+            }
+
+            _initialized = true;
+            console.log('[PublicAPI] initialized, version', API_VERSION);
+          } catch (err) {
+            _initPromise = null;
+            throw err;
+          }
+        })();
       }
-
-      // Register web page message listener (only in contexts that have window)
-      if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
-        self.addEventListener('message', dispatchWebMessage);
-      }
-
-      _initialized = true;
-      console.log('[PublicAPI] initialized, version', API_VERSION);
+      return _initPromise;
     },
 
     /**

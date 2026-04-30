@@ -1,5 +1,3 @@
-
-
 <p align="center">
   <img src="images/ScriptVault-192x192.png" alt="ScriptVault" width="128" height="128">
 </p>
@@ -11,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.0.2-22c55e?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-2.3.4-22c55e?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/manifest-v3-60a5fa?style=flat-square" alt="Manifest V3">
   <img src="https://img.shields.io/badge/license-MIT-orange?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/chrome-120%2B-blue?style=flat-square" alt="Chrome 120+">
