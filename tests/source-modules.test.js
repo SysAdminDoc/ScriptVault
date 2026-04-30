@@ -318,6 +318,24 @@ describe('source resource cache module', () => {
 
     expect(ResourceCache.cache['https://example.com/good.txt']?.text).toBe('ok');
   });
+
+  it('rejects invalid and oversized resources without caching them', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get: vi.fn((name) => (name === 'content-length' ? String(ResourceCache.maxResourceBytes + 1) : 'text/plain')),
+      },
+      arrayBuffer: vi.fn(),
+    });
+    globalThis.fetch = fetchMock;
+
+    await expect(ResourceCache.fetchResource('file:///tmp/local.js')).rejects.toThrow('Only HTTP(S)');
+    await expect(ResourceCache.fetchResource('https://example.com/huge.js')).rejects.toThrow('maximum allowed size');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(ResourceCache.cache['https://example.com/huge.js']).toBeUndefined();
+  });
 });
 
 describe('source xhr manager module', () => {

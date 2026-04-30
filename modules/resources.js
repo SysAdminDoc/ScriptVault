@@ -5,6 +5,9 @@
 const ResourceCache = {
   cache: {},
   maxAge: 86400000, // 24 hours
+  maxEntries: 200,
+  maxResourceBytes: 5 * 1024 * 1024,
+  fetchTimeoutMs: 30000,
   STORAGE_PREFIX: 'res_cache_',
 
   async get(url) {
@@ -33,7 +36,7 @@ const ResourceCache = {
     const entry = { text, dataUri, timestamp: Date.now() };
     // Cap in-memory cache size to prevent unbounded growth
     const keys = Object.keys(this.cache);
-    if (keys.length >= 200) {
+    if (keys.length >= this.maxEntries) {
       // Evict oldest entry
       let oldestKey = keys[0], oldestTs = Infinity;
       for (const k of keys) {
@@ -53,38 +56,48 @@ const ResourceCache = {
     if (cached) return cached.text;
 
     // Validate URL protocol
-    if (url && !url.startsWith('https://') && !url.startsWith('http://')) {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
       throw new Error('Only HTTP(S) URLs allowed for @resource/@require');
     }
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeout);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const contentType = response.headers.get('content-type') || 'text/plain';
-      const buffer = await response.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
+      const timeout = setTimeout(() => controller.abort(), this.fetchTimeoutMs);
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const contentType = response.headers.get('content-type') || 'text/plain';
+        const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
+        if (Number.isFinite(contentLength) && contentLength > this.maxResourceBytes) {
+          throw new Error('Resource exceeds maximum allowed size (5 MB)');
+        }
+        const buffer = await response.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        if (bytes.length > this.maxResourceBytes) {
+          throw new Error('Resource exceeds maximum allowed size (5 MB)');
+        }
 
-      // Generate text representation
-      let text;
-      if (contentType.includes('text') || contentType.includes('json') || contentType.includes('xml') || contentType.includes('css') || contentType.includes('javascript')) {
-        text = new TextDecoder().decode(bytes);
-      } else {
-        text = '';
+        // Generate text representation
+        let text;
+        if (contentType.includes('text') || contentType.includes('json') || contentType.includes('xml') || contentType.includes('css') || contentType.includes('javascript')) {
+          text = new TextDecoder().decode(bytes);
+        } else {
+          text = '';
+        }
+
+        // Generate data URI for binary resources (images, fonts, etc.)
+        const chunks = [];
+        for (let i = 0; i < bytes.length; i += 8192) {
+          chunks.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)));
+        }
+        const base64 = btoa(chunks.join(''));
+        const dataUri = `data:${contentType};base64,${base64}`;
+
+        await this.set(url, text, dataUri);
+        return text;
+      } finally {
+        clearTimeout(timeout);
       }
-
-      // Generate data URI for binary resources (images, fonts, etc.)
-      const chunks = [];
-      for (let i = 0; i < bytes.length; i += 8192) {
-        chunks.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)));
-      }
-      const base64 = btoa(chunks.join(''));
-      const dataUri = `data:${contentType};base64,${base64}`;
-
-      await this.set(url, text, dataUri);
-      return text;
     } catch (e) {
       console.error('[ScriptVault] Failed to fetch resource:', url, e);
       throw e;
@@ -102,7 +115,9 @@ const ResourceCache = {
 
   async prefetchResources(resources) {
     if (!resources || typeof resources !== 'object') return;
-    const promises = Object.values(resources).map(url =>
+    const promises = Object.values(resources)
+      .filter(url => typeof url === 'string' && url.length > 0)
+      .map(url =>
       this.fetchResource(url).catch(e => console.warn('[ScriptVault] Resource prefetch failed:', url, e.message))
     );
     await Promise.allSettled(promises);
