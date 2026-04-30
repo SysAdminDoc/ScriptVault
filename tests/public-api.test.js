@@ -120,6 +120,58 @@ describe('PublicAPI', () => {
       expect(invalid.error).toContain('missing ==UserScript==');
       expect(oversized.error).toContain('exceeds maximum allowed size');
     });
+
+    it('preserves common userscript metadata when installing through the external API', async () => {
+      const ScriptStorage = {
+        getAll: vi.fn().mockResolvedValue([]),
+        set: vi.fn().mockResolvedValue(),
+      };
+      PublicAPI = createFreshAPI({ ScriptStorage });
+      await PublicAPI.init();
+      await PublicAPI.setPermissions({ installScript: 'allow' });
+
+      const result = await PublicAPI.handleExternalMessage(
+        {
+          action: 'installScript',
+          code: [
+            '// ==UserScript==',
+            '// @name Metadata Script',
+            '// @namespace scriptvault/tests',
+            '// @version 1.2.3',
+            '// @description Checks metadata persistence',
+            '// @include https://include.example/*',
+            '// @exclude https://exclude.example/*',
+            '// @grant GM_getValue',
+            '// @grant GM_setValue',
+            '// @require https://cdn.example/lib.js',
+            '// @resource logo https://cdn.example/logo.png',
+            '// @connect api.example',
+            '// @noframes',
+            '// @run-at document-start',
+            '// ==/UserScript==',
+            'console.log("metadata");',
+          ].join('\n'),
+        },
+        { id: 'metadata-ext' },
+      );
+      const installed = ScriptStorage.set.mock.calls[0][1];
+
+      expect(result.ok).toBe(true);
+      expect(installed.meta).toMatchObject({
+        name: 'Metadata Script',
+        namespace: 'scriptvault/tests',
+        version: '1.2.3',
+        description: 'Checks metadata persistence',
+        include: ['https://include.example/*'],
+        exclude: ['https://exclude.example/*'],
+        grant: ['GM_getValue', 'GM_setValue'],
+        require: ['https://cdn.example/lib.js'],
+        resource: { logo: 'https://cdn.example/logo.png' },
+        connect: ['api.example'],
+        noframes: true,
+        'run-at': 'document-start',
+      });
+    });
   });
 
   describe('setPermissions', () => {

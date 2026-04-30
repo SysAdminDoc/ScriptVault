@@ -103,6 +103,52 @@ const PublicAPI = (() => {
     return false;
   }
 
+  const ARRAY_META_KEYS = {
+    match: 'match',
+    include: 'include',
+    exclude: 'exclude',
+    'exclude-match': 'excludeMatch',
+    grant: 'grant',
+    require: 'require',
+    connect: 'connect',
+    tag: 'tag',
+    compatible: 'compatible',
+    incompatible: 'incompatible',
+    antifeature: 'antifeature'
+  };
+  const BOOLEAN_META_KEYS = new Set(['noframes', 'unwrap', 'top-level-await']);
+
+  function appendMetaValue(meta, key, value) {
+    if (!meta[key]) meta[key] = [];
+    meta[key].push(value);
+  }
+
+  function buildStoredMeta(meta, scriptId) {
+    return {
+      name: meta.name || scriptId,
+      namespace: meta.namespace || '',
+      version: meta.version || '1.0',
+      description: meta.description || '',
+      author: meta.author || '',
+      match: meta.match || ['*://*/*'],
+      include: meta.include || [],
+      exclude: meta.exclude || [],
+      excludeMatch: meta.excludeMatch || [],
+      grant: meta.grant || ['none'],
+      require: meta.require || [],
+      resource: meta.resource || {},
+      connect: meta.connect || [],
+      'run-at': (meta.runAt || 'document_idle').replace(/_/g, '-'),
+      noframes: !!meta.noframes,
+      unwrap: !!meta.unwrap,
+      'top-level-await': !!meta['top-level-await'],
+      tag: meta.tag || [],
+      compatible: meta.compatible || [],
+      incompatible: meta.incompatible || [],
+      antifeature: meta.antifeature || []
+    };
+  }
+
   /* ------------------------------------------------------------------ */
   /*  Default Permissions                                                */
   /* ------------------------------------------------------------------ */
@@ -469,14 +515,7 @@ const PublicAPI = (() => {
         const newScript = {
           id: scriptId,
           code,
-          meta: {
-            name: meta.name || scriptId,
-            version: meta.version || '1.0',
-            description: meta.description || '',
-            match: meta.match || ['*://*/*'],
-            include: meta.include || [],
-            'run-at': meta.runAt || 'document_idle'
-          },
+          meta: buildStoredMeta(meta, scriptId),
           enabled: true,
           createdAt: Date.now(),
           updatedAt: Date.now(),
@@ -515,21 +554,25 @@ const PublicAPI = (() => {
 
     const lines = headerMatch[1].split('\n');
     for (const line of lines) {
-      const m = line.match(/\/\/\s*@(\S+)\s+(.*)/);
+      const m = line.match(/\/\/\s*@(\S+)(?:\s+(.*))?/);
       if (!m) continue;
       const key = m[1].trim();
-      const val = m[2].trim();
+      const val = (m[2] || '').trim();
 
-      if (key === 'match') {
-        if (!meta.match) meta.match = [];
-        meta.match.push(val);
-      } else if (key === 'include') {
-        if (!meta.include) meta.include = [];
-        meta.include.push(val);
+      if (BOOLEAN_META_KEYS.has(key)) {
+        meta[key] = true;
+      } else if (ARRAY_META_KEYS[key]) {
+        if (val) appendMetaValue(meta, ARRAY_META_KEYS[key], val);
+      } else if (key === 'resource') {
+        const resourceMatch = val.match(/^(\S+)\s+(.+)$/);
+        if (resourceMatch) {
+          if (!meta.resource) meta.resource = {};
+          meta.resource[resourceMatch[1]] = resourceMatch[2];
+        }
       } else if (key === 'run-at') {
-        meta.runAt = val.replace(/-/g, '_');
+        if (val) meta.runAt = val.replace(/-/g, '_');
       } else {
-        meta[key] = val;
+        if (val) meta[key] = val;
       }
     }
     return meta;
@@ -627,13 +670,7 @@ const PublicAPI = (() => {
         const newScript = {
           id: scriptId,
           code,
-          meta: {
-            name: meta.name || scriptId,
-            version: meta.version || '1.0',
-            description: meta.description || '',
-            match: meta.match || ['*://*/*'],
-            'run-at': meta.runAt || 'document_idle'
-          },
+          meta: buildStoredMeta(meta, scriptId),
           enabled: true,
           createdAt: Date.now(),
           updatedAt: Date.now(),
