@@ -11,6 +11,9 @@ interface CacheEntry {
 interface ResourceCache {
   cache: Record<string, CacheEntry>;
   maxAge: number;
+  maxEntries: number;
+  maxResourceBytes: number;
+  fetchTimeoutMs: number;
   STORAGE_PREFIX: string;
   get(url: string): Promise<CacheEntry | null>;
   set(url: string, text: string, dataUri: string): Promise<void>;
@@ -23,6 +26,9 @@ interface ResourceCache {
 const ResourceCache: ResourceCache = {
   cache: {},
   maxAge: 86400000, // 24 hours
+  maxEntries: 200,
+  maxResourceBytes: 5 * 1024 * 1024,
+  fetchTimeoutMs: 30_000,
   STORAGE_PREFIX: 'res_cache_',
 
   async get(url: string): Promise<CacheEntry | null> {
@@ -50,6 +56,19 @@ const ResourceCache: ResourceCache = {
 
   async set(url: string, text: string, dataUri: string): Promise<void> {
     const entry: CacheEntry = { text, dataUri, timestamp: Date.now() };
+    // Cap in-memory cache size to prevent unbounded growth.
+    const keys = Object.keys(this.cache);
+    if (keys.length >= this.maxEntries) {
+      let oldestKey = keys[0]!;
+      let oldestTs = Infinity;
+      for (const key of keys) {
+        if (this.cache[key]!.timestamp < oldestTs) {
+          oldestKey = key;
+          oldestTs = this.cache[key]!.timestamp;
+        }
+      }
+      delete this.cache[oldestKey];
+    }
     this.cache[url] = entry;
     try {
       const key = this.STORAGE_PREFIX + url;
@@ -61,38 +80,48 @@ const ResourceCache: ResourceCache = {
     const cached = await this.get(url);
     if (cached) return cached.text;
 
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+      throw new Error('Only HTTP(S) URLs allowed for @resource/@require');
+    }
+
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30_000);
-      let response: Response;
+      const timeoutId = setTimeout(() => controller.abort(), this.fetchTimeoutMs);
       try {
-        response = await fetch(url, { signal: controller.signal });
+        const response: Response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const contentType = response.headers.get('content-type') || 'text/plain';
+        const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
+        if (Number.isFinite(contentLength) && contentLength > this.maxResourceBytes) {
+          throw new Error('Resource exceeds maximum allowed size (5 MB)');
+        }
+        const buffer = await response.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        if (bytes.length > this.maxResourceBytes) {
+          throw new Error('Resource exceeds maximum allowed size (5 MB)');
+        }
+
+        // Generate text representation
+        let text: string;
+        if (contentType.includes('text') || contentType.includes('json') || contentType.includes('xml') || contentType.includes('css') || contentType.includes('javascript')) {
+          text = new TextDecoder().decode(bytes);
+        } else {
+          text = '';
+        }
+
+        // Generate data URI for binary resources (images, fonts, etc.)
+        const chunks: string[] = [];
+        for (let i = 0; i < bytes.length; i += 8192) {
+          chunks.push(String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 8192))));
+        }
+        const base64 = btoa(chunks.join(''));
+        const dataUri = `data:${contentType};base64,${base64}`;
+
+        await this.set(url, text, dataUri);
+        return text;
       } finally {
         clearTimeout(timeoutId);
       }
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const contentType = response.headers.get('content-type') || 'text/plain';
-      const buffer = await response.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-
-      // Generate text representation
-      let text: string;
-      if (contentType.includes('text') || contentType.includes('json') || contentType.includes('xml') || contentType.includes('css') || contentType.includes('javascript')) {
-        text = new TextDecoder().decode(bytes);
-      } else {
-        text = '';
-      }
-
-      // Generate data URI for binary resources (images, fonts, etc.)
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]!);
-      }
-      const base64 = btoa(binary);
-      const dataUri = `data:${contentType};base64,${base64}`;
-
-      await this.set(url, text, dataUri);
-      return text;
     } catch (e: unknown) {
       console.error('[ScriptVault] Failed to fetch resource:', url, e);
       throw e;
@@ -110,9 +139,11 @@ const ResourceCache: ResourceCache = {
 
   async prefetchResources(resources: Record<string, string> | null | undefined): Promise<void> {
     if (!resources || typeof resources !== 'object') return;
-    const promises = Object.values(resources).map((url: string) =>
-      this.fetchResource(url).catch((e: Error) => console.warn('[ScriptVault] Resource prefetch failed:', url, e.message))
-    );
+    const promises = Object.values(resources)
+      .filter((url): url is string => typeof url === 'string' && url.length > 0)
+      .map((url: string) =>
+        this.fetchResource(url).catch((e: Error) => console.warn('[ScriptVault] Resource prefetch failed:', url, e.message))
+      );
     await Promise.allSettled(promises);
   },
 
