@@ -83,7 +83,6 @@ const NotificationSystem = {
   async notifyUpdate(scripts) {
     const prefs = await this.getPreferences();
     if (!prefs.updates) return;
-    if (await this._isQuietHours()) return;
 
     const list = Array.isArray(scripts) ? scripts : [scripts];
     if (list.length === 0) return;
@@ -96,6 +95,8 @@ const NotificationSystem = {
       oldVersion: s.oldVersion || null,
       timestamp: Date.now()
     })));
+
+    if (await this._isQuietHours()) return;
 
     let title, message, notifId;
 
@@ -123,10 +124,17 @@ const NotificationSystem = {
     }
 
     // Store click context so we can open the dashboard to the right script
-    await this._setClickContext(notifId, {
-      action: 'openScript',
-      scriptId: list.length === 1 ? list[0].id : null
-    });
+    await this._setClickContext(
+      notifId,
+      list.length === 1
+        ? {
+            action: 'openScript',
+            scriptId: list[0]?.id ?? null
+          }
+        : {
+            action: 'openDashboard'
+          }
+    );
   },
 
   // ---------------------------------------------------------------------------
@@ -287,8 +295,9 @@ const NotificationSystem = {
     const prefs = await this.getPreferences();
     if (!prefs.digest) return;
 
-    // Clear and recreate the alarm to ensure correct schedule
-    await chrome.alarms.clear(this.ALARM_WEEKLY_DIGEST).catch(() => {});
+    // Avoid churn on service-worker wakes if the weekly digest alarm is already active.
+    const existing = await chrome.alarms.get(this.ALARM_WEEKLY_DIGEST);
+    if (existing) return;
 
     // Schedule to fire in 7 days, repeating weekly
     const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -360,7 +369,7 @@ const NotificationSystem = {
     if (summary.staleScripts.length > 0) {
       lines.push(`${summary.staleScripts.length} stale script(s) (90+ days)`);
     }
-    if (storageUsage) {
+    if (storageUsage && storageUsage.quota > 0) {
       const pct = ((storageUsage.used / storageUsage.quota) * 100).toFixed(1);
       lines.push(`Storage: ${pct}% used`);
     }
