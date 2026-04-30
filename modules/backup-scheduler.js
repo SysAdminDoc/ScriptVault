@@ -53,6 +53,15 @@ const BackupScheduler = (() => {
     return (bytes / 1048576).toFixed(2) + ' MB';
   }
 
+  function _zipBytesToBase64(zipData) {
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < zipData.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, Array.from(zipData.subarray(i, i + chunkSize)));
+    }
+    return btoa(binary);
+  }
+
   /** Compute the next Date for a given hour (and optional dayOfWeek). */
   function _nextScheduledTime(hour, dayOfWeek) {
     const now = new Date();
@@ -134,6 +143,7 @@ const BackupScheduler = (() => {
 
       // Options / metadata
       const options = {
+        scriptId: script.id,
         settings: {
           enabled: script.enabled,
           'run-at': script.meta?.['run-at'] || 'document-idle'
@@ -194,13 +204,8 @@ const BackupScheduler = (() => {
 
     // Compress
     const zipData = fflate.zipSync(files, { level: 6 });
-    let binary = '';
-    const chunkSize = 8192;
-    for (let i = 0; i < zipData.length; i += chunkSize) {
-      binary += String.fromCharCode.apply(null, zipData.subarray(i, i + chunkSize));
-    }
     return {
-      base64: btoa(binary),
+      base64: _zipBytesToBase64(zipData),
       scriptCount: scripts.length,
       hasGlobalSettings,
       hasFolders,
@@ -408,61 +413,74 @@ const BackupScheduler = (() => {
         const userScripts = fileNames.filter(n => n.endsWith('.user.js'));
 
         if (options.selective && Array.isArray(options.scriptIds)) {
-          // Selective restore: import matching scripts individually
-          for (const filename of userScripts) {
-            const code = fflate.strFromU8(unzipped[filename]);
-            const baseName = filename.replace(/\.user\.js$/, '');
+          const selectedRefs = new Set(options.scriptIds);
+          const selectedFiles = {};
 
-            // Parse metadata to get script identity
+          for (const filename of userScripts) {
+            const baseName = filename.replace(/\.user\.js$/, '');
+            const displayName = baseName.replace(/^scripts\//, '');
+
+            // Parse metadata to match IDs for new backups and names for legacy backups.
+            let scriptId = '';
+            let scriptName = displayName;
+            let scriptNs = '';
             let optionsMeta = {};
             const optionsFile = `${baseName}.options.json`;
-            if (unzipped[optionsFile]) {
-              try { optionsMeta = JSON.parse(fflate.strFromU8(unzipped[optionsFile])); } catch (_) {}
+            const optionsFileData = unzipped[optionsFile];
+            if (optionsFileData) {
+              try {
+                optionsMeta = JSON.parse(fflate.strFromU8(optionsFileData));
+                scriptId = typeof optionsMeta.scriptId === 'string' ? optionsMeta.scriptId : '';
+                scriptName = optionsMeta.meta?.name || displayName;
+                scriptNs = optionsMeta.meta?.namespace || '';
+              } catch (_) {}
             }
 
-            const scriptId = optionsMeta.id || baseName.replace(/^scripts\//, '');
-            const scriptName = optionsMeta.meta?.name || scriptId;
-            const scriptNs = optionsMeta.meta?.namespace || '';
             const scriptKey = scriptNs ? `${scriptName}::${scriptNs}` : scriptName;
-            if (!options.scriptIds.includes(scriptId) && !options.scriptIds.includes(scriptName) && !options.scriptIds.includes(scriptKey)) continue;
+            const matchesSelection =
+              selectedRefs.has(scriptName) ||
+              selectedRefs.has(displayName) ||
+              selectedRefs.has(scriptKey) ||
+              (scriptId ? selectedRefs.has(scriptId) : false);
+            if (!matchesSelection) continue;
 
-            try {
-              const meta = optionsMeta.meta || {};
-              const settings = optionsMeta.settings || {};
-
-              // Find existing script or generate new ID
-              const allScripts = await ScriptStorage.getAll();
-              const existing = allScripts.find(s => s.meta?.name === meta.name && s.meta?.namespace === meta.namespace);
-              const scriptId = existing ? existing.id : generateId();
-
-              await ScriptStorage.set(scriptId, {
-                id: scriptId,
-                code,
-                meta,
-                enabled: settings.enabled !== false,
-                settings: settings,
-                position: existing ? existing.position : allScripts.length,
-                createdAt: existing ? existing.createdAt : Date.now(),
-                updatedAt: Date.now()
-              });
-              restoredScripts++;
-
-              // Restore script values if present
-              const storageFile = `${baseName}.storage.json`;
-              if (unzipped[storageFile]) {
-                try {
-                  const storageData = JSON.parse(fflate.strFromU8(unzipped[storageFile]));
-                  if (storageData.data) {
-                    await ScriptValues.setAll(scriptId, storageData.data);
-                  }
-                } catch (storageErr) {
-                  errors.push({ name: scriptName, error: storageErr.message || String(storageErr) });
-                }
-              }
-            } catch (importErr) {
-              console.warn('[BackupScheduler] Script import error:', filename, importErr);
-              errors.push({ name: filename, error: importErr.message || String(importErr) });
+            const scriptFile = unzipped[filename];
+            if (scriptFile) {
+              selectedFiles[filename] = scriptFile;
             }
+            if (optionsFileData) {
+              selectedFiles[optionsFile] = optionsFileData;
+            }
+            const storageFile = `${baseName}.storage.json`;
+            const storageFileData = unzipped[storageFile];
+            if (storageFileData) {
+              selectedFiles[storageFile] = storageFileData;
+            }
+          }
+
+          if (Object.keys(selectedFiles).length === 0) {
+            return {
+              success: true,
+              restoredScripts: 0,
+              skippedScripts: 0,
+              restoredSettings: false,
+              restoredFolders: false,
+              restoredWorkspaces: false,
+              errors: []
+            };
+          }
+
+          const importResult = await importFromZip(
+            _zipBytesToBase64(fflate.zipSync(selectedFiles, { level: 6 })),
+            { overwrite: true }
+          );
+          if (importResult?.error) {
+            errors.push({ name: 'archive', error: importResult.error });
+          }
+          restoredScripts = importResult?.imported || 0;
+          skippedScripts = importResult?.skipped || 0;
+          if (Array.isArray(importResult?.errors)) {
+            errors.push(...importResult.errors);
           }
         } else {
           // Full restore: use importFromZip for all scripts at once
@@ -723,16 +741,19 @@ const BackupScheduler = (() => {
             const baseName = n.replace(/\.user\.js$/, '');
             const displayName = baseName.replace(/^scripts\//, '');
             let meta = {};
+            let scriptId = '';
             const optionsFile = `${baseName}.options.json`;
             if (unzipped[optionsFile]) {
               try {
-                meta = JSON.parse(fflate.strFromU8(unzipped[optionsFile]))?.meta || {};
+                const optionsData = JSON.parse(fflate.strFromU8(unzipped[optionsFile]));
+                meta = optionsData?.meta || {};
+                scriptId = typeof optionsData?.scriptId === 'string' ? optionsData.scriptId : '';
               } catch (_) {}
             }
             const name = meta.name || displayName;
             const namespace = meta.namespace || '';
             return {
-              id: namespace ? `${name}::${namespace}` : name,
+              id: scriptId || (namespace ? `${name}::${namespace}` : name),
               name,
               namespace,
               hasStorage: !!unzipped[`${baseName}.storage.json`]

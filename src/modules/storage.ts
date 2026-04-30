@@ -45,6 +45,7 @@ interface ValueChangeListener {
 interface PendingNotification {
   timeout: ReturnType<typeof setTimeout>;
   oldValue: unknown;
+  senderTabId?: number | null;
 }
 
 // Declare the global _notifCallbacks on the service-worker scope
@@ -95,7 +96,11 @@ export const SettingsManager = {
         console.log('[ScriptVault] Settings loaded');
       })();
     }
-    return _settingsInitPromise;
+    try {
+      return await _settingsInitPromise;
+    } finally {
+      _settingsInitPromise = null;
+    }
   },
 
   get: getSettingsValue,
@@ -142,7 +147,11 @@ export const ScriptStorage = {
         console.log('[ScriptVault] Loaded', Object.keys(this.cache).length, 'scripts');
       })();
     }
-    return _scriptsInitPromise;
+    try {
+      return await _scriptsInitPromise;
+    } finally {
+      _scriptsInitPromise = null;
+    }
   },
 
   async save(): Promise<void> {
@@ -179,9 +188,10 @@ export const ScriptStorage = {
     const prev = this.cache![id];
     delete this.cache![id];
     try {
-      // Also delete associated values
-      await ScriptValues.deleteAll(id);
       await this.save();
+      // Delete associated values after script removal persists. If saving the
+      // script cache fails, rollback keeps values and script data consistent.
+      await ScriptValues.deleteAll(id);
     } catch (e) {
       // Rollback cache on failure
       if (prev !== undefined) this.cache![id] = prev;
@@ -190,8 +200,14 @@ export const ScriptStorage = {
   },
 
   async clear(): Promise<void> {
+    const prev = this.cache;
     this.cache = {};
-    await this.save();
+    try {
+      await this.save();
+    } catch (e) {
+      this.cache = prev;
+      throw e;
+    }
   },
 
   /**
@@ -209,15 +225,15 @@ export const ScriptStorage = {
     const q = query.toLowerCase();
     return Object.values(this.cache!).filter(
       (s) =>
-        s.meta.name.toLowerCase().includes(q) ||
-        s.meta.description?.toLowerCase().includes(q) ||
-        s.meta.author?.toLowerCase().includes(q),
+        (s.meta?.name || '').toLowerCase().includes(q) ||
+        (s.meta?.description || '').toLowerCase().includes(q) ||
+        (s.meta?.author || '').toLowerCase().includes(q),
     );
   },
 
   async getByNamespace(namespace: string): Promise<Script[]> {
     await this.init();
-    return Object.values(this.cache!).filter((s) => s.meta.namespace === namespace);
+    return Object.values(this.cache!).filter((s) => s.meta?.namespace === namespace);
   },
 
   async reorder(orderedIds: string[]): Promise<void> {
@@ -242,14 +258,13 @@ export const ScriptStorage = {
       id: newId,
       meta: {
         ...original.meta,
-        name: original.meta.name + ' (Copy)',
+        name: `${original.meta?.name || 'Unnamed'} (Copy)`,
       },
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
 
-    this.cache![newId] = newScript;
-    await this.save();
+    await this.set(newId, newScript);
     return newScript;
   },
 };
@@ -289,27 +304,40 @@ export const ScriptValues = {
 
   // FIXED: Save immediately to prevent data loss on service worker termination
   // MV3 service workers can be killed at any time — setTimeout-based debouncing is unsafe
-  async set(scriptId: string, key: string, value: unknown): Promise<unknown> {
+  async set(scriptId: string, key: string, value: unknown, senderTabId: number | null = null): Promise<unknown> {
     await this.init(scriptId);
     const oldValue = this.cache[scriptId]![key];
+    const hadKey = Object.hasOwn(this.cache[scriptId]!, key);
 
     // Update cache immediately
     this.cache[scriptId]![key] = value;
 
     // Save IMMEDIATELY — don't debounce persistence in MV3!
     // Service workers can be terminated at any time, losing unsaved data
-    await chrome.storage.local.set({
-      [`values_${scriptId}`]: this.cache[scriptId],
-    });
+    try {
+      await chrome.storage.local.set({
+        [`values_${scriptId}`]: this.cache[scriptId],
+      });
+    } catch (e) {
+      if (hadKey) this.cache[scriptId]![key] = oldValue;
+      else delete this.cache[scriptId]![key];
+      throw e;
+    }
 
     // Debounce notifications only (these are less critical)
-    this.scheduleNotification(scriptId, key, oldValue, value);
+    this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
 
     return value;
   },
 
   // Debounced notifications — batches rapid changes (notification loss is acceptable)
-  scheduleNotification(scriptId: string, key: string, oldValue: unknown, newValue: unknown): void {
+  scheduleNotification(
+    scriptId: string,
+    key: string,
+    oldValue: unknown,
+    newValue: unknown,
+    senderTabId: number | null = null,
+  ): void {
     const notifKey = `${scriptId}_${key}`;
     const existing = this.pendingNotifications.get(notifKey);
     if (existing) {
@@ -320,21 +348,27 @@ export const ScriptValues = {
 
     const timeout = setTimeout(() => {
       this.pendingNotifications.delete(notifKey);
-      this.notifyChange(scriptId, key, oldValue, newValue, false);
+      this.notifyChange(scriptId, key, oldValue, newValue, false, senderTabId);
     }, 100);
 
-    this.pendingNotifications.set(notifKey, { timeout, oldValue });
+    this.pendingNotifications.set(notifKey, { timeout, oldValue, senderTabId });
   },
 
-  async delete(scriptId: string, key: string): Promise<void> {
+  async delete(scriptId: string, key: string, senderTabId: number | null = null): Promise<void> {
     await this.init(scriptId);
+    if (!Object.hasOwn(this.cache[scriptId]!, key)) return;
     const oldValue = this.cache[scriptId]![key];
     delete this.cache[scriptId]![key];
     // Save immediately
-    await chrome.storage.local.set({
-      [`values_${scriptId}`]: this.cache[scriptId],
-    });
-    this.scheduleNotification(scriptId, key, oldValue, undefined);
+    try {
+      await chrome.storage.local.set({
+        [`values_${scriptId}`]: this.cache[scriptId],
+      });
+    } catch (e) {
+      this.cache[scriptId]![key] = oldValue;
+      throw e;
+    }
+    this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
   },
 
   async list(scriptId: string): Promise<string[]> {
@@ -347,17 +381,27 @@ export const ScriptValues = {
     return { ...this.cache[scriptId]! };
   },
 
-  async setAll(scriptId: string, values: Record<string, unknown>): Promise<void> {
+  async setAll(scriptId: string, values: Record<string, unknown>, senderTabId: number | null = null): Promise<void> {
     await this.init(scriptId);
+    const snapshot = { ...this.cache[scriptId] };
+    const changes: Array<[string, unknown, unknown]> = [];
     for (const [key, value] of Object.entries(values)) {
       const oldValue = this.cache[scriptId]![key];
       this.cache[scriptId]![key] = value;
-      this.scheduleNotification(scriptId, key, oldValue, value);
+      changes.push([key, oldValue, value]);
     }
     // Save immediately
-    await chrome.storage.local.set({
-      [`values_${scriptId}`]: this.cache[scriptId],
-    });
+    try {
+      await chrome.storage.local.set({
+        [`values_${scriptId}`]: this.cache[scriptId],
+      });
+    } catch (e) {
+      this.cache[scriptId] = snapshot;
+      throw e;
+    }
+    for (const [key, oldValue, value] of changes) {
+      this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
+    }
   },
 
   async deleteAll(scriptId: string): Promise<void> {
@@ -366,17 +410,29 @@ export const ScriptValues = {
   },
 
   // Delete multiple specific keys at once
-  async deleteMultiple(scriptId: string, keys: string[]): Promise<void> {
+  async deleteMultiple(scriptId: string, keys: string[], senderTabId: number | null = null): Promise<void> {
     await this.init(scriptId);
+    const snapshot = { ...this.cache[scriptId] };
+    const changes: Array<[string, unknown]> = [];
     for (const key of keys) {
+      if (!Object.hasOwn(this.cache[scriptId]!, key)) continue;
       const oldValue = this.cache[scriptId]![key];
       delete this.cache[scriptId]![key];
-      this.scheduleNotification(scriptId, key, oldValue, undefined);
+      changes.push([key, oldValue]);
     }
+    if (changes.length === 0) return;
     // Save immediately
-    await chrome.storage.local.set({
-      [`values_${scriptId}`]: this.cache[scriptId],
-    });
+    try {
+      await chrome.storage.local.set({
+        [`values_${scriptId}`]: this.cache[scriptId],
+      });
+    } catch (e) {
+      this.cache[scriptId] = snapshot;
+      throw e;
+    }
+    for (const [key, oldValue] of changes) {
+      this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
+    }
   },
 
   async getStorageSize(scriptId: string): Promise<number> {
@@ -394,7 +450,14 @@ export const ScriptValues = {
     this.listeners.delete(key);
   },
 
-  notifyChange(scriptId: string, key: string, oldValue: unknown, newValue: unknown, remote: boolean): void {
+  notifyChange(
+    scriptId: string,
+    key: string,
+    oldValue: unknown,
+    newValue: unknown,
+    remote: boolean,
+    senderTabId: number | null = null,
+  ): void {
     // Skip if value didn't actually change
     if (oldValue === newValue) return;
 
@@ -413,11 +476,12 @@ export const ScriptValues = {
     chrome.tabs
       .query({ status: 'complete' })
       .then((tabs) => {
-        const msg = {
-          action: 'valueChanged',
-          data: { scriptId, key, oldValue, newValue, remote: true },
-        };
         for (const tab of tabs) {
+          const isOriginTab = senderTabId !== null && tab.id === senderTabId;
+          const msg = {
+            action: 'valueChanged',
+            data: { scriptId, key, oldValue, newValue, remote: !isOriginTab },
+          };
           chrome.tabs.sendMessage(tab.id!, msg).catch(() => {});
         }
       })
@@ -513,7 +577,11 @@ export const FolderStorage = {
         this.cache = (data['scriptFolders'] as Folder[] | undefined) || [];
       })();
     }
-    return _foldersInitPromise;
+    try {
+      return await _foldersInitPromise;
+    } finally {
+      _foldersInitPromise = null;
+    }
   },
 
   async save(): Promise<void> {
@@ -544,16 +612,31 @@ export const FolderStorage = {
     await this.init();
     const folder = this.cache!.find((f) => f.id === id);
     if (folder) {
+      const prev: Partial<Folder> = {};
+      for (const key of Object.keys(updates) as Array<keyof Folder>) {
+        prev[key] = folder[key] as never;
+      }
       Object.assign(folder, updates);
-      await this.save();
+      try {
+        await this.save();
+      } catch (e) {
+        Object.assign(folder, prev);
+        throw e;
+      }
     }
     return folder;
   },
 
   async delete(id: string): Promise<void> {
     await this.init();
+    const prev = this.cache;
     this.cache = this.cache!.filter((f) => f.id !== id);
-    await this.save();
+    try {
+      await this.save();
+    } catch (e) {
+      this.cache = prev;
+      throw e;
+    }
   },
 
   async addScript(folderId: string, scriptId: string): Promise<void> {
@@ -561,7 +644,12 @@ export const FolderStorage = {
     const folder = this.cache!.find((f) => f.id === folderId);
     if (folder && !folder.scriptIds.includes(scriptId)) {
       folder.scriptIds.push(scriptId);
-      await this.save();
+      try {
+        await this.save();
+      } catch (e) {
+        folder.scriptIds.pop();
+        throw e;
+      }
     }
   },
 
@@ -569,22 +657,32 @@ export const FolderStorage = {
     await this.init();
     const folder = this.cache!.find((f) => f.id === folderId);
     if (folder) {
+      const prev = folder.scriptIds;
       folder.scriptIds = folder.scriptIds.filter((sid) => sid !== scriptId);
-      await this.save();
+      try {
+        await this.save();
+      } catch (e) {
+        folder.scriptIds = prev;
+        throw e;
+      }
     }
   },
 
   async moveScript(scriptId: string, fromFolderId: string, toFolderId: string): Promise<void> {
     await this.init();
-    if (fromFolderId) {
-      const from = this.cache!.find((f) => f.id === fromFolderId);
-      if (from) from.scriptIds = from.scriptIds.filter((sid) => sid !== scriptId);
+    const from = fromFolderId ? this.cache!.find((f) => f.id === fromFolderId) : undefined;
+    const to = toFolderId ? this.cache!.find((f) => f.id === toFolderId) : undefined;
+    const prevFrom = from ? [...from.scriptIds] : null;
+    const prevTo = to ? [...to.scriptIds] : null;
+    if (from) from.scriptIds = from.scriptIds.filter((sid) => sid !== scriptId);
+    if (to && !to.scriptIds.includes(scriptId)) to.scriptIds.push(scriptId);
+    try {
+      await this.save();
+    } catch (e) {
+      if (from && prevFrom) from.scriptIds = prevFrom;
+      if (to && prevTo) to.scriptIds = prevTo;
+      throw e;
     }
-    if (toFolderId) {
-      const to = this.cache!.find((f) => f.id === toFolderId);
-      if (to && !to.scriptIds.includes(scriptId)) to.scriptIds.push(scriptId);
-    }
-    await this.save();
   },
 
   getFolderForScript(scriptId: string): Folder | null {

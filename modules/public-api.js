@@ -17,6 +17,10 @@ const PublicAPI = (() => {
   const MAX_AUDIT_ENTRIES = 500;
   const RATE_LIMIT_WINDOW = 1000; // ms
   const RATE_LIMIT_MAX = 10;      // requests per window
+  const MAX_CODE_SIZE = 5 * 1024 * 1024; // 5 MB externally supplied source limit
+  const MAX_FETCH_SIZE = 5 * 1024 * 1024; // 5 MB fetched source limit
+  const FETCH_TIMEOUT_MS = 15000;
+  const WEBHOOK_TIMEOUT_MS = 10000;
 
   /* ------------------------------------------------------------------ */
   /*  State                                                              */
@@ -27,6 +31,7 @@ const PublicAPI = (() => {
   let _webhooks = {};         // { [eventType]: { url, enabled } }
   let _trustedOrigins = [];
   let _initialized = false;
+  let _initPromise = null;
   let _rateLimitMap = new Map(); // senderId -> [timestamps]
 
   /* ------------------------------------------------------------------ */
@@ -248,7 +253,7 @@ const PublicAPI = (() => {
       timestamp: Date.now(),
       action,
       sender: describeSender(sender),
-      details: details || null,
+      details: details ?? null,
       result: result || 'ok'
     };
     _auditLog.push(entry);
@@ -449,6 +454,8 @@ const PublicAPI = (() => {
     async installScript(msg, sender) {
       const code = msg.code;
       if (!code || typeof code !== 'string') return { error: 'Missing or invalid code parameter' };
+      if (code.length > MAX_CODE_SIZE) return { error: 'Script code exceeds maximum allowed size (5 MB)' };
+      if (!code.includes('==UserScript==')) return { error: 'Not a valid userscript (missing ==UserScript== header)' };
 
       const allowed = await authorize('installScript', sender);
       if (!allowed) return { error: 'Permission denied', action: 'installScript' };
@@ -589,9 +596,27 @@ const PublicAPI = (() => {
 
       // Fetch the script only after authorization and URL validation
       try {
-        const resp = await fetch(url);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+        let resp;
+        try {
+          resp = await fetch(url, { signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+        const contentLength = resp.headers?.get?.('content-length');
+        if (contentLength && parseInt(contentLength, 10) > MAX_FETCH_SIZE) {
+          throw new Error('Script file exceeds maximum allowed size (5 MB)');
+        }
         const code = await resp.text();
+        if (code.length > MAX_FETCH_SIZE) {
+          throw new Error('Script file exceeds maximum allowed size (5 MB)');
+        }
+        if (!code.includes('==UserScript==')) {
+          throw new Error('Not a valid userscript (missing ==UserScript== header)');
+        }
 
         // Parse and install directly (authorization already checked above)
         const meta = parseUserscriptMeta(code);
@@ -645,14 +670,19 @@ const PublicAPI = (() => {
       data: payload
     };
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
     try {
       await fetch(hook.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: controller.signal
       });
     } catch (e) {
       console.warn(`[PublicAPI] webhook ${eventType} failed:`, e);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -753,21 +783,30 @@ const PublicAPI = (() => {
      */
     async init() {
       if (_initialized) return;
+      if (!_initPromise) {
+        _initPromise = (async () => {
+          try {
+            await loadState();
 
-      await loadState();
+            // Register external message listener
+            if (chrome.runtime.onMessageExternal) {
+              chrome.runtime.onMessageExternal.addListener(onExternalMessage);
+            }
 
-      // Register external message listener
-      if (chrome.runtime.onMessageExternal) {
-        chrome.runtime.onMessageExternal.addListener(onExternalMessage);
+            // Register web page message listener (only in contexts that have window)
+            if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
+              self.addEventListener('message', dispatchWebMessage);
+            }
+
+            _initialized = true;
+            console.log('[PublicAPI] initialized, version', API_VERSION);
+          } catch (err) {
+            _initPromise = null;
+            throw err;
+          }
+        })();
       }
-
-      // Register web page message listener (only in contexts that have window)
-      if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
-        self.addEventListener('message', dispatchWebMessage);
-      }
-
-      _initialized = true;
-      console.log('[PublicAPI] initialized, version', API_VERSION);
+      return _initPromise;
     },
 
     /**

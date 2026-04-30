@@ -244,6 +244,38 @@ describe('source storage module', () => {
     TabStorage.delete(7);
     expect(TabStorage.get(7)).toEqual({});
   });
+
+  it('keeps script records and values consistent when delete persistence fails', async () => {
+    const script = makeScript();
+    await ScriptStorage.set(script.id, script);
+    await ScriptValues.set(script.id, 'draft', true);
+
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(ScriptStorage.delete(script.id)).rejects.toThrow('QUOTA');
+
+    expect(await ScriptStorage.get(script.id)).toEqual(script);
+    expect(await ScriptValues.get(script.id, 'draft', false)).toBe(true);
+    expect(chrome.storage.local.remove).not.toHaveBeenCalledWith(`values_${script.id}`);
+  });
+
+  it('rolls back value batches and folder membership when persistence fails', async () => {
+    await ScriptValues.set('script_alpha', 'count', 1);
+    await ScriptValues.set('script_alpha', 'name', 'Alpha');
+
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(
+      ScriptValues.setAll('script_alpha', { count: 2, name: 'Beta', draft: true }),
+    ).rejects.toThrow('QUOTA');
+
+    expect(await ScriptValues.get('script_alpha', 'count', 0)).toBe(1);
+    expect(await ScriptValues.get('script_alpha', 'name', '')).toBe('Alpha');
+    expect(await ScriptValues.get('script_alpha', 'draft', false)).toBe(false);
+
+    const folder = await FolderStorage.create('Pinned');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(FolderStorage.addScript(folder.id, 'script_alpha')).rejects.toThrow('QUOTA');
+    expect(FolderStorage.getFolderForScript('script_alpha')).toBeNull();
+  });
 });
 
 describe('source resource cache module', () => {
