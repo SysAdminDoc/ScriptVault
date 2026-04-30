@@ -35,6 +35,7 @@ const BackupScheduler = (() => {
 
   let _settings = null;
   let _initialized = false;
+  let _settingsLoadPromise = null;
 
   /* ------------------------------------------------------------------ */
   /*  Helpers                                                            */
@@ -99,13 +100,18 @@ const BackupScheduler = (() => {
 
   async function _loadSettings() {
     if (_settings) return _settings;
-    const data = await chrome.storage.local.get(STORAGE_KEY_SETTINGS);
-    _settings = { ...DEFAULT_SETTINGS, ...(data[STORAGE_KEY_SETTINGS] || {}) };
-    return _settings;
+    if (_settingsLoadPromise) return _settingsLoadPromise;
+    _settingsLoadPromise = (async () => {
+      const data = await chrome.storage.local.get(STORAGE_KEY_SETTINGS);
+      _settings = { ...DEFAULT_SETTINGS, ...(data[STORAGE_KEY_SETTINGS] || {}) };
+      return _settings;
+    })();
+    return _settingsLoadPromise;
   }
 
   async function _saveSettings(settings) {
     _settings = { ...DEFAULT_SETTINGS, ...settings };
+    _settingsLoadPromise = null;
     await chrome.storage.local.set({ [STORAGE_KEY_SETTINGS]: _settings });
   }
 
@@ -242,16 +248,21 @@ const BackupScheduler = (() => {
   /* ------------------------------------------------------------------ */
 
   async function _registerAlarms() {
-    // Clear existing backup alarms
-    await chrome.alarms.clear(ALARM_NAME);
-    await chrome.alarms.clear(DEBOUNCE_ALARM);
-
     const settings = await _loadSettings();
+
+    // Always replace scheduled daily/weekly alarms because the cadence may have changed.
+    await chrome.alarms.clear(ALARM_NAME);
+
+    // Preserve a pending on-change debounce alarm across service-worker wakes.
+    // Clearing it here can drop the only backup queued after recent script edits.
+    if (!settings.enabled || settings.scheduleType !== 'onChange') {
+      await chrome.alarms.clear(DEBOUNCE_ALARM);
+    }
+
     if (!settings.enabled) return;
 
     if (settings.scheduleType === 'daily') {
       const nextRun = _nextScheduledTime(settings.hour);
-      const delayMs = nextRun.getTime() - Date.now();
       chrome.alarms.create(ALARM_NAME, {
         when: nextRun.getTime(),
         periodInMinutes: 24 * 60 // repeat every 24 hours

@@ -185,4 +185,50 @@ describe('runtime backup scheduler', () => {
     ]);
     expect(ScriptStorage.set).not.toHaveBeenCalled();
   });
+
+  it('preserves a pending on-change debounce alarm when initializing', async () => {
+    await chrome.storage.local.set({
+      backupSchedulerSettings: {
+        enabled: true,
+        scheduleType: 'onChange',
+        hour: 3,
+        dayOfWeek: 0,
+        maxBackups: 5,
+        notifyOnSuccess: false,
+        notifyOnFailure: false,
+        warnOnStorageFull: false,
+      },
+    });
+    const { BackupScheduler } = createSchedulerHarness([]);
+
+    await BackupScheduler.init();
+
+    expect(chrome.alarms.clear).toHaveBeenCalledWith('sv_backup_scheduled');
+    expect(chrome.alarms.clear).not.toHaveBeenCalledWith('sv_backup_debounce');
+    expect(chrome.alarms.create).not.toHaveBeenCalledWith(
+      'sv_backup_scheduled',
+      expect.any(Object),
+    );
+  });
+
+  it('clears a stale on-change debounce alarm when backups are disabled', async () => {
+    await chrome.storage.local.set({
+      backupSchedulerSettings: {
+        enabled: false,
+        scheduleType: 'onChange',
+        hour: 3,
+        dayOfWeek: 0,
+        maxBackups: 5,
+        notifyOnSuccess: false,
+        notifyOnFailure: false,
+        warnOnStorageFull: false,
+      },
+    });
+    const { BackupScheduler } = createSchedulerHarness([]);
+
+    await BackupScheduler.init();
+
+    expect(chrome.alarms.clear).toHaveBeenCalledWith('sv_backup_scheduled');
+    expect(chrome.alarms.clear).toHaveBeenCalledWith('sv_backup_debounce');
+  });
 });

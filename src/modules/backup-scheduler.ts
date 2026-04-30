@@ -49,6 +49,10 @@ interface BackupSchedulerSettings {
   warnOnStorageFull: boolean;
 }
 
+interface BackupSchedulerSettingsResult extends BackupSchedulerSettings {
+  prunedCount: number;
+}
+
 interface BackupEntry {
   id: string;
   timestamp: number;
@@ -415,11 +419,17 @@ function _estimateBackupSize(backups: BackupEntry[]): number {
 // ---------------------------------------------------------------------------
 
 async function _registerAlarms(): Promise<void> {
-  // Clear existing backup alarms
-  await chrome.alarms.clear(ALARM_NAME);
-  await chrome.alarms.clear(DEBOUNCE_ALARM);
-
   const settings: BackupSchedulerSettings = await _loadSettings();
+
+  // Always replace scheduled daily/weekly alarms because the cadence may have changed.
+  await chrome.alarms.clear(ALARM_NAME);
+
+  // Preserve a pending on-change debounce alarm across service-worker wakes.
+  // Clearing it here can drop the only backup queued after recent script edits.
+  if (!settings.enabled || settings.scheduleType !== 'onChange') {
+    await chrome.alarms.clear(DEBOUNCE_ALARM);
+  }
+
   if (!settings.enabled) return;
 
   if (settings.scheduleType === 'daily') {
@@ -894,27 +904,29 @@ export const BackupScheduler = {
    */
   async setSettings(
     settings: Partial<BackupSchedulerSettings>,
-  ): Promise<BackupSchedulerSettings> {
+  ): Promise<BackupSchedulerSettingsResult> {
     const merged: BackupSchedulerSettings = {
       ...(await _loadSettings()),
       ...settings,
     };
     await _saveSettings(merged);
     await _registerAlarms();
-    return { ..._settings! };
+    const prunedCount = await BackupScheduler.pruneOldBackups();
+    return { ..._settings!, prunedCount };
   },
 
   /**
    * Remove old backups exceeding the retention limit.
    */
-  async pruneOldBackups(): Promise<void> {
+  async pruneOldBackups(): Promise<number> {
     const settings: BackupSchedulerSettings = await _loadSettings();
     const backups: BackupEntry[] = await _getBackupList();
-    if (backups.length <= settings.maxBackups) return;
+    if (backups.length <= settings.maxBackups) return 0;
 
     // Keep the newest N
     const pruned: BackupEntry[] = backups.slice(0, settings.maxBackups);
     await _saveBackupList(pruned);
+    return Math.max(0, backups.length - pruned.length);
   },
 
   /**

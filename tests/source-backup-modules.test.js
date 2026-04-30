@@ -122,11 +122,15 @@ async function loadFreshBackupSchedulerHarness(scripts, valuesByScript = {}) {
   const SettingsManager = {
     get: vi.fn(async () => ({ enabled: true, layout: 'dark' })),
   };
+  const FolderStorage = {
+    cache: null,
+  };
 
   vi.doMock('../src/modules/storage.ts', () => ({
     ScriptStorage,
     ScriptValues,
     SettingsManager,
+    FolderStorage,
   }));
 
   const mod = await import('../src/modules/backup-scheduler.ts');
@@ -285,6 +289,54 @@ describe('source backup scheduler module', () => {
       'scripts/Beta.storage.json',
       'scripts/Beta.user.js',
     ]);
+  });
+
+  it('preserves a pending on-change debounce alarm when initializing', async () => {
+    await chrome.storage.local.set({
+      backupSchedulerSettings: {
+        enabled: true,
+        scheduleType: 'onChange',
+        hour: 3,
+        dayOfWeek: 0,
+        maxBackups: 5,
+        notifyOnSuccess: false,
+        notifyOnFailure: true,
+        warnOnStorageFull: false,
+      },
+    });
+    const { BackupScheduler } = await loadFreshBackupSchedulerHarness([]);
+
+    await BackupScheduler.init();
+
+    expect(chrome.alarms.clear).toHaveBeenCalledWith('sv_backup_scheduled');
+    expect(chrome.alarms.clear).not.toHaveBeenCalledWith('sv_backup_debounce');
+  });
+
+  it('returns retention pruning count from setSettings for dashboard feedback', async () => {
+    const { BackupScheduler } = await loadFreshBackupSchedulerHarness([]);
+    await chrome.storage.local.set({
+      backupSchedulerSettings: {
+        enabled: true,
+        scheduleType: 'manual',
+        hour: 3,
+        dayOfWeek: 0,
+        maxBackups: 1,
+        notifyOnSuccess: false,
+        notifyOnFailure: true,
+        warnOnStorageFull: false,
+      },
+      autoBackups: [
+        { id: 'newer', timestamp: 2, version: '1', reason: 'manual', scriptCount: 0, size: 1, sizeFormatted: '1 B', data: 'aa' },
+        { id: 'older', timestamp: 1, version: '1', reason: 'manual', scriptCount: 0, size: 1, sizeFormatted: '1 B', data: 'aa' },
+      ],
+    });
+
+    const settings = await BackupScheduler.setSettings({ maxBackups: 1 });
+    const stored = await chrome.storage.local.get('autoBackups');
+
+    expect(settings.prunedCount).toBe(1);
+    expect(stored.autoBackups).toHaveLength(1);
+    expect(stored.autoBackups[0].id).toBe('newer');
   });
 });
 
