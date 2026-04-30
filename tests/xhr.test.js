@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
@@ -12,6 +12,13 @@ function createFresh() {
 
 beforeEach(() => {
   XhrManager = createFresh();
+});
+
+afterEach(() => {
+  for (const requestId of Array.from(XhrManager.requests.keys())) {
+    XhrManager.remove(requestId);
+  }
+  vi.useRealTimers();
 });
 
 describe('XhrManager', () => {
@@ -62,6 +69,17 @@ describe('XhrManager', () => {
   it('remove() deletes request', () => {
     const req = XhrManager.create(1, 's1', {});
     XhrManager.remove(req.id);
+    expect(XhrManager.get(req.id)).toBeUndefined();
+  });
+
+  it('auto-cleans abandoned requests after the cleanup delay', () => {
+    vi.useFakeTimers();
+    const req = XhrManager.create(1, 's1', {});
+
+    vi.advanceTimersByTime(XhrManager.cleanupDelayMs - 1);
+    expect(XhrManager.get(req.id)).toBe(req);
+
+    vi.advanceTimersByTime(1);
     expect(XhrManager.get(req.id)).toBeUndefined();
   });
 

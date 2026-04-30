@@ -4635,6 +4635,7 @@ chrome.tabs.onRemoved.addListener((closedTabId) => {
 const XhrManager = {
   requests: new Map(), // requestId -> { controller, tabId, scriptId, etc }
   nextId: 1,
+  cleanupDelayMs: 300000,
   
   // Create a new tracked request (controller added later by caller)
   create(tabId, scriptId, details) {
@@ -4652,7 +4653,7 @@ const XhrManager = {
     
     this.requests.set(requestId, request);
     // Auto-cleanup after 5 minutes to prevent leaks from abandoned requests
-    request._cleanupTimer = setTimeout(() => this.remove(requestId), 300000);
+    request._cleanupTimer = setTimeout(() => this.remove(requestId), this.cleanupDelayMs);
     return request;
   },
   
