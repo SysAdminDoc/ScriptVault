@@ -2,6 +2,13 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.6.2] — Drop fake gist token encryption (Phase 5.5)
+
+- Removed: the AES-GCM encryption around the GitHub gist PAT was security theater. The key was derived via PBKDF2 from two string literals (`'ScriptVault-Gist-Key-v1'` + `'sv-gist-salt'`) embedded in the source — anyone with the encrypted blob and access to this file could derive the same key. Tokens now live in `chrome.storage.local` plaintext; that storage is already sandboxed by Chrome at the extension boundary, which is the actual protection.
+- Migration: existing installs decrypt their stored token once (using the same legacy hardcoded inputs), re-save it under the new `gist_pat` key, and drop the legacy `gist_pat_encrypted` entry. Best-effort — if the one-shot decryption or write fails, the next dashboard load retries.
+- Hardened: `clearToken()` now removes both the new and the legacy storage keys defensively, so a sign-out followed by a downgrade can't leak a token via the legacy key.
+- UX: the gist setup hint now describes the storage model honestly ("Stored in `chrome.storage.local`, sandboxed by Chrome — readable only by ScriptVault") instead of claiming local encryption.
+
 ## [v3.6.1] — Webhook SSRF guard (Phase 5.5)
 
 - Hardened: `PublicAPI.setWebhook` now rejects URLs that point at internal/loopback hosts. Previously the only validation was `https://` — a malicious web origin with capability-token access could register a webhook at `https://192.168.1.1/admin` or `https://169.254.169.254/latest/meta-data/` (cloud metadata) and exfiltrate or trigger LAN-side actions when the extension fired the webhook.

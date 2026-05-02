@@ -26,7 +26,16 @@ const GistIntegration = (() => {
     };
 
     const API_BASE = 'https://api.github.com/gists';
-    const STORAGE_KEY_TOKEN = 'gist_pat_encrypted';
+    // Phase 5.5 (v3.6.2) — Token now stored in plain text under `gist_pat`.
+    // Previously this was AES-GCM encrypted with a hardcoded PBKDF2 key
+    // derived from string literals embedded in the source — anyone with
+    // the encrypted blob and access to this file could derive the same
+    // key, which is security theater. chrome.storage.local is already
+    // sandboxed by Chrome at the extension boundary; that is the actual
+    // protection. We keep the legacy `gist_pat_encrypted` key around for
+    // one read so existing installs migrate transparently.
+    const STORAGE_KEY_TOKEN = 'gist_pat';
+    const STORAGE_KEY_TOKEN_LEGACY = 'gist_pat_encrypted';
     const STORAGE_KEY_AUTOSYNC = 'gist_autosync';
     const CACHE_TTL = 5 * 60 * 1000; // 5 min
 
@@ -36,33 +45,23 @@ const GistIntegration = (() => {
     function escapeHtml(str) { return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     // =========================================
-    // Encryption helpers (AES-GCM via WebCrypto)
+    // One-shot legacy decryption (only used during migration)
     // =========================================
-    async function getDerivedKey() {
-        const raw = new TextEncoder().encode('ScriptVault-Gist-Key-v1');
-        const keyMaterial = await crypto.subtle.importKey('raw', raw, 'PBKDF2', false, ['deriveKey']);
-        return crypto.subtle.deriveKey(
-            { name: 'PBKDF2', salt: new TextEncoder().encode('sv-gist-salt'), iterations: 100000, hash: 'SHA-256' },
-            keyMaterial,
-            { name: 'AES-GCM', length: 256 },
-            false,
-            ['encrypt', 'decrypt']
-        );
-    }
-
-    async function encryptToken(token) {
-        const key = await getDerivedKey();
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(token));
-        const combined = new Uint8Array(iv.length + encrypted.byteLength);
-        combined.set(iv);
-        combined.set(new Uint8Array(encrypted), iv.length);
-        return btoa(String.fromCharCode(...combined));
-    }
-
-    async function decryptToken(stored) {
+    // Mirrors the old encrypt() — same hardcoded inputs — so existing
+    // installs can decrypt their stored token once and re-save it as
+    // plaintext. Delete this block after a couple of releases when the
+    // legacy key is unlikely to still be in any user's storage.
+    async function _legacyDecryptToken(stored) {
         try {
-            const key = await getDerivedKey();
+            const raw = new TextEncoder().encode('ScriptVault-Gist-Key-v1');
+            const keyMaterial = await crypto.subtle.importKey('raw', raw, 'PBKDF2', false, ['deriveKey']);
+            const key = await crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt: new TextEncoder().encode('sv-gist-salt'), iterations: 100000, hash: 'SHA-256' },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['decrypt']
+            );
             const data = Uint8Array.from(atob(stored), c => c.charCodeAt(0));
             const iv = data.slice(0, 12);
             const ciphertext = data.slice(12);
@@ -77,18 +76,31 @@ const GistIntegration = (() => {
     // Token storage
     // =========================================
     async function loadToken() {
-        const data = await chrome.storage.local.get([STORAGE_KEY_TOKEN, STORAGE_KEY_AUTOSYNC]);
+        const data = await chrome.storage.local.get([
+            STORAGE_KEY_TOKEN, STORAGE_KEY_TOKEN_LEGACY, STORAGE_KEY_AUTOSYNC
+        ]);
         if (data[STORAGE_KEY_TOKEN]) {
-            _state.token = await decryptToken(data[STORAGE_KEY_TOKEN]);
+            _state.token = data[STORAGE_KEY_TOKEN];
             _state.tokenVerified = !!_state.token;
+        } else if (data[STORAGE_KEY_TOKEN_LEGACY]) {
+            // Migrate: decrypt with the legacy hardcoded key once, then
+            // re-save plaintext + drop the legacy entry.
+            const legacy = await _legacyDecryptToken(data[STORAGE_KEY_TOKEN_LEGACY]);
+            if (legacy) {
+                _state.token = legacy;
+                _state.tokenVerified = true;
+                try {
+                    await chrome.storage.local.set({ [STORAGE_KEY_TOKEN]: legacy });
+                    await chrome.storage.local.remove(STORAGE_KEY_TOKEN_LEGACY);
+                } catch (_e) { /* migration is best-effort; reload will retry */ }
+            }
         }
         _state.autoSync = !!data[STORAGE_KEY_AUTOSYNC];
     }
 
     async function saveToken(token) {
-        const encrypted = await encryptToken(token);
         return new Promise(resolve => {
-            chrome.storage.local.set({ [STORAGE_KEY_TOKEN]: encrypted }, () => {
+            chrome.storage.local.set({ [STORAGE_KEY_TOKEN]: token }, () => {
                 _state.token = token;
                 _state.tokenVerified = true;
                 resolve();
@@ -98,7 +110,9 @@ const GistIntegration = (() => {
 
     function clearToken() {
         return new Promise(resolve => {
-            chrome.storage.local.remove(STORAGE_KEY_TOKEN, () => {
+            // Remove both the new and the (defensively, in case migration
+            // didn't fire yet) legacy entry.
+            chrome.storage.local.remove([STORAGE_KEY_TOKEN, STORAGE_KEY_TOKEN_LEGACY], () => {
                 _state.token = null;
                 _state.tokenVerified = false;
                 resolve();
@@ -1213,7 +1227,7 @@ const GistIntegration = (() => {
 
             const hint = document.createElement('div');
             hint.style.cssText = 'font-size:11px;color:var(--text-muted,#707070);';
-            hint.innerHTML = 'Generate a token at <a href="https://github.com/settings/tokens/new?scopes=gist&description=ScriptVault" target="_blank" style="color:var(--accent-blue,#60a5fa)">GitHub Settings</a> with the <strong>gist</strong> scope. Token is stored encrypted locally.';
+            hint.innerHTML = 'Generate a token at <a href="https://github.com/settings/tokens/new?scopes=gist&description=ScriptVault" target="_blank" style="color:var(--accent-blue,#60a5fa)">GitHub Settings</a> with the <strong>gist</strong> scope. Stored in <code>chrome.storage.local</code>, sandboxed by Chrome — readable only by ScriptVault.';
             tokenSection.appendChild(hint);
         }
         container.appendChild(tokenSection);
