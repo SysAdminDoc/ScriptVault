@@ -13,6 +13,7 @@ import {
   TabStorage,
   _openTabTrackers,
 } from '../src/modules/storage.ts';
+import { ScriptsDAO, ValuesDAO } from '../src/storage/script-db.ts';
 
 const originalFetch = globalThis.fetch;
 
@@ -216,18 +217,23 @@ describe('source storage module', () => {
     await ScriptValues.set('script_alpha', 'draft', true);
     await ScriptStorage.delete('script_alpha');
     expect(await ScriptStorage.get('script_alpha')).toBeNull();
-    expect(await chrome.storage.local.remove).toHaveBeenCalledWith('values_script_alpha');
+    // v3.0: values are wiped via the IDB cascade in ScriptsDAO.delete(), not
+    // chrome.storage.local.remove. Verify the value bag is gone from IDB.
+    expect(await ValuesDAO.getAll('script_alpha')).toEqual({});
   });
 
   it('stores values, emits listeners, and manages folders/tab state', async () => {
-    vi.useFakeTimers();
+    // Note: we deliberately use real timers here. fake-indexeddb's internal
+    // scheduling does not play well with vi.useFakeTimers() — IDB requests
+    // would never resolve. We wait out the 100ms notification debounce with
+    // a real timer instead.
     const changes = [];
     ScriptValues.addListener('script_alpha', 'listener', (...args) => changes.push(args));
 
     await ScriptValues.set('script_alpha', 'count', 1);
     await ScriptValues.setAll('script_alpha', { count: 2, name: 'Alpha' });
     await ScriptValues.deleteMultiple('script_alpha', ['name']);
-    vi.runAllTimers();
+    await new Promise((r) => setTimeout(r, 150));
 
     expect(await ScriptValues.get('script_alpha', 'count', 0)).toBe(2);
     expect(await ScriptValues.list('script_alpha')).toEqual(['count']);
@@ -250,27 +256,34 @@ describe('source storage module', () => {
     await ScriptStorage.set(script.id, script);
     await ScriptValues.set(script.id, 'draft', true);
 
-    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    // v3.0: simulate an IDB delete failure rather than chrome.storage.set.
+    const spy = vi.spyOn(ScriptsDAO, 'delete').mockRejectedValueOnce(new Error('QUOTA'));
     await expect(ScriptStorage.delete(script.id)).rejects.toThrow('QUOTA');
+    spy.mockRestore();
 
     expect(await ScriptStorage.get(script.id)).toEqual(script);
     expect(await ScriptValues.get(script.id, 'draft', false)).toBe(true);
-    expect(chrome.storage.local.remove).not.toHaveBeenCalledWith(`values_${script.id}`);
   });
 
   it('rolls back value batches and folder membership when persistence fails', async () => {
     await ScriptValues.set('script_alpha', 'count', 1);
     await ScriptValues.set('script_alpha', 'name', 'Alpha');
 
-    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    // v3.0: ValuesDAO.setAll runs every put inside one IDB transaction, so a
+    // mid-batch failure aborts everything. We simulate that here.
+    const spy = vi.spyOn(ValuesDAO, 'setAll').mockRejectedValueOnce(new Error('QUOTA'));
     await expect(
       ScriptValues.setAll('script_alpha', { count: 2, name: 'Beta', draft: true }),
     ).rejects.toThrow('QUOTA');
+    spy.mockRestore();
 
     expect(await ScriptValues.get('script_alpha', 'count', 0)).toBe(1);
     expect(await ScriptValues.get('script_alpha', 'name', '')).toBe('Alpha');
     expect(await ScriptValues.get('script_alpha', 'draft', false)).toBe(false);
 
+    // FolderStorage still uses chrome.storage.local in v3.0 (folders are a
+    // small index that doesn't benefit from IDB), so the original
+    // chrome.storage.local.set rejection still exercises that path.
     const folder = await FolderStorage.create('Pinned');
     chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
     await expect(FolderStorage.addScript(folder.id, 'script_alpha')).rejects.toThrow('QUOTA');
@@ -420,6 +433,8 @@ describe('source public api module', () => {
   });
 
   it('toggles scripts in object-map storage without corrupting the record shape', async () => {
+    // Seed via legacy chrome.storage.local blob — v3 migration picks it up
+    // on first ScriptStorage.init() and routes it into IDB.
     await chrome.storage.local.set({
       userscripts: {
         script_alpha: makeScript(),
@@ -432,11 +447,13 @@ describe('source public api module', () => {
       { action: 'toggleScript', scriptId: 'script_alpha', enabled: false },
       { id: 'ext-test' },
     );
-    const stored = await chrome.storage.local.get('userscripts');
+    // v3.0: PublicAPI is loaded as a fresh module (separate ScriptStorage
+    // cache); read straight from IDB via the DAO to bypass cache.
+    const stored = await ScriptsDAO.get('script_alpha');
 
     expect(result.ok).toBe(true);
-    expect(stored.userscripts.script_alpha.enabled).toBe(false);
-    expect(stored.userscripts.script_alpha.meta.name).toBe('Alpha');
+    expect(stored?.enabled).toBe(false);
+    expect(stored?.meta.name).toBe('Alpha');
     expect(globalThis.registerAllScripts).toHaveBeenCalledTimes(1);
     expect(globalThis.updateBadge).toHaveBeenCalledTimes(1);
     expect(globalThis.autoReloadMatchingTabs).not.toHaveBeenCalled();
@@ -470,20 +487,22 @@ describe('source public api module', () => {
       },
       { id: 'ext-test' },
     );
-    const stored = await chrome.storage.local.get('userscripts');
+    // v3.0: PublicAPI is loaded as a fresh module (separate ScriptStorage
+    // cache); read straight from IDB via the DAO to bypass cache.
+    const stored = await ScriptsDAO.get('script_beta');
 
     expect(result.ok).toBe(true);
-    expect(stored.userscripts.script_beta.meta.name).toBe('Script Beta');
-    expect(stored.userscripts.script_beta.meta.version).toBe('2.1.0');
-    expect(stored.userscripts.script_beta.meta.match).toEqual(['https://example.com/*']);
-    expect(stored.userscripts.script_beta.meta.include).toEqual(['https://include.example/*']);
-    expect(stored.userscripts.script_beta.meta.exclude).toEqual(['https://exclude.example/*']);
-    expect(stored.userscripts.script_beta.meta.grant).toEqual(['GM_getValue', 'GM_setValue']);
-    expect(stored.userscripts.script_beta.meta.require).toEqual(['https://cdn.example/lib.js']);
-    expect(stored.userscripts.script_beta.meta.resource).toEqual({ logo: 'https://cdn.example/logo.png' });
-    expect(stored.userscripts.script_beta.meta.connect).toEqual(['api.example']);
-    expect(stored.userscripts.script_beta.meta.noframes).toBe(true);
-    expect(stored.userscripts.script_beta.code).toContain('console.log("beta")');
+    expect(stored?.meta.name).toBe('Script Beta');
+    expect(stored?.meta.version).toBe('2.1.0');
+    expect(stored?.meta.match).toEqual(['https://example.com/*']);
+    expect(stored?.meta.include).toEqual(['https://include.example/*']);
+    expect(stored?.meta.exclude).toEqual(['https://exclude.example/*']);
+    expect(stored?.meta.grant).toEqual(['GM_getValue', 'GM_setValue']);
+    expect(stored?.meta.require).toEqual(['https://cdn.example/lib.js']);
+    expect(stored?.meta.resource).toEqual({ logo: 'https://cdn.example/logo.png' });
+    expect(stored?.meta.connect).toEqual(['api.example']);
+    expect(stored?.meta.noframes).toBe(true);
+    expect(stored?.code).toContain('console.log("beta")');
     expect(globalThis.registerAllScripts).toHaveBeenCalledTimes(1);
     expect(globalThis.updateBadge).toHaveBeenCalledTimes(1);
     expect(globalThis.autoReloadMatchingTabs).toHaveBeenCalledWith(expect.objectContaining({

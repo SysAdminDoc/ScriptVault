@@ -143,7 +143,7 @@ This catches message shape mismatches at compile time (the exact bug class that 
 
 ---
 
-## Phase 2 — Storage Layer Rewrite
+## Phase 2 — Storage Layer Rewrite ✅ Shipped in v3.0.0
 
 **Goal:** Replace the single-blob `chrome.storage.local` approach with a scalable, crash-safe storage layer.
 
@@ -189,6 +189,8 @@ async function withTransaction<T>(
 - Selective restore reads individual scripts from the ZIP, not the whole blob
 
 **Exit criteria:** All data in IndexedDB (except settings/index), transactions protect multi-step operations, backup blobs are raw ArrayBuffer, existing tests updated and passing.
+
+**Status:** Shipped in v3.0.0. `src/storage/{idb,transaction,script-db,migration-v3}.ts` ship the IDB layer; `ScriptStorage`, `ScriptValues`, and `PublicAPI.installScript`/`toggleScript` route through DAOs. Migration is automatic on first v3 boot (legacy keys preserved 30 days as a safety net). 550 tests passing including IDB-aware rollback regression suite. Stats fire-and-forget integration deferred to a follow-up (StatsDAO exists, ScriptStats module not yet wired). BackupStorage refactor also deferred — backups still go through `chrome.storage.local` until the backup-scheduler module is migrated.
 
 ---
 
