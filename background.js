@@ -1,4 +1,4 @@
-// ScriptVault v3.7.0 - Background Service Worker
+// ScriptVault v3.8.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -13034,6 +13034,9 @@ async function handleMessage(message, sender) {
       
       case 'installFromUrl':
         return await installFromUrl(data.url);
+
+      case 'installFromCode':
+        return await installFromCode(data.code);
         
       // Resources
       case 'fetchResource':
@@ -15342,6 +15345,52 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   ]
 });
 
+// Handle direct script installation from raw source code (file picker, drag/drop)
+async function installFromCode(code) {
+  try {
+    if (typeof code !== 'string' || !code) {
+      throw new Error('No script content provided');
+    }
+
+    if (code.length > MAX_SCRIPT_SIZE) {
+      throw new Error(`Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+    }
+
+    if (!code.includes('==UserScript==')) {
+      throw new Error('Not a valid userscript');
+    }
+
+    const parsed = parseUserscript(code);
+    if (parsed.error) {
+      throw new Error(parsed.error);
+    }
+    const meta = parsed.meta;
+    const allScripts = await ScriptStorage.getAll();
+
+    const existing = allScripts.find(s => s.meta.name === meta.name && s.meta.namespace === meta.namespace);
+    const id = existing ? existing.id : generateId();
+
+    const script = {
+      id,
+      code,
+      meta,
+      enabled: existing ? existing.enabled : true,
+      position: existing ? existing.position : allScripts.length,
+      createdAt: existing ? existing.createdAt : Date.now(),
+      updatedAt: Date.now()
+    };
+
+    await ScriptStorage.set(id, script);
+    await registerAllScripts(true);
+    await updateBadge();
+    await autoReloadMatchingTabs(script);
+
+    return { success: true, script };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 // Handle direct script installation from URL
 async function installFromUrl(url) {
   try {
@@ -15364,43 +15413,7 @@ async function installFromUrl(url) {
 
     const code = await response.text();
 
-    // Post-read size check (content-length may be missing)
-    if (code.length > MAX_SCRIPT_SIZE) {
-      throw new Error(`Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
-    }
-
-    if (!code.includes('==UserScript==')) {
-      throw new Error('Not a valid userscript');
-    }
-    
-    // Parse and save
-    const parsed = parseUserscript(code);
-    if (parsed.error) {
-      throw new Error(parsed.error);
-    }
-    const meta = parsed.meta;
-    const allScripts = await ScriptStorage.getAll();
-
-    // Check for existing script with same name+namespace (update instead of duplicate)
-    const existing = allScripts.find(s => s.meta.name === meta.name && s.meta.namespace === meta.namespace);
-    const id = existing ? existing.id : generateId();
-
-    const script = {
-      id,
-      code,
-      meta,
-      enabled: existing ? existing.enabled : true,
-      position: existing ? existing.position : allScripts.length,
-      createdAt: existing ? existing.createdAt : Date.now(),
-      updatedAt: Date.now()
-    };
-
-    await ScriptStorage.set(id, script);
-    await registerAllScripts(true);
-    await updateBadge();
-    await autoReloadMatchingTabs(script);
-
-    return { success: true, script };
+    return await installFromCode(code);
   } catch (error) {
     return { success: false, error: error.message };
   }

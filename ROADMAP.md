@@ -790,7 +790,7 @@ TM issue [#2624](https://github.com/Tampermonkey/tampermonkey/issues/2624). Curr
 - On reinstall: detect existing script by namespace+name match; merge user-side fields (tags, enabled state, settings) with new code/metadata from the update
 - "Untagged" as a virtual filter option in the tag sidebar (shows all scripts with no tags assigned)
 
-### 12.9 Install from Local File
+### 12.9 Install from Local File ✅ Shipped in v3.8.0
 
 TM issue [#2722](https://github.com/Tampermonkey/tampermonkey/issues/2722). Allow drag-and-drop or file-picker install of a `.user.js` file without going through a URL:
 
@@ -798,6 +798,8 @@ TM issue [#2722](https://github.com/Tampermonkey/tampermonkey/issues/2722). Allo
 - Parse the file as a userscript; show the normal install confirmation dialog
 - Drag-and-drop `.user.js` onto the dashboard also triggers install
 - Does not require any new permissions (`chrome.userScripts` registration is already handled)
+
+**Status (v3.8.0, 2026-05-02):** Shipped. New "Install from Local File" section in the dashboard Import tab with a hidden file input and a "Choose file…" button; status pill reports the chosen file's name and install result. Window-wide drag/drop overlay accepts one or many `.user.js` files at once and installs them serially with a single batch toast. Background gained `installFromCode(code)` (TS + JS) and a matching `installFromCode` message handler; `installFromUrl` now reuses it after fetching the URL so both paths share parse/size/dedupe/register logic. Multi-file drop reuses the same handler; per-file size cap matches the URL path (5MB).
 
 ### 12.10 In-App Update Notifications
 
