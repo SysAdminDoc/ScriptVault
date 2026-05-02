@@ -131,7 +131,9 @@
       handled = true;
     }
 
-    // Notification event forwarding (click, done)
+    // Notification event forwarding (click, done, buttonClick).
+    // Phase 11.11: buttonIndex is forwarded so the wrapper can fire
+    // onbuttonclick({ buttonClickIndex }) per ScriptCat semantics.
     if (message.action === 'notificationEvent') {
       window.postMessage({
         channel: CHANNEL_ID,
@@ -139,7 +141,8 @@
         type: 'notificationEvent',
         scriptId: message.data?.scriptId,
         notifTag: message.data?.notifId,
-        eventType: message.data?.type
+        eventType: message.data?.type,
+        buttonIndex: message.data?.buttonIndex
       }, '*');
       handled = true;
     }
