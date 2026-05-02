@@ -99,7 +99,23 @@ function parseUserscript(code) {
       case 'incompatible': {
         const arrayKey = key === 'exclude-match' ? 'excludeMatch' : key;
         if (!meta[arrayKey]) meta[arrayKey] = [];
-        if (value) meta[arrayKey].push(value);
+        if (value) {
+          // Phase 36.6 — comma-separated convenience syntax
+          const splittable =
+            arrayKey === 'match' ||
+            arrayKey === 'include' ||
+            arrayKey === 'exclude' ||
+            arrayKey === 'excludeMatch' ||
+            arrayKey === 'connect';
+          if (splittable && value.includes(',')) {
+            for (const part of value.split(',')) {
+              const trimmed = part.trim();
+              if (trimmed) meta[arrayKey].push(trimmed);
+            }
+          } else {
+            meta[arrayKey].push(value);
+          }
+        }
         break;
       }
       case 'resource': {
@@ -424,5 +440,43 @@ describe('parseUserscript', () => {
     expect(meta.grant).toContain('none');
     expect(meta.grant).toContain('GM_setValue');
     expect(meta.grant).toHaveLength(2);
+  });
+
+  // Phase 36.6 — comma-separated convenience syntax (VM #2403)
+  it('splits comma-separated @match into multiple patterns', () => {
+    const code = '// ==UserScript==\n// @name CSV\n// @match https://a.com/*,https://b.com/*,https://c.com/*\n// ==/UserScript==\n';
+    const { meta } = parseUserscript(code);
+    expect(meta.match).toEqual([
+      'https://a.com/*',
+      'https://b.com/*',
+      'https://c.com/*',
+    ]);
+  });
+
+  it('splits comma-separated @exclude-match into multiple patterns', () => {
+    const code = '// ==UserScript==\n// @name CSV2\n// @match *://*/*\n// @exclude-match https://x.com/*, https://y.com/*\n// ==/UserScript==\n';
+    const { meta } = parseUserscript(code);
+    expect(meta.excludeMatch).toEqual(['https://x.com/*', 'https://y.com/*']);
+  });
+
+  it('preserves single @match without comma intact', () => {
+    const code = '// ==UserScript==\n// @name Single\n// @match https://example.com/*\n// ==/UserScript==\n';
+    const { meta } = parseUserscript(code);
+    expect(meta.match).toEqual(['https://example.com/*']);
+  });
+
+  // Phase 36.4 — multi-word @tag preserved (VM v2.35.2 parity)
+  it('preserves multi-word @tag values without splitting on whitespace', () => {
+    const code = '// ==UserScript==\n// @name Tagged\n// @tag my util\n// @tag another tag\n// ==/UserScript==\n';
+    const { meta } = parseUserscript(code);
+    expect(meta.tag).toEqual(['my util', 'another tag']);
+  });
+
+  it('does not split @tag on commas (multi-word values may contain them)', () => {
+    const code = '// ==UserScript==\n// @name Tagged2\n// @tag tools,utility\n// ==/UserScript==\n';
+    const { meta } = parseUserscript(code);
+    // Tag splitting on comma would mangle declarative single-tag values like
+    // "v3.8, beta". We only desugar comma syntax for URL-pattern arrays.
+    expect(meta.tag).toEqual(['tools,utility']);
   });
 });

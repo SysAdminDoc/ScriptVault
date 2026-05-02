@@ -181,7 +181,26 @@ function parseUserscript(code) {
       case 'incompatible':
         const arrayKey = key === 'exclude-match' ? 'excludeMatch' : key;
         if (!meta[arrayKey]) meta[arrayKey] = [];
-        if (value) meta[arrayKey].push(value);
+        if (value) {
+          // Phase 36.6 — comma-separated convenience syntax for URL pattern
+          // directives. Commas are not valid in match patterns per Chrome's
+          // match syntax, so we can split safely. `tag` keeps raw values so
+          // multi-word tags like `// @tag my util` stay intact.
+          const splittable =
+            arrayKey === 'match' ||
+            arrayKey === 'include' ||
+            arrayKey === 'exclude' ||
+            arrayKey === 'excludeMatch' ||
+            arrayKey === 'connect';
+          if (splittable && value.includes(',')) {
+            for (const part of value.split(',')) {
+              const trimmed = part.trim();
+              if (trimmed) meta[arrayKey].push(trimmed);
+            }
+          } else {
+            meta[arrayKey].push(value);
+          }
+        }
         break;
       case 'resource':
         const resourceMatch = value.match(/^(\S+)\s+(.+)$/);

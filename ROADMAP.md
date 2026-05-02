@@ -2243,6 +2243,7 @@ Violentmonkey v2.35.2 added `// @tag <name>` (preserves inner spaces, e.g. `// @
 - On install/update: union the source-declared `meta.tags` with any user-assigned tags. User-assigned tags are never removed by a re-install (already covered by Phase 12.8).
 - Round-trips through the Tampermonkey ZIP export/import format unchanged (TM ignores unknown directives).
 - Source: [Violentmonkey v2.35.2 release notes](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.35.2), [VM dashboard #2499](https://github.com/violentmonkey/violentmonkey/issues/2499) (the regression that proves it's a real attack surface — handle missing/malformed `@tag` lines gracefully so dashboard never wedges).
+- **Status:** ✅ Shipped in v3.9.0. Parser already collected `@tag` via `ARRAY_KEYS`; user-assigned tags now survive re-install through `getMetaArray('tag')` source+existing union in `src/modules/public-api.ts`. Multi-word tags (`// @tag my util`) round-trip intact — comma desugar deliberately skips `@tag` so values like `tools,utility` aren't mangled.
 
 ### 36.5 `@require-id` Local Module Resolution
 
@@ -2262,6 +2263,7 @@ Open VM enhancement [#2403](https://github.com/violentmonkey/violentmonkey/issue
 - Round-trip preserves the comma form on save; export to TM-compatible format expands back to one-per-line so existing managers can ingest the file.
 - Same desugar applies to `@include` and `@exclude-match`.
 - Source: [VM #2403](https://github.com/violentmonkey/violentmonkey/issues/2403).
+- **Status:** ✅ Shipped in v3.9.0. Comma-split branch added in `src/background/parser.ts` and mirrored in `background.core.js` + `tests/parser.test.js`. Splittable keys: `match`, `include`, `exclude`, `excludeMatch`, `connect`. Excluded: `tag`, `grant`, `require`, `antifeature`, `compatible`, `incompatible` (raw values may legitimately contain commas).
 
 ### 36.7 Default Top-Level Await
 
@@ -2308,6 +2310,7 @@ VM v2.34.1 added `{{icon}}` to the new-script template — substitutes the activ
 - Add `{{icon}}` that resolves to `chrome.tabs.query({active: true, currentWindow: true})[0].favIconUrl` at template-instantiation time.
 - Document the token in the new-script wizard alongside the others.
 - Source: [Violentmonkey v2.34.1 release notes](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.34.1).
+- **Status:** ✅ Shipped in v3.9.0. `resolveTemplateTokens()` in `pages/dashboard.js` resolves `{{name}}`, `{{namespace}}`, `{{match}}`, `{{icon}}` against the active tab at create-time. Unresolvable directive lines are stripped. Blank template now ships with `// @icon {{icon}}`.
 
 ### 36.12 Cron `once(timestamp)` Schedule Expression (ScriptCat parity)
 

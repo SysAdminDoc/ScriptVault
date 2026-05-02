@@ -526,6 +526,30 @@ function getMetaArray(
   existingMeta: Record<string, unknown>,
   key: string,
 ): string[] {
+  if (key === 'tag') {
+    // Phase 36.4 — preserve user-assigned tags across re-install/update.
+    // Source-declared `// @tag` directives union with any tags previously
+    // set by the user (UI or earlier source). Deduplicate while preserving
+    // first-seen order so the new source's order leads.
+    const fromSource: string[] = asStringArray(meta[key]);
+    const fromExisting: string[] = asStringArray(existingMeta[key]);
+    if (fromSource.length === 0) return fromExisting;
+    const seen: Set<string> = new Set<string>();
+    const merged: string[] = [];
+    for (const t of fromSource) {
+      if (!seen.has(t)) {
+        seen.add(t);
+        merged.push(t);
+      }
+    }
+    for (const t of fromExisting) {
+      if (!seen.has(t)) {
+        seen.add(t);
+        merged.push(t);
+      }
+    }
+    return merged;
+  }
   return asStringArray(meta[key] ?? existingMeta[key]);
 }
 
