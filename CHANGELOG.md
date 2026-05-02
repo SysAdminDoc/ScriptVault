@@ -2,6 +2,15 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.6.0] — Update-check exponential backoff (Phase 6.1)
+
+- Added: per-script exponential backoff in `UpdateSystem.checkForUpdates`. A network error or non-2xx response increments `script._updateFailureCount` and stamps `script._updateNextCheck = now + 2^(failures-1) * 1min`, capped at 24 hours. The auto-update path skips scripts whose cooldown hasn't elapsed; manual single-script checks (popup "Check for Update", dashboard force-update) bypass the cooldown so users see fresh failures immediately.
+- Fixed: scripts with a permanently broken `updateURL` previously consumed bandwidth on every periodic alarm. The new backoff means a dead URL retries at most ~17 cooldowns/day instead of every check interval.
+- Changed: a 304 Not Modified response now also clears the failure count + next-check timestamp (treating it as a successful conditional fetch). Previously 304 just `continue`'d without touching backoff state, so a script that returned 5xx once and then 304 forever would stay in a stale cooldown.
+- Added: 4 tests pinning the backoff math (`_nextRetryAt`) — first-failure base interval, doubling progression, 24-hour cap, defensive zero-failures input. 589 tests pass.
+
+The conditional `If-None-Match` / `If-Modified-Since` headers and 304 short-circuit were already implemented; this release adds the resilience layer around them so misbehaving update servers don't waste resources.
+
 ## [v3.5.0] — `@weight` injection priority (Phase 11.7)
 
 - Added: `// @weight 1..999` directive (Userscripts/Safari standard). Higher = earlier within the same `@run-at`. Clamped to the documented range so an `@weight 99999` typo can't dominate the sort.

@@ -251,17 +251,42 @@ function parseUserscript(code) {
 // ============================================================================
 
 const UpdateSystem = {
+  // Phase 6.1 — exponential backoff bookkeeping. Per-script failure count
+  // doubles the wait between retries (1m, 2m, 4m, …) up to a 24h cap so a
+  // dead update URL doesn't consume bandwidth on every periodic alarm.
+  // Successful checks (200 or 304) clear the count.
+  _BACKOFF_BASE_MS: 60 * 1000,         // 1 minute
+  _BACKOFF_MAX_MS: 24 * 60 * 60 * 1000, // 24 hours
+  _MAX_BACKOFF_EXP: 10,                 // 2^10 * 1m = ~17 hours; capped by _BACKOFF_MAX_MS
+
+  /** Compute the next-check timestamp for a failure-count value. */
+  _nextRetryAt(failures) {
+    const exp = Math.min(this._MAX_BACKOFF_EXP, Math.max(0, failures - 1));
+    const wait = Math.min(this._BACKOFF_MAX_MS, this._BACKOFF_BASE_MS * (2 ** exp));
+    return Date.now() + wait;
+  },
+
   async checkForUpdates(scriptId = null) {
-    const scripts = scriptId 
+    // A manual single-script check (caller passed scriptId) bypasses backoff —
+    // user explicitly asked, so honor it and let them see fresh failure
+    // surface immediately.
+    const isManualSingle = !!scriptId;
+    const scripts = scriptId
       ? [await ScriptStorage.get(scriptId)].filter(Boolean)
       : await ScriptStorage.getAll();
-    
+
     const updates = [];
-    
+    const now = Date.now();
+
     for (const script of scripts) {
       if (script.meta.nodownload) continue; // @nodownload prevents auto-updates
       if (!script.meta.updateURL && !script.meta.downloadURL) continue;
-      
+
+      // Skip scripts in backoff cooldown (auto-update path only).
+      if (!isManualSingle && script._updateNextCheck && script._updateNextCheck > now) {
+        continue;
+      }
+
       try {
         const updateUrl = script.meta.updateURL || script.meta.downloadURL;
         const headers = {};
@@ -272,16 +297,36 @@ const UpdateSystem = {
 
         const response = await fetch(updateUrl, { headers });
 
-        // 304 Not Modified - no update needed
-        if (response.status === 304) continue;
-        if (!response.ok) continue;
+        // 304 Not Modified — counts as success; clear any backoff state.
+        if (response.status === 304) {
+          if (script._updateFailureCount || script._updateNextCheck) {
+            script._updateFailureCount = 0;
+            script._updateNextCheck = 0;
+            await ScriptStorage.set(script.id, script);
+          }
+          continue;
+        }
+        if (!response.ok) {
+          // Non-2xx — record failure and bump the cooldown.
+          script._updateFailureCount = (script._updateFailureCount || 0) + 1;
+          script._updateNextCheck = this._nextRetryAt(script._updateFailureCount);
+          await ScriptStorage.set(script.id, script);
+          continue;
+        }
 
-        // Store HTTP cache headers for next check
+        // Store HTTP cache headers for next check + clear backoff on success.
         const etag = response.headers.get('etag');
         const lastModified = response.headers.get('last-modified');
+        const hadBackoff = script._updateFailureCount || script._updateNextCheck;
         if (etag || lastModified) {
           script._httpEtag = etag || '';
           script._httpLastModified = lastModified || '';
+        }
+        if (hadBackoff) {
+          script._updateFailureCount = 0;
+          script._updateNextCheck = 0;
+        }
+        if (etag || lastModified || hadBackoff) {
           await ScriptStorage.set(script.id, script);
         }
 
@@ -300,9 +345,13 @@ const UpdateSystem = {
         }
       } catch (e) {
         console.error('[ScriptVault] Update check failed for:', script.meta.name, e);
+        // Network error counts as a failure too.
+        script._updateFailureCount = (script._updateFailureCount || 0) + 1;
+        script._updateNextCheck = this._nextRetryAt(script._updateFailureCount);
+        try { await ScriptStorage.set(script.id, script); } catch (_) { /* best effort */ }
       }
     }
-    
+
     return updates;
   },
   
