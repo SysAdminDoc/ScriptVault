@@ -18,8 +18,9 @@ function generateId() {
 
 function sanitizeUrl(url) {
   if (!url) return null;
-  const trimmed = url.trim();
-  if (/^(javascript|data|vbscript|blob):/i.test(trimmed)) return null;
+  const trimmed = String(url).replace(/[\u0000-\u0020\u007f]+/g, '');
+  if (!trimmed) return null;
+  if (/^(javascript|data|vbscript|blob|file):/i.test(trimmed)) return null;
   if (/^(https?|ftp|mailto):/i.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('#')) {
     return trimmed;
   }
@@ -31,8 +32,8 @@ function sanitizeUrl(url) {
 function formatBytes(bytes) {
   if (!bytes || bytes <= 0) return '0 B';
   const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
@@ -152,6 +153,16 @@ describe('sanitizeUrl', () => {
     expect(sanitizeUrl('blob:https://example.com/uuid')).toBeNull();
   });
 
+  it('blocks file: URLs', () => {
+    expect(sanitizeUrl('file:///C:/Users/example/secrets.txt')).toBeNull();
+  });
+
+  it('blocks dangerous schemes disguised with control characters and whitespace', () => {
+    expect(sanitizeUrl('\u0000javascript:alert(1)')).toBeNull();
+    expect(sanitizeUrl('java\nscript:alert(1)')).toBeNull();
+    expect(sanitizeUrl('\tdata:text/html,<script>alert(1)</script>')).toBeNull();
+  });
+
   it('allows root-relative paths', () => {
     expect(sanitizeUrl('/path/to/page')).toBe('/path/to/page');
   });
@@ -217,43 +228,17 @@ describe('formatBytes', () => {
     expect(formatBytes(1)).toBe('1 B');
   });
 
-  it('produces broken output for TB-scale values (no Math.min clamping)', () => {
-    // The sizes array only has ['B', 'KB', 'MB', 'GB'] — index 4 is undefined
-    // This documents the current bug: 1 TB gives "1 undefined"
+  it('formats TB-scale values', () => {
     const oneTB = Math.pow(1024, 4);
-    expect(formatBytes(oneTB)).toBe('1 undefined');
+    expect(formatBytes(oneTB)).toBe('1 TB');
   });
 });
 
-// ── formatBytes with Math.min clamping ──────────────────────────────────────
+// ── formatBytes upper-bound clamping ───────────────────────────────────────
 
-describe('formatBytes (clamped)', () => {
-  function formatBytesClamped(bytes) {
-    if (!bytes || bytes <= 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  }
-
-  it('clamps TB-scale values to GB', () => {
-    const oneTB = Math.pow(1024, 4);
-    expect(formatBytesClamped(oneTB)).toBe('1024 GB');
-  });
-
-  it('clamps 5 TB to GB', () => {
-    const fiveTB = 5 * Math.pow(1024, 4);
-    expect(formatBytesClamped(fiveTB)).toBe('5120 GB');
-  });
-
-  it('does not affect values within range', () => {
-    expect(formatBytesClamped(1024)).toBe('1 KB');
-    expect(formatBytesClamped(1073741824)).toBe('1 GB');
-  });
-
-  it('still returns 0 B for zero/negative/null', () => {
-    expect(formatBytesClamped(0)).toBe('0 B');
-    expect(formatBytesClamped(-1)).toBe('0 B');
-    expect(formatBytesClamped(null)).toBe('0 B');
+describe('formatBytes upper-bound clamping', () => {
+  it('clamps values above TB to the largest supported unit', () => {
+    const onePB = Math.pow(1024, 5);
+    expect(formatBytes(onePB)).toBe('1024 TB');
   });
 });

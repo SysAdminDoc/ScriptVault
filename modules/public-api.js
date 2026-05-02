@@ -668,22 +668,23 @@ const PublicAPI = (() => {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-        let resp;
+        let code = '';
         try {
-          resp = await fetch(url, { signal: controller.signal });
+          const resp = await fetch(url, { signal: controller.signal });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+          const contentLength = resp.headers?.get?.('content-length');
+          if (contentLength && parseInt(contentLength, 10) > MAX_FETCH_SIZE) {
+            throw new Error('Script file exceeds maximum allowed size (5 MB)');
+          }
+          code = await resp.text();
+          if (code.length > MAX_FETCH_SIZE) {
+            throw new Error('Script file exceeds maximum allowed size (5 MB)');
+          }
         } finally {
           clearTimeout(timeoutId);
         }
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
-        const contentLength = resp.headers?.get?.('content-length');
-        if (contentLength && parseInt(contentLength, 10) > MAX_FETCH_SIZE) {
-          throw new Error('Script file exceeds maximum allowed size (5 MB)');
-        }
-        const code = await resp.text();
-        if (code.length > MAX_FETCH_SIZE) {
-          throw new Error('Script file exceeds maximum allowed size (5 MB)');
-        }
         if (!code.includes('==UserScript==')) {
           throw new Error('Not a valid userscript (missing ==UserScript== header)');
         }

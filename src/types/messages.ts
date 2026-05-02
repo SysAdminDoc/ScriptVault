@@ -487,6 +487,7 @@ interface MoveScriptToFolder {
 
 interface GMXmlhttpRequest {
   action: 'GM_xmlhttpRequest';
+  scriptId: string;
   url: string;
   method?: string;
   headers?: Record<string, string>;
@@ -494,7 +495,6 @@ interface GMXmlhttpRequest {
   responseType?: string;
   timeout?: number;
   anonymous?: boolean;
-  scriptId?: string;
 }
 
 interface GMXmlhttpRequestAbort {
@@ -584,6 +584,7 @@ interface GMGetResourceURL {
 
 interface GMLoadScript {
   action: 'GM_loadScript';
+  scriptId: string;
   url: string;
   timeout?: number;
 }

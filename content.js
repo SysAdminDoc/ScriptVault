@@ -16,9 +16,8 @@
 
   // Security allowlist — the bridge receives window.postMessage events that
   // any page script can forge (channel ID is derived from the public extension
-  // ID). Only permit GM_* actions and the two telemetry hooks the userscript
-  // wrapper uses; block everything else (factoryReset, deleteScript,
-  // importScripts, setSettings, etc.) from being dispatched via the bridge.
+  // ID). Keep this bridge telemetry-only; privileged GM APIs must use
+  // chrome.runtime messaging from the USER_SCRIPT world.
   const ALLOWED_BRIDGE_ACTIONS = new Set([
     'netlog_record',
     'reportExecError',
@@ -26,7 +25,6 @@
   ]);
   function isAllowedBridgeAction(action) {
     if (typeof action !== 'string') return false;
-    if (action.startsWith('GM_') || action.startsWith('GM.')) return true;
     return ALLOWED_BRIDGE_ACTIONS.has(action);
   }
 
@@ -45,13 +43,14 @@
     const msgId = msg.id;
     const action = msg.action;
 
-    // Security: reject any action that isn't a known userscript-safe action
+    // Security: reject any action that isn't a known userscript-safe telemetry action.
+    // Do not forward GM_* calls here: page scripts can post to this window too.
     if (!isAllowedBridgeAction(action)) {
       window.postMessage({
         channel: CHANNEL_ID,
         direction: 'to-userscript',
         id: msgId,
-        error: 'Action not permitted via userscript bridge',
+        error: 'Action not permitted via page-visible bridge',
         success: false
       }, '*');
       return;
@@ -194,8 +193,7 @@
     return false;
   });
   
-  // Expose channel ID for userscripts and signal ready
-  Object.defineProperty(window, '__ScriptVault_ChannelID__', { value: CHANNEL_ID, writable: false, configurable: false });
+  // Signal readiness without exposing additional bridge material to page code.
   Object.defineProperty(window, '__ScriptVault_BridgeReady__', { value: true, writable: false, configurable: false });
   
   window.postMessage({

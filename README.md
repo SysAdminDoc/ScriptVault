@@ -235,7 +235,7 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 - **Storage Quota Manager** &mdash; Auto-cleanup when approaching Chrome's 10MB limit
 
 #### Quality & Testing
-- **159 Unit Tests** &mdash; Vitest suite covering parser, utilities, versions, analyzer, network log
+- **600+ Vitest Tests** &mdash; Coverage for parser, utilities, storage, update flows, UI modules, accessibility, and security boundaries
 - **JSDoc Type Annotations** &mdash; @ts-check compatible on critical functions
 - **esbuild Build System** &mdash; Modern bundler with minification and source maps
 - **Accessibility (WCAG 2.1 AA)** &mdash; ARIA labels, focus trapping, high contrast, reduced motion
@@ -411,6 +411,8 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 ScriptVault/
 ├── manifest.json              # Chrome MV3 manifest
 ├── manifest-firefox.json      # Firefox MV3 manifest
+├── esbuild.config.mjs         # Cross-platform build pipeline
+├── .env.example               # Safe template for Chrome Web Store publishing credentials
 ├── background.js              # Service worker (built from source modules)
 ├── background.core.js         # Main service worker logic (~5500 lines)
 ├── content.js                 # Content script bridge (USER_SCRIPT <-> background)
@@ -480,6 +482,6 @@ MIT License &mdash; see [LICENSE](LICENSE) for details.
 ---
 
 <p align="center">
-  <strong>ScriptVault v1.7.8</strong><br>
+  <strong>ScriptVault v3.10.1</strong><br>
   <em>Your scripts, your rules &mdash; locked down and loaded</em>
 </p>

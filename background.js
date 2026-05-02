@@ -9417,22 +9417,23 @@ const PublicAPI = (() => {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-        let resp;
+        let code = '';
         try {
-          resp = await fetch(url, { signal: controller.signal });
+          const resp = await fetch(url, { signal: controller.signal });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+          const contentLength = resp.headers?.get?.('content-length');
+          if (contentLength && parseInt(contentLength, 10) > MAX_FETCH_SIZE) {
+            throw new Error('Script file exceeds maximum allowed size (5 MB)');
+          }
+          code = await resp.text();
+          if (code.length > MAX_FETCH_SIZE) {
+            throw new Error('Script file exceeds maximum allowed size (5 MB)');
+          }
         } finally {
           clearTimeout(timeoutId);
         }
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
-        const contentLength = resp.headers?.get?.('content-length');
-        if (contentLength && parseInt(contentLength, 10) > MAX_FETCH_SIZE) {
-          throw new Error('Script file exceeds maximum allowed size (5 MB)');
-        }
-        const code = await resp.text();
-        if (code.length > MAX_FETCH_SIZE) {
-          throw new Error('Script file exceeds maximum allowed size (5 MB)');
-        }
         if (!code.includes('==UserScript==')) {
           throw new Error('Not a valid userscript (missing ==UserScript== header)');
         }
@@ -10932,12 +10933,46 @@ const UpdateSystem = {
   _BACKOFF_BASE_MS: 60 * 1000,         // 1 minute
   _BACKOFF_MAX_MS: 24 * 60 * 60 * 1000, // 24 hours
   _MAX_BACKOFF_EXP: 10,                 // 2^10 * 1m = ~17 hours; capped by _BACKOFF_MAX_MS
+  _FETCH_TIMEOUT_MS: 15 * 1000,
+  _MAX_UPDATE_BYTES: 5 * 1024 * 1024,
 
   /** Compute the next-check timestamp for a failure-count value. */
   _nextRetryAt(failures) {
     const exp = Math.min(this._MAX_BACKOFF_EXP, Math.max(0, failures - 1));
     const wait = Math.min(this._BACKOFF_MAX_MS, this._BACKOFF_BASE_MS * (2 ** exp));
     return Date.now() + wait;
+  },
+
+  async fetchUpdateCandidate(updateUrl, fetchOptions = {}) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this._FETCH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(updateUrl, { ...fetchOptions, signal: controller.signal });
+
+      if (response.status === 304 || !response.ok) {
+        return { response, code: '' };
+      }
+
+      const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+      if (contentLength > this._MAX_UPDATE_BYTES) {
+        throw new Error(`Update too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(this._MAX_UPDATE_BYTES)}.`);
+      }
+
+      const code = await response.text();
+      if (code.length > this._MAX_UPDATE_BYTES) {
+        throw new Error(`Update too large (${formatBytes(code.length)}). Maximum is ${formatBytes(this._MAX_UPDATE_BYTES)}.`);
+      }
+
+      return { response, code };
+    } catch (e) {
+      if (e?.name === 'AbortError') {
+        throw new Error(`Update fetch timed out after ${Math.round(this._FETCH_TIMEOUT_MS / 1000)} seconds`);
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   },
 
   async checkForUpdates(scriptId = null) {
@@ -10969,7 +11004,7 @@ const UpdateSystem = {
         if (script._httpEtag) headers['If-None-Match'] = script._httpEtag;
         if (script._httpLastModified) headers['If-Modified-Since'] = script._httpLastModified;
 
-        const response = await fetch(updateUrl, { headers });
+        const { response, code: newCode } = await this.fetchUpdateCandidate(updateUrl, { headers });
 
         // 304 Not Modified — counts as success; clear any backoff state.
         if (response.status === 304) {
@@ -11004,7 +11039,6 @@ const UpdateSystem = {
           await ScriptStorage.set(script.id, script);
         }
 
-        const newCode = await response.text();
         const parsed = parseUserscript(newCode);
         if (parsed.error) continue;
 
@@ -11737,6 +11771,84 @@ function isUserScriptAllowedAction(action) {
   if (action.startsWith('GM_') || action.startsWith('GM.')) return true;
   return USER_SCRIPT_ALLOWED_EXTRAS.has(action);
 }
+
+function normalizeConnectHost(value) {
+  if (typeof value !== 'string') return '';
+  let pattern = value.trim().toLowerCase();
+  if (!pattern) return '';
+  if (pattern === '*' || pattern === 'self' || pattern === 'localhost') return pattern;
+
+  try {
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(pattern)) {
+      pattern = new URL(pattern.replace(/\*/g, 'x')).hostname.toLowerCase();
+    }
+  } catch (_) {
+    // Fall through to best-effort host extraction below.
+  }
+
+  pattern = pattern.replace(/^\/\//, '').split('/')[0].split('?')[0].split('#')[0];
+  if (pattern.startsWith('*.')) pattern = pattern.slice(2);
+  if (pattern.startsWith('x.')) pattern = pattern.slice(2);
+  if (pattern.startsWith('.')) pattern = pattern.slice(1);
+  if (pattern.startsWith('[') && pattern.includes(']')) {
+    pattern = pattern.slice(1, pattern.indexOf(']'));
+  } else {
+    pattern = pattern.split(':')[0];
+  }
+  return pattern;
+}
+
+function hostMatchesConnectPattern(hostname, pattern) {
+  const host = normalizeConnectHost(hostname);
+  const target = normalizeConnectHost(pattern);
+  if (!host || !target) return false;
+  if (target === 'localhost') return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  return host === target || host.endsWith('.' + target);
+}
+
+function selfConnectDomains(script) {
+  const patterns = [
+    ...(script?.meta?.match || []),
+    ...(script?.meta?.include || [])
+  ];
+  return patterns.map(pattern => {
+    try {
+      return normalizeConnectHost(new URL(String(pattern).replace(/\*/g, 'x')).hostname);
+    } catch (_) {
+      return '';
+    }
+  }).filter(Boolean);
+}
+
+function evaluateConnectPolicy(script, requestUrl) {
+  let hostname;
+  try {
+    hostname = new URL(requestUrl).hostname;
+  } catch (_) {
+    return { allowed: false, error: 'Invalid URL', hostname: '' };
+  }
+
+  const connectList = Array.isArray(script?.meta?.connect) ? script.meta.connect : [];
+  if (connectList.length === 0 || connectList.some(pattern => String(pattern).trim() === '*')) {
+    return { allowed: true, hostname };
+  }
+
+  const selfDomains = selfConnectDomains(script);
+  const allowed = connectList.some(pattern => {
+    const normalized = normalizeConnectHost(pattern);
+    if (normalized === 'self') {
+      return selfDomains.some(domain => hostMatchesConnectPattern(hostname, domain));
+    }
+    return hostMatchesConnectPattern(hostname, normalized);
+  });
+
+  return {
+    allowed,
+    hostname,
+    error: allowed ? '' : `Connection to ${hostname} blocked by @connect policy`
+  };
+}
+
 if (chrome.runtime.onUserScriptMessage) {
   chrome.runtime.onUserScriptMessage.addListener((message, sender, sendResponse) => {
     if (!message || !isUserScriptAllowedAction(message.action)) {
@@ -12272,12 +12384,11 @@ async function handleMessage(message, sender) {
         const downloadUrl = script.meta.downloadURL || script.meta.updateURL;
         if (!downloadUrl) return { error: 'No download URL configured' };
         try {
-          const response = await fetch(downloadUrl, {
+          const { response, code: newCode } = await UpdateSystem.fetchUpdateCandidate(downloadUrl, {
             cache: 'no-store',
             headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
           });
           if (!response.ok) return { error: `HTTP ${response.status}` };
-          const newCode = await response.text();
           const parsed = parseUserscript(newCode);
           if (parsed.error) return parsed;
           // Apply as update (force=true bypasses userModified guard)
@@ -13090,36 +13201,34 @@ async function handleMessage(message, sender) {
       case 'GM_loadScript': {
         try {
           if (!data.url) return { error: 'No URL provided' };
+          if (!data.scriptId) return { error: 'Missing script context' };
+          const lsScript = await ScriptStorage.get(data.scriptId);
+          if (!lsScript) return { error: 'Script context not found' };
+
           // Enforce @connect for GM_loadScript (same rules as GM_xmlhttpRequest)
-          if (data.scriptId) {
-            const lsScript = await ScriptStorage.get(data.scriptId);
-            if (lsScript && lsScript.meta.connect && lsScript.meta.connect.length > 0) {
-              const lsConnectList = lsScript.meta.connect;
-              if (!lsConnectList.includes('*')) {
-                try {
-                  const lsHostname = new URL(data.url).hostname;
-                  const lsAllowed = lsConnectList.some(p => {
-                    if (p === 'self') {
-                      const mDomains = (lsScript.meta.match || []).map(m => {
-                        try { return new URL(m.replace(/\*/g, 'x')).hostname.replace(/^x\./, ''); } catch { return null; }
-                      }).filter(Boolean);
-                      return mDomains.some(d => lsHostname === d || lsHostname.endsWith('.' + d));
-                    }
-                    if (p === 'localhost') return lsHostname === 'localhost' || lsHostname === '127.0.0.1' || lsHostname === '::1';
-                    return lsHostname === p || lsHostname.endsWith('.' + p);
-                  });
-                  if (!lsAllowed) return { error: `Connection to ${lsHostname} blocked by @connect policy` };
-                } catch (e) {}
-              }
-            }
+          const lsPolicy = evaluateConnectPolicy(lsScript, data.url);
+          if (!lsPolicy.allowed) {
+            return { error: lsPolicy.error };
           }
+
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), data.timeout || 30000);
-          const response = await fetch(data.url, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          if (!response.ok) return { error: `HTTP ${response.status}` };
-          const code = await response.text();
+          let code;
+          try {
+            const response = await fetch(data.url, { signal: controller.signal });
+            if (!response.ok) return { error: `HTTP ${response.status}` };
+            const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+            if (contentLength > MAX_SCRIPT_SIZE) {
+              return { error: `Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
+            }
+            code = await response.text();
+          } finally {
+            clearTimeout(timeoutId);
+          }
           if (!code || code.length === 0) return { error: 'Empty response' };
+          if (code.length > MAX_SCRIPT_SIZE) {
+            return { error: `Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
+          }
           return { code };
         } catch (e) {
           return { error: e.message || 'Fetch failed' };
@@ -13134,39 +13243,21 @@ async function handleMessage(message, sender) {
             return { error: 'No URL provided', type: 'error' };
           }
 
+          if (!data.scriptId) {
+            return { error: 'Missing script context', type: 'error' };
+          }
+          const xhrScript = await ScriptStorage.get(data.scriptId);
+          if (!xhrScript) {
+            return { error: 'Script context not found', type: 'error' };
+          }
+
           // @connect enforcement
-          if (data.scriptId) {
-            const xhrScript = await ScriptStorage.get(data.scriptId);
-            if (xhrScript && xhrScript.meta.connect && xhrScript.meta.connect.length > 0) {
-              const connectList = xhrScript.meta.connect;
-              const hasWildcard = connectList.includes('*');
-              if (!hasWildcard) {
-                try {
-                  const reqUrl = new URL(data.url);
-                  const hostname = reqUrl.hostname;
-                  const isAllowed = connectList.some(pattern => {
-                    if (pattern === 'self') {
-                      // @connect self - allow same origin as script match domains
-                      const matchDomains = (xhrScript.meta.match || []).map(m => {
-                        try { return new URL(m.replace(/\*/g, 'x')).hostname.replace(/^x\./, ''); } catch { return null; }
-                      }).filter(Boolean);
-                      return matchDomains.some(d => hostname === d || hostname.endsWith('.' + d));
-                    }
-                    if (pattern === 'localhost') {
-                      return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
-                    }
-                    // Check exact match or subdomain match
-                    return hostname === pattern || hostname.endsWith('.' + pattern);
-                  });
-                  if (!isAllowed) {
-                    console.warn(`[ScriptVault] @connect blocked: ${hostname} not in allowed list for ${xhrScript.meta.name}`);
-                    return { error: `Connection to ${hostname} blocked by @connect policy`, type: 'error' };
-                  }
-                } catch (e) {
-                  return { error: 'Invalid URL', type: 'error' };
-                }
-              }
+          const connectPolicy = evaluateConnectPolicy(xhrScript, data.url);
+          if (!connectPolicy.allowed) {
+            if (connectPolicy.hostname) {
+              console.warn(`[ScriptVault] @connect blocked: ${connectPolicy.hostname} not in allowed list for ${xhrScript.meta.name}`);
             }
+            return { error: connectPolicy.error, type: 'error' };
           }
 
           const tabId = sender.tab?.id;
@@ -13280,7 +13371,6 @@ async function handleMessage(message, sender) {
           (async () => {
             try {
               const response = await fetch(data.url, fetchOptions);
-              clearTimeout(timeoutId);
               
               if (request.aborted) return;
               
@@ -13435,8 +13525,6 @@ async function handleMessage(message, sender) {
               XhrManager.remove(requestId);
               
             } catch (e) {
-              clearTimeout(timeoutId);
-              
               if (request.aborted) {
                 // Already handled by abort
                 return;
@@ -13462,6 +13550,8 @@ async function handleMessage(message, sender) {
               });
               
               XhrManager.remove(requestId);
+            } finally {
+              clearTimeout(timeoutId);
             }
           })().catch(e => {
             // Guard against any unexpected exception escaping the try/catch above
@@ -15300,20 +15390,24 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
     // Fetch with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
-    const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
+    let code;
+    try {
+      const response = await fetch(url, { signal: controller.signal });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Check content length before reading body
+      const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+      if (contentLength > MAX_SCRIPT_SIZE) {
+        throw new Error(`Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+      }
+
+      code = await response.text();
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    // Check content length before reading body
-    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-    if (contentLength > MAX_SCRIPT_SIZE) {
-      throw new Error(`Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
-    }
-
-    const code = await response.text();
 
     if (code.length > MAX_SCRIPT_SIZE) {
       throw new Error(`Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
@@ -15416,21 +15510,24 @@ async function installFromUrl(url) {
     // Timeout after 30 seconds
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
+    let code;
+    try {
+      const response = await fetch(url, { signal: controller.signal });
 
-    const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      // Size limit: 5MB (same as webNavigation handler)
+      const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+      if (contentLength > MAX_SCRIPT_SIZE) {
+        throw new Error(`Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+      }
+
+      code = await response.text();
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    // Size limit: 5MB (same as webNavigation handler)
-    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-    if (contentLength > MAX_SCRIPT_SIZE) {
-      throw new Error(`Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
-    }
-
-    const code = await response.text();
 
     return await installFromCode(code);
   } catch (error) {
@@ -16271,35 +16368,38 @@ async function fetchWithRetry(url, retries = 2) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'text/javascript, application/javascript, text/plain, */*',
-          'Cache-Control': 'no-cache'
-        },
-        mode: 'cors',
-        credentials: 'omit',
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
 
-      // Reject excessively large @require scripts (>5MB) to prevent memory issues
-      const MAX_REQUIRE_BYTES = 5 * 1024 * 1024;
-      const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-      if (contentLength > MAX_REQUIRE_BYTES) {
-        throw new Error(`Response too large (${Math.round(contentLength / 1024)}KB, max 5MB)`);
-      }
+      let code;
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Accept': 'text/javascript, application/javascript, text/plain, */*',
+            'Cache-Control': 'no-cache'
+          },
+          mode: 'cors',
+          credentials: 'omit',
+          signal: controller.signal
+        });
 
-      const code = await response.text();
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
 
-      if (code.length > MAX_REQUIRE_BYTES) {
-        throw new Error(`Response too large (${Math.round(code.length / 1024)}KB, max 5MB)`);
+        // Reject excessively large @require scripts (>5MB) to prevent memory issues
+        const MAX_REQUIRE_BYTES = 5 * 1024 * 1024;
+        const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+        if (contentLength > MAX_REQUIRE_BYTES) {
+          throw new Error(`Response too large (${Math.round(contentLength / 1024)}KB, max 5MB)`);
+        }
+
+        code = await response.text();
+
+        if (code.length > MAX_REQUIRE_BYTES) {
+          throw new Error(`Response too large (${Math.round(code.length / 1024)}KB, max 5MB)`);
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
 
       // Basic validation - should look like JavaScript
@@ -16872,9 +16972,13 @@ ${req.code}
     return _bridgeReadyPromise;
   }
   
-  // Send message to background script
-  // Prefers chrome.runtime.sendMessage (direct, no bridge needed) when available via messaging: true
-  // Falls back to postMessage bridge for older Chrome versions
+  function canUsePostMessageBridge(action) {
+    return action === 'netlog_record' || action === 'reportExecError' || action === 'reportExecTime';
+  }
+
+  // Send message to background script.
+  // Prefers chrome.runtime.sendMessage (direct, no bridge needed) when available via messaging: true.
+  // The postMessage bridge is telemetry-only because page scripts can forge window messages.
   async function sendToBackground(action, data) {
     // Try direct messaging first (available when userScripts world has messaging: true)
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
@@ -16885,7 +16989,11 @@ ${req.code}
       }
     }
 
-    // Fallback: use content script bridge via postMessage
+    if (!canUsePostMessageBridge(action)) {
+      return { error: 'ScriptVault requires Chrome userScripts messaging for GM API calls.' };
+    }
+
+    // Fallback: use the telemetry-only content script bridge via postMessage.
     await waitForBridge();
 
     return new Promise((resolve, reject) => {
@@ -17558,7 +17666,7 @@ ${req.code}
     }
     if (!url) throw new Error('GM_loadScript: No URL provided');
     if (!options.force && _loadedScripts.has(url)) return;
-    const result = await sendToBackground('GM_loadScript', { url, timeout: options.timeout });
+    const result = await sendToBackground('GM_loadScript', { scriptId, url, timeout: options.timeout });
     if (!result || result.error) throw new Error('GM_loadScript: ' + (result?.error || 'request timed out'));
     // Temporarily mask module systems so UMD scripts create window globals
     const _savedModule = window.module;
