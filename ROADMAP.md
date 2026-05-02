@@ -1037,6 +1037,252 @@ The extension's `_locales/` directory has en-US strings but coverage is incomple
 
 ---
 
+## Phase 15 — Editor & Developer Experience
+
+**Goal:** Close the gap between ScriptVault's built-in editor and a full development environment. Bring first-class TypeScript authoring, live grant detection, version history, and diffing into the editor itself.
+
+### 15.1 GM_* IntelliSense via `@types/tampermonkey`
+- After Phase 13.4 (Monaco 0.55.x), call `monaco.typescript.typescriptDefaults.addExtraLib(src, 'ts:tm.d.ts')`
+- Bundle `@types/tampermonkey` (45KB) at build time; inject on editor initialization
+- Also inject `@types/greasemonkey` for GM4 Promise-style APIs
+- After injection: full autocomplete, parameter hints, type errors for all 35+ GM_* functions
+- Source: `github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/tampermonkey/index.d.ts` [source 47]
+
+### 15.2 Auto-Grant Inference (Live AST)
+- As the user types in the Monaco editor, run a Web Worker Acorn parse on the current document text
+- Walk `Identifier` and `MemberExpression` nodes matching against a list of 28+ `grantNames` (pattern from `vite-plugin-monkey/src/node/utils/grant.ts`) [source 49]
+- Display a non-intrusive suggestion bar: "Detected: GM_xmlhttpRequest, GM_setValue — add to @grant?" with one-click accept
+- Diff the detected set against existing `@grant` lines and only suggest additions
+- ScriptVault has Acorn already in `background.js`; the Web Worker path reuses it without shipping a second copy
+- vite-plugin-monkey does this at build time; ScriptVault is the first manager to do it live in the editor [source 50]
+
+### 15.3 Script Version History & Rollback
+- On every save (Ctrl+S or auto-save), compute a `diff-match-patch` delta from the previous version and store as `{scriptId, timestamp, @version, type:'patch', data:patchText, source:'manual_edit'}` in IndexedDB `script_versions` store [source 72]
+- Store a full copy as the anchor for each 10-version window; all others are deltas (typical bug-fix patch ≈ 200–500 bytes vs. 8KB full copy → ~95% space saving)
+- UI: "History" tab per script showing version timeline (timestamp, @version, delta size)
+- One-click rollback to any snapshot; exports any historical version as `.user.js`
+- Retention policy: last 20 versions or 90 days (configurable in settings)
+- Requires Phase 2 (IndexedDB) for the `script_versions` store
+- No manager has this; VM #1391 (data loss with no recovery) illustrates the gap [source 60]
+
+### 15.4 Diff View on Update
+- Before applying an @updateURL pull, open a `monaco.editor.createDiffEditor()` side-by-side view showing current vs. incoming script body
+- "Update" button stays disabled until the user reviews the diff; "Update" and "Skip" are the only actions
+- On apply, snapshot current version (source: `'update_check'`) into script_versions before overwriting
+- Addresses VM's #1 most-reacted enhancement request (VM #500, 80+ upvotes) [source 73]
+- Also addresses VM #1023: decouples "check for update" from "auto-install" [source 74]
+- Scripts with local edits (body differs from installed @version hash) get an additional warning: "Your local edits will be overwritten"
+
+### 15.5 Script Templates & Scaffolding
+- Add 6 built-in templates to the New Script dialog: Basic, DOM Manipulation, AJAX Interceptor, CSS Injection, MutationObserver SPA, TypeScript Starter
+- Template variables: `$DATETIME$`, `$URL_PATTERN$`, `$SCRIPT_NAME$`, `$VERSION$`
+- ScriptFlow (the reference open-source userscript IDE) has 5 templates; this matches and adds MutationObserver/TypeScript variants [source 51]
+- TamperMonkey supports `$DATETIME$` in new-script templates [source 52]; ScriptVault extends the pattern
+
+### 15.6 In-Browser TypeScript Transpilation (esbuild-wasm)
+- Add `esbuild-wasm` to devDependencies; bundle the 3.2MB `.wasm` file into `lib/esbuild/`
+- Manifest CSP update: add `'wasm-unsafe-eval'` to `content_security_policy.extension_pages` (Chrome 112+ required, already above minimum_chrome_version 120) [source 48]
+- Worker initialization: `await esbuild.initialize({ wasmURL: './lib/esbuild/esbuild.wasm' })`
+- Compile-on-save: transform TypeScript → JavaScript before injecting; store both source (for editing) and compiled output (for injection) in IndexedDB
+- Editor indicator: "TypeScript mode" badge in the editor footer when @userscript header lacks `// @nocompile`
+- No other userscript manager or open-source userscript IDE implements in-browser TypeScript transpilation [source 48]
+
+### 15.7 Live Reload (Re-Inject to Active Tab)
+- Add a "▶ Run in Active Tab" button to the editor toolbar
+- On click: call `chrome.scripting.executeScript({ target: { tabId }, func: injectScript, world: 'MAIN' })` to re-execute the current editor content in the active tab
+- Display a toast: "Re-injected to Tab #N — (tab title)"
+- Caveat: `executeScript` cannot undo previous execution effects (DOM mutations persist); warn user on first use
+- Uses `chrome.userScripts.execute()` (Chrome 135+) for scripts requiring USER_SCRIPT world [source 13]
+- vite-plugin-monkey provides HMR via an external dev server (requires Vite running locally); ScriptVault provides it natively within the extension [source 50]
+
+### 15.8 Dry-Run Sandbox
+- Add "Sandbox" mode: open a sandboxed `<iframe sandbox="allow-scripts allow-same-origin">` in the editor panel
+- Inject a GM_* mock layer into the iframe that intercepts all GM_* calls, logs them to the console panel with arguments, and optionally simulates return values
+- Mock coverage: GM_setValue/getValue/listValues (in-memory Map), GM_xmlhttpRequest (returns configurable mock response), GM_notification (logs), GM_addStyle (injects into iframe)
+- Run the script against the sandbox by clicking "▶ Sandbox"
+- ScriptFlow implements a DOM-only PiP preview; ScriptVault's sandbox adds GM_* interception — no manager has this [source 51]
+
+**Exit criteria:** GM_* types appear in Monaco autocomplete; auto-grant inference detects all 28 grantNames from vite-plugin-monkey's list; version history stores and retrieves diffs; diff view renders before every @updateURL update is applied; 6 templates exist in new-script dialog; esbuild-wasm compiles TypeScript on save; live reload injects to active tab; sandbox intercepts GM_setValue calls.
+
+---
+
+## Phase 16 — Advanced XHR & Network Modernization
+
+**Goal:** Close the XHR API gap vs. TamperMonkey and leapfrog VM. Add Promise-based `GM_fetch`, AbortController support, proper streaming, CHIPS/cookie partition parity, and OpenUserJS as a second script source.
+
+### 16.1 `GM_fetch` (Promise-Based Fetch API)
+- Implement `GM_fetch(url, init?)` as a new GM function returning `Promise<Response>`
+- Background SW uses `fetch()` with the extension's host permissions to bypass CORS; passes cookies and headers as specified in `init`
+- Response is serialized over `chrome.runtime.connect` to the content-world caller; `response.body` is a `ReadableStream` piped through the port
+- FireMonkey (Firefox) is the only existing manager with a `GM_fetch` implementation; TM/VM don't have it [source 55]; TM #1050 was proposed and closed without implementation [source 56]
+- Add `GM_fetch` to `@types/tampermonkey`-aligned type definitions: `GM_fetch(url: string | URL, init?: RequestInit): Promise<Response>`
+
+### 16.2 AbortController Signal Support in `GM_xmlhttpRequest`
+- Accept `signal?: AbortSignal` as a new field in the `GM_xmlhttpRequest` request object
+- Bridge: `signal.addEventListener('abort', () => nativeReq.abort())`; propagate `signal.reason` to the `onabort` callback as the abort reason
+- No manager (TM, VM, ScriptCat) supports this; all use a separate `.abort()` control object [source 58]
+- Enables cancellation sharing: one AbortController can cancel multiple GM requests + native fetch calls simultaneously
+
+### 16.3 Proper XHR Streaming (ReadableStream without Caveats)
+- TamperMonkey's `responseType: 'stream'` forces `fetch: true` mode, sacrificing `abort`, `timeout`, and `onprogress` [source 59]; ScriptCat's stream support is "rudimentary" by their own docs [source 1]
+- ScriptVault implementation: use `fetch()` with `response.body.getReader()` in the SW background; pipe chunks through a `chrome.runtime.connect` long-lived port to the content world; emit synthetic `onprogress` events from chunk sizes
+- Preserves abort (signal the port close), timeout (alarm in SW), and progress simultaneously
+- Leapfrog over all current implementations [source 59]
+
+### 16.4 CHIPS / Cookie Partition Support
+- Add `cookiePartition?: { topLevelSite?: string }` to the `GM_xmlhttpRequest` request type, matching `@types/tampermonkey:83-86` [source 47]
+- Background SW passes `cookiePartition` as the `partitionKey` in the `chrome.cookies.get*` calls used by the GM_cookie implementation (Phase 11.6)
+- Fixes the active user pain point documented in VM #2100: Cloudflare-protected sites set partitioned cookies; without partition key forwarding, XHR from the SW context uses the wrong partition and gets 403 errors [source 63]
+- TamperMonkey has `cookiePartition` in types; VM does not — this is parity with TM and leapfrog over VM
+
+### 16.5 XHR Redirect Mode
+- Add `redirect?: 'follow' | 'error' | 'manual'` to `GM_xmlhttpRequest` request, matching `@types/tampermonkey:79`
+- `'manual'` mode: return the 3xx response before following; expose `Location` header to the script
+- VM issue #2359 (redirect control) has been open since 2023 — TM already has this [source 27]
+- Low-effort addition: pass `redirect` directly to the `fetch()` call in the SW background handler
+
+### 16.6 `GM_download` Improvements
+- Accept `url: string | Blob | File` (not just string) — matches TM v5.4.6226+ behavior; enables in-memory downloads (canvas export, constructed data) [source 58]
+- Add `conflictAction: 'uniquify' | 'overwrite' | 'prompt'` parameter for download naming conflicts
+- Stretch: chunked `Range: bytes=X-Y` resume support — issue background `Range` requests; reassemble in SW; resume interrupted downloads. No manager has this [source 58]
+
+### 16.7 OpenUserJS in Script Browser
+- Add OpenUserJS as a second source tab alongside GreasyFork in the Phase 12.16 script browser
+- Install URL format `https://openuserjs.org/install/{user}/{name}.user.js` — the `.user.js` interception already handles installs; no new code needed for the install flow [source 67]
+- Search: OUJS has no documented JSON API; implement as an HTML scrape of `/scripts?q={query}` or a static "browse top scripts" list if search isn't feasible
+- Show source badge in script details: "GreasyFork" | "OpenUserJS" | "Direct URL"
+
+**Exit criteria:** `GM_fetch` resolves with a real `Response` object; `signal` aborts both a native fetch and a GM_xmlhttpRequest in the same chain; streaming response emits `onprogress` and can be aborted; `cookiePartition` is passed to the background fetch; `redirect: 'manual'` returns the 3xx response; `GM_download` accepts a `Blob` url; OpenUserJS scripts appear in the browser and install on click.
+
+---
+
+## Phase 17 — Security & Integrity Round 2
+
+**Goal:** Harden the injection pipeline and audit trail. Close the script body integrity gap, decouple update-check from auto-install, and guard against external message injection.
+
+### 17.1 Script Body Integrity Hash at Injection Time
+- On every save, compute `await crypto.subtle.digest('SHA-256', encoder.encode(scriptBody))` and store the hex hash in `chrome.storage.session` (cleared on browser restart, inaccessible to content scripts)
+- At injection time (before `userScripts.register()` / `userScripts.execute()`), recompute the hash of the stored body and compare
+- If mismatch → abort injection, show a dashboard alert: "Script '{name}' body has changed unexpectedly — possible tampering detected"
+- Threat model: another extension with `storage` access mutates `chrome.storage.local`; a compromised SW writes bad content before injection [source 69]
+- Phase 11.8 covers `@require` SRI; this closes the remaining gap on the script body itself
+
+### 17.2 Tamper-Evident Audit Log
+- Maintain a rotating log in `chrome.storage.local`: `{scriptId, scriptName, timestamp, changeHash, changeType: 'install'|'update'|'edit'|'delete'|'enable'|'disable'}`
+- `changeHash`: SHA-256 of (scriptId + timestamp + changeType + scriptBodyHash) — makes the log entry tamper-detectable
+- Cap at 100 events (FIFO); display in a "Audit Log" or "History" tab in the dashboard
+- No competitor (TM, VM, ScriptCat) offers a tamper-evident audit trail [source 70]
+
+### 17.3 Update Consent Decoupling
+- "Check for updates" (query `@updateURL`) must never silently install the new version
+- Current flow: check → if newer version available → auto-install
+- New flow: check → store pending update → badge the script row "⬆ Update available" → user clicks → diff view (Phase 15.4) → user confirms → install
+- Exception: if user has explicitly set auto-update AND script body is unmodified since last install → auto-install is permitted (matches TM's "no local edits" guard)
+- VM #1023 documents this as the #2 most-painful VM behavior (check triggers install, destroying local edits) [source 74]
+
+### 17.4 External Message Origin Validation
+- Audit every `chrome.runtime.onMessage` and `chrome.runtime.onMessageExternal` handler in the SW
+- Add an explicit `sender.id` allowlist check for any `onMessageExternal` handler; reject messages from unknown extension IDs
+- If `externally_connectable` is added to manifest (Phase 12.14 vscode.dev), the allowlist must enumerate `Tampermonkey/tampermonkey-editors`'s extension ID
+- Threat: a malicious extension can call `chrome.runtime.sendMessage(ScriptVaultExtensionID, { action: 'installScript', ... })` if the message handler doesn't validate origin [source 71]
+
+### 17.5 chrome:// URL @match Warning
+- When a script's `@match` or `@include` contains `chrome://`, `chrome-extension://`, or `edge://` patterns, show an inline editor warning: "chrome:// URLs cannot be matched by userscripts — this pattern will never execute"
+- These URLs are blocked by the Chrome APIs regardless of declared permissions; the error is silent and confusing for users
+- Addresses top Stack Overflow pain point: "Script not executing on chrome:// pages" (5K views, Oct 2025) [source 75]
+
+### 17.6 `@require-css` Metadata Directive
+- Parse `@require-css` lines in the metadata block (ScriptCat innovation) [source 4]
+- Fetch and cache the CSS resource at install time (same pipeline as `@require`)
+- At injection time, inject a `<style>` into `document.documentElement` before any script runs (FOUC-safe)
+- Cleaner than runtime `GM_addStyle` calls for static CSS assets; eliminates a common `@require` + `GM_addStyle` pattern
+- `@require-css` resources are subject to the same SRI verification as `@require` (Phase 11.8)
+
+### 17.7 `GM_addStyle` Handle-Based API
+- `GM_addStyle(css)` currently returns `HTMLStyleElement` — add new optional second parameter: `GM_addStyle(css, { target?: Element | ShadowRoot })` for ShadowRoot injection
+- Return a handle object: `{ element: HTMLStyleElement, remove(): void, replace(newCss: string): void }`
+- `remove()`: cleanly removes the injected `<style>` element
+- `replace()`: atomically swaps CSS content without DOM flicker
+- TM marked GM_removeStyle/replace as "not planned" (TM #2671 closed) — leapfrog opportunity [source 80]
+- ShadowRoot injection enables styling Web Components without `::part()` access hacks; no manager currently supports this [source 80]
+- FOUC fix: if `@run-at document-start`, inject into `document.documentElement` directly; move to `<head>` via `MutationObserver` once it exists
+
+**Exit criteria:** Injection is aborted when script body hash mismatches stored reference; audit log entries appear in dashboard after install/update/edit/delete; update check never auto-installs without user confirmation; no `onMessageExternal` handler accepts messages from unlisted extension IDs; chrome:// @match patterns show inline warning in editor; @require-css CSS is injected before script runs; GM_addStyle handle's `.remove()` cleanly removes the style element; ShadowRoot injection works on a test page with a Web Component.
+
+---
+
+## Phase 18 — Performance & Storage Modernization
+
+**Goal:** Reduce SW cold-start time, replace heavyweight dependencies where native APIs suffice, handle large script libraries gracefully, and expose new platform capabilities to userscripts.
+
+### 18.1 ES Module Splitting for SW Cold-Start
+- Change manifest: `"background": { "service_worker": "background.js", "type": "module" }`
+- Restructure esbuild config to emit multiple chunks via `--splitting` flag; entry point stays `background.js` but imports are dynamically loaded
+- Lazy initialization pattern: SW entry point wires only event listeners; heavy subsystems (GM API shim, sync engine, storage engine) are `import()`-ed inside their first event handler
+- Practical split: `core.js` (event routing, ~2K lines) + `gm-api.js` (GM_* implementations, ~4K lines) + `sync.js` (sync providers, ~2K lines) + `dashboard-bridge.js` (dashboard message handlers)
+- SW cold-start time target: <300ms for 80% of users (from ~1200ms baseline with 16K-line monolith) [source 76]
+- Requires: Phase 1 TypeScript migration complete so the module graph is clean
+
+### 18.2 OPFS for Large Script Storage
+- `navigator.storage.getDirectory()` works from the extension's origin in MV3 [source 77]
+- For scripts > 50KB (large userscripts, TypeScript source from Phase 15.6), store the content in OPFS as a `FileSystemFileHandle`; store only the UUID path reference in IndexedDB
+- Use `FileSystemSyncAccessHandle` in an offscreen document worker for zero-copy synchronous reads at injection time
+- Caveat: OPFS is cleared on "clear all browsing data"; always maintain IndexedDB as the canonical record
+- Requires Phase 2 (IndexedDB) as the metadata layer; OPFS supplements it for large payloads [source 77]
+
+### 18.3 `scheduler.postTask` for Background Tasks
+- Replace bare `setTimeout(fn, 0)` patterns in the SW with `scheduler.postTask(fn, { priority: 'background' })` (Chrome 94+)
+- Apply to: hash verification (Phase 17.1), backup compression, sync polling, @require cache refreshes
+- Replace busy loops / Promise-chaining with `await scheduler.yield()` (Chrome 124+) in multi-step SW operations to prevent starving the event loop [source 78]
+- Zero API surface change; purely internal optimization
+
+### 18.4 CompressionStream for Backup Export
+- Replace the fflate-based export path with native `CompressionStream('gzip')` for streaming backup generation (Chrome 80+, no dependency needed) [source 79]
+- Keep fflate in the codebase for: synchronous compression cases, zstd/brotli format support, and any non-streaming paths
+- Reduces the fflate dependency footprint in the streaming export path; exports start streaming bytes immediately instead of buffering the full backup in memory
+
+### 18.5 Virtual Scrolling for Script Lists
+- At script count ≥ 100, activate virtual scrolling in the sidePanel and dashboard script list
+- Use `@tanstack/virtual-core` (3KB minified, zero framework dependencies) for variable-height row virtualization [source 79]
+- Below 100 scripts: current flat render is fine; add a threshold check on list render
+- Ensures smooth scrolling for power users with 200+ scripts
+
+### 18.6 SharedWorker extendedLifetime (Chrome 148)
+- Chrome 148 ships `SharedWorker` with `extendedLifetime: true` — the worker survives after all connected tabs close [source 26]
+- Move long-running backup generation and sync operations into a `SharedWorker` with `extendedLifetime: true`; this eliminates the need for chrome.alarms heartbeats in those specific flows
+- SW still handles all Chrome API calls (SharedWorker cannot call `chrome.*` APIs directly); bridge: SW spawns worker, worker does heavy computation, posts result back to SW
+- Version guard: check `typeof SharedWorker !== 'undefined'` and check worker feature detection before using; fall back to alarm-based approach on earlier Chrome versions
+
+### 18.7 Sanitizer API: GM_setHTML + Extension UI
+- Chrome 146 ships `Element.setHTML(html, { sanitizer: new Sanitizer(...) })` as the native XSS-safe innerHTML [source 29]
+- Add `GM_setHTML(element, html, sanitizerConfig?)` as a new GM function: wraps `element.setHTML()` so scripts can safely inject HTML without constructing a `DOMParser + manual sanitization` chain
+- In extension UI code (dashboard, popup, settings): replace `element.innerHTML = str` patterns with `element.setHTML(str)` or `Document.parseHTML(str)` — eliminates the DOMPurify dependency from extension UI code paths where Chrome 146+ is guaranteed
+- For compatibility with Chrome 120–145: keep DOMPurify as a fallback; feature-detect with `typeof Element.prototype.setHTML !== 'undefined'`
+
+### 18.8 `navigator.storage.persist()` Before IndexedDB Open
+- Greasemonkey 4.x is the only manager that calls `await navigator.storage.persist()` before opening its IndexedDB database [source 68]; no other manager does this
+- Chrome can evict `chrome.storage.local` and IndexedDB data under storage pressure if `persist()` hasn't been called
+- Add `await navigator.storage.persist()` to the Phase 2 IndexedDB initialization sequence; log the result (`true` = granted, `false` = denied due to storage policy)
+- Show a one-time warning in the dashboard if `persist()` returns `false`: "Storage persistence not granted — scripts may be lost if browser storage is cleared under pressure"
+
+### 18.9 Broken Script Detector
+- Track last-matched timestamp per script: on each `userScripts` injection success, update `{scriptId: lastMatchedAt}` in `chrome.storage.session`
+- At dashboard open, surface scripts where `lastMatchedAt` is null (never ran) or `> 30 days ago` with a yellow ⚠ badge
+- "Script hasn't matched any page in 30+ days — check your @match patterns" — with a direct link to the URL Patterns editor
+- Addresses Stack Overflow pattern: "scripts breaking after browser updates" is frequently caused by stale `@match` patterns that nobody notices [source 75]
+- Auto-suppressed for intentionally domain-specific scripts (user can dismiss the warning per-script)
+
+### 18.10 `@require-nocache` Development Directive
+- Add `@require-nocache` as a metadata directive that bypasses the `@require` resource cache for named URLs
+- During development, scripts often reference `@require` URLs pointing to localhost or a staging server; the cache means changes don't appear until the cache expires
+- Pattern: `// @require-nocache  http://localhost:3000/myscript.js` — fetches fresh on every page load
+- TM #723 documents this as an active developer pain point [source 76]
+- Implementation: skip the IndexedDB resource cache for URLs listed in `@require-nocache`; always fetch
+
+**Exit criteria:** SW cold-start measured with `performance.now()` before and after module splitting; OPFS handles scripts > 50KB without IndexedDB size errors; `scheduler.postTask` replaces all `setTimeout(fn, 0)` in SW; backup export streams bytes without OOM on a library with 200 scripts; virtual scrolling activates at 100 scripts; SharedWorker backup runs on Chrome 148 without SW alarms; `GM_setHTML` injects sanitized HTML; dashboard shows "storage not persistent" warning when `navigator.storage.persist()` returns false; broken script badge appears for scripts with 30+ day gap in @match hits; `@require-nocache` bypasses cache.
+
+---
+
 ## Phase Summary & Dependencies
 
 ```
@@ -1066,6 +1312,11 @@ Phase 11 ─── GM API Parity (Phase 11.9 needs Phase 2 for storage.session; 
 Phase 12 ─── UX Polish (12.13 Trash needs Phase 2; 12.14 vscode.dev needs Phase 1; rest independent)
 Phase 13 ─── Platform Modernization (13.7 Git sync needs Phase 8; rest can start now)
 Phase 14 ─── Accessibility & i18n (fully independent, can start now)
+
+Phase 15 ─── Editor & Dev UX (15.2 auto-grant uses existing Acorn; 15.3+15.4 need Phase 2 + Phase 13.4; 15.6 adds wasm-unsafe-eval CSP; rest need Phase 13.4 Monaco upgrade)
+Phase 16 ─── Advanced XHR (builds on Phase 11.5 XHR; 16.3 streaming needs long-lived port; rest independent)
+Phase 17 ─── Security Round 2 (17.1 needs Phase 2 session storage; 17.7 GM_addStyle needs Phase 11; rest independent)
+Phase 18 ─── Performance (18.1 needs Phase 1 TS migration; 18.2 needs Phase 2; rest independent)
 ```
 
 ### Suggested Execution Order
@@ -1085,6 +1336,10 @@ Phase 14 ─── Accessibility & i18n (fully independent, can start now)
 14. **Phase 12** — UX Polish (can run alongside phases 7–10; 12.13 after Phase 2)
 15. **Phase 13** — Platform Modernization (13.9–13.11 can start now; 13.7 after Phase 8)
 16. **Phase 14** — Accessibility & i18n (can start anytime; fully independent)
+17. **Phase 15** — Editor & Dev UX (15.1–15.2 can start after Phase 13.4; 15.3 after Phase 2; 15.6 independent of other phases)
+18. **Phase 16** — Advanced XHR (can run alongside Phase 11; 16.3 streaming after Phase 11.5)
+19. **Phase 17** — Security Round 2 (17.1 after Phase 2; 17.3 after Phase 6 update system; rest independent)
+20. **Phase 18** — Performance (18.1 after Phase 1 TS migration; 18.2 after Phase 2; 18.3–18.10 can start anytime)
 
 ### Version Mapping
 | Phase | Version | Milestone |
@@ -1105,6 +1360,10 @@ Phase 14 ─── Accessibility & i18n (fully independent, can start now)
 | 12    | v4.2.0  | UX polish + vscode.dev + per-site toggles |
 | 13    | v4.3.0  | Platform modernization + CWS signing |
 | 14    | v4.4.0  | WCAG 2.2 + i18n groundwork |
+| 15    | v4.5.0  | Editor DX: IntelliSense, auto-grant, version history, diff view |
+| 16    | v4.6.0  | GM_fetch, AbortController, streaming XHR, CHIPS, OpenUserJS |
+| 17    | v4.7.0  | Security Round 2: integrity hash, audit log, update consent |
+| 18    | v4.8.0  | Performance: module split, OPFS, scheduler, Sanitizer API |
 
 ## Open-Source Research (Round 2)
 
@@ -1256,10 +1515,106 @@ Confirmed absent from ScriptVault based on API docs and issue tracker analysis:
 - vscode.dev integration — TM has companion extension; nobody else [source 9]
 - Runtime permission diagnostics — VM issue open; major usability gap [source 30]
 - CWS verified CRX signing — new June 2025; no manager has adopted yet [source 17]
+- `GM_fetch` — FireMonkey (Firefox) has it; no Chrome manager does; TM #1050 closed without implementation [source 55, 56]
+- AbortController signal in GM_xmlhttpRequest — no manager supports `signal?`; all use separate `.abort()` [source 58]
+- Script version history + rollback — no manager has this; VM #1391 confirms the data-loss pain [source 60]
+- GM_* IntelliSense in built-in editor — `@types/tampermonkey` exists but no manager injects it into their editor [source 47]
+- In-browser TypeScript transpilation — no manager or open-source userscript IDE has it [source 48]
+- Auto-grant inference (live editor) — vite-plugin-monkey does it at build time; no manager editor does it live [source 49]
+- Diff view on update — TM has basic text diff; VM is the most-requested missing feature (#500, 80+ upvotes) [source 73]
+
+## External Research (Round 5)
+
+_Added after second agent-based sweep (May 2026). Sources numbered 47–96 to extend Round 4's index._
+
+### Source Index
+
+**Type Definitions & Build Tools**
+47. https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/tampermonkey/index.d.ts — `@types/tampermonkey` (45KB, full GM_* API surface, cookiePartition, stream responseType)
+48. https://esbuild.github.io/api/#browser — esbuild-wasm browser usage + wasm-unsafe-eval CSP requirement
+49. https://github.com/lisonge/vite-plugin-monkey/blob/main/packages/vite-plugin-monkey/src/node/utils/grant.ts — auto-grant inference AST walk implementation
+50. https://github.com/lisonge/vite-plugin-monkey/blob/main/packages/vite-plugin-monkey/src/node/utils/gmApi.ts — 28 tracked GM identifiers for auto-grant
+51. https://github.com/kusoidev/ScriptFlow — ScriptFlow: multi-file IDE with 5 templates, PiP sandbox, File System Access API live reload
+52. https://github.com/microsoft/monaco-editor/blob/main/CHANGELOG.md — Monaco 0.53–0.55.1 changelog (AMD removal, native LSP, namespace rename)
+53. https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/greasemonkey — @types/greasemonkey (GM4 Promise API + v3 subdirectory)
+
+**GM API References**
+54. https://violentmonkey.github.io/api/gm/ — VM GM_ function reference (responseType options, anonymous, abort control)
+55. https://github.com/erosman/support/issues/98 — FireMonkey `GM_fetch` implementation confirmed (Firefox extension)
+56. https://github.com/Tampermonkey/tampermonkey/issues/1050 — TM GM_fetch / Response object proposal (closed as duplicate 2025-04-13)
+57. https://www.tampermonkey.net/documentation.php — TM docs: GM_webRequest not available in MV3 (v5.2+)
+58. https://github.com/Tampermonkey/tampermonkey/issues/644 — TM GM_webRequest dropped from MV3 branch
+59. https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/tampermonkey/index.d.ts#L97-L106 — stream responseType caveats (no abort/timeout/progress in fetch mode)
+
+**GitHub Issue Trackers (Round 5)**
+60. https://github.com/violentmonkey/violentmonkey/issues/1391 — VM data loss with no rollback (zero recovery path)
+61. https://github.com/violentmonkey/violentmonkey/issues/2118 — VM set-cookie response header filtering breaks SSO flows
+62. https://github.com/Tampermonkey/tampermonkey/issues/723 — TM @require-nocache for local development
+63. https://github.com/violentmonkey/violentmonkey/issues/2100 — VM CHIPS partitioned cookies break GM.xhr (Cloudflare 403)
+64. https://github.com/Tampermonkey/tampermonkey/issues/1483 — TM GM_wsConnectTo WebSocket bypass proposal
+65. https://github.com/Tampermonkey/tampermonkey/issues/2703 — TM CLI/API for programmatic script management (developer appetite)
+66. https://github.com/Tampermonkey/tampermonkey/issues/2613 — TM install flow UX scrutiny
+67. https://github.com/OpenUserJS/OpenUserJS.org — OpenUserJS source; install URL format; no public REST API
+68. https://github.com/greasemonkey/greasemonkey — Greasemonkey 4.x (maintenance mode, last real code Feb 2025)
+69. https://github.com/advisories?query=tampermonkey — GitHub Advisory Database: 0 CVEs for TM or VM
+70. https://github.com/violentmonkey/violentmonkey/issues/500 — VM diff view on update (#1 most-reacted enhancement, 80+ upvotes)
+71. https://github.com/violentmonkey/violentmonkey/issues/1934 — VM MV3 migration status (occupied with infra, not features)
+72. https://github.com/google/diff-match-patch — diff-match-patch (Google): delta compression for version history (6KB gzipped)
+73. https://github.com/violentmonkey/violentmonkey/issues/500 — Diff view before update (see also source 70)
+74. https://github.com/violentmonkey/violentmonkey/issues/1023 — VM decouple check-for-update from auto-install (#2 most-painful behavior)
+
+**Adjacent OSS Projects**
+75. https://stackoverflow.com/questions/tagged/tampermonkey — Top SO questions: chrome:// blocking, @connect errors, execution timing
+76. https://github.com/openstyles/stylus — Stylus CSS manager (MV3, IndexedDB, WebDAV, revision-based sync conflict resolution)
+77. https://github.com/openstyles/stylus/blob/master/src/background/sync-manager.js — Stylus sync: 30min interval, 1min debounce, monotonic _rev conflict resolution
+78. https://github.com/openstyles/stylus/blob/master/src/background/db.js — Stylus dual-mode IDB/chrome.storage, gzip mirror in CacheStorage API
+79. https://chromewebstore.google.com/detail/orangemonkey/ekmeppjgajofkpiofbebgcbohbmfldaf — OrangeMonkey (VM fork, v2.0.14 Mar 2026, closed-source, ZIP backup feature)
+80. https://github.com/Tampermonkey/tampermonkey/issues?q=GM_addStyle+shadow+OR+timing+OR+remove+OR+replace — TM GM_addStyle issues: #2671 (remove/replace "not planned")
+
+**ScriptCat v1.x**
+81. https://github.com/scriptscat/scriptcat/releases/tag/v1.3.0 — ScriptCat v1.3.0: Amazon S3 sync, GM_addElement content fix, GM API async corrections
+82. https://github.com/scriptscat/scriptcat/releases/tag/v1.4.0-beta.1 — ScriptCat v1.4.0-beta: AI Agent, @unwrap, window.onurlchange
+83. https://docs.scriptcat.org/en/docs/dev/api/ — ScriptCat GM_setValues/getValues/deleteValues bulk APIs, GM_log with levels
+84. https://docs.scriptcat.org/en/docs/change/ — ScriptCat full changelog
+
+**Chrome Platform APIs (Round 5)**
+85. https://developer.chrome.com/blog/chrome-148-beta — Chrome 148: SharedWorker extendedLifetime, structured clone, Web Serial on Android
+86. https://developer.chrome.com/blog/chrome-146-beta — Chrome 146: Sanitizer API (Element.setHTML, Document.parseHTML)
+87. https://developer.chrome.com/blog/chrome-147-beta — Chrome 147: scoped View Transitions (Element.startViewTransition), CSSPseudoElement
+88. https://chromestatus.com/api/v0/features?milestone=149 — Chrome 149 features (CSS gap decorations, BFCache WebSocket disconnect, OpaqueRange)
+89. https://chromestatus.com/api/v0/features?milestone=150 — Chrome 150 features (CSS URL integrity, AccentColor, text-fit)
+90. https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle — SW lifecycle: keepalive via WebSocket (116+), port (114+), API call timer reset
+91. https://web.dev/articles/origin-private-file-system — OPFS: zero-copy sync access handles, no quota prompts, ~10× faster than IDB for large files
+92. https://github.com/w3c/webextensions — WECG proposals: 420 open issues; SW persistent background (#72, #51) still unresolved
+
+**Performance & Runtime**
+93. https://developer.mozilla.org/en-US/docs/Web/API/Scheduler/postTask — scheduler.postTask (Chrome 94+) and scheduler.yield (Chrome 124+)
+94. https://tanstack.com/virtual/latest/docs/framework/react/examples/dynamic — TanStack Virtual (3KB, zero framework deps, variable-height rows)
+95. https://hn.algolia.com/api/v1/search?query=tampermonkey&tags=story&numericFilters=created_at_i>1704067200 — HN 2025 stories: AI-generated userscripts (ClickRemix, Tweeks) as competitive signal
+96. https://github.com/openstyles/stylus/issues/2069 — Stylus cloud sync issue (Apr 2026): closest community conversation to version history
+
+### Updated Chrome Platform API Timeline (Chrome 135–150)
+
+| Version | API Change | ScriptVault Impact |
+|---------|-----------|-------------------|
+| Chrome 120 | `userScripts` API launched; `chrome.alarms` min interval 30s | Baseline; alarms can now cover 30–60s tasks |
+| Chrome 130 | `StorageArea.getKeys()` across all storage areas | Phase 13.11 |
+| Chrome 132 | `tabs.Tab.frozen` boolean; `permissions.addHostAccessRequest()` | Phase 12.12, 13.9 |
+| Chrome 133 | `worldId` on `RegisteredUserScript` for per-script isolation | Phase 13 architecture note |
+| Chrome 135 | `userScripts.execute()` one-shot injection | Phase 11.4 |
+| Chrome 137 | `--load-extension` CLI flag removed | Phase 13.6 |
+| Chrome 138 | "Allow User Scripts" per-extension toggle | Phase 13.3 |
+| Chrome 140 | `sidePanel.getLayout()` | Phase 13.2 |
+| Chrome 146 | Sanitizer API: `Element.setHTML()`, `Document.parseHTML()` | Phase 18.7 — GM_setHTML + remove DOMPurify from UI |
+| Chrome 147 | `Element.startViewTransition()` scoped to sub-element | Phase 18 — sidePanel panel transitions |
+| Chrome 148 | Structured clone messaging opt-in | Phase 13.1 |
+| Chrome 148 | `SharedWorker` with `extendedLifetime: true` | Phase 18.6 — long-lived sync/backup |
+| Chrome 149 | BFCache WebSocket disconnect | Scripts with WebSocket connections need disconnect handling |
+| Chrome 150 | CSS URL integrity `url("img.png" integrity(...))` | Complements Phase 11.8 @require SRI |
 
 ## Feature Harvest & Gap Analysis Appendix
 
-This appendix records ALL features considered for Phases 11–14, their final tier, and the reasoning. Items are grouped by the category used in the research brief.
+This appendix records ALL features considered for Phases 11–18, their final tier, and the reasoning. Items are grouped by the category used in the research brief.
 
 ### Accepted — Now/Next (Phases 11–14)
 
@@ -1317,6 +1672,43 @@ This appendix records ALL features considered for Phases 11–14, their final ti
 | RTL layout groundwork | Next | 14.6 | Requires Phase 13.2; enables Arabic/Hebrew |
 | i18n `_messages.json` audit | Next | 14.7 | Prerequisite for any future translations |
 
+### Accepted — Now/Next (Phases 15–18)
+
+| Item | Tier | Phase | Reasoning |
+|------|------|-------|-----------|
+| GM_* IntelliSense via @types/tampermonkey | Now | 15.1 | 45KB type definitions exist; no manager has done this; zero new permissions |
+| Auto-grant inference (live Acorn AST) | Now | 15.2 | Eliminates #1 developer workflow error; Acorn already in SW; leapfrog over all competitors |
+| Script version history + rollback (diff-match-patch) | Now | 15.3 | No manager has this; VM #1391 data-loss pain; 95% storage saving with delta compression |
+| Diff view before update (Monaco diff editor) | Now | 15.4 | VM #500 most-reacted enhancement; VM still hasn't shipped it in 2025 |
+| Script templates (6 built-in types) | Now | 15.5 | Developer UX table stakes; reduces friction for new scripts |
+| esbuild-wasm TypeScript transpilation | Next | 15.6 | Only manager with in-editor TS support; requires wasm-unsafe-eval CSP; 3.2MB WASM download |
+| Live reload (re-inject on save) | Next | 15.7 | Developer UX; ScriptFlow has it; no Chrome manager does |
+| Dry-run sandbox (GM_* mock iframe) | Next | 15.8 | Testing workflow innovation; no competitor has an in-manager sandbox |
+| GM_fetch (Promise-based XHR) | Now | 16.1 | FireMonkey has it; no Chrome manager does; TM #1050 closed without implementation |
+| AbortController signal in GM_xmlhttpRequest | Now | 16.2 | Standard JS API integration; huge DX improvement; low effort |
+| Long-lived port XHR streaming | Next | 16.3 | Avoids stream responseType's fetch-mode limitations (no abort/progress); genuine leapfrog |
+| CHIPS cookiePartition option in GM_xhr | Now | 16.4 | VM #2100 Cloudflare CHIPS breakage; types already have it; low effort |
+| XHR redirect mode option | Now | 16.5 | Standard fetch parity; complementary to Phase 11.5 |
+| GM_download Blob/File URL | Now | 16.6 | Simple extension of existing GM_download; enables in-memory data download |
+| OpenUserJS in script browser | Next | 16.7 | Second browser source beyond GreasyFork; static top-scripts approach avoids API dependency |
+| Script body integrity hash at injection | Now | 17.1 | Session storage hash → injection verification; no manager does this; 0 UX friction |
+| Tamper-evident audit log | Now | 17.2 | Enables incident analysis; no manager has it; high trust value |
+| Decouple update-check from auto-install | Now | 17.3 | VM #1023 most-painful behavior; provides consent before overwriting working scripts |
+| External message origin validation | Now | 17.4 | Prevents malicious extension injection via chrome.runtime.sendMessage; minimal code |
+| chrome:// @match warning | Now | 17.5 | Silent failure on chrome:// currently; low effort toaster warning |
+| @require-css metadata directive | Next | 17.6 | ScriptCat differentiator; fetch+cache CSS at install; inject before script runs |
+| GM_addStyle handle API + ShadowRoot injection | Next | 17.7 | TM #2671 "not planned"; leapfrog with `.remove()` / `.replace()` handle API |
+| ES module splitting for SW cold-start | Now | 18.1 | ~1200ms → <300ms cold-start; requires Phase 1 TS migration; critical perf fix |
+| OPFS for large script storage | Next | 18.2 | 10× faster than IDB for large files; zero-copy sync access; requires Phase 2 |
+| scheduler.postTask for SW background work | Now | 18.3 | Chrome 94+; replaces bare setTimeout; prevents SW event loop starvation |
+| CompressionStream in backup export | Now | 18.4 | Native Chrome API; streaming gzip; eliminates fflate for streaming path |
+| TanStack Virtual for script lists | Next | 18.5 | 3KB zero-dep; smooth scrolling at 200+ scripts; threshold at ≥100 |
+| SharedWorker extendedLifetime (Chrome 148) | Later | 18.6 | Chrome 148+ only; good for long-running sync but requires complex SW bridge |
+| GM_setHTML + Sanitizer API | Now | 18.7 | Chrome 146+; eliminates DOMPurify from UI paths; new GM API leapfrog |
+| navigator.storage.persist() on IDB open | Now | 18.8 | Prevents storage eviction under pressure; only Greasemonkey does this; 1-line fix |
+| Broken script detector | Next | 18.9 | 30+ day idle with errors warning; proactive maintenance UX; no competitor has it |
+| @require-nocache directive | Next | 18.10 | Developer QoL; TM #723 open since 2019; zero implementation risk |
+
 ### Rejected — With Reasoning
 
 | Item | Reason |
@@ -1345,3 +1737,9 @@ This appendix records ALL features considered for Phases 11–14, their final ti
 | Mobile support | Desktop-only Chrome extension. No mobile Chrome extension runtime for injecting userscripts. Rejected as platform limitation. |
 | CHIPS cookie partition in XHR | Nobody has implemented this yet; Chrome's cookie partitioning API is still evolving. Under Consideration once the Chrome API stabilizes. |
 | `@require-local` / local script as dependency | This is Phase 11 item 11.7's `@require` work extended. The `@require-local` pattern (referencing another installed script by ID as a dependency) is a valid extension of the `@require` SRI work. Under Consideration as Phase 11 follow-up. |
+| AI Agent / MCP integration (ScriptCat v1.4.0-beta) | ScriptCat v1.4.0-beta ships an AI Agent with MCP integration for generating and debugging scripts. Explicitly contradict's ScriptVault's anti-bloat philosophy (see CLAUDE.md deleted features). Rejected — not this project's mission. |
+| GM_webRequest (MV3) | Permanently dropped from Chrome MV3; TM v5.2+ removed it. `chrome.declarativeNetRequest` does not support per-request callbacks. Structural blocker. Rejected as MV3 architectural impossibility. |
+| Full OPFS migration (replace IDB entirely) | OPFS is ideal for large binary file storage but cannot serve as the metadata/index layer efficiently. IDB must remain as the metadata and query layer. Rejected for IDB replacement; OPFS used only as overflow for large script bodies (Phase 18.2). |
+| ClickRemix / AI-powered userscript generation | HN 2025 product hunt; AI writes userscripts from natural-language prompts. Validates market demand but directly contradicts ScriptVault's stated philosophy. Rejected per philosophy. |
+| GM_wsConnectTo (TM #1483) | WebSocket proxy bypass via extension background; very niche use (scripts blocked from WebSocket by CSP). No active demand in ScriptVault tracker. Under Consideration for later phase if demand emerges. |
+| Anonymous XHR credential stripping | TM documents `anonymous: true` to strip cookies/credentials from GM_xmlhttpRequest. Low demand signal beyond existing `anonymous` mode in VM. Under Consideration as trivial addition to Phase 16. |
