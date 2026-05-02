@@ -1,4 +1,4 @@
-// ScriptVault v3.0.0 - Background Service Worker
+// ScriptVault v3.0.1 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -11503,9 +11503,7 @@ async function handleMessage(message, sender) {
   // Wait for SW init (SettingsManager/ScriptStorage) to finish before handling
   // any message. Without this, fast popup/dashboard opens after wake can hit
   // handlers with uninitialised state and return empty results or throw.
-  if (self._initPromise) {
-    try { await self._initPromise; } catch (e) { /* init failure is logged in init() */ }
-  }
+  try { await ensureInitialized(); } catch (e) { /* init failure is logged in init() */ }
   const { action } = message;
   // Support both patterns: { action, data: { ... } } and { action, prop1, prop2, ... }
   const data = message.data || message;
@@ -14337,6 +14335,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 // ============================================================================
 
 chrome.commands.onCommand.addListener(async (command) => {
+  try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   switch (command) {
     case 'open_dashboard':
       chrome.tabs.create({ url: 'pages/dashboard.html' });
@@ -14362,19 +14361,33 @@ chrome.commands.onCommand.addListener(async (command) => {
 // Alarms (Auto-update & Sync)
 // ============================================================================
 
-// Debounced stats save — coalesces rapid reportExecTime/Error writes into a single storage write
-let _statsSaveTimer = null;
+// Stats save coalescing — chrome.alarms instead of setTimeout so the debounce
+// survives MV3 service-worker termination. Minimum delayInMinutes is 0.5 in
+// production (Chrome enforces a 30s floor for non-development extensions); in
+// dev builds the smaller value below applies.
+const STATS_SAVE_ALARM = 'statsSave';
 function _debouncedStatsSave() {
-  if (_statsSaveTimer) clearTimeout(_statsSaveTimer);
-  _statsSaveTimer = setTimeout(() => {
-    _statsSaveTimer = null;
-    ScriptStorage.save().catch(() => {});
-  }, 5000);
+  // delayInMinutes 0.1 = 6s in unpacked dev; production extensions clamp to 30s.
+  // ScriptStorage.save is idempotent, so creating the alarm repeatedly while
+  // pending only resets the timer — that's the intended debounce.
+  try {
+    chrome.alarms.create(STATS_SAVE_ALARM, { delayInMinutes: 0.1 });
+  } catch (_) { /* alarms unavailable (e.g. SW shutting down) — drop the write */ }
 }
 
 let _backgroundTaskRunning = false;
 let _backgroundTaskToken = 0;
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  // Cold-start: an alarm can wake the SW before init() finishes. Wait for it
+  // so handlers below see a fully-initialised ScriptStorage / SettingsManager.
+  try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
+
+  // Stats save (coalesces rapid reportExecTime/Error writes)
+  if (alarm.name === STATS_SAVE_ALARM) {
+    try { await ScriptStorage.save(); } catch (_) { /* non-critical */ }
+    return;
+  }
+
   // Handle notification auto-close alarms
   if (alarm.name.startsWith('notif_clear_')) {
     const notifId = alarm.name.slice('notif_clear_'.length);
@@ -14575,6 +14588,7 @@ async function setupAlarms() {
 
 // Update badge when tab is activated
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   try {
     const tab = await chrome.tabs.get(activeInfo.tabId);
     if (tab.url) {
@@ -14587,6 +14601,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
 // Update badge when tab URL changes
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   if (changeInfo.url || changeInfo.status === 'complete') {
     if (tab.url) {
       await updateBadgeForTab(tabId, tab.url);
@@ -17517,4 +17532,13 @@ function convertIncludeToMatch(include) {
   return null;
 }
 
-init();
+// MV3 cold-start guard: store the init promise on self so all event listeners
+// (onMessage, onAlarm, onCommand, onTab*) can await it before touching state.
+// Without this, an event firing during the SW wake races init() and hits
+// handlers before ScriptStorage / SettingsManager are ready.
+self._initPromise = init();
+function ensureInitialized() {
+  if (!self._initPromise) self._initPromise = init();
+  return self._initPromise;
+}
+self.ensureInitialized = ensureInitialized;
