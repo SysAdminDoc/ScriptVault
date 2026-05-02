@@ -56,6 +56,26 @@ declare const self: typeof globalThis & {
 };
 
 // ============================================================================
+// Script-change notifier (used by background.core.js to invalidate the
+// MatchSet cache after writes). Pluggable so the storage module stays
+// independent of the specific consumer.
+// ============================================================================
+
+let _scriptChangeListener: (() => void) | null = null;
+
+export function setScriptChangeListener(fn: (() => void) | null): void {
+  _scriptChangeListener = fn;
+}
+
+function notifyScriptChange(): void {
+  try {
+    _scriptChangeListener?.();
+  } catch {
+    // Swallow — listener errors must not break storage writes.
+  }
+}
+
+// ============================================================================
 // Settings Manager
 // ============================================================================
 
@@ -196,6 +216,7 @@ export const ScriptStorage = {
     }
     this.cache![id] = script;
     void prev; // explicit no-op to keep diff readable; cache now matches IDB
+    notifyScriptChange();
     return script;
   },
 
@@ -213,6 +234,7 @@ export const ScriptStorage = {
     delete this.cache![id];
     // Mirror the deletion into the in-memory ScriptValues cache too.
     delete ScriptValues.cache[id];
+    notifyScriptChange();
   },
 
   async clear(): Promise<void> {
@@ -226,6 +248,7 @@ export const ScriptStorage = {
     this.cache = {};
     ScriptValues.cache = {};
     void prev;
+    notifyScriptChange();
   },
 
   /**

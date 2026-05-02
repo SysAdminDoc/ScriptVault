@@ -89,6 +89,7 @@ const ScriptStorage = {
       else delete this.cache[id];
       throw e; // Re-throw so callers know the save failed
     }
+    if (typeof invalidateMatchSet === 'function') invalidateMatchSet();
     return script;
   },
 
@@ -106,8 +107,9 @@ const ScriptStorage = {
       if (prev !== undefined) this.cache[id] = prev;
       throw e;
     }
+    if (typeof invalidateMatchSet === 'function') invalidateMatchSet();
   },
-  
+
   async clear() {
     const prev = this.cache;
     this.cache = {};
@@ -118,6 +120,7 @@ const ScriptStorage = {
       this.cache = prev;
       throw e;
     }
+    if (typeof invalidateMatchSet === 'function') invalidateMatchSet();
   },
   
   async search(query) {
