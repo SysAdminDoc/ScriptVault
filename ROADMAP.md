@@ -248,6 +248,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 **Goal:** One correct, shared, fast URL matcher used everywhere.
 
+**Status:** Partially shipped in v3.1.0 — `MatchSet` (4.2) lands in both `background.core.js` and the TS mirror at `src/background/url-matcher.ts`; `getScriptsForUrl` now uses it; the matcher tests now import the production TS module instead of duplicating logic. Remaining: 4.3 (popup/sidepanel currently message the background for matching, so they share results indirectly — formal direct-import bundle still pending an esbuild migration), 4.1's full path-vs-query separation rewrite, plus the 4.5 fuzz/benchmark suite.
+
 ### 4.1 Unified Matcher Module
 Create `src/shared/url-matcher.ts`:
 - Full Tampermonkey-compatible `@match` (Chrome match pattern spec)
@@ -256,20 +258,22 @@ Create `src/shared/url-matcher.ts`:
 - `<all_urls>` special pattern
 - Proper handling: path matching uses pathname only (not query string), aligning with Chrome's native behavior
 
-### 4.2 Precompiled Match Sets
+### 4.2 Precompiled Match Sets ✅ Shipped in v3.1.0
 ```typescript
 class MatchSet {
-  private trie: URLTrie; // trie on scheme+host for O(log n) lookups
-  private regexPatterns: CompiledRegex[]; // for @include regex patterns
+  private universal: Script[];          // <all_urls>, *, regex includes, host-less globs
+  private byHost: Map<string, Script[]>; // host hint → scripts indexed under that host
 
-  constructor(patterns: ScriptPattern[]) { /* build trie */ }
-  test(url: string): boolean { /* fast lookup */ }
-  getMatchingScripts(url: string): Script[] { /* returns all matches */ }
+  constructor(scripts: readonly Script[]);
+  getCandidates(url: string): Script[]; // strict superset of true matches
+  getMatching(url: string): Script[];   // candidates filtered through doesScriptMatchUrl
 }
 ```
-- Build the `MatchSet` once when scripts change, reuse for every URL test
-- O(log n) host lookup via trie instead of O(n) linear scan over all scripts
-- Regex patterns validated at parse time (reject pathological backtracking)
+- Builds an `O(1)` hostname → script bucket so `getScriptsForUrl` no longer linear-scans every pattern.
+- Wildcard subdomains (`*.example.com`) indexed under the base domain; deep subdomains (`a.b.example.com`) resolved via parent-suffix walk.
+- Regex `@include` and host-less globs land in a universal bucket so the candidate set remains a strict superset of the true match set (zero false negatives).
+- Cached in `_matchSetCache`; invalidated automatically by `invalidateMatchSet()` global hook called from `ScriptStorage.set/delete/clear`.
+- Wired into the `getScriptsForUrl` background message handler. Other hot paths (`registerAllScripts` matching loops, tab-reload, badge updates) can adopt `getMatchSet().getMatching(url)` incrementally.
 
 ### 4.3 Share Across All Contexts
 - Background uses `MatchSet` for registration, badge counts, tab reload
@@ -287,6 +291,8 @@ class MatchSet {
 - Edge cases: query strings, fragments, IDN domains, IPv6, data: URLs, about:blank
 - Fuzz testing with random URLs against random patterns
 - Benchmark: measure lookup time with 500+ scripts
+
+**2026-05-02 note (v3.1.0):** The url-matcher test file now imports `src/background/url-matcher.ts` directly instead of redefining the matcher logic locally — the previous duplication had silently drifted. 21 new tests added covering `MatchSet` (host indexing, wildcard subdomains, universal bucket, port stripping, dedup), `isUrlBlockedByGlobalSettings` (denied-host suffix-coincidence guard, whitelist/blacklist modes, malformed URLs), and a ReDoS regression that pins the `*+ → *` collapse in `matchIncludePattern`. Full suite is now 571 tests across 33 files. Fuzz harness + 500-script benchmark still pending.
 
 **Exit criteria:** Single `url-matcher.ts` used in background, popup, and sidepanel. All three agree on every URL. Trie-based lookup. 100+ matcher test cases.
 

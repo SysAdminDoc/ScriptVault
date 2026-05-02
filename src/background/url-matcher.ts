@@ -341,6 +341,207 @@ export function extractMatchPatternsFromRegex(regexStr: string): string[] {
   return [...new Set(patterns)];
 }
 
+// ---------------------------------------------------------------------------
+// MatchSet — precompiled host index for fast `getScriptsForUrl`-style queries.
+//
+// The naive matcher walks every script and tests every pattern on every URL
+// query. With 200+ scripts that's hundreds of regex tests per popup open. The
+// MatchSet trades a tiny amount of build cost for an O(1) hostname lookup
+// that filters the candidate set down to scripts whose patterns could
+// possibly match before falling through to the slow per-pattern check.
+//
+// Bucketing strategy:
+//   - "*" or "<all_urls>" or scheme-only patterns → universal bucket (always
+//     candidates).
+//   - Concrete hostname → indexed under the lowercase hostname.
+//   - "*.example.com" → indexed under "example.com" so a URL with hostname
+//     "example.com" or "sub.example.com" both pick it up via suffix walk.
+//   - Regex `@include` patterns → universal bucket (we can't statically
+//     extract a host without false negatives).
+//   - Plain glob `@include` (no `://` scheme delimiter) → universal bucket.
+//
+// `getCandidates(url)` returns the union of universal + hostname bucket +
+// every parent domain bucket (so `*.example.com` matches `a.b.example.com`).
+// ---------------------------------------------------------------------------
+
+interface PatternRecord {
+  pattern: string;
+  kind: 'match' | 'include' | 'excludeMatch' | 'exclude';
+}
+
+function extractHostHint(pattern: string, kind: PatternRecord['kind']): string | null {
+  if (!pattern) return null;
+  if (pattern === '*' || pattern === '<all_urls>') return null;
+
+  // Regex @include — no static host hint without false negatives.
+  if ((kind === 'include' || kind === 'exclude') && isRegexPattern(pattern)) {
+    return null;
+  }
+
+  // Match-style patterns: scheme://host/path
+  const m = pattern.match(/^(?:\*|https?|file|ftp):\/\/([^/]+)/);
+  if (!m) return null;
+  const host = m[1]!;
+  if (!host || host === '*') return null;
+  // Strip port for indexing — matchPattern handles port comparison itself.
+  const noPort = host.replace(/:\d+$/, '');
+  if (noPort.startsWith('*.')) {
+    const base = noPort.slice(2);
+    return base.toLowerCase();
+  }
+  // Reject hostnames with embedded wildcards we don't index (e.g. "*foo.bar").
+  if (noPort.includes('*')) return null;
+  return noPort.toLowerCase();
+}
+
+function getEffectivePatterns(script: Script): PatternRecord[] {
+  const meta = (script.meta || {}) as Partial<Script['meta']>;
+  const settings = (script.settings || {}) as Record<string, unknown>;
+  const out: PatternRecord[] = [];
+
+  const pushAll = (
+    arr: string[] | string | undefined,
+    kind: PatternRecord['kind'],
+  ): void => {
+    if (!arr) return;
+    const list = Array.isArray(arr) ? arr : [arr];
+    for (const p of list) {
+      if (typeof p === 'string' && p) out.push({ pattern: p, kind });
+    }
+  };
+
+  if (settings.useOriginalMatches !== false) pushAll(meta.match as string[] | undefined, 'match');
+  pushAll(settings.userMatches as string[] | undefined, 'match');
+
+  if (settings.useOriginalIncludes !== false) {
+    pushAll(meta.include as string[] | undefined, 'include');
+  }
+  pushAll(settings.userIncludes as string[] | undefined, 'include');
+
+  pushAll(meta.excludeMatch as string[] | undefined, 'excludeMatch');
+
+  return out;
+}
+
+/**
+ * Precompiled fast-lookup index over a collection of scripts.
+ *
+ * Build once when the script set changes, then call `getCandidates(url)` for
+ * each URL query. The candidate list is a strict superset of the scripts
+ * that `doesScriptMatchUrl` would return true for; pass each candidate
+ * through `doesScriptMatchUrl` for the authoritative answer.
+ */
+export class MatchSet {
+  private universal: Script[] = [];
+  private byHost: Map<string, Script[]> = new Map();
+  readonly size: number;
+
+  constructor(scripts: readonly Script[]) {
+    this.size = scripts.length;
+    for (const script of scripts) {
+      if (!script || !script.id) continue;
+      const patterns = getEffectivePatterns(script);
+
+      // Match-only bucketing — only positive (match/include) patterns gate
+      // candidacy. excludeMatch never adds to the candidate set; it's
+      // applied later in doesScriptMatchUrl.
+      const positive = patterns.filter((p) => p.kind === 'match' || p.kind === 'include');
+
+      if (positive.length === 0) {
+        // No positive patterns at all — script can't run on any URL.
+        continue;
+      }
+
+      let allUniversal = false;
+      const hosts = new Set<string>();
+      for (const p of positive) {
+        if (p.pattern === '*' || p.pattern === '<all_urls>') {
+          allUniversal = true;
+          break;
+        }
+        const hint = extractHostHint(p.pattern, p.kind);
+        if (hint == null) {
+          // Either regex without a host hint, or a non-match-shaped glob.
+          // Conservatively put it in the universal bucket so doesScriptMatchUrl
+          // can rule it in or out.
+          allUniversal = true;
+          break;
+        }
+        hosts.add(hint);
+      }
+
+      if (allUniversal) {
+        this.universal.push(script);
+      } else {
+        for (const host of hosts) {
+          let bucket = this.byHost.get(host);
+          if (!bucket) {
+            bucket = [];
+            this.byHost.set(host, bucket);
+          }
+          bucket.push(script);
+        }
+      }
+    }
+  }
+
+  /**
+   * Return scripts whose @match/@include patterns *could* match `url`.
+   * The result is a superset — callers must run `doesScriptMatchUrl` for
+   * authoritative inclusion.
+   */
+  getCandidates(url: string): Script[] {
+    let hostname: string;
+    try {
+      hostname = new URL(url).hostname.toLowerCase();
+    } catch {
+      // Invalid URL — only the universal bucket can match (e.g. <all_urls>
+      // can match data: URLs which don't have a hostname).
+      return [...this.universal];
+    }
+
+    const seen = new Set<Script>();
+    const out: Script[] = [];
+
+    for (const s of this.universal) {
+      if (!seen.has(s)) {
+        seen.add(s);
+        out.push(s);
+      }
+    }
+
+    // Walk every suffix: a.b.example.com → a.b.example.com, b.example.com,
+    // example.com, com. This lets a `*.example.com` pattern (indexed under
+    // "example.com") match a URL with hostname "a.b.example.com".
+    let cursor = hostname;
+    while (cursor) {
+      const bucket = this.byHost.get(cursor);
+      if (bucket) {
+        for (const s of bucket) {
+          if (!seen.has(s)) {
+            seen.add(s);
+            out.push(s);
+          }
+        }
+      }
+      const dot = cursor.indexOf('.');
+      if (dot < 0) break;
+      cursor = cursor.slice(dot + 1);
+    }
+
+    return out;
+  }
+
+  /**
+   * Return scripts that actually match `url` (universal candidates filtered
+   * through `doesScriptMatchUrl`).
+   */
+  getMatching(url: string): Script[] {
+    const candidates = this.getCandidates(url);
+    return candidates.filter((s) => doesScriptMatchUrl(s, url));
+  }
+}
+
 /**
  * Convert an `@include` glob pattern to a `@match`-style pattern.
  * Returns `null` if conversion is not possible.
