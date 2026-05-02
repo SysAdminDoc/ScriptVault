@@ -1360,8 +1360,21 @@ const PublicAPI = {
       throw new Error(`Unknown event type: ${eventType}`);
     }
     const url = config.url ?? '';
-    if (url && !url.startsWith('https://')) {
-      throw new Error('Webhook URL must use https://');
+    if (url) {
+      if (!url.startsWith('https://')) {
+        throw new Error('Webhook URL must use https://');
+      }
+      // Phase 5.5 — Reject RFC 1918 / loopback / link-local / IPv6 internal
+      // hosts. Webhooks fire from the extension's network context, so a URL
+      // pointing at the user's LAN is an SSRF vector for any web origin
+      // that obtains capability-token access via PublicAPI.
+      let parsed: URL;
+      try { parsed = new URL(url); } catch { throw new Error('Webhook URL is malformed'); }
+      const host = parsed.hostname || '';
+      if (!host) throw new Error('Webhook URL has empty hostname');
+      if (isInternalHost(host)) {
+        throw new Error('Webhook URL points at internal/loopback host');
+      }
     }
     _webhooks[eventType] = {
       url,
