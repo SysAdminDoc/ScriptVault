@@ -7,7 +7,7 @@
  * Extracted from background.core.js `buildWrappedScript()`.
  */
 
-import type { Script } from '../types/script';
+import type { Script, ScriptMeta } from '../types/script';
 
 /** A fetched @require script with its source URL and code text. */
 export interface RequireScript {
@@ -1554,9 +1554,25 @@ ${libraryExports}
 `;
 
   // @top-level-await: wrap user code in async IIFE so top-level await works
-  const userCode: string = meta['top-level-await']
+  let userCode: string = meta['top-level-await']
     ? `(async () => {\n${script.code}\n})();`
     : script.code;
+
+  // @delay: postpone script execution by N milliseconds (legacy alignment)
+  const delay = (meta as Partial<ScriptMeta> & { delay?: number }).delay;
+  if (typeof delay === 'number' && delay > 0) {
+    userCode = `setTimeout(() => {\n${userCode}\n}, ${delay});`;
+  }
+
+  // Phase 11.2 — `// @unwrap` (Violentmonkey parity). Emit the script body
+  // verbatim without the GM API IIFE wrapper. GM_* APIs are unavailable in
+  // this mode; we log a one-line console.warn so authors who set @unwrap by
+  // mistake can spot it.
+  if (meta.unwrap === true) {
+    const safeName = JSON.stringify(meta.name || 'Unnamed').slice(1, -1);
+    const banner = `console.warn('[ScriptVault] ${safeName}: @unwrap is set — GM_* APIs are unavailable.');`;
+    return banner + '\n' + userCode;
+  }
 
   return apiInit + userCode + apiClose;
 }

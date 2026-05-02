@@ -581,6 +581,8 @@ Violentmonkey supports `// @unwrap` to disable the auto-injected IIFE wrapper. T
 
 Add `@unwrap` to the metadata parser; when present, emit the script code as-is rather than wrapping in `(function() { ... })()`. Log a console warning noting that `@grant` APIs are unavailable without the wrapper. Source: [VM metadata block docs](https://violentmonkey.github.io/api/metadata-block/).
 
+**Status (v3.2.1, 2026-05-02):** Shipped. Parser already accepted `@unwrap`; wrapper-builder (`background.core.js` + TS mirror at `src/background/wrapper-builder.ts`) now skips the GM API IIFE when `meta.unwrap === true` and prepends a `console.warn` banner so the choice is visible at runtime. Install confirmation dialog surfaces `unwrapped (no GM_* APIs)` in the run-timing summary so users see it before they confirm.
+
 ### 11.3 Per-Script User-Override Merge Flags
 
 Violentmonkey supports `// @merge_matches`, `// @merge_excludes`, `// @merge_includes`, `// @merge_connect` to let users toggle whether their local additions to those fields _replace_ or _merge with_ the script's authored values. ScriptVault already allows user overrides to match/exclude; it needs the merge/replace toggle.
