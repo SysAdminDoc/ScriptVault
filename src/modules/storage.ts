@@ -5,6 +5,8 @@
 import type { Script, Settings } from '../types/index';
 import { generateId } from '../shared/utils';
 import settingsDefaultsData from '../config/settings-defaults.json';
+import { ScriptsDAO, ValuesDAO } from '../storage/script-db';
+import { ensureV3Migration } from '../storage/migration-v3';
 
 // ============================================================================
 // Folder type (local — no shared definition yet)
@@ -135,6 +137,10 @@ export function debugLog(...args: unknown[]): void {
 // Script Storage
 // ============================================================================
 
+// ScriptStorage — IndexedDB-backed (v3.0). The in-memory `cache` is a mirror
+// of the IDB `scripts` store, populated lazily on init and kept in sync on
+// every write. Reads serve from cache for synchronous-ish semantics; writes
+// commit to IDB first, then update cache. Persist failures roll back cache.
 export const ScriptStorage = {
   cache: null as Record<string, Script> | null,
 
@@ -142,8 +148,17 @@ export const ScriptStorage = {
     if (this.cache !== null) return;
     if (!_scriptsInitPromise) {
       _scriptsInitPromise = (async () => {
-        const data = await chrome.storage.local.get('userscripts');
-        this.cache = (data['userscripts'] as Record<string, Script> | undefined) || {};
+        // Run the v2→v3 migration the first time the SW touches storage.
+        // Idempotent — cheap no-op once schema is at v3.
+        try {
+          await ensureV3Migration();
+        } catch (e) {
+          console.warn('[ScriptVault] v3 migration failed:', e);
+        }
+        const list = await ScriptsDAO.getAll();
+        const next: Record<string, Script> = {};
+        for (const s of list) next[s.id] = s;
+        this.cache = next;
         console.log('[ScriptVault] Loaded', Object.keys(this.cache).length, 'scripts');
       })();
     }
@@ -154,8 +169,10 @@ export const ScriptStorage = {
     }
   },
 
+  // Legacy hook retained as a no-op so callers that still invoke save()
+  // don't error; persistence happens inline on every write.
   async save(): Promise<void> {
-    await chrome.storage.local.set({ userscripts: this.cache });
+    /* no-op: IDB writes commit per-record in set()/delete()/clear()/reorder() */
   },
 
   async getAll(): Promise<Script[]> {
@@ -171,49 +188,50 @@ export const ScriptStorage = {
   async set(id: string, script: Script): Promise<Script> {
     await this.init();
     const prev = this.cache![id];
-    this.cache![id] = script;
     try {
-      await this.save();
+      await ScriptsDAO.put(script);
     } catch (e) {
-      // Rollback cache on persist failure (e.g., quota exceeded)
-      if (prev !== undefined) this.cache![id] = prev;
-      else delete this.cache![id];
-      throw e; // Re-throw so callers know the save failed
+      // Cache untouched on IDB failure — rethrow so callers know.
+      throw e;
     }
+    this.cache![id] = script;
+    void prev; // explicit no-op to keep diff readable; cache now matches IDB
     return script;
   },
 
   async delete(id: string): Promise<void> {
     await this.init();
     const prev = this.cache![id];
-    delete this.cache![id];
+    if (prev === undefined) return;
     try {
-      await this.save();
-      // Delete associated values after script removal persists. If saving the
-      // script cache fails, rollback keeps values and script data consistent.
-      await ScriptValues.deleteAll(id);
+      // ScriptsDAO.delete() runs script + values + stats removal in one IDB
+      // transaction, so a SW kill mid-delete leaves no orphans.
+      await ScriptsDAO.delete(id);
     } catch (e) {
-      // Rollback cache on failure
-      if (prev !== undefined) this.cache![id] = prev;
       throw e;
     }
+    delete this.cache![id];
+    // Mirror the deletion into the in-memory ScriptValues cache too.
+    delete ScriptValues.cache[id];
   },
 
   async clear(): Promise<void> {
+    await this.init();
     const prev = this.cache;
-    this.cache = {};
     try {
-      await this.save();
+      await ScriptsDAO.clear();
     } catch (e) {
-      this.cache = prev;
       throw e;
     }
+    this.cache = {};
+    ScriptValues.cache = {};
+    void prev;
   },
 
   /**
-   * Drop the in-memory cache so the next read forces a fresh load from storage.
-   * Call this after any out-of-band write to the 'userscripts' storage key
-   * (e.g., legacy code that writes directly via chrome.storage.local.set).
+   * Drop the in-memory cache so the next read forces a fresh load from IDB.
+   * Call this after any out-of-band IDB write (rare; mostly used by tests
+   * and the import-export flow).
    */
   invalidateCache(): void {
     this.cache = null;
@@ -238,13 +256,20 @@ export const ScriptStorage = {
 
   async reorder(orderedIds: string[]): Promise<void> {
     await this.init();
+    // Build the updated list, then write per-record (each in its own IDB txn).
+    // We tolerate partial failure: any record that persists stays persisted,
+    // and the cache reflects what actually shipped.
+    const updates: Script[] = [];
     orderedIds.forEach((id, index) => {
       const script = this.cache![id];
       if (script) {
         script.position = index;
+        updates.push(script);
       }
     });
-    await this.save();
+    for (const s of updates) {
+      await ScriptsDAO.put(s);
+    }
   },
 
   async duplicate(id: string): Promise<Script | null> {
@@ -273,6 +298,10 @@ export const ScriptStorage = {
 // Script Values Storage (GM_getValue/setValue)
 // ============================================================================
 
+// ScriptValues — IndexedDB-backed (v3.0). The per-script in-memory cache is a
+// mirror of the IDB `values` store. Reads serve from cache after init; writes
+// commit to IDB first, then update cache so a persist failure leaves no
+// in-memory drift.
 export const ScriptValues = {
   cache: {} as Record<string, Record<string, unknown>>,
   listeners: new Map<string, ValueChangeListener>(),
@@ -284,9 +313,10 @@ export const ScriptValues = {
     const existing = this._initPromises.get(scriptId);
     if (existing) return existing;
     const p = (async () => {
-      const storageKey = `values_${scriptId}`;
-      const data = await chrome.storage.local.get(storageKey);
-      this.cache[scriptId] = (data[storageKey] as Record<string, unknown> | undefined) || {};
+      // ScriptStorage.init() runs the v2→v3 migration. We chain it here so
+      // pure-values-only call paths still trigger the migration on cold boot.
+      await ScriptStorage.init();
+      this.cache[scriptId] = await ValuesDAO.getAll(scriptId);
     })();
     this._initPromises.set(scriptId, p);
     try {
@@ -302,27 +332,19 @@ export const ScriptValues = {
     return value !== undefined ? value : defaultValue;
   },
 
-  // FIXED: Save immediately to prevent data loss on service worker termination
-  // MV3 service workers can be killed at any time — setTimeout-based debouncing is unsafe
+  // FIXED: Save immediately to prevent data loss on service worker termination.
+  // MV3 service workers can be killed at any time — setTimeout-based debouncing is unsafe.
   async set(scriptId: string, key: string, value: unknown, senderTabId: number | null = null): Promise<unknown> {
     await this.init(scriptId);
     const oldValue = this.cache[scriptId]![key];
-    const hadKey = Object.hasOwn(this.cache[scriptId]!, key);
 
-    // Update cache immediately
-    this.cache[scriptId]![key] = value;
-
-    // Save IMMEDIATELY — don't debounce persistence in MV3!
-    // Service workers can be terminated at any time, losing unsaved data
+    // Persist BEFORE mutating cache so a quota error leaves no drift.
     try {
-      await chrome.storage.local.set({
-        [`values_${scriptId}`]: this.cache[scriptId],
-      });
+      await ValuesDAO.set(scriptId, key, value);
     } catch (e) {
-      if (hadKey) this.cache[scriptId]![key] = oldValue;
-      else delete this.cache[scriptId]![key];
       throw e;
     }
+    this.cache[scriptId]![key] = value;
 
     // Debounce notifications only (these are less critical)
     this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
@@ -358,16 +380,12 @@ export const ScriptValues = {
     await this.init(scriptId);
     if (!Object.hasOwn(this.cache[scriptId]!, key)) return;
     const oldValue = this.cache[scriptId]![key];
-    delete this.cache[scriptId]![key];
-    // Save immediately
     try {
-      await chrome.storage.local.set({
-        [`values_${scriptId}`]: this.cache[scriptId],
-      });
+      await ValuesDAO.delete(scriptId, key);
     } catch (e) {
-      this.cache[scriptId]![key] = oldValue;
       throw e;
     }
+    delete this.cache[scriptId]![key];
     this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
   },
 
@@ -383,21 +401,18 @@ export const ScriptValues = {
 
   async setAll(scriptId: string, values: Record<string, unknown>, senderTabId: number | null = null): Promise<void> {
     await this.init(scriptId);
-    const snapshot = { ...this.cache[scriptId] };
     const changes: Array<[string, unknown, unknown]> = [];
     for (const [key, value] of Object.entries(values)) {
-      const oldValue = this.cache[scriptId]![key];
-      this.cache[scriptId]![key] = value;
-      changes.push([key, oldValue, value]);
+      changes.push([key, this.cache[scriptId]![key], value]);
     }
-    // Save immediately
     try {
-      await chrome.storage.local.set({
-        [`values_${scriptId}`]: this.cache[scriptId],
-      });
+      // setAll runs every put in a single IDB transaction — atomic on commit.
+      await ValuesDAO.setAll(scriptId, values);
     } catch (e) {
-      this.cache[scriptId] = snapshot;
       throw e;
+    }
+    for (const [key, _o, v] of changes) {
+      this.cache[scriptId]![key] = v;
     }
     for (const [key, oldValue, value] of changes) {
       this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
@@ -406,30 +421,26 @@ export const ScriptValues = {
 
   async deleteAll(scriptId: string): Promise<void> {
     delete this.cache[scriptId];
-    await chrome.storage.local.remove(`values_${scriptId}`);
+    await ValuesDAO.deleteAll(scriptId);
   },
 
   // Delete multiple specific keys at once
   async deleteMultiple(scriptId: string, keys: string[], senderTabId: number | null = null): Promise<void> {
     await this.init(scriptId);
-    const snapshot = { ...this.cache[scriptId] };
     const changes: Array<[string, unknown]> = [];
+    const present: string[] = [];
     for (const key of keys) {
       if (!Object.hasOwn(this.cache[scriptId]!, key)) continue;
-      const oldValue = this.cache[scriptId]![key];
-      delete this.cache[scriptId]![key];
-      changes.push([key, oldValue]);
+      changes.push([key, this.cache[scriptId]![key]]);
+      present.push(key);
     }
-    if (changes.length === 0) return;
-    // Save immediately
+    if (present.length === 0) return;
     try {
-      await chrome.storage.local.set({
-        [`values_${scriptId}`]: this.cache[scriptId],
-      });
+      await ValuesDAO.deleteMultiple(scriptId, present);
     } catch (e) {
-      this.cache[scriptId] = snapshot;
       throw e;
     }
+    for (const key of present) delete this.cache[scriptId]![key];
     for (const [key, oldValue] of changes) {
       this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
     }
@@ -437,7 +448,9 @@ export const ScriptValues = {
 
   async getStorageSize(scriptId: string): Promise<number> {
     await this.init(scriptId);
-    return JSON.stringify(this.cache[scriptId] || {}).length;
+    // TextEncoder produces accurate UTF-8 byte counts (vs JS string .length
+    // which counts UTF-16 code units).
+    return new TextEncoder().encode(JSON.stringify(this.cache[scriptId] || {})).length;
   },
 
   addListener(scriptId: string, listenerId: string, callback: ValueChangeListener['callback']): string {

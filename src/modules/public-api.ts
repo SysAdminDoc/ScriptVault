@@ -863,31 +863,12 @@ const HANDLERS: Record<string, HandlerFn> = {
       // registerAllScripts() to re-register scripts with the old enabled value.
       const script = await ScriptStorage.get(scriptId);
       if (!script) {
-        // Fall back to legacy-format path for backwards compatibility
-        const store = await getScriptStore();
-        let updatedStore: StoredUserscripts | null = null;
-
-        if (store.mode === 'array') {
-          const scripts = Array.isArray(store.raw) ? [...store.raw] : [];
-          const idx = findArrayScriptIndex(scripts, scriptId);
-          if (idx === -1) return { error: 'Script not found', scriptId };
-          const current = scripts[idx]!;
-          scripts[idx] = { ...current, enabled, updatedAt: Date.now() };
-          updatedStore = scripts;
-        } else {
-          const record = !Array.isArray(store.raw) ? { ...store.raw } : {};
-          const entry = findRecordScriptEntry(record, scriptId);
-          if (!entry) return { error: 'Script not found', scriptId };
-          record[entry.key] = { ...entry.value, enabled, updatedAt: Date.now() };
-          updatedStore = record;
-        }
-
-        await chrome.storage.local.set({ userscripts: updatedStore });
-        // Invalidate the ScriptStorage cache since we wrote to storage directly
-        ScriptStorage.invalidateCache();
-      } else {
-        await ScriptStorage.set(scriptId, { ...script, enabled, updatedAt: Date.now() });
+        // v3.0: ScriptStorage.init() runs the v2→v3 migration, so anything
+        // that ever existed is now in IDB. A null result means the script
+        // was never installed.
+        return { error: 'Script not found', scriptId };
       }
+      await ScriptStorage.set(scriptId, { ...script, enabled, updatedAt: Date.now() });
 
       await refreshRuntimeAfterMutation();
 
@@ -940,9 +921,24 @@ const HANDLERS: Record<string, HandlerFn> = {
       const store = await getScriptStore();
       const updatedStore = upsertScriptStore(store, newScript, meta, describeSender(sender));
 
-      await chrome.storage.local.set({ userscripts: updatedStore });
-      // Invalidate ScriptStorage cache so registerAllScripts() picks up the new script
-      ScriptStorage.invalidateCache();
+      // v3.0: persist through ScriptStorage so the IDB-backed store stays
+      // authoritative. The legacy `userscripts` blob is migrated on first
+      // init() and then ignored — direct chrome.storage writes would be
+      // invisible to the dashboard.
+      if (Array.isArray(updatedStore)) {
+        // Array-mode legacy path — convert to nested record on the way in.
+        await ScriptStorage.set(newScript.id, createNestedStoredScript(
+          newScript, meta, describeSender(sender), store.scripts.length, null
+        ) as unknown as Parameters<typeof ScriptStorage.set>[1]);
+      } else {
+        const entry = updatedStore[newScript.id] ?? Object.values(updatedStore).find((v) => {
+          const n = normalizeStoredScript(v);
+          return n?.id === newScript.id;
+        });
+        if (entry) {
+          await ScriptStorage.set(newScript.id, entry as unknown as Parameters<typeof ScriptStorage.set>[1]);
+        }
+      }
       await refreshRuntimeAfterMutation(newScript, meta);
 
       void fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
@@ -1109,9 +1105,21 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
       const store = await getScriptStore();
       const updatedStore = upsertScriptStore(store, newScript, meta, `origin:${origin}`);
 
-      await chrome.storage.local.set({ userscripts: updatedStore });
-      // Invalidate ScriptStorage cache so registerAllScripts() picks up the new script
-      ScriptStorage.invalidateCache();
+      // v3.0: route through ScriptStorage (IDB-backed) instead of writing the
+      // legacy `userscripts` blob directly.
+      if (Array.isArray(updatedStore)) {
+        await ScriptStorage.set(newScript.id, createNestedStoredScript(
+          newScript, meta, `origin:${origin}`, store.scripts.length, null
+        ) as unknown as Parameters<typeof ScriptStorage.set>[1]);
+      } else {
+        const entry = updatedStore[newScript.id] ?? Object.values(updatedStore).find((v) => {
+          const n = normalizeStoredScript(v);
+          return n?.id === newScript.id;
+        });
+        if (entry) {
+          await ScriptStorage.set(newScript.id, entry as unknown as Parameters<typeof ScriptStorage.set>[1]);
+        }
+      }
       await refreshRuntimeAfterMutation(newScript, meta);
 
       void fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
