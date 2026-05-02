@@ -808,6 +808,8 @@ TM issue [#2748](https://github.com/Tampermonkey/tampermonkey/issues/2748) and [
 - Dashboard shows an "Updates available" banner that lists pending updates
 - Only use OS notifications for: install errors, sync failures, and security warnings (new `@connect` domain added)
 
+**Status (v3.7.0, 2026-05-02):** Mostly shipped. `applyUpdate` no longer fires a per-script OS notification — `autoUpdate` aggregates cycle results into a single summary notification ("3 scripts updated: A v1.0 → v1.1, B v2.0 → v2.1, ..."), still gated by `notifyOnUpdate`. New `UpdateSystem._recentUpdates` ring buffer + `getRecentUpdates`/`clearRecentUpdates` background handlers feed a dismissible dashboard banner that lists scripts auto-updated since the last visit. Yellow-badge indicator for "updates available" still pending — can land alongside Phase 6.2 (staged updates) when those land.
+
 ### 12.11 Per-Site Enable/Disable Toggle
 
 VM issue [#2410](https://github.com/violentmonkey/violentmonkey/issues/2410). Allow enabling or disabling a script for only the current domain without globally disabling it or editing `@match`. No other manager has this; it fills the gap between "script off everywhere" and "script on everywhere."

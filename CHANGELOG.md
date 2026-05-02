@@ -2,6 +2,13 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.7.0] — In-app update notifications + summary OS notifications (Phase 12.10)
+
+- Changed: `applyUpdate` no longer fires a per-script OS notification. Previously a 10-script auto-update cycle would trigger 10 OS-level "Script Updated" toasts back-to-back; now `autoUpdate` aggregates the cycle's successful updates and fires at most one summary notification (`"3 scripts updated: A v1.0 → v1.1, B v2.0 → v2.1, C v0.4 → v0.5"`).
+- Added: in-app dashboard banner that lists scripts auto-updated since the last visit. Lands at the top of the Scripts tab on dashboard load. Dismiss button clears the ring on the background side so the banner stays gone next visit.
+- Added: `UpdateSystem._recentUpdates` ring buffer (cap 20, newest first) plus `getRecentUpdates` / `clearRecentUpdates` background message handlers.
+- Manual single-script flows (popup "Check for Update", dashboard force-update) keep their inline feedback path — they don't push onto the ring or fire a summary notification.
+
 ## [v3.6.3] — Beautify preserves cursor + scroll (Phase 7.5)
 
 - Fixed: `beautifyCode` (editor toolbar "Beautify" button) used to slam the cursor to line 0, char 0 after every reformat. On a long file you'd lose your place every time you hit it. The cursor + vertical scroll position now stay where they were.
