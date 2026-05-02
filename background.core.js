@@ -419,19 +419,20 @@ const UpdateSystem = {
     // Persist to storage after registration attempt
     await ScriptStorage.set(scriptId, script);
 
-    const settings = await SettingsManager.get();
-    if (settings.notifyOnUpdate) {
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'images/icon128.png',
-        title: 'Script Updated',
-        message: `${script.meta.name} updated to v${script.meta.version}`
-      });
-    }
-
+    // Phase 12.10 — applyUpdate no longer fires a per-script OS notification.
+    // Instead, the autoUpdate caller aggregates successful updates into a
+    // single summary notification (or none, when notifyOnUpdate is off), and
+    // pushes them onto the recent-updates ring so the dashboard can surface
+    // an in-app banner. Manual single-script updates (popup "Check for
+    // Update", dashboard force-update) get their feedback inline via the
+    // returned { success, script } payload.
     return { success: true, script };
   },
-  
+
+  // Phase 12.10 — recently-applied updates ring buffer surfaced to the
+  // dashboard via the `getRecentUpdates` background message. Capped at 20.
+  _recentUpdates: [],
+
   async autoUpdate() {
     const settings = await SettingsManager.get();
     if (!settings.autoUpdate) return;
@@ -444,7 +445,56 @@ const UpdateSystem = {
       console.error('[ScriptVault] Auto-update failures:', failed.map(r => r.reason?.message || r.reason));
     }
 
+    // Aggregate successful updates for in-app surfacing + a single summary
+    // OS notification (only fired when the user opted in via notifyOnUpdate).
+    const successful = [];
+    results.forEach((r, idx) => {
+      if (r.status === 'fulfilled' && r.value?.success && updates[idx]) {
+        successful.push({
+          id: updates[idx].id,
+          name: updates[idx].name,
+          previousVersion: updates[idx].currentVersion,
+          newVersion: updates[idx].newVersion,
+          appliedAt: Date.now()
+        });
+      }
+    });
+    if (successful.length > 0) {
+      // Push onto the ring (newest first), cap at 20.
+      this._recentUpdates = [...successful, ...this._recentUpdates].slice(0, 20);
+
+      if (settings.notifyOnUpdate) {
+        const title = successful.length === 1
+          ? 'Script Updated'
+          : `${successful.length} scripts updated`;
+        // Compact message body: list up to 3 names then "+N more".
+        const names = successful.slice(0, 3).map(s => `${s.name} v${s.newVersion}`);
+        const overflow = successful.length - names.length;
+        const message = overflow > 0
+          ? `${names.join(', ')} (+${overflow} more)`
+          : names.join(', ');
+        try {
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'images/icon128.png',
+            title,
+            message
+          });
+        } catch (_e) { /* notifications may be disabled; non-fatal */ }
+      }
+    }
+
     await SettingsManager.set('lastUpdateCheck', Date.now());
+  },
+
+  /** Return the most recent successful auto-updates (newest first). */
+  getRecentUpdates() {
+    return this._recentUpdates.slice();
+  },
+
+  /** Clear the recent-updates ring (called when the dashboard banner is dismissed). */
+  clearRecentUpdates() {
+    this._recentUpdates = [];
   }
 };
 
@@ -1531,6 +1581,14 @@ async function handleMessage(message, sender) {
       // Updates
       case 'checkUpdates':
         return await UpdateSystem.checkForUpdates(data?.scriptId);
+
+      // Phase 12.10 — recently-applied updates for the in-app dashboard banner.
+      case 'getRecentUpdates':
+        return UpdateSystem.getRecentUpdates();
+
+      case 'clearRecentUpdates':
+        UpdateSystem.clearRecentUpdates();
+        return { success: true };
 
       case 'forceUpdate': {
         // Force re-download bypassing HTTP cache
