@@ -30,6 +30,21 @@ interface XhrManagerInterface {
   abortByTab(tabId: number): void;
   abortByScript(scriptId: string): void;
   getActiveCount(): number;
+  buildFetchOptions(data: XhrFetchPayload): RequestInit;
+}
+
+/**
+ * Wire-format payload sent from the GM_xmlhttpRequest wrapper to the
+ * background. Only the subset relevant to fetch() options is typed here;
+ * the body and signal are wired by the caller.
+ */
+export interface XhrFetchPayload {
+  method?: string;
+  headers?: Record<string, string>;
+  noCache?: boolean;
+  redirect?: 'follow' | 'error' | 'manual' | string;
+  anonymous?: boolean;
+  [key: string]: unknown;
 }
 
 const XhrManager: XhrManagerInterface = {
@@ -109,6 +124,41 @@ const XhrManager: XhrManagerInterface = {
   // Get count of active requests
   getActiveCount(): number {
     return this.requests.size;
+  },
+
+  /**
+   * Build the `fetch()` init options for a GM_xmlhttpRequest payload.
+   *
+   * Encapsulates the per-option translation rules so they're unit-testable:
+   *   - `data.noCache === true` adds Cache-Control + Pragma: no-cache
+   *     (only if the caller hasn't already set them — case-insensitive).
+   *   - `data.redirect` is forwarded only when it's a valid RequestInit value
+   *     ('follow' | 'error' | 'manual'); typos are silently dropped.
+   *   - `data.anonymous === true` switches credentials to 'omit'.
+   *
+   * Body and signal are wired by the caller because they involve
+   * AbortController + body serialization that lives outside this helper.
+   */
+  buildFetchOptions(data: XhrFetchPayload): RequestInit {
+    const method = String(data.method || 'GET').toUpperCase();
+    const reqHeaders: Record<string, string> = { ...(data.headers || {}) };
+
+    if (data.noCache === true) {
+      const lcKeys = Object.keys(reqHeaders).map((k) => k.toLowerCase());
+      if (!lcKeys.includes('cache-control')) reqHeaders['Cache-Control'] = 'no-cache';
+      if (!lcKeys.includes('pragma')) reqHeaders['Pragma'] = 'no-cache';
+    }
+
+    const opts: RequestInit = {
+      method,
+      headers: reqHeaders,
+      credentials: data.anonymous === true ? 'omit' : 'include',
+    };
+
+    if (data.redirect === 'follow' || data.redirect === 'error' || data.redirect === 'manual') {
+      opts.redirect = data.redirect;
+    }
+    return opts;
   }
 };
 

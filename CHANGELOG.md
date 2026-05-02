@@ -2,6 +2,15 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.2.0] — GM_xmlhttpRequest noCache/redirect + GM_info platform parity (Phase 11)
+
+- Added: `GM_xmlhttpRequest({ noCache: true })` (and Tampermonkey's lowercase `nocache` alias) — sets `Cache-Control: no-cache` + `Pragma: no-cache` on the request, but only if the caller didn't already set them (case-insensitive). Closes Violentmonkey issue #2168 / Tampermonkey changelog parity.
+- Added: `GM_xmlhttpRequest({ redirect: 'follow' | 'error' | 'manual' })` — forwarded directly to `RequestInit.redirect` so scripts can detect or block redirects. Invalid values are silently dropped (no breakage on typos like `redirect: true`). Closes VM #2359.
+- Refactored: extracted the fetch-options translation into `XhrManager.buildFetchOptions(data)` (in `modules/xhr.js` + the TS mirror at `src/modules/xhr.ts`) so the noCache/redirect/credentials rules are unit-testable in isolation. The background `GM_xmlhttpRequest` handler now consumes this helper.
+- Added: 9 new tests for `XhrManager.buildFetchOptions` covering case-insensitive Cache-Control/Pragma overrides, valid/invalid redirect values, anonymous credentials, and method default. 580 tests pass across 33 files.
+- Added: `GM_info.userAgent`, `GM_info.userAgentData` (clone of `navigator.userAgentData` brands/platform/mobile), and `GM_info.platform.fullVersionList` + `GM_info.platform.mobile` — Phase 11.1 GM_info enrichment for parity with Violentmonkey.
+- Hardened: `GM_info.platform.browserName` / `browserVersion` now prefer `navigator.userAgentData.brands` over the legacy `navigator.userAgent` regex, with the regex retained as a fallback for older Chrome.
+
 ## [v3.1.0] — MatchSet precompiled URL lookup + tests target production code
 
 - Added: `MatchSet` precompiled host index (`background.core.js` + `src/background/url-matcher.ts`). Builds an `O(1)` hostname → script bucket so `getScriptsForUrl` no longer linear-scans every script's pattern list. Wildcard subdomains (`*.example.com`) are indexed under their base domain and resolved via parent-suffix walk so deep subdomains (`a.b.example.com`) still hit the bucket. Regex `@include` and patterns without a host hint fall into a universal bucket so the candidate set remains a strict superset of the true match set. Phase 4.2 of the roadmap.
