@@ -6948,6 +6948,15 @@ ${req.code}
   }
   
   // GM_addElement
+  const _urlAttrs = new Set(['href', 'src', 'action', 'formaction', 'poster', 'cite', 'background', 'xlink:href', 'data']);
+  function _isUnsafeElementAttribute(name, value) {
+    const lowerName = String(name || '').trim().toLowerCase();
+    if (!lowerName || lowerName.startsWith('on')) return true;
+    if (!_urlAttrs.has(lowerName)) return false;
+    const normalizedValue = String(value ?? '').replace(/[\\u0000-\\u0020\\u007f\\ufffd]+/g, '').toLowerCase();
+    return /^(javascript|vbscript|data|blob|file):/.test(normalizedValue);
+  }
+
   function GM_addElement(parentOrTag, tagOrAttrs, attrsOrUndefined) {
     if (!hasGrant('GM_addElement') && !hasGrant('GM.addElement')) return null;
     let parent, tag, attrs;
@@ -6965,15 +6974,12 @@ ${req.code}
       Object.entries(attrs).forEach(([k, v]) => {
         if (k === 'textContent') el.textContent = v;
         else if (k === 'innerHTML') {
-          // Sanitize: strip event handlers and script tags to prevent XSS
           const temp = document.createElement('template');
           temp.innerHTML = v;
           temp.content.querySelectorAll('script').forEach(s => s.remove());
           temp.content.querySelectorAll('*').forEach(node => {
             for (const attr of [...node.attributes]) {
-              const lowerName = attr.name.toLowerCase();
-              const lowerValue = attr.value.trim().toLowerCase();
-              if (lowerName.startsWith('on') || lowerValue.startsWith('javascript:') || lowerValue.startsWith('vbscript:')) {
+              if (_isUnsafeElementAttribute(attr.name, attr.value)) {
                 node.removeAttribute(attr.name);
               }
             }
@@ -6981,17 +6987,7 @@ ${req.code}
           el.innerHTML = temp.innerHTML;
         }
         else {
-          // Apply the same defensive sanitization to direct attribute sets so
-          // this path stays consistent with the innerHTML branch above: drop
-          // inline event handlers (onclick/onerror/...) and reject javascript:
-          // or vbscript: URLs regardless of attribute name (covers href, src,
-          // formaction, xlink:href, poster, action, etc.). The tradeoff is
-          // bare minimum — this is not a full HTML sanitizer, just matching the
-          // innerHTML branch's baseline.
-          const lowerName = String(k).toLowerCase();
-          if (lowerName.startsWith('on')) return;
-          const lowerValue = String(v ?? '').trim().toLowerCase();
-          if (lowerValue.startsWith('javascript:') || lowerValue.startsWith('vbscript:')) return;
+          if (_isUnsafeElementAttribute(k, v)) return;
           try { el.setAttribute(k, v); } catch { /* ignore invalid attribute names */ }
         }
       });
@@ -7483,80 +7479,109 @@ ${req.code}
       sendToBackground('netlog_record', { scriptId: _scriptId, scriptName: _scriptName, ...entry }).catch(() => {});
     }
 
+    function _safeSet(target, prop, value) {
+      try {
+        Object.defineProperty(target, prop, { configurable: true, writable: true, value });
+        return true;
+      } catch (e) {
+        try {
+          target[prop] = value;
+          return target[prop] === value;
+        } catch (e2) {
+          return false;
+        }
+      }
+    }
+
     // ── fetch ──────────────────────────────────────────────────────────────
     const _origFetch = window.fetch;
-    window.fetch = function __svFetch(input, init) {
-      const method = (init?.method || 'GET').toUpperCase();
-      const url = typeof input === 'string' ? input : input?.url || String(input);
-      const t0 = performance.now();
-      return _origFetch.apply(this, arguments).then(resp => {
-        const duration = Math.round(performance.now() - t0);
-        const cl = parseInt(resp.headers.get('content-length') || '0') || 0;
-        _log({ type: 'fetch', method, url, status: resp.status, statusText: resp.statusText, duration, responseSize: cl, responseHeaders: Object.fromEntries(resp.headers.entries()) });
-        return resp;
-      }, err => {
-        const duration = Math.round(performance.now() - t0);
-        _log({ type: 'fetch', method, url, error: err?.message || String(err), duration });
-        throw err;
+    if (typeof _origFetch === 'function') {
+      _safeSet(window, 'fetch', function __svFetch(input, init) {
+        const method = (init?.method || 'GET').toUpperCase();
+        const url = typeof input === 'string' ? input : input?.url || String(input);
+        const t0 = performance.now();
+        return _origFetch.apply(this, arguments).then(resp => {
+          const duration = Math.round(performance.now() - t0);
+          const cl = parseInt(resp.headers.get('content-length') || '0') || 0;
+          _log({ type: 'fetch', method, url, status: resp.status, statusText: resp.statusText, duration, responseSize: cl, responseHeaders: Object.fromEntries(resp.headers.entries()) });
+          return resp;
+        }, err => {
+          const duration = Math.round(performance.now() - t0);
+          _log({ type: 'fetch', method, url, error: err?.message || String(err), duration });
+          throw err;
+        });
       });
-    };
+    }
 
     // ── XMLHttpRequest ─────────────────────────────────────────────────────
     const _OrigXHR = window.XMLHttpRequest;
-    window.XMLHttpRequest = function __svXHR() {
-      const xhr = new _OrigXHR();
-      let _method = 'GET', _url = '', _t0 = 0;
-      const _origOpen = xhr.open.bind(xhr);
-      xhr.open = function(method, url) {
-        _method = (method || 'GET').toUpperCase();
-        _url = String(url);
-        return _origOpen.apply(this, arguments);
+    if (typeof _OrigXHR === 'function') {
+      const _WrappedXHR = function __svXHR() {
+        const xhr = new _OrigXHR();
+        let _method = 'GET', _url = '', _t0 = 0;
+        const _origOpen = xhr.open.bind(xhr);
+        xhr.open = function(method, url) {
+          _method = (method || 'GET').toUpperCase();
+          _url = String(url);
+          return _origOpen.apply(this, arguments);
+        };
+        const _origSend = xhr.send.bind(xhr);
+        xhr.send = function() {
+          _t0 = performance.now();
+          xhr.addEventListener('loadend', () => {
+            const duration = Math.round(performance.now() - _t0);
+            if (xhr.status) {
+              _log({ type: 'xhr', method: _method, url: _url, status: xhr.status, statusText: xhr.statusText, duration, responseSize: (xhr.responseText || '').length });
+            } else {
+              _log({ type: 'xhr', method: _method, url: _url, error: 'Request failed', duration });
+            }
+          }, { once: true });
+          return _origSend.apply(this, arguments);
+        };
+        return xhr;
       };
-      const _origSend = xhr.send.bind(xhr);
-      xhr.send = function() {
-        _t0 = performance.now();
-        xhr.addEventListener('loadend', () => {
-          const duration = Math.round(performance.now() - _t0);
-          if (xhr.status) {
-            _log({ type: 'xhr', method: _method, url: _url, status: xhr.status, statusText: xhr.statusText, duration, responseSize: (xhr.responseText || '').length });
-          } else {
-            _log({ type: 'xhr', method: _method, url: _url, error: 'Request failed', duration });
-          }
-        }, { once: true });
-        return _origSend.apply(this, arguments);
-      };
-      return xhr;
-    };
-    window.XMLHttpRequest.prototype = _OrigXHR.prototype;
+      _WrappedXHR.prototype = _OrigXHR.prototype;
+      _safeSet(window, 'XMLHttpRequest', _WrappedXHR);
+    }
 
     // ── WebSocket ──────────────────────────────────────────────────────────
     const _OrigWS = window.WebSocket;
-    window.WebSocket = function __svWebSocket(url, protocols) {
-      const ws = protocols ? new _OrigWS(url, protocols) : new _OrigWS(url);
-      const t0 = performance.now();
-      let bytesSent = 0, bytesRecv = 0;
-      ws.addEventListener('open', () => {
-        _log({ type: 'websocket', method: 'WS', url: String(url), status: 101, statusText: 'Switching Protocols', duration: Math.round(performance.now() - t0) });
+    if (typeof _OrigWS === 'function') {
+      const _WrappedWS = function __svWebSocket(url, protocols) {
+        const ws = protocols ? new _OrigWS(url, protocols) : new _OrigWS(url);
+        const t0 = performance.now();
+        let bytesSent = 0, bytesRecv = 0;
+        ws.addEventListener('open', () => {
+          _log({ type: 'websocket', method: 'WS', url: String(url), status: 101, statusText: 'Switching Protocols', duration: Math.round(performance.now() - t0) });
+        });
+        ws.addEventListener('message', e => { bytesRecv += (e.data?.length || 0); });
+        ws.addEventListener('close', e => {
+          _log({ type: 'websocket', method: 'WS_CLOSE', url: String(url), status: e.code, duration: Math.round(performance.now() - t0), responseSize: bytesRecv });
+        });
+        const _origSendWS = ws.send.bind(ws);
+        ws.send = function(data) { bytesSent += (data?.length || 0); return _origSendWS(data); };
+        return ws;
+      };
+      _WrappedWS.prototype = _OrigWS.prototype;
+      Object.assign(_WrappedWS, {
+        CONNECTING: _OrigWS.CONNECTING ?? 0,
+        OPEN: _OrigWS.OPEN ?? 1,
+        CLOSING: _OrigWS.CLOSING ?? 2,
+        CLOSED: _OrigWS.CLOSED ?? 3
       });
-      ws.addEventListener('message', e => { bytesRecv += (e.data?.length || 0); });
-      ws.addEventListener('close', e => {
-        _log({ type: 'websocket', method: 'WS_CLOSE', url: String(url), status: e.code, duration: Math.round(performance.now() - t0), responseSize: bytesRecv });
-      });
-      const _origSendWS = ws.send.bind(ws);
-      ws.send = function(data) { bytesSent += (data?.length || 0); return _origSendWS(data); };
-      return ws;
-    };
-    window.WebSocket.prototype = _OrigWS.prototype;
-    Object.assign(window.WebSocket, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
+      _safeSet(window, 'WebSocket', _WrappedWS);
+    }
 
     // ── sendBeacon ─────────────────────────────────────────────────────────
-    const _origBeacon = navigator.sendBeacon.bind(navigator);
-    navigator.sendBeacon = function __svBeacon(url, data) {
-      const result = _origBeacon(url, data);
-      const size = data ? (typeof data === 'string' ? data.length : (data?.byteLength || data?.size || 0)) : 0;
-      _log({ type: 'beacon', method: 'POST', url: String(url), status: result ? 200 : 0, duration: 0, responseSize: size });
-      return result;
-    };
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+      const _origBeacon = navigator.sendBeacon.bind(navigator);
+      _safeSet(navigator, 'sendBeacon', function __svBeacon(url, data) {
+        const result = _origBeacon(url, data);
+        const size = data ? (typeof data === 'string' ? data.length : (data?.byteLength || data?.size || 0)) : 0;
+        _log({ type: 'beacon', method: 'POST', url: String(url), status: result ? 200 : 0, duration: 0, responseSize: size });
+        return result;
+      });
+    }
   })();
   // ========== End Network Proxy ==========
 
