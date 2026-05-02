@@ -52,6 +52,15 @@ describe('WorkspaceManager', () => {
     expect(ws.snapshot.s2).toBe(false);
   });
 
+  it('create() rolls back cache when persistence fails', async () => {
+    mods.ScriptStorage.cache = { s1: { id: 's1', enabled: true } };
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+
+    await expect(WorkspaceManager.create('Unsaved')).rejects.toThrow('QUOTA');
+
+    expect((await WorkspaceManager.getAll()).list).toEqual([]);
+  });
+
   it('getAll returns created workspaces', async () => {
     mods.ScriptStorage.cache = { s1: { id: 's1', enabled: true } };
     await WorkspaceManager.create('WS1');
@@ -81,6 +90,16 @@ describe('WorkspaceManager', () => {
     expect(updated.name).toBe('NewName');
   });
 
+  it('update rolls back cache when persistence fails', async () => {
+    mods.ScriptStorage.cache = { s1: { id: 's1', enabled: true } };
+    const ws = await WorkspaceManager.create('OldName');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+
+    await expect(WorkspaceManager.update(ws.id, { name: 'NewName' })).rejects.toThrow('QUOTA');
+
+    expect((await WorkspaceManager.getAll()).list[0].name).toBe('OldName');
+  });
+
   it('update returns null for missing workspace', async () => {
     const result = await WorkspaceManager.update('nonexistent', { name: 'X' });
     expect(result).toBeNull();
@@ -106,6 +125,16 @@ describe('WorkspaceManager', () => {
     expect(active).toBe(ws.id);
   });
 
+  it('activate rolls back active workspace when persistence fails', async () => {
+    mods.ScriptStorage.cache = { s1: { id: 's1', enabled: true } };
+    const ws = await WorkspaceManager.create('Active');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+
+    await expect(WorkspaceManager.activate(ws.id)).rejects.toThrow('QUOTA');
+
+    expect((await WorkspaceManager.getAll()).active).toBeNull();
+  });
+
   it('activate returns error for missing workspace', async () => {
     const result = await WorkspaceManager.activate('nonexistent');
     expect(result.error).toContain('not found');
@@ -120,6 +149,20 @@ describe('WorkspaceManager', () => {
     expect(active).toBeNull();
   });
 
+  it('delete rolls back list and active workspace when persistence fails', async () => {
+    mods.ScriptStorage.cache = { s1: { id: 's1', enabled: true } };
+    const ws = await WorkspaceManager.create('WS');
+    await WorkspaceManager.activate(ws.id);
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+
+    await expect(WorkspaceManager.delete(ws.id)).rejects.toThrow('QUOTA');
+
+    const { active, list } = await WorkspaceManager.getAll();
+    expect(active).toBe(ws.id);
+    expect(list).toHaveLength(1);
+    expect(list[0].id).toBe(ws.id);
+  });
+
   it('save updates existing workspace snapshot', async () => {
     mods.ScriptStorage.cache = { s1: { id: 's1', enabled: true } };
     const ws = await WorkspaceManager.create('WS');
@@ -127,5 +170,16 @@ describe('WorkspaceManager', () => {
     mods.ScriptStorage.cache.s1.enabled = false;
     const saved = await WorkspaceManager.save(ws.id);
     expect(saved.snapshot.s1).toBe(false);
+  });
+
+  it('save rolls back snapshot when persistence fails', async () => {
+    mods.ScriptStorage.cache = { s1: { id: 's1', enabled: true } };
+    const ws = await WorkspaceManager.create('WS');
+    mods.ScriptStorage.cache.s1.enabled = false;
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+
+    await expect(WorkspaceManager.save(ws.id)).rejects.toThrow('QUOTA');
+
+    expect((await WorkspaceManager.getAll()).list[0].snapshot.s1).toBe(true);
   });
 });
