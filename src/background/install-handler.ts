@@ -154,6 +154,60 @@ export interface InstallResult {
   error?: string;
 }
 
+/**
+ * Install a userscript directly from raw source text — used by both
+ * `installFromUrl` (after fetch) and `installFromCode` (file picker / drag-drop).
+ */
+export async function installFromCode(code: string): Promise<InstallResult> {
+  try {
+    if (typeof code !== 'string' || !code) {
+      throw new Error('No script content provided');
+    }
+
+    if (code.length > MAX_SCRIPT_SIZE) {
+      throw new Error(
+        `Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`,
+      );
+    }
+
+    if (!code.includes('==UserScript==')) {
+      throw new Error('Not a valid userscript');
+    }
+
+    const parsed = parseUserscript(code);
+    if (parsed.error) {
+      throw new Error(parsed.error);
+    }
+    const meta: ScriptMeta = parsed.meta!;
+    const allScripts: Script[] = await ScriptStorage.getAll();
+
+    const existing: Script | undefined = allScripts.find(
+      (s) => s.meta.name === meta.name && s.meta.namespace === meta.namespace,
+    );
+    const id: string = existing ? existing.id : generateId();
+
+    const script: Script = {
+      id,
+      code,
+      meta,
+      enabled: existing ? existing.enabled : true,
+      position: existing ? existing.position : allScripts.length,
+      createdAt: existing ? existing.createdAt : Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    await ScriptStorage.set(id, script);
+    await registerAllScripts();
+    await updateBadge();
+    await autoReloadMatchingTabs(script);
+
+    return { success: true, script };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, error: message };
+  }
+}
+
 export async function installFromUrl(url: string): Promise<InstallResult> {
   try {
     // Timeout after 30 seconds
@@ -183,47 +237,7 @@ export async function installFromUrl(url: string): Promise<InstallResult> {
 
     const code: string = await response.text();
 
-    // Post-read size check (content-length may be missing)
-    if (code.length > MAX_SCRIPT_SIZE) {
-      throw new Error(
-        `Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`,
-      );
-    }
-
-    if (!code.includes('==UserScript==')) {
-      throw new Error('Not a valid userscript');
-    }
-
-    // Parse and save
-    const parsed = parseUserscript(code);
-    if (parsed.error) {
-      throw new Error(parsed.error);
-    }
-    const meta: ScriptMeta = parsed.meta!;
-    const allScripts: Script[] = await ScriptStorage.getAll();
-
-    // Check for existing script with same name+namespace (update instead of duplicate)
-    const existing: Script | undefined = allScripts.find(
-      (s) => s.meta.name === meta.name && s.meta.namespace === meta.namespace,
-    );
-    const id: string = existing ? existing.id : generateId();
-
-    const script: Script = {
-      id,
-      code,
-      meta,
-      enabled: existing ? existing.enabled : true,
-      position: existing ? existing.position : allScripts.length,
-      createdAt: existing ? existing.createdAt : Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    await ScriptStorage.set(id, script);
-    await registerAllScripts();
-    await updateBadge();
-    await autoReloadMatchingTabs(script);
-
-    return { success: true, script };
+    return await installFromCode(code);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return { success: false, error: message };

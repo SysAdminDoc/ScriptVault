@@ -2,6 +2,13 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.8.0] — Install from Local File + Drag-and-Drop (Phase 12.9)
+
+- Added: file-picker install in the dashboard Import section. Pick a `.user.js` (or `.js`) file from disk and ScriptVault parses, validates, and installs it the same way URL installs do — same 5MB ceiling, same name+namespace dedupe, same `==UserScript==` requirement.
+- Added: drag-and-drop install. Drop one or more `.user.js` files anywhere on the dashboard and the page dims with a "Drop .user.js to install" overlay; on release each file is parsed and installed in sequence with a single end-of-batch toast.
+- Added: new background message `installFromCode` (and `installFromCode(code)` helper exported from `src/background/install-handler.ts`). `installFromUrl` is now a thin wrapper that fetches the URL and delegates to `installFromCode`, so both paths share the same parse/dedupe/registration flow.
+- Source: TM issue [#2722](https://github.com/Tampermonkey/tampermonkey/issues/2722).
+
 ## [v3.7.0] — In-app update notifications + summary OS notifications (Phase 12.10)
 
 - Changed: `applyUpdate` no longer fires a per-script OS notification. Previously a 10-script auto-update cycle would trigger 10 OS-level "Script Updated" toasts back-to-back; now `autoUpdate` aggregates the cycle's successful updates and fires at most one summary notification (`"3 scripts updated: A v1.0 → v1.1, B v2.0 → v2.1, C v0.4 → v0.5"`).
