@@ -2,6 +2,16 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.3.0] — GM_notification: progress, buttons, update, close (Phase 11.11)
+
+- Added: `GM_notification({ progress: 0..100 })` — shows a progress bar inside the notification (uses `chrome.notifications.type='progress'`). Useful for download or batch-job scripts.
+- Added: `GM_notification({ buttons: [{title, iconUrl}, ...] })` — up to 2 action buttons (Chrome's hard cap; we silently truncate so the platform contract stays explicit). Click events fire the new `onbuttonclick` callback with `{ buttonClickIndex }` (ScriptCat semantics).
+- Added: `GM_updateNotification(id, details)` — updates an existing notification by tag without closing it. Fields the caller doesn't pass are left untouched, so partial updates don't blank out the title/message.
+- Added: `GM_closeNotification(id)` — programmatically dismisses a notification by tag.
+- Added: `GM_notification(...)` now returns a control object `{ close(), update(patch) }` so authors don't have to track tags manually for the common case.
+- Internal: new background-side message handlers `GM_updateNotification` and `GM_closeNotification` plus a `chrome.notifications.onButtonClicked` listener that routes button clicks back to the originating tab.
+- Internal: `content.js` notification bridge now forwards `buttonIndex` so the wrapper can fire the right callback. Linter `KNOWN_GM_APIS` learned the two new function names.
+
 ## [v3.2.1] — @unwrap metadata tag (Phase 11.2)
 
 - Added: `// @unwrap` directive support (Violentmonkey parity). When present, the wrapper builder emits the user code verbatim without the GM API IIFE — useful for ESM-style top-level imports/exports and scripts that intentionally modify the top-level scope. A one-line `console.warn` banner is prepended so authors who set `@unwrap` by mistake can spot it. GM_* APIs are unavailable in this mode.

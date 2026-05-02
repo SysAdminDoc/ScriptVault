@@ -2764,20 +2764,37 @@ async function handleMessage(message, sender) {
       
       // Notifications (with callbacks: onclick, ondone, timeout, tag)
       case 'GM_notification': {
+        // Phase 11.11 — progress + buttons (ScriptCat parity).
+        // Chrome's chrome.notifications API supports both natively:
+        //   - type: 'progress' + progress: 0..100 → progress bar
+        //   - buttons: [{ title, iconUrl }] up to 2 → action buttons with
+        //     chrome.notifications.onButtonClicked routing.
+        const hasProgress = typeof data.progress === 'number';
         const notifOpts = {
-          type: 'basic',
+          type: hasProgress ? 'progress' : 'basic',
           iconUrl: data.image || 'images/icon128.png',
           title: data.title || 'ScriptVault',
           message: data.text || '',
           silent: data.silent || false
         };
+        if (hasProgress) {
+          notifOpts.progress = Math.max(0, Math.min(100, Math.floor(data.progress)));
+        }
+        // Buttons — Chrome caps at 2; we silently truncate to honour the
+        // platform contract instead of failing the whole notification.
+        if (Array.isArray(data.buttons) && data.buttons.length > 0) {
+          notifOpts.buttons = data.buttons.slice(0, 2).map((b) => ({
+            title: String(b?.title ?? '').slice(0, 200),
+            ...(b?.iconUrl ? { iconUrl: b.iconUrl } : {})
+          }));
+        }
         // Use tag as notification ID for updates
         const notifId = data.tag
           ? await chrome.notifications.create(data.tag, notifOpts)
           : await chrome.notifications.create(notifOpts);
         const tabId = sender.tab?.id;
         // Track notification for callbacks
-        if (tabId && (data.hasOnclick || data.hasOndone)) {
+        if (tabId && (data.hasOnclick || data.hasOndone || data.hasOnbuttonclick)) {
           if (!self._notifCallbacks) self._notifCallbacks = new Map();
           // Evict oldest if map grows too large (prevents unbounded growth)
           if (self._notifCallbacks.size > 500) {
@@ -2786,7 +2803,9 @@ async function handleMessage(message, sender) {
           }
           self._notifCallbacks.set(notifId, {
             tabId, scriptId: data.scriptId,
-            hasOnclick: data.hasOnclick, hasOndone: data.hasOndone
+            hasOnclick: data.hasOnclick,
+            hasOndone: data.hasOndone,
+            hasOnbuttonclick: data.hasOnbuttonclick
           });
           SessionState.persistNotifCallbacks();
         }
@@ -2807,6 +2826,49 @@ async function handleMessage(message, sender) {
           }
         }
         return { success: true, id: notifId };
+      }
+
+      // Phase 11.11 — Update an existing notification by id (tag).
+      // Skips fields the caller didn't specify so partial updates don't blank
+      // out the title/message. Mirrors chrome.notifications.update() behaviour.
+      case 'GM_updateNotification': {
+        if (!data.id) return { success: false, error: 'Missing notification id' };
+        const updateOpts = {};
+        if (typeof data.title === 'string') updateOpts.title = data.title;
+        if (typeof data.text === 'string') updateOpts.message = data.text;
+        if (typeof data.image === 'string') updateOpts.iconUrl = data.image;
+        if (typeof data.progress === 'number') {
+          updateOpts.type = 'progress';
+          updateOpts.progress = Math.max(0, Math.min(100, Math.floor(data.progress)));
+        }
+        if (Array.isArray(data.buttons)) {
+          updateOpts.buttons = data.buttons.slice(0, 2).map((b) => ({
+            title: String(b?.title ?? '').slice(0, 200),
+            ...(b?.iconUrl ? { iconUrl: b.iconUrl } : {})
+          }));
+        }
+        if (typeof data.silent === 'boolean') updateOpts.silent = data.silent;
+        try {
+          const wasUpdated = await chrome.notifications.update(data.id, updateOpts);
+          return { success: !!wasUpdated };
+        } catch (e) {
+          return { success: false, error: e?.message || 'Update failed' };
+        }
+      }
+
+      // Phase 11.11 — Programmatically close a notification by id (tag).
+      case 'GM_closeNotification': {
+        if (!data.id) return { success: false, error: 'Missing notification id' };
+        try {
+          await chrome.notifications.clear(data.id);
+          if (self._notifCallbacks) {
+            self._notifCallbacks.delete(data.id);
+            SessionState.persistNotifCallbacks();
+          }
+          return { success: true };
+        } catch (e) {
+          return { success: false, error: e?.message || 'Close failed' };
+        }
       }
       
       // Open tab (with close tracking for onclose callback)
@@ -4298,6 +4360,21 @@ chrome.notifications.onClosed.addListener(async (notifId, byUser) => {
   if (self._notifCallbacks) {
     self._notifCallbacks.delete(notifId);
     SessionState.persistNotifCallbacks();
+  }
+});
+
+// Phase 11.11 — Notification button click routing.
+// ScriptCat exposes `e.buttonClickIndex` on the onclick event when the user
+// clicks an action button. Forward the index to the originating tab so the
+// wrapper-side onbuttonclick callback can fire.
+chrome.notifications.onButtonClicked.addListener(async (notifId, buttonIndex) => {
+  try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
+  const cb = self._notifCallbacks?.get(notifId);
+  if (cb && cb.hasOnbuttonclick) {
+    chrome.tabs.sendMessage(cb.tabId, {
+      action: 'notificationEvent',
+      data: { notifId, scriptId: cb.scriptId, type: 'buttonClick', buttonIndex }
+    }).catch(() => {});
   }
 });
 
@@ -6300,10 +6377,15 @@ ${req.code}
     GM_xmlhttpRequest({ method: 'HEAD', url, onload: callback, onerror: callback });
   }
 
-  // GM_notification (with onclick, ondone, timeout, tag, silent, highlight, url)
+  // GM_notification (with onclick, ondone, onbuttonclick, timeout, tag, silent,
+  // highlight, url, plus Phase 11.11 progress + buttons + update + close).
+  // Returns a control object with { close(), update(details) } so script
+  // authors don't have to keep notification IDs around manually.
   const _notifCallbacks = new Map();
   function GM_notification(details, ondone) {
-    if (!hasGrant('GM_notification') && !hasGrant('GM.notification')) return;
+    if (!hasGrant('GM_notification') && !hasGrant('GM.notification')) {
+      return { close: () => {}, update: () => {} };
+    }
     let opts;
     if (typeof details === 'string') {
       // GM_notification(text, title, image, onclick)
@@ -6318,15 +6400,25 @@ ${req.code}
     const notifTag = opts.tag || ('notif_' + Math.random().toString(36).substring(2));
     // Store callbacks
     _notifCallbacks.set(notifTag, {
-      onclick: opts.onclick, ondone: opts.ondone
+      onclick: opts.onclick,
+      ondone: opts.ondone,
+      onbuttonclick: opts.onbuttonclick
     });
     // Highlight tab instead of notification
     if (opts.highlight) {
       sendToBackground('GM_focusTab', {}).catch(() => {});
       if (opts.ondone) { try { opts.ondone(); } catch(e) {} }
       _notifCallbacks.delete(notifTag); // Clean up — no notification created
-      return;
+      return { close: () => {}, update: () => {} };
     }
+    // Sanitize buttons[] so the background's truncate-to-2 contract stays
+    // explicit at the wrapper boundary.
+    const wireButtons = Array.isArray(opts.buttons)
+      ? opts.buttons.slice(0, 2).map((b) => ({
+          title: String(b?.title ?? ''),
+          ...(typeof b?.iconUrl === 'string' ? { iconUrl: b.iconUrl } : {})
+        }))
+      : undefined;
     sendToBackground('GM_notification', {
       scriptId,
       title: opts.title || GM_info.script.name,
@@ -6335,9 +6427,65 @@ ${req.code}
       timeout: opts.timeout || 0,
       tag: notifTag,
       silent: opts.silent || false,
+      progress: typeof opts.progress === 'number' ? opts.progress : undefined,
+      buttons: wireButtons,
       hasOnclick: !!opts.onclick,
-      hasOndone: !!opts.ondone
+      hasOndone: !!opts.ondone,
+      hasOnbuttonclick: typeof opts.onbuttonclick === 'function'
     }).catch(() => { _notifCallbacks.delete(notifTag); });
+
+    return {
+      close: () => {
+        _notifCallbacks.delete(notifTag);
+        sendToBackground('GM_closeNotification', { id: notifTag }).catch(() => {});
+      },
+      update: (patch) => {
+        if (!patch || typeof patch !== 'object') return;
+        sendToBackground('GM_updateNotification', {
+          id: notifTag,
+          title: typeof patch.title === 'string' ? patch.title : undefined,
+          text: typeof patch.text === 'string' ? patch.text
+              : typeof patch.body === 'string' ? patch.body : undefined,
+          image: typeof patch.image === 'string' ? patch.image : undefined,
+          progress: typeof patch.progress === 'number' ? patch.progress : undefined,
+          buttons: Array.isArray(patch.buttons)
+            ? patch.buttons.slice(0, 2).map((b) => ({
+                title: String(b?.title ?? ''),
+                ...(typeof b?.iconUrl === 'string' ? { iconUrl: b.iconUrl } : {})
+              }))
+            : undefined,
+          silent: typeof patch.silent === 'boolean' ? patch.silent : undefined
+        }).catch(() => {});
+      }
+    };
+  }
+
+  // Phase 11.11 — Standalone GM_updateNotification / GM_closeNotification
+  // for callers that hold onto the tag from a prior GM_notification(tag: ...).
+  function GM_updateNotification(notificationId, details) {
+    if (!hasGrant('GM_notification') && !hasGrant('GM.notification')) return;
+    if (!notificationId || !details || typeof details !== 'object') return;
+    sendToBackground('GM_updateNotification', {
+      id: notificationId,
+      title: typeof details.title === 'string' ? details.title : undefined,
+      text: typeof details.text === 'string' ? details.text
+          : typeof details.body === 'string' ? details.body : undefined,
+      image: typeof details.image === 'string' ? details.image : undefined,
+      progress: typeof details.progress === 'number' ? details.progress : undefined,
+      buttons: Array.isArray(details.buttons)
+        ? details.buttons.slice(0, 2).map((b) => ({
+            title: String(b?.title ?? ''),
+            ...(typeof b?.iconUrl === 'string' ? { iconUrl: b.iconUrl } : {})
+          }))
+        : undefined,
+      silent: typeof details.silent === 'boolean' ? details.silent : undefined
+    }).catch(() => {});
+  }
+  function GM_closeNotification(notificationId) {
+    if (!hasGrant('GM_notification') && !hasGrant('GM.notification')) return;
+    if (!notificationId) return;
+    _notifCallbacks.delete(notificationId);
+    sendToBackground('GM_closeNotification', { id: notificationId }).catch(() => {});
   }
   
   // GM_openInTab (with close(), onclose, insert, setParent, incognito)
@@ -6621,6 +6769,10 @@ ${req.code}
       const cbs = _notifCallbacks.get(tag);
       if (!cbs) return;
       if (event.data.eventType === 'click' && cbs.onclick) { try { cbs.onclick(); } catch(e) {} }
+      // Phase 11.11 — buttonClick fires onbuttonclick({buttonClickIndex}).
+      if (event.data.eventType === 'buttonClick' && cbs.onbuttonclick) {
+        try { cbs.onbuttonclick({ buttonClickIndex: event.data.buttonIndex | 0 }); } catch(e) {}
+      }
       if (event.data.eventType === 'done') {
         if (cbs.ondone) { try { cbs.ondone(); } catch(e) {} }
         _notifCallbacks.delete(tag);
@@ -6720,6 +6872,8 @@ ${req.code}
   window.GM_head = GM_head;
   window.GM_setClipboard = GM_setClipboard;
   window.GM_notification = GM_notification;
+  window.GM_updateNotification = GM_updateNotification;
+  window.GM_closeNotification = GM_closeNotification;
   window.GM_openInTab = GM_openInTab;
   window.GM_download = GM_download;
   window.GM_log = GM_log;

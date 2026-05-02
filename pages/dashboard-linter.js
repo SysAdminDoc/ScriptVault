@@ -288,6 +288,8 @@ const AdvancedLinter = (() => {
     'GM_getResourceURL', 'GM_registerMenuCommand', 'GM_info', 'GM_log',
     'GM_addStyle', 'GM_addElement', 'GM_download', 'GM_getTab',
     'GM_saveTab', 'GM_getTabs', 'GM_unregisterMenuCommand',
+    // Phase 11.11 — GM_notification companion APIs
+    'GM_updateNotification', 'GM_closeNotification',
     'unsafeWindow', 'window.close', 'window.focus', 'window.onurlchange',
   ];
 

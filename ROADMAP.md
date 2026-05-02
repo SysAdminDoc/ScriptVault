@@ -690,6 +690,8 @@ ScriptCat's `GM_notification` implementation extends the standard:
 
 Chrome's `chrome.notifications` API supports all of these natively via `progressType: 'progressbar'`, `buttons[]`, `update()`, and `clear()`. Source: [ScriptCat notification API](https://docs.scriptcat.org/docs/dev/api/#gm_notification-).
 
+**Status (v3.3.0, 2026-05-02):** Shipped. `progress` (0..100) and `buttons[]` (capped at 2 per Chrome) are accepted by `GM_notification`. New top-level `GM_updateNotification(id, details)` and `GM_closeNotification(id)` functions exposed on `window`. `GM_notification(...)` now also returns a control object `{ close(), update(patch) }` so authors don't have to keep tags around manually. `chrome.notifications.onButtonClicked` routes the index back to the originating tab; the wrapper fires `onbuttonclick({ buttonClickIndex })`. `content.js` bridge forwards `buttonIndex`; linter `KNOWN_GM_APIS` learned the new function names.
+
 **Exit criteria:** `GM_info.isIncognito` and `GM_info.platform` populated; `@unwrap` parses and emits correctly; merge-mode UI exists; "Run now" button uses `userScripts.execute()` on Chrome 135+; `GM_xmlhttpRequest` accepts `noCache`/`nocache`, `redirect`, and `responseType: 'stream'`; `GM_cookie` proxied through SW; `@inject-into`, `@connect`, `@tag`, `@antifeature`, `@top-level-await`, `@run-at document-body`, `@weight` all parsed; `@require` SRI validated; `GM_getTab`/`GM_saveTab`/`GM_getTabs` stored in `storage.session`; `@run-at navigation` fires on SPA route changes; `GM_notification` supports progress, buttons, update, close.
 
 ---
