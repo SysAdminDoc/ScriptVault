@@ -3665,13 +3665,13 @@ async function handleMessage(message, sender) {
       }
 
       case 'factoryReset': {
-        // Clear all scripts
+        // Clear all scripts through the storage abstraction so per-script
+        // values, IDB rows, and in-memory caches stay consistent.
         const allScripts = await ScriptStorage.getAll();
         for (const s of allScripts) {
           await unregisterScript(s.id);
         }
-        await chrome.storage.local.remove('userscripts');
-        ScriptStorage.cache = {};
+        await ScriptStorage.clear();
         // Reset settings
         await SettingsManager.reset();
         await updateBadge();
