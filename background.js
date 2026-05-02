@@ -1,4 +1,4 @@
-// ScriptVault v3.2.0 - Background Service Worker
+// ScriptVault v3.2.1 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -17715,6 +17715,18 @@ ${libraryExports}
   // @delay: postpone script execution by N milliseconds
   if (meta.delay > 0) {
     userCode = `setTimeout(() => {\n${userCode}\n}, ${meta.delay});`;
+  }
+
+  // Phase 11.2 — `// @unwrap` (Violentmonkey parity).
+  // When set, emit the script body verbatim without the GM API IIFE wrapper.
+  // Useful for ESM-style top-level imports/exports and scripts that
+  // intentionally modify the top-level scope. GM_* APIs are NOT available
+  // in this mode (no apiInit/apiClose); we log a one-line console.warn so
+  // authors who set @unwrap by mistake can spot it. Console-capture and
+  // error suppression are also disabled in this mode.
+  if (meta.unwrap === true) {
+    const banner = `console.warn('[ScriptVault] ${JSON.stringify(meta.name || 'Unnamed').slice(1, -1)}: @unwrap is set — GM_* APIs are unavailable.');`;
+    return banner + '\n' + userCode;
   }
 
   return apiInit + userCode + apiClose;
