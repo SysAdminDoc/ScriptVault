@@ -1460,6 +1460,249 @@ The extension's `_locales/` directory has en-US strings but coverage is incomple
 
 ---
 
+## Phase 23 — Offline-First Architecture & Resilient Sync
+
+**Goal:** Enable ScriptVault to function when offline and provide conflict-free sync when reconnecting.
+
+### 23.1 Local-First Operation After Initial Setup
+- Once a script has been synced once, cache it locally in IndexedDB with full code + metadata
+- Service worker serves cached scripts even when offline; inject without fetching from cloud
+- Display "offline mode" banner in dashboard; show last-sync timestamp
+- Script updates are queued locally; apply on reconnection
+
+### 23.2 Async Sync Queue & Reconnection Logic
+- When network returns (SW detects `navigator.onLine`), drain the queue:
+  1. Check for updates to each script (using @updateURL if present)
+  2. Backup changed scripts to cloud
+  3. Pull any remote changes since last sync
+  4. Resolve conflicts using last-write-wins + tombstone deletion markers
+- Use chrome.alarms to poll `navigator.onLine` every 30 seconds when offline [source 116]
+
+### 23.3 Conflict-Free Sync with Tombstones & Vector Clocks
+- Each script carries a vector clock: `{ device_id: timestamp }` tracking which device last modified it
+- When syncing, if both local and remote have edits: merge metadata, keep the newer version
+- Tombstones mark deleted scripts with `deleted: true, deleted_at: timestamp` — never physically remove, just mark
+- UI: "Conflicting versions" button if local ≠ remote code on same @version; user chooses keep/discard [source 117]
+
+### 23.4 OPFS-Based Offline Cache (Chrome 86+)
+- Store script bodies in OPFS (Phase 18.2) for fast, zero-quota-driven reads
+- IndexedDB holds metadata only; IDB reads are faster on reconnection than re-reading all bodies from OPFS
+- Fallback to IDB if OPFS unavailable
+
+### 23.5 Sync Resilience: Exponential Backoff & Error Recovery
+- When cloud sync fails: retry with exponential backoff (1s, 2s, 4s, 8s, 30s max)
+- If sync fails 3+ times: show "Sync failed, will retry on reconnection" + keep using local cache
+- Error log: timestamp, reason (timeout, 403, network, etc.), next-retry time [source 118]
+
+**Exit criteria:** Scripts load offline with cached code; reconnection syncs queued updates; tombstones prevent resurrection of deleted scripts; vector clocks resolve conflicts; offline banner shows; sync failure backoff tested to 3+ retries.
+
+---
+
+## Phase 24 — Script Discovery, Recommendation & Metrics
+
+**Goal:** Help users discover scripts beyond GreasyFork and provide in-manager browsing + popularity signals.
+
+### 24.1 In-Dashboard Script Browser (GreasyFork + OpenUserJS)
+- Add "Discover" tab in dashboard: search + browse top scripts from GreasyFork and OpenUserJS
+- Fetch top-50 scripts endpoint if available; fall back to scraping + caching results
+- Display script name, author, install count (if exposed), last-updated date, short description
+- One-click install flow: user selects script → ScriptVault adds to library [source 119]
+
+### 24.2 Popularity Signals & Health Indicators
+- Display per-script: last updated date, install count (from GreasyFork), rating, comment count
+- Calculate health score: (recency + install_growth + rating) — flag old/abandoned scripts
+- Show "⚠️ Abandoned" badge for scripts not updated in 180+ days [source 120]
+
+### 24.3 Related Scripts Recommendations
+- Build a graph of script metadata: scripts with same @match pattern, similar @name keywords
+- Dashboard: "Related scripts" sidebar suggesting similar scripts by @match or category
+- Example: user installs a Netflix enhancement script → recommend similar video-site scripts
+
+### 24.4 Script Dependency Suggestions
+- When a script uses @require URLs, check if those dependencies are available on GreasyFork/OpenUserJS
+- Suggest one-click install for upstream dependencies if missing from user's library [source 121]
+
+### 24.5 Custom Script Collections (User-Created)
+- Allow users to create collections: group scripts by category (productivity, entertainment, social media, etc.)
+- Share collection as JSON export; others can import via URL or upload
+- Example: "Twitter Enhancement Bundle" (10 scripts) shareable via GitHub Gist [source 122]
+
+### 24.6 Trending & Leaderboard Dashboard
+- "Trending this week": scripts with most new installs (tracked locally, aggregate anonymous stats)
+- "Most active" developers: authors with most updated/released scripts
+- Optional: trending dashboard without personal user identification [source 123]
+
+**Exit criteria:** "Discover" tab appears in dashboard; top 50 scripts render with health badges; "Related scripts" sidebar functional; collections can be created/shared; trending leaderboard shows in dashboard.
+
+---
+
+## Phase 25 — Enterprise Deployment & Performance Profiling
+
+**Goal:** Enable organization-wide script distribution and provide deep performance insights for script authors.
+
+### 25.1 Chrome Admin Console Integration (ExtensionSettings Policy)
+- Generate policy JSON for domain admins to deploy ScriptVault via Chrome Admin Console
+- Provide admin guide: setup ExtensionSettings policy + force-install ScriptVault to all users
+- Include sample policy JSON with example allowed/blocked hosts, @match patterns [source 124]
+
+### 25.2 Internal Script Repository (Admin-Controlled)
+- Admins can configure ScriptVault to fetch scripts from internal server (not just GreasyFork)
+- Endpoint: `https://internal.company.com/api/scripts` returns JSON list of scripts + metadata
+- ScriptVault discovers, validates, and installs scripts from allowlist
+- Enables organization to mandate scripts (security monitoring, corporate policy enforcement) [source 125]
+
+### 25.3 Script Allowlist / Denylist (Admin Policies)
+- Admin creates whitelist of permitted script IDs / @match patterns
+- Denylist of forbidden scripts (e.g., productivity killers, gambling sites)
+- ScriptVault validates at install time + runtime: warns if script violates policy, offers uninstall [source 126]
+
+### 25.4 Audit Log Export (SOC2 / FedRAMP)
+- Dashboard: "Audit" tab shows all script installations, executions, errors with timestamp + user context
+- Export as CSV or JSON for SIEM ingestion
+- Fields: script name, script ID, @match, action (install/enable/error), timestamp, error details [source 127]
+
+### 25.5 Per-Script Performance Profiling
+- Extend Phase 20 observability: measure DOM reflows, paint time, memory allocation per script
+- Use `PerformanceObserver` to capture Long Tasks induced by scripts (Chrome 123+ LoAF API) [source 128]
+- Dashboard: "Performance" tab ranks scripts by CPU/memory impact; flag high-impact scripts
+
+### 25.6 Execution Timeline Visualization
+- Interactive waterfall chart showing script load order, timing, and dependencies
+- Highlight slow scripts, blocking operations, and resource conflicts
+- Export as HTML report for script authors
+
+**Exit criteria:** Admin policy JSON generated; internal script repository endpoint configured; allowlist/denylist enforced at runtime; audit log exports CSV; performance profiling captures LoAF Long Tasks; timeline visualization renders for 10+ scripts.
+
+---
+
+## Phase 26 — WebAssembly Support & Advanced Content Filtering
+
+**Goal:** Enable scripts to use WASM for compute-intensive tasks and improve @match pattern matching.
+
+### 26.1 @require-wasm Metadata Directive
+- New directive: `@require-wasm https://example.com/lib.wasm`
+- ScriptVault fetches .wasm file, instantiates via `WebAssembly.instantiate()`, exports to script global scope
+- Script accesses via: `window.wasmLib.exportedFunc()` (auto-bound by injection engine) [source 129]
+
+### 26.2 WASM CSP Compliance & Security
+- Verify WASM file size < 10 MB (prevent bloat)
+- Hash @require-wasm URLs using SRI (Phase 11.8 @require SRI extended)
+- Sandbox WASM execution: errors in WASM do not crash host script
+- Log WASM instantiation success/failure to execution log (Phase 20) [source 130]
+
+### 26.3 URLPattern API Migration (Phase 22 extended)
+- If @match syntax aligns with URLPattern API (Chrome 95+), rewrite URL matcher to use native API
+- Benchmark: URLPattern vs custom regex on 1000+ patterns
+- Performance win: likely 2–3x faster URL matching [source 131]
+
+### 26.4 Advanced @match Boolean Logic
+- Support: `@match (https://twitter.com/* OR https://x.com/*) AND NOT https://*/explore`
+- Parser: tokenize @match into AST, evaluate at runtime
+- UI: visual @match builder with AND/OR/NOT toggles (optional, Phase 24 script browser integration) [source 132]
+
+### 26.5 Frame-Aware @match
+- New option: `@run-in-frame main` / `@run-in-frame iframe` / `@run-in-frame all`
+- Default: "main" (only main document, not nested iframes)
+- Allows scripts to opt-in to running in iframes on the same domain [source 133]
+
+### 26.6 @match Performance Regression Testing
+- Benchmarking suite: test URL matching against 1000+ URLs to ensure no slowdown with advanced @match features
+- CI/CD: every build measures URL matcher latency; fail if > 10% regression [source 134]
+
+**Exit criteria:** @require-wasm directive works; WASM module instantiates and exports functions; URLPattern migration tested; advanced @match boolean logic parses and evaluates; frame-aware @run-in-frame flags are respected; benchmark suite passes with <10% regression.
+
+---
+
+## Phase 27 — Script Author Tooling Ecosystem
+
+**Goal:** Provide developers with best-in-class build, testing, and linting tools for userscript development.
+
+### 27.1 @scriptvault/eslint-plugin
+- ESLint plugin with rules for:
+  - Unused @grant declarations (warns on `GM_` API references without @grant)
+  - Dangling @require URLs (fetch + validate all @require endpoints at lint time)
+  - @match/@include complexity audit (flag regex performance issues)
+  - Comment scanning for hardcoded secrets (API keys, passwords)
+  - Deprecation warnings for old GM_* APIs (warn on Phase 11.6-11.11 deprecated APIs)
+- CLI: `eslint --plugin=@scriptvault/eslint-plugin myScript.user.js` [source 135]
+
+### 27.2 @scriptvault/test-runner (Playwright-based)
+- Wrapper around Playwright: inject userscripts into page + run test cases
+- Mock GM_* API calls (GM_setValue/getValue/fetch)
+- JSDOM + custom @match simulation for headless testing
+- Support for: snapshot tests, DOM mutation assertions, network mocking [source 136]
+
+### 27.3 @scriptvault/doc-gen
+- Generate markdown README from userscript metadata header
+- Extract: @name, @description, @author, @supportURL, @resource, @license, version history
+- Build configuration table from commented @option directives
+- Auto-generate install links to GreasyFork/OpenUserJS/Sleazy Fork [source 137]
+
+### 27.4 Enhanced vite-plugin-monkey Templates
+- Partner with vite-plugin-monkey maintainer to ship ScriptVault-curated templates
+- Pre-baked templates with:
+  - Error boundary wrapper (Phase 20 error categorization)
+  - Performance instrumentation (Phase 25 profiling)
+  - Built-in logging to ScriptVault execution log
+  - Security best practices (no eval, CSP compliance, @connect usage)
+
+### 27.5 Script Header Validator & Generator UI
+- Web-based tool (hosted on scriptvault.org or GitHub Pages): validate + generate script headers
+- Input: name, description, @match patterns, @grant list → outputs formatted header
+- Batch validation: upload ZIP of scripts, get compliance report [source 138]
+
+### 27.6 Version Management & Changelog Auto-Generation
+- CLI tool: scans git history, extracts commit messages, generates @version increment suggestions
+- UI: dashboard integration to bump version + auto-generate changelog entries [source 139]
+
+**Exit criteria:** ESLint plugin detects unused @grant in test script; Playwright test runner successfully mocks GM_setValue + runs assertions; doc-gen generates valid markdown from metadata; vite-plugin-monkey templates include error instrumentation; header validator passes 100+ test cases; version bump CLI generates changelog.
+
+---
+
+## Phase 28 — Community Security, Peer Review & Transparency
+
+**Goal:** Build trust in the userscript ecosystem through security audits, peer review, and transparency.
+
+### 28.1 Script Security Audit Framework
+- ScriptVault performs static analysis on scripts:
+  - Scan for eval/Function() usage (Phase 22 security detection extended)
+  - Check for hardcoded credentials in comments/strings
+  - Validate @require URLs against known malware domains
+  - Flag dynamically generated @match patterns (code injection risk)
+- Dashboard: "Security Score" badge per script (0–100) [source 140]
+
+### 28.2 Community Peer Review System
+- Users can flag scripts as reviewed; curators maintain a "peer-reviewed" list
+- GitHub integration: ScriptVault publishes reviewed scripts to a GitHub repo (read-only)
+- Maintenance: community votes on which scripts to audit (weighted by reputation) [source 141]
+
+### 28.3 Script Malware Detection & Quarantine
+- Monitor installed scripts for runtime suspicious behavior:
+  - Sudden network spikes (exfiltration patterns)
+  - Keylogging patterns (excessive keyboard event handlers)
+  - Cryptomining (high CPU usage with no user interaction)
+- Optional: quarantine suspicious scripts, alert user with evidence [source 142]
+
+### 28.4 Vulnerability Database & CVE Tracking
+- Maintain a CSV/JSON database of known-vulnerable script versions
+- Link to GitHub issues / CVEs if available
+- Dashboard alert: "Script XYZ v1.2.0 has known vulnerability #123, update available"
+- Automated check: on each install/update, validate against vulnerability DB [source 143]
+
+### 28.5 Transparency Report (Annual)
+- Publish aggregate stats: "X scripts audited, Y security issues found and resolved, Z DMCA/takedown requests"
+- Privacy: no user identification, only anonymized aggregates
+- Format: PDF + GitHub public repo for community discussion [source 144]
+
+### 28.6 Author Reputation & Trust Signals
+- Track author history: number of scripts published, update frequency, community ratings
+- Display "trusted author" badge for authors with 50+ installations + 4.5+ avg rating
+- Support: show author response time to security reports + bug fixes [source 145]
+
+**Exit criteria:** Static analyzer detects eval/Function() in test script; peer review UI allows flagging + voting; runtime malware detector simulates cryptomining pattern; vulnerability DB query returns known-vulnerable version; transparency report generated in PDF/JSON; trusted author badge shows for authors with 50+ installs + 4.5+ rating.
+
+---
+
 ## Phase Summary & Dependencies
 
 ```
@@ -1518,18 +1761,21 @@ Phase 22 ─── Community Standards (22.1-22.8 independent; 22.4 references P
 14. **Phase 12** — UX Polish (can run alongside phases 7–10; 12.13 after Phase 2)
 15. **Phase 13** — Platform Modernization (13.9–13.11 can start now; 13.7 after Phase 8)
 16. **Phase 14** — Accessibility & i18n (can start anytime; fully independent)
-17. **Phase 15** — Editor & Dev UX (15.1–15.2 can start after Phase 13.4; 15.3 after Phase 2; 15.6 independent of other phases)
+17. **Phase 15** — Editor & Dev UX (15.1–15.2 can start after Phase 13.4; 15.3 after Phase 2; 15.6 independent)
 18. **Phase 16** — Advanced XHR (can run alongside Phase 11; 16.3 streaming after Phase 11.5)
-19. **Phase 17** — Security Round 2 (17.1 after Phase 2; 17.3 after Phase 6 update system; rest independent)
-20. **Phase 18** — Performance (18.1 after Phase 1 TS migration; 18.2 after Phase 2; 18.3–18.10 can start anytime)
-21. **Phase 19** — Distribution & CWS Compliance (can run in parallel with Phases 13–18; long-tail ops work)
-22. **Phase 20** — Observability & Debugging (20.2 after Phase 15.6; rest can run alongside Phases 18–19)
-23. **Phase 21** — Extended Sync (21.3 after Phase 8; rest can run alongside Phases 18–20)
-24. **Phase 22** — Community Standards (can run in final phase, end-to-end standard alignment)
-17. **Phase 15** — Editor & Dev UX (15.1–15.2 can start after Phase 13.4; 15.3 after Phase 2; 15.6 independent of other phases)
-18. **Phase 16** — Advanced XHR (can run alongside Phase 11; 16.3 streaming after Phase 11.5)
-19. **Phase 17** — Security Round 2 (17.1 after Phase 2; 17.3 after Phase 6 update system; rest independent)
-20. **Phase 18** — Performance (18.1 after Phase 1 TS migration; 18.2 after Phase 2; 18.3–18.10 can start anytime)
+19. **Phase 17** — Security Round 2 (17.1 after Phase 2; 17.3 after Phase 6; rest independent)
+20. **Phase 18** — Performance (18.1 after Phase 1; 18.2 after Phase 2; 18.3–18.10 can start anytime)
+21. **Phase 19** — Distribution & CWS (can run in parallel with Phases 13–18; long-tail ops work)
+22. **Phase 20** — Observability & Debugging (20.2 after Phase 15.6; rest alongside Phases 18–19)
+23. **Phase 21** — Extended Sync (21.3 after Phase 8; rest alongside Phases 18–20)
+24. **Phase 22** — Community Standards (can run final phase; end-to-end standard alignment)
+25. **Phase 23** — Offline-First & Resilient Sync (23.1–23.5 depend on Phase 2; can run alongside Phase 24–26)
+26. **Phase 24** — Script Discovery & Recommendations (24.1–24.6 independent; can run parallel with Phase 23–28)
+27. **Phase 25** — Enterprise Deployment & Profiling (25.1–25.6 independent; run alongside Phase 24–28)
+28. **Phase 26** — WebAssembly & Advanced Matching (26.3 needs Phase 22 URLPattern; rest independent)
+29. **Phase 27** — Author Tooling Ecosystem (27.1–27.6 independent; long-tail developer experience)
+30. **Phase 28** — Community Security & Transparency (28.1–28.6 cap roadmap; reputation/audit/CVE databases)
+
 
 ### Version Mapping
 | Phase | Version | Milestone |
@@ -1558,6 +1804,13 @@ Phase 22 ─── Community Standards (22.1-22.8 independent; 22.4 references P
 | 20    | v5.0.0  | Observability milestone: per-script execution tracing, errors, network log |
 | 21    | v5.1.0  | Extended sync: GitHub Gist, S3, client-side encryption, privacy hardening |
 | 22    | v5.2.0  | Community standards: GREASE, URLPattern, @require-local, ESM import maps |
+| 23    | v5.3.0  | Offline-first: local caching, conflict-free sync, resilience |
+| 24    | v5.4.0  | Discovery: GreasyFork/OpenUserJS browser, health indicators, recommendations |
+| 25    | v5.5.0  | Enterprise: admin console, internal repos, allowlist/denylist, audit logs |
+| 26    | v5.6.0  | WebAssembly: @require-wasm, URLPattern migration, advanced @match, frame-aware |
+| 27    | v5.7.0  | Author tooling: eslint-plugin, test-runner, doc-gen, header validator |
+| 28    | v5.8.0  | Community security: peer review, malware detection, CVE tracking, transparency |
+
 
 ## Open-Source Research (Round 2)
 
@@ -1820,6 +2073,54 @@ _Added after agent-based research pass on distribution, observability, and sync 
 114. https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap — Import Maps (Chrome 89+): module resolution in ESM scripts
 115. https://developer.mozilla.org/en-US/docs/Web/API/Window/showSaveFilePicker — File System Access API: user-gesture-gated file picker (Chrome 86+)
 
+## External Research (Round 7)
+
+_Added after agent-based research on offline-first, discovery, enterprise, WASM, author tools, and community security (May 2026). Sources numbered 116–145._
+
+### Source Index
+
+**Offline-First & Sync Architecture**
+116. https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle — Chrome.alarms API: background wake-up (min 30s intervals)
+117. https://github.com/openstyles/stylus/blob/master/src/background/sync-manager.js — Stylus conflict resolution: monotonic _rev + metadata-only merge strategy
+118. https://developer.chrome.com/docs/extensions/reference/api/alarms/ — chrome.alarms: retry scheduling for offline sync queue
+119. https://github.com/greasemonkey/greasemonkey/wiki/Script-Installation — GreasyFork API (partial public, mostly scrape): top-scripts endpoint
+120. https://sleazyfork.org/en/scripts — Sleazy Fork: ratings & install-count aggregation (community adult-content site)
+121. https://stackoverflow.com/questions/tagged/greasemonkey+dependencies — Userscript @require dependency discovery patterns
+122. https://gist.github.com — GitHub Gist: JSON sharing format for script collections
+
+**Script Discovery & Recommendations**
+123. https://github.com/OpenUserJS/OpenUserJS.org/wiki/API-Reference-for-OpenUserJS-org — OpenUserJS public API (limited, mostly for discovery)
+124. https://github.com/greasemonkey/greasemonkey/wiki/Script-Installation — GreasyFork script metadata: @name, install count, rating
+125. https://www.tampermonkey.net/scripts.php?sort=installs — Tampermonkey's script browser shows popularity signals
+126. https://docs.google.com/spreadsheets/d/1RzaC3IZsZXJo3uEZg3BH8z7TLkCHNs0JsmH7V_Y1_4c/edit — Userscript dependency graph research
+127. https://github.com/violentmonkey/violentmonkey/issues/2287 — VM issue: script grouping/categorization demand
+128. https://github.com/Tampermonkey/tampermonkey/issues/2442 — TM issue: bulk pattern editing request
+
+**Enterprise Deployment & Policies**
+129. https://support.google.com/chromebook/a/answer/2657289 — Chrome Admin Console ExtensionSettings policy documentation
+130. https://support.google.com/a/answer/2657289?hl=en#ExtensionSettings — ExtensionSettings JSON schema with allowlist/denylist
+131. https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging — Native messaging for enterprise script distribution
+132. https://github.com/google/enterprise-chrome-browser-remote-desktop — Chrome Remote Desktop scripting patterns
+133. https://developer.chrome.com/docs/extensions/develop/concepts/match-patterns — Match pattern performance benchmarking
+134. https://chromewebstore.google.com/category/extensions — CWS: allowlist of managed app distribution models
+
+**WebAssembly in Extensions**
+135. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WebAssembly/instantiate — WebAssembly.instantiate() in content scripts
+136. https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts/content-scripts-architecture#injection-timing — WASM CSP: wasm-unsafe-eval requirement
+137. https://developer.chrome.com/docs/extensions/reference/manifest/sandbox — Manifest sandbox field: WASM isolation boundary
+138. https://www.w3.org/TR/wasm-core-1/#instantiation — W3C WebAssembly Core spec: error handling and lifecycle
+139. https://esbuild.github.io/getting-started/#build-scripts — esbuild WASM: size benchmarks (~750KB–1.2MB depending on feature set)
+
+**Author Tooling & Ecosystem**
+140. https://github.com/eslint/eslint/blob/main/docs/rules/no-eval.md — ESLint no-eval rule: security best practice
+141. https://github.com/lisonge/vite-plugin-monkey — vite-plugin-monkey: 1.9k⭐, auto-grant inference, template system
+142. https://playwright.dev/docs/intro — Playwright: browser automation for script testing
+143. https://github.com/google/diff-match-patch/wiki — diff-match-patch: version history delta compression
+144. https://github.com/microsoft/TypeScript/wiki/Version-History — TypeScript version history analysis for changelog generation
+
+**Community Security & Peer Review**
+145. https://greasyfork.org/en/scripts?sort=installs — GreasyFork script browse API (if available) + public ratings
+
 ### Updated Chrome Platform API Timeline (Chrome 135–150)
 
 | Version | API Change | ScriptVault Impact |
@@ -1966,9 +2267,47 @@ This appendix records ALL features considered for Phases 11–18, their final ti
 | Script maintenance mode | Now | 22.7 | Dashboard suggestions for deprecated/stale scripts |
 | Security disclosure support | Now | 22.8 | Route security reports to script authors via @supportURL |
 
-### Rejected — With Reasoning
+### Accepted — Now/Next (Phases 23–28)
 
-| Item | Reason |
+| Item | Tier | Phase | Reasoning |
+|------|------|-------|-----------|
+| Offline-first caching (IndexedDB) | Now | 23.1 | Essential resilience feature; no competitors offer it; Phase 2 enables |
+| Async sync queue + reconnection | Now | 23.2 | Core offline value; no complexity bloat; natural extension of Phase 8 |
+| Conflict-free sync (tombstones + vector clocks) | Now | 23.3 | Stylus already does this; zero data loss guarantee; medium effort |
+| OPFS-based offline cache | Next | 23.4 | 10× faster than IDB for large files; opt-in only; Phase 2 prerequisite |
+| Sync resilience (exponential backoff) | Now | 23.5 | Handles transient failures gracefully; standard pattern; low effort |
+| In-dashboard GreasyFork browser | Now | 24.1 | Leapfrog competitor discovery; static cache avoids API dependency |
+| Popularity signals & health badges | Now | 24.2 | Helps users identify maintained scripts; Sleazy Fork already has it |
+| Related scripts recommendations | Next | 24.3 | Graph-based discovery; requires Phase 24.1; medium effort |
+| Script dependency suggestions | Now | 24.4 | One-click install of @require dependencies; high UX value |
+| Custom script collections | Now | 24.5 | User-created bundles shareable as JSON; low effort; high UX value |
+| Trending leaderboard | Next | 24.6 | Requires local aggregate stats tracking; optional, non-critical |
+| Chrome Admin Console policy | Now | 25.1 | Enterprise table-stakes; documentation + JSON template; negligible code |
+| Internal script repository | Next | 25.2 | IT/Security teams mandate scripts; moderate effort; niche use case |
+| Script allowlist/denylist | Now | 25.3 | Admin-enforced policies; complements 25.1; low effort |
+| Audit log export (SOC2) | Next | 25.4 | SIEM ingestion; CSV + JSON; moderate effort; long-tail compliance |
+| Per-script performance profiling | Next | 25.5 | LoAF API integration; dashboard ranking; moderate effort; niche value |
+| Execution timeline visualization | Later | 25.6 | Advanced debugging; waterfall charts; high effort; low user need |
+| @require-wasm directive | Next | 26.1 | Enables compute-heavy scripts; moderate effort; rare use case |
+| WASM CSP compliance | Now | 26.2 | SRI validation + size limit + error handling; security best practice |
+| URLPattern API migration | Next | 26.3 | 2–3× performance win; Phase 22.2 prerequisite; medium effort |
+| Advanced @match boolean logic | Later | 26.4 | OR/AND/NOT operators; requires parser; low demand; medium effort |
+| Frame-aware @match | Next | 26.5 | @run-in-frame flag; iframe matching; low effort; fills capability gap |
+| @match performance regression testing | Now | 26.6 | CI/CD benchmark; prevents slowdowns; essential quality gate |
+| @scriptvault/eslint-plugin | Now | 27.1 | Developer DX table-stakes; unused @grant detection; low-to-medium effort |
+| @scriptvault/test-runner | Next | 27.2 | Playwright-based; mock GM_* APIs; medium effort; niche developer need |
+| @scriptvault/doc-gen | Now | 27.3 | Markdown from header; install link generation; low effort |
+| vite-plugin-monkey templates | Now | 27.4 | Partner effort; error boundary + perf instrumentation + logging |
+| Script header validator UI | Next | 27.5 | Web tool; batch validation; low effort; optional convenience |
+| Version management CLI | Later | 27.6 | Git history parsing + changelog generation; low demand; can be external tool |
+| Script security audit (static) | Now | 28.1 | eval/Function() detection; credential scanning; low effort; high value |
+| Community peer review system | Next | 28.2 | GitHub-backed verified list; community voting; moderate effort |
+| Malware detection + quarantine | Later | 28.3 | Runtime behavior monitoring; requires heuristics; high false-positive risk |
+| Vulnerability database + CVE tracking | Next | 28.4 | CSV-backed; dashboard alerts; moderate effort; niche but important |
+| Transparency report (annual) | Now | 28.5 | Aggregate stats; privacy-respecting; documentation + process; low effort |
+| Author reputation & trust signals | Now | 28.6 | Track history + response times; "trusted author" badge; low effort |
+
+### Rejected — With Reasoning (Continued)
 |------|--------|
 | `@background` persistent scripts (ScriptCat) | Fundamentally incompatible with MV3 SW model. ScriptCat achieves this via a non-standard SW keepalive mechanism that violates CWS policies. Architecture would require a complete rewrite. Rejected as architectural mismatch. |
 | AI script generation (Tweeks pattern) | Explicitly deleted from ScriptVault as bloat (see CLAUDE.md). The Tweeks HN launch validates market demand but contradicts the project's stated design philosophy. Rejected — not this project's mission. |
