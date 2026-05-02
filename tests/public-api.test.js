@@ -224,6 +224,79 @@ describe('PublicAPI', () => {
       await expect(PublicAPI.setWebhook('unknown.event', { url: 'https://x.com', enabled: true }))
         .rejects.toThrow('Unknown event type');
     });
+
+    // Phase 5.5 — webhook SSRF guard ─────────────────────────────────────
+    it('rejects localhost', async () => {
+      await PublicAPI.init();
+      await expect(
+        PublicAPI.setWebhook('script.installed', { url: 'https://localhost/hook', enabled: true })
+      ).rejects.toThrow(/internal|loopback|localhost/i);
+    });
+
+    it('rejects RFC 1918 / private IPv4 addresses', async () => {
+      await PublicAPI.init();
+      const privateUrls = [
+        'https://10.0.0.1/hook',
+        'https://192.168.1.1/hook',
+        'https://172.16.0.1/hook',
+        'https://172.31.255.255/hook',
+        'https://127.0.0.1/hook',
+      ];
+      for (const url of privateUrls) {
+        await expect(
+          PublicAPI.setWebhook('script.installed', { url, enabled: true })
+        ).rejects.toThrow(/internal|loopback|private/i);
+      }
+    });
+
+    it('rejects link-local + cloud-metadata IPv4', async () => {
+      await PublicAPI.init();
+      // 169.254.0.0/16 — covers AWS/GCP metadata endpoint 169.254.169.254
+      await expect(
+        PublicAPI.setWebhook('script.installed', {
+          url: 'https://169.254.169.254/latest/meta-data/',
+          enabled: true,
+        })
+      ).rejects.toThrow();
+    });
+
+    it('rejects IPv6 loopback and link-local', async () => {
+      await PublicAPI.init();
+      await expect(
+        PublicAPI.setWebhook('script.installed', { url: 'https://[::1]/hook', enabled: true })
+      ).rejects.toThrow();
+      await expect(
+        PublicAPI.setWebhook('script.installed', { url: 'https://[fe80::1]/hook', enabled: true })
+      ).rejects.toThrow();
+    });
+
+    it('still accepts public hostnames', async () => {
+      await PublicAPI.init();
+      await PublicAPI.setWebhook('script.installed', {
+        url: 'https://hooks.example.org/v1/notify',
+        enabled: true,
+      });
+      expect(PublicAPI.getWebhooks()['script.installed'].url).toMatch(/example\.org/);
+    });
+
+    it('still accepts public IPv4', async () => {
+      await PublicAPI.init();
+      // 8.8.8.8 (Google DNS) — public, should pass.
+      await PublicAPI.setWebhook('script.installed', {
+        url: 'https://8.8.8.8/hook',
+        enabled: true,
+      });
+      expect(PublicAPI.getWebhooks()['script.installed'].url).toContain('8.8.8.8');
+    });
+
+    it('rejects empty webhook URL host (malformed)', async () => {
+      await PublicAPI.init();
+      // `https://` with no host — URL constructor will fail or produce empty
+      // hostname depending on the parser; either way we should reject.
+      await expect(
+        PublicAPI.setWebhook('script.installed', { url: 'https:///', enabled: true })
+      ).rejects.toThrow();
+    });
   });
 
   describe('trusted origins', () => {

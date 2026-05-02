@@ -333,6 +333,11 @@ class MatchSet {
 - Cloud sync: encrypt with a user-provided passphrase (or remove encryption claim entirely)
 - npm resolver: only use resolved exact semver versions in CDN URLs (no ranges, no path traversal chars)
 
+**Status:**
+- **Webhook RFC 1918 / internal-host guard shipped in v3.6.1 (2026-05-02).** `PublicAPI.setWebhook` rejects URLs whose hostname matches the existing `_isInternalHost` classifier (localhost aliases, IPv4 loopback/unspecified/RFC 1918/CGNAT/link-local/broadcast, IPv6 loopback/link-local/ULA). 7 new tests cover the rejection set; public hostnames + public IPv4 still pass.
+- npm resolver SSRF guard (path traversal + exact semver) was already in place from earlier rounds.
+- Gist fake-encryption removal and cloud-sync passphrase encryption still pending.
+
 ### 5.6 CSP Tightening
 - Remove `https://cdn.jsdelivr.net` from sandbox CSP after Monaco is bundled locally (Phase 0.2)
 - Extension pages CSP: keep `script-src 'self'` (already correct)
