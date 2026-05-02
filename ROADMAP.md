@@ -349,11 +349,13 @@ class MatchSet {
 
 **Goal:** Reliable, efficient, user-friendly script updates.
 
-### 6.1 Differential Updates
+### 6.1 Differential Updates ✅ Shipped
 - Send `If-Modified-Since` / `If-None-Match` headers on update checks
 - Skip download if 304 Not Modified
 - Track ETags per script in metadata
 - Exponential backoff on failed update checks (not fixed interval)
+
+**Status:** Conditional fetch (`If-None-Match`/`If-Modified-Since` + 304 short-circuit) was already in place. **v3.6.0 (2026-05-02)** added the per-script exponential backoff layer: `_updateFailureCount` doubles on each failure (1m base, capped at 24h); `_updateNextCheck` lets the auto-update path skip cooldowns; manual checks (popup "Check for Update") bypass the cooldown. 304 now also clears backoff state to recover from stale cooldowns. 4 unit tests pin the `_nextRetryAt` math.
 
 ### 6.2 Staged Updates
 - Download update → store as pending in IndexedDB (don't apply)
