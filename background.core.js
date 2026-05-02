@@ -7099,6 +7099,18 @@ ${libraryExports}
     userCode = `setTimeout(() => {\n${userCode}\n}, ${meta.delay});`;
   }
 
+  // Phase 11.2 — `// @unwrap` (Violentmonkey parity).
+  // When set, emit the script body verbatim without the GM API IIFE wrapper.
+  // Useful for ESM-style top-level imports/exports and scripts that
+  // intentionally modify the top-level scope. GM_* APIs are NOT available
+  // in this mode (no apiInit/apiClose); we log a one-line console.warn so
+  // authors who set @unwrap by mistake can spot it. Console-capture and
+  // error suppression are also disabled in this mode.
+  if (meta.unwrap === true) {
+    const banner = `console.warn('[ScriptVault] ${JSON.stringify(meta.name || 'Unnamed').slice(1, -1)}: @unwrap is set — GM_* APIs are unavailable.');`;
+    return banner + '\n' + userCode;
+  }
+
   return apiInit + userCode + apiClose;
 }
 

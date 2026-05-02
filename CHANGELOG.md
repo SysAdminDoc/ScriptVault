@@ -2,6 +2,12 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.2.1] — @unwrap metadata tag (Phase 11.2)
+
+- Added: `// @unwrap` directive support (Violentmonkey parity). When present, the wrapper builder emits the user code verbatim without the GM API IIFE — useful for ESM-style top-level imports/exports and scripts that intentionally modify the top-level scope. A one-line `console.warn` banner is prepended so authors who set `@unwrap` by mistake can spot it. GM_* APIs are unavailable in this mode.
+- Added: install confirmation dialog now displays `unwrapped (no GM_* APIs)` in the run-timing summary so users know what they're agreeing to before installing an `@unwrap`'d script.
+- Internal: TS mirror in `src/background/wrapper-builder.ts` updated to match (and now also honours `meta.delay`, which the JS source already did).
+
 ## [v3.2.0] — GM_xmlhttpRequest noCache/redirect + GM_info platform parity (Phase 11)
 
 - Added: `GM_xmlhttpRequest({ noCache: true })` (and Tampermonkey's lowercase `nocache` alias) — sets `Cache-Control: no-cache` + `Pragma: no-cache` on the request, but only if the caller didn't already set them (case-insensitive). Closes Violentmonkey issue #2168 / Tampermonkey changelog parity.

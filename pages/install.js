@@ -737,6 +737,8 @@ function formatRunTiming(meta) {
   if (meta.noframes) parts.push('top frame only');
   if (meta.delay) parts.push(`delay ${numberFormatter.format(meta.delay)}ms`);
   if (meta.nodownload) parts.push('manual updates only');
+  // @unwrap warning surface — script ships without the GM API wrapper.
+  if (meta.unwrap) parts.push('unwrapped (no GM_* APIs)');
   return parts.join(' • ');
 }
 
