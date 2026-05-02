@@ -409,10 +409,13 @@ describe('dashboard surface modules', () => {
 
   it('legacy dashboard stylesheet avoids transition-all on shared controls', () => {
     expect(dashboardCss).not.toMatch(/transition:\s*all/i);
-    expect(dashboardCss).toContain('transition: background 0.15s, color 0.15s, border-color 0.15s;');
-    expect(dashboardCss).toContain('transition: background 0.15s, color 0.15s, opacity 0.15s;');
-    expect(dashboardCss).toContain('transition: transform 0.3s, opacity 0.3s;');
-    expect(dashboardCss).toContain('transition: opacity 0.2s, visibility 0.2s;');
+    // v3.10 polish pass tokenised transitions onto --t-fast/--t-base/--t-slow
+    // with named easings. Spot-check that scoped transitions (not blanket `all`)
+    // are still in place on tabs, action-btn, toast, and modal-overlay.
+    expect(dashboardCss).toMatch(/\.tab\s*\{[\s\S]*?transition:\s*background var\(--t-fast\)/);
+    expect(dashboardCss).toMatch(/\.action-btn\s*\{[\s\S]*?transition:\s*background 0\.15s,\s*color 0\.15s,\s*opacity 0\.15s/);
+    expect(dashboardCss).toMatch(/\.toast\s*\{[\s\S]*?transition:\s*transform var\(--t-slow\)/);
+    expect(dashboardCss).toMatch(/\.modal-overlay\s*\{[\s\S]*?transition:\s*opacity var\(--t-base\)/);
   });
 
   it('collections render accessible controls and await async per-script toggles', async () => {

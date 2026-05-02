@@ -1,4 +1,4 @@
-/* ScriptVault Dashboard - Tampermonkey Style with 5 Tabs */
+/* ScriptVault Dashboard - Premium polish layer (v3.10) */
 
 :root {
   --bg-body: #1a1a1a;
@@ -22,6 +22,80 @@
   --toggle-off: #555555;
   --toggle-on: #22c55e;
   --scrollbar-thumb-hover: #555555;
+
+  /* === Premium polish tokens (v3.10) ============================
+     Layered on top of the legacy tokens above. All theme-aware via
+     [data-theme] overrides further down. New rules should prefer
+     these over hand-rolled rgba() so light/catppuccin/oled
+     re-theme cleanly. */
+  --hairline: rgba(255, 255, 255, 0.06);
+  --hairline-strong: rgba(255, 255, 255, 0.10);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.45);
+  --overlay-scrim: rgba(0, 0, 0, 0.55);
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-pill: 999px;
+  --t-fast: 120ms;
+  --t-base: 180ms;
+  --t-slow: 280ms;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --focus-ring: 0 0 0 2px var(--accent-blue), 0 0 0 4px rgba(96, 165, 250, 0.22);
+  --tint-green-soft: rgba(74, 222, 128, 0.10);
+  --tint-blue-soft: rgba(96, 165, 250, 0.10);
+  --tint-red-soft: rgba(248, 113, 113, 0.10);
+  --tint-yellow-soft: rgba(251, 191, 36, 0.10);
+  --tint-orange-soft: rgba(251, 146, 60, 0.10);
+  --tint-purple-soft: rgba(192, 132, 252, 0.10);
+  --tint-green-edge: rgba(74, 222, 128, 0.28);
+  --tint-blue-edge: rgba(96, 165, 250, 0.28);
+  --tint-red-edge: rgba(248, 113, 113, 0.30);
+  --tint-yellow-edge: rgba(251, 191, 36, 0.28);
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --hairline: rgba(15, 23, 42, 0.07);
+  --hairline-strong: rgba(15, 23, 42, 0.13);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 6px 18px rgba(15, 23, 42, 0.10);
+  --shadow-lg: 0 20px 48px rgba(15, 23, 42, 0.18);
+  --overlay-scrim: rgba(15, 23, 42, 0.32);
+  --tint-green-soft: rgba(22, 163, 74, 0.08);
+  --tint-blue-soft: rgba(37, 99, 235, 0.08);
+  --tint-red-soft: rgba(220, 38, 38, 0.08);
+  --tint-yellow-soft: rgba(202, 138, 4, 0.10);
+  --tint-orange-soft: rgba(234, 88, 12, 0.10);
+  --tint-purple-soft: rgba(147, 51, 234, 0.08);
+  --tint-green-edge: rgba(22, 163, 74, 0.30);
+  --tint-blue-edge: rgba(37, 99, 235, 0.30);
+  --tint-red-edge: rgba(220, 38, 38, 0.32);
+  --tint-yellow-edge: rgba(202, 138, 4, 0.32);
+  --focus-ring: 0 0 0 2px #2563eb, 0 0 0 4px rgba(37, 99, 235, 0.18);
+  color-scheme: light;
+}
+
+[data-theme="catppuccin"] {
+  --hairline: rgba(205, 214, 244, 0.07);
+  --hairline-strong: rgba(205, 214, 244, 0.12);
+  --shadow-sm: 0 1px 2px rgba(17, 17, 27, 0.30);
+  --shadow-md: 0 6px 20px rgba(17, 17, 27, 0.40);
+  --shadow-lg: 0 24px 60px rgba(17, 17, 27, 0.55);
+  --overlay-scrim: rgba(17, 17, 27, 0.60);
+}
+
+[data-theme="oled"] {
+  --hairline: rgba(255, 255, 255, 0.05);
+  --hairline-strong: rgba(255, 255, 255, 0.09);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.55);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.65);
+  --shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.80);
+  --overlay-scrim: rgba(0, 0, 0, 0.78);
 }
 
 * {
@@ -117,7 +191,10 @@ a:hover {
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  position: relative;
+  transition: background var(--t-fast) var(--ease-out),
+              color var(--t-fast) var(--ease-out),
+              border-color var(--t-fast) var(--ease-out);
 }
 
 .tab:hover {
@@ -132,6 +209,18 @@ a:hover {
   margin-bottom: -1px;
   position: relative;
   z-index: 1;
+}
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent-green);
+  border-radius: 2px 2px 0 0;
+  pointer-events: none;
 }
 
 /* ===== CONTENT ===== */
@@ -295,11 +384,14 @@ thead {
 }
 
 th {
-  padding: 8px 12px;
+  padding: 10px 12px;
   text-align: left;
-  font-weight: 500;
-  color: var(--text-secondary);
-  border-bottom: 2px solid var(--border-section);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--hairline-strong);
   white-space: nowrap;
   user-select: none;
 }
@@ -331,8 +423,8 @@ th.sort-desc .sort-arrow {
 
 tbody tr {
   background: var(--bg-row);
-  border-bottom: 1px solid var(--border-color);
-  transition: background 0.1s;
+  box-shadow: inset 0 -1px 0 var(--hairline);
+  transition: background var(--t-fast) var(--ease-out);
 }
 
 tbody tr:hover {
@@ -341,6 +433,7 @@ tbody tr:hover {
 
 tbody tr.selected {
   background: var(--bg-row-selected);
+  box-shadow: inset 3px 0 0 var(--accent-blue), inset 0 -1px 0 var(--hairline);
 }
 
 td {
@@ -391,7 +484,9 @@ input[type="checkbox"] {
   inset: 0;
   background: var(--toggle-off);
   border-radius: 22px;
-  transition: 0.2s;
+  box-shadow: inset 0 0 0 1px var(--hairline-strong);
+  transition: background var(--t-base) var(--ease-out),
+              box-shadow var(--t-base) var(--ease-out);
 }
 
 .toggle-slider::before {
@@ -403,15 +498,22 @@ input[type="checkbox"] {
   bottom: 3px;
   background: #fff;
   border-radius: 50%;
-  transition: 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(0, 0, 0, 0.15);
+  transition: transform var(--t-base) var(--ease-spring),
+              background var(--t-base) var(--ease-out);
 }
 
 .toggle input:checked + .toggle-slider {
   background: var(--toggle-on);
+  box-shadow: inset 0 0 0 1px transparent;
 }
 
 .toggle input:checked + .toggle-slider::before {
   transform: translateX(18px);
+}
+
+.toggle input:focus-visible + .toggle-slider {
+  box-shadow: var(--focus-ring);
 }
 
 /* ===== SCRIPT ICON ===== */
@@ -653,21 +755,30 @@ input[type="checkbox"] {
 /* ===== EMPTY STATE ===== */
 .empty-state {
   text-align: center;
-  padding: 60px 20px;
+  padding: 56px 24px;
   color: var(--text-muted);
 }
 
 .empty-state svg {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 16px;
-  opacity: 0.5;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 14px;
+  opacity: 0.45;
 }
 
 .empty-state h3 {
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.empty-state p {
+  margin: 0 auto;
+  max-width: 420px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 /* ===== LOADING ===== */
@@ -679,12 +790,12 @@ input[type="checkbox"] {
 }
 
 .spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid var(--border-color);
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid var(--hairline-strong);
   border-top-color: var(--accent-green);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: spin 0.95s linear infinite;
 }
 
 @keyframes spin {
@@ -698,15 +809,17 @@ input[type="checkbox"] {
   right: 20px;
   background: var(--bg-header);
   border: 1px solid var(--border-color);
-  padding: 12px 18px;
-  border-radius: 6px;
+  padding: 12px 16px 12px 14px;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
   /* Raised above modal-overlay (z-index 1000) so toasts remain visible when modal is open */
   display: flex;
   align-items: center;
   gap: 10px;
   transform: translateY(80px);
   opacity: 0;
-  transition: transform 0.3s, opacity 0.3s;
+  transition: transform var(--t-slow) var(--ease-spring),
+              opacity var(--t-slow) var(--ease-out);
   z-index: 1100;
 }
 
@@ -715,10 +828,22 @@ input[type="checkbox"] {
   opacity: 1;
 }
 
-.toast.success { border-color: var(--accent-green); }
-.toast.error { border-color: var(--accent-red); }
+.toast.success {
+  border-color: var(--tint-green-edge);
+  background: linear-gradient(var(--tint-green-soft), var(--tint-green-soft)), var(--bg-header);
+  box-shadow: var(--shadow-md), inset 3px 0 0 var(--accent-green);
+}
+.toast.error {
+  border-color: var(--tint-red-edge);
+  background: linear-gradient(var(--tint-red-soft), var(--tint-red-soft)), var(--bg-header);
+  box-shadow: var(--shadow-md), inset 3px 0 0 var(--accent-red);
+}
 .toast.warning,
-.toast.toast-warning { border-color: var(--accent-yellow); }
+.toast.toast-warning {
+  border-color: var(--tint-yellow-edge);
+  background: linear-gradient(var(--tint-yellow-soft), var(--tint-yellow-soft)), var(--bg-header);
+  box-shadow: var(--shadow-md), inset 3px 0 0 var(--accent-yellow);
+}
 .toast-action {
   border: 1px solid var(--border-color);
   border-radius: 999px;
@@ -729,24 +854,32 @@ input[type="checkbox"] {
   font-size: 12px;
   padding: 4px 9px;
   white-space: nowrap;
+  transition: border-color var(--t-fast) var(--ease-out),
+              background var(--t-fast) var(--ease-out);
 }
 .toast-action:hover,
 .toast-action:focus-visible {
   border-color: var(--accent-blue);
   outline: none;
 }
+.toast-action:focus-visible {
+  box-shadow: var(--focus-ring);
+}
 
 /* ===== MODAL ===== */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.75);
+  background: var(--overlay-scrim);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.2s, visibility 0.2s;
+  transition: opacity var(--t-base) var(--ease-out),
+              visibility var(--t-base) var(--ease-out);
   z-index: 1000;
 }
 
@@ -758,17 +891,21 @@ input[type="checkbox"] {
 .modal {
   background: var(--bg-header);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
   width: 90%;
   max-width: 500px;
   max-height: 80vh;
   overflow: hidden;
-  transform: scale(0.95);
-  transition: transform 0.2s;
+  transform: scale(0.96) translateY(8px);
+  opacity: 0;
+  transition: transform var(--t-slow) var(--ease-spring),
+              opacity var(--t-base) var(--ease-out);
 }
 
 .modal-overlay.show .modal {
-  transform: scale(1);
+  transform: scale(1) translateY(0);
+  opacity: 1;
 }
 
 .modal-header {
@@ -858,11 +995,14 @@ input[type="checkbox"] {
 .section-label {
   width: 180px;
   min-width: 180px;
-  padding: 15px 20px;
-  font-weight: bold;
+  padding: 16px 20px;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
   color: var(--text-secondary);
   background: var(--bg-header);
-  border-right: 3px solid var(--border-section);
+  border-right: 1px solid var(--hairline-strong);
 }
 
 .section-content {
@@ -1010,17 +1150,23 @@ input[type="checkbox"] {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-body);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 5px;
+  background: var(--hairline-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background var(--t-fast) var(--ease-out);
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover, #555);
+  background-clip: padding-box;
 }
+
+::-webkit-scrollbar-corner { background: transparent; }
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
@@ -1042,7 +1188,7 @@ input[type="checkbox"] {
   .section-label {
     width: 100%;
     border-right: none;
-    border-bottom: 3px solid var(--border-section);
+    border-bottom: 1px solid var(--hairline-strong);
   }
 
   .tabs {
@@ -1317,19 +1463,28 @@ input[type="checkbox"] {
 }
 
 .snippet-item {
+  position: relative;
   padding: 10px 14px;
   font-size: 13px;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   color: var(--text-primary);
   background: var(--bg-input);
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  transition: background var(--t-fast) var(--ease-out),
+              box-shadow var(--t-fast) var(--ease-out),
+              padding-left var(--t-fast) var(--ease-out);
 }
 
 .snippet-item:hover {
   background: var(--bg-row-hover);
-  transform: translateX(4px);
+  box-shadow: inset 3px 0 0 var(--accent-green);
+  padding-left: 18px;
+}
+
+.snippet-item:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* Active toolbar button state */
@@ -1880,4 +2035,63 @@ tr.row-over-budget {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ============================================
+   Premium polish layer (v3.10) — global
+   Focus-visible, selection, numeric alignment.
+   Lives at end-of-file so cascade beats earlier
+   per-component rules without !important spam.
+   ============================================ */
+::selection {
+  background: rgba(96, 165, 250, 0.32);
+  color: var(--text-primary);
+}
+
+.toolbar-btn:focus-visible,
+.action-btn:focus-visible,
+.modal-close:focus-visible,
+.tab:focus-visible,
+button:focus-visible,
+.input-field:focus-visible,
+.toolbar-select:focus-visible,
+.select-field:focus-visible,
+input[type="text"]:focus-visible,
+input[type="search"]:focus-visible,
+input[type="number"]:focus-visible,
+input[type="url"]:focus-visible,
+input[type="email"]:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-color: var(--accent-blue);
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+/* Numeric columns — keep digits aligned */
+.col-version,
+.col-size,
+.col-order,
+.col-updated,
+td.col-version,
+td.col-size,
+td.col-order,
+td.col-updated {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle elevation on key surfaces */
+.modal,
+.cmd-dialog {
+  box-shadow: var(--shadow-lg);
+}
+
+/* Ensure thead sits cleanly above scrolled rows */
+thead {
+  box-shadow: 0 1px 0 var(--hairline);
 }
