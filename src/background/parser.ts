@@ -153,6 +153,7 @@ export function parseUserscript(code: string): ParseResult {
     incompatible: [],
     webRequest: null,
     priority: 0,
+    weight: 0,
   };
 
   const metaBlock: string = metaBlockMatch[1]!;
@@ -195,6 +196,14 @@ export function parseUserscript(code: string): ParseResult {
         case 'priority':
           meta.priority = parseInt(value, 10) || 0;
           break;
+        case 'weight': {
+          // Phase 11.7 — Userscripts (Safari) `@weight 1..999`. Higher =
+          // earlier within the same `@run-at`. Clamped to the documented
+          // range so an `@weight 99999` typo can't dominate the sort.
+          const w: number = parseInt(value, 10);
+          if (Number.isFinite(w)) meta.weight = Math.max(1, Math.min(999, w));
+          break;
+        }
         case 'nodownload':
           (meta as unknown as { nodownload?: boolean }).nodownload = true;
           break;

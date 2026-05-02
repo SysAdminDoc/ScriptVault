@@ -2,6 +2,14 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.5.0] — `@weight` injection priority (Phase 11.7)
+
+- Added: `// @weight 1..999` directive (Userscripts/Safari standard). Higher = earlier within the same `@run-at`. Clamped to the documented range so an `@weight 99999` typo can't dominate the sort.
+- Changed: `registerAllScripts` sort now uses `Math.max(meta.priority || 0, meta.weight || 0)` so authors who set both don't get surprised by the lower one winning. Existing `@priority` behavior preserved.
+- Added: `GM_info.script.weight` and `GM_info.script.priority` so scripts can introspect their own injection ordering hints.
+- Added: 5 parser tests covering valid range, clamp-above, clamp-below, default, non-numeric. 585 tests pass.
+- Internal: TS mirrors in `src/types/script.ts` and `src/background/parser.ts` now declare the new field; the existing JS-test parser duplicate matched.
+
 ## [v3.4.0] — Run on This Tab via chrome.userScripts.execute() (Phase 11.4)
 
 - Added: "Run on This Tab" entry in the popup script-action dropdown. Fires the script once on the active tab without registering it for future page loads — useful for quick-test workflows and for running scripts that aren't enabled or that don't match the current URL.
