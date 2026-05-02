@@ -2,6 +2,12 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.6.3] — Beautify preserves cursor + scroll (Phase 7.5)
+
+- Fixed: `beautifyCode` (editor toolbar "Beautify" button) used to slam the cursor to line 0, char 0 after every reformat. On a long file you'd lose your place every time you hit it. The cursor + vertical scroll position now stay where they were.
+- Approach: capture cursor + scroll before the reformat, then map the old column to the new one — `newCh = newLeadingWS + max(0, oldCh - oldLeadingWS)` — since beautify only changes leading whitespace, the same logical line exists before/after with the same trimmed content. Cursors that sat inside the indent region snap to the start of the content on the new line.
+- Falls back to the old behaviour (cursor at top) only if the editor adapter doesn't expose `getCursor()` (e.g. some Monaco-adapter edge cases on first-paint).
+
 ## [v3.6.2] — Drop fake gist token encryption (Phase 5.5)
 
 - Removed: the AES-GCM encryption around the GitHub gist PAT was security theater. The key was derived via PBKDF2 from two string literals (`'ScriptVault-Gist-Key-v1'` + `'sv-gist-salt'`) embedded in the source — anyone with the encrypted blob and access to this file could derive the same key. Tokens now live in `chrome.storage.local` plaintext; that storage is already sandboxed by Chrome at the extension boundary, which is the actual protection.

@@ -6253,12 +6253,23 @@
         const code = state.editor.getValue();
         const tabStr = state.editor.getOption('indentWithTabs') ? '\t' : ' '.repeat(state.editor.getOption('indentUnit') || 4);
 
+        // Phase 7.5 — capture cursor + scroll position so we can preserve them.
+        // Beautify only changes leading whitespace, so the same logical line
+        // exists before/after; we just need to remap the column based on the
+        // new indentation level.
+        const oldLines = code.split('\n');
+        let oldCursor = null;
+        let oldScroll = null;
+        try {
+            oldCursor = state.editor.getCursor();
+            oldScroll = state.editor.getScrollInfo?.() || null;
+        } catch (_e) { /* getCursor unsupported in some adapters */ }
+
         // Simple beautifier: normalize indentation based on braces
-        const lines = code.split('\n');
         const beautified = [];
         let currentIndent = 0;
 
-        for (let line of lines) {
+        for (let line of oldLines) {
             let trimmed = line.trim();
             if (!trimmed) { beautified.push(''); continue; }
 
@@ -6285,7 +6296,32 @@
         }
 
         state.editor.setValue(beautified.join('\n'));
-        state.editor.setCursor({ line: 0, ch: 0 });
+
+        // Map the old cursor to the new layout. Leading-whitespace count is
+        // the only thing beautify changes per line, so:
+        //   cursorOffsetFromContent = max(0, oldCh - oldLeadingWS)
+        //   newCh = newLeadingWS + cursorOffsetFromContent
+        // If the cursor was inside the leading whitespace region, snap it to
+        // the start of the content in the new line.
+        if (oldCursor && typeof oldCursor.line === 'number') {
+            const lineNo = Math.min(oldCursor.line, beautified.length - 1);
+            const oldLine = oldLines[lineNo] ?? '';
+            const newLine = beautified[lineNo] ?? '';
+            const oldWs = (oldLine.match(/^\s*/) || [''])[0].length;
+            const newWs = (newLine.match(/^\s*/) || [''])[0].length;
+            const oldCh = typeof oldCursor.ch === 'number' ? oldCursor.ch : 0;
+            const offsetFromContent = Math.max(0, oldCh - oldWs);
+            const newCh = Math.min(newLine.length, newWs + offsetFromContent);
+            try { state.editor.setCursor({ line: lineNo, ch: newCh }); } catch (_e) {}
+            // Restore vertical scroll where possible. Without this, the editor
+            // jumps to top on a long file even if the cursor stays put.
+            if (oldScroll && typeof state.editor.scrollTo === 'function') {
+                try { state.editor.scrollTo(oldScroll.left || 0, oldScroll.top || 0); } catch (_e) {}
+            }
+        } else {
+            state.editor.setCursor({ line: 0, ch: 0 });
+        }
+
         updateLineCount();
         updateCursorPos();
         markCurrentEditorDirty();
