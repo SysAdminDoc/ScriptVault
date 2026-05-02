@@ -1,4 +1,4 @@
-// ScriptVault v3.0.1 - Background Service Worker
+// ScriptVault v3.0.2 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -10603,6 +10603,55 @@ function debugWarn(...args) {
 })();
 
 // ============================================================================
+// Session State — persist GM_* runtime maps to chrome.storage.session so
+// onclose / onclick / onclose callbacks survive MV3 service-worker termination.
+// chrome.storage.session is in-memory but persists across SW restarts within
+// the browser session, which is exactly the GM_openInTab / GM_notification
+// callback lifetime.
+// ============================================================================
+const SessionState = {
+  _NC_KEY: 'sessionNotifCallbacks',
+  _OTT_KEY: 'sessionOpenTabTrackers',
+  _AWT_KEY: 'sessionAudioWatchedTabs',
+  _hydrated: false,
+  async hydrate() {
+    if (this._hydrated) return;
+    this._hydrated = true;
+    if (!chrome?.storage?.session) return;
+    try {
+      const data = await chrome.storage.session.get([this._NC_KEY, this._OTT_KEY, this._AWT_KEY]);
+      const nc = data[this._NC_KEY];
+      if (nc && typeof nc === 'object') {
+        if (!self._notifCallbacks) self._notifCallbacks = new Map();
+        for (const [k, v] of Object.entries(nc)) self._notifCallbacks.set(k, v);
+      }
+      const ott = data[this._OTT_KEY];
+      if (ott && typeof ott === 'object') {
+        if (!self._openTabTrackers) self._openTabTrackers = new Map();
+        for (const [k, v] of Object.entries(ott)) self._openTabTrackers.set(Number(k), v);
+      }
+      const awt = data[this._AWT_KEY];
+      if (Array.isArray(awt)) {
+        if (!self._audioWatchedTabs) self._audioWatchedTabs = new Set();
+        for (const id of awt) self._audioWatchedTabs.add(id);
+      }
+    } catch (_) { /* session storage unavailable */ }
+  },
+  _persist(key, source) {
+    if (!chrome?.storage?.session) return;
+    let value;
+    if (source instanceof Map) value = Object.fromEntries(source);
+    else if (source instanceof Set) value = [...source];
+    else value = source ?? null;
+    chrome.storage.session.set({ [key]: value }).catch(() => {});
+  },
+  persistNotifCallbacks() { this._persist(this._NC_KEY, self._notifCallbacks); },
+  persistOpenTabTrackers() { this._persist(this._OTT_KEY, self._openTabTrackers); },
+  persistAudioWatchedTabs() { this._persist(this._AWT_KEY, self._audioWatchedTabs); },
+};
+self.SessionState = SessionState;
+
+// ============================================================================
 // Userscript Parser
 // ============================================================================
 
@@ -13318,6 +13367,7 @@ async function handleMessage(message, sender) {
             tabId, scriptId: data.scriptId,
             hasOnclick: data.hasOnclick, hasOndone: data.hasOndone
           });
+          SessionState.persistNotifCallbacks();
         }
         // Auto-close after timeout
         if (data.timeout && data.timeout > 0) {
@@ -13328,7 +13378,10 @@ async function handleMessage(message, sender) {
           } else {
             setTimeout(() => {
               chrome.notifications.clear(notifId).catch(() => {});
-              if (self._notifCallbacks) self._notifCallbacks.delete(notifId);
+              if (self._notifCallbacks) {
+                self._notifCallbacks.delete(notifId);
+                SessionState.persistNotifCallbacks();
+              }
             }, data.timeout);
           }
         }
@@ -13360,6 +13413,7 @@ async function handleMessage(message, sender) {
             self._openTabTrackers.delete(oldest);
           }
           self._openTabTrackers.set(tab.id, { callerTabId, scriptId: data.scriptId });
+          SessionState.persistOpenTabTrackers();
         }
         return { success: true, tabId: tab.id };
       }
@@ -13642,12 +13696,15 @@ async function handleMessage(message, sender) {
         if (!tabId) return { error: 'No tab context' };
         if (!self._audioWatchedTabs) self._audioWatchedTabs = new Set();
         self._audioWatchedTabs.add(tabId);
+        SessionState.persistAudioWatchedTabs();
         return { success: true };
       }
 
       case 'GM_audio_unwatchState': {
         const tabId = sender.tab?.id;
-        if (tabId && self._audioWatchedTabs) self._audioWatchedTabs.delete(tabId);
+        if (tabId && self._audioWatchedTabs?.delete(tabId)) {
+          SessionState.persistAudioWatchedTabs();
+        }
         return { success: true };
       }
 
@@ -14392,7 +14449,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name.startsWith('notif_clear_')) {
     const notifId = alarm.name.slice('notif_clear_'.length);
     chrome.notifications.clear(notifId).catch(() => {});
-    if (self._notifCallbacks) self._notifCallbacks.delete(notifId);
+    if (self._notifCallbacks) {
+      self._notifCallbacks.delete(notifId);
+      SessionState.persistNotifCallbacks();
+    }
     return;
   }
 
@@ -14622,12 +14682,14 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     } catch (e) {
       // Tab may have been closed
       self._audioWatchedTabs.delete(tabId);
+      SessionState.persistAudioWatchedTabs();
     }
   }
 });
 
 // GM_openInTab onclose: fire callback when tracked tab closes
-chrome.tabs.onRemoved.addListener((tabId) => {
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   const tracker = self._openTabTrackers?.get(tabId);
   if (tracker) {
     chrome.tabs.sendMessage(tracker.callerTabId, {
@@ -14635,13 +14697,17 @@ chrome.tabs.onRemoved.addListener((tabId) => {
       data: { tabId, scriptId: tracker.scriptId }
     }).catch(() => {});
     self._openTabTrackers.delete(tabId);
+    SessionState.persistOpenTabTrackers();
   }
   // Clean up audio watch tracking for closed tabs
-  if (self._audioWatchedTabs) self._audioWatchedTabs.delete(tabId);
+  if (self._audioWatchedTabs?.delete(tabId)) {
+    SessionState.persistAudioWatchedTabs();
+  }
 });
 
 // GM_notification onclick/ondone: fire callbacks on notification interaction
-chrome.notifications.onClicked.addListener((notifId) => {
+chrome.notifications.onClicked.addListener(async (notifId) => {
+  try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   const cb = self._notifCallbacks?.get(notifId);
   if (cb && cb.hasOnclick) {
     chrome.tabs.sendMessage(cb.tabId, {
@@ -14651,7 +14717,8 @@ chrome.notifications.onClicked.addListener((notifId) => {
   }
 });
 
-chrome.notifications.onClosed.addListener((notifId, byUser) => {
+chrome.notifications.onClosed.addListener(async (notifId, byUser) => {
+  try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   const cb = self._notifCallbacks?.get(notifId);
   if (cb && cb.hasOndone) {
     chrome.tabs.sendMessage(cb.tabId, {
@@ -14659,7 +14726,10 @@ chrome.notifications.onClosed.addListener((notifId, byUser) => {
       data: { notifId, scriptId: cb.scriptId, type: 'done', byUser }
     }).catch(() => {});
   }
-  if (self._notifCallbacks) self._notifCallbacks.delete(notifId);
+  if (self._notifCallbacks) {
+    self._notifCallbacks.delete(notifId);
+    SessionState.persistNotifCallbacks();
+  }
 });
 
 // Update badge when window focus changes
@@ -14840,6 +14910,11 @@ async function installFromUrl(url) {
 
 async function init() {
   await SettingsManager.init();
+
+  // Rehydrate ephemeral runtime maps (notification callbacks, opened-tab
+  // trackers, audio-watched tabs) from chrome.storage.session so callbacks
+  // registered before the SW was killed still fire after wake.
+  await SessionState.hydrate();
 
   // v2.0: Run migration BEFORE ScriptStorage.init() so that any migration-driven
   // rewrites of `userscripts` storage are visible to the in-memory cache. Running
@@ -15045,12 +15120,30 @@ async function registerAllScripts(forceReregister = false) {
           const scripts = await ScriptStorage.getAll();
           const enabledScripts = scripts.filter(s => s.enabled !== false);
           const registeredIds = new Set(existing.map(s => s.id));
+          const enabledIds = new Set(enabledScripts.map(s => s.id));
           const missing = enabledScripts.filter(s => !registeredIds.has(s.id));
+          // Stale = registered but no longer in storage OR now disabled.
+          // Unregister so wake doesn't leave dead injections active until the
+          // next forceReregister cycle.
+          const stale = existing
+            .map(s => s.id)
+            .filter(id => !enabledIds.has(id));
 
-          if (missing.length === 0) {
-            debugLog(`Skipping re-registration: ${existing.length} scripts already registered, none missing`);
+          if (missing.length === 0 && stale.length === 0) {
+            debugLog(`Skipping re-registration: ${existing.length} scripts already registered, no diff`);
             return;
           }
+
+          if (stale.length > 0) {
+            debugLog(`Unregistering ${stale.length} stale script(s) on wake`);
+            try {
+              await chrome.userScripts.unregister({ ids: stale });
+            } catch (e) {
+              console.warn('[ScriptVault] Failed to unregister stale scripts:', e?.message || e);
+            }
+          }
+
+          if (missing.length === 0) return;
 
           // Preload @require deps for the missing subset in parallel
           const missingRequires = new Set();
