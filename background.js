@@ -1,4 +1,4 @@
-// ScriptVault v3.1.0 - Background Service Worker
+// ScriptVault v3.2.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -4712,6 +4712,44 @@ const XhrManager = {
   // Get count of active requests
   getActiveCount() {
     return this.requests.size;
+  },
+
+  /**
+   * Build the `fetch()` init options for a GM_xmlhttpRequest payload.
+   *
+   * Encapsulates the per-option translation rules so they're unit-testable:
+   *   - `data.noCache === true` adds Cache-Control + Pragma: no-cache
+   *     (only if the caller hasn't already set them — case-insensitive).
+   *   - `data.redirect` is forwarded only when it's a valid RequestInit value
+   *     ('follow' | 'error' | 'manual'); typos are silently dropped.
+   *   - `data.anonymous === true` switches credentials to 'omit'.
+   *
+   * Body and signal are wired by the caller because they involve
+   * AbortController + body serialization that lives outside this helper.
+   *
+   * @param {object} data — the wrapper-side request payload.
+   * @returns {RequestInit} — fetch() init object (no body/signal).
+   */
+  buildFetchOptions(data) {
+    const method = String(data.method || 'GET').toUpperCase();
+    const reqHeaders = { ...(data.headers || {}) };
+
+    if (data.noCache === true) {
+      const lcKeys = Object.keys(reqHeaders).map((k) => k.toLowerCase());
+      if (!lcKeys.includes('cache-control')) reqHeaders['Cache-Control'] = 'no-cache';
+      if (!lcKeys.includes('pragma')) reqHeaders['Pragma'] = 'no-cache';
+    }
+
+    const opts = {
+      method,
+      headers: reqHeaders,
+      credentials: data.anonymous === true ? 'omit' : 'include'
+    };
+
+    if (data.redirect === 'follow' || data.redirect === 'error' || data.redirect === 'manual') {
+      opts.redirect = data.redirect;
+    }
+    return opts;
   }
 };
 
@@ -12997,17 +13035,15 @@ async function handleMessage(message, sender) {
             }
           };
           
-          // Build fetch options
-          // No 'mode' override — Chrome extensions with <all_urls> host permissions
-          // bypass CORS automatically. Forcing mode:'cors' breaks requests to servers
-          // that don't echo the extension origin (e.g. localhost with null CORS).
-          const method = (data.method || 'GET').toUpperCase();
-          const fetchOptions = {
-            method,
-            headers: data.headers || {},
-            signal: controller.signal,
-            credentials: data.anonymous ? 'omit' : 'include'
-          };
+          // Build fetch options via the shared helper so the noCache /
+          // redirect / credentials translation rules stay unit-testable.
+          // No 'mode' override — Chrome extensions with <all_urls> host
+          // permissions bypass CORS automatically. Forcing mode:'cors'
+          // breaks requests to servers that don't echo the extension origin
+          // (e.g. localhost with null CORS).
+          const method = String(data.method || 'GET').toUpperCase();
+          const fetchOptions = XhrManager.buildFetchOptions(data);
+          fetchOptions.signal = controller.signal;
 
           // Add body for non-GET/HEAD requests; deserialize tagged body objects
           if (data.data && method !== 'GET' && method !== 'HEAD') {
@@ -16284,9 +16320,23 @@ ${req.code}
     platform: {
       os: navigator.userAgentData?.platform || navigator.platform || 'unknown',
       arch: navigator.userAgentData?.architecture || 'unknown',
-      browserName: 'Chrome',
-      browserVersion: navigator.userAgent?.match(/Chrome\\/([\\d.]+)/)?.[1] || 'unknown'
+      browserName: navigator.userAgentData?.brands?.find(b => /chrome|chromium|edge/i.test(b.brand))?.brand || 'Chrome',
+      browserVersion: navigator.userAgentData?.brands?.[0]?.version || (navigator.userAgent?.match(/Chrome\\/([\\d.]+)/)?.[1]) || 'unknown',
+      // Phase 11.1 — fullVersionList + mobile parity with Violentmonkey.
+      fullVersionList: navigator.userAgentData?.brands?.map(b => ({ brand: b.brand, version: b.version })) || [],
+      mobile: navigator.userAgentData?.mobile === true
     },
+    // Phase 11.1 — Tampermonkey-compatible userAgent strings sourced from
+    // the page context. Exposed so scripts have a consistent reference even
+    // when tests mock navigator.userAgent.
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+    userAgentData: typeof navigator !== 'undefined' && navigator.userAgentData
+      ? {
+          platform: navigator.userAgentData.platform,
+          mobile: navigator.userAgentData.mobile,
+          brands: (navigator.userAgentData.brands || []).map(b => ({ brand: b.brand, version: b.version }))
+        }
+      : null,
     uuid: ${JSON.stringify(script.id)}
   };
   
@@ -16772,6 +16822,11 @@ ${req.code}
         password: details.password,
         context: details.context,
         anonymous: details.anonymous,
+        // VM #2168 / TM noCache: bypass intermediate caches.
+        // Accept both `noCache` (VM camelCase) and `nocache` (TM lowercase).
+        noCache: details.noCache === true || details.nocache === true,
+        // VM #2359: expose RequestInit.redirect so scripts can detect/block redirects.
+        redirect: details.redirect,
         // Track which callbacks are registered so background knows what to send
         hasCallbacks: {
           onload: !!details.onload,
