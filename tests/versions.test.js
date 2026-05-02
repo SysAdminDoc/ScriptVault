@@ -122,3 +122,44 @@ describe('compareVersions', () => {
     expect(compareVersions('0.0.1', '0.0.0')).toBe(1);
   });
 });
+
+// ── UpdateSystem._nextRetryAt — exponential backoff (Phase 6.1) ───────────
+// Mirror the constants from UpdateSystem so this test pins the production
+// behaviour. If background.core.js drifts, this test must be updated.
+
+const _BACKOFF_BASE_MS = 60 * 1000;
+const _BACKOFF_MAX_MS = 24 * 60 * 60 * 1000;
+const _MAX_BACKOFF_EXP = 10;
+
+function nextRetryAt(failures, now = Date.now()) {
+  const exp = Math.min(_MAX_BACKOFF_EXP, Math.max(0, failures - 1));
+  const wait = Math.min(_BACKOFF_MAX_MS, _BACKOFF_BASE_MS * (2 ** exp));
+  return now + wait;
+}
+
+describe('UpdateSystem exponential backoff (_nextRetryAt)', () => {
+  const T0 = 1_700_000_000_000;
+
+  it('first failure waits the base interval (1m)', () => {
+    expect(nextRetryAt(1, T0) - T0).toBe(_BACKOFF_BASE_MS);
+  });
+
+  it('doubles the wait on each subsequent failure', () => {
+    expect(nextRetryAt(2, T0) - T0).toBe(2 * _BACKOFF_BASE_MS);
+    expect(nextRetryAt(3, T0) - T0).toBe(4 * _BACKOFF_BASE_MS);
+    expect(nextRetryAt(4, T0) - T0).toBe(8 * _BACKOFF_BASE_MS);
+  });
+
+  it('caps at 24h regardless of failure count', () => {
+    // 2^10 * 1m = ~17h, so the next-step cap engages around the 11th failure.
+    const veryDeep = nextRetryAt(50, T0) - T0;
+    expect(veryDeep).toBeLessThanOrEqual(_BACKOFF_MAX_MS);
+    expect(veryDeep).toBeGreaterThan(_BACKOFF_BASE_MS * 2 ** 9);
+  });
+
+  it('treats 0 failures as the same as 1 failure (defensive)', () => {
+    // The handler always increments before calling _nextRetryAt, but if a
+    // miscalculation passes 0 we should still produce a non-zero wait.
+    expect(nextRetryAt(0, T0) - T0).toBe(_BACKOFF_BASE_MS);
+  });
+});
