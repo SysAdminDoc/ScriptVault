@@ -47,7 +47,8 @@ function parseUserscript(code) {
     compatible: [],
     incompatible: [],
     webRequest: null,
-    priority: 0
+    priority: 0,
+    weight: 0
   };
 
   const metaBlock = metaBlockMatch[1];
@@ -126,6 +127,11 @@ function parseUserscript(code) {
       case 'priority':
         meta.priority = parseInt(value, 10) || 0;
         break;
+      case 'weight': {
+        const w = parseInt(value, 10);
+        if (Number.isFinite(w)) meta.weight = Math.max(1, Math.min(999, w));
+        break;
+      }
       case 'webRequest':
         try { meta.webRequest = JSON.parse(value); } catch (e) {}
         break;
@@ -288,6 +294,41 @@ describe('parseUserscript', () => {
     const code = makeScript({ name: 'Pri', priority: 'abc' });
     const { meta } = parseUserscript(code);
     expect(meta.priority).toBe(0);
+  });
+
+  // Phase 11.7 — @weight (Userscripts/Safari) ─────────────────────────────
+  it('parses @weight as integer in 1..999 range', () => {
+    const code = makeScript({ name: 'Wt', weight: '42' });
+    const { meta } = parseUserscript(code);
+    expect(meta.weight).toBe(42);
+  });
+
+  it('clamps @weight above 999 down to 999', () => {
+    const code = makeScript({ name: 'Wt', weight: '99999' });
+    const { meta } = parseUserscript(code);
+    expect(meta.weight).toBe(999);
+  });
+
+  it('clamps @weight below 1 up to 1', () => {
+    const code = makeScript({ name: 'Wt', weight: '0' });
+    const { meta } = parseUserscript(code);
+    expect(meta.weight).toBe(1);
+    const code2 = makeScript({ name: 'Wt', weight: '-50' });
+    const { meta: meta2 } = parseUserscript(code2);
+    expect(meta2.weight).toBe(1);
+  });
+
+  it('leaves @weight at default 0 when not specified', () => {
+    const code = makeScript({ name: 'NoWt' });
+    const { meta } = parseUserscript(code);
+    expect(meta.weight).toBe(0);
+  });
+
+  it('ignores non-numeric @weight values', () => {
+    const code = makeScript({ name: 'Wt', weight: 'oops' });
+    const { meta } = parseUserscript(code);
+    // Non-numeric leaves the default 0 in place rather than clamping to 1.
+    expect(meta.weight).toBe(0);
   });
 
   it('parses @resource with name and URL', () => {

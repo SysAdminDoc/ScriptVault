@@ -44,6 +44,8 @@ export interface ScriptMeta {
   'top-level-await': boolean;
   webRequest: WebRequestRule[] | null;
   priority: number;
+  /** Userscripts (Safari) `@weight 1..999` injection priority — higher = earlier. */
+  weight: number;
 
   // Tags & compat
   antifeature: string[];

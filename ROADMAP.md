@@ -651,6 +651,11 @@ Several metadata directives parsed by Violentmonkey and Tampermonkey are not yet
 
 Priority order: `@inject-into` and `@connect` are HIGH (security-relevant and broadly compatible); the rest are MEDIUM parity items.
 
+**Status (rolling):**
+- `@inject-into`, `@connect`, `@tag`, `@antifeature`, `@compatible`, `@incompatible`, `@top-level-await` — all parsed in `background.core.js`. `@antifeature` warning banner already lives in the install dialog.
+- `@run-at document-body` — recognized by the parser; currently maps to `document_end` for `chrome.userScripts.register()` since Chrome lacks a native body-only injection point. A MutationObserver shim that fires when `<body>` appears is still the right behavior; deferred.
+- **`@weight 1..999` shipped in v3.5.0 (2026-05-02).** Parser clamps to documented range; `registerAllScripts` sort uses `Math.max(priority, weight)`; `GM_info.script.weight` + `GM_info.script.priority` exposed. TS mirrors in `src/types/script.ts` + `src/background/parser.ts` matched. 5 parser tests cover valid/clamp-above/clamp-below/default/non-numeric.
+
 ### 11.8 `@require` Subresource Integrity
 
 Tampermonkey supports SRI hashes appended to `@require` URLs:

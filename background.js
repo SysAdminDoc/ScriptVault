@@ -1,4 +1,4 @@
-// ScriptVault v3.4.0 - Background Service Worker
+// ScriptVault v3.5.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -10746,6 +10746,7 @@ function parseUserscript(code) {
     incompatible: [],
     webRequest: null,
     priority: 0,
+    weight: 0,
     crontab: ''
   };
 
@@ -10824,6 +10825,15 @@ function parseUserscript(code) {
       case 'priority':
         meta.priority = parseInt(value, 10) || 0;
         break;
+      case 'weight': {
+        // Phase 11.7 — Userscripts (Safari) `@weight 1..999`. Integer
+        // injection priority where higher = earlier within the same
+        // `@run-at`. Clamp to the documented range so an `@weight 99999`
+        // typo can't dominate the sort.
+        const w = parseInt(value, 10);
+        if (Number.isFinite(w)) meta.weight = Math.max(1, Math.min(999, w));
+        break;
+      }
       case 'webRequest':
         try { meta.webRequest = JSON.parse(value); } catch (e) {}
         break;
@@ -15531,10 +15541,14 @@ async function registerAllScripts(forceReregister = false) {
     
     const enabledScripts = scripts.filter(s => s.enabled !== false);
 
-    // Sort by @priority (higher = first), then position
+    // Sort by combined @priority + @weight (higher = first), then position.
+    // @priority is the legacy ScriptVault directive; @weight is the Userscripts
+    // (Safari) standard (1..999). Either bumps a script earlier within the same
+    // @run-at — we take the max so authors who set both don't get surprised by
+    // the lower one winning.
     enabledScripts.sort((a, b) => {
-      const pa = a.meta?.priority || 0;
-      const pb = b.meta?.priority || 0;
+      const pa = Math.max(a.meta?.priority || 0, a.meta?.weight || 0);
+      const pb = Math.max(b.meta?.priority || 0, b.meta?.weight || 0);
       if (pb !== pa) return pb - pa;
       return (a.position || 0) - (b.position || 0);
     });
@@ -16468,7 +16482,10 @@ ${req.code}
       license: meta.license || '',
       updateURL: meta.updateURL || '',
       downloadURL: meta.downloadURL || '',
-      supportURL: meta.supportURL || ''
+      supportURL: meta.supportURL || '',
+      // Phase 11.7 — Userscripts (Safari) injection priority.
+      weight: meta.weight || 0,
+      priority: meta.priority || 0
     },
     scriptMetaStr: ${JSON.stringify(script.code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/)?.[0] || '')},
     scriptHandler: 'ScriptVault',
