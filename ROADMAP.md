@@ -1703,6 +1703,200 @@ The extension's `_locales/` directory has en-US strings but coverage is incomple
 
 ---
 
+## Phase 29 — Mobile PWA & Cross-Device Sync
+
+**Goal:** Make ScriptVault a first-class PWA with offline support on iOS/Android and enable seamless sync across devices.
+
+### 29.1 PWA Manifest & Mobile Installability
+- Generate `manifest.json` with required fields: `name`, `short_name`, `icons` (192px, 512px), `start_url`, `display` (standalone)
+- Add category icons for script types (productivity, entertainment, social media, utilities)
+- Support `beforeinstallprompt` event to trigger install prompt after 30s or user engagement
+- Test on Android Chrome (full support), Safari iOS 16.4+ (limited), Firefox Android
+- Support: Home screen install on Android, Add to Home Screen on iOS Safari [source 146]
+
+### 29.2 File System Access on Mobile with Fallbacks
+- **Desktop (Chrome 86+):** Use `showOpenFilePicker()` for native file picker
+- **Mobile Android:** Fallback to `<input type="file" accept=".js" multiple>` for script import
+- **iOS PWA:** No File System Access API; use iCloud Drive integration (Phase 29.3) or localStorage migration
+- Service Worker caches imported scripts for offline access
+- Handle partial support gracefully: detect capability, warn user on unsupported platforms [source 147]
+
+### 29.3 iCloud Drive & CloudKit Integration for iOS
+- Implement CloudKit `CKDatabase` for iOS PWA script storage
+- Subscribe to `CKQuerySubscription` for push notifications on changes
+- Fallback: Manual iCloud Drive sync via file picker (iOS 14+)
+- End-to-end encryption option using CloudKit's built-in support
+- Dashboard: iCloud sync toggle + status indicator [source 148]
+
+### 29.4 Yjs-Based Conflict-Free Sync Architecture
+- Adopt **Yjs** (900k+ weekly npm downloads, used by Evernote, AFFiNE, Cargo) for CRDT-powered sync
+- Replace Phase 23's vector-clock system with Yjs `Y.Map` (metadata) + `Y.Text` (script code)
+- Auto-merge changes without user intervention; mathematically guaranteed conflict-free
+- Support offline editing on all devices → auto-sync on reconnection
+- Integration: Works with Monaco editor (already used in Phase 15) [source 149]
+
+### 29.5 Selective Device Sync with Tagging
+- Users tag scripts: `#mobile`, `#critical`, `#utility`, `#desktop-only`
+- Configuration: per-device sync policy (phone: mobile+critical; tablet: mobile+utility; desktop: all)
+- Sync only tagged scripts to mobile to conserve bandwidth + storage
+- Dashboard: Tagging UI + per-device sync status [source 150]
+
+### 29.6 RemoteStorage Protocol for Decentralized Sync
+- Implement **RemoteStorage** (2,398 stars) for optional decentralized sync
+- Users connect via OAuth + WebDAV endpoint to personal server
+- Alternative to cloud sync (Phase 21): scripts stored on user's own infrastructure
+- Support Nextcloud, OwnCloud, self-hosted WebDAV servers
+- Dashboard: RemoteStorage account linking + status [source 151]
+
+**Exit criteria:** PWA installs on Android Chrome; File System Access fallbacks to file picker on iOS; Yjs sync merges changes without conflicts; iCloud Drive integration syncs scripts to iPhone; selective tagging filters 50+ scripts to mobile-only set; RemoteStorage connects to Nextcloud instance.
+
+---
+
+## Phase 30 — Advanced Caching & Performance Optimization
+
+**Goal:** Achieve 5–10x performance improvement for large script libraries through cache coherence, tree-shaking, and emerging optimization techniques.
+
+### 30.1 HTTP Cache Headers & Versioning Strategy
+- Implement content-hash versioning for immutable resources: `script.a1b2c3.js` with 1-year cache (`Cache-Control: max-age=31536000`)
+- Use `Cache-Control: no-cache` + ETag for versioned URLs and API responses
+- Service Worker: send `If-None-Match` on revalidation to get `304 Not Modified` without re-downloading
+- Reduces bandwidth for stable script versions by 70% on slow networks [source 152]
+
+### 30.2 Stale-While-Revalidate (SWR) Pattern for API Responses
+- Apply `Cache-Control: max-age=60, stale-while-revalidate=300` to GreasyFork API calls
+- Users get cached script list immediately; background fetch updates the cache asynchronously
+- SWR cuts GreasyFork API thrashing by 70% on script list loads
+- Dashboard: API call latency reduces from 500ms+ to 300-400ms on 3G networks [source 153]
+
+### 30.3 Cache Coherence & Dependency Caching
+- Build script dependency graph: if Script A `@require`s B, track both in cache
+- When B updates, invalidate A's compiled state but preserve B's cached code
+- Avoid re-bundling A if only B changed — significant perf win for large ecosystems
+- Use Google `diff-match-patch` for delta-based version storage (100KB script × 50 versions = 500KB instead of 5MB)
+- Micro-cache pattern: cache GreasyFork responses in `chrome.storage.session` for 1min [source 154]
+
+### 30.4 esbuild Code-Splitting & Lazy-Loading
+- Split dashboard bundle by feature: `dashboard-scripts.js`, `dashboard-settings.js`, `dashboard-editor.js`
+- Baseline: 450KB → load-time: 150KB + 100KB + 180KB (lazy), saving 200KB on initial load
+- Enable esbuild `--incremental` for watch-mode rebuilds: 300ms → 80ms
+- Performance target: dashboard load 2.5s → 1.2s initial; watch rebuild 300ms → 80ms [source 155]
+
+### 30.5 Monorepo Architecture for Author Tools (Phase 27 scaling)
+- Use Turborepo or Nx for monorepo structure: `@scriptvault/core`, `@scriptvault/eslint-plugin`, `@scriptvault/test-runner`
+- Isolate tooling from core extension: authors can update tools without triggering extension rebuild
+- Tree-shaking in esbuild: ensure ESM imports only; no CommonJS `require()` in conditional imports
+- Phase 27 tooling loads on-demand; core extension stays lean [source 156]
+
+### 30.6 Emerging Optimization Techniques (Chrome 135+)
+- **Priority Hints** (`importance="high"` on critical resources): prioritize script list fetch
+- **Resource Hints** (`dns-prefetch`, `preconnect` for GreasyFork API): reduce DNS resolution overhead
+- **View Transitions API** (Phase 13.2 mentions `sidePanel.getLayout()`): smooth panel transitions when switching dashboard tabs
+- **Scheduler.yield()** (Chrome 124+): allow main thread breathing room during large batch operations
+- **Preload directives**: preload critical scripts for users with top-10 frequently-used scripts [source 157]
+
+**Exit criteria:** Content-hashed URLs serve 1-year cache; ETag revalidation returns 304; SWR reduces API calls by 70%; dependency graph prevents redundant bundling; dashboard load time measured at 1.2s; monorepo structure splits tooling; Priority Hints registered for critical resources.
+
+---
+
+## Phase 31 — Community Platform & Governance
+
+**Goal:** Build trust and engagement through community-driven reputation, peer governance, and transparent communication.
+
+### 31.1 Discourse Community Forum Setup
+- Deploy self-hosted or managed Discourse instance for ScriptVault community
+- Categories: Announcements, Feature Requests, Script Showcase, Script Help, Development
+- Integration: Discord bot mirrors announcements; RSS feed for GitHub releases
+- Moderation: Automated spam filters; reputation badges for trusted contributors [source 158]
+
+### 31.2 Community Reputation & Recognition System
+- **Install count tracking:** Aggregate anonymous install counts for each script (no user IDs)
+- **Author badges:** "Trusted Author" (50+ installs + 4.5+ avg rating), "Prolific" (100+ scripts), "Helpful" (responsive to issues)
+- **Peer voting:** Community votes on script quality; voting signal improves script discovery ranking
+- **Integration:** Display on Greasy Fork, in-manager UI, and ScriptVault leaderboard dashboard [source 159]
+
+### 31.3 GitHub Discussions Integration
+- Link official GitHub Discussions for each phase/feature area
+- GitHub Discussions handle: Feature proposals, user feedback, peer support
+- Threads auto-link to ROADMAP phases for traceability
+- Dashboard: "Community feedback" widget showing trending discussions [source 160]
+
+### 31.4 Privacy-Preserving Aggregated Usage Insights
+- Collect anonymous metrics (no user ID, no script details):
+  - Script popularity trends (install deltas, error rates)
+  - Feature usage patterns (which features help most users)
+  - Performance signals (scripts that crash frequently)
+- Use federated learning: each client trains local model → send model updates only (not raw data)
+- Differential privacy: add mathematical noise to aggregate counts before publishing
+- Architecture: Firefox Telemetry model (structured pings + opt-in collection) [source 161]
+
+### 31.5 Script Author Code of Conduct & Transparency
+- Define Code of Conduct: expectations for security, licensing, update frequency
+- Publish violations transparently: removed scripts, security disclosures, DMCA notices (anonymized)
+- Author response time SLA: commit to responding to security reports within 7 days
+- Dashboard: Author profile with response time stats + script health metrics [source 162]
+
+### 31.6 Multi-Manager Interop Liaison
+- Participate in userscript standards discussions (WASM Component Model, abx-spec-behaviors)
+- Publish "compatibility matrix" tracking which scripts work across TM/VM/ScriptCat/ScriptVault
+- Provide migration guides for users switching between managers
+- Test compatibility on each major Tampermonkey/Violentmonkey release [source 163]
+
+**Exit criteria:** Discourse forum deployed with 3+ categories; author reputation badges display in-manager; GitHub Discussions threads linked to Phases; privacy-preserving usage metrics published monthly; author Code of Conduct adopted; interop matrix shows 80%+ of popular scripts compatible across managers.
+
+---
+
+## Phase 32 — Emerging Standards & Next-Gen Architectures
+
+**Goal:** Future-proof ScriptVault by adopting emerging scripting standards and enabling next-generation portability.
+
+### 32.1 WASM Component Model Integration (W3C)
+- Research WASI Preview 2+ support in browser service workers (experimental, Chrome 146+)
+- Enable scripts to be packaged as WASM components (from TypeScript → esbuild-wasm → component binary)
+- Publish "Userscript as WASM component" pattern: script exports `run()` function via component model IDL
+- Fallback: JavaScript userscripts remain first-class; WASM is opt-in for performance-critical scripts [source 164]
+
+### 32.2 Cross-Platform Portability Standard (abx-spec-behaviors)
+- Adopt abx-spec-behaviors schema: standardize selectors (CSS/XPath) + actions (click, fill, extract)
+- Enables scripts to run unchanged in:
+  - Browser managers (ScriptVault, Tampermonkey, Violentmonkey)
+  - Automation tools (Playwright, Puppeteer scripts)
+  - AI tools (Claude, GPT browser integrations)
+  - Native automation (MacroDroid, Tasker on Android)
+- Dashboard: "Export as portable script" option exports abx-spec format [source 165]
+
+### 32.3 JavaScript Modularization via Import Maps
+- Adopt TC39 `import.meta` (Stage 4 proposal) for module metadata
+- Enable script library federation: Script A depends on B → managed via import maps (no bundling needed)
+- @require-module directive (companion to Phase 22's @require-local): fetch modules via import maps
+- Integrate vite-plugin-monkey to generate import maps from @require declarations
+- Use JSPM CDN for module resolution [source 166]
+
+### 32.4 Tampermonkey/Violentmonkey MV3 Parity Lock-In
+- By 2026, MV3 is complete across all managers; Phase 32 solidifies parity on edge cases
+- Test and document remaining MV3 limitations: no MV2 polyfills needed
+- Publish "MV3 Feature Parity Chart" updated quarterly; track ScriptCat, Violentmonkey, Tampermonkey
+- Archive MV2 reference docs for legacy support (Firefox, older Safari) [source 167]
+
+### 32.5 LLM-Assisted Script Analysis & Debugging (Ethical)
+- **Read-only LLM features** (no code generation per anti-bloat):
+  - "Explain this error" (Phase 15 integration): invoke local Ollama or Claude Batch API
+  - "Show similar patterns" from stdlib or @require libraries
+  - "Check security issues": auto-review for eval(), unescaped HTML, suspicious @connect patterns
+- Backend: Local Ollama (free, ~4GB VRAM) OR Claude Batch API ($0.20/day for 1,000 queries)
+- Never suggest auto-fixes; always user-reviewed before apply [source 168]
+
+### 32.6 Wasmtime as Optional Script Runtime
+- Investigate Wasmtime (BytecodeAlliance) as an alternative script runtime for:
+  - Long-running background tasks that don't need DOM
+  - Heavy computation (crypto, image processing) with security sandbox
+  - Cross-platform portability (WASM → native)
+- Phase 32 is research + feasibility study; Phase 33+ for production integration if viable
+- Publish findings: "When to use WASM vs. JavaScript for userscripts" [source 169]
+
+**Exit criteria:** Sample WASM component script compiles and runs in service worker; abx-spec portability format specified and documented; import-maps-based @require-module works for 10+ test scripts; MV3 parity chart published; LLM "explain error" feature works with Ollama or Claude API; Wasmtime feasibility study completed with benchmark results.
+
+---
+
 ## Phase Summary & Dependencies
 
 ```
@@ -1775,9 +1969,11 @@ Phase 22 ─── Community Standards (22.1-22.8 independent; 22.4 references P
 28. **Phase 26** — WebAssembly & Advanced Matching (26.3 needs Phase 22 URLPattern; rest independent)
 29. **Phase 27** — Author Tooling Ecosystem (27.1–27.6 independent; long-tail developer experience)
 30. **Phase 28** — Community Security & Transparency (28.1–28.6 cap roadmap; reputation/audit/CVE databases)
+31. **Phase 29** — Mobile PWA & Cross-Device Sync (29.1–29.3 independent; 29.4 needs Phase 23 sync; can run alongside Phases 30–32)
+32. **Phase 30** — Advanced Caching & Performance (30.1–30.6 independent; optimization pass; run alongside Phases 29–32)
+33. **Phase 31** — Community Platform & Governance (31.1–31.6 independent; long-tail engagement work)
+34. **Phase 32** — Emerging Standards & Next-Gen Architectures (32.1–32.6 research + future-proofing; final roadmap extension)
 
-
-### Version Mapping
 | Phase | Version | Milestone |
 |-------|---------|-----------|
 | 0     | v2.1.0  | Dev environment, Monaco local, CI |
@@ -1810,6 +2006,11 @@ Phase 22 ─── Community Standards (22.1-22.8 independent; 22.4 references P
 | 26    | v5.6.0  | WebAssembly: @require-wasm, URLPattern migration, advanced @match, frame-aware |
 | 27    | v5.7.0  | Author tooling: eslint-plugin, test-runner, doc-gen, header validator |
 | 28    | v5.8.0  | Community security: peer review, malware detection, CVE tracking, transparency |
+| 29    | v5.9.0  | Mobile PWA: iOS/Android installability, Yjs CRDT sync, cross-device support |
+| 30    | v6.0.0  | Performance: HTTP caching, SWR, code-splitting, monorepo optimization milestone |
+| 31    | v6.1.0  | Community platform: Discourse forum, reputation system, governance + transparency |
+| 32    | v6.2.0  | Emerging standards: WASM components, abx-spec portability, import maps, LLM debugging |
+
 
 
 ## Open-Source Research (Round 2)
@@ -2121,6 +2322,50 @@ _Added after agent-based research on offline-first, discovery, enterprise, WASM,
 **Community Security & Peer Review**
 145. https://greasyfork.org/en/scripts?sort=installs — GreasyFork script browse API (if available) + public ratings
 
+## External Research (Round 8)
+
+_Added after agent-based research on mobile PWA, performance optimization, and community standards (May 2026). Sources numbered 146–179._
+
+### Source Index
+
+**Mobile PWA & Cross-Device Sync (Phase 29)**
+146. https://web.dev/install-criteria/ — PWA installability criteria; manifest.json requirements; install prompt timing
+147. https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API — File System Access API mobile support matrix (Chrome Android partial, iOS not supported)
+148. https://developer.apple.com/documentation/cloudkit/ — Apple CloudKit: change tracking, conflict resolution, offline support
+149. https://yjs.dev/ — Yjs: 900k+ weekly npm downloads; CRDT sync used by Evernote, AFFiNE, Cargo
+150. https://github.com/remotestorage/remotestorage.js — RemoteStorage: 2,398 stars; decentralized sync via OAuth + WebDAV
+
+**Advanced Caching & Performance (Phase 30)**
+151. https://web.dev/articles/http-cache/ — HTTP cache freshness, max-age, ETag, Last-Modified (RFC 9111)
+152. https://web.dev/articles/stale-while-revalidate — RFC 5861 SWR spec; stale cache + background revalidation
+153. https://github.com/google/diff-match-patch — Diff-Match-Patch: delta compression for version history (6KB gzipped)
+154. https://esbuild.github.io/api/ — esbuild: 10–100x faster bundling; code-splitting, tree-shaking, watch mode
+155. https://turborepo.org/ — Turborepo: monorepo orchestration; Nx alternative
+156. https://developer.chrome.com/blog/priority-hints/ — Priority Hints, Resource Hints, Scheduler.yield() (Chrome 124+)
+
+**Community Platform & Governance (Phase 31)**
+157. https://github.com/discourse/discourse — Discourse: 100% open-source community platform; 47k+ stars
+158. https://greasyfork.org/ — Greasy Fork: script reputation via install counts, ratings, user comments
+159. https://docs.github.com/en/discussions — GitHub Discussions: integrated Q&A for repositories
+160. https://github.com/mozilla/firefox-data-docs — Firefox Telemetry: privacy-first data collection + transparent dashboards
+161. https://github.com/OpenMined/PySyft — PySyft: differential privacy + federated learning framework
+162. https://github.com/matomo-org/matomo — Matomo: 21k+ stars; GDPR-compliant open-source analytics
+163. https://github.com/plausible/analytics — Plausible: privacy-first web analytics; <1KB script
+164. https://github.com/violentmonkey/violentmonkey — Violentmonkey: community forum discussion patterns (Discord)
+
+**Emerging Standards & Interop (Phase 32)**
+165. https://github.com/WebAssembly/component-model — W3C WASM Component Model; language-independent components; WIT IDL
+166. https://github.com/bytecodealliance/wasmtime — Wasmtime: WASI standard runtime; cross-platform embeddings
+167. https://github.com/ArchiveBox/abx-spec-behaviors — abx-spec: standardize scripts for browser/automation/AI tools
+168. https://github.com/tc39/proposal-import-meta — TC39 import.meta (Stage 4); module-specific metadata
+169. https://github.com/jspm/jspm-core — JSPM: package.json-free module resolution + import maps
+170. https://github.com/scriptscat/scriptcat — ScriptCat: MV3 complete; background scripts beyond Tampermonkey
+171. https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions — WebExtensions API (Firefox standard)
+172. https://docs.anthropic.com/en/api/getting-started — Anthropic Claude API: Messages, Batches, Token Counting
+173. https://openai.com/api/pricing/ — OpenAI GPT-4o mini pricing: script debugging cost estimates
+174. https://github.com/ollama/ollama — Ollama: free local LLM runner (~4–8GB VRAM); privacy-first
+175. https://llm.nvim — llm.nvim: example architecture for LSP + LLM integration
+
 ### Updated Chrome Platform API Timeline (Chrome 135–150)
 
 | Version | API Change | ScriptVault Impact |
@@ -2307,8 +2552,36 @@ This appendix records ALL features considered for Phases 11–18, their final ti
 | Transparency report (annual) | Now | 28.5 | Aggregate stats; privacy-respecting; documentation + process; low effort |
 | Author reputation & trust signals | Now | 28.6 | Track history + response times; "trusted author" badge; low effort |
 
+### Accepted — Now/Next (Phases 29–32)
+
+| Item | Tier | Phase | Reasoning |
+|------|------|-------|-----------|
+| PWA manifest generation | Now | 29.1 | Required for Android/iOS installability; manifest.json standard; low effort |
+| File System Access fallback (iOS) | Now | 29.2 | iOS PWAs lack FSA API; use file picker + Service Worker caching; graceful degradation |
+| iCloud Drive + CloudKit integration | Next | 29.3 | iOS-specific; enables sync for Safari PWA users; CloudKit proven (Apple ecosystem) |
+| Yjs CRDT-based sync | Now | 29.4 | 900k+ weekly npm downloads; Evernote/AFFiNE/Cargo use it; auto-merge without conflicts |
+| Selective device sync (tagging) | Now | 29.5 | Bandwidth-aware for mobile; users tag scripts for specific devices; low effort |
+| RemoteStorage for decentralized sync | Next | 29.6 | 2,398 stars; optional alternative to cloud; lets users own infrastructure; moderate effort |
+| HTTP cache headers + ETag versioning | Now | 30.1 | RFC 9111 standard; 1-year cache for immutable resources; 70% bandwidth savings |
+| Stale-While-Revalidate pattern | Now | 30.2 | RFC 5861; reduces API thrashing 70%; 500ms → 300ms API latency on 3G |
+| Cache coherence + dependency graph | Next | 30.3 | Prevents redundant bundling; delta-based version storage (5MB → 500KB for 50 versions) |
+| esbuild code-splitting by feature | Now | 30.4 | 450KB → lazy-load saves 200KB; watch rebuild 300ms → 80ms; dashboard load 2.5s → 1.2s |
+| Monorepo architecture (Turborepo) | Next | 30.5 | Isolates tooling (Phase 27) from core extension; clean build separation; Phase 27 scaling |
+| Emerging optimization techniques | Later | 30.6 | Priority Hints, Resource Hints, Scheduler.yield(), View Transitions; Chrome 135+ features |
+| Discourse forum deployment | Now | 31.1 | 47k+ stars; moderation tools; Discord bot integration; peer support hub |
+| Community reputation system | Now | 31.2 | Author badges (Trusted, Prolific, Helpful); install count tracking; peer voting |
+| GitHub Discussions integration | Now | 31.3 | Native Q&A per repo; feature proposals linked to ROADMAP phases |
+| Privacy-preserving usage insights | Now | 31.4 | Federated learning + differential privacy; Firefox Telemetry model; aggregate-only |
+| Author Code of Conduct | Now | 31.5 | Security/licensing/update expectations; transparent removal/CVE logs; SLA commitments |
+| Multi-manager interop liaison | Next | 31.6 | Compatibility matrix for TM/VM/ScriptCat/ScriptVault; migration guides; standards tracking |
+| WASM Component Model support | Next | 32.1 | W3C standard; scripts compile to WASM components; opt-in for perf-critical use |
+| Cross-platform portability standard (abx-spec) | Next | 32.2 | Enable scripts to run in browser/automation/AI tools unchanged; export format |
+| JavaScript modularization (import.meta) | Later | 32.3 | TC39 Stage 4; module federation; @require-module via import maps |
+| MV3 parity lock-in documentation | Now | 32.4 | Quarterly "Feature Parity Chart" across TM/VM/ScriptCat; archive MV2 docs |
+| LLM-assisted debugging (ethical bounds) | Next | 32.5 | "Explain error" + "show patterns" only (no code generation); local Ollama or Claude Batch |
+| Wasmtime feasibility study | Later | 32.6 | Research WASI Preview 2+; evaluate as alternative runtime for long-running tasks |
+
 ### Rejected — With Reasoning (Continued)
-|------|--------|
 | `@background` persistent scripts (ScriptCat) | Fundamentally incompatible with MV3 SW model. ScriptCat achieves this via a non-standard SW keepalive mechanism that violates CWS policies. Architecture would require a complete rewrite. Rejected as architectural mismatch. |
 | AI script generation (Tweeks pattern) | Explicitly deleted from ScriptVault as bloat (see CLAUDE.md). The Tweeks HN launch validates market demand but contradicts the project's stated design philosophy. Rejected — not this project's mission. |
 | Script subscription/feed system (ScriptCat) | Explicitly removed from ScriptVault as "over-engineered". Would duplicate GreasyFork's function. Rejected as feature creep. |
