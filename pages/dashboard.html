@@ -6576,6 +6576,18 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
 
             <div class="settings-section">
+                <div class="section-label">Install from Local File</div>
+                <div class="section-content">
+                    <div class="utility-note" style="margin-bottom:8px">Pick a <code>.user.js</code> file or drag and drop one anywhere on this page.</div>
+                    <div class="setting-row">
+                        <input type="file" id="installFileInput" name="install_file" accept=".user.js,.js,text/javascript" aria-label="Userscript file" style="display:none">
+                        <button type="button" class="btn" id="btnInstallFromFile">Choose file…</button>
+                        <span class="utility-inline-status" id="installFileStatus" style="margin-left:8px">No file selected</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
                 <div class="section-label">Batch Install from URLs</div>
                 <div class="section-content">
                     <div class="setting-row">

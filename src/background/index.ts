@@ -73,5 +73,6 @@ export {
 
 export {
   installFromUrl,
+  installFromCode,
   registerWebNavigationListener,
 } from './install-handler';

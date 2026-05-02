@@ -1518,6 +1518,9 @@
         elements.importFileName = document.getElementById('importFileName');
         elements.importUrlInput = document.getElementById('importUrlInput');
         elements.btnInstallFromUrl = document.getElementById('btnInstallFromUrl');
+        elements.installFileInput = document.getElementById('installFileInput');
+        elements.btnInstallFromFile = document.getElementById('btnInstallFromFile');
+        elements.installFileStatus = document.getElementById('installFileStatus');
         elements.textareaData = document.getElementById('textareaData');
         elements.btnTextareaExport = document.getElementById('btnTextareaExport');
         elements.btnTextareaImport = document.getElementById('btnTextareaImport');
@@ -6652,6 +6655,71 @@
         }
     }
 
+    async function installFromCodeText(code, label) {
+        if (typeof code !== 'string' || !code) {
+            showToast('Empty file', 'error');
+            return false;
+        }
+        try {
+            const res = await chrome.runtime.sendMessage({ action: 'installFromCode', code });
+            if (res?.success) {
+                await loadScripts();
+                updateStats();
+                showToast(label ? `Installed ${label}` : 'Installed', 'success');
+                return true;
+            }
+            showToast(res?.error || 'Failed', 'error');
+        } catch (e) {
+            showToast('Failed', 'error');
+        }
+        return false;
+    }
+
+    async function installFromFile(file) {
+        if (!file) return false;
+        const name = file.name || 'file';
+        const lower = name.toLowerCase();
+        if (!lower.endsWith('.user.js') && !lower.endsWith('.js')) {
+            showToast('Pick a .user.js file', 'error');
+            return false;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('File too large (max 5MB)', 'error');
+            return false;
+        }
+        const statusEl = elements.installFileStatus || document.getElementById('installFileStatus');
+        if (statusEl) statusEl.textContent = `Reading ${name}…`;
+        try {
+            const code = await file.text();
+            if (statusEl) statusEl.textContent = `Installing ${name}…`;
+            const ok = await installFromCodeText(code, name);
+            if (statusEl) statusEl.textContent = ok ? `Installed ${name}` : `Failed: ${name}`;
+            return ok;
+        } catch (e) {
+            if (statusEl) statusEl.textContent = `Failed to read ${name}`;
+            showToast('Failed to read file', 'error');
+            return false;
+        }
+    }
+
+    async function installFromFileList(fileList) {
+        if (!fileList || !fileList.length) return;
+        const files = Array.from(fileList).filter(f => /\.user\.js$|\.js$/i.test(f.name || ''));
+        if (!files.length) {
+            showToast('No .user.js files found', 'error');
+            return;
+        }
+        let installed = 0;
+        for (const file of files) {
+            // eslint-disable-next-line no-await-in-loop
+            const ok = await installFromFile(file);
+            if (ok) installed++;
+        }
+        if (files.length > 1) {
+            showToast(`Installed ${installed} of ${files.length}`, installed === files.length ? 'success' : 'info');
+        }
+    }
+
     // Helpers
     async function updateStats() {
         const total = state.scripts.length;
@@ -8770,6 +8838,85 @@
         elements.btnInstallFromUrl?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, installFromUrl, { busyLabel: 'Installing…' });
         });
+
+        elements.btnInstallFromFile?.addEventListener('click', () => {
+            elements.installFileInput?.click();
+        });
+
+        elements.installFileInput?.addEventListener('change', async event => {
+            const input = event.currentTarget;
+            const files = input?.files;
+            if (files && files.length) {
+                await installFromFileList(files);
+                try { input.value = ''; } catch {}
+            }
+        });
+
+        // Drag-and-drop .user.js anywhere on the dashboard
+        (() => {
+            let dragDepth = 0;
+            const overlayId = 'sv-install-drop-overlay';
+            function ensureOverlay() {
+                let el = document.getElementById(overlayId);
+                if (el) return el;
+                el = document.createElement('div');
+                el.id = overlayId;
+                el.setAttribute('aria-hidden', 'true');
+                el.style.cssText = [
+                    'position:fixed',
+                    'inset:0',
+                    'background:rgba(11,16,27,0.78)',
+                    'border:3px dashed var(--accent, #58a6ff)',
+                    'color:#fff',
+                    'font:600 18px/1.3 system-ui,sans-serif',
+                    'display:none',
+                    'align-items:center',
+                    'justify-content:center',
+                    'z-index:99999',
+                    'pointer-events:none',
+                    'text-align:center',
+                    'padding:24px',
+                ].join(';');
+                el.textContent = 'Drop .user.js to install';
+                document.body.appendChild(el);
+                return el;
+            }
+            function hasFiles(e) {
+                const dt = e.dataTransfer;
+                if (!dt) return false;
+                if (dt.types && Array.from(dt.types).includes('Files')) return true;
+                return false;
+            }
+            window.addEventListener('dragenter', e => {
+                if (!hasFiles(e)) return;
+                dragDepth++;
+                const ov = ensureOverlay();
+                ov.style.display = 'flex';
+            });
+            window.addEventListener('dragover', e => {
+                if (!hasFiles(e)) return;
+                e.preventDefault();
+            });
+            window.addEventListener('dragleave', e => {
+                if (!hasFiles(e)) return;
+                dragDepth = Math.max(0, dragDepth - 1);
+                if (dragDepth === 0) {
+                    const ov = document.getElementById(overlayId);
+                    if (ov) ov.style.display = 'none';
+                }
+            });
+            window.addEventListener('drop', async e => {
+                if (!hasFiles(e)) return;
+                e.preventDefault();
+                dragDepth = 0;
+                const ov = document.getElementById(overlayId);
+                if (ov) ov.style.display = 'none';
+                const files = e.dataTransfer?.files;
+                if (files && files.length) {
+                    await installFromFileList(files);
+                }
+            });
+        })();
 
         // Batch URL install
         document.getElementById('btnBatchInstall')?.addEventListener('click', async event => {

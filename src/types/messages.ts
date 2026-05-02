@@ -347,6 +347,11 @@ interface InstallFromUrl {
   url: string;
 }
 
+interface InstallFromCode {
+  action: 'installFromCode';
+  code: string;
+}
+
 // ─── Storage Quota ───────────────────────────────────────────────────
 
 interface GetStorageUsage {
@@ -974,7 +979,7 @@ export type BackgroundMessage =
   // Easy Cloud
   | EasyCloudConnect | EasyCloudDisconnect | EasyCloudSync | EasyCloudStatus
   // Import/export
-  | ExportAll | ImportAll | ImportBackup | ExportZip | ImportFromZip | InstallFromUrl
+  | ExportAll | ImportAll | ImportBackup | ExportZip | ImportFromZip | InstallFromUrl | InstallFromCode
   // Storage quota
   | GetStorageUsage | GetStorageBreakdown | CleanupStorage
   // Backup
@@ -1075,6 +1080,7 @@ export interface ResponseMap {
   rollbackScript: { success: true; script: Script } | ErrorResponse;
 
   installFromUrl: { success: true } | ErrorResponse;
+  installFromCode: { success: true } | ErrorResponse;
 
   getStorageUsage: StorageUsageResponse;
 
