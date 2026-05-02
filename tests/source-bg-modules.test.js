@@ -163,7 +163,7 @@ describe('source workspace manager module', () => {
       { id: 'alpha', enabled: true, updatedAt: 1 },
       { id: 'beta', enabled: true, updatedAt: 1 },
     ]);
-    const { WorkspaceManager, registerAllScripts, updateBadge } = harness;
+    const { WorkspaceManager, scriptCache, set, registerAllScripts, updateBadge } = harness;
     const workspace = await WorkspaceManager.create('Minimal');
     workspace.snapshot.beta = false;
     chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
@@ -171,6 +171,10 @@ describe('source workspace manager module', () => {
     await expect(WorkspaceManager.activate(workspace.id)).rejects.toThrow('QUOTA');
 
     expect((await WorkspaceManager.getAll()).active).toBeNull();
+    expect(scriptCache.beta.enabled).toBe(true);
+    expect(scriptCache.beta.updatedAt).toBe(1);
+    expect(set).toHaveBeenCalledWith('beta', expect.objectContaining({ id: 'beta', enabled: false }));
+    expect(set).toHaveBeenCalledWith('beta', expect.objectContaining({ id: 'beta', enabled: true, updatedAt: 1 }));
     expect(registerAllScripts).not.toHaveBeenCalled();
     expect(updateBadge).not.toHaveBeenCalled();
   });

@@ -10656,19 +10656,28 @@ const WorkspaceManager = {
     // Apply snapshot — use ScriptStorage.set() for each changed script for rollback safety
     const scripts = await ScriptStorage.getAll();
     const now = Date.now();
-    for (const s of scripts) {
-      const shouldBeEnabled = ws.snapshot[s.id];
-      if (shouldBeEnabled !== undefined && (s.enabled !== false) !== shouldBeEnabled) {
-        await ScriptStorage.set(s.id, { ...s, enabled: shouldBeEnabled, updatedAt: now });
-      }
-    }
-
     const previousActive = this._cache.active;
-    this._cache.active = id;
+    const changedScripts = [];
     try {
+      for (const s of scripts) {
+        const shouldBeEnabled = ws.snapshot[s.id];
+        if (shouldBeEnabled !== undefined && (s.enabled !== false) !== shouldBeEnabled) {
+          changedScripts.push({ ...s });
+          await ScriptStorage.set(s.id, { ...s, enabled: shouldBeEnabled, updatedAt: now });
+        }
+      }
+
+      this._cache.active = id;
       await this._save();
     } catch (e) {
       this._cache.active = previousActive;
+      for (const script of changedScripts.reverse()) {
+        try {
+          await ScriptStorage.set(script.id, script);
+        } catch (rollbackError) {
+          console.warn('[ScriptVault] Failed to roll back workspace activation for script:', script.id, rollbackError);
+        }
+      }
       throw e;
     }
 
