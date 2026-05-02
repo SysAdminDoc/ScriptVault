@@ -292,6 +292,19 @@ describe('source storage module', () => {
     await expect(FolderStorage.addScript(folder.id, 'script_alpha')).rejects.toThrow('QUOTA');
     expect(FolderStorage.getFolderForScript('script_alpha')).toBeNull();
   });
+
+  it('rolls back folder create and delete when persistence fails', async () => {
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(FolderStorage.create('Unsaved')).rejects.toThrow('QUOTA');
+    expect(await FolderStorage.getAll()).toEqual([]);
+
+    const folder = await FolderStorage.create('Pinned');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(FolderStorage.delete(folder.id)).rejects.toThrow('QUOTA');
+    const folders = await FolderStorage.getAll();
+    expect(folders).toHaveLength(1);
+    expect(folders[0].id).toBe(folder.id);
+  });
 });
 
 describe('source resource cache module', () => {

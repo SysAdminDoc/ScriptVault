@@ -4536,7 +4536,12 @@ const FolderStorage = {
     await this.init();
     const folder = { id: generateId(), name, color, collapsed: false, scriptIds: [], createdAt: Date.now() };
     this.cache.push(folder);
-    await this.save();
+    try {
+      await this.save();
+    } catch (e) {
+      this.cache = this.cache.filter(f => f.id !== folder.id);
+      throw e;
+    }
     return folder;
   },
 
@@ -4562,8 +4567,14 @@ const FolderStorage = {
 
   async delete(id) {
     await this.init();
+    const prev = this.cache;
     this.cache = this.cache.filter(f => f.id !== id);
-    await this.save();
+    try {
+      await this.save();
+    } catch (e) {
+      this.cache = prev;
+      throw e;
+    }
   },
 
   async addScript(folderId, scriptId) {
@@ -10589,7 +10600,12 @@ const WorkspaceManager = {
       updatedAt: Date.now()
     };
     this._cache.list.push(workspace);
-    await this._save();
+    try {
+      await this._save();
+    } catch (e) {
+      this._cache.list = this._cache.list.filter(w => w.id !== workspace.id);
+      throw e;
+    }
     return workspace;
   },
 
@@ -10597,9 +10613,16 @@ const WorkspaceManager = {
     await this._init();
     const ws = this._cache.list.find(w => w.id === id);
     if (!ws) return null;
+    const prev = { name: ws.name, updatedAt: ws.updatedAt };
     if (updates.name !== undefined) ws.name = updates.name;
     ws.updatedAt = Date.now();
-    await this._save();
+    try {
+      await this._save();
+    } catch (e) {
+      ws.name = prev.name;
+      ws.updatedAt = prev.updatedAt;
+      throw e;
+    }
     return ws;
   },
 
@@ -10609,12 +10632,19 @@ const WorkspaceManager = {
     const ws = this._cache.list.find(w => w.id === id);
     if (!ws) return null;
     const scripts = await ScriptStorage.getAll();
+    const prev = { snapshot: { ...ws.snapshot }, updatedAt: ws.updatedAt };
     ws.snapshot = {};
     for (const s of scripts) {
       ws.snapshot[s.id] = s.enabled !== false;
     }
     ws.updatedAt = Date.now();
-    await this._save();
+    try {
+      await this._save();
+    } catch (e) {
+      ws.snapshot = prev.snapshot;
+      ws.updatedAt = prev.updatedAt;
+      throw e;
+    }
     return ws;
   },
 
@@ -10633,8 +10663,14 @@ const WorkspaceManager = {
       }
     }
 
+    const previousActive = this._cache.active;
     this._cache.active = id;
-    await this._save();
+    try {
+      await this._save();
+    } catch (e) {
+      this._cache.active = previousActive;
+      throw e;
+    }
 
     // Re-register all scripts
     await registerAllScripts();
@@ -10648,8 +10684,15 @@ const WorkspaceManager = {
     const index = this._cache.list.findIndex(w => w.id === id);
     if (index === -1) return null;
     const [removed] = this._cache.list.splice(index, 1);
+    const previousActive = this._cache.active;
     if (this._cache.active === id) this._cache.active = null;
-    await this._save();
+    try {
+      await this._save();
+    } catch (e) {
+      this._cache.list.splice(index, 0, removed);
+      this._cache.active = previousActive;
+      throw e;
+    }
     return removed;
   }
 };

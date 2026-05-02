@@ -116,6 +116,25 @@ describe('source workspace manager module', () => {
     expect((await WorkspaceManager.getAll()).list).toHaveLength(1);
   });
 
+  it('rolls back workspace mutations when persistence fails', async () => {
+    const { WorkspaceManager } = await loadFreshWorkspaceManager([
+      { id: 'alpha', enabled: true, updatedAt: 1 },
+    ]);
+
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(WorkspaceManager.create('Unsaved')).rejects.toThrow('QUOTA');
+    expect((await WorkspaceManager.getAll()).list).toEqual([]);
+
+    const workspace = await WorkspaceManager.create('Focus');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(WorkspaceManager.update(workspace.id, { name: 'Renamed' })).rejects.toThrow('QUOTA');
+    expect((await WorkspaceManager.getAll()).list[0].name).toBe('Focus');
+
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(WorkspaceManager.delete(workspace.id)).rejects.toThrow('QUOTA');
+    expect((await WorkspaceManager.getAll()).list[0].id).toBe(workspace.id);
+  });
+
   it('activates a workspace, persists changed script states, and refreshes registrations', async () => {
     const harness = await loadFreshWorkspaceManager([
       { id: 'alpha', enabled: true, updatedAt: 1 },
@@ -137,6 +156,23 @@ describe('source workspace manager module', () => {
     expect(registerAllScripts).toHaveBeenCalledTimes(1);
     expect(updateBadge).toHaveBeenCalledTimes(1);
     expect((await WorkspaceManager.getAll()).active).toBe(workspace.id);
+  });
+
+  it('rolls back active workspace when activation persistence fails', async () => {
+    const harness = await loadFreshWorkspaceManager([
+      { id: 'alpha', enabled: true, updatedAt: 1 },
+      { id: 'beta', enabled: true, updatedAt: 1 },
+    ]);
+    const { WorkspaceManager, registerAllScripts, updateBadge } = harness;
+    const workspace = await WorkspaceManager.create('Minimal');
+    workspace.snapshot.beta = false;
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+
+    await expect(WorkspaceManager.activate(workspace.id)).rejects.toThrow('QUOTA');
+
+    expect((await WorkspaceManager.getAll()).active).toBeNull();
+    expect(registerAllScripts).not.toHaveBeenCalled();
+    expect(updateBadge).not.toHaveBeenCalled();
   });
 });
 

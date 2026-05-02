@@ -58,7 +58,12 @@ export const WorkspaceManager = {
       updatedAt: Date.now()
     };
     this._cache!.list.push(workspace);
-    await this._save();
+    try {
+      await this._save();
+    } catch (e) {
+      this._cache!.list = this._cache!.list.filter(w => w.id !== workspace.id);
+      throw e;
+    }
     return workspace;
   },
 
@@ -66,9 +71,16 @@ export const WorkspaceManager = {
     await this._init();
     const ws: Workspace | undefined = this._cache!.list.find(w => w.id === id);
     if (!ws) return null;
+    const prev = { name: ws.name, updatedAt: ws.updatedAt };
     if (updates.name !== undefined) ws.name = updates.name;
     ws.updatedAt = Date.now();
-    await this._save();
+    try {
+      await this._save();
+    } catch (e) {
+      ws.name = prev.name;
+      ws.updatedAt = prev.updatedAt;
+      throw e;
+    }
     return ws;
   },
 
@@ -78,12 +90,19 @@ export const WorkspaceManager = {
     const ws: Workspace | undefined = this._cache!.list.find(w => w.id === id);
     if (!ws) return null;
     const scripts: Script[] = await ScriptStorage.getAll();
+    const prev = { snapshot: { ...ws.snapshot }, updatedAt: ws.updatedAt };
     ws.snapshot = {};
     for (const s of scripts) {
       ws.snapshot[s.id] = s.enabled !== false;
     }
     ws.updatedAt = Date.now();
-    await this._save();
+    try {
+      await this._save();
+    } catch (e) {
+      ws.snapshot = prev.snapshot;
+      ws.updatedAt = prev.updatedAt;
+      throw e;
+    }
     return ws;
   },
 
@@ -102,8 +121,14 @@ export const WorkspaceManager = {
       }
     }
 
+    const previousActive = this._cache!.active;
     this._cache!.active = id;
-    await this._save();
+    try {
+      await this._save();
+    } catch (e) {
+      this._cache!.active = previousActive;
+      throw e;
+    }
 
     // Re-register all scripts
     await registerAllScripts();
@@ -112,10 +137,21 @@ export const WorkspaceManager = {
     return { success: true, name: ws.name };
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string): Promise<Workspace | null> {
     await this._init();
-    this._cache!.list = this._cache!.list.filter(w => w.id !== id);
+    const index = this._cache!.list.findIndex(w => w.id === id);
+    if (index === -1) return null;
+    const removed = this._cache!.list[index] as Workspace;
+    this._cache!.list.splice(index, 1);
+    const previousActive = this._cache!.active;
     if (this._cache!.active === id) this._cache!.active = null;
-    await this._save();
+    try {
+      await this._save();
+    } catch (e) {
+      this._cache!.list.splice(index, 0, removed);
+      this._cache!.active = previousActive;
+      throw e;
+    }
+    return removed;
   }
 };

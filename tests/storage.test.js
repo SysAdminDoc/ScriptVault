@@ -218,11 +218,26 @@ describe('FolderStorage', () => {
     expect(updated.scriptIds).toEqual([]);
   });
 
+  it('create() rolls back on persist failure', async () => {
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(FolderStorage.create('Unsaved')).rejects.toThrow('QUOTA');
+    expect(await FolderStorage.getAll()).toEqual([]);
+  });
+
   it('delete() removes folder', async () => {
     const folder = await FolderStorage.create('F1');
     await FolderStorage.delete(folder.id);
     const all = await FolderStorage.getAll();
     expect(all).toHaveLength(0);
+  });
+
+  it('delete() rolls back on persist failure', async () => {
+    const folder = await FolderStorage.create('F1');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(FolderStorage.delete(folder.id)).rejects.toThrow('QUOTA');
+    const all = await FolderStorage.getAll();
+    expect(all).toHaveLength(1);
+    expect(all[0].id).toBe(folder.id);
   });
 
   it('update() rolls back on persist failure without clobbering other fields', async () => {

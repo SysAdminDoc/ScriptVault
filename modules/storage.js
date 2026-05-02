@@ -438,7 +438,12 @@ const FolderStorage = {
     await this.init();
     const folder = { id: generateId(), name, color, collapsed: false, scriptIds: [], createdAt: Date.now() };
     this.cache.push(folder);
-    await this.save();
+    try {
+      await this.save();
+    } catch (e) {
+      this.cache = this.cache.filter(f => f.id !== folder.id);
+      throw e;
+    }
     return folder;
   },
 
@@ -464,8 +469,14 @@ const FolderStorage = {
 
   async delete(id) {
     await this.init();
+    const prev = this.cache;
     this.cache = this.cache.filter(f => f.id !== id);
-    await this.save();
+    try {
+      await this.save();
+    } catch (e) {
+      this.cache = prev;
+      throw e;
+    }
   },
 
   async addScript(folderId, scriptId) {

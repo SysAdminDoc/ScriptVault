@@ -640,7 +640,12 @@ export const FolderStorage = {
       createdAt: Date.now(),
     };
     this.cache!.push(folder);
-    await this.save();
+    try {
+      await this.save();
+    } catch (e) {
+      this.cache = this.cache!.filter((f) => f.id !== folder.id);
+      throw e;
+    }
     return folder;
   },
 
