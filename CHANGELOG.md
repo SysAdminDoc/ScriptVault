@@ -2,6 +2,17 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.10.0] — Premium UX polish (design tokens, multi-theme dashboard, refined components)
+
+- Added: design-token layer at the top of `pages/dashboard.css` — `--hairline`, `--hairline-strong`, `--shadow-sm/md/lg`, `--overlay-scrim`, `--r-xs/sm/md/lg/pill`, `--t-fast/base/slow`, `--ease-out`, `--ease-spring`, `--focus-ring`, and per-accent `--tint-*-soft/edge` variants. Theme-aware via `[data-theme="light|catppuccin|oled"]` overrides; `color-scheme` declared so native form controls pick the right palette.
+- Changed: dropped the neon-green slabs. `<th>` lost its 2px green bottom-border in favour of a hairline + uppercase 11px label; `.section-label` lost its 3px green right-bar in favour of a 1px hairline divider with refined typography. Active tabs now show a 2px accent indicator strip via `::after` rather than the old margin-overlap trick.
+- Changed: table rows render as a calm hairline-shadow stack instead of hard 1px borders; selected rows get an inset 3px accent-blue rail. Empty-state typography tightened (h3 promoted to `--text-primary` / 600 weight); spinner reduced 28→24px and slowed slightly for less mechanical feel.
+- Changed: toasts now have variant-tinted backgrounds + accent stripe (success / error / warning each get their own soft tint and inset 3px stripe). Modals get `backdrop-filter: blur(4px)` on the scrim, spring-eased scale-and-translate enter, and `--shadow-lg` elevation. Scrollbars are 10px transparent-track / pill-thumb that adapts to theme.
+- Changed: snippet-item hover replaced its `transform: translateX(4px)` with a calmer accent-green inset stripe + 4px padding shift. Toggle switches gained an inner hairline border on OFF and a subtle knob shadow; checked transition uses spring easing.
+- Added: global premium-polish layer at end-of-file — system-wide `:focus-visible` ring (2px accent-blue + 4px halo), `::selection` styling, tabular-nums on numeric columns (`.col-version`, `.col-size`, `.col-order`, `.col-updated`), and elevation on `.modal` / `.cmd-dialog`.
+- Compatibility: every legacy CSS variable (`--bg-body`, `--bg-row*`, `--border-section`, `--toggle-on/off`, `--accent-*`, etc.) is preserved unchanged so the runtime theme editor (`pages/dashboard-theme-editor.js`), inline `[data-theme]` blocks in `pages/dashboard.html`, and dashboard JS modules continue to work without touch. Pure CSS pass; no HTML or JS changes.
+- Tests: 601/601 green (no functional change).
+
 ## [v3.9.0] — Round 10 parser & template wins (Phases 36.4, 36.6, 36.11)
 
 - Added: `@tag` round-trip preservation. User-assigned tags now survive script re-install and update — `getMetaArray('tag')` unions source-declared and existing tags (dedupe, first-seen order). VM v2.35.2 parity. Phase 36.4.
