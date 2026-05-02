@@ -194,7 +194,7 @@ async function withTransaction<T>(
 
 ---
 
-## Phase 3 — Service Worker Resilience
+## Phase 3 — Service Worker Resilience ✅ Shipped in v3.0.1 + v3.0.2
 
 **Goal:** Every in-memory timer and Map survives service worker termination.
 
@@ -239,6 +239,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 - Use `chrome.userScripts.getScripts()` to check what's already registered before re-registering
 
 **Exit criteria:** Extension survives Chrome killing and restarting the service worker mid-operation, no data loss, no orphaned state.
+
+**Status:** Shipped across v3.0.1 (cold-start guard, statsSave alarm) and v3.0.2 (SessionState persistence for `_notifCallbacks` / `_openTabTrackers` / `_audioWatchedTabs`, stale-script unregistration in `registerAllScripts` diff-on-wake). Code-hash–based change detection deferred — current diff catches add/remove but treats updated-in-place scripts as a forceReregister upstream concern.
 
 ---
 
