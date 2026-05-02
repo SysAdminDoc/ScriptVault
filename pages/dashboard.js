@@ -6047,6 +6047,69 @@
 
     let _creatingScript = false;
 
+    /**
+     * Phase 36.11 — Resolve template tokens before sending to the background.
+     * Supported tokens: {{name}} (active tab title), {{icon}} (active tab favicon),
+     * {{match}} (active tab origin pattern), {{namespace}} (active tab origin).
+     * Tokens with no resolvable value are stripped (line removed) so we never
+     * leave literal `{{icon}}` in the script. Mirrors VM v2.34.1 behaviour.
+     */
+    async function resolveTemplateTokens(code) {
+        if (typeof code !== 'string' || !code.includes('{{')) return code;
+        let activeTab = null;
+        try {
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            activeTab = tabs && tabs[0] ? tabs[0] : null;
+        } catch (_) { /* ignore — fall through with empty values */ }
+
+        let matchPattern = '';
+        let namespace = '';
+        try {
+            if (activeTab && activeTab.url) {
+                const u = new URL(activeTab.url);
+                if (u.protocol === 'http:' || u.protocol === 'https:') {
+                    matchPattern = u.protocol + '//' + u.hostname + '/*';
+                    namespace = u.protocol + '//' + u.hostname + '/';
+                }
+            }
+        } catch (_) { /* keep empty */ }
+
+        const tokens = {
+            '{{name}}': (activeTab && activeTab.title) || '',
+            '{{icon}}': (activeTab && activeTab.favIconUrl) || '',
+            '{{match}}': matchPattern,
+            '{{namespace}}': namespace,
+        };
+
+        // Strip directive lines whose only value is an unresolvable token —
+        // leaving `// @icon       {{icon}}` in source produces a dead URL.
+        const lines = code.split('\n');
+        const out = [];
+        for (const raw of lines) {
+            let drop = false;
+            for (const [tok, val] of Object.entries(tokens)) {
+                if (val === '' && raw.includes(tok)) {
+                    // Only drop if this token sits on a metadata directive line
+                    // (e.g. `// @icon  {{icon}}`). Body code that happens to
+                    // contain `{{name}}` is left alone for the substitution
+                    // pass below.
+                    if (/^\s*\/\/\s*@\S+\s+/.test(raw) && raw.trim().endsWith(tok)) {
+                        drop = true;
+                        break;
+                    }
+                }
+            }
+            if (!drop) out.push(raw);
+        }
+
+        let result = out.join('\n');
+        for (const [tok, val] of Object.entries(tokens)) {
+            if (val === '') continue;
+            result = result.split(tok).join(val);
+        }
+        return result;
+    }
+
     const SCRIPT_TEMPLATES = {
         blank: {
             label: 'Blank Script',
@@ -6057,6 +6120,7 @@
 // @version     1.0
 // @description A new userscript
 // @author      You
+// @icon        {{icon}}
 // @match       *://*/*
 // @grant       none
 // ==/UserScript==
@@ -6279,7 +6343,8 @@
 
                 _creatingScript = true;
                 try {
-                    const response = await chrome.runtime.sendMessage({ action: 'createScript', code: template.code });
+                    const resolvedCode = await resolveTemplateTokens(template.code);
+                    const response = await chrome.runtime.sendMessage({ action: 'createScript', code: resolvedCode });
                     if (response?.success) {
                         await loadScripts();
                         updateStats();
