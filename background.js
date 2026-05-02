@@ -1,4 +1,4 @@
-// ScriptVault v3.3.0 - Background Service Worker
+// ScriptVault v3.4.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -13558,6 +13558,90 @@ async function handleMessage(message, sender) {
           await updateBadgeForTab(data.tabId, data.url);
         }
         return { success: true };
+      }
+
+      // Phase 11.4 — Run a script once on a specific tab without registering
+      // it for future page loads. Uses chrome.userScripts.execute() (Chrome
+      // 135+); falls back to chrome.scripting.executeScript so older Chrome
+      // can still run the wrapper-less code body. The script doesn't need
+      // to be enabled, and registration state is not modified.
+      case 'runScriptNow': {
+        const scriptId = data.scriptId || data.id;
+        const tabId = data.tabId;
+        if (!scriptId) return { success: false, error: 'Missing scriptId' };
+        try {
+          const script = await ScriptStorage.get(scriptId);
+          if (!script) return { success: false, error: 'Script not found' };
+
+          // Resolve the target tab — caller usually passes an explicit id;
+          // fall back to the active tab so the popup's "Run on current tab"
+          // affordance can omit it.
+          let targetTabId = tabId;
+          if (typeof targetTabId !== 'number') {
+            const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            targetTabId = activeTab?.id;
+          }
+          if (typeof targetTabId !== 'number') {
+            return { success: false, error: 'No target tab' };
+          }
+
+          // Resolve @require dependencies the same way the context-menu
+          // injector does, so the one-shot run sees the same library set as
+          // a normal injection. Per-require failures are non-fatal — the
+          // user-script body still runs.
+          const reqList = Array.isArray(script.meta?.require)
+            ? script.meta.require
+            : (script.meta?.require ? [script.meta.require] : []);
+          const requireScripts = [];
+          for (const url of reqList) {
+            try {
+              const code = await fetchRequireScript(url);
+              if (code) requireScripts.push({ url, code });
+            } catch (_e) { /* require fetch failed — keep going */ }
+          }
+
+          let storedValues = {};
+          try { storedValues = await ScriptValues.getAll(script.id) || {}; } catch (_e) {}
+
+          const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, [], []);
+
+          // Prefer userScripts.execute() (Chrome 135+) — runs in the same
+          // USER_SCRIPT world as a normal injection so unsafeWindow / GM_*
+          // APIs behave identically.
+          if (typeof chrome.userScripts?.execute === 'function') {
+            try {
+              await chrome.userScripts.execute({
+                target: { tabId: targetTabId },
+                js: [{ code: wrappedCode }],
+                world: 'USER_SCRIPT'
+              });
+              return { success: true, mode: 'userScripts.execute' };
+            } catch (e) {
+              // Fall through to chrome.scripting fallback below.
+              debugLog('userScripts.execute failed, falling back:', e?.message);
+            }
+          }
+
+          // Fallback: chrome.scripting.executeScript — runs in MAIN world,
+          // GM_* APIs unavailable but the user-script body still executes.
+          // Acceptable for "Run now" use because the user explicitly opted in.
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: targetTabId },
+              world: 'MAIN',
+              func: (code) => {
+                try { (0, eval)(code); } catch (err) { console.error('[ScriptVault Run Now]', err); }
+              },
+              args: [wrappedCode]
+            });
+            return { success: true, mode: 'scripting.executeScript' };
+          } catch (e) {
+            return { success: false, error: e?.message || 'Run failed' };
+          }
+        } catch (e) {
+          console.error('[ScriptVault] runScriptNow error:', e);
+          return { success: false, error: e?.message || 'Run failed' };
+        }
       }
       
       // Get info

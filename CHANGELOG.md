@@ -2,6 +2,12 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.4.0] — Run on This Tab via chrome.userScripts.execute() (Phase 11.4)
+
+- Added: "Run on This Tab" entry in the popup script-action dropdown. Fires the script once on the active tab without registering it for future page loads — useful for quick-test workflows and for running scripts that aren't enabled or that don't match the current URL.
+- Added: `runScriptNow` background message handler. Prefers `chrome.userScripts.execute()` (Chrome 135+) so the script runs in the same `USER_SCRIPT` world as a normal injection — `unsafeWindow` and the GM_* APIs behave identically. Falls back to `chrome.scripting.executeScript({ world: 'MAIN' })` on older Chrome (without GM_* APIs but the script body still runs).
+- Internal: `runScriptNow` resolves `@require` dependencies via `fetchRequireScript` exactly like the context-menu run-once path so the one-shot run sees the same library set as a normal injection. Per-require fetch failures are non-fatal.
+
 ## [v3.3.0] — GM_notification: progress, buttons, update, close (Phase 11.11)
 
 - Added: `GM_notification({ progress: 0..100 })` — shows a progress bar inside the notification (uses `chrome.notifications.type='progress'`). Useful for download or batch-job scripts.
