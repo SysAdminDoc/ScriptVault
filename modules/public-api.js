@@ -103,6 +103,33 @@ const PublicAPI = (() => {
     return false;
   }
 
+  /**
+   * Phase 5.5 — webhook URL guard. Wraps `_isInternalHost` with a string
+   * reason so the caller can surface a useful error message ("loopback",
+   * "RFC 1918", etc.) instead of a generic refusal.
+   *
+   * Returns null when the URL is safe to send a webhook to, otherwise a
+   * short reason string.
+   *
+   * @param {string} url
+   * @returns {string|null}
+   */
+  function isInternalWebhookUrl(url) {
+    let parsed;
+    try { parsed = new URL(url); } catch { return 'malformed URL'; }
+    const host = parsed.hostname || '';
+    if (!host) return 'empty hostname';
+    if (_isInternalHost(host)) {
+      // Surface the most useful reason — IPv4 vs IPv6 vs alias — without
+      // duplicating the classification code.
+      if (host === 'localhost' || host.endsWith('.localdomain')) return 'localhost alias';
+      if (host.includes(':')) return 'IPv6 loopback/internal';
+      if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return 'IPv4 private/loopback/CGNAT';
+      return 'internal host';
+    }
+    return null;
+  }
+
   const ARRAY_META_KEYS = {
     match: 'match',
     include: 'include',
@@ -932,8 +959,18 @@ const PublicAPI = (() => {
         throw new Error(`Unknown event type: ${eventType}`);
       }
       const url = config.url || '';
-      if (url && !url.startsWith('https://')) {
-        throw new Error('Webhook URL must use https://');
+      if (url) {
+        if (!url.startsWith('https://')) {
+          throw new Error('Webhook URL must use https://');
+        }
+        // Phase 5.5 — Reject RFC 1918 / loopback / link-local / IPv6 internal
+        // hosts. Webhooks fire from the extension's network context, so a URL
+        // pointing at the user's LAN is an SSRF vector for any web origin
+        // that obtains capability-token access via PublicAPI.
+        const reason = isInternalWebhookUrl(url);
+        if (reason) {
+          throw new Error('Webhook URL points at internal/loopback host: ' + reason);
+        }
       }
       _webhooks[eventType] = {
         url,

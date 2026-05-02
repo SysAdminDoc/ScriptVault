@@ -2,6 +2,13 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.6.1] — Webhook SSRF guard (Phase 5.5)
+
+- Hardened: `PublicAPI.setWebhook` now rejects URLs that point at internal/loopback hosts. Previously the only validation was `https://` — a malicious web origin with capability-token access could register a webhook at `https://192.168.1.1/admin` or `https://169.254.169.254/latest/meta-data/` (cloud metadata) and exfiltrate or trigger LAN-side actions when the extension fired the webhook.
+- Coverage matches the existing `_isInternalHost` SSRF guard already used by the install-from-URL flow: localhost aliases, IPv4 loopback (127/8), unspecified (0/8), RFC 1918 (10/8, 172.16/12, 192.168/16), CGNAT (100.64/10), link-local (169.254/16), broadcast, IPv6 loopback (`::1`), IPv6 link-local (`fe80::/10`), and IPv6 ULA (`fc00::/7`).
+- Added: 7 new tests pinning the rejection set (localhost, RFC 1918 sweep, link-local, IPv6 loopback, IPv6 link-local, malformed URL) plus regression tests confirming public hostnames + public IPv4 still work. 596 tests pass total.
+- Internal: TS mirror in `src/modules/public-api.ts` matched. The JS source got a small `isInternalWebhookUrl()` wrapper around `_isInternalHost` so the install-flow guard and the webhook guard share classification logic without duplication.
+
 ## [v3.6.0] — Update-check exponential backoff (Phase 6.1)
 
 - Added: per-script exponential backoff in `UpdateSystem.checkForUpdates`. A network error or non-2xx response increments `script._updateFailureCount` and stamps `script._updateNextCheck = now + 2^(failures-1) * 1min`, capped at 24 hours. The auto-update path skips scripts whose cooldown hasn't elapsed; manual single-script checks (popup "Check for Update", dashboard force-update) bypass the cooldown so users see fresh failures immediately.
