@@ -28,8 +28,9 @@ export function generateId(): string {
  */
 export function sanitizeUrl(url: string): string | null {
   if (!url) return null;
-  const trimmed = url.trim();
-  if (/^(javascript|data|vbscript|blob):/i.test(trimmed)) return null;
+  const trimmed = String(url).replace(/[\u0000-\u0020\u007f]+/g, '');
+  if (!trimmed) return null;
+  if (/^(javascript|data|vbscript|blob|file):/i.test(trimmed)) return null;
   if (/^(https?|ftp|mailto):/i.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('#')) {
     return trimmed;
   }

@@ -16,6 +16,7 @@ scriptvault.pem
 # Secrets / environment
 .env
 .env.*
+!.env.example
 *.secret
 credentials.json
 

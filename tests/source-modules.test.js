@@ -122,6 +122,9 @@ describe('source utils', () => {
     expect(escapeHtml('<tag "x">')).toBe('&lt;tag &quot;x&quot;&gt;');
     expect(generateId()).toMatch(/^script_/);
     expect(sanitizeUrl('javascript:alert(1)')).toBeNull();
+    expect(sanitizeUrl('\u0000javascript:alert(1)')).toBeNull();
+    expect(sanitizeUrl('java\nscript:alert(1)')).toBeNull();
+    expect(sanitizeUrl('file:///C:/Users/example/secrets.txt')).toBeNull();
     expect(sanitizeUrl('https://example.com/app')).toBe('https://example.com/app');
     expect(sanitizeUrl('//cdn.example.com/lib.js')).toBe('//cdn.example.com/lib.js');
     expect(formatBytes(0)).toBe('0 B');

@@ -74,6 +74,44 @@ export type ApplyUpdateResult = ApplyUpdateSuccess | ApplyUpdateError | ApplyUpd
 // ---------------------------------------------------------------------------
 
 export const UpdateSystem = {
+  _FETCH_TIMEOUT_MS: 15 * 1000,
+  _MAX_UPDATE_BYTES: 5 * 1024 * 1024,
+
+  async fetchUpdateCandidate(
+    updateUrl: string,
+    fetchOptions: RequestInit = {},
+  ): Promise<{ response: Response; code: string }> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this._FETCH_TIMEOUT_MS);
+
+    try {
+      const response: Response = await fetch(updateUrl, { ...fetchOptions, signal: controller.signal });
+
+      if (response.status === 304 || !response.ok) {
+        return { response, code: '' };
+      }
+
+      const contentLength: number = parseInt(response.headers.get('content-length') || '0', 10);
+      if (contentLength > this._MAX_UPDATE_BYTES) {
+        throw new Error(`Update too large (${contentLength} bytes). Maximum is ${this._MAX_UPDATE_BYTES} bytes.`);
+      }
+
+      const code: string = await response.text();
+      if (code.length > this._MAX_UPDATE_BYTES) {
+        throw new Error(`Update too large (${code.length} bytes). Maximum is ${this._MAX_UPDATE_BYTES} bytes.`);
+      }
+
+      return { response, code };
+    } catch (e: unknown) {
+      if ((e as { name?: string })?.name === 'AbortError') {
+        throw new Error(`Update fetch timed out after ${Math.round(this._FETCH_TIMEOUT_MS / 1000)} seconds`);
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  },
+
   /**
    * Check one or all scripts for available upstream updates.
    * Returns an array of updates that have a newer version than the installed one.
@@ -100,14 +138,7 @@ export const UpdateSystem = {
         if (script._httpEtag) headers['If-None-Match'] = script._httpEtag;
         if (script._httpLastModified) headers['If-Modified-Since'] = script._httpLastModified;
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-        let response: Response;
-        try {
-          response = await fetch(updateUrl, { headers, signal: controller.signal });
-        } finally {
-          clearTimeout(timeoutId);
-        }
+        const { response, code: newCode } = await this.fetchUpdateCandidate(updateUrl, { headers });
 
         // 304 Not Modified - no update needed
         if (response.status === 304) continue;
@@ -122,7 +153,6 @@ export const UpdateSystem = {
           await ScriptStorage.set(script.id, script);
         }
 
-        const newCode: string = await response.text();
         const parsed = parseUserscript(newCode);
         if (parsed.error !== undefined || !parsed.meta) continue;
 

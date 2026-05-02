@@ -410,9 +410,13 @@ ${req.code}
     return _bridgeReadyPromise;
   }
 
-  // Send message to background script
-  // Prefers chrome.runtime.sendMessage (direct, no bridge needed) when available via messaging: true
-  // Falls back to postMessage bridge for older Chrome versions
+  function canUsePostMessageBridge(action) {
+    return action === 'netlog_record' || action === 'reportExecError' || action === 'reportExecTime';
+  }
+
+  // Send message to background script.
+  // Prefers chrome.runtime.sendMessage (direct, no bridge needed) when available via messaging: true.
+  // The postMessage bridge is telemetry-only because page scripts can forge window messages.
   async function sendToBackground(action, data) {
     // Try direct messaging first (available when userScripts world has messaging: true)
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
@@ -423,7 +427,11 @@ ${req.code}
       }
     }
 
-    // Fallback: use content script bridge via postMessage
+    if (!canUsePostMessageBridge(action)) {
+      return { error: 'ScriptVault requires Chrome userScripts messaging for GM API calls.' };
+    }
+
+    // Fallback: use the telemetry-only content script bridge via postMessage.
     await waitForBridge();
 
     return new Promise((resolve, reject) => {
@@ -457,8 +465,7 @@ ${req.code}
       // Send to content script bridge.
       // targetOrigin must be '*' because opaque origins (data:, blob:, about:blank)
       // cannot match any specific origin and rejecting them would break scripts
-      // that run in sandboxed frames. Channel-ID authentication protects the
-      // channel (see bridge init in content.js).
+      // that run in sandboxed frames. The content bridge only accepts telemetry.
       window.postMessage({
         channel: CHANNEL_ID,
         direction: 'to-background',
@@ -985,7 +992,7 @@ ${req.code}
     }
     if (!url) throw new Error('GM_loadScript: No URL provided');
     if (!options.force && _loadedScripts.has(url)) return;
-    const result = await sendToBackground('GM_loadScript', { url, timeout: options.timeout });
+    const result = await sendToBackground('GM_loadScript', { scriptId, url, timeout: options.timeout });
     if (result.error) throw new Error('GM_loadScript: ' + result.error);
     // Temporarily mask module systems so UMD scripts create window globals
     const _savedModule = window.module;
