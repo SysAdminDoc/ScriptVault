@@ -2857,18 +2857,18 @@ async function handleMessage(message, sender) {
 
       // Get scripts for URL
       case 'getScriptsForUrl': {
-        const allScripts = await ScriptStorage.getAll();
         const settings = await SettingsManager.get();
         const url = data.url || data;
 
         if (isUrlBlockedByGlobalSettings(url, settings)) {
           return [];
         }
-        
-        // Filter scripts that match this URL (both enabled and disabled for popup display)
-        const filtered = allScripts.filter(script => 
-          doesScriptMatchUrl(script, url)
-        ).sort((a, b) => (a.position || 0) - (b.position || 0));
+
+        // Filter scripts that match this URL (both enabled and disabled for popup display).
+        // Use the cached MatchSet so we test only candidate scripts, not every script.
+        const matchSet = await getMatchSet();
+        const filtered = matchSet.getMatching(url)
+          .sort((a, b) => (a.position || 0) - (b.position || 0));
         
         // Return with metadata property for popup compatibility (strip code to reduce message size)
         return filtered.map(({ code, ...rest }) => ({ ...rest, metadata: rest.meta }));
@@ -3628,6 +3628,154 @@ function matchIncludePattern(pattern, url, urlObj) {
   } catch (e) {
     return false;
   }
+}
+
+// ============================================================================
+// MatchSet — precompiled host index (Phase 4.2)
+//
+// `getScriptsForUrl` and the badge/tab-reload paths previously walked every
+// script and every pattern on every URL. With 200+ scripts that's hundreds
+// of regex tests per popup open. MatchSet precomputes a hostname → script
+// index so the candidate set drops to scripts whose patterns could possibly
+// match before the slow per-pattern check runs.
+//
+// See `src/background/url-matcher.ts` for the typed mirror; logic must
+// stay aligned.
+// ============================================================================
+
+function _extractHostHint(pattern, kind) {
+  if (!pattern) return null;
+  if (pattern === '*' || pattern === '<all_urls>') return null;
+  if ((kind === 'include' || kind === 'exclude') && isRegexPattern(pattern)) return null;
+
+  const m = pattern.match(/^(?:\*|https?|file|ftp):\/\/([^/]+)/);
+  if (!m) return null;
+  const host = m[1];
+  if (!host || host === '*') return null;
+  const noPort = host.replace(/:\d+$/, '');
+  if (noPort.startsWith('*.')) return noPort.slice(2).toLowerCase();
+  if (noPort.includes('*')) return null;
+  return noPort.toLowerCase();
+}
+
+function _getEffectivePatterns(script) {
+  const meta = script.meta || {};
+  const settings = script.settings || {};
+  const out = [];
+  const pushAll = (arr, kind) => {
+    if (!arr) return;
+    const list = Array.isArray(arr) ? arr : [arr];
+    for (const p of list) {
+      if (typeof p === 'string' && p) out.push({ pattern: p, kind });
+    }
+  };
+  if (settings.useOriginalMatches !== false) pushAll(meta.match, 'match');
+  pushAll(settings.userMatches, 'match');
+  if (settings.useOriginalIncludes !== false) pushAll(meta.include, 'include');
+  pushAll(settings.userIncludes, 'include');
+  pushAll(meta.excludeMatch, 'excludeMatch');
+  return out;
+}
+
+class MatchSet {
+  constructor(scripts) {
+    this.universal = [];
+    this.byHost = new Map();
+    this.size = scripts.length;
+
+    for (const script of scripts) {
+      if (!script || !script.id) continue;
+      const patterns = _getEffectivePatterns(script);
+      const positive = patterns.filter(p => p.kind === 'match' || p.kind === 'include');
+      if (positive.length === 0) continue;
+
+      let allUniversal = false;
+      const hosts = new Set();
+      for (const p of positive) {
+        if (p.pattern === '*' || p.pattern === '<all_urls>') {
+          allUniversal = true;
+          break;
+        }
+        const hint = _extractHostHint(p.pattern, p.kind);
+        if (hint == null) {
+          allUniversal = true;
+          break;
+        }
+        hosts.add(hint);
+      }
+
+      if (allUniversal) {
+        this.universal.push(script);
+      } else {
+        for (const host of hosts) {
+          let bucket = this.byHost.get(host);
+          if (!bucket) {
+            bucket = [];
+            this.byHost.set(host, bucket);
+          }
+          bucket.push(script);
+        }
+      }
+    }
+  }
+
+  /**
+   * Return scripts whose @match/@include patterns *could* match `url`.
+   * The result is a superset — callers must run `doesScriptMatchUrl` for
+   * the authoritative answer.
+   */
+  getCandidates(url) {
+    let hostname;
+    try {
+      hostname = new URL(url).hostname.toLowerCase();
+    } catch {
+      return this.universal.slice();
+    }
+
+    const seen = new Set();
+    const out = [];
+    for (const s of this.universal) {
+      if (!seen.has(s)) { seen.add(s); out.push(s); }
+    }
+
+    let cursor = hostname;
+    while (cursor) {
+      const bucket = this.byHost.get(cursor);
+      if (bucket) {
+        for (const s of bucket) {
+          if (!seen.has(s)) { seen.add(s); out.push(s); }
+        }
+      }
+      const dot = cursor.indexOf('.');
+      if (dot < 0) break;
+      cursor = cursor.slice(dot + 1);
+    }
+    return out;
+  }
+
+  /**
+   * Return scripts that actually match `url` after running candidates
+   * through `doesScriptMatchUrl`.
+   */
+  getMatching(url) {
+    return this.getCandidates(url).filter(s => doesScriptMatchUrl(s, url));
+  }
+}
+
+// Cached MatchSet — invalidated whenever the script set changes.
+let _matchSetCache = null;
+let _matchSetCacheVersion = 0;
+
+function invalidateMatchSet() {
+  _matchSetCache = null;
+  _matchSetCacheVersion++;
+}
+
+async function getMatchSet() {
+  if (_matchSetCache) return _matchSetCache;
+  const scripts = await ScriptStorage.getAll();
+  _matchSetCache = new MatchSet(scripts);
+  return _matchSetCache;
 }
 
 // ============================================================================

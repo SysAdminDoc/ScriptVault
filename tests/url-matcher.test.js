@@ -1,195 +1,17 @@
 // ScriptVault — URL Matcher Tests
-// Tests for URL matching functions from background.core.js
+// Tests the production matcher in src/background/url-matcher.ts directly so
+// that the JS test file does not drift away from the implementation.
 import { describe, it, expect } from 'vitest';
-
-// ── Re-implement URL matching functions for testing ─────────────────────────
-
-function isValidMatchPattern(pattern) {
-  if (!pattern) return false;
-  if (pattern === '<all_urls>') return true;
-  const matchRegex = /^(\*|https?|file|ftp):\/\/(\*|\*\.[^/*]+|[^/*:]+(?::\d+)?)\/.*$/;
-  return matchRegex.test(pattern);
-}
-
-function convertIncludeToMatch(include) {
-  if (!include) return null;
-  if (isValidMatchPattern(include)) return include;
-  if (include === '*') return '<all_urls>';
-
-  let pattern = include;
-
-  if (pattern.startsWith('*://')) {
-    const afterScheme = pattern.slice(4);
-    if (!afterScheme.includes('/')) pattern += '/*';
-    return isValidMatchPattern(pattern) ? pattern : null;
-  }
-
-  if (pattern.match(/^https?:\/\//)) {
-    if (!pattern.includes('/*') && !pattern.endsWith('/')) pattern += '/*';
-    return isValidMatchPattern(pattern) ? pattern : null;
-  }
-
-  if (pattern.startsWith('*.')) {
-    const result = '*://' + pattern + '/*';
-    return isValidMatchPattern(result) ? result : null;
-  }
-
-  if (!pattern.includes('://') && !pattern.startsWith('/')) {
-    const result = '*://' + pattern + '/*';
-    return isValidMatchPattern(result) ? result : null;
-  }
-
-  return null;
-}
-
-function isRegexPattern(pattern) {
-  if (!pattern || !pattern.startsWith('/') || pattern.length <= 2) return false;
-  const match = pattern.match(/^\/(.+?)\/([gimsuy]*)$/);
-  if (!match) return false;
-  return /[\\^$\[(+?{|]/.test(match[1]);
-}
-
-function parseRegexPattern(pattern) {
-  const match = pattern.match(/^\/(.+)\/([gimsuy]*)$/);
-  if (!match) return null;
-  try {
-    return new RegExp(match[1], match[2]);
-  } catch (e) {
-    return null;
-  }
-}
-
-function matchPattern(pattern, url, urlObj) {
-  if (!pattern) return false;
-  if (pattern === '<all_urls>') return true;
-  if (pattern === '*') return true;
-
-  try {
-    const patternMatch = pattern.match(/^(\*|https?|file|ftp):\/\/([^/]+)(\/.*)$/);
-    if (!patternMatch) return false;
-
-    const [, scheme, host, path] = patternMatch;
-
-    if (scheme !== '*' && scheme !== urlObj.protocol.slice(0, -1)) {
-      return false;
-    }
-
-    if (host !== '*') {
-      const hasPort = host.includes(':');
-      const urlHost = hasPort ? urlObj.host : urlObj.hostname;
-      if (host.startsWith('*.')) {
-        const baseDomain = host.slice(2);
-        if (hasPort) {
-          if (urlHost !== baseDomain && !urlHost.endsWith('.' + baseDomain)) {
-            return false;
-          }
-        } else {
-          if (urlObj.hostname !== baseDomain && !urlObj.hostname.endsWith('.' + baseDomain)) {
-            return false;
-          }
-        }
-      } else if (host !== urlHost) {
-        return false;
-      }
-    }
-
-    const pathRegex = new RegExp('^' + path.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
-    if (!pathRegex.test(urlObj.pathname + urlObj.search)) {
-      return false;
-    }
-
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-function matchIncludePattern(pattern, url, urlObj) {
-  if (!pattern) return false;
-  if (pattern === '*') return true;
-
-  try {
-    if (isRegexPattern(pattern)) {
-      const re = parseRegexPattern(pattern);
-      return re ? re.test(url) : false;
-    }
-
-    let regex = pattern
-      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.');
-
-    regex = regex.replace(/^(\\\*):\/\//, '(https?|file|ftp)://');
-
-    const re = new RegExp('^' + regex + '$', 'i');
-    return re.test(url);
-  } catch (e) {
-    return false;
-  }
-}
-
-function doesScriptMatchUrl(script, url) {
-  const meta = script.meta || {};
-  const settings = script.settings || {};
-
-  try {
-    const urlObj = new URL(url);
-
-    let effectiveMatches = [];
-    let effectiveIncludes = [];
-    let effectiveExcludes = [];
-
-    if (settings.useOriginalMatches !== false) {
-      const origMatches = Array.isArray(meta.match) ? meta.match : (meta.match ? [meta.match] : []);
-      effectiveMatches.push(...origMatches);
-    }
-
-    if (settings.userMatches && settings.userMatches.length > 0) {
-      effectiveMatches.push(...settings.userMatches);
-    }
-
-    if (settings.useOriginalIncludes !== false) {
-      const origIncludes = Array.isArray(meta.include) ? meta.include : (meta.include ? [meta.include] : []);
-      effectiveIncludes.push(...origIncludes);
-    }
-
-    if (settings.userIncludes && settings.userIncludes.length > 0) {
-      effectiveIncludes.push(...settings.userIncludes);
-    }
-
-    if (settings.useOriginalExcludes !== false) {
-      const origExcludes = Array.isArray(meta.exclude) ? meta.exclude : (meta.exclude ? [meta.exclude] : []);
-      effectiveExcludes.push(...origExcludes);
-    }
-
-    if (settings.userExcludes && settings.userExcludes.length > 0) {
-      effectiveExcludes.push(...settings.userExcludes);
-    }
-
-    const excludeMatchPatterns = Array.isArray(meta.excludeMatch) ? meta.excludeMatch :
-                          (meta.excludeMatch ? [meta.excludeMatch] : []);
-
-    for (const pattern of effectiveExcludes) {
-      if (matchIncludePattern(pattern, url, urlObj)) return false;
-    }
-    for (const pattern of excludeMatchPatterns) {
-      if (matchPattern(pattern, url, urlObj)) return false;
-    }
-
-    for (const pattern of effectiveMatches) {
-      if (matchPattern(pattern, url, urlObj)) return true;
-    }
-    for (const pattern of effectiveIncludes) {
-      if (matchIncludePattern(pattern, url, urlObj)) return true;
-    }
-
-    return false;
-  } catch (e) {
-    return false;
-  }
-}
-
-// ── Tests ───────────────────────────────────────────────────────────────────
+import {
+  isValidMatchPattern,
+  convertIncludeToMatch,
+  isRegexPattern,
+  matchPattern,
+  matchIncludePattern,
+  doesScriptMatchUrl,
+  isUrlBlockedByGlobalSettings,
+  MatchSet,
+} from '../src/background/url-matcher.ts';
 
 // ── isValidMatchPattern ─────────────────────────────────────────────────────
 
@@ -522,6 +344,19 @@ describe('matchIncludePattern', () => {
     const urlObj = new URL(url);
     expect(matchIncludePattern('*://example.com/*', url, urlObj)).toBe(true);
   });
+
+  it('collapses runaway `*` repeats to avoid catastrophic backtracking', () => {
+    // Without the `*+ → *` collapse this regex would generate `(.*){N}` which
+    // is the textbook ReDoS pattern. The collapse keeps it linear-time.
+    const url = 'https://example.com/payload';
+    const urlObj = new URL(url);
+    const evil = '*'.repeat(80) + '://example.com/' + '*'.repeat(80);
+    const start = Date.now();
+    matchIncludePattern(evil, url, urlObj);
+    const elapsed = Date.now() - start;
+    // Should be effectively instant — well under 100ms even on a slow box.
+    expect(elapsed).toBeLessThan(500);
+  });
 });
 
 // ── doesScriptMatchUrl (integration) ────────────────────────────────────────
@@ -640,5 +475,197 @@ describe('doesScriptMatchUrl', () => {
     // URL constructor converts IDN to punycode
     const script = { meta: { match: ['*://xn--e1afmapc.xn--p1ai/*'] } };
     expect(doesScriptMatchUrl(script, 'https://xn--e1afmapc.xn--p1ai/page')).toBe(true);
+  });
+});
+
+// ── isUrlBlockedByGlobalSettings ────────────────────────────────────────────
+
+describe('isUrlBlockedByGlobalSettings', () => {
+  it('returns false when no global filters configured', () => {
+    expect(isUrlBlockedByGlobalSettings('https://example.com/', {})).toBe(false);
+  });
+
+  it('blocks URLs whose hostname is in deniedHosts', () => {
+    expect(
+      isUrlBlockedByGlobalSettings('https://blocked.com/page', { deniedHosts: ['blocked.com'] })
+    ).toBe(true);
+  });
+
+  it('blocks subdomains of denied hosts via suffix match', () => {
+    expect(
+      isUrlBlockedByGlobalSettings('https://api.blocked.com/v1', { deniedHosts: ['blocked.com'] })
+    ).toBe(true);
+  });
+
+  it('does not match unrelated hosts via suffix coincidence', () => {
+    // "notblocked.com" must NOT match a denial of "blocked.com"
+    expect(
+      isUrlBlockedByGlobalSettings('https://notblocked.com/', { deniedHosts: ['blocked.com'] })
+    ).toBe(false);
+  });
+
+  it('whitelist mode blocks anything not on the whitelist', () => {
+    const settings = {
+      pageFilterMode: 'whitelist',
+      whitelistedPages: '*://example.com/*\n*://allowed.org/*',
+    };
+    expect(isUrlBlockedByGlobalSettings('https://example.com/page', settings)).toBe(false);
+    expect(isUrlBlockedByGlobalSettings('https://allowed.org/page', settings)).toBe(false);
+    expect(isUrlBlockedByGlobalSettings('https://other.com/page', settings)).toBe(true);
+  });
+
+  it('blacklist mode blocks listed patterns', () => {
+    const settings = {
+      pageFilterMode: 'blacklist',
+      blacklistedPages: '*://blocked.com/*',
+    };
+    expect(isUrlBlockedByGlobalSettings('https://blocked.com/page', settings)).toBe(true);
+    expect(isUrlBlockedByGlobalSettings('https://allowed.com/page', settings)).toBe(false);
+  });
+
+  it('returns false on malformed URLs (treated as not-blocked)', () => {
+    expect(isUrlBlockedByGlobalSettings('not-a-url', { deniedHosts: ['x'] })).toBe(false);
+  });
+});
+
+// ── MatchSet (Phase 4.2) ────────────────────────────────────────────────────
+
+describe('MatchSet', () => {
+  function script(id, meta, settings) {
+    return { id, meta: meta || {}, settings: settings || {} };
+  }
+
+  it('returns no candidates for empty script set', () => {
+    const set = new MatchSet([]);
+    expect(set.getCandidates('https://example.com/')).toEqual([]);
+    expect(set.size).toBe(0);
+  });
+
+  it('indexes scripts by hostname so unrelated hosts are filtered out', () => {
+    const a = script('a', { match: ['https://example.com/*'] });
+    const b = script('b', { match: ['https://other.org/*'] });
+    const set = new MatchSet([a, b]);
+
+    const candidates = set.getCandidates('https://example.com/page');
+    expect(candidates).toContain(a);
+    expect(candidates).not.toContain(b);
+  });
+
+  it('indexes wildcard-subdomain patterns under their base host', () => {
+    const a = script('a', { match: ['https://*.example.com/*'] });
+    const set = new MatchSet([a]);
+
+    // Base host hits the index directly.
+    expect(set.getCandidates('https://example.com/x')).toContain(a);
+    // Subdomain walks suffixes up to the indexed base host.
+    expect(set.getCandidates('https://api.v2.example.com/x')).toContain(a);
+    // Unrelated host does not.
+    expect(set.getCandidates('https://other.com/x')).not.toContain(a);
+  });
+
+  it('treats <all_urls> and bare * as universal candidates', () => {
+    const a = script('a', { match: ['<all_urls>'] });
+    const b = script('b', { include: ['*'] });
+    const c = script('c', { match: ['https://example.com/*'] });
+    const set = new MatchSet([a, b, c]);
+
+    // Universal scripts match every host.
+    const cands = set.getCandidates('https://anywhere.example.org/page');
+    expect(cands).toContain(a);
+    expect(cands).toContain(b);
+    // Unrelated host-bound script does not.
+    expect(cands).not.toContain(c);
+  });
+
+  it('treats regex @include patterns as universal (no false negatives)', () => {
+    const a = script('a', { include: ['/example\\.com/'] });
+    const set = new MatchSet([a]);
+    // We can't statically extract a host from a regex, so the script lands in
+    // the universal bucket and gets candidate-tested for every URL.
+    expect(set.getCandidates('https://example.com/')).toContain(a);
+    expect(set.getCandidates('https://anywhere.org/')).toContain(a);
+  });
+
+  it('skips scripts with no positive patterns at all', () => {
+    const a = script('a', { match: [], include: [] });
+    const set = new MatchSet([a]);
+    expect(set.getCandidates('https://example.com/')).toEqual([]);
+  });
+
+  it('respects userMatches added via settings', () => {
+    const a = script(
+      'a',
+      { match: [] },
+      { userMatches: ['https://added-by-user.com/*'] }
+    );
+    const set = new MatchSet([a]);
+    expect(set.getCandidates('https://added-by-user.com/x')).toContain(a);
+    expect(set.getCandidates('https://other.com/x')).not.toContain(a);
+  });
+
+  it('honours useOriginalMatches: false (script is not host-indexed)', () => {
+    const a = script(
+      'a',
+      { match: ['https://example.com/*'] },
+      { useOriginalMatches: false }
+    );
+    const set = new MatchSet([a]);
+    expect(set.getCandidates('https://example.com/')).not.toContain(a);
+  });
+
+  it('strips ports for indexing (port comparison happens in matchPattern)', () => {
+    const a = script('a', { match: ['http://localhost:3000/*'] });
+    const set = new MatchSet([a]);
+    expect(set.getCandidates('http://localhost:3000/api')).toContain(a);
+  });
+
+  it('handles the same script appearing under multiple hosts only once', () => {
+    const a = script('a', {
+      match: ['https://example.com/*', 'https://other.org/*'],
+    });
+    const set = new MatchSet([a]);
+    const candidates = set.getCandidates('https://example.com/');
+    // Single entry — no duplicate from being indexed twice.
+    expect(candidates.filter((s) => s === a)).toHaveLength(1);
+  });
+
+  it('falls back to universal-only candidates on unparseable URLs', () => {
+    const universal = script('u', { match: ['<all_urls>'] });
+    const hostBound = script('h', { match: ['https://example.com/*'] });
+    const set = new MatchSet([universal, hostBound]);
+    const candidates = set.getCandidates('not-a-url');
+    expect(candidates).toContain(universal);
+    expect(candidates).not.toContain(hostBound);
+  });
+
+  it('getMatching() filters candidates through doesScriptMatchUrl', () => {
+    // Same host, but excludeMatch should rule it out.
+    const a = script('a', {
+      match: ['https://example.com/*'],
+      excludeMatch: ['https://example.com/secret*'],
+    });
+    const set = new MatchSet([a]);
+    expect(set.getMatching('https://example.com/page')).toContain(a);
+    expect(set.getMatching('https://example.com/secret/admin')).not.toContain(a);
+  });
+
+  it('getMatching() handles a realistic mixed set of 50 scripts', () => {
+    const scripts = [];
+    for (let i = 0; i < 25; i++) {
+      scripts.push(script(`a${i}`, { match: [`https://site-${i}.com/*`] }));
+    }
+    for (let i = 0; i < 25; i++) {
+      scripts.push(script(`b${i}`, { match: [`https://*.bigco.com/*`] }));
+    }
+    const set = new MatchSet(scripts);
+
+    // Matching a site-N URL hits exactly one entry.
+    const onSite7 = set.getMatching('https://site-7.com/page');
+    expect(onSite7).toHaveLength(1);
+    expect(onSite7[0].id).toBe('a7');
+
+    // Matching a bigco subdomain hits all 25 b-scripts.
+    const onBigco = set.getMatching('https://eu.api.bigco.com/v2');
+    expect(onBigco).toHaveLength(25);
   });
 });
