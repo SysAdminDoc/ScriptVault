@@ -416,9 +416,11 @@ class MatchSet {
 
 **2026-04-26 note:** Bulk delete now says "Move to Trash" when recovery is available, keeps destructive copy only when Trash is disabled, and offers an "Open Trash" toast action after successful recovery-backed deletes. Deferred true undo remains open.
 
-### 7.5 Beautify Cursor Preservation
+### 7.5 Beautify Cursor Preservation ✅ Shipped in v3.6.3
 - After beautify, find the equivalent position in the new code by character offset mapping
 - Or: use Monaco's built-in format document action which preserves cursor natively
+
+**Status (v3.6.3, 2026-05-02):** Cursor + vertical scroll position preserved after beautify. Implementation uses character-offset-from-content mapping: since the beautifier only changes leading whitespace, the same logical line exists before/after, so `newCh = newLeadingWS + max(0, oldCh - oldLeadingWS)`. Cursors that sat inside the indent region snap to the start of the new line's content. Falls back to old top-of-file behaviour only when the editor adapter doesn't expose `getCursor()`.
 
 ### 7.6 Web Worker for Heavy Operations
 - Move filtering, sorting, and search to a Web Worker
