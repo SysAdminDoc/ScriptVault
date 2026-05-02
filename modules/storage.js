@@ -96,28 +96,47 @@ const ScriptStorage = {
   async delete(id) {
     await this.init();
     const prev = this.cache[id];
+    if (prev === undefined) return;
     delete this.cache[id];
+    let scriptRemovalPersisted = false;
     try {
       await this.save();
-      // Delete associated values AFTER script removal persists
-      // (if save fails, rollback below restores the script; values stay intact)
+      scriptRemovalPersisted = true;
+      // Delete associated values AFTER script removal persists. If cleanup fails,
+      // restore the script record so storage does not end up half-deleted.
       await ScriptValues.deleteAll(id);
     } catch (e) {
-      // Rollback cache on failure
-      if (prev !== undefined) this.cache[id] = prev;
+      this.cache[id] = prev;
+      if (scriptRemovalPersisted) {
+        try {
+          await this.save();
+        } catch (rollbackError) {
+          console.warn('[ScriptVault] Failed to restore script after delete cleanup failure:', rollbackError);
+        }
+      }
       throw e;
     }
     if (typeof invalidateMatchSet === 'function') invalidateMatchSet();
   },
 
   async clear() {
+    await this.init();
     const prev = this.cache;
+    const previousIds = Object.keys(prev || {});
     this.cache = {};
     try {
       await this.save();
+      for (const id of previousIds) {
+        await ScriptValues.deleteAll(id);
+      }
     } catch (e) {
       // Rollback so cache reflects what's actually persisted
       this.cache = prev;
+      try {
+        await this.save();
+      } catch (rollbackError) {
+        console.warn('[ScriptVault] Failed to restore scripts after clear failure:', rollbackError);
+      }
       throw e;
     }
     if (typeof invalidateMatchSet === 'function') invalidateMatchSet();
@@ -294,8 +313,14 @@ const ScriptValues = {
   },
   
   async deleteAll(scriptId) {
+    const prev = this.cache[scriptId];
     delete this.cache[scriptId];
-    await chrome.storage.local.remove(`values_${scriptId}`);
+    try {
+      await chrome.storage.local.remove(`values_${scriptId}`);
+    } catch (e) {
+      if (prev !== undefined) this.cache[scriptId] = prev;
+      throw e;
+    }
   },
   
   // Delete multiple specific keys at once

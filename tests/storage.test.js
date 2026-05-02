@@ -151,6 +151,64 @@ describe('ScriptStorage', () => {
     expect(result).toBeNull();
   });
 
+  it('delete() removes associated script values', async () => {
+    await ScriptStorage.set('test1', mockScript);
+    await ScriptValues.set('test1', 'draft', true);
+
+    await ScriptStorage.delete('test1');
+
+    expect(await ScriptStorage.get('test1')).toBeNull();
+    expect(await ScriptValues.get('test1', 'draft', false)).toBe(false);
+    const persisted = await chrome.storage.local.get(['userscripts', 'values_test1']);
+    expect(persisted.userscripts).toEqual({});
+    expect(persisted.values_test1).toBeUndefined();
+  });
+
+  it('delete() restores persisted script state when value cleanup fails', async () => {
+    await ScriptStorage.set('test1', mockScript);
+    await ScriptValues.set('test1', 'draft', true);
+
+    chrome.storage.local.remove.mockRejectedValueOnce(new Error('REMOVE_FAILED'));
+    await expect(ScriptStorage.delete('test1')).rejects.toThrow('REMOVE_FAILED');
+
+    expect(await ScriptStorage.get('test1')).toEqual(mockScript);
+    expect(await ScriptValues.get('test1', 'draft', false)).toBe(true);
+    const persisted = await chrome.storage.local.get(['userscripts', 'values_test1']);
+    expect(persisted.userscripts.test1).toEqual(mockScript);
+    expect(persisted.values_test1).toEqual({ draft: true });
+  });
+
+  it('clear() removes scripts and their value bags', async () => {
+    await ScriptStorage.set('test1', mockScript);
+    await ScriptStorage.set('test2', { ...mockScript, id: 'test2', meta: { name: 'Second' } });
+    await ScriptValues.set('test1', 'draft', true);
+    await ScriptValues.set('test2', 'count', 2);
+
+    await ScriptStorage.clear();
+
+    expect(await ScriptStorage.getAll()).toEqual([]);
+    expect(await ScriptValues.get('test1', 'draft', false)).toBe(false);
+    expect(await ScriptValues.get('test2', 'count', 0)).toBe(0);
+    const persisted = await chrome.storage.local.get(['userscripts', 'values_test1', 'values_test2']);
+    expect(persisted.userscripts).toEqual({});
+    expect(persisted.values_test1).toBeUndefined();
+    expect(persisted.values_test2).toBeUndefined();
+  });
+
+  it('clear() restores persisted script state when value cleanup fails', async () => {
+    await ScriptStorage.set('test1', mockScript);
+    await ScriptValues.set('test1', 'draft', true);
+
+    chrome.storage.local.remove.mockRejectedValueOnce(new Error('REMOVE_FAILED'));
+    await expect(ScriptStorage.clear()).rejects.toThrow('REMOVE_FAILED');
+
+    expect(await ScriptStorage.get('test1')).toEqual(mockScript);
+    expect(await ScriptValues.get('test1', 'draft', false)).toBe(true);
+    const persisted = await chrome.storage.local.get(['userscripts', 'values_test1']);
+    expect(persisted.userscripts.test1).toEqual(mockScript);
+    expect(persisted.values_test1).toEqual({ draft: true });
+  });
+
   it('set() rolls back cache on persist failure', async () => {
     await ScriptStorage.set('test1', mockScript);
     // Make save fail
