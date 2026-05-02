@@ -544,6 +544,499 @@ const MIGRATIONS: Migration[] = [
 
 ---
 
+## Phase 11 — GM API Parity & Platform API Catch-up
+
+**Goal:** Close the gap between ScriptVault and Tampermonkey/Violentmonkey on GM API coverage and expose newly-available Chrome platform APIs.
+
+### 11.1 GM_info Enrichment
+
+Violentmonkey exposes substantially more metadata in `GM_info` than ScriptVault does. Parity targets:
+
+- `GM_info.isIncognito` — `true` when the script is executing in an incognito context. Incognito-aware scripts currently have no portable way to detect this. Source: [VM GM_info docs](https://violentmonkey.github.io/api/gm/#gm_info).
+- `GM_info.platform` — object with `arch`, `browserName`, `browserVersion`, `fullVersionList`, `mobile`, `os` sourced from `navigator.userAgentData` (available from the background SW context, not spoofable by the page). Source: [VM GM_info docs](https://violentmonkey.github.io/api/gm/#gm_info).
+- `GM_info.userAgent` / `GM_info.userAgentData` — expose the SW-context strings. Pages can spoof `navigator.userAgent`; injecting from the background avoids that.
+- `GM_info.script.options` — expose per-script override settings so scripts can read their own configuration.
+
+Implementation: expose these from the background's `buildGmInfo()` function; no new permissions required.
+
+### 11.2 `@unwrap` Metadata Tag
+
+Violentmonkey supports `// @unwrap` to disable the auto-injected IIFE wrapper. This allows:
+
+- ESM-style top-level `export`/`import` if the page's CSP permits
+- Scripts that intentionally modify the top-level scope
+- Easier porting of scripts from other contexts
+
+Add `@unwrap` to the metadata parser; when present, emit the script code as-is rather than wrapping in `(function() { ... })()`. Log a console warning noting that `@grant` APIs are unavailable without the wrapper. Source: [VM metadata block docs](https://violentmonkey.github.io/api/metadata-block/).
+
+### 11.3 Per-Script User-Override Merge Flags
+
+Violentmonkey supports `// @merge_matches`, `// @merge_excludes`, `// @merge_includes`, `// @merge_connect` to let users toggle whether their local additions to those fields _replace_ or _merge with_ the script's authored values. ScriptVault already allows user overrides to match/exclude; it needs the merge/replace toggle.
+
+- Add `userOverrideMergeMode: 'merge' | 'replace'` per field to `ScriptSettings`
+- UI: dropdown per overrideable field in the script settings panel
+- Default: `merge` (matches current undocumented behavior)
+
+### 11.4 `userScripts.execute()` — One-Shot Execution
+
+Chrome 135 added `chrome.userScripts.execute()` — inject a script into a specific tab once, on demand, without registering it for future page loads. Enables:
+
+- "Run now" button in the dashboard (execute once without toggling the script on)
+- Quick-test workflow: modify → inject into current tab without a full save
+- Popup action to run a specific script against the active tab immediately
+
+Guard with `typeof chrome.userScripts.execute === 'function'` (Chrome 135+ only). Source: [Chrome Extensions What's New](https://developer.chrome.com/docs/extensions/whats-new), [userScripts.execute() reference](https://developer.chrome.com/docs/extensions/reference/api/userScripts#method-execute).
+
+### 11.5 GM_xmlhttpRequest Completeness
+
+Two missing options discovered from competitor changelogs:
+
+- **`noCache: true`** — add a `Cache-Control: no-cache` / `Pragma: no-cache` request header (or append a cache-buster query param for HTTP/1.0 compatibility). Maps to Violentmonkey issue [#2168](https://github.com/violentmonkey/violentmonkey/issues/2168).
+- **`redirect: 'follow' | 'error' | 'manual'`** — expose the `RequestInit.redirect` option so scripts can detect or block redirects. Maps to Violentmonkey issue [#2359](https://github.com/violentmonkey/violentmonkey/issues/2359).
+
+Both changes are localized to `modules/xhr.js` (later `src/modules/xhr.ts`). Low risk.
+
+Additional completeness items for `GM_xmlhttpRequest`:
+
+- **`responseType: 'stream'`** — ScriptCat exposes a streaming response type for chunked/SSE responses. Implementation via `fetch()` with a `ReadableStream` callback forwarded through the SW message channel. Source: [ScriptCat API docs](https://docs.scriptcat.org/docs/dev/api/).
+- **`nocache` alias** — Tampermonkey uses `nocache` (not `noCache`); accept both casings in the parser.
+
+### 11.6 `GM_cookie` API
+
+Both Tampermonkey and ScriptCat expose `GM_cookie` for reading, writing, and deleting cookies — including HttpOnly cookies inaccessible via `document.cookie`. This is one of the highest-demand missing APIs for scripts targeting sites with strict cookie policies.
+
+```js
+// Signature to implement (Tampermonkey-compatible):
+GM_cookie("list", { url, domain, name }, (cookies, error) => {});
+GM_cookie("set",  { url, name, value, domain, path, secure, httpOnly, sameSite, expirationDate }, (error) => {});
+GM_cookie("delete", { url, name }, (error) => {});
+```
+
+Implementation path: the background service worker has `cookies` permission; proxy calls through the SW using `chrome.cookies.getAll/set/remove`. Source: [ScriptCat GM_cookie docs](https://docs.scriptcat.org/docs/dev/api/#gm_cookie), [TM changelog](https://www.tampermonkey.net/changelog.php).
+
+Requires adding `"cookies"` to `manifest.json` permissions and auditing whether CWS review requires additional justification.
+
+### 11.7 Extended Metadata Directives
+
+Several metadata directives parsed by Violentmonkey and Tampermonkey are not yet handled by ScriptVault's parser. Add parsing and behavior for:
+
+| Directive | Manager | Behavior |
+|-----------|---------|----------|
+| `@inject-into page\|content\|auto` | VM | Selects `USER_SCRIPT` world (`page`) vs. `ISOLATED` world (`content`) vs. automatic fallback (`auto`). Maps directly to `world:` in `chrome.userScripts.register()`. Source: [VM metadata](https://violentmonkey.github.io/api/metadata-block/#inject-into). |
+| `@connect domain` | TM | Whitelist domains that `GM_xmlhttpRequest` may contact. Parse into the script record; enforce at request time in `xhr.js`. Source: [TM docs via ScriptCat comparison](https://docs.scriptcat.org/docs/dev/api/). |
+| `@tag label` | VM | Categorical labels assigned by the script author (distinct from user-assigned tags). Expose in `GM_info.script.options.tags` and in the dashboard filter sidebar. Source: [VM metadata — @tag](https://violentmonkey.github.io/api/metadata-block/). |
+| `@antifeature ads\|tracking\|miner "note"` | TM, VM | Declare monetization or data collection. Show a warning banner in the install confirmation dialog when present. Source: [VM GM_info](https://violentmonkey.github.io/api/gm/#gm_info). |
+| `@compatible chrome\|firefox\|...` | TM, VM | Browser compatibility hints. Display in script info panel; no enforcement needed. |
+| `@top-level-await` | VM | When present, wrap the script in an async IIFE (`(async () => { ... })()`). Required for scripts using `await` at the top level. Source: [VM metadata](https://violentmonkey.github.io/api/metadata-block/#top-level-await). |
+| `@run-at document-body` | VM | Fire after the `<body>` element appears (via `MutationObserver`), before `DOMContentLoaded`. Source: [VM metadata](https://violentmonkey.github.io/api/metadata-block/). |
+| `@weight 1–999` | Userscripts (Safari) | Integer injection priority (higher = earlier within same `@run-at`). Useful when two scripts both run `document-start` and one must come first. Source: [Userscripts README](https://github.com/quoid/userscripts). |
+
+Priority order: `@inject-into` and `@connect` are HIGH (security-relevant and broadly compatible); the rest are MEDIUM parity items.
+
+### 11.8 `@require` Subresource Integrity
+
+Tampermonkey supports SRI hashes appended to `@require` URLs:
+
+```
+// @require https://cdn.example.com/lib.js#sha256-BASE64HASH=
+```
+
+If the downloaded content's hash does not match, the `@require` resource must be rejected and an error surfaced in the install dialog. This closes a supply-chain attack vector where a CDN serves silently-modified code.
+
+Implementation: after fetching the `@require` URL, extract the fragment (`#sha256-` / `#sha384-` / `#sha512-`), compute the hash of the downloaded bytes via `crypto.subtle.digest()`, and compare. Source: [GitHub Advisory Database — userscript supply chain risk](https://github.com/advisories?query=userscript), [TM docs](https://www.tampermonkey.net/changelog.php).
+
+### 11.9 `GM_getTab` / `GM_saveTab` / `GM_getTabs`
+
+Tab-scoped transient storage: attach arbitrary data to the current tab's lifetime. `GM_getTabs` returns data from all tabs running scripts from this extension. Present in Tampermonkey, ScriptCat, and Userscripts (Safari).
+
+Implementation: store in `chrome.storage.session` keyed by `tabId` (in-memory, cleared on tab close/browser restart). Source: [ScriptCat API](https://docs.scriptcat.org/docs/dev/api/#gm_getsavetabgm_gettabs), [Userscripts README](https://github.com/quoid/userscripts).
+
+### 11.10 `@run-at navigation` — SPA Re-execution
+
+Single-page applications that use `history.pushState` do not trigger standard document lifecycle events, so `document-start`/`document-end` scripts run only on the initial page load. This is the most persistent user complaint in community threads.
+
+Implementation options:
+1. Background SW listens for `chrome.webNavigation.onHistoryStateUpdated` and calls `userScripts.execute()` (Chrome 135+) to re-inject the script.
+2. Or: inject a lightweight `popstate`/Navigation-API observer shim alongside the script that calls back to the SW on each navigation event.
+
+Parse `// @run-at navigation` in the metadata block as a trigger mode distinct from the existing `run-at` values. Scripts with this directive still run on `document-end` for the initial page load; the navigation trigger handles subsequent client-side navigations.
+
+Source: VM issue [#2048](https://github.com/violentmonkey/violentmonkey/issues/2048), Chrome Navigation API (shipped Chrome 102).
+
+### 11.11 `GM_notification` Enhancements
+
+ScriptCat's `GM_notification` implementation extends the standard:
+
+- `progress: 0–100` — show a progress bar within the notification (useful for download scripts).
+- `buttons: [{title, iconUrl}]` up to 2 — clickable action buttons in the notification; `onclick(e)` receives `e.buttonClickIndex`.
+- `GM_updateNotification(notificationId, details)` — update the text/progress of an existing notification without closing it.
+- `GM_closeNotification(notificationId)` — programmatically close a notification.
+
+Chrome's `chrome.notifications` API supports all of these natively via `progressType: 'progressbar'`, `buttons[]`, `update()`, and `clear()`. Source: [ScriptCat notification API](https://docs.scriptcat.org/docs/dev/api/#gm_notification-).
+
+**Exit criteria:** `GM_info.isIncognito` and `GM_info.platform` populated; `@unwrap` parses and emits correctly; merge-mode UI exists; "Run now" button uses `userScripts.execute()` on Chrome 135+; `GM_xmlhttpRequest` accepts `noCache`/`nocache`, `redirect`, and `responseType: 'stream'`; `GM_cookie` proxied through SW; `@inject-into`, `@connect`, `@tag`, `@antifeature`, `@top-level-await`, `@run-at document-body`, `@weight` all parsed; `@require` SRI validated; `GM_getTab`/`GM_saveTab`/`GM_getTabs` stored in `storage.session`; `@run-at navigation` fires on SPA route changes; `GM_notification` supports progress, buttons, update, close.
+
+---
+
+## Phase 12 — UX Polish & High-Signal Community Requests
+
+**Goal:** Address the most-upvoted feature requests from Tampermonkey and Violentmonkey issue trackers that apply cleanly to ScriptVault's design philosophy.
+
+Sources: TM issues [#2748](https://github.com/Tampermonkey/tampermonkey/issues/2748), [#2722](https://github.com/Tampermonkey/tampermonkey/issues/2722), [#2624](https://github.com/Tampermonkey/tampermonkey/issues/2624), [#2458](https://github.com/Tampermonkey/tampermonkey/issues/2458), [#2442](https://github.com/Tampermonkey/tampermonkey/issues/2442), [#2579](https://github.com/Tampermonkey/tampermonkey/issues/2579); VM issues [#2464](https://github.com/violentmonkey/violentmonkey/issues/2464), [#2287](https://github.com/violentmonkey/violentmonkey/issues/2287), [#2219](https://github.com/violentmonkey/violentmonkey/issues/2219), [#2169](https://github.com/violentmonkey/violentmonkey/issues/2169).
+
+### 12.1 Script Profiles (Groups)
+
+A **profile** is a named set of scripts with independent per-script enable/disable state. Toggling a profile enables or disables all its members in one action without losing the per-script state within the profile.
+
+- Data model: `Profile { id, name, scriptStates: Map<scriptId, enabled> }`; stored in `chrome.storage.local` alongside the script index
+- UI: profile selector in the popup toolbar and dashboard header; "Active profile" shown in the extension badge tooltip
+- Profile edit modal: add/remove scripts, rename, duplicate, delete
+- "Global" is the default profile (current behavior)
+
+This supersedes simple tag-based enable/disable without touching the tag system.
+
+### 12.2 Improved Script Search
+
+Current search is substring-based. Users with 100+ scripts struggle to find scripts by partial or out-of-order words (VM issue [#2464](https://github.com/violentmonkey/violentmonkey/issues/2464)).
+
+- Replace exact-match with fuzzy match (Levenshtein distance or prefix-weighted scoring)
+- Search fields: name, namespace, description, `@match` patterns
+- Highlight matched substrings in results
+- Sort by relevance score when a search query is active, not alphabetical
+- The Web Worker from Phase 7.6 hosts the search index; no main-thread blocking
+
+### 12.3 Enabled-But-Not-Executed Visual Distinction
+
+Tampermonkey distinguishes between scripts that are **enabled** vs. scripts that **executed on the current page**. ScriptVault's sidepanel shows active scripts but doesn't make this distinction.
+
+- In the sidepanel and popup list: green dot = executed on this tab, grey dot = enabled but not matching/ran
+- Add an "executed" counter to the badge (separate from "installed") or use the existing badge just for executed count
+- Helps users diagnose why a script "isn't running" without opening the dashboard
+
+### 12.4 Script List Grouping and Folding
+
+VM issue [#2287](https://github.com/violentmonkey/violentmonkey/issues/2287). Group scripts in the dashboard list by tag (or profile, once 12.1 lands) with collapsible sections:
+
+- Collapsible tag-groups in the installed scripts table
+- Collapsed state persisted per session
+- Drag-sort still works within and across groups (drop on a group header to assign tag)
+- "Ungroup" view available
+
+### 12.5 Popup Menu Command Collapse
+
+VM issue [#2219](https://github.com/violentmonkey/violentmonkey/issues/2219). When many scripts register menu commands via `GM_registerMenuCommand`, the popup becomes unwieldy. Fix:
+
+- Scripts with multiple registered commands collapse into a sub-section in the popup
+- Expand on click
+- Single-command scripts stay flat (no nesting needed)
+
+### 12.6 Mass Export / Selective Export
+
+VM issue [#2169](https://github.com/violentmonkey/violentmonkey/issues/2169). Current backup exports all scripts or one script. Add:
+
+- Checkbox multi-select in the dashboard script list
+- "Export selected" button: generates a ZIP containing only selected scripts
+- Individual-script export (already partially exists — make it consistent and discoverable)
+- Round-trip format compatibility with Tampermonkey's ZIP export
+
+### 12.7 Bulk Pattern Editing
+
+TM issue [#2442](https://github.com/Tampermonkey/tampermonkey/issues/2442). Allow multi-selecting scripts and adding a shared `@exclude` or `@exclude-match` pattern to all of them at once:
+
+- "Add exclude" action in the multi-select toolbar
+- Text input for the new pattern
+- Preview which scripts already match the exclude before committing
+- Undo via the standard 5-second deferred-commit toast (from Phase 7.4)
+
+### 12.8 Tag Preservation on Reinstall + "Untagged" Filter
+
+TM issue [#2624](https://github.com/Tampermonkey/tampermonkey/issues/2624). Currently reinstalling a script via its install page resets all user-assigned tags.
+
+- On reinstall: detect existing script by namespace+name match; merge user-side fields (tags, enabled state, settings) with new code/metadata from the update
+- "Untagged" as a virtual filter option in the tag sidebar (shows all scripts with no tags assigned)
+
+### 12.9 Install from Local File
+
+TM issue [#2722](https://github.com/Tampermonkey/tampermonkey/issues/2722). Allow drag-and-drop or file-picker install of a `.user.js` file without going through a URL:
+
+- File input in the dashboard toolbar (`<input type="file" accept=".user.js,.js">`)
+- Parse the file as a userscript; show the normal install confirmation dialog
+- Drag-and-drop `.user.js` onto the dashboard also triggers install
+- Does not require any new permissions (`chrome.userScripts` registration is already handled)
+
+### 12.10 In-App Update Notifications
+
+TM issue [#2748](https://github.com/Tampermonkey/tampermonkey/issues/2748) and [#2458](https://github.com/Tampermonkey/tampermonkey/issues/2458). Users find OS notification spam for update checks annoying. Replace:
+
+- Remove all `chrome.notifications.create()` calls for routine update check results (no-update, pending)
+- Instead: badge a yellow indicator on the extension icon when updates are available
+- Dashboard shows an "Updates available" banner that lists pending updates
+- Only use OS notifications for: install errors, sync failures, and security warnings (new `@connect` domain added)
+
+### 12.11 Per-Site Enable/Disable Toggle
+
+VM issue [#2410](https://github.com/violentmonkey/violentmonkey/issues/2410). Allow enabling or disabling a script for only the current domain without globally disabling it or editing `@match`. No other manager has this; it fills the gap between "script off everywhere" and "script on everywhere."
+
+- Data model: `ScriptSettings.siteOverrides: { [origin: string]: boolean }` — values override the script's global enabled state for that origin only
+- UI: in the popup script list, long-press or right-click on a script row shows "Disable only for this site" / "Enable only for this site"
+- Badge shows site-specific count separately from global count
+- Does not affect `@match` rules — purely a runtime override at injection decision time
+
+### 12.12 Runtime Permission Diagnostics
+
+VM issue [#2263](https://github.com/violentmonkey/violentmonkey/issues/2263). When `GM_download` or `GM_xmlhttpRequest` fails silently (Chrome blocks the request due to missing host permissions), the user sees an empty error object. Fix:
+
+- On `GM_xmlhttpRequest` error: check whether the target URL's origin has host permission (`chrome.permissions.contains`)
+- If no permission: surface a diagnostic toast: _"Request to example.com was blocked. ScriptVault does not have host permission for this domain. [Grant permission]"_
+- The "Grant permission" button triggers `chrome.permissions.request({origins: ['https://example.com/*']})` via `chrome.permissions.addHostAccessRequest()` (Chrome 132+) or a fallback dialog
+- Log the diagnostic to the script's execution log (Phase 7.5 log panel)
+
+Source: VM issue [#2263](https://github.com/violentmonkey/violentmonkey/issues/2263), [chrome.permissions.addHostAccessRequest() — Chrome 132](https://developer.chrome.com/docs/extensions/whats-new).
+
+### 12.13 Script Recycle Bin (Undo Delete)
+
+VM issue [#2144](https://github.com/violentmonkey/violentmonkey/issues/2144). When a script is deleted or overwritten via reinstall, save the previous version to a soft-delete bin before permanent removal.
+
+- Soft-delete: move to `scripts_trash` IndexedDB store (Phase 2) with a `deletedAt` timestamp; keep for 30 days or until manually purged
+- Dashboard "Trash" section (collapsible, greyed out): shows deleted scripts with "Restore" and "Permanently delete" actions
+- On script update/reinstall: write the old version to trash before writing the new version
+- "Undo" toast after delete: 8-second window; clicking Undo restores from trash immediately
+
+### 12.14 vscode.dev Integration
+
+TM has a companion extension ([Tampermonkey Editors](https://github.com/Tampermonkey/tampermonkey-editors)) that exposes a `chrome.runtime.onMessageExternal` interface so vscode.dev can open and save scripts directly. Implement the same pattern:
+
+- Add a `"externally_connectable"` manifest entry listing vscode.dev as a permitted external connection
+- Expose: `getScript(id)`, `listScripts()`, `saveScript(id, code)`, `createScript(metadata, code)` via `onMessageExternal`
+- Publish a companion VS Code extension that: connects to ScriptVault, opens scripts as virtual workspace files, auto-saves on `onDidSaveTextDocument`
+- VS Code extension ID registered in `externally_connectable.ids`
+
+Source: [Tampermonkey/tampermonkey-editors](https://github.com/Tampermonkey/tampermonkey-editors), VM issue [#1994](https://github.com/violentmonkey/violentmonkey/issues/1994).
+
+### 12.15 `@storageName` — Cross-Script Storage Sharing
+
+ScriptCat allows multiple scripts to share a `GM_setValue`/`GM_getValue` storage namespace by declaring the same `@storageName` in their metadata. Useful for utility scripts that expose a shared data layer.
+
+- Parse `// @storageName <name>` in the metadata block
+- When present, use `storageName` as the storage key prefix instead of the script's internal ID
+- Security: only scripts with the same `@storageName` can share the bucket; no cross-namespace leakage
+
+Source: [ScriptCat API docs — @storageName](https://docs.scriptcat.org/docs/dev/meta/#storagename).
+
+### 12.16 Script Browser (GreasyFork/OpenUserJS)
+
+VM issue [#2425](https://github.com/violentmonkey/violentmonkey/issues/2425). Complement the existing "Publish to GreasyFork" button (Phase 13.8) with an in-manager script discovery view:
+
+- New "Browse" tab in the dashboard using the GreasyFork JSON API (`greasyfork.org/scripts.json?q=&sort=daily_installs`)
+- Display: script name, description, install count, last updated, compatibility badges
+- "Install" button: fetches the `.user.js` URL and runs through the normal install dialog
+- Search: proxied through `GM_xmlhttpRequest` → background SW to avoid CORS restrictions
+- Paginated; no caching needed (network request on open)
+
+Source: [GreasyFork API docs](https://greasyfork.org/en/help/api), VM issue [#2425](https://github.com/violentmonkey/violentmonkey/issues/2425).
+
+**Exit criteria:** Profiles work end-to-end; fuzzy search live in dashboard; executed/enabled distinction visible; list groups collapse; popup commands fold; mass export works; bulk exclude add works; tags preserved on reinstall; local file install works; no OS notifications for routine update checks; per-site enable/disable toggle works; runtime permission diagnostics surface actionable hints; trash bin restores deleted scripts; vscode.dev companion extension connects and saves; `@storageName` storage sharing works; GreasyFork script browser loads and installs scripts.
+
+---
+
+## Phase 13 — Platform Modernization
+
+**Goal:** Adopt Chrome APIs that have matured since v2.x, upgrade key dependencies, and prepare the extension for the next two years of the Chrome platform.
+
+### 13.1 Chrome 148 Structured Clone Messaging
+
+Chrome 148 adds opt-in structured clone serialization for extension messaging, replacing JSON. This enables passing `Map`, `Set`, `BigInt`, `Date`, `Error`, `File`, and `Blob` objects without manual serialization. Source: [Chrome Extensions blog, April 2026](https://developer.chrome.com/blog/structured-clone-messaging).
+
+- Add `"message_serialization": "structured_clone"` to `manifest.json` (requires Chrome 148)
+- Guard with version check: only opt in if `Number(navigator.userAgent.match(/Chrome\/(\d+)/)?.[1]) >= 148`
+- After TypeScript migration (Phase 1.6): replace `Map<k,v>` → JSON-array workarounds in message passing with direct `Map` usage
+- Test: verify backward-compat with Chrome < 148 (falls back to JSON automatically)
+- Note: native messaging channels are unaffected (always JSON)
+
+### 13.2 `sidePanel.getLayout()` for RTL Support
+
+Chrome 140 added `chrome.sidePanel.getLayout()` to detect whether the panel is docked left or right. Source: [Chrome Extensions What's New](https://developer.chrome.com/docs/extensions/whats-new).
+
+- Use the panel position to flip the content's internal layout for better visual alignment
+- Necessary groundwork for RTL locale support (Phase 14.6)
+
+### 13.3 Chrome 138 "Allow User Scripts" Onboarding Update
+
+Chrome 138 replaced the global Developer Mode requirement with a per-extension "Allow User Scripts" toggle. This changes the onboarding experience for new users. Source: [Chrome blog: chrome.userScripts is changing](https://developer.chrome.com/blog/chrome-userscript).
+
+- Update `onboarding.html` (if it exists) and the install README instructions
+- The `isUserScriptsAvailable()` detection function already handles both versions (try/catch approach)
+- Ensure `background.js` has the Chrome 138 version-gated check:
+  ```js
+  const ver = Number(navigator.userAgent.match(/Chrome\/(\d+)/)?.[1]);
+  if (ver >= 138) { /* link to per-extension toggle */ }
+  else { /* link to developer mode */ }
+  ```
+- Update CWS description to reference the new toggle path
+
+### 13.4 Monaco Upgrade: 0.52 → 0.55.x
+
+Monaco 0.52 is the pinned version. Monaco 0.55.x adds:
+- **Native LSP support** (`lsp` namespace) — enables real-time type-checking, go-to-definition, and hover docs for the userscript editor if a language server is available
+- **AMD build deprecated** (0.53.0) — the AMD module format is no longer supported; ScriptVault must verify it does not load Monaco via AMD. The ESM/bundled path (via esbuild) is fine.
+- **Namespace refactoring** (0.55.0 breaking) — `languages.css/html/json/typescript` moved to top-level `css/html/json/typescript` — update any import paths if used.
+
+Source: [Monaco Editor CHANGELOG](https://github.com/microsoft/monaco-editor/blob/main/CHANGELOG.md).
+
+Steps:
+1. Run `npm install monaco-editor@0.55.x`
+2. Verify esbuild bundle still produces working editor
+3. Update any `languages.*` namespace references
+4. Test all 8 themes and editor keyboard shortcuts
+
+### 13.5 Acorn Upgrade: 8.12 → 8.16
+
+The AST parser used for security analysis. New in 8.14-8.16:
+- **ES2025 import attributes** (`with { type: "json" }`)
+- **ES2025 RegExp modifiers** (`/foo(?i:bar)/`)
+- **`using` / `await using`** explicit resource management (8.15)
+- **CommonJS source type** (8.16) — useful for analyzing `require()`-style @require dependencies
+
+Source: [Acorn CHANGELOG](https://github.com/acornjs/acorn/blob/master/acorn/CHANGELOG.md).
+
+Steps: `npm install acorn@latest`; verify AST-based security detector still passes all test cases.
+
+### 13.6 CI: Adapt to `--load-extension` Removal (Chrome 137)
+
+Chrome 137 removes the `--load-extension` CLI flag. Puppeteer has contributed fixes upstream for loading extensions without this flag. Source: [Chrome Extensions June 2025 news](https://developer.chrome.com/blog/extension-news-june-2025).
+
+- Update `npm run smoke:dashboard` to use Puppeteer's new extension-loading API
+- Verify CI pipeline still provisions Chrome and loads the unpacked extension
+- Test locally: `npx puppeteer browsers install chrome@stable` then run smoke test
+
+### 13.7 Git Repository Sync
+
+VM issue [#2176](https://github.com/violentmonkey/violentmonkey/issues/2176). Allow backing up/restoring scripts to a GitHub/GitLab/Bitbucket repository:
+
+- New sync provider: `GitSync` — uses the GitHub Contents API (or GitLab equivalent) to commit script files to a repo
+- Each script = one `.user.js` file in the repo; metadata stored in a `manifest.json` at the repo root
+- Commit messages auto-generated: `"Update <ScriptName> to v<version>"` 
+- Pull: fetch all `.user.js` files from repo, install/update scripts matching namespace
+- Two-way: local changes push upstream; remote changes pull down on sync
+- Auth: GitHub personal access token, stored in `chrome.storage.local`
+- This slots into Phase 8's sync provider architecture; add `GitHubSyncProvider` implementing the `SyncProvider` interface
+
+### 13.8 Publish to GreasyFork/OpenUserJS
+
+VM issue [#2425](https://github.com/violentmonkey/violentmonkey/issues/2425). One-click publish from the editor:
+
+- Add "Publish…" button in the Monaco editor toolbar
+- Dialog: pick target (GreasyFork / OpenUserJS), enter session cookie or API token
+- GreasyFork: use the prefill URL API (`/en/script_versions/prefill` POST) to open the submission form pre-populated with the current code
+- OpenUserJS: equivalent API endpoint
+- Notify via toast when the browser tab opens with the prefill form
+- Note: does not require ScriptVault to handle auth; the user's existing browser session is used for GreasyFork's cookie-based submission
+
+### 13.9 `chrome.permissions.addHostAccessRequest()` (Chrome 132)
+
+Chrome 132 added `chrome.permissions.addHostAccessRequest()` to proactively surface host permission requests in the Extensions menu (the puzzle-piece icon) without requiring an immediate dialog. This is especially important for ScriptVault since scripts routinely need permissions for sites not anticipated at install time.
+
+- Call `addHostAccessRequest({tabId, documentId, url})` when a script encounters a permission denial on the current tab
+- The Extensions menu will show a "ScriptVault wants access to this site" badge that the user can click to grant
+- Gracefully degrades on Chrome < 132 (condition already needed for runtime permission diagnostics in Phase 12.12)
+
+Source: [Chrome Extensions What's New — Chrome 132](https://developer.chrome.com/docs/extensions/whats-new).
+
+### 13.10 CWS Verified CRX Signing (June 2025)
+
+The Chrome Web Store now supports developer-registered signing keys: once a public key is registered in the developer dashboard, all future CRX uploads must be signed with the corresponding private key. An account-takeover attack can no longer push an unsigned update.
+
+- Generate a dedicated signing keypair for ScriptVault (separate from the `.pem` used for local testing)
+- Register the public key in the CWS developer dashboard
+- Integrate signing into the release workflow (`.github/workflows/release.yml`)
+- Store the private key as a GitHub Actions secret (`CWS_SIGNING_KEY`)
+
+Source: [Chrome extension news — June 2025](https://developer.chrome.com/blog/extension-news-june-2025).
+
+### 13.11 `chrome.storage.session` Optimization (Chrome 130)
+
+Chrome 130 added `StorageArea.getKeys()` across all storage areas, reducing overhead for frequent "list what's in storage" operations in the service worker. The session storage area (10 MB quota, in-memory, cleared on restart) is ideal for per-tab volatile state like currently-executing script IDs and per-tab injection results.
+
+- Migrate volatile runtime state (currently stored in in-memory JS objects that die with the SW) into `chrome.storage.session`
+- Use `getKeys()` in hotpaths where a full `get()` is unnecessary
+- Set `setAccessLevel({accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS'})` if content scripts need to read session state
+
+Source: [chrome.storage API reference](https://developer.chrome.com/docs/extensions/reference/api/storage).
+
+**Exit criteria:** Structured clone opt-in on Chrome 148; panel layout aware; onboarding docs reflect Chrome 138 toggle; Monaco 0.55.x with AMD migration verified; Acorn 8.16; smoke tests pass without `--load-extension`; git sync provider works end-to-end; GreasyFork prefill flow works; `addHostAccessRequest()` used for permission denials on Chrome 132+; CWS signing key registered and wired into release workflow; volatile SW state migrated to `storage.session`.
+
+---
+
+## Phase 14 — Accessibility & Internationalization
+
+**Goal:** Meet WCAG 2.2 AA compliance for ScriptVault's own UI and broaden locale support.
+
+These items address structural accessibility debt and do not affect script execution. They are independently shippable.
+
+### 14.1 Font Sizes: px → rem
+
+All font sizes are currently in `px`, which ignores user browser font-size preferences (see `CLAUDE.md` Known Remaining Issues).
+
+- Audit every CSS file: `grep -n 'font-size:.*px' **/*.{css,html,js}`
+- Replace all `px` values with `rem` equivalents (base 16px assumed)
+- Test: set Chrome's base font to 20px and verify dashboard text scales correctly
+- Also convert `line-height` and spacing tied to font size
+
+### 14.2 WCAG 2.2 Focus Visibility (2.4.11 AA)
+
+WCAG 2.2 criterion 2.4.11 (published October 2023) requires that when a component receives keyboard focus, it is not entirely hidden by author-created content. Source: [W3C WCAG 2.2 new criteria](https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/).
+
+- Audit sticky/fixed elements (sidepanel toolbar, dashboard header, toast stack) to verify they do not obscure focused elements
+- Add `scroll-margin-top` / `scroll-padding-top` to ensure focused rows scroll into view above sticky headers
+
+### 14.3 WCAG 2.2 Target Sizes (2.5.8 AA)
+
+Criterion 2.5.8 requires touch targets to be at least 24×24 CSS pixels (with spacing accounting for smaller sizes). Source: [W3C WCAG 2.2](https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/).
+
+- Audit all interactive controls: script enable/disable toggles, action buttons, checkboxes, dropdown items
+- Apply `min-height: 24px; min-width: 24px` or ensure adequate spacing via `padding` around smaller controls
+- Note: most dashboard controls are already ≥ 32px; this primarily affects the popup's compact list
+
+### 14.4 Screen Reader Support for Script Toggles
+
+TM issue [#2676](https://github.com/Tampermonkey/tampermonkey/issues/2676). The script enable/disable toggle is not announced correctly by screen readers.
+
+- Ensure toggle elements use `<button role="switch" aria-checked="true|false">` pattern
+- Add `aria-label` with script name: `aria-label="Enable {scriptName}"`
+- Announce state change via `aria-live="polite"` region (or `role="status"`)
+- Test with NVDA (Chrome) and VoiceOver (macOS)
+
+### 14.5 Drag-Sort Keyboard Alternative
+
+WCAG 2.5.7 (AA) requires that any drag movement have a single-pointer alternative. The script list drag-sort and folder reordering have no keyboard fallback. Source: [W3C WCAG 2.2 dragging movements](https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/).
+
+- When a drag-handle is focused (keyboard Tab), pressing Enter enters "move mode"
+- Arrow keys move the item up/down in the list
+- Enter confirms placement; Escape cancels
+- Visual indicator shows which item is being moved and its target position
+
+### 14.6 RTL Layout Support
+
+Groundwork for right-to-left locales (Arabic, Hebrew, Farsi). Uses the `sidePanel.getLayout()` API from Phase 13.2.
+
+- Switch all directional CSS from `left`/`right` to `inset-inline-start`/`inset-inline-end`
+- Test by setting `<html dir="rtl">` and verifying layout does not break
+- `chrome.sidePanel.getLayout()` result feeds `data-panel-side` attribute on `<body>` for per-side styling
+
+### 14.7 i18n: `_messages.json` Coverage Audit
+
+The extension's `_locales/` directory has en-US strings but coverage is incomplete (many UI strings are hardcoded in JS/HTML).
+
+- Enumerate all user-visible strings via `grep -rn "textContent\|innerHTML\|innerText\|placeholder\|title\|aria-label" pages/ dashboard-*.js`
+- Move all found strings to `_messages.json` entries
+- Add `getMessage()` calls in JS; `data-i18n` attributes in HTML with a lightweight init-time substitution pass
+- Start with en-US only; structure enables future community translations
+- Add a CI lint step: strings not in `_messages.json` are a build warning
+
+**Exit criteria:** All font sizes in rem; WCAG 2.2 focus and target criteria pass; toggle announced correctly by screen reader; drag-sort has keyboard alternative; RTL layout does not break; all visible strings in `_messages.json`.
+
+---
+
 ## Phase Summary & Dependencies
 
 ```
@@ -568,13 +1061,18 @@ Phase 1 ─── TypeScript Migration
   └── Phase 7 ─── Dashboard UX
 
 Phase 10 ─── Testing (runs in parallel, grows with each phase)
+
+Phase 11 ─── GM API Parity (Phase 11.9 needs Phase 2 for storage.session; rest independent)
+Phase 12 ─── UX Polish (12.13 Trash needs Phase 2; 12.14 vscode.dev needs Phase 1; rest independent)
+Phase 13 ─── Platform Modernization (13.7 Git sync needs Phase 8; rest can start now)
+Phase 14 ─── Accessibility & i18n (fully independent, can start now)
 ```
 
 ### Suggested Execution Order
 1. **Phase 0** — Unblocks everything
 2. **Phase 1** (waves 1-3) — TypeScript for modules and background
 3. **Phase 4** — URL matcher (high bug density, self-contained)
-4. **Phase 2** — Storage rewrite (enables phases 3, 8, 9)
+4. **Phase 2** — Storage rewrite (enables phases 3, 8, 9, and parts of 11/12)
 5. **Phase 5** — Security (can run partially in parallel with 2)
 6. **Phase 3** — Service worker resilience (depends on Phase 2)
 7. **Phase 1** (waves 4-5) — TypeScript for pages/dashboard
@@ -583,6 +1081,10 @@ Phase 10 ─── Testing (runs in parallel, grows with each phase)
 10. **Phase 8** — Sync rewrite (depends on storage rewrite)
 11. **Phase 9** — Migration system (depends on storage rewrite)
 12. **Phase 10** — Testing (continuous, ramps up each phase)
+13. **Phase 11** — GM API Parity (can run alongside phases 4–10 for self-contained items)
+14. **Phase 12** — UX Polish (can run alongside phases 7–10; 12.13 after Phase 2)
+15. **Phase 13** — Platform Modernization (13.9–13.11 can start now; 13.7 after Phase 8)
+16. **Phase 14** — Accessibility & i18n (can start anytime; fully independent)
 
 ### Version Mapping
 | Phase | Version | Milestone |
@@ -599,6 +1101,10 @@ Phase 10 ─── Testing (runs in parallel, grows with each phase)
 | 8     | v3.6.0  | Sync rewrite |
 | 9     | v3.7.0  | Migration framework |
 | 10    | v4.0.0  | Full test suite, production-ready |
+| 11    | v4.1.0  | GM API parity + metadata directives |
+| 12    | v4.2.0  | UX polish + vscode.dev + per-site toggles |
+| 13    | v4.3.0  | Platform modernization + CWS signing |
+| 14    | v4.4.0  | WCAG 2.2 + i18n groundwork |
 
 ## Open-Source Research (Round 2)
 
@@ -659,3 +1165,183 @@ Phase 10 ─── Testing (runs in parallel, grows with each phase)
 - **esbuild** pin `>=0.25.0`; gotcha: set `target:"chrome120"` to match MV3 baseline so class fields/top-level-await ship unshimmed.
 - **idb** (IndexedDB wrapper) pin `>=8.x`; entrypoint `openDB`; gotcha: SW can't hold DB handles across restarts — reopen per operation.
 - **@types/greasemonkey** pin latest; provides GM_* typings for the editor's IntelliSense.
+
+## External Research (Round 4)
+
+_Added after agent-based competitive and platform research sweep (June 2025). Sources are numbered to facilitate the gap analysis appendix below._
+
+### Source Index
+
+**Competitor APIs and Documentation**
+1. https://docs.scriptcat.org/docs/dev/api/ — ScriptCat full GM API reference (v0.17.x)
+2. https://docs.scriptcat.org/docs/dev/background/ — ScriptCat background script architecture
+3. https://docs.scriptcat.org/docs/dev/cat-api/ — ScriptCat CAT_ unique API extensions
+4. https://docs.scriptcat.org/docs/dev/meta/#storagename — ScriptCat `@storageName` metadata
+5. https://violentmonkey.github.io/api/gm/ — Violentmonkey GM_ function reference
+6. https://violentmonkey.github.io/api/metadata-block/ — Violentmonkey metadata block spec
+7. https://www.tampermonkey.net/changelog.php — Tampermonkey changelog (recent releases)
+8. https://github.com/quoid/userscripts — Userscripts (Safari) README and metadata docs
+9. https://github.com/Tampermonkey/tampermonkey-editors — TM vscode.dev companion extension
+10. https://github.com/lisonge/vite-plugin-monkey — vite-plugin-monkey README (auto-grant, ESM, HMR)
+11. https://github.com/kusoidev/ScriptFlow — ScriptFlow multi-file userscript IDE (community)
+
+**Chrome Extension Platform**
+12. https://developer.chrome.com/docs/extensions/whats-new — Chrome Extensions What's New (Chrome 120–148)
+13. https://developer.chrome.com/docs/extensions/reference/api/userScripts — userScripts API reference
+14. https://developer.chrome.com/docs/extensions/reference/api/storage — chrome.storage API reference
+15. https://developer.chrome.com/docs/extensions/reference/api/offscreen — chrome.offscreen API reference
+16. https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle — SW lifecycle
+17. https://developer.chrome.com/blog/extension-news-june-2025 — CWS signing, --load-extension removal
+18. https://developer.chrome.com/blog/structured-clone-messaging — Chrome 148 structured clone opt-in
+19. https://developer.chrome.com/blog/chrome-userscript — Chrome 138 Allow User Scripts toggle
+20. https://developer.chrome.com/docs/webstore/program-policies/ — CWS developer program policies
+21. https://extensionworkshop.com/documentation/develop/manifest-v3-migration-guide/ — Firefox MV3 guide
+
+**GitHub Issue Trackers**
+22. https://github.com/violentmonkey/violentmonkey/issues/2464 — Fuzzy/ranked search
+23. https://github.com/violentmonkey/violentmonkey/issues/2425 — Direct GF publish + browser
+24. https://github.com/violentmonkey/violentmonkey/issues/2419 — `@require-local` local dependencies
+25. https://github.com/violentmonkey/violentmonkey/issues/2410 — Per-site enable/disable toggle
+26. https://github.com/violentmonkey/violentmonkey/issues/2365 — Enterprise policy deployment
+27. https://github.com/violentmonkey/violentmonkey/issues/2359 — GM_xmlhttpRequest redirect control
+28. https://github.com/violentmonkey/violentmonkey/issues/2342 — `@top-level-await` as default
+29. https://github.com/violentmonkey/violentmonkey/issues/2287 — Script list grouping/folding
+30. https://github.com/violentmonkey/violentmonkey/issues/2263 — Runtime permission diagnostics
+31. https://github.com/violentmonkey/violentmonkey/issues/2219 — Collapsible popup command groups
+32. https://github.com/violentmonkey/violentmonkey/issues/2176 — Local filesystem sync
+33. https://github.com/violentmonkey/violentmonkey/issues/2168 — GM_xmlhttpRequest nocache
+34. https://github.com/violentmonkey/violentmonkey/issues/2144 — Recycle bin / undo delete
+35. https://github.com/violentmonkey/violentmonkey/issues/2125 — Local filesystem directory sync
+36. https://github.com/violentmonkey/violentmonkey/issues/2100 — CHIPS cookie partition in XHR
+37. https://github.com/violentmonkey/violentmonkey/issues/2048 — SPA-aware popup / `@match-active`
+38. https://github.com/violentmonkey/violentmonkey/issues/1994 — vscode.dev integration (17 comments)
+39. https://github.com/violentmonkey/violentmonkey/issues/1982 — GM_registerMenuCommand accessKey
+
+**Standards and Specifications**
+40. https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/ — WCAG 2.2 new criteria
+41. https://wiki.greasespot.net/Metadata_Block — Greasemonkey metadata spec (canonical)
+42. https://greasyfork.org/en/help/api — GreasyFork JSON API + prefill endpoint
+43. https://github.com/WICG/navigation-api — Navigation API spec (Chrome 102)
+
+**Community Signal**
+44. https://news.ycombinator.com/item?id=42337605 — Launch HN: Tweeks (YC W25) — 351pts/213 comments
+45. https://github.com/advisories?query=userscript — GitHub Advisory Database (4 advisories)
+46. https://github.com/awesome-scripts/awesome-userscripts — Awesome Userscripts landscape index
+
+### Chrome Platform API Timeline (Chrome 120–148)
+
+| Version | API Change | ScriptVault Impact |
+|---------|-----------|-------------------|
+| Chrome 120 | `userScripts` API launched; `chrome.alarms` min interval 30s | Baseline; alarms can now cover 30–60s tasks |
+| Chrome 130 | `StorageArea.getKeys()` across all storage areas | Phase 13.11 |
+| Chrome 132 | `tabs.Tab.frozen` boolean; `permissions.addHostAccessRequest()` | Phase 12.12, 13.9 |
+| Chrome 133 | `worldId` on `RegisteredUserScript` for per-script isolation | Phase 13 architecture note |
+| Chrome 135 | `userScripts.execute()` one-shot injection | Phase 11.4 |
+| Chrome 137 | `--load-extension` CLI flag removed | Phase 13.6 |
+| Chrome 138 | "Allow User Scripts" per-extension toggle | Phase 13.3 |
+| Chrome 140 | `sidePanel.getLayout()` | Phase 13.2 |
+| Chrome 148 | Structured clone messaging opt-in | Phase 13.1 |
+
+### Key Competitive Feature Gaps (Summary)
+
+Confirmed absent from ScriptVault based on API docs and issue tracker analysis:
+
+- `GM_cookie` — present in TM and ScriptCat; absent from VM intentionally; high demand [sources 1, 7]
+- `GM_getTab/saveTab/getTabs` — present in TM, ScriptCat, Userscripts Safari [sources 1, 8]
+- `@inject-into` — present in VM and Userscripts Safari; affects world selection [source 6]
+- `@connect` enforcement — TM parses; VM does not; affects XHR sandboxing [source 41]
+- `@require` SRI — TM supports; others do not; supply-chain security gap [source 7]
+- `@run-at navigation` — nobody has it; highest SPA pain point in community [sources 37, 43]
+- Per-site enable/disable — nobody has it; VM issue open since 2024 [source 25]
+- vscode.dev integration — TM has companion extension; nobody else [source 9]
+- Runtime permission diagnostics — VM issue open; major usability gap [source 30]
+- CWS verified CRX signing — new June 2025; no manager has adopted yet [source 17]
+
+## Feature Harvest & Gap Analysis Appendix
+
+This appendix records ALL features considered for Phases 11–14, their final tier, and the reasoning. Items are grouped by the category used in the research brief.
+
+### Accepted — Now/Next (Phases 11–14)
+
+| Item | Tier | Phase | Reasoning |
+|------|------|-------|-----------|
+| `GM_info` enrichment (isIncognito, platform) | Now | 11.1 | Direct parity gap; 0 new permissions; low risk |
+| `@unwrap` metadata | Now | 11.2 | High compatibility value for VM scripts |
+| Per-script merge-mode flags | Now | 11.3 | Addresses documented override behavior gap |
+| `userScripts.execute()` Run Now button | Now | 11.4 | Requires Chrome 135; high dev-UX value |
+| GM_xmlhttpRequest `noCache`/`redirect` | Now | 11.5 | Low-effort, high parity value |
+| GM_xmlhttpRequest `stream` responseType | Next | 11.5 | Moderate effort; ScriptCat differentiator |
+| `GM_cookie` API | Now | 11.6 | Power-user necessity; TM/ScriptCat have it |
+| `@inject-into` directive | Now | 11.7 | Security-relevant world selection |
+| `@connect` enforcement | Now | 11.7 | XHR sandboxing; security-relevant |
+| `@tag`, `@antifeature`, `@compatible` | Now | 11.7 | Low-effort metadata parity |
+| `@top-level-await` | Now | 11.7 | Needed for async script patterns |
+| `@run-at document-body` | Now | 11.7 | VM parity; fills lifecycle gap |
+| `@weight` | Next | 11.7 | Low priority; rare need |
+| `@require` SRI verification | Now | 11.8 | Supply-chain security; high value |
+| `GM_getTab/saveTab/getTabs` | Next | 11.9 | Medium effort; tab-scoped state common in TM scripts |
+| `@run-at navigation` | Now | 11.10 | Highest SPA pain point; no competitor has it yet |
+| `GM_notification` progress/buttons/update | Next | 11.11 | Moderate; chrome.notifications supports it natively |
+| Script profiles (groups) | Now | 12.1 | High demand; enables bulk enable/disable |
+| Fuzzy search | Now | 12.2 | Quality of life; <1 day with existing Web Worker |
+| Enabled-but-not-executed distinction | Now | 12.3 | TM differentiator; directly addresses user confusion |
+| Script list grouping/folding | Now | 12.4 | VM issue #2287; low effort |
+| Popup command collapse | Now | 12.5 | VM issue #2219; trivial |
+| Mass export | Now | 12.6 | VM issue #2169; extends existing backup system |
+| Bulk pattern editing | Next | 12.7 | TM issue #2442; moderate effort |
+| Tag preservation on reinstall | Now | 12.8 | TM issue #2624; low effort |
+| Install from local file | Now | 12.9 | TM issue #2722; file picker trivial |
+| In-app update notifications | Now | 12.10 | TM issue #2748; removes OS notification spam |
+| Per-site enable/disable toggle | Now | 12.11 | VM issue #2410; no competitor has it — leapfrog |
+| Runtime permission diagnostics | Now | 12.12 | VM issue #2263; actionable fix for silent failures |
+| Recycle bin / undo delete | Next | 12.13 | VM issue #2144; needs Phase 2 IndexedDB |
+| vscode.dev integration | Next | 12.14 | TM companion extension is the reference; high dev value |
+| `@storageName` cross-script storage | Next | 12.15 | ScriptCat feature; moderate effort |
+| GreasyFork script browser | Next | 12.16 | Complement to 13.8; improves discovery |
+| Structured clone messaging (Chrome 148) | Now | 13.1 | Manifest opt-in + version guard; low effort |
+| `sidePanel.getLayout()` | Now | 13.2 | Groundwork for RTL support |
+| Chrome 138 onboarding update | Now | 13.3 | Docs + detection code; <1 day |
+| Monaco 0.52 → 0.55.x | Now | 13.4 | AMD deprecation is a time-sensitive migration |
+| Acorn 8.12 → 8.16 | Now | 13.5 | ES2025 features for AST analysis |
+| CI: adapt to `--load-extension` removal | Now | 13.6 | Chrome 137 already shipped; CI will break |
+| Git repository sync | Next | 13.7 | Substantial effort; needs Phase 8 sync architecture |
+| GreasyFork publish button | Next | 13.8 | VM issue #2425; moderate effort |
+| `chrome.permissions.addHostAccessRequest()` | Now | 13.9 | Chrome 132; enhances permission diagnostics |
+| CWS verified CRX signing | Now | 13.10 | June 2025 CWS change; security-critical |
+| `chrome.storage.session` optimization | Now | 13.11 | Chrome 130 `getKeys()` + volatile state migration |
+| Font sizes px → rem | Now | 14.1 | CLAUDE.md known issue; accessibility debt |
+| WCAG 2.2 focus visibility | Now | 14.2 | AA compliance |
+| WCAG 2.2 target sizes | Now | 14.3 | AA compliance |
+| Screen reader toggle support | Now | 14.4 | TM issue #2676 |
+| Drag-sort keyboard alternative | Now | 14.5 | WCAG 2.5.7 AA |
+| RTL layout groundwork | Next | 14.6 | Requires Phase 13.2; enables Arabic/Hebrew |
+| i18n `_messages.json` audit | Next | 14.7 | Prerequisite for any future translations |
+
+### Rejected — With Reasoning
+
+| Item | Reason |
+|------|--------|
+| `@background` persistent scripts (ScriptCat) | Fundamentally incompatible with MV3 SW model. ScriptCat achieves this via a non-standard SW keepalive mechanism that violates CWS policies. Architecture would require a complete rewrite. Rejected as architectural mismatch. |
+| AI script generation (Tweeks pattern) | Explicitly deleted from ScriptVault as bloat (see CLAUDE.md). The Tweeks HN launch validates market demand but contradicts the project's stated design philosophy. Rejected — not this project's mission. |
+| Script subscription/feed system (ScriptCat) | Explicitly removed from ScriptVault as "over-engineered". Would duplicate GreasyFork's function. Rejected as feature creep. |
+| `CAT_fileStorage` binary cloud storage | ScriptCat-unique architecture requiring a dedicated cloud backend. Maintenance burden too high; no clear user base for ScriptVault. Rejected as disproportionate effort. |
+| `CAT_proxy` per-script proxy | Conflicts with Proxy SwitchyOmega and similar extensions. Requires elevated permissions. ScriptCat acknowledges conflict risk. Rejected as too invasive. |
+| Multi-file ES module project IDE (ScriptFlow) | ScriptFlow is a standalone application for this exact use case. Implementing it in ScriptVault would duplicate ScriptFlow and require a bundler pipeline inside the extension. Rejected as out of scope for a manager. |
+| Live HTML/CSS/JS preview window (ScriptFlow) | Same rationale as multi-file IDE. Rejected. |
+| Git repo integration (clone/commit in browser) | 13.7 covers script-file sync to git. Full clone/commit/push of arbitrary repos is a different product category. Rejected as scope creep beyond script management. |
+| `GM_openInTab` `useOpen` / `incognito` | ScriptCat-specific; very niche use cases (special-protocol URLs, incognito automation). Low demand signal. Deferred: Under Consideration. |
+| `GM_registerMenuCommand` `accessKey` keyboard shortcut | Specification explicitly prohibits keyboard shortcuts (CLAUDE.md universal rule). Rejected. |
+| `GM_registerMenuCommand` `nested` context-menu level | ScriptCat-specific UI pattern; does not translate cleanly to Chrome extension popup model. Rejected as UX mismatch. |
+| `GM_audio.getState()` | TM experimental with no published documentation. No use case beyond very niche audio-control scripts. Rejected as too experimental. |
+| `GM_log` with levels | The extension already has an execution log panel. This would add an API surface for something the log panel already provides. Deferred: Under Consideration for Phase 7 log panel expansion. |
+| Script-to-standalone-extension compiler | Distribution tooling for non-technical users. Not a script manager feature. Community tool (`hrussellzfac023.github.io`) already exists. Rejected. |
+| Enterprise MDM/registry policy deployment | VM issue #2365 with 6 comments — low demand relative to effort. Requires Chrome policy infrastructure. Deferred: Under Consideration for a future enterprise-focused phase if demand grows. |
+| Script subscription/collectible collections | Same as script subscription/feed above. Rejected. |
+| Toolbar badge display options (TM) | Low-value cosmetic option. Deferred: Under Consideration as a minor preference in a settings cleanup pass. |
+| `$DATETIME$` template variable | Trivial to add but not in any user-facing issue tracker. Under Consideration as part of a future "editor quality of life" micro-release. |
+| Storage editor `Ctrl+S` save | TM changelog item. Dashboard already has storage viewer; Ctrl+S save is a minor UX improvement. Under Consideration alongside the storage editor work in Phase 7. |
+| SPA-aware `@match-active` metadata (VM proposal) | Phase 11.10 covers the behavioral fix (`@run-at navigation`). The `@match-active` metadata proposal is speculative. Deferred: evaluate after `@run-at navigation` ships. |
+| Firefox port (all phases) | Tracked separately in `FIREFOX-PORT.md`. Excluded from this roadmap to prevent scope bleed. |
+| Mobile support | Desktop-only Chrome extension. No mobile Chrome extension runtime for injecting userscripts. Rejected as platform limitation. |
+| CHIPS cookie partition in XHR | Nobody has implemented this yet; Chrome's cookie partitioning API is still evolving. Under Consideration once the Chrome API stabilizes. |
+| `@require-local` / local script as dependency | This is Phase 11 item 11.7's `@require` work extended. The `@require-local` pattern (referencing another installed script by ID as a dependency) is a valid extension of the `@require` SRI work. Under Consideration as Phase 11 follow-up. |
