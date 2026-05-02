@@ -2,6 +2,11 @@
 // Mocks Chrome extension APIs for vitest (jsdom environment)
 
 import { vi } from 'vitest';
+import 'fake-indexeddb/auto';
+
+// Reset IDB between tests so each spec sees a clean store.
+// (`fake-indexeddb/auto` installs the global; we rebuild it on demand below.)
+import { IDBFactory } from 'fake-indexeddb';
 
 // Mock chrome.* APIs
 const storageMock = {};
@@ -179,6 +184,8 @@ globalThis.chrome = {
 globalThis.__resetStorageMock = () => {
   for (const key of Object.keys(storageMock)) delete storageMock[key];
   for (const key of Object.keys(sessionStorageMock)) delete sessionStorageMock[key];
+  // Also wipe IndexedDB so per-test seeding starts from a clean DB.
+  globalThis.indexedDB = new IDBFactory();
 };
 
 // Mock crypto.randomUUID
