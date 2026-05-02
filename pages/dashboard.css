@@ -285,14 +285,21 @@ a:hover {
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   padding: 6px 14px;
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--t-fast) var(--ease-out),
+              border-color var(--t-fast) var(--ease-out),
+              transform var(--t-fast) var(--ease-out);
 }
 
 .toolbar-btn:hover {
   background: var(--bg-row-hover);
+  border-color: var(--hairline-strong);
+}
+
+.toolbar-btn:active {
+  transform: translateY(0.5px);
 }
 
 .toolbar-btn:disabled {
@@ -692,12 +699,12 @@ input[type="checkbox"] {
   cursor: help;
 }
 
-.feature-storage { background: #22c55e33; color: var(--accent-green); }
-.feature-xhr { background: #60a5fa33; color: var(--accent-blue); }
-.feature-style { background: #c084fc33; color: var(--accent-purple); }
-.feature-notify { background: #fbbf2433; color: var(--accent-yellow); }
-.feature-menu { background: #fb923c33; color: var(--accent-orange); }
-.feature-unsafe { background: #f8717133; color: var(--accent-red); }
+.feature-storage { background: var(--tint-green-soft); color: var(--accent-green); }
+.feature-xhr { background: var(--tint-blue-soft); color: var(--accent-blue); }
+.feature-style { background: var(--tint-purple-soft); color: var(--accent-purple); }
+.feature-notify { background: var(--tint-yellow-soft); color: var(--accent-yellow); }
+.feature-menu { background: var(--tint-orange-soft); color: var(--accent-orange); }
+.feature-unsafe { background: var(--tint-red-soft); color: var(--accent-red); }
 
 /* ===== HOMEPAGE LINK ===== */
 .homepage-link {
@@ -926,13 +933,22 @@ input[type="checkbox"] {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 4px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 16px;
   line-height: 1;
+  border-radius: var(--r-sm);
+  transition: background var(--t-fast) var(--ease-out),
+              color var(--t-fast) var(--ease-out);
 }
 
 .modal-close:hover {
   color: var(--text-primary);
+  background: var(--bg-row-hover);
 }
 
 .modal-body {
@@ -1538,12 +1554,12 @@ input[type="checkbox"] {
 }
 
 .diff-add-count {
-  color: #4ade80;
+  color: var(--accent-green);
   font-weight: 600;
 }
 
 .diff-del-count {
-  color: #f87171;
+  color: var(--accent-red);
   font-weight: 600;
 }
 
@@ -1590,19 +1606,19 @@ input[type="checkbox"] {
 }
 
 .diff-add {
-  background: rgba(74, 222, 128, 0.08);
+  background: var(--tint-green-soft);
 }
 
 .diff-add .diff-sign {
-  color: #4ade80;
+  color: var(--accent-green);
 }
 
 .diff-del {
-  background: rgba(248, 113, 113, 0.08);
+  background: var(--tint-red-soft);
 }
 
 .diff-del .diff-sign {
-  color: #f87171;
+  color: var(--accent-red);
 }
 
 .diff-ctx {
