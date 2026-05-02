@@ -336,7 +336,8 @@ class MatchSet {
 **Status:**
 - **Webhook RFC 1918 / internal-host guard shipped in v3.6.1 (2026-05-02).** `PublicAPI.setWebhook` rejects URLs whose hostname matches the existing `_isInternalHost` classifier (localhost aliases, IPv4 loopback/unspecified/RFC 1918/CGNAT/link-local/broadcast, IPv6 loopback/link-local/ULA). 7 new tests cover the rejection set; public hostnames + public IPv4 still pass.
 - npm resolver SSRF guard (path traversal + exact semver) was already in place from earlier rounds.
-- Gist fake-encryption removal and cloud-sync passphrase encryption still pending.
+- **Gist fake-encryption removed in v3.6.2 (2026-05-02).** Token now stored plaintext in `chrome.storage.local`; one-shot legacy migration decrypts existing installs' tokens with the old hardcoded key and re-saves them under the new key, then drops the legacy entry. UX hint copy updated to describe the storage model honestly.
+- Cloud-sync passphrase encryption still pending.
 
 ### 5.6 CSP Tightening
 - Remove `https://cdn.jsdelivr.net` from sandbox CSP after Monaco is bundled locally (Phase 0.2)
