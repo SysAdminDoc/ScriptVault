@@ -2194,6 +2194,209 @@ The following federation patterns were **investigated and rejected**:
 
 ---
 
+## Phase 36 — AI-Native Authoring & Modern Platform APIs
+
+**Goal:** Catch up to Chrome 138-148 platform additions and the recent wave of Violentmonkey/ScriptCat author-experience improvements that landed since the v2.34/v0.16.13 baseline of Round 9.
+
+### 36.1 Structured-Clone Message Serialization (Chrome 148)
+
+Opt into [`"message_serialization": "structured_clone"`](https://developer.chrome.com/blog/structured-clone-messaging) in `manifest.json`. Today every cross-context message (background ↔ content ↔ popup ↔ sidepanel ↔ devtools) goes through JSON, which silently mangles `Map`, `Set`, `Date`, `BigInt`, `Error`, `NaN`, `Infinity`, `Blob`, and `File`.
+
+- Audit `chrome.runtime.sendMessage` payloads for any of these types currently being hand-serialized (the `_recentUpdates` ring, `GM_xmlhttpRequest` response wrappers, backup payloads, dashboard event log).
+- Once opted in, drop the `Array.from(map.entries())` workaround in: dashboard network log, GM_notification button payloads, recent-updates banner, `getRecentUpdates`/`clearRecentUpdates` handlers, and any code path that serializes a `Date` for stats.
+- Cross-extension messaging breaks if the other extension uses the JSON format — keep `externally_connectable` (Phase 12.14 vscode.dev companion) on JSON or coordinate the cutover.
+- No change to `chrome.storage.local`/`chrome.storage.session` (those already preserve structured types).
+
+Source: [Chrome blog — Structured Clone Messaging (April 22, 2026)](https://developer.chrome.com/blog/structured-clone-messaging), [Chrome 148 release notes](https://developer.chrome.com/docs/extensions/whats-new).
+
+**Caveats:** `SharedArrayBuffer` and transferable `ArrayBuffer` are still not supported under structured-clone messaging. Skip the opt-in if/when ScriptVault grows a WASM-heavy worker that needs zero-copy transfer (Phase 26).
+
+### 36.2 Built-in AI for Author Tooling (Chrome 138 Prompt API)
+
+Chrome 138+ exposes [`LanguageModel`](https://developer.chrome.com/docs/extensions/ai/prompt-api) (Gemini Nano) to extensions via Origin Trial. All inference is on-device — no network call, no API key, no telemetry leaving the browser. Model is ~3GB and downloads on first use; fall back gracefully when unavailable.
+
+- **"Explain this script"** in the editor toolbar: feed the script body to Gemini Nano, get a 3-bullet plain-English summary in the install confirmation dialog. Reduces the friction of installing scripts whose code looks scary.
+- **Static malware-risk hint**: prompt = "Flag suspicious patterns: keylogging, clipboard exfiltration, fingerprinting, hidden network calls, obfuscated eval. Return JSON `{risk: low|med|high, reasons: [...]}`." Surface in install dialog as an info row alongside the existing `@grant` audit. Not authoritative — labelled "AI hint, verify manually".
+- **`@require` library summarizer**: when adding a remote `@require`, Gemini Nano summarizes the fetched library so the user knows what they're trusting.
+- **Linter narration** (Phase 15 dependency): translate `eslint-plugin-userscripts` errors into beginner-friendly prose for less experienced authors.
+- **Hardware floor**: Windows 10+/macOS 13+/Linux/ChromeOS Plus, 22GB free, 4GB+ VRAM or 16GB RAM. Feature degrades to a "Not available on this device" notice; never blocks install.
+
+Source: [Prompt API for Chrome Extensions](https://developer.chrome.com/docs/extensions/ai/prompt-api), [Chrome 148 sampling-parameters origin trial](https://chromestatus.com/feature/6325545693478912), [Built-in AI hardware requirements](https://developer.chrome.com/docs/ai/get-started).
+
+**Risk:** Model behaviour is non-deterministic. Never use the AI risk hint as a hard block. Flag the feature as opt-in (off by default) under a new "Experimental → On-device AI" settings group; hide the section entirely when `LanguageModel.availability()` returns `unavailable`.
+
+### 36.3 RTL-Aware Side Panel via `sidePanel.getLayout()` (Chrome 140)
+
+[`chrome.sidePanel.getLayout()`](https://developer.chrome.com/docs/extensions/reference/api/sidePanel#method-getLayout) reports whether the side panel is anchored on the user's left or right. ScriptVault's sidepanel currently assumes a fixed layout for its preview pane and matched-script panel.
+
+- On `sidepanel.html` load, call `chrome.sidePanel.getLayout()`; set `dir="rtl"` on the body when the panel is on the right and the UI language is RTL (Arabic, Hebrew, Persian — Phase 14 covers RTL strings).
+- Re-query on `chrome.windows.onFocusChanged` to handle users who flip the panel mid-session.
+- Animations (slide-in toasts, drawer transitions) flip direction to match.
+
+Source: [Chrome 140 — sidePanel.getLayout()](https://developer.chrome.com/docs/extensions/reference/api/sidePanel#method-getLayout).
+
+### 36.4 `// @tag` Inline Tag Directive (Violentmonkey parity)
+
+Violentmonkey v2.35.2 added `// @tag <name>` (preserves inner spaces, e.g. `// @tag my util`). ScriptVault has tags assigned via the dashboard UI but no in-source declaration.
+
+- Parser: extend `parseUserscript` to collect repeated `@tag` lines into `meta.tags: string[]`.
+- On install/update: union the source-declared `meta.tags` with any user-assigned tags. User-assigned tags are never removed by a re-install (already covered by Phase 12.8).
+- Round-trips through the Tampermonkey ZIP export/import format unchanged (TM ignores unknown directives).
+- Source: [Violentmonkey v2.35.2 release notes](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.35.2), [VM dashboard #2499](https://github.com/violentmonkey/violentmonkey/issues/2499) (the regression that proves it's a real attack surface — handle missing/malformed `@tag` lines gracefully so dashboard never wedges).
+
+### 36.5 `@require-id` Local Module Resolution
+
+Open VM enhancement [#2419](https://github.com/violentmonkey/violentmonkey/issues/2419) — share utility code between scripts without a CDN. One script declares `// @id utils.common` and exposes its body; others reference `// @require utils.common` (no URL).
+
+- Parser: accept bare `@id <name>` and `@require <name>` (no scheme = local lookup).
+- Wrapper builder: when a `@require` token has no scheme, search the installed-scripts index for a matching `@id`. Concatenate before the consumer's body, same as remote `@require`.
+- Cycle detection: refuse to resolve `A → B → A`; surface in install dialog with a one-line "circular @require: A → B" error.
+- Compatibility: TM/VM/SC don't yet implement this — emit a `console.warn` if the user exports a script with bare `@require` to other managers; keep a "Compatibility Mode" flag in settings that blocks bare references on export.
+- Source: [VM #2419](https://github.com/violentmonkey/violentmonkey/issues/2419), [User JavaScript and CSS local-include reference](https://chromewebstore.google.com/detail/user-javascript-and-css/nbhcbdghjpllgmfilhnhkllmkecfmpld).
+
+### 36.6 Comma-Separated `@match` Convenience Syntax
+
+Open VM enhancement [#2403](https://github.com/violentmonkey/violentmonkey/issues/2403). Allow `// @match xyz.com,zyx.com,xzy.*` as a parser-side desugar to three separate `@match` patterns, mirroring uBlock Origin's filter syntax. Authors maintaining many sibling sites currently spam 20 lines of `@match`.
+
+- Parser: split `@match` directive values on `,` (with leading/trailing whitespace trimmed); push each fragment through the existing match validator. Reject any fragment that fails validation, with a per-fragment error message.
+- Round-trip preserves the comma form on save; export to TM-compatible format expands back to one-per-line so existing managers can ingest the file.
+- Same desugar applies to `@include` and `@exclude-match`.
+- Source: [VM #2403](https://github.com/violentmonkey/violentmonkey/issues/2403).
+
+### 36.7 Default Top-Level Await
+
+Open VM enhancement [#2342](https://github.com/violentmonkey/violentmonkey/issues/2342). Currently scripts must declare `// @top-level-await` to use bare `await` at module scope. Make it the default — newer authors don't know about the directive and JS itself permits TLA in modules since 2022.
+
+- Wrapper builder: drop the `(async () => { ... })()` IIFE for new scripts; emit module-style `await`-tolerant scope. Behind an opt-out `// @no-top-level-await` for the rare cases where authors depend on synchronous IIFE return semantics.
+- Migration: existing scripts unchanged (their `// @top-level-await` directive becomes a no-op annotation).
+- Tests: add cases for `await fetch(...)`, `await import(...)` at top level; for `// @no-top-level-await` falling back to the legacy IIFE.
+- Source: [VM #2342](https://github.com/violentmonkey/violentmonkey/issues/2342), [TC39 top-level await proposal](https://github.com/tc39/proposal-top-level-await).
+
+### 36.8 Per-Frame Popup Menu Commands (Violentmonkey v2.36 parity)
+
+VM v2.36.0 separated `GM_registerMenuCommand` entries by frame in the popup. ScriptVault currently lumps all commands together regardless of which frame registered them.
+
+- Track `frameId` (and `frameUrl`, when available) for every `GM_registerMenuCommand` call.
+- Popup groups commands under a per-frame collapsible header: "Top frame" / `iframe https://example.com/embed`.
+- Single-frame scripts (the common case) still render flat — no header until ≥2 frames are involved.
+- Source: [Violentmonkey v2.36.0 release notes](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.36.0).
+
+### 36.9 Per-Script Author Notes Field
+
+VM v2.35.2 added a freeform notes/comments text input in the editor settings panel — distinct from `@description` because notes are local-only and don't ship in exports by default.
+
+- Data model: `Script.userNotes: string` (already capacity in IDB schema; just plumb it through).
+- UI: new "Notes" textarea in the dashboard script-edit settings panel and in the popup info card.
+- Backup: notes included in ZIP export under a new `meta.json` sibling so they round-trip with ScriptVault but are stripped on TM/VM export ("Strip user fields on export" toggle, already covered by Phase 12.6 selective export).
+- Source: [Violentmonkey v2.35.2 release notes](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.35.2).
+
+### 36.10 Live Local-File `@require` Tracking
+
+VM v2.35.0 added auto re-fetch of `localhost`/`file:` `@require` URLs whenever the manager wakes (per their [edit-with-your-favorite-editor](https://violentmonkey.github.io/posts/how-to-edit-scripts-with-your-favorite-editor/) workflow). Authors with VS Code open to a `localhost:3000/lib.js` get hot-reload across saves without bumping `@version`.
+
+- Detection: `@require` URLs whose host resolves to `localhost`, `127.0.0.1`, `[::1]`, or `file://` are flagged as `dynamic`.
+- On every script registration cycle (Phase 3.4 already runs on SW wake), re-fetch dynamic `@require` URLs with `cache: 'no-store'` and rebuild the wrapped script.
+- ETag/`Last-Modified` honored to skip rebuilds when nothing changed.
+- Settings toggle: "Live-reload local @require dependencies" (default off; on for explicitly opted-in scripts).
+- Source: [Violentmonkey v2.35.0 release notes](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.35.0), [VM blog post on local editor workflow](https://violentmonkey.github.io/posts/how-to-edit-scripts-with-your-favorite-editor/).
+
+### 36.11 `{{icon}}` Template Token
+
+VM v2.34.1 added `{{icon}}` to the new-script template — substitutes the active tab's favicon URL into `// @icon`. Removes a manual paste step every time someone scaffolds a new script for a specific site.
+
+- Extend the template engine with the existing `{{name}}`, `{{namespace}}`, `{{match}}` tokens.
+- Add `{{icon}}` that resolves to `chrome.tabs.query({active: true, currentWindow: true})[0].favIconUrl` at template-instantiation time.
+- Document the token in the new-script wizard alongside the others.
+- Source: [Violentmonkey v2.34.1 release notes](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.34.1).
+
+### 36.12 Cron `once(timestamp)` Schedule Expression (ScriptCat parity)
+
+ScriptCat v0.16.14 extended its cron syntax with `once(...)` — schedule a one-shot run at a specific wall-clock time instead of cron's recurrence. Phase 13 (Platform Modernization) has a scheduler hook; this slots in cleanly.
+
+- Parser: extend the schedule-directive grammar to accept `once(2026-06-01T08:00:00Z)` alongside the existing cron expressions.
+- Scheduler: when a `once(...)` job fires, mark it consumed and remove from the active alarms set.
+- Stale `once(...)` jobs that the SW missed (browser was closed past the trigger) prompt the user on next dashboard open: "Run / discard."
+- Source: [ScriptCat v0.16.14 release notes](https://github.com/scriptscat/scriptcat/releases/tag/v0.16.14), [ScriptCat cron docs](https://docs.scriptcat.org/en/docs/dev/api/scriptcat-api/#crontab).
+
+### 36.13 Storage Vacuum on Recycle Bin Empty
+
+VM v2.35.0 vacuums the storage backend after the recycle bin is emptied. ScriptVault's IDB layer (Phase 2) doesn't expose an explicit compact, but cleanup hooks reduce wasted bytes after large deletions.
+
+- After `clear()` or bulk `delete()` on the trash store (Phase 12.13): walk the live `scripts` and `values` stores and rewrite any tombstoned keys (`null` script-bodies, orphaned values).
+- Re-run the dead-code GC on `_recentUpdates` ring buffer.
+- Trigger automatically when ≥50 scripts are emptied at once or quota usage drops below 50% post-delete; expose a manual "Compact storage" button in Settings → Maintenance.
+- Source: [Violentmonkey v2.35.0 release notes](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.35.0).
+
+### 36.14 Popup "Add Current Domain" Button
+
+VM enhancement [#2403](https://github.com/violentmonkey/violentmonkey/issues/2403) (point 1). Add a one-click "+" in the popup that adds the current page's domain to a selected script's `@match` list — no editor open, no source edit. Useful for link-shortener domains that rotate every 1-2 days, or for adding a CDN mirror to an existing rule.
+
+- UI: each script row in the popup gets a hover-revealed "+" button.
+- Click prompts: "Add `https://*.example.com/*` to <script-name>?" with [Confirm] / [Cancel].
+- On confirm: append a new `@match` directive to the script's source, save through the same path as editor save (validates, re-registers, reloads matched tabs).
+- Sibling action: "Disable on this domain" appends an `@exclude-match` instead.
+- Source: [VM #2403](https://github.com/violentmonkey/violentmonkey/issues/2403).
+
+**Exit criteria:** Manifest opts into `structured_clone` and the dashboard sends/receives `Map`/`Date`/`Set`/`Blob` round-trip; AI summarizer present in install dialog and editor toolbar (gracefully hidden when unavailable); side panel mirrors layout; `@tag` parsed end-to-end with round-trip; bare `@require <id>` resolves locally with cycle guard; comma-separated `@match` parses and round-trips; default TLA wrapper ships behind an opt-out; per-frame popup menus group by frame; per-script notes editable + persisted; localhost `@require` live-reloads on SW wake; `{{icon}}` template token works; `once(...)` cron schedule fires; manual storage compaction button works; popup +Domain button appends and re-registers.
+
+---
+
+## Phase 37 — Enterprise Distribution & CWS Compliance Round 2
+
+**Goal:** Track CWS publisher-side changes from 2026 H1 that affect how ScriptVault ships and is trusted, plus the cross-extension interop matrix that the Chrome 148 messaging change introduces.
+
+### 37.1 CWS Enterprise Publishing
+
+Chrome Web Store now supports private publishing to approved external organizations ([blog post, Feb 20 2026](https://developer.chrome.com/blog/cws-new-enterprise-publishing-option)) — distinct from the existing "private to your domain" option.
+
+- For ScriptVault's enterprise track (Phase 25): document the workflow for an org admin to approve ScriptVault for their tenant; surface the org's deployment policy hash inside the dashboard so users know they're on a managed build.
+- Update CWS publish workflow (`publish.sh`) with a `--enterprise <org-id>` flag that bypasses the public listing.
+- Source: [Publishing to external organizations (Feb 20 2026)](https://developer.chrome.com/blog/cws-new-enterprise-publishing-option).
+
+### 37.2 CWS Publisher Roles
+
+CWS dashboard now supports inviting members directly into the publisher account with one of four roles ([blog post, April 30 2026](https://developer.chrome.com/blog/cws-role-expansion-developer-dashboard)) — no more shared Google Group, no $5 fee for invitees.
+
+- Document the roles in `CONTRIBUTING.md` so co-maintainers know which one to request.
+- Tag the public release-management runbook with role minimums for: tagging a release (Developer), uploading a CRX (Publisher), responding to a CWS appeal (Owner).
+- Source: [Empower your team with extension roles (April 30 2026)](https://developer.chrome.com/blog/cws-role-expansion-developer-dashboard).
+
+### 37.3 Streamlined CWS Appeals Workflow
+
+The CWS [smarter & faster appeals process (April 8 2026)](https://developer.chrome.com/blog/cws-new-appeals-process) lets developers appeal policy enforcement directly through the publisher dashboard.
+
+- Add a section to `docs/cws-takedown-recovery.md` describing the new flow, with the canned response language ScriptVault would use for the most likely false-positive flag (`scripting` permission misuse — userscript managers historically eat false-positives because the entire premise is "execute arbitrary user code").
+- Source: [Smarter & faster appeals (April 8 2026)](https://developer.chrome.com/blog/cws-new-appeals-process).
+
+### 37.4 Cross-Extension Messaging Compatibility Matrix
+
+Chrome 148 enforces matching serialization formats — JSON-mode and structured-clone-mode extensions cannot directly exchange `runtime.sendMessage`/`runtime.connect` payloads. Once ScriptVault opts into structured-clone (Phase 36.1), every extension that talks to it must be audited.
+
+- Inventory every `externally_connectable` consumer ScriptVault talks to today and the planned vscode.dev companion (Phase 12.14): each must either also opt into structured clone or proxy through a JSON-only bridge.
+- Document the matrix in `docs/extension-interop.md`: rows = external extensions, columns = serialization format, cell = success/blocked/proxied.
+- Decide cutover policy: stay on JSON until vscode.dev companion ships and is itself on structured-clone.
+- Source: [Structured Clone Messaging — Extension-to-extension communication](https://developer.chrome.com/blog/structured-clone-messaging).
+
+### 37.5 Extensions Update Lifecycle Documentation
+
+Chrome published an [update-lifecycle guide (Sept 9 2025)](https://developer.chrome.com/docs/extensions/develop/concepts/extensions-update-lifecycle) clarifying when extensions check for updates, how `update_url` overrides interact with CWS auto-update, and the consequences of upload-vs-publish timing.
+
+- Cross-reference Phase 6 (update system) against the new guide; ensure ScriptVault's auto-update language doesn't claim behaviour Chrome's update mechanism contradicts.
+- Update README "How updates work" to link to the official lifecycle page.
+- Source: [Extensions update lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/extensions-update-lifecycle).
+
+### 37.6 `Tab.frozen` Property & Frozen-Tab Message Queueing
+
+Chrome 132+ exposes `Tab.frozen`. Messages sent to frozen tabs are now queued and delivered after thaw. ScriptVault's tab-event handlers and badge updaters never inspect this — they treat frozen tabs the same as live ones, which can produce stale stats.
+
+- Audit every `chrome.tabs.query`/`chrome.tabs.onUpdated` consumer; skip stats decrement and badge-count updates when `tab.frozen === true`.
+- `getScriptsForTab` returns the cached match set when `tab.frozen` is true rather than re-evaluating against a stale URL.
+- Source: [Chrome 132 — Tab.frozen](https://developer.chrome.com/docs/extensions/whats-new#chrome_132_new_frozen_property_in_the_tabs_api).
+
+**Exit criteria:** publish.sh supports `--enterprise <org-id>`; CONTRIBUTING.md documents CWS publisher roles; takedown-recovery runbook references the new appeals flow; interop matrix written and reviewed before Phase 36.1 ships; README update-lifecycle section links the official guide; tab handlers gate on `tab.frozen` for stats and match-resolution paths.
+
+---
+
 ## Phase Summary & Dependencies
 
 ```
@@ -2273,6 +2476,8 @@ Phase 22 ─── Community Standards (22.1-22.8 independent; 22.4 references P
 35. **Phase 33** — Cross-Browser Support (33.1 WXT pipeline first; 33.2 Firefox after; 33.4 Edge in parallel; 33.7 Safari deferred behind decision gate)
 36. **Phase 34** — Deep Accessibility & Author Education (34.1–34.6 incremental a11y improvements; 34.7 docs site can run anytime; 34.10 i18n after Phase 14)
 37. **Phase 35** — Federation & Decentralization (35.1 IPFS + 35.3 did:key are zero-dep; 35.2 Nostr after Phase 24; 35.5 registry spec after Phase 25.2)
+38. **Phase 36** — AI-Native Authoring & Modern Platform APIs (36.1 structured-clone messaging needs Phase 37.4 interop matrix first; 36.2 Prompt API depends on Phase 14 settings groups; 36.4-36.7 + 36.11 + 36.14 are zero-dep parser/UI work; 36.10 needs Phase 3 SW-wake hooks; 36.13 needs Phase 2 IDB; 36.12 slots into Phase 13 scheduler)
+39. **Phase 37** — Enterprise Distribution & CWS Compliance Round 2 (37.4 interop matrix gates Phase 36.1; 37.1-37.3 + 37.5 are documentation-only; 37.6 `tab.frozen` is a 30-min gate-check across existing tab handlers)
 
 | Phase | Version | Milestone |
 |-------|---------|-----------|
@@ -3007,3 +3212,69 @@ This appendix records ALL features considered for Phases 11–18, their final ti
 | ClickRemix / AI-powered userscript generation | HN 2025 product hunt; AI writes userscripts from natural-language prompts. Validates market demand but directly contradicts ScriptVault's stated philosophy. Rejected per philosophy. |
 | GM_wsConnectTo (TM #1483) | WebSocket proxy bypass via extension background; very niche use (scripts blocked from WebSocket by CSP). No active demand in ScriptVault tracker. Under Consideration for later phase if demand emerges. |
 | Anonymous XHR credential stripping | TM documents `anonymous: true` to strip cookies/credentials from GM_xmlhttpRequest. Low demand signal beyond existing `anonymous` mode in VM. Under Consideration as trivial addition to Phase 16. |
+
+---
+
+## External Research (Round 10) — 2026 H1 Platform & Competitor Sweep
+
+**Date:** 2026-04 sweep covering Chrome 138-148, Violentmonkey v2.34.1-2.37.1, ScriptCat v0.16.13-0.16.14, and CWS publisher-side changes that landed since Round 9. Net-new signal concentrates in three areas: structured-clone messaging, on-device AI, and incremental author-DX directives that competitors shipped in the gap.
+
+### Sources Cited (Round 10)
+
+| # | URL | Surfaced Item(s) |
+|---|-----|------------------|
+| R10.1 | https://developer.chrome.com/blog/structured-clone-messaging | Phase 36.1 (`message_serialization`), Phase 37.4 (interop matrix) |
+| R10.2 | https://developer.chrome.com/docs/extensions/whats-new | Chrome 132 `tabs.frozen` (37.6), Chrome 138 NTP changes, Chrome 140 `sidePanel.getLayout` (36.3), Chrome 148 release context |
+| R10.3 | https://developer.chrome.com/docs/extensions/ai/prompt-api | Phase 36.2 (Prompt API in extensions, Origin Trial chain Chrome 138 → 148) |
+| R10.4 | https://chromestatus.com/feature/6325545693478912 | Phase 36.2 sampling-parameter origin trial |
+| R10.5 | https://developer.chrome.com/blog/cws-new-enterprise-publishing-option | Phase 37.1 (enterprise external-org publishing, Feb 20 2026) |
+| R10.6 | https://developer.chrome.com/blog/cws-role-expansion-developer-dashboard | Phase 37.2 (publisher roles, April 30 2026) |
+| R10.7 | https://developer.chrome.com/blog/cws-new-appeals-process | Phase 37.3 (in-dashboard appeals, April 8 2026) |
+| R10.8 | https://developer.chrome.com/docs/extensions/develop/concepts/extensions-update-lifecycle | Phase 37.5 (update lifecycle docs, Sept 9 2025) |
+| R10.9 | https://github.com/violentmonkey/violentmonkey/releases/tag/v2.37.0 | `@tag` polish, dashboard sort restore, GM_addElement parent fix |
+| R10.10 | https://github.com/violentmonkey/violentmonkey/releases/tag/v2.36.0 | Phase 36.8 (per-frame popup menu commands) |
+| R10.11 | https://github.com/violentmonkey/violentmonkey/releases/tag/v2.35.2 | Phase 36.4 (`@tag` directive), Phase 36.9 (per-script notes) |
+| R10.12 | https://github.com/violentmonkey/violentmonkey/releases/tag/v2.35.0 | Phase 36.10 (live local `@require`), Phase 36.13 (vacuum on trash empty) |
+| R10.13 | https://github.com/violentmonkey/violentmonkey/releases/tag/v2.34.1 | Phase 36.11 (`{{icon}}` template token) |
+| R10.14 | https://violentmonkey.github.io/posts/how-to-edit-scripts-with-your-favorite-editor/ | Phase 36.10 design context |
+| R10.15 | https://github.com/violentmonkey/violentmonkey/issues/2419 | Phase 36.5 (`@require-id` local module resolution) |
+| R10.16 | https://github.com/violentmonkey/violentmonkey/issues/2403 | Phase 36.6 (comma-separated `@match`), Phase 36.14 (popup +Domain button) |
+| R10.17 | https://github.com/violentmonkey/violentmonkey/issues/2342 | Phase 36.7 (default top-level await) |
+| R10.18 | https://github.com/scriptscat/scriptcat/releases/tag/v0.16.14 | Phase 36.12 (`once(...)` schedule), iframe nested postMessage fix, removed axios dep |
+| R10.19 | https://github.com/scriptscat/scriptcat/releases/tag/v0.16.13 | CustomEvent secret-leak CVE — review for our MAIN↔ISOLATED bridge (Phase 5 update) |
+| R10.20 | https://github.com/Tampermonkey/tampermonkey/issues?q=is%3Aissue+sort%3Aupdated-desc | TM milestone 5.5 enhancement queue (#2734, #2748, #2731 — content not yet substantive enough to extract specific phase items, will revisit Round 11) |
+| R10.21 | https://github.com/webmachinelearning/prompt-api | Prompt API spec source for Phase 36.2 |
+| R10.22 | https://developer.chrome.com/docs/extensions/reference/api/sidePanel#method-getLayout | Phase 36.3 API reference |
+
+### Round 10 — Items Folded Into Existing Phases (no new sub-phase)
+
+- **VM v2.37.0 dashboard sort restore** — already covered by Phase 7 dashboard polish; existing list-state persistence handles it.
+- **VM v2.37.0 GM_addElement parent fix** — already covered by Phase 11 GM_addElement (Phase 11.x); add a regression test for the parent-resolution edge case (`(parent: ParentNode | null, tagName, attrs)` — null parent should default to `document.head ?? document.documentElement`).
+- **ScriptCat v0.16.14 iframe nested postMessage fix** — defensive depth-check belongs in our existing Phase 5 sandbox bridge tests; no new feature.
+- **ScriptCat v0.16.13 CustomEvent secret leak** — security review entry: our MAIN↔ISOLATED bridge passes payloads via `CustomEvent.detail`. Audit: confirm we never include the GM secret/nonce in `detail` payloads readable by the page. Tracked as a Phase 5 follow-up; no new sub-phase.
+- **Chrome 138 NTP footer changes** — irrelevant to ScriptVault (we don't override NTP).
+- **Chrome 132 storage editor in DevTools** — already a developer affordance; no integration work needed.
+- **CWS Publisher Roles role-name details** — folded into Phase 37.2 already.
+
+### Round 10 — Items Rejected (with reasoning)
+
+| Item | Why Rejected |
+|------|--------------|
+| Bundle Gemini Nano model fallback to OpenAI/Anthropic API | Network-dependent AI directly contradicts ScriptVault's local-first philosophy and would require API-key UX. Phase 36.2 stays Prompt-API-only or off. |
+| `SharedArrayBuffer` in messages | Not supported under structured-clone messaging; no use case in ScriptVault today. |
+| Mass extension-conversion tooling that turns scripts into standalone CRX (CWS role context) | Distribution tooling, not a manager feature. Already rejected in Round 8/9 list. |
+
+### Round 10 — Items Promoted to Now/Next
+
+The following Round-10 sub-phases are tagged **Next** by impact (most are high-leverage parity catch-up or platform-API alignment with low-to-medium effort):
+
+- **Now:** 36.1 structured-clone messaging (manifest one-liner + 30-min audit), 37.4 interop matrix (must precede 36.1 cutover), 36.4 `@tag` directive, 36.11 `{{icon}}` token, 36.6 comma `@match` desugar.
+- **Next:** 36.3 RTL side-panel, 36.8 per-frame popup menus, 36.9 per-script notes, 36.13 storage vacuum, 36.14 popup +Domain button, 37.5 update-lifecycle doc cross-reference, 37.6 `tab.frozen` gating.
+- **Later:** 36.2 Prompt API integration (high effort, hardware-gated, opt-in only), 36.5 `@require-id` (compatibility risk), 36.7 default TLA (breaking change for legacy scripts; needs migration period), 36.10 live local-`@require` reload (security review needed for localhost auto-fetch).
+- **Under Consideration:** 36.12 `once(...)` cron (slot into Phase 13 scheduler if/when phase ships), 37.1/37.2/37.3 (process docs — actioned only when ScriptVault hits CWS publication or enterprise demand emerges).
+
+### Round 10 Completion Note
+
+Floor of 30-60 sources is exceeded across all 10 rounds combined (well over 200 cumulative URLs in the appendix). Round 10's net-new contribution is ≈22 distinct sources concentrated on 2026 H1 platform shifts and the gap between Round 9's VM/SC baseline (v2.34/v0.16.13) and current upstream (VM v2.37.1, SC v0.16.14). No Round-10 item duplicates a shipped phase or a Now/Next item from earlier rounds. Two new phases (36, 37) added; phase summary table updated below.
+
+---
