@@ -1712,6 +1712,11 @@
         // Lazy-init the scripts tab (default active tab) so CardView etc. are available
         lazyInitTab('scripts');
 
+        // Phase 12.10 — show an in-app banner if scripts auto-updated since
+        // the last dashboard visit. Replaces the per-script OS notification
+        // spam.
+        showRecentUpdatesBanner();
+
         const route = getDashboardRoute();
         if (route.type === 'new') {
             createNewScript();
@@ -1942,6 +1947,47 @@
         });
     }
     
+    // Phase 12.10 — In-app banner replacing the per-script update OS
+    // notification spam. Pulls the recent-updates ring from background;
+    // dismiss → clearRecentUpdates so the banner stays gone next visit.
+    async function showRecentUpdatesBanner() {
+        try {
+            const updates = await chrome.runtime.sendMessage({ action: 'getRecentUpdates' });
+            if (!Array.isArray(updates) || updates.length === 0) return;
+
+            const panel = document.getElementById('scriptsPanel');
+            if (!panel) return;
+
+            // Compose a compact summary — list up to 3 names with old → new
+            // versions, then "+N more" overflow.
+            const head = updates.slice(0, 3).map(u =>
+                `${escapeHtml(u.name || u.id || 'Unnamed')} <span style="opacity:0.7">v${escapeHtml(u.previousVersion || '?')} → v${escapeHtml(u.newVersion || '?')}</span>`
+            );
+            const overflow = updates.length - head.length;
+            const list = head.join(' · ') + (overflow > 0 ? ` <span style="opacity:0.7">(+${overflow} more)</span>` : '');
+
+            const banner = document.createElement('div');
+            banner.className = 'recent-updates-banner';
+            banner.innerHTML = `
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(96,165,250,0.12));border:1px solid rgba(34,197,94,0.25);border-radius:8px;margin:8px 12px;font-size:13px">
+                    <div style="flex:1;min-width:0;color:var(--text-primary)">
+                        <strong>${updates.length === 1 ? 'Script updated' : `${updates.length} scripts updated`}:</strong>
+                        ${list}
+                    </div>
+                    <button id="btnRecentUpdatesDismiss" type="button" aria-label="Dismiss" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px;line-height:1">&times;</button>
+                </div>
+            `;
+            panel.insertBefore(banner, panel.firstChild);
+
+            document.getElementById('btnRecentUpdatesDismiss')?.addEventListener('click', async () => {
+                banner.remove();
+                try { await chrome.runtime.sendMessage({ action: 'clearRecentUpdates' }); } catch (_e) {}
+            });
+        } catch (_e) {
+            // Background message failure isn't fatal — banner just won't show.
+        }
+    }
+
     // Check if userScripts API is available and enabled
     async function checkUserScriptsAvailability() {
         const banner = document.getElementById('setupWarningBanner');
