@@ -1283,6 +1283,183 @@ The extension's `_locales/` directory has en-US strings but coverage is incomple
 
 ---
 
+## Phase 19 — Multi-Store Distribution & CWS Compliance
+
+**Goal:** Expand ScriptVault beyond Chrome Web Store to Edge Add-ons, Firefox AMO, and self-hosted update channels.
+
+### 19.1 Edge Add-ons Store Listing
+- Microsoft Edge Add-ons has a different submission/review process than CWS
+- Manifest v3 support confirmed; no manifest changes required beyond CWS
+- Create `edge-addon-submission.md` documenting store-specific screenshots, category tags (Developer Tools), and testing on Edge Canary
+- Zero code changes; purely store operations [source 97]
+
+### 19.2 Firefox AMO Listing (MV2 Compatibility Note)
+- Firefox uses MV2 extension model; a ScriptVault Firefox port would require complete architectural changes (service worker → background page, `browser.runtime` vs `chrome.runtime`)
+- Document this explicitly in `FIREFOX-PORT.md` — do not include in the MV3 roadmap
+- Note: Violentmonkey and Tampermonkey have separate FF codebases, not shared source
+
+### 19.3 Self-Hosted CRX Update Server
+- Create an optional update manifest server for users who want to host ScriptVault CRX artifacts themselves
+- Implement `autoupdate.xml` generator: reads released CRX file, computes SHA256 hash, outputs XML with `<updatecheck>` tags [source 98]
+- Example: `GET https://example.com/scriptvault/updates.xml` returns Chrome's autoupdate XML format
+- Documentation: how to set `update_url` in manifest for self-hosted updates
+
+### 19.4 TM/VM ZIP Import Round-Trip Compatibility
+- Tampermonkey backup JSON structure: per-script `uuid`, `config`, `script` (code), `meta` (headers)
+- Violentmonkey ZIP structure: `scripts/` folder with one `.user.js` per script, `_meta.json` for metadata
+- Implement bidirectional conversion: ScriptVault ZIP can import from both TM backup JSON and VM ZIP
+- Round-trip: export as both TM-compatible JSON and VM-compatible ZIP in the Settings export options [source 99]
+
+### 19.5 Developer Tooling Ecosystem Documentation
+- Create `DEVELOPER_GUIDE.md`: patterns for bundling userscripts with esbuild/Vite + ScriptVault metadata
+- Document how to use `@types/tampermonkey` for full IDE IntelliSense (Phase 15.1)
+- Link to `vite-plugin-monkey` and alternatives
+- No new code; curate best practices and link to existing tools
+
+### 19.6 CWS Policy Compliance & Remote Code Execution Exception
+- ScriptVault, like TM and VM, falls under the "trusted remote code execution" exception in CWS policies [source 100]
+- Document the policy exception in `COMPLIANCE.md` to clarify that executing arbitrary user-provided scripts is intentional and allowed
+- Prepare for CWS audit response: cite policy exception and document user consent model
+
+**Exit criteria:** Edge Add-ons submission created and approved (if possible in test env); `autoupdate.xml` generator works for self-hosted CRX; bidirectional TM/VM import tested; `DEVELOPER_GUIDE.md` published with tooling patterns; CWS compliance memo drafted.
+
+---
+
+## Phase 20 — Script Execution Observability & Debugging
+
+**Goal:** Help users and developers debug failing or slow userscripts with local, privacy-safe tools.
+
+### 20.1 Per-Script Execution Time Logging
+- Wrap `GM_xmlhttpRequest` and `GM_fetch` with `performance.mark()` / `performance.measure()` to track network latency per script
+- Store timing data in IndexedDB under `script_stats` table (extends Phase 2 schema)
+- Dashboard: "Performance" tab shows per-script median execution time, outliers flagged [source 101]
+
+### 20.2 Source Map Support for Error Stack Traces
+- When ScriptVault injects a userscript, append a `//# sourceMappingURL=data:...` comment with an inline source map if available
+- For scripts with `@require`, embed source maps for dependencies in the injection bundle
+- Error stack traces in console will then point to original source files, not injected code [source 102]
+- Requires Phase 15.6 (esbuild-wasm TS transpilation) to generate source maps in editor
+
+### 20.3 Per-Script Console Interception
+- Intercept `console.log` / `console.warn` / `console.error` at injection time: `window.__scriptVaultConsole__ = { script: <id>, logs: [...] }`
+- Extension background collects logs and stores in IndexedDB `script_logs` table (time-series, auto-cleanup after 30 days)
+- Dashboard: "Console" tab filters by script, shows timestamp + level + message [source 103]
+
+### 20.4 Script Error Categorization
+- Distinguish between: script syntax errors (parse-time), runtime errors (`window.onerror`), promise rejections (`unhandledrejection`), and timeout/timeout errors
+- Tag errors with context: `@match` URL, execution order relative to page load, document.readyState
+- Dashboard: "Errors" tab shows histogram of errors per script, latest 100 errors with stack traces [source 104]
+
+### 20.5 Network Request Tracing (Privacy-Safe)
+- Log per-script outbound requests using `GM_fetch`/`GM_xmlhttpRequest` interception
+- Store: method, URL (truncated at query string), status code, latency, initiating script ID
+- Do NOT log response bodies or request headers (privacy)
+- Dashboard: "Network" tab shows request waterfall per script [source 105]
+
+### 20.6 Permission Denial Logging
+- When a script tries to use a GM API it doesn't have in its @grant list, log the denial + stack trace
+- Example: script calls `GM_setValue` without `@grant GM_setValue`
+- Dashboard: "Permissions" tab shows permission denials, suggests @grant additions
+
+**Exit criteria:** Execution time data logged for 5+ script operations; source maps render in DevTools; per-script console appears in dashboard with filters; error categorization tested; network tracing logs 10+ request types; permission denials logged and suggested as @grant additions.
+
+---
+
+## Phase 21 — Extended Sync Backends & Privacy Hardening
+
+**Goal:** Support additional cloud backends beyond Dropbox/GDrive/OneDrive and improve privacy of synchronized data.
+
+### 21.1 GitHub Gist Sync (Two-Way)
+- GitHub Gist as a sync backend for users with a GitHub PAT
+- One Gist per library: plaintext JSON with script metadata (not code bodies due to Gist size limits)
+- For code bodies: optional S3-compatible backend (see 21.2) or local-only with manual export
+- Gist API: create/update gist via `PUT /gists/<id>` with `{files: {"scripts.json": {content: "..."}}}` [source 106]
+- Revision history: read Gist revision list to show sync history in Settings
+
+### 21.2 S3-Compatible Sync (Cloudflare R2, Backblaze B2, MinIO)
+- S3 API support via presigned URLs (avoid embedding credentials in extension)
+- Server-side signing: extension sends request to `https://example.com/s3-presign?bucket=...&key=...` → receives presigned URL → extension uploads directly to S3 [source 107]
+- For script bodies + large backups: S3 is ideal (no size limits, cheap, supports streaming uploads)
+- Authentication: users provide bucket name + presigned-URL endpoint, no AWS credentials in extension memory
+
+### 21.3 Nextcloud / Self-Hosted WebDAV + CalDAV Fallback
+- Extend existing WebDAV (Phase 8) to detect Nextcloud and offer native Nextcloud Files API as option
+- CalDAV as a fallback sync transport: Nextcloud Contacts can be used to store versioned backup metadata
+- Auto-discovery: when user enters Nextcloud URL, detect instance and offer sync options
+
+### 21.4 Client-Side Encryption for Cloud Backup
+- Optional password-protected backup using Web Crypto API: `AES-256-GCM` + `PBKDF2` key derivation
+- User enters passphrase → `PBKDF2(passphrase, salt, 100000 iterations)` → derives encryption key
+- Backup encrypts before upload; cloud stores opaque blob (cannot be indexed/searched by provider)
+- UI in Settings: "Encrypt cloud backup with password", generate random salt, show salt QR for backup [source 108]
+
+### 21.5 Privacy Hardening: Referrer Stripping in GM_xhr
+- Add UI toggle: "Strip referrer from GM_xmlhttpRequest" — when enabled, adds `"Referer": ""` header to all script XHR
+- Logs all referrer-stripped requests in the execution log for transparency
+- Document that `@connect` enforcement (Phase 11.7) + referrer stripping + credential modes combine for privacy [source 109]
+
+### 21.6 Incognito Mode Storage Isolation
+- When running in incognito window: isolate GM_setValue storage per-window instance
+- Do NOT persist incognito storage to persistent IndexedDB; use `chrome.storage.session` only (cleared on window close)
+- UI: show "Incognito mode" badge in dashboard when opened in incognito context
+
+**Exit criteria:** GitHub Gist sync connects with PAT and syncs metadata; S3 presigned-URL flow works end-to-end; WebDAV detects Nextcloud; password-protected backup encrypts/decrypts with PBKDF2; referrer-stripping toggle appears in Settings; incognito storage uses chrome.storage.session; no data persists after incognito window closes.
+
+---
+
+## Phase 22 — Community Standards & Long-Tail Features
+
+**Goal:** Implement emerging community standards and address high-value edge cases.
+
+### 22.1 GREASE Metadata Spec Alignment
+- GREASE (Greaselike Extension Assembly Standard) is being standardized by the userscript community
+- Ensure ScriptVault's @metadata header parsing aligns with GREASE; add missing directives if spec changes
+- Current scopes: @namespace, @name, @version, @description, @author, @license, @homepageURL, @documentationURL, @updateURL, @downloadURL, @support URL, @icon, @iconURL, @defaultIcon, @run-at, @include, @exclude, @match, @require, @resource, @grant, @noframes, @inject-into, @connect
+- Add future GREASE additions as Phase 22 sub-versions [source 110]
+
+### 22.2 URLPattern API for @match Rewrite
+- Chrome 95+: `new URLPattern(pattern)` provides a standard way to parse URL patterns
+- If Greasemonkey @match syntax aligns with URLPattern, rewrite Phase 4's URL matcher to use URLPattern API
+- Fallback: keep custom regex engine for non-URLPattern platforms (Firefox, older Chrome)
+- Benefit: align with web standards; potential to share test cases with other browsers [source 111]
+
+### 22.3 `@require-local` Directive (Script Dependencies)
+- Allow `@require-local id:scriptId` to reference another installed script by ID as a dependency
+- Extension will fetch the dependency script code at injection time and prepend it before the main script
+- Enables script authors to build modular script libraries without external @require URLs
+- Version mismatch warning: if required script is disabled or missing, show warning in dashboard [source 112]
+
+### 22.4 `@sandbox` Content Security Policy Bypass Detection
+- When a script tries to use `@sandbox` (ScriptCat extension), ScriptVault cannot honor it (no equivalent CSP bypass in Chrome MV3)
+- Add a warning in the dashboard: "Script requested sandbox mode which isn't available; some content injection patterns may fail"
+- Document limitation in README [source 113]
+
+### 22.5 Import Maps Support for ESM Scripts
+- Chrome 89+: pages can define import maps via `<script type="importmap">`
+- If an injected script is compiled to ESM (Phase 15.6) and the page has import maps, the script can leverage them
+- Behavior: do NOT override page import maps; inject into the page's module namespace
+- Document best practices: when is it safe to use page import maps vs bundling everything [source 114]
+
+### 22.6 File System Access API as Optional GM_* Bridge
+- `showOpenFilePicker()` / `showSaveFilePicker()` require user gesture and work from content scripts
+- Add optional `GM_openFile()` / `GM_saveFile()` APIs that wrap File System Access (Chrome 86+)
+- Gate behind `@grant GM_openFile` + requires user gesture check before calling
+- Use case: scripts that need to read/write local files (e.g., config persistence, local data export) [source 115]
+
+### 22.7 Broken Script Detection & Proactive Maintenance
+- Phase 18.9 (broken script detector) flags scripts idle 30+ days with errors
+- Add "Maintenance Mode": dashboard suggests scripts to migrate/update, shows deprecation warnings from script authors
+- Check `@supportURL` for issues/discussions about script maintenance status
+
+### 22.8 Security Disclosure Support for Script Authors
+- If a script is flagged for security issues (Phase 5/17 audit), add a UI element: "Report security issue"
+- Guide users to email script author via @supportURL or @author email
+- Optionally: integrate with GreasyFork security report mechanism (if available)
+
+**Exit criteria:** GREASE metadata directives validated; URLPattern API tested on sample @match patterns; `@require-local` dependency injection works; @sandbox detection shows warning; ESM script execution works with page import maps; File System Access API gate behind @grant; broken script detection shows maintenance suggestions; security report flow documented.
+
+---
+
 ## Phase Summary & Dependencies
 
 ```
@@ -1317,6 +1494,11 @@ Phase 15 ─── Editor & Dev UX (15.2 auto-grant uses existing Acorn; 15.3+15
 Phase 16 ─── Advanced XHR (builds on Phase 11.5 XHR; 16.3 streaming needs long-lived port; rest independent)
 Phase 17 ─── Security Round 2 (17.1 needs Phase 2 session storage; 17.7 GM_addStyle needs Phase 11; rest independent)
 Phase 18 ─── Performance (18.1 needs Phase 1 TS migration; 18.2 needs Phase 2; rest independent)
+
+Phase 19 ─── Distribution & CWS Compliance (fully independent; builds on prior phases but can run in parallel as long-tail work)
+Phase 20 ─── Observability & Debugging (20.1-20.5 build on prior phases' logging; 20.2 needs Phase 15.6; mostly independent)
+Phase 21 ─── Extended Sync Backends (21.1-21.2 independent; 21.3 builds on Phase 8; 21.4-21.6 independent)
+Phase 22 ─── Community Standards (22.1-22.8 independent; 22.4 references Phase 5/17 security; purely spec/standard alignment)
 ```
 
 ### Suggested Execution Order
@@ -1336,6 +1518,14 @@ Phase 18 ─── Performance (18.1 needs Phase 1 TS migration; 18.2 needs Phas
 14. **Phase 12** — UX Polish (can run alongside phases 7–10; 12.13 after Phase 2)
 15. **Phase 13** — Platform Modernization (13.9–13.11 can start now; 13.7 after Phase 8)
 16. **Phase 14** — Accessibility & i18n (can start anytime; fully independent)
+17. **Phase 15** — Editor & Dev UX (15.1–15.2 can start after Phase 13.4; 15.3 after Phase 2; 15.6 independent of other phases)
+18. **Phase 16** — Advanced XHR (can run alongside Phase 11; 16.3 streaming after Phase 11.5)
+19. **Phase 17** — Security Round 2 (17.1 after Phase 2; 17.3 after Phase 6 update system; rest independent)
+20. **Phase 18** — Performance (18.1 after Phase 1 TS migration; 18.2 after Phase 2; 18.3–18.10 can start anytime)
+21. **Phase 19** — Distribution & CWS Compliance (can run in parallel with Phases 13–18; long-tail ops work)
+22. **Phase 20** — Observability & Debugging (20.2 after Phase 15.6; rest can run alongside Phases 18–19)
+23. **Phase 21** — Extended Sync (21.3 after Phase 8; rest can run alongside Phases 18–20)
+24. **Phase 22** — Community Standards (can run in final phase, end-to-end standard alignment)
 17. **Phase 15** — Editor & Dev UX (15.1–15.2 can start after Phase 13.4; 15.3 after Phase 2; 15.6 independent of other phases)
 18. **Phase 16** — Advanced XHR (can run alongside Phase 11; 16.3 streaming after Phase 11.5)
 19. **Phase 17** — Security Round 2 (17.1 after Phase 2; 17.3 after Phase 6 update system; rest independent)
@@ -1364,6 +1554,10 @@ Phase 18 ─── Performance (18.1 needs Phase 1 TS migration; 18.2 needs Phas
 | 16    | v4.6.0  | GM_fetch, AbortController, streaming XHR, CHIPS, OpenUserJS |
 | 17    | v4.7.0  | Security Round 2: integrity hash, audit log, update consent |
 | 18    | v4.8.0  | Performance: module split, OPFS, scheduler, Sanitizer API |
+| 19    | v4.9.0  | Multi-store distribution: Edge, CWS compliance, TM/VM compat |
+| 20    | v5.0.0  | Observability milestone: per-script execution tracing, errors, network log |
+| 21    | v5.1.0  | Extended sync: GitHub Gist, S3, client-side encryption, privacy hardening |
+| 22    | v5.2.0  | Community standards: GREASE, URLPattern, @require-local, ESM import maps |
 
 ## Open-Source Research (Round 2)
 
@@ -1593,6 +1787,39 @@ _Added after second agent-based sweep (May 2026). Sources numbered 47–96 to ex
 95. https://hn.algolia.com/api/v1/search?query=tampermonkey&tags=story&numericFilters=created_at_i>1704067200 — HN 2025 stories: AI-generated userscripts (ClickRemix, Tweeks) as competitive signal
 96. https://github.com/openstyles/stylus/issues/2069 — Stylus cloud sync issue (Apr 2026): closest community conversation to version history
 
+## External Research (Round 6)
+
+_Added after agent-based research pass on distribution, observability, and sync backends (May 2026). Sources numbered 97–135 to extend Round 5's index._
+
+### Source Index
+
+**Multi-Store Distribution & CWS Compliance**
+97. https://docs.microsoft.com/en-us/microsoft-edge/extensions-chromium/ — Microsoft Edge Add-ons store requirements for extensions (MV3 support confirmed)
+98. https://developer.chrome.com/docs/extensions/how-to/manage/stay_secure_update_safely — Chrome CRX update server: autoupdate.xml format and self-hosted setup
+99. https://github.com/Tampermonkey/tampermonkey/issues/1500 — TM backup JSON structure format (uuid, config, script, meta fields)
+100. https://support.google.com/chrome/a/answer/188453 — Chrome Web Store policy: remote code execution exception for extension APIs (userscripts manager exemption)
+
+**Script Execution Observability & Debugging**
+101. https://developer.mozilla.org/en-US/docs/Web/API/Performance/mark — Performance Mark API: per-script execution timing instrumentation
+102. https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/SourceMap — Source map support in DevTools: //# sourceMappingURL inline comments
+103. https://developer.chrome.com/docs/extensions/service-workers/service-workers/ — Chrome extension service worker console behavior: message routing to DevTools
+104. https://developer.mozilla.org/en-US/docs/Web/API/GlobalEventHandlers/onerror — window.onerror vs unhandledrejection event classification
+105. https://developer.chrome.com/docs/extensions/develop/concepts/messaging-native/ — Native messaging for extensions (for network log relay pattern reference)
+
+**Cloud Sync Backends**
+106. https://docs.github.com/en/rest/gists/gists — GitHub Gist API: create/update/list operations with personal access token (stable API, v3)
+107. https://docs.aws.amazon.com/AmazonS3/latest/userguide/PresignedUrlUploadObject.html — AWS S3 presigned URLs: client-side uploads without AWS SDK
+108. https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto — Web Crypto API: AES-256-GCM encryption and PBKDF2 key derivation (Chrome 34+)
+109. https://www.tampermonkey.net/documentation.php#api_GM_xmlhttpRequest — TM GM_xmlhttpRequest header options: `Referer` header control
+110. https://www.greasyfork.org/en/scripts/by-site — GreasyFork homepage: community script ecosystem overview (for standards research)
+
+**Community Standards & Specs**
+111. https://developer.mozilla.org/en-US/docs/Web/API/URLPattern — URLPattern API (Chrome 95+): standard URL matching for @match parsing
+112. https://github.com/violentmonkey/violentmonkey/issues — VM GitHub: @require-local pattern research from community proposals
+113. https://github.com/scriptscat/scriptcat — ScriptCat GitHub: @sandbox directive documentation (if available)
+114. https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap — Import Maps (Chrome 89+): module resolution in ESM scripts
+115. https://developer.mozilla.org/en-US/docs/Web/API/Window/showSaveFilePicker — File System Access API: user-gesture-gated file picker (Chrome 86+)
+
 ### Updated Chrome Platform API Timeline (Chrome 135–150)
 
 | Version | API Change | ScriptVault Impact |
@@ -1708,6 +1935,36 @@ This appendix records ALL features considered for Phases 11–18, their final ti
 | navigator.storage.persist() on IDB open | Now | 18.8 | Prevents storage eviction under pressure; only Greasemonkey does this; 1-line fix |
 | Broken script detector | Next | 18.9 | 30+ day idle with errors warning; proactive maintenance UX; no competitor has it |
 | @require-nocache directive | Next | 18.10 | Developer QoL; TM #723 open since 2019; zero implementation risk |
+
+### Accepted — Now/Next (Phases 19–22)
+
+| Item | Tier | Phase | Reasoning |
+|------|------|-------|-----------|
+| Edge Add-ons store listing | Now | 19.1 | MV3 compatible; no code changes; extend store coverage |
+| Self-hosted CRX update server | Next | 19.3 | Optional feature for privacy-conscious users; non-standard distribution |
+| TM/VM ZIP import round-trip | Now | 19.4 | High interoperability value; backup format compatibility |
+| Developer tooling guide | Now | 19.5 | Documentation + curation; no new code; establish best practices |
+| CWS policy compliance memo | Now | 19.6 | Anticipate audits; document policy exception for remote code execution |
+| Per-script execution timing | Now | 20.1 | Low-effort performance observability; IndexedDB schema extension |
+| Source map support for errors | Next | 20.2 | Requires Phase 15.6; stack traces point to source files, not injected code |
+| Per-script console interception | Now | 20.3 | Collects logs locally; dashboard console tab for debugging |
+| Script error categorization | Now | 20.4 | Distinguish syntax/runtime/rejection/timeout errors; better diagnostics |
+| Network request tracing | Now | 20.5 | Log method/URL/status/latency per-script; no request bodies (privacy) |
+| Permission denial logging | Now | 20.6 | Log attempts to use ungrantable APIs; suggest @grant additions |
+| GitHub Gist sync | Now | 21.1 | Second cloud backend; enables revision history; Gist API stable |
+| S3-compatible sync (R2/B2) | Next | 21.2 | For large backups/bodies; presigned URL approach avoids credential storage |
+| Nextcloud detection + CalDAV | Next | 21.3 | Extends Phase 8 WebDAV; auto-discover Nextcloud + offer native API |
+| Client-side encryption for backup | Now | 21.4 | AES-256-GCM + PBKDF2; cloud stores opaque blobs; opt-in UI toggle |
+| Referrer stripping in GM_xhr | Now | 21.5 | Optional privacy toggle; logs stripped referrers; complements @connect |
+| Incognito storage isolation | Now | 21.6 | Use chrome.storage.session for incognito; no persistence on close |
+| GREASE spec alignment | Now | 22.1 | Active community standard; track as it evolves; future-proof directives |
+| URLPattern API migration | Next | 22.2 | Chrome 95+ native API; if @match syntax aligns, leapfrog custom regex |
+| @require-local dependencies | Now | 22.3 | Script authors build modular libraries; enables community patterns |
+| @sandbox detection warning | Now | 22.4 | Alert when scripts request unsupported sandbox mode (ScriptCat pattern) |
+| Import maps for ESM scripts | Next | 22.5 | Pages with import maps; ESM-compiled scripts can leverage them |
+| GM_openFile / GM_saveFile APIs | Next | 22.6 | File System Access API bridge; behind @grant gate + user gesture |
+| Script maintenance mode | Now | 22.7 | Dashboard suggestions for deprecated/stale scripts |
+| Security disclosure support | Now | 22.8 | Route security reports to script authors via @supportURL |
 
 ### Rejected — With Reasoning
 
