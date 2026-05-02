@@ -173,7 +173,27 @@ export function parseUserscript(code: string): ParseResult {
     } else if (ARRAY_KEYS.has(key)) {
       const arrayKey: ArrayMetaKey = (key === 'exclude-match' ? 'excludeMatch' : key) as ArrayMetaKey;
       if (value) {
-        meta[arrayKey].push(value);
+        // Phase 36.6 — comma-separated convenience syntax for match/include
+        // patterns (VM #2403). Authors who target many sibling sites can write
+        // `// @match a.com,b.com,c.*` instead of three separate directives. We
+        // only split for URL-pattern keys; commas are not valid in match
+        // patterns per Chrome's match syntax. `tag` keeps the raw value so
+        // multi-word tags like `// @tag my util` round-trip intact (matches
+        // Violentmonkey v2.35.2 semantics).
+        const splittable: boolean =
+          arrayKey === 'match' ||
+          arrayKey === 'include' ||
+          arrayKey === 'exclude' ||
+          arrayKey === 'excludeMatch' ||
+          arrayKey === 'connect';
+        if (splittable && value.includes(',')) {
+          for (const part of value.split(',')) {
+            const trimmed: string = part.trim();
+            if (trimmed) meta[arrayKey].push(trimmed);
+          }
+        } else {
+          meta[arrayKey].push(value);
+        }
       }
     } else {
       switch (key) {

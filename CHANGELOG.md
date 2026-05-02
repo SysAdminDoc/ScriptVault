@@ -2,6 +2,13 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.9.0] — Round 10 parser & template wins (Phases 36.4, 36.6, 36.11)
+
+- Added: `@tag` round-trip preservation. User-assigned tags now survive script re-install and update — `getMetaArray('tag')` unions source-declared and existing tags (dedupe, first-seen order). VM v2.35.2 parity. Phase 36.4.
+- Added: comma-separated convenience syntax for URL pattern arrays. `// @match a.com,b.com,c.com` now expands to three patterns at install time. Same desugaring applies to `@include`, `@exclude`, `@exclude-match`, `@connect`. `@tag` is intentionally left raw so multi-word values like `tools,utility` round-trip intact. Mirrored in `src/background/parser.ts`, `background.core.js`, and `tests/parser.test.js`. VM #2403. Phase 36.6.
+- Added: `{{icon}}` template token. The blank-script template now ships with `// @icon {{icon}}` and resolves the active tab's `favIconUrl` at create-time. `{{name}}`, `{{match}}`, and `{{namespace}}` already resolved; this completes the standard set. Unresolvable directive lines are stripped to keep generated headers clean. Phase 36.11.
+- Tests: 5 new regressions in `tests/parser.test.js` covering comma-split for `@match`/`@exclude-match`, single-pattern preservation, multi-word `@tag` retention, and the deliberate non-split of comma-bearing tag values. 601/601 green.
+
 ## [v3.8.0] — Install from Local File + Drag-and-Drop (Phase 12.9)
 
 - Added: file-picker install in the dashboard Import section. Pick a `.user.js` (or `.js`) file from disk and ScriptVault parses, validates, and installs it the same way URL installs do — same 5MB ceiling, same name+namespace dedupe, same `==UserScript==` requirement.
