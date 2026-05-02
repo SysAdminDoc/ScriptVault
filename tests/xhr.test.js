@@ -108,3 +108,76 @@ describe('XhrManager', () => {
     expect(XhrManager.getActiveCount()).toBe(2);
   });
 });
+
+describe('XhrManager.buildFetchOptions', () => {
+  it('upper-cases the method and defaults to GET', () => {
+    expect(XhrManager.buildFetchOptions({}).method).toBe('GET');
+    expect(XhrManager.buildFetchOptions({ method: 'post' }).method).toBe('POST');
+  });
+
+  it('clones supplied headers (no aliasing the caller object)', () => {
+    const headers = { Authorization: 'Bearer x' };
+    const opts = XhrManager.buildFetchOptions({ headers });
+    expect(opts.headers).toEqual(headers);
+    opts.headers['X-Added'] = 'after';
+    // Caller's original headers must not be mutated.
+    expect(headers['X-Added']).toBeUndefined();
+  });
+
+  it('noCache:true sets Cache-Control + Pragma when caller did not', () => {
+    const opts = XhrManager.buildFetchOptions({ noCache: true });
+    expect(opts.headers['Cache-Control']).toBe('no-cache');
+    expect(opts.headers['Pragma']).toBe('no-cache');
+  });
+
+  it('noCache:true respects caller-supplied Cache-Control (case-insensitive)', () => {
+    const opts = XhrManager.buildFetchOptions({
+      noCache: true,
+      headers: { 'cache-control': 'no-store' }
+    });
+    expect(opts.headers['cache-control']).toBe('no-store');
+    // Pragma still added because caller did not supply it
+    expect(opts.headers['Pragma']).toBe('no-cache');
+    // Don't add a second Cache-Control header in different casing
+    const cacheKeys = Object.keys(opts.headers).filter(
+      (k) => k.toLowerCase() === 'cache-control'
+    );
+    expect(cacheKeys).toHaveLength(1);
+  });
+
+  it('noCache:true respects caller-supplied Pragma (case-insensitive)', () => {
+    const opts = XhrManager.buildFetchOptions({
+      noCache: true,
+      headers: { PRAGMA: 'public' }
+    });
+    expect(opts.headers['PRAGMA']).toBe('public');
+    const pragmaKeys = Object.keys(opts.headers).filter(
+      (k) => k.toLowerCase() === 'pragma'
+    );
+    expect(pragmaKeys).toHaveLength(1);
+  });
+
+  it('noCache:false (or absent) leaves cache headers alone', () => {
+    expect(XhrManager.buildFetchOptions({}).headers).toEqual({});
+    expect(XhrManager.buildFetchOptions({ noCache: false }).headers).toEqual({});
+  });
+
+  it('forwards redirect: "follow"|"error"|"manual" verbatim', () => {
+    expect(XhrManager.buildFetchOptions({ redirect: 'follow' }).redirect).toBe('follow');
+    expect(XhrManager.buildFetchOptions({ redirect: 'error' }).redirect).toBe('error');
+    expect(XhrManager.buildFetchOptions({ redirect: 'manual' }).redirect).toBe('manual');
+  });
+
+  it('drops invalid redirect values silently', () => {
+    expect(XhrManager.buildFetchOptions({ redirect: true }).redirect).toBeUndefined();
+    expect(XhrManager.buildFetchOptions({ redirect: 'forward' }).redirect).toBeUndefined();
+    expect(XhrManager.buildFetchOptions({ redirect: '' }).redirect).toBeUndefined();
+  });
+
+  it('omits credentials when anonymous:true', () => {
+    expect(XhrManager.buildFetchOptions({ anonymous: true }).credentials).toBe('omit');
+    expect(XhrManager.buildFetchOptions({}).credentials).toBe('include');
+    // Truthy non-true value should still default to include (strict equality).
+    expect(XhrManager.buildFetchOptions({ anonymous: 1 }).credentials).toBe('include');
+  });
+});

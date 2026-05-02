@@ -569,6 +569,8 @@ Violentmonkey exposes substantially more metadata in `GM_info` than ScriptVault 
 
 Implementation: expose these from the background's `buildGmInfo()` function; no new permissions required.
 
+**Status (v3.2.0, 2026-05-02):** `GM_info.isIncognito`, `GM_info.platform.{os,arch,browserName,browserVersion,fullVersionList,mobile}`, `GM_info.userAgent`, and `GM_info.userAgentData` (cloned brands/platform/mobile) all populated. browserName/browserVersion now prefer `navigator.userAgentData.brands` with the legacy UA-string regex as fallback. `GM_info.script.options` deferred — needs the merge-mode UI from 11.3 to have anything meaningful to expose.
+
 ### 11.2 `@unwrap` Metadata Tag
 
 Violentmonkey supports `// @unwrap` to disable the auto-injected IIFE wrapper. This allows:
@@ -610,6 +612,8 @@ Additional completeness items for `GM_xmlhttpRequest`:
 
 - **`responseType: 'stream'`** — ScriptCat exposes a streaming response type for chunked/SSE responses. Implementation via `fetch()` with a `ReadableStream` callback forwarded through the SW message channel. Source: [ScriptCat API docs](https://docs.scriptcat.org/docs/dev/api/).
 - **`nocache` alias** — Tampermonkey uses `nocache` (not `noCache`); accept both casings in the parser.
+
+**Status (v3.2.0, 2026-05-02):** `noCache` (with `nocache` alias), `redirect: 'follow'|'error'|'manual'`, and `responseType: 'stream'` all live. `XhrManager.buildFetchOptions(data)` (in `modules/xhr.js` + TS mirror) centralises the option translation and is unit-tested (9 cases — case-insensitive Cache-Control/Pragma override behavior, valid/invalid redirect values, anonymous credentials, default method).
 
 ### 11.6 `GM_cookie` API
 
