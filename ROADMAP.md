@@ -1897,6 +1897,264 @@ The extension's `_locales/` directory has en-US strings but coverage is incomple
 
 ---
 
+## Phase 33 — Cross-Browser Support & Build Pipeline
+
+**Goal:** Ship ScriptVault to Firefox, Edge, Brave/Vivaldi/Opera, Orion, and (long-tail) Safari without forking the codebase. Establish a build pipeline that produces per-browser artifacts from a single source.
+
+### 33.1 Cross-Browser Build Pipeline (WXT)
+- Migrate build from current Vite/esbuild to **WXT** (https://wxt.dev) — auto-handles MV2/MV3 conversion, browser-specific manifests, hot-reload across vendors [source 180]
+- Define build targets: `chrome`, `firefox-mv3`, `edge`, `safari` (via `xcrun`)
+- Per-browser manifest function: conditional `background` (event page vs service worker), permissions, `web_accessible_resources` UUID handling
+- CI matrix: build all 4 targets on every PR; smoke-test each in respective browser
+- Alternative considered: Plasmo Framework — WXT chosen for smaller dependency surface and explicit MV3-first stance [source 181]
+- **Effort:** 2–3 weeks (prerequisite to all other 33.x subtasks)
+
+### 33.2 Firefox MV3 Port
+- Add `browser_specific_settings.gecko.id` and `gecko.strict_min_version` to manifest (Firefox 128+) [source 182]
+- Bundle `webextension-polyfill` for `browser.*` Promise-based API parity with `chrome.*` [source 183]
+- Switch background to **event page** format under Firefox build target (Firefox doesn't fully support service workers in MV3 yet — uses event pages with persistent: false equivalent)
+- Handle Firefox's `userScripts` API as `optional_permissions` — first-run flow requests user grant [source 184]
+- Replace any code that assumes `chrome-extension://` URL scheme — Firefox uses `moz-extension://` with **per-install random UUIDs** for `web_accessible_resources` (cannot hardcode) [source 185]
+- Validate Xray Vision boundary: Firefox content scripts see "Xrayed" wrappers around page objects — code touching `unsafeWindow` / page globals must use `wrappedJSObject`
+- Use Firefox's **`declarativeNetRequest`** carefully: Firefox's DNR has lower rule limits than Chrome and different `urlFilter` semantics — feature-detect [source 186]
+- AMO submission: source code review required for minified/bundled extensions; provide unminified source archive
+- **Effort:** 3–5 weeks
+
+### 33.3 Firefox for Android Support
+- Firefox Android is the **only mobile browser** that supports a curated set of MV3 extensions on a stable channel [source 187]
+- Add `browser_specific_settings.gecko_android: {}` to opt into the Android extension catalog
+- Audit popup layout: no sidebar API, no `commands` keyboard shortcuts, restricted `menus` API on Android
+- Test with `web-ext lint` for Android API surface
+- Submit to Mozilla's recommended-for-Android list (manual review process)
+- **Effort:** 1–2 weeks (after 33.2)
+
+### 33.4 Edge Add-ons Store Submission
+- Build is Chrome-compatible — submit same `.zip` as CWS to Microsoft Partner Center [source 188]
+- Differences: Edge's review is faster (~3 days vs CWS 7+ days); allows external installation links
+- Add Edge install badge to README
+- Track Edge-specific telemetry via `chrome.management.getSelf().installType`
+- **Effort:** 1–3 days
+
+### 33.5 Brave / Vivaldi / Opera / Arc Compat Sweep
+- All Chromium-based; should "just work" with CWS build, but each has quirks:
+  - **Brave Shields** runs before extensions; can interfere with `declarativeNetRequest` rules — document conflict resolution [source 189]
+  - **Vivaldi**: command-chain API allows assigning ScriptVault actions to power keys; opt-in integration
+  - **Opera**: must be installed from Opera addons store (separate review) or sideloaded
+  - **Arc**: sidebar UI; ensure popup renders correctly in narrow chrome
+- Compatibility matrix in README; smoke-test each on every release
+- **Effort:** 1 week
+
+### 33.6 Orion Browser (WebKit) Validation
+- Orion (Kagi) supports both Chrome AND Firefox extensions via shim layer [source 190]
+- Load Firefox build in Orion → verify `browser.userScripts` shim completeness
+- Document install path in README
+- **Effort:** 1–3 days
+
+### 33.7 Safari Web Extension (Long-Tail)
+- **Highest-effort target.** Requires Xcode, Apple Developer account ($99/yr), Swift companion app
+- Use `xcrun safari-web-extension-converter` to bootstrap Xcode project [source 191]
+- Reference implementation: **quoid/userscripts** (https://github.com/quoid/userscripts) — Swift wrapper + filesystem access via native messaging [source 192]
+- iOS variant: even more constrained; iCloud sync via CloudKit (overlap with Phase 29.3)
+- App Store review cycle: 1–4 weeks per submission
+- **Defer until Phases 33.1–33.6 ship.** Decision gate: do we have 1k+ install community demand for Safari? If yes, fund 8–16 weeks of Swift work; if no, document workaround (use quoid/userscripts to import ScriptVault scripts)
+- **Effort:** 8–16 weeks (research + native dev + App Store)
+
+**Exit criteria:** WXT build pipeline produces 4 artifacts (chrome.zip, firefox.zip, edge.zip, safari.zip) on every release; Firefox extension published to AMO with active user count; Edge listing live in Add-ons store; Brave/Vivaldi/Opera/Arc compat matrix in README confirms green status; Orion install path documented; Safari decision gate documented (build or defer with workaround link).
+
+---
+
+## Phase 34 — Deep Accessibility & Author Education
+
+**Goal:** Move beyond Phase 14's WCAG 2.2 structural baseline. Address Monaco screen reader gaps, voice control, forced-colors mode, cognitive accessibility, and onboarding pathways for new script authors. ScriptVault should be the most accessible userscript manager available.
+
+### 34.1 Monaco Screen Reader Compatibility
+- Set `accessibilitySupport: 'on'` explicitly in Monaco options (currently auto-detect, unreliable in iframe sandbox) [source 193]
+- Add `ariaLabel: 'Userscript editor — press Alt+F1 for help'` to Monaco instance
+- Implement Monaco's accessibility help dialog (Alt+F1) — currently disabled in default sandbox config
+- Add live region announcement when Monaco loads: "Editor ready. Screen reader users press Alt+F1 for shortcuts."
+- Provide "Plain textarea fallback" toggle in Settings — for users where Monaco ARIA tree breaks (NVDA in some Chrome versions, or screen readers that can't enter sandboxed iframes) [source 194]
+- Document NVDA Browse Mode → Focus Mode transition (NVDA+Space) in user docs [source 195]
+- **Effort:** 3–4 hours
+
+### 34.2 Voice Control & Cursorless Compat
+- Audit ScriptVault UI for **Talon Voice** users: every interactive element must have a unique `aria-label` or visible text [source 196]
+- Add `data-talon-action="<verb>"` hints on common buttons (toggle, edit, delete) — Talon community wins
+- **Cursorless** (VSCode + Talon voice coding) does NOT work with standalone Monaco — document this limitation in user docs and link to alternatives [source 197]
+- For voice-first users: provide "Open in VSCode" path (Phase 12 feature) — they edit in VSCode with Cursorless, ScriptVault syncs back
+- **Effort:** 2–3 hours
+
+### 34.3 Keyboard Patterns (WAI-ARIA APG)
+- Audit dashboard for full keyboard access per **WAI-ARIA Authoring Practices Guide** patterns [source 198]:
+  - **Tablist**: arrow-key navigation between tabs (currently Tab-only)
+  - **Grid** (script table): arrow keys navigate rows/cells, Home/End jump
+  - **Combobox** (search): `role="combobox"` + `aria-expanded` for autocomplete dropdown
+  - **Dialog**: focus trap + Escape handler (focus trap exists; Escape handler missing per Phase 14 audit)
+- Add visible focus rings using **CSS `:focus-visible`** — not just `:focus` (avoid mouse-click focus rings)
+- Skip-to-main-content link at top of every page (currently missing)
+- **Effort:** 6–10 hours
+
+### 34.4 Forced-Colors Mode (Windows High Contrast)
+- Add `@media (forced-colors: active)` block to all CSS — replace custom colors with system colors (`Canvas`, `CanvasText`, `LinkText`, `ButtonText`, `ButtonFace`, `Highlight`) [source 199]
+- Replace `box-shadow` focus indicators with `outline: 2px solid CanvasText` (box-shadow ignored in forced-colors)
+- Monaco theme: Monaco has built-in `hc-black` and `hc-light` themes — switch via `window.matchMedia('(forced-colors: active)')` listener [source 200]
+- Toggle and badge state: use `border` and `outline` for state indication, not background color (system overrides bg)
+- **Effort:** 3–4 hours
+
+### 34.5 Reduced Motion (CSS-First)
+- Replace JS-based reduced-motion detection (Phase 14) with native `@media (prefers-reduced-motion: reduce)` CSS block [source 201]
+- Disable: shimmer animations, hover lifts, modal slide-in, toast slide-up, scroll animations
+- Monaco: respect via `cursorBlinking: 'solid'` and `smoothScrolling: false` when reduced motion is set
+- Add Settings toggle "Override system motion preference" for users who want full motion despite OS setting
+- **Effort:** 1–2 hours
+
+### 34.6 Cognitive Accessibility & Plain Language
+- Audit all error messages for technical jargon — rewrite at Flesch Reading Ease 60+ (8th grade) [source 202]
+- Examples:
+  - "ENOENT: no such file or directory" → "Couldn't find the file. It may have been moved or deleted."
+  - "Failed to parse @match directive" → "ScriptVault couldn't understand the website pattern. Check the @match line for typos."
+- Empty states with helpful copy: "No scripts yet. [Create your first script] or [browse Greasy Fork]"
+- Consistent vocabulary: pick "userscript" OR "script" globally, not both
+- Confirmation dialogs use plain verbs: "Delete script?" not "Are you sure you want to remove this user script?"
+- **Effort:** 4–6 hours (one-pass audit) + ongoing
+
+### 34.7 Author Education & Documentation Site
+- Stand up dedicated docs site at **scriptvault.dev/docs** using **Astro Starlight** (smaller than Docusaurus, native dark mode, faster cold start) [source 203]
+- Pages:
+  - **Quick start** — install + first userscript in 5 minutes
+  - **Userscript basics** — link to Violentmonkey's "Creating a Userscript" + MDN Content Scripts (don't reinvent) [sources 204, 205]
+  - **GM API reference** — auto-generated from TS types
+  - **Recipe book** — common patterns (intercept fetch, modify DOM on dynamic SPA, persist settings)
+  - **Migration guides** — from TM, VM, Greasemonkey
+  - **Accessibility guide for script authors** — "Don't break the page's a11y; here's how to test your script with a screen reader"
+- Free **Algolia DocSearch** for OSS — typeahead search [source 206]
+- Crowdin/Weblate integration for community-translated docs (overlap with 34.10)
+- **Effort:** 8–12 hours initial + ongoing
+
+### 34.8 First-Run Onboarding (Anti-Bloat Compliant)
+- **NO interactive tutorial wizard** (anti-bloat). Instead: friendly empty-state copy + sample scripts.
+- On first launch with zero scripts:
+  - Empty-state card: "Welcome. Add scripts from a URL, paste code, or browse Greasy Fork."
+  - Three buttons: `[Add from URL]`, `[Write new]`, `[Browse Greasy Fork]`
+  - Inline "Hello World" template auto-loaded into the new-script editor
+- After first script added: show one-time toast "Tip: scripts run automatically on matching sites. Toggle them off any time from the dashboard."
+- No re-trigger; no "tour again" prompt
+- **Effort:** 3–5 hours
+
+### 34.9 Video Tutorial Channel
+- Create **scriptvault.dev YouTube channel** with 5-minute screencasts:
+  - "Install ScriptVault" (per-browser variants from Phase 33)
+  - "Write your first userscript"
+  - "Use GM_setValue / GM_getValue"
+  - "Migrate from Tampermonkey"
+  - "Sync across devices" (Phase 29 feature)
+- Captions via YouTube auto-caption + manual review (a11y requirement)
+- Embed videos in docs with `<iframe title="...">` per WCAG 2.1 SC 4.1.2
+- **Effort:** 2–3 hours per video + filming time
+
+### 34.10 Internationalization Deep Dive
+- Replace positional `{0}` substitution with **ICU MessageFormat** for plurals/gender [source 207] — current approach breaks Russian (3 plural forms), Arabic (6), Polish, etc.
+  - `messageformat-runtime` (~3 KB gzipped)
+- Add RTL support: `dir="rtl"` on `<html>` for Arabic/Hebrew locales; mirror icons (chevrons, back arrows); flip scrollbar position
+- Add 4 new locales: `ar`, `hi`, `ko`, `tr` (currently 8: de, en, es, fr, ja, pt, ru, zh)
+- **Crowdin** free OSS plan — community translation pipeline; auto-PR new translations [source 208]
+- Locale-aware `Intl.DateTimeFormat`, `Intl.NumberFormat`, `Intl.RelativeTimeFormat` (replace any hardcoded "5 minutes ago" strings)
+- CJK font selection: ensure system-ui falls back to Noto Sans CJK on Linux (where system-ui may not include CJK glyphs)
+- **Effort:** 6–10 hours
+
+### 34.11 Accessibility Testing Automation
+- Add **axe-core** to CI [source 209]:
+  - Vitest test: run axe against rendered dashboard, fail on any WCAG 2.2 AA violation
+  - `@axe-core/playwright` integrated with existing Puppeteer smoke test (`npm run smoke:dashboard`)
+- Add **Pa11y CI** as secondary engine — catches issues axe misses [source 210]
+- Lighthouse a11y score ≥ 90 enforced in CI
+- Manual screen reader checklist: `docs/testing/screen-reader-checklist.md` — 8-step NVDA + VoiceOver protocol; run before every release
+- **Effort:** 4–6 hours
+
+**Exit criteria:** Monaco accessibility help dialog works (Alt+F1); plain-textarea fallback ships; Talon Voice users confirm dashboard is fully voice-controllable; WAI-ARIA APG patterns implemented for tablist/grid/combobox/dialog; forced-colors mode renders correctly on Windows High Contrast (manual screenshot test); `prefers-reduced-motion` is CSS-driven, no JS; all error messages pass Flesch 60+; docs site at scriptvault.dev/docs live with 5+ guides; first-run empty state ships (no wizard); 5+ YouTube tutorials published with captions; 12 locales supported with ICU plurals + RTL; axe-core + Pa11y in CI gating PRs; Lighthouse a11y ≥ 90 on every release.
+
+---
+
+## Phase 35 — Federation, Decentralization & Resilience
+
+**Goal:** Make ScriptVault scripts resilient to censorship, takedowns, and single-point-of-failure registries — without adding heavyweight P2P dependencies. Cherry-pick zero/near-zero-dependency wins; reject SDK-heavy options.
+
+**Anti-bloat philosophy:** This phase is **opportunistic**, not aspirational. Each subtask had to clear a "≤30 KB dependency, ≥10x user value" bar to be accepted. The full-fat federation stack (Matrix sync, Solid pods, Hypercore, Helia in-browser IPFS) is **rejected** with documented reasoning.
+
+### 35.1 IPFS CID Integrity & Gateway Fallback
+- When a script declares `@ipfs-cid bafy...` in its header, ScriptVault stores the CID alongside the script [source 211]
+- On `@updateURL` 404 / DMCA takedown / DNS failure: fall back to public IPFS gateways: `ipfs.io`, `dweb.link`, `cf-ipfs.com`, `gateway.pinata.cloud`
+- Verify content integrity: hash fetched bytes, compare to declared CID — **rejects tampered content automatically** (zero-trust)
+- Authors opt-in to "Pin my scripts to IPFS" — reuses **Pinata** (500 files / 1 GB free) or **Storacha** (5 GB free) [source 212]
+- Brave Browser native `ipfs://` handler: detect Brave via `navigator.brave?.isBrave()` and use direct ipfs:// URLs (no gateway needed) [source 213]
+- **Zero new dependencies** — pure HTTP fetch + WebCrypto SHA-256
+- **Effort:** 8–12 hours
+
+### 35.2 Nostr-Based Script Discovery (NIP-C0)
+- **NIP-C0** defines `kind:1337` events for code snippets [source 214]
+- Add Nostr relay queries to the "Discover" tab (Phase 24): `wss://relay.nostr.band` + `wss://relay.damus.io` filter `kind:1337 AND #l:javascript`
+- Display alongside GreasyFork/OpenUserJS results; clearly badge as "Nostr — uncensorable"
+- Use **`nostr-tools`** library (~30 KB gzipped) — smallest of all federation protocols evaluated
+- Authors can publish to Nostr via `nostr.com` web client or `damus` mobile app — ScriptVault doesn't need a publishing UI (defer; users opt-in)
+- Scripts include `@nostr-event-id <hex>` header for follow-up updates via NIP-94 file metadata
+- **Effort:** 12–16 hours
+
+### 35.3 Cryptographic Author Identity (did:key)
+- Every published script MAY include a `@author-did did:key:z6Mk...` header + detached Ed25519 signature [source 215]
+- ScriptVault verifies signature using native `crypto.subtle.verify()` — **zero new dependencies**
+- Benefits:
+  - **Author impersonation prevention**: when GreasyFork removes a script and a malicious actor uploads a "replacement" with the same name, signature mismatch flags it
+  - **Cross-registry identity**: same DID works on GreasyFork, Nostr, IPFS, OpenUserJS — author proves ownership without account-linking
+  - **DMCA-survivor**: script removed from one registry; user re-discovers it elsewhere; signature confirms it's genuinely the same author
+- Signature visible in script details: green checkmark "Verified author: did:key:z6Mk..." with copy-to-clipboard for cross-checking
+- **Defers** full Verifiable Credentials (300 KB JSON-LD library) — DIDs alone are sufficient for the threat model
+- **Effort:** 6–10 hours
+
+### 35.4 ActivityPub Passive Consumption (Forgejo)
+- When `@updateURL` hostname runs Forgejo (detected via `/.well-known/nodeinfo` returning `software.name === "forgejo"`), subscribe to the file's ActivityPub outbox for push-style update notifications [source 216]
+- Plain HTTP GET to `/api/v1/activitypub/repository-id/<id>/outbox` — no AP server needed in ScriptVault
+- Replaces polling for updates on Forgejo-hosted scripts: O(seconds) latency vs O(hours) for polling
+- Codeberg.org runs Forgejo and hosts a growing share of indie userscripts — direct beneficiary
+- Falls back to standard polling if outbox unavailable
+- **Zero new dependencies** — plain fetch
+- **Effort:** 4–6 hours
+
+### 35.5 Self-Hosted Registry Specification
+- Publish a public spec: `GET /.well-known/scriptvault-registry` returns JSON with registry metadata + script index [source 217]
+- ScriptVault Settings → "Federated Registries" lets users add registry URLs; discovery merges all registries into one search UI
+- Provide a reference implementation: single-binary Go server + SQLite, ~15 MB Docker image; one `docker run` command sets up a full registry
+- Use cases:
+  - Internal corporate userscripts (overlap with Phase 25.2)
+  - Indie communities (a single PI subreddit could run their own)
+  - Censorship resistance (someone runs a backup registry of removed Greasy Fork scripts)
+- **Spec is open**; anyone can implement it; ScriptVault provides reference but doesn't gatekeep
+- **Effort:** 16–24 hours (spec + reference impl + docs)
+
+### 35.6 Censorship-Resistant Update Resolution
+- When a script's primary `@updateURL` returns 404 or 403:
+  1. Try IPFS CID (35.1)
+  2. Try Nostr event ID (35.2)
+  3. Try archive.org / Wayback Machine snapshot
+  4. Surface "Script may have been removed. View [archive] | [Nostr] | [IPFS]"
+- User decides whether to keep the cached version or accept the archived/republished one
+- All three fallback sources verified against author signature (35.3) — **graceful degradation, no security relaxation**
+- **Effort:** 6–10 hours
+
+### 35.7 Rejected — With Documented Reasoning
+The following federation patterns were **investigated and rejected**:
+- **Matrix as sync transport**: 500 KB SDK; users prefer dedicated sync (Phase 21); link to Matrix room as community-only (overlap with Phase 31)
+- **Solid Pods**: 300 KB SDK; <0.1% userscript-author overlap with Solid community; effort/value mismatch
+- **DAT/Hypercore/Pear runtime**: requires Pear runtime install — userscript users won't install a separate runtime
+- **WebRTC mesh sync (y-webrtc)**: 605 KB Yjs already accepted in Phase 29.4; mesh adds NAT traversal complexity for marginal benefit over server-mediated sync
+- **WebTorrent**: 600 KB; userscripts are <100 KB — wrong scale for BitTorrent
+- **Helia (in-browser IPFS node)**: 200 KB+ DHT; gateway fallback (35.1) achieves 95% of value for 0% of weight
+- **Full Verifiable Credentials**: 300 KB JSON-LD; DIDs alone (35.3) are sufficient
+- **Radicle P2P git**: requires `rad` binary — userscript users won't install
+- **AT Protocol custom Lexicon**: maintaining a custom `xyz.scriptvault.userscript` lexicon adds versioning burden; defer until Bluesky's userscript community materializes (currently zero)
+
+**Exit criteria:** IPFS CID integrity check works on 5+ test scripts; Nostr discovery surfaces ≥10 scripts in the Discover tab from public relays; did:key signature verification ships and is documented; Forgejo AP outbox subscription works against Codeberg-hosted test repo; self-hosted registry spec published at scriptvault.dev/spec/registry-v1.md with reference Go binary; censorship-resistant update flow tested with intentional 404 + IPFS/Nostr/archive.org fallback.
+
+---
+
 ## Phase Summary & Dependencies
 
 ```
@@ -1972,7 +2230,10 @@ Phase 22 ─── Community Standards (22.1-22.8 independent; 22.4 references P
 31. **Phase 29** — Mobile PWA & Cross-Device Sync (29.1–29.3 independent; 29.4 needs Phase 23 sync; can run alongside Phases 30–32)
 32. **Phase 30** — Advanced Caching & Performance (30.1–30.6 independent; optimization pass; run alongside Phases 29–32)
 33. **Phase 31** — Community Platform & Governance (31.1–31.6 independent; long-tail engagement work)
-34. **Phase 32** — Emerging Standards & Next-Gen Architectures (32.1–32.6 research + future-proofing; final roadmap extension)
+34. **Phase 32** — Emerging Standards & Next-Gen Architectures (32.1–32.6 research + future-proofing)
+35. **Phase 33** — Cross-Browser Support (33.1 WXT pipeline first; 33.2 Firefox after; 33.4 Edge in parallel; 33.7 Safari deferred behind decision gate)
+36. **Phase 34** — Deep Accessibility & Author Education (34.1–34.6 incremental a11y improvements; 34.7 docs site can run anytime; 34.10 i18n after Phase 14)
+37. **Phase 35** — Federation & Decentralization (35.1 IPFS + 35.3 did:key are zero-dep; 35.2 Nostr after Phase 24; 35.5 registry spec after Phase 25.2)
 
 | Phase | Version | Milestone |
 |-------|---------|-----------|
@@ -2010,6 +2271,9 @@ Phase 22 ─── Community Standards (22.1-22.8 independent; 22.4 references P
 | 30    | v6.0.0  | Performance: HTTP caching, SWR, code-splitting, monorepo optimization milestone |
 | 31    | v6.1.0  | Community platform: Discourse forum, reputation system, governance + transparency |
 | 32    | v6.2.0  | Emerging standards: WASM components, abx-spec portability, import maps, LLM debugging |
+| 33    | v6.3.0  | Cross-browser: WXT pipeline, Firefox MV3, Edge store, Brave/Vivaldi/Opera/Arc, Orion, Safari (deferred) |
+| 34    | v6.4.0  | Deep a11y: Monaco screen reader, voice control, forced-colors, ICU plurals, RTL, docs site, axe CI |
+| 35    | v6.5.0  | Federation: IPFS CID fallback, Nostr discovery, did:key signing, ActivityPub, self-hosted registry spec |
 
 
 
@@ -2366,6 +2630,55 @@ _Added after agent-based research on mobile PWA, performance optimization, and c
 174. https://github.com/ollama/ollama — Ollama: free local LLM runner (~4–8GB VRAM); privacy-first
 175. https://llm.nvim — llm.nvim: example architecture for LSP + LLM integration
 
+## External Research (Round 9)
+
+_Added May 2026 after parallel agent research on cross-browser support, deep accessibility, and federation/decentralization. Sources 180–217._
+
+### Cross-Browser & Build Tooling (180–192)
+180. https://wxt.dev/guide/essentials/target-different-browsers.html — WXT cross-browser targeting (Chrome, Firefox, Edge, Safari)
+181. https://github.com/PlasmoHQ/plasmo — Plasmo Framework (alternative considered)
+182. https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/browser_specific_settings — `browser_specific_settings` for Firefox signing + Android opt-in
+183. https://github.com/mozilla/webextension-polyfill — Mozilla's `browser.*` Promise polyfill
+184. https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts — Firefox `userScripts` API (optional permission)
+185. https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Chrome_incompatibilities — Chrome vs Firefox API differences
+186. https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/declarativeNetRequest — Firefox DNR (lower rule limits)
+187. https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Developing_WebExtensions_for_Firefox_for_Android — Firefox for Android extension development
+188. https://learn.microsoft.com/en-us/microsoft-edge/extensions-chromium/publish/publish-extension — Edge Add-ons store submission
+189. https://brave.com/shields/ — Brave Shields interaction with extensions
+190. https://browser.kagi.com/ — Orion (WebKit Mac/iOS, supports Chrome + Firefox extensions)
+191. https://developer.apple.com/safari/extensions/ — Safari Web Extensions + Xcode converter
+192. https://github.com/quoid/userscripts — quoid/userscripts: Safari userscript manager reference
+
+### Accessibility & Education (193–210)
+193. https://github.com/microsoft/monaco-editor/wiki/Accessibility-Guide — Monaco accessibility configuration
+194. https://github.com/microsoft/monaco-editor/issues/4908 — Monaco screen reader iframe issue (open)
+195. https://www.nvaccess.org/files/nvda/documentation/userGuide.html — NVDA Browse Mode / Focus Mode
+196. https://talonvoice.com/ — Talon Voice control for developers
+197. https://www.cursorless.org/ — Cursorless: voice coding (VSCode-only, not Monaco)
+198. https://www.w3.org/WAI/ARIA/apg/patterns/ — WAI-ARIA Authoring Practices Guide patterns (tablist, grid, combobox, dialog)
+199. https://developer.mozilla.org/en-US/docs/Web/CSS/@media/forced-colors — `forced-colors` media query (Windows High Contrast)
+200. https://github.com/microsoft/monaco-editor/blob/main/docs/integrate-amd.md — Monaco hc-black / hc-light themes
+201. https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion — `prefers-reduced-motion` CSS-first approach
+202. https://www.w3.org/TR/coga-usable/ — W3C Cognitive Accessibility (plain language, consistent navigation)
+203. https://starlight.astro.build/ — Astro Starlight (recommended docs site framework)
+204. https://violentmonkey.github.io/guide/creating-a-userscript/ — Violentmonkey beginner guide (link, don't reinvent)
+205. https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Content_scripts — MDN Content Scripts (canonical reference)
+206. https://docsearch.algolia.com/ — Algolia DocSearch free tier for OSS
+207. https://formatjs.io/docs/intl-messageformat/ — ICU MessageFormat (plurals, gender, RTL)
+208. https://crowdin.com/page/open-source-project-setup-request — Crowdin free OSS plan
+209. https://github.com/dequelabs/axe-core — axe-core: WCAG rule engine for CI
+210. https://pa11y.org/ — Pa11y CI: secondary a11y test engine
+
+### Federation & Decentralization (211–217)
+211. https://docs.ipfs.tech/concepts/content-addressing/ — IPFS Content Identifiers (CIDs) + integrity
+212. https://web3.storage/ — Storacha (formerly web3.storage): IPFS pinning, 5 GB free
+213. https://brave.com/ipfs-support/ — Brave native IPFS resolver (`ipfs://` URLs)
+214. https://github.com/nostr-protocol/nips/blob/master/C0.md — Nostr NIP-C0: kind:1337 code snippets
+215. https://www.w3.org/TR/did-core/ — W3C DID Core specification (did:key for author signing)
+216. https://forgejo.org/docs/latest/user/activitypub/ — Forgejo ActivityPub federation (passive consumption)
+217. https://github.com/yjs/y-webrtc — y-webrtc (rejected: 605 KB; documented in 35.7)
+
+
 ### Updated Chrome Platform API Timeline (Chrome 135–150)
 
 | Version | API Change | ScriptVault Impact |
@@ -2580,6 +2893,49 @@ This appendix records ALL features considered for Phases 11–18, their final ti
 | MV3 parity lock-in documentation | Now | 32.4 | Quarterly "Feature Parity Chart" across TM/VM/ScriptCat; archive MV2 docs |
 | LLM-assisted debugging (ethical bounds) | Next | 32.5 | "Explain error" + "show patterns" only (no code generation); local Ollama or Claude Batch |
 | Wasmtime feasibility study | Later | 32.6 | Research WASI Preview 2+; evaluate as alternative runtime for long-running tasks |
+
+### Accepted — Now/Next (Phases 33–35)
+
+| Item | Tier | Phase | Reasoning |
+|------|------|-------|-----------|
+| WXT cross-browser build pipeline | Now | 33.1 | Prerequisite to all Firefox/Edge/Safari work; auto-handles MV2/MV3 conversion |
+| Firefox MV3 port | Now | 33.2 | Highest-value target after Chrome; AMO is largest non-CWS extension marketplace |
+| Firefox for Android | Next | 33.3 | Only stable mobile browser supporting MV3 extensions; depends on 33.2 |
+| Edge Add-ons store submission | Now | 33.4 | 1–3 days; build is already Chrome-compatible; expand reach |
+| Brave/Vivaldi/Opera/Arc compat sweep | Now | 33.5 | Chromium-based; doc Brave Shields conflict, Vivaldi commands, Arc sidebar |
+| Orion Browser validation | Next | 33.6 | Near-zero effort; Mac/iOS WebKit; load Firefox build, document |
+| Safari Web Extension | Later | 33.7 | 8–16 weeks Swift work; defer behind decision gate (1k+ install demand) |
+| Monaco screen reader compatibility | Now | 34.1 | Critical a11y gap in Phase 14; Alt+F1 help, plain-textarea fallback, ARIA labels |
+| Voice control (Talon) audit | Next | 34.2 | Add `data-talon-action` hints; document Cursorless limitation |
+| WAI-ARIA APG keyboard patterns | Now | 34.3 | Tablist/grid/combobox/dialog: arrow-key nav, focus traps, skip links |
+| Forced-colors mode (Windows HC) | Now | 34.4 | `@media (forced-colors: active)`; system colors; Monaco hc-black theme switch |
+| Reduced-motion CSS-first | Now | 34.5 | Replace JS detection with `@media (prefers-reduced-motion: reduce)` |
+| Cognitive accessibility audit | Now | 34.6 | Flesch 60+ for all error messages; consistent vocabulary; plain verbs |
+| scriptvault.dev/docs (Starlight) | Now | 34.7 | Quick start, GM API ref, recipes, migration guides; Algolia DocSearch |
+| First-run empty state (no wizard) | Now | 34.8 | Anti-bloat compliant: empty-state copy + sample script + 3 buttons |
+| YouTube tutorial channel | Next | 34.9 | 5 screencasts (install, first script, GM API, migrate, sync); captioned |
+| ICU MessageFormat + RTL | Now | 34.10 | Replace `{0}` with ICU plurals; add ar/hi/ko/tr; Crowdin pipeline |
+| axe-core + Pa11y in CI | Now | 34.11 | Vitest + Playwright + GH Actions; gate PRs on WCAG 2.2 AA |
+| IPFS CID integrity + gateway fallback | Now | 35.1 | Zero new deps; HTTP fetch + WebCrypto; survives DMCA takedowns |
+| Nostr discovery (NIP-C0) | Next | 35.2 | 30 KB nostr-tools; smallest federation protocol; uncensorable |
+| did:key author signatures | Now | 35.3 | Zero new deps; native crypto.subtle; impersonation prevention |
+| ActivityPub passive consumption | Next | 35.4 | Plain HTTP GET to Forgejo outboxes; push-style update notifications |
+| Self-hosted registry spec | Next | 35.5 | Open spec + Go reference impl; enables corporate + community registries |
+| Censorship-resistant update resolution | Next | 35.6 | IPFS → Nostr → Wayback fallback chain; signature-verified |
+
+### Rejected — Phase 35 Federation (With Documented Reasoning)
+
+| Item | Why Rejected |
+|------|--------------|
+| Matrix as sync transport | 500 KB SDK; users prefer dedicated sync (Phase 21); link as community-only |
+| Solid Pods | 300 KB SDK; <0.1% userscript-author overlap with Solid community |
+| DAT/Hypercore/Pear runtime | Requires separate Pear runtime install — hard userscript user no |
+| WebRTC mesh sync (y-webrtc) | 605 KB Yjs accepted in 29.4; mesh adds NAT complexity for marginal benefit |
+| WebTorrent | 600 KB; userscripts <100 KB — wrong scale for BitTorrent |
+| Helia (in-browser IPFS node) | 200 KB+ DHT; gateway fallback (35.1) achieves 95% value at 0% weight |
+| Full Verifiable Credentials | 300 KB JSON-LD; DIDs alone (35.3) sufficient for threat model |
+| Radicle P2P git | Requires `rad` binary install — userscript users won't install |
+| AT Protocol custom Lexicon | Maintenance burden; defer until Bluesky userscript community materializes |
 
 ### Rejected — With Reasoning (Continued)
 | `@background` persistent scripts (ScriptCat) | Fundamentally incompatible with MV3 SW model. ScriptCat achieves this via a non-standard SW keepalive mechanism that violates CWS policies. Architecture would require a complete rewrite. Rejected as architectural mismatch. |
