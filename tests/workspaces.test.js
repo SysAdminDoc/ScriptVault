@@ -126,13 +126,19 @@ describe('WorkspaceManager', () => {
   });
 
   it('activate rolls back active workspace when persistence fails', async () => {
-    mods.ScriptStorage.cache = { s1: { id: 's1', enabled: true } };
+    mods.ScriptStorage.cache = {
+      s1: { id: 's1', enabled: true, updatedAt: 1 },
+      s2: { id: 's2', enabled: true, updatedAt: 1 },
+    };
     const ws = await WorkspaceManager.create('Active');
+    ws.snapshot.s2 = false;
     chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
 
     await expect(WorkspaceManager.activate(ws.id)).rejects.toThrow('QUOTA');
 
     expect((await WorkspaceManager.getAll()).active).toBeNull();
+    expect(mods.ScriptStorage.cache.s2.enabled).toBe(true);
+    expect(mods.ScriptStorage.cache.s2.updatedAt).toBe(1);
   });
 
   it('activate returns error for missing workspace', async () => {
