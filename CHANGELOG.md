@@ -2,6 +2,14 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.10.1] — Polish polish: token-clean diff view + feature badges + button refinements
+
+- Changed: `.feature-storage` / `.feature-xhr` / `.feature-style` / `.feature-notify` / `.feature-menu` / `.feature-unsafe` badges no longer hardcode `#22c55e33`/`#60a5fa33`/etc. — they reference `--tint-{green,blue,purple,yellow,orange,red}-soft` so the badges retint correctly in light/catppuccin themes instead of staying dark-mode-only.
+- Changed: diff view (`.diff-add`, `.diff-del`, `.diff-add-count`, `.diff-del-count`, `.diff-add .diff-sign`, `.diff-del .diff-sign`) now uses `var(--accent-green)` / `var(--accent-red)` / `var(--tint-*-soft)` instead of literal hex. Light-theme diffs are readable now.
+- Changed: `.toolbar-btn` got tokenised transitions, hairline border on hover, and a 0.5px press-down on `:active` for premium tactile feel. Border-radius bumped to `--r-sm`.
+- Changed: `.modal-close` is now a 28×28 hit target with rounded-square hover background instead of a bare floating × — matches the rest of the icon-button system, easier to click, focusable.
+- Tests: 601/601 green. CSS-only.
+
 ## [v3.10.0] — Premium UX polish (design tokens, multi-theme dashboard, refined components)
 
 - Added: design-token layer at the top of `pages/dashboard.css` — `--hairline`, `--hairline-strong`, `--shadow-sm/md/lg`, `--overlay-scrim`, `--r-xs/sm/md/lg/pill`, `--t-fast/base/slow`, `--ease-out`, `--ease-spring`, `--focus-ring`, and per-accent `--tint-*-soft/edge` variants. Theme-aware via `[data-theme="light|catppuccin|oled"]` overrides; `color-scheme` declared so native form controls pick the right palette.
