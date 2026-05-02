@@ -601,6 +601,8 @@ Chrome 135 added `chrome.userScripts.execute()` — inject a script into a speci
 
 Guard with `typeof chrome.userScripts.execute === 'function'` (Chrome 135+ only). Source: [Chrome Extensions What's New](https://developer.chrome.com/docs/extensions/whats-new), [userScripts.execute() reference](https://developer.chrome.com/docs/extensions/reference/api/userScripts#method-execute).
 
+**Status (v3.4.0, 2026-05-02):** Popup-side Run on This Tab shipped. Background `runScriptNow` handler prefers `chrome.userScripts.execute()` (USER_SCRIPT world, GM_* APIs intact) with a `chrome.scripting.executeScript({world:'MAIN'})` fallback for Chrome <135. `@require` libraries are resolved via `fetchRequireScript` so the one-shot run sees the same library set as a normal registration. Dashboard-side Run Now button still pending (the popup affordance covers the most common quick-test workflow).
+
 ### 11.5 GM_xmlhttpRequest Completeness
 
 Two missing options discovered from competitor changelogs:

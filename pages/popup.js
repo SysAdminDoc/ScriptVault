@@ -753,6 +753,37 @@
                 if (scriptId) openDashboard(scriptId);
             });
 
+            // Phase 11.4 — Run on This Tab. Fires the script once via the
+            // background's runScriptNow handler (chrome.userScripts.execute()
+            // when available, scripting.executeScript fallback otherwise).
+            // The script doesn't have to be enabled or matching the URL.
+            dropdown.querySelector('[data-action="runNow"]')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const scriptId = activeDropdownScriptId;
+                queuePopupFocusRestore(getPopupFocusDescriptor(getDropdownTriggerButton(scriptId)));
+                closeScriptDropdown();
+                if (!scriptId) return;
+                await runScriptAction(scriptId, async () => {
+                    try {
+                        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                        if (!tab?.id) {
+                            showPopupToast('No active tab', 'error');
+                            return;
+                        }
+                        const result = await chrome.runtime.sendMessage({
+                            action: 'runScriptNow', scriptId, tabId: tab.id
+                        });
+                        if (result?.success) {
+                            showPopupToast('Script ran on this tab');
+                        } else {
+                            showPopupToast(result?.error || 'Run failed', 'error');
+                        }
+                    } catch (err) {
+                        showPopupToast(err?.message || 'Run failed', 'error');
+                    }
+                });
+            });
+
             dropdown.querySelector('[data-action="update"]')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const scriptId = activeDropdownScriptId;
