@@ -2379,6 +2379,7 @@ Chrome 148 enforces matching serialization formats — JSON-mode and structured-
 - Document the matrix in `docs/extension-interop.md`: rows = external extensions, columns = serialization format, cell = success/blocked/proxied.
 - Decide cutover policy: stay on JSON until vscode.dev companion ships and is itself on structured-clone.
 - Source: [Structured Clone Messaging — Extension-to-extension communication](https://developer.chrome.com/blog/structured-clone-messaging).
+- **Status:** ✅ Shipped in v3.9.0 (matrix). [`docs/extension-interop.md`](docs/extension-interop.md) inventories all messaging surfaces, confirms ScriptVault is closed-loop today (no `externally_connectable`, no `onMessageExternal`), defines the cutover policy for the vscode.dev companion (Phase 12.14), and lists the audit checklist that must run before any Phase 36.x messaging PR. Gate for Phase 36.1 is now green.
 
 ### 37.5 Extensions Update Lifecycle Documentation
 
