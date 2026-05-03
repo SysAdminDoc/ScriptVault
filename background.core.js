@@ -881,6 +881,7 @@ async function exportToZip(options = {}) {
     
     // Add options.json (Tampermonkey format)
     const scriptOptions = {
+      scriptId: script.id,
       settings: {
         enabled: script.enabled,
         'run-at': script.meta['run-at'] || 'document-idle',
@@ -957,6 +958,7 @@ async function importFromZip(zipData, options = {}) {
     // Find all .user.js files
     const userScripts = fileNames.filter(name => name.endsWith('.user.js'));
     const allExistingScripts = await ScriptStorage.getAll();
+    const usedScriptIds = new Set(allExistingScripts.map(script => script.id));
     // Starting position for newly-imported scripts (avoids O(n²) getAll() per script)
     let _importPosition = allExistingScripts.length;
 
@@ -976,17 +978,6 @@ async function importFromZip(zipData, options = {}) {
           continue;
         }
 
-        // Check for existing script with same name/namespace
-        const existing = allExistingScripts.find(s =>
-          s.meta.name === parsed.meta.name && 
-          (s.meta.namespace === parsed.meta.namespace || (!s.meta.namespace && !parsed.meta.namespace))
-        );
-        
-        if (existing && !options.overwrite) {
-          results.skipped++;
-          continue;
-        }
-        
         // Look for associated options and storage files
         const baseName = filename.replace('.user.js', '');
         const optionsFileData = unzipped[`${baseName}.options.json`];
@@ -994,12 +985,14 @@ async function importFromZip(zipData, options = {}) {
         
         let enabled = true;
         let storedValues = {};
+        let preferredScriptId = '';
         
         // Parse options file if exists
         if (optionsFileData) {
           try {
             const optionsData = JSON.parse(fflate.strFromU8(optionsFileData));
             enabled = optionsData.settings?.enabled !== false;
+            preferredScriptId = typeof optionsData.scriptId === 'string' ? optionsData.scriptId : '';
           } catch (e) {
             console.warn('Failed to parse options file:', e);
           }
@@ -1014,9 +1007,35 @@ async function importFromZip(zipData, options = {}) {
             console.warn('Failed to parse storage file:', e);
           }
         }
+
+        // Prefer ScriptVault's stable scriptId metadata when present. Name or
+        // namespace can change over time, but backup restore should still
+        // update the same script record.
+        const existingById = preferredScriptId
+          ? allExistingScripts.find(s => s.id === preferredScriptId)
+          : null;
+        const existing = existingById || allExistingScripts.find(s =>
+          s.meta.name === parsed.meta.name &&
+          (s.meta.namespace === parsed.meta.namespace || (!s.meta.namespace && !parsed.meta.namespace))
+        );
+
+        if (existing && !options.overwrite) {
+          results.skipped++;
+          continue;
+        }
         
         // Create or update script
-        const scriptId = existing?.id || generateId();
+        let scriptId;
+        if (existing?.id) {
+          scriptId = existing.id;
+        } else if (preferredScriptId && !usedScriptIds.has(preferredScriptId)) {
+          scriptId = preferredScriptId;
+        } else {
+          do {
+            scriptId = generateId();
+          } while (usedScriptIds.has(scriptId));
+        }
+        usedScriptIds.add(scriptId);
         const script = {
           id: scriptId,
           code: code,

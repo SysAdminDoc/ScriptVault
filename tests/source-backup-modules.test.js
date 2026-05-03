@@ -389,4 +389,37 @@ describe('source import/export module', () => {
     expect(harness.ScriptValues.setAll).toHaveBeenCalledWith('script_preserved', { draft: true });
     expect(globalThis.generateId).not.toHaveBeenCalled();
   });
+
+  it('uses stored script ids before name matching when importing renamed ScriptVault scripts', async () => {
+    const existing = makeScript('script_preserved', 'Renamed Local Script');
+    const harness = await loadFreshImportExportHarness([existing]);
+    const zipBytes = harness.fakeFflate.zipSync({
+      'Preserved.user.js': harness.fakeFflate.strToU8([
+        '// ==UserScript==',
+        '// @name Preserved Script',
+        '// @namespace scriptvault/preserved',
+        '// @version 1.0.0',
+        '// @match https://example.com/*',
+        '// ==/UserScript==',
+        'console.log("preserved");',
+      ].join('\n')),
+      'Preserved.options.json': harness.fakeFflate.strToU8(JSON.stringify({
+        scriptId: 'script_preserved',
+        settings: { enabled: true },
+      })),
+    });
+
+    const result = await harness.importFromZip(bytesToBase64(zipBytes), { overwrite: true });
+
+    expect(result).toMatchObject({ imported: 1, skipped: 0 });
+    expect(harness.ScriptStorage.set).toHaveBeenCalledWith(
+      'script_preserved',
+      expect.objectContaining({
+        id: 'script_preserved',
+        enabled: true,
+        meta: expect.objectContaining({ name: 'Preserved Script' }),
+      }),
+    );
+    expect(globalThis.generateId).not.toHaveBeenCalled();
+  });
 });
