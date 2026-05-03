@@ -126,7 +126,7 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}) {
     'registerAllScripts',
     'updateBadge',
     'generateId',
-    `${extractRuntimeImportExportCode()}; return { exportToZip, importFromZip };`,
+    `${extractRuntimeImportExportCode()}; return { exportToZip, importFromZip, importScripts };`,
   );
 
   return {
@@ -213,5 +213,36 @@ describe('runtime import/export archive identity', () => {
       }),
     );
     expect(harness.generateId).not.toHaveBeenCalled();
+  });
+
+  it('generates safe IDs for unsafe JSON import script IDs', async () => {
+    const harness = createRuntimeHarness();
+
+    const result = await harness.importScripts({
+      scripts: [{
+        id: '__proto__',
+        code: [
+          '// ==UserScript==',
+          '// @name Unsafe ID Script',
+          '// @namespace scriptvault/unsafe-json-id',
+          '// @version 1.0.0',
+          '// @match https://example.com/*',
+          '// ==/UserScript==',
+          'console.log("unsafe");',
+        ].join('\n'),
+        enabled: true,
+      }],
+    }, { overwrite: true });
+
+    expect(result).toMatchObject({ imported: 1, skipped: 0 });
+    expect(harness.ScriptStorage.set).toHaveBeenCalledWith(
+      'generated_script_1',
+      expect.objectContaining({
+        id: 'generated_script_1',
+        meta: expect.objectContaining({ name: 'Unsafe ID Script' }),
+      }),
+    );
+    expect(harness.ScriptStorage.get).not.toHaveBeenCalledWith('__proto__');
+    expect(harness.generateId).toHaveBeenCalledTimes(1);
   });
 });
