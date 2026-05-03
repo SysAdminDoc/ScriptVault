@@ -72,6 +72,25 @@ describe('SettingsManager', () => {
     expect(theme).toBe('dark');
   });
 
+  it('returns isolated nested settings from get()', async () => {
+    const settings = await SettingsManager.get();
+    settings.blacklist.push('mutated.example');
+    settings.deniedHosts.push('blocked.example');
+    settings.trustedSigningKeys.demo = { name: 'Demo', addedAt: 1 };
+
+    const fresh = await SettingsManager.get();
+    expect(fresh.blacklist).toEqual([]);
+    expect(fresh.deniedHosts).toEqual([]);
+    expect(fresh.trustedSigningKeys).toEqual({});
+  });
+
+  it('returns isolated nested values from keyed get()', async () => {
+    const deniedHosts = await SettingsManager.get('deniedHosts');
+    deniedHosts.push('blocked.example');
+
+    expect(await SettingsManager.get('deniedHosts')).toEqual([]);
+  });
+
   it('set() persists to storage', async () => {
     await SettingsManager.set('theme', 'catppuccin');
     expect(chrome.storage.local.set).toHaveBeenCalled();
@@ -83,6 +102,13 @@ describe('SettingsManager', () => {
     await SettingsManager.set({ theme: 'light', debugMode: true });
     expect(await SettingsManager.get('theme')).toBe('light');
     expect(await SettingsManager.get('debugMode')).toBe(true);
+  });
+
+  it('set() returns an isolated settings snapshot', async () => {
+    const settings = await SettingsManager.set({ deniedHosts: ['blocked.example'] });
+    settings.deniedHosts.push('mutated.example');
+
+    expect(await SettingsManager.get('deniedHosts')).toEqual(['blocked.example']);
   });
 
   it('set() rolls back cache on persist failure', async () => {
@@ -108,8 +134,10 @@ describe('SettingsManager', () => {
 
   it('reset() restores defaults', async () => {
     await SettingsManager.set('theme', 'oled');
-    await SettingsManager.reset();
+    const reset = await SettingsManager.reset();
+    reset.deniedHosts.push('mutated.example');
     expect(await SettingsManager.get('theme')).toBe('dark');
+    expect(await SettingsManager.get('deniedHosts')).toEqual([]);
   });
 
   it('reset() rolls back cache on persist failure', async () => {

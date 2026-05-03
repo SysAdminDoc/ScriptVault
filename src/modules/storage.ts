@@ -140,15 +140,19 @@ function cloneSettingsState<T extends object>(settings: T): T {
   }
 }
 
+function cloneSettingsValue<T>(value: T): T {
+  return value && typeof value === 'object' ? (cloneSettingsState(value as object) as T) : value;
+}
+
 async function getSettingsValue<K extends keyof Settings>(key: K): Promise<Settings[K]>;
 async function getSettingsValue(): Promise<Settings>;
 async function getSettingsValue<K extends keyof Settings>(key?: K): Promise<Settings | Settings[K]> {
   await SettingsManager.init();
   const cachedSettings = SettingsManager.cache!;
   if (key !== undefined) {
-    return cachedSettings[key];
+    return cloneSettingsValue(cachedSettings[key]);
   }
-  return { ...cachedSettings };
+  return cloneSettingsState(cachedSettings);
 }
 
 export const SettingsManager = {
@@ -190,7 +194,7 @@ export const SettingsManager = {
       throw e;
     }
     this.cache = next;
-    return this.cache!;
+    return cloneSettingsState(this.cache!);
   },
 
   async reset(): Promise<Settings> {
@@ -208,7 +212,7 @@ export const SettingsManager = {
     }
     this.defaults = nextDefaults;
     this.cache = nextCache;
-    return this.cache;
+    return cloneSettingsState(this.cache);
   },
 };
 
