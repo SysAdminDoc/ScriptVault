@@ -315,17 +315,7 @@ export async function importFromZip(
           continue;
         }
 
-        // Check for existing script with same name/namespace
         const parsedMeta: ScriptMeta = parsed.meta;
-        const existing: Script | undefined = allExistingScripts.find(s =>
-          s.meta.name === parsedMeta.name &&
-          (s.meta.namespace === parsedMeta.namespace || (!s.meta.namespace && !parsedMeta.namespace))
-        );
-
-        if (existing && !options.overwrite) {
-          results.skipped++;
-          continue;
-        }
 
         // Look for associated options and storage files
         const baseName: string = filename.replace('.user.js', '');
@@ -360,6 +350,22 @@ export async function importFromZip(
           } catch (e: unknown) {
             console.warn('Failed to parse storage file:', e);
           }
+        }
+
+        // Prefer ScriptVault's stable scriptId metadata when present. Name or
+        // namespace can change over time, but backup restore should still
+        // update the same script record.
+        const existingById: Script | undefined = preferredScriptId
+          ? allExistingScripts.find(s => s.id === preferredScriptId)
+          : undefined;
+        const existing: Script | undefined = existingById ?? allExistingScripts.find(s =>
+          s.meta.name === parsedMeta.name &&
+          (s.meta.namespace === parsedMeta.namespace || (!s.meta.namespace && !parsedMeta.namespace))
+        );
+
+        if (existing && !options.overwrite) {
+          results.skipped++;
+          continue;
         }
 
         // Create or update script
