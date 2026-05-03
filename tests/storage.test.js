@@ -111,6 +111,14 @@ describe('SettingsManager', () => {
     expect(await SettingsManager.get('deniedHosts')).toEqual(['blocked.example']);
   });
 
+  it('set() clones caller-owned nested settings before caching', async () => {
+    const deniedHosts = ['blocked.example'];
+    await SettingsManager.set({ deniedHosts });
+    deniedHosts.push('mutated.example');
+
+    expect(await SettingsManager.get('deniedHosts')).toEqual(['blocked.example']);
+  });
+
   it('set() rolls back cache on persist failure', async () => {
     await SettingsManager.set('theme', 'oled');
     chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
@@ -371,6 +379,31 @@ describe('FolderStorage', () => {
 
 // ── ScriptValues rollback (rounds 2+ added rollback to set/delete/setAll) ─
 describe('ScriptValues rollback', () => {
+  it('isolates object values at set/get boundaries', async () => {
+    const value = { nested: { items: ['saved'] } };
+    const returned = await ScriptValues.set('s1', 'prefs', value);
+    value.nested.items.push('caller-mutated');
+    returned.nested.items.push('return-mutated');
+
+    const firstRead = await ScriptValues.get('s1', 'prefs');
+    expect(firstRead).toEqual({ nested: { items: ['saved'] } });
+
+    firstRead.nested.items.push('read-mutated');
+    expect(await ScriptValues.get('s1', 'prefs')).toEqual({ nested: { items: ['saved'] } });
+
+    const all = await ScriptValues.getAll('s1');
+    all.prefs.nested.items.push('getAll-mutated');
+    expect(await ScriptValues.get('s1', 'prefs')).toEqual({ nested: { items: ['saved'] } });
+  });
+
+  it('isolates object values passed to setAll()', async () => {
+    const values = { prefs: { nested: { items: ['saved'] } } };
+    await ScriptValues.setAll('s1', values);
+    values.prefs.nested.items.push('caller-mutated');
+
+    expect(await ScriptValues.get('s1', 'prefs')).toEqual({ nested: { items: ['saved'] } });
+  });
+
   it('stores prototype-shaped value names as data keys', async () => {
     const values = Object.fromEntries([
       ['__proto__', { polluted: true }],

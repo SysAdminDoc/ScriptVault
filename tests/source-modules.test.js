@@ -206,6 +206,11 @@ describe('source storage module', () => {
     const returned = await SettingsManager.set({ deniedHosts: ['persisted.example'] });
     returned.deniedHosts.push('mutated.example');
     expect(await SettingsManager.get('deniedHosts')).toEqual(['persisted.example']);
+
+    const callerOwnedHosts = ['caller.example'];
+    await SettingsManager.set({ deniedHosts: callerOwnedHosts });
+    callerOwnedHosts.push('mutated.example');
+    expect(await SettingsManager.get('deniedHosts')).toEqual(['caller.example']);
   });
 
   it('keeps settings cache consistent when persistence fails', async () => {
@@ -323,6 +328,28 @@ describe('source storage module', () => {
     chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
     await expect(FolderStorage.addScript(folder.id, 'script_alpha')).rejects.toThrow('QUOTA');
     expect(FolderStorage.getFolderForScript('script_alpha')).toBeNull();
+  });
+
+  it('isolates script value objects at persistence boundaries', async () => {
+    const value = { nested: { items: ['saved'] } };
+    const returned = await ScriptValues.set('script_alpha', 'prefs', value);
+    value.nested.items.push('caller-mutated');
+    returned.nested.items.push('return-mutated');
+
+    const firstRead = await ScriptValues.get('script_alpha', 'prefs', null);
+    expect(firstRead).toEqual({ nested: { items: ['saved'] } });
+
+    firstRead.nested.items.push('read-mutated');
+    expect(await ScriptValues.get('script_alpha', 'prefs', null)).toEqual({ nested: { items: ['saved'] } });
+
+    const all = await ScriptValues.getAll('script_alpha');
+    all.prefs.nested.items.push('getAll-mutated');
+    expect(await ScriptValues.get('script_alpha', 'prefs', null)).toEqual({ nested: { items: ['saved'] } });
+
+    const values = { prefs: { nested: { items: ['batch'] } } };
+    await ScriptValues.setAll('script_alpha', values);
+    values.prefs.nested.items.push('caller-mutated');
+    expect(await ScriptValues.get('script_alpha', 'prefs', null)).toEqual({ nested: { items: ['batch'] } });
   });
 
   it('stores prototype-shaped value names as normal data keys', async () => {
