@@ -193,15 +193,45 @@ const ScriptStorage = {
 // Script Values Storage (GM_getValue/setValue)
 // ============================================================================
 
+function makeValueBag(values = {}) {
+  const bag = Object.create(null);
+  for (const [key, value] of Object.entries(values || {})) {
+    setValueBagKey(bag, key, value);
+  }
+  return bag;
+}
+
+function setValueBagKey(bag, key, value) {
+  Object.defineProperty(bag, String(key), {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true
+  });
+}
+
+function setScriptValueBag(cache, scriptId, bag) {
+  Object.defineProperty(cache, String(scriptId), {
+    value: bag,
+    enumerable: true,
+    configurable: true,
+    writable: true
+  });
+}
+
+function exportValueBag(values = {}) {
+  return Object.fromEntries(Object.entries(values || {}));
+}
+
 const ScriptValues = {
-  cache: {},
+  cache: Object.create(null),
   listeners: new Map(),
   pendingNotifications: new Map(), // Debounce notifications only (not saves!)
   
   async init(scriptId) {
-    if (this.cache[scriptId]) return;
+    if (Object.hasOwn(this.cache, scriptId)) return;
     const data = await chrome.storage.local.get(`values_${scriptId}`);
-    this.cache[scriptId] = data[`values_${scriptId}`] || {};
+    setScriptValueBag(this.cache, scriptId, makeValueBag(data[`values_${scriptId}`] || {}));
   },
   
   async get(scriptId, key, defaultValue) {
@@ -218,7 +248,7 @@ const ScriptValues = {
     const hadKey = Object.hasOwn(this.cache[scriptId], key);
 
     // Update cache immediately
-    this.cache[scriptId][key] = value;
+    setValueBagKey(this.cache[scriptId], key, value);
 
     // Save IMMEDIATELY - don't debounce persistence in MV3!
     // Service workers can be terminated at any time, losing unsaved data.
@@ -227,10 +257,10 @@ const ScriptValues = {
     // no change notification is emitted for a write that never landed.
     try {
       await chrome.storage.local.set({
-        [`values_${scriptId}`]: this.cache[scriptId]
+        [`values_${scriptId}`]: exportValueBag(this.cache[scriptId])
       });
     } catch (e) {
-      if (hadKey) this.cache[scriptId][key] = oldValue;
+      if (hadKey) setValueBagKey(this.cache[scriptId], key, oldValue);
       else delete this.cache[scriptId][key];
       throw e;
     }
@@ -268,10 +298,10 @@ const ScriptValues = {
     // the key gone while storage still holds it, drifting on SW restart.
     try {
       await chrome.storage.local.set({
-        [`values_${scriptId}`]: this.cache[scriptId]
+        [`values_${scriptId}`]: exportValueBag(this.cache[scriptId])
       });
     } catch (e) {
-      this.cache[scriptId][key] = oldValue;
+      setValueBagKey(this.cache[scriptId], key, oldValue);
       throw e;
     }
     this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
@@ -284,7 +314,7 @@ const ScriptValues = {
   
   async getAll(scriptId) {
     await this.init(scriptId);
-    return { ...this.cache[scriptId] };
+    return exportValueBag(this.cache[scriptId]);
   },
   
   async setAll(scriptId, values, senderTabId = null) {
@@ -292,19 +322,19 @@ const ScriptValues = {
     // Snapshot prior state so we can roll back the cache on persist failure
     // (quota exceeded, etc.) and only fire change notifications for writes
     // that actually committed to storage.
-    const snapshot = { ...this.cache[scriptId] };
+    const snapshot = makeValueBag(this.cache[scriptId]);
     const changes = [];
     for (const [key, value] of Object.entries(values)) {
       const oldValue = this.cache[scriptId][key];
-      this.cache[scriptId][key] = value;
+      setValueBagKey(this.cache[scriptId], key, value);
       changes.push([key, oldValue, value]);
     }
     try {
       await chrome.storage.local.set({
-        [`values_${scriptId}`]: this.cache[scriptId]
+        [`values_${scriptId}`]: exportValueBag(this.cache[scriptId])
       });
     } catch (e) {
-      this.cache[scriptId] = snapshot;
+      setScriptValueBag(this.cache, scriptId, snapshot);
       throw e;
     }
     for (const [key, oldValue, newValue] of changes) {
@@ -313,12 +343,13 @@ const ScriptValues = {
   },
   
   async deleteAll(scriptId) {
+    const hadCache = Object.hasOwn(this.cache, scriptId);
     const prev = this.cache[scriptId];
-    delete this.cache[scriptId];
+    if (hadCache) delete this.cache[scriptId];
     try {
       await chrome.storage.local.remove(`values_${scriptId}`);
     } catch (e) {
-      if (prev !== undefined) this.cache[scriptId] = prev;
+      if (hadCache) setScriptValueBag(this.cache, scriptId, prev);
       throw e;
     }
   },
@@ -326,7 +357,7 @@ const ScriptValues = {
   // Delete multiple specific keys at once
   async deleteMultiple(scriptId, keys, senderTabId = null) {
     await this.init(scriptId);
-    const snapshot = { ...this.cache[scriptId] };
+    const snapshot = makeValueBag(this.cache[scriptId]);
     const changes = [];
     for (const key of keys) {
       if (!Object.hasOwn(this.cache[scriptId], key)) continue;
@@ -337,10 +368,10 @@ const ScriptValues = {
     if (changes.length === 0) return;
     try {
       await chrome.storage.local.set({
-        [`values_${scriptId}`]: this.cache[scriptId]
+        [`values_${scriptId}`]: exportValueBag(this.cache[scriptId])
       });
     } catch (e) {
-      this.cache[scriptId] = snapshot;
+      setScriptValueBag(this.cache, scriptId, snapshot);
       throw e;
     }
     for (const [key, oldValue] of changes) {
@@ -350,7 +381,7 @@ const ScriptValues = {
   
   async getStorageSize(scriptId) {
     await this.init(scriptId);
-    return JSON.stringify(this.cache[scriptId] || {}).length;
+    return JSON.stringify(exportValueBag(this.cache[scriptId])).length;
   },
   
   addListener(scriptId, listenerId, callback) {

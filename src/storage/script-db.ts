@@ -61,6 +61,15 @@ export interface BackupRecord {
   meta?: Record<string, unknown>;
 }
 
+function setRecordKey<T>(record: Record<string, T>, key: string, value: T): void {
+  Object.defineProperty(record, String(key), {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
 function upgradeSchema(
   db: IDBDatabase,
   oldVersion: number,
@@ -208,7 +217,7 @@ export const ValuesDAO = {
       const out: Record<string, unknown> = {};
       const idx = tx.objectStore(Stores.values).index('by-script');
       await forEachCursor<ScriptValueRow>(idx, (row) => {
-        out[row.key] = row.value;
+        setRecordKey(out, row.key, row.value);
       }, IDBKeyRange.only(scriptId));
       return out;
     });
@@ -279,7 +288,7 @@ export const StatsDAO = {
         tx.objectStore(Stores.stats).getAll() as IDBRequest<ScriptStatsRecord[]>,
       );
       const out: Record<string, ScriptStatsRecord> = {};
-      for (const r of rows ?? []) out[r.scriptId] = r;
+      for (const r of rows ?? []) setRecordKey(out, r.scriptId, r);
       return out;
     });
   },

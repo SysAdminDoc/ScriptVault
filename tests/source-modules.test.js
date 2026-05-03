@@ -293,6 +293,59 @@ describe('source storage module', () => {
     expect(FolderStorage.getFolderForScript('script_alpha')).toBeNull();
   });
 
+  it('stores prototype-shaped value names as normal data keys', async () => {
+    const values = Object.fromEntries([
+      ['__proto__', { polluted: true }],
+      ['constructor', 'ctor-value'],
+      ['prototype', 'prototype-value'],
+    ]);
+
+    await ScriptValues.setAll('script_alpha', values);
+    await ScriptValues.set('script_alpha', '__proto__', { polluted: false });
+
+    expect(await ScriptValues.get('script_alpha', '__proto__', null)).toEqual({ polluted: false });
+    expect(await ScriptValues.get('script_alpha', 'constructor', null)).toBe('ctor-value');
+    expect(await ScriptValues.get('script_alpha', 'prototype', null)).toBe('prototype-value');
+
+    const all = await ScriptValues.getAll('script_alpha');
+    expect(Object.hasOwn(all, '__proto__')).toBe(true);
+    expect(all.__proto__).toEqual({ polluted: false });
+    expect(Object.getPrototypeOf(ScriptValues.cache.script_alpha)).toBeNull();
+
+    const stored = await ValuesDAO.getAll('script_alpha');
+    expect(Object.hasOwn(stored, '__proto__')).toBe(true);
+    expect(stored.__proto__).toEqual({ polluted: false });
+
+    ScriptValues.cache = {};
+    await ScriptValues.init('script_alpha');
+    expect(Object.getPrototypeOf(ScriptValues.cache.script_alpha)).toBeNull();
+    expect(await ScriptValues.get('script_alpha', '__proto__', null)).toEqual({ polluted: false });
+
+    await ScriptValues.deleteMultiple('script_alpha', ['__proto__', 'constructor']);
+    expect(await ScriptValues.get('script_alpha', '__proto__', 'DEFAULT')).toBe('DEFAULT');
+    expect(await ScriptValues.get('script_alpha', 'constructor', 'DEFAULT')).toBe('DEFAULT');
+    expect(Object.hasOwn(await ValuesDAO.getAll('script_alpha'), '__proto__')).toBe(false);
+  });
+
+  it('treats prototype-shaped script IDs as value-cache keys defensively', async () => {
+    await ScriptValues.set('__proto__', 'draft', true);
+
+    expect(Object.hasOwn(ScriptValues.cache, '__proto__')).toBe(true);
+    expect(Object.getPrototypeOf(ScriptValues.cache.__proto__)).toBeNull();
+    expect(await ScriptValues.get('__proto__', 'draft', false)).toBe(true);
+  });
+
+  it('keeps value cache loaded when deleteAll persistence fails', async () => {
+    await ScriptValues.set('script_alpha', 'draft', true);
+
+    const spy = vi.spyOn(ValuesDAO, 'deleteAll').mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(ScriptValues.deleteAll('script_alpha')).rejects.toThrow('QUOTA');
+    spy.mockRestore();
+
+    expect(Object.hasOwn(ScriptValues.cache, 'script_alpha')).toBe(true);
+    expect(await ScriptValues.get('script_alpha', 'draft', false)).toBe(true);
+  });
+
   it('rolls back folder create and delete when persistence fails', async () => {
     chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
     await expect(FolderStorage.create('Unsaved')).rejects.toThrow('QUOTA');

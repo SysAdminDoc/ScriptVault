@@ -311,6 +311,44 @@ describe('FolderStorage', () => {
 
 // ── ScriptValues rollback (rounds 2+ added rollback to set/delete/setAll) ─
 describe('ScriptValues rollback', () => {
+  it('stores prototype-shaped value names as data keys', async () => {
+    const values = Object.fromEntries([
+      ['__proto__', { polluted: true }],
+      ['constructor', 'ctor-value'],
+      ['prototype', 'prototype-value'],
+    ]);
+
+    await ScriptValues.setAll('s1', values);
+    await ScriptValues.set('s1', '__proto__', { polluted: false });
+
+    expect(await ScriptValues.get('s1', '__proto__')).toEqual({ polluted: false });
+    expect(await ScriptValues.get('s1', 'constructor')).toBe('ctor-value');
+    expect(await ScriptValues.get('s1', 'prototype')).toBe('prototype-value');
+
+    const all = await ScriptValues.getAll('s1');
+    expect(Object.hasOwn(all, '__proto__')).toBe(true);
+    expect(all.__proto__).toEqual({ polluted: false });
+    expect(Object.getPrototypeOf(ScriptValues.cache.s1)).toBeNull();
+    expect(Object.hasOwn(ScriptValues.cache.s1, '__proto__')).toBe(true);
+
+    const persisted = await chrome.storage.local.get('values_s1');
+    expect(Object.hasOwn(persisted.values_s1, '__proto__')).toBe(true);
+    expect(persisted.values_s1.__proto__).toEqual({ polluted: false });
+
+    ScriptValues.cache = {};
+    await ScriptValues.init('s1');
+    expect(Object.getPrototypeOf(ScriptValues.cache.s1)).toBeNull();
+    expect(await ScriptValues.get('s1', '__proto__')).toEqual({ polluted: false });
+  });
+
+  it('treats prototype-shaped script IDs as cache keys defensively', async () => {
+    await ScriptValues.set('__proto__', 'draft', true);
+
+    expect(Object.hasOwn(ScriptValues.cache, '__proto__')).toBe(true);
+    expect(Object.getPrototypeOf(ScriptValues.cache.__proto__)).toBeNull();
+    expect(await ScriptValues.get('__proto__', 'draft', false)).toBe(true);
+  });
+
   it('set() rolls back cache on persist failure', async () => {
     await ScriptValues.set('s1', 'key', 'original');
     chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
@@ -354,5 +392,15 @@ describe('ScriptValues rollback', () => {
       .rejects.toThrow('QUOTA');
     expect(await ScriptValues.get('s1', 'a')).toBe(1);
     expect(await ScriptValues.get('s1', 'b')).toBe(2);
+  });
+
+  it('deleteAll() keeps the value cache when removal fails', async () => {
+    await ScriptValues.set('s1', 'draft', true);
+    chrome.storage.local.remove.mockRejectedValueOnce(new Error('QUOTA'));
+
+    await expect(ScriptValues.deleteAll('s1')).rejects.toThrow('QUOTA');
+
+    expect(Object.hasOwn(ScriptValues.cache, 's1')).toBe(true);
+    expect(await ScriptValues.get('s1', 'draft', false)).toBe(true);
   });
 });
