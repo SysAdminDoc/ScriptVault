@@ -4107,6 +4107,21 @@ function cloneDefaultSettings() {
   return JSON.parse(JSON.stringify(SCRIPTVAULT_SETTINGS_DEFAULTS));
 }
 
+function cloneSettingsState(settings) {
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(settings);
+    } catch (_) {
+      // Fall through to JSON/shallow clone for legacy or non-cloneable values.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(settings));
+  } catch (_) {
+    return { ...settings };
+  }
+}
+
 const SettingsManager = {
   defaults: cloneDefaultSettings(),
   
@@ -4126,19 +4141,38 @@ const SettingsManager = {
   
   async set(key, value) {
     await this.init();
+    const previous = cloneSettingsState(this.cache);
+    let next;
     if (typeof key === 'object') {
-      this.cache = { ...this.cache, ...key };
+      next = { ...this.cache, ...key };
     } else {
-      this.cache[key] = value;
+      next = { ...this.cache, [key]: value };
     }
-    await chrome.storage.local.set({ settings: this.cache });
+    try {
+      await chrome.storage.local.set({ settings: next });
+    } catch (e) {
+      this.cache = previous;
+      throw e;
+    }
+    this.cache = next;
     return this.cache;
   },
   
   async reset() {
-    this.defaults = cloneDefaultSettings();
-    this.cache = cloneDefaultSettings();
-    await chrome.storage.local.set({ settings: this.cache });
+    await this.init();
+    const previousDefaults = cloneSettingsState(this.defaults);
+    const previousCache = cloneSettingsState(this.cache);
+    const nextDefaults = cloneDefaultSettings();
+    const nextCache = cloneDefaultSettings();
+    try {
+      await chrome.storage.local.set({ settings: nextCache });
+    } catch (e) {
+      this.defaults = previousDefaults;
+      this.cache = previousCache;
+      throw e;
+    }
+    this.defaults = nextDefaults;
+    this.cache = nextCache;
     return this.cache;
   }
 };

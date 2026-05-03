@@ -85,10 +85,42 @@ describe('SettingsManager', () => {
     expect(await SettingsManager.get('debugMode')).toBe(true);
   });
 
+  it('set() rolls back cache on persist failure', async () => {
+    await SettingsManager.set('theme', 'oled');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+
+    await expect(SettingsManager.set('theme', 'light')).rejects.toThrow('QUOTA');
+
+    expect(await SettingsManager.get('theme')).toBe('oled');
+    const persisted = await chrome.storage.local.get('settings');
+    expect(persisted.settings.theme).toBe('oled');
+  });
+
+  it('bulk set() rolls back cache on persist failure', async () => {
+    await SettingsManager.set({ theme: 'oled', debugMode: false });
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+
+    await expect(SettingsManager.set({ theme: 'light', debugMode: true })).rejects.toThrow('QUOTA');
+
+    expect(await SettingsManager.get('theme')).toBe('oled');
+    expect(await SettingsManager.get('debugMode')).toBe(false);
+  });
+
   it('reset() restores defaults', async () => {
     await SettingsManager.set('theme', 'oled');
     await SettingsManager.reset();
     expect(await SettingsManager.get('theme')).toBe('dark');
+  });
+
+  it('reset() rolls back cache on persist failure', async () => {
+    await SettingsManager.set('theme', 'oled');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+
+    await expect(SettingsManager.reset()).rejects.toThrow('QUOTA');
+
+    expect(await SettingsManager.get('theme')).toBe('oled');
+    const persisted = await chrome.storage.local.get('settings');
+    expect(persisted.settings.theme).toBe('oled');
   });
 
   it('reset() recreates nested default structures', async () => {
