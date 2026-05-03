@@ -62,7 +62,7 @@ function makeValueBag(values: Record<string, unknown> = {}): ValueBag {
 
 function setValueBagKey(bag: ValueBag, key: string, value: unknown): void {
   Object.defineProperty(bag, String(key), {
-    value,
+    value: cloneStoredValue(value),
     enumerable: true,
     configurable: true,
     writable: true,
@@ -79,7 +79,7 @@ function setScriptValueBag(cache: Record<string, ValueBag>, scriptId: string, ba
 }
 
 function exportValueBag(values: ValueBag = {}): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(values || {}));
+  return Object.fromEntries(Object.entries(values || {}).map(([key, value]) => [key, cloneStoredValue(value)]));
 }
 
 // Declare the global _notifCallbacks on the service-worker scope
@@ -144,6 +144,22 @@ function cloneSettingsValue<T>(value: T): T {
   return value && typeof value === 'object' ? (cloneSettingsState(value as object) as T) : value;
 }
 
+function cloneStoredValue<T>(value: T): T {
+  if (!value || typeof value !== 'object') return value;
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value) as T;
+    } catch (_) {
+      // Fall through to JSON/shallow clone for legacy or non-cloneable values.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as T;
+  } catch (_) {
+    return (Array.isArray(value) ? [...value] : { ...(value as object) }) as T;
+  }
+}
+
 async function getSettingsValue<K extends keyof Settings>(key: K): Promise<Settings[K]>;
 async function getSettingsValue(): Promise<Settings>;
 async function getSettingsValue<K extends keyof Settings>(key?: K): Promise<Settings | Settings[K]> {
@@ -181,14 +197,15 @@ export const SettingsManager = {
   async set(key: keyof Settings | Partial<Settings>, value?: Settings[keyof Settings]): Promise<Settings> {
     await this.init();
     const previous = cloneSettingsState(this.cache!);
-    let next: Settings;
+    let rawNext: Settings;
     if (typeof key === 'object') {
-      next = { ...this.cache!, ...key };
+      rawNext = { ...this.cache!, ...key };
     } else {
-      next = { ...this.cache!, [key]: value };
+      rawNext = { ...this.cache!, [key]: value };
     }
+    const next = cloneSettingsState(rawNext);
     try {
-      await chrome.storage.local.set({ settings: next });
+      await chrome.storage.local.set({ settings: cloneSettingsState(next) });
     } catch (e) {
       this.cache = previous;
       throw e;
@@ -422,7 +439,7 @@ export const ScriptValues = {
   async get(scriptId: string, key: string, defaultValue: unknown): Promise<unknown> {
     await this.init(scriptId);
     const value = this.cache[scriptId]![key];
-    return value !== undefined ? value : defaultValue;
+    return value !== undefined ? cloneStoredValue(value) : defaultValue;
   },
 
   // FIXED: Save immediately to prevent data loss on service worker termination.
@@ -430,19 +447,20 @@ export const ScriptValues = {
   async set(scriptId: string, key: string, value: unknown, senderTabId: number | null = null): Promise<unknown> {
     await this.init(scriptId);
     const oldValue = this.cache[scriptId]![key];
+    const nextValue = cloneStoredValue(value);
 
     // Persist BEFORE mutating cache so a quota error leaves no drift.
     try {
-      await ValuesDAO.set(scriptId, key, value);
+      await ValuesDAO.set(scriptId, key, cloneStoredValue(nextValue));
     } catch (e) {
       throw e;
     }
-    setValueBagKey(this.cache[scriptId]!, key, value);
+    setValueBagKey(this.cache[scriptId]!, key, nextValue);
 
     // Debounce notifications only (these are less critical)
-    this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
+    this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), cloneStoredValue(nextValue), senderTabId);
 
-    return value;
+    return cloneStoredValue(nextValue);
   },
 
   // Debounced notifications — batches rapid changes (notification loss is acceptable)
@@ -479,7 +497,7 @@ export const ScriptValues = {
       throw e;
     }
     delete this.cache[scriptId]![key];
-    this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
+    this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), undefined, senderTabId);
   },
 
   async list(scriptId: string): Promise<string[]> {
@@ -494,13 +512,14 @@ export const ScriptValues = {
 
   async setAll(scriptId: string, values: Record<string, unknown>, senderTabId: number | null = null): Promise<void> {
     await this.init(scriptId);
+    const nextValues = exportValueBag(values);
     const changes: Array<[string, unknown, unknown]> = [];
-    for (const [key, value] of Object.entries(values)) {
-      changes.push([key, this.cache[scriptId]![key], value]);
+    for (const [key, value] of Object.entries(nextValues)) {
+      changes.push([key, cloneStoredValue(this.cache[scriptId]![key]), cloneStoredValue(value)]);
     }
     try {
       // setAll runs every put in a single IDB transaction — atomic on commit.
-      await ValuesDAO.setAll(scriptId, values);
+      await ValuesDAO.setAll(scriptId, cloneStoredValue(nextValues));
     } catch (e) {
       throw e;
     }
@@ -508,7 +527,7 @@ export const ScriptValues = {
       setValueBagKey(this.cache[scriptId]!, key, v);
     }
     for (const [key, oldValue, value] of changes) {
-      this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
+      this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), cloneStoredValue(value), senderTabId);
     }
   },
 
@@ -544,7 +563,7 @@ export const ScriptValues = {
     }
     for (const key of present) delete this.cache[scriptId]![key];
     for (const [key, oldValue] of changes) {
-      this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
+      this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), undefined, senderTabId);
     }
   },
 

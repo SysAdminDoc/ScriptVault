@@ -28,6 +28,22 @@ function cloneSettingsValue(value) {
   return value && typeof value === 'object' ? cloneSettingsState(value) : value;
 }
 
+function cloneStoredValue(value) {
+  if (!value || typeof value !== 'object') return value;
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value);
+    } catch (_) {
+      // Fall through to JSON/shallow clone for legacy or non-cloneable values.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (_) {
+    return Array.isArray(value) ? [...value] : { ...value };
+  }
+}
+
 const SettingsManager = {
   defaults: cloneDefaultSettings(),
   
@@ -48,14 +64,15 @@ const SettingsManager = {
   async set(key, value) {
     await this.init();
     const previous = cloneSettingsState(this.cache);
-    let next;
+    let rawNext;
     if (typeof key === 'object') {
-      next = { ...this.cache, ...key };
+      rawNext = { ...this.cache, ...key };
     } else {
-      next = { ...this.cache, [key]: value };
+      rawNext = { ...this.cache, [key]: value };
     }
+    const next = cloneSettingsState(rawNext);
     try {
-      await chrome.storage.local.set({ settings: next });
+      await chrome.storage.local.set({ settings: cloneSettingsState(next) });
     } catch (e) {
       this.cache = previous;
       throw e;
@@ -241,7 +258,7 @@ function makeValueBag(values = {}) {
 
 function setValueBagKey(bag, key, value) {
   Object.defineProperty(bag, String(key), {
-    value,
+    value: cloneStoredValue(value),
     enumerable: true,
     configurable: true,
     writable: true
@@ -258,7 +275,7 @@ function setScriptValueBag(cache, scriptId, bag) {
 }
 
 function exportValueBag(values = {}) {
-  return Object.fromEntries(Object.entries(values || {}));
+  return Object.fromEntries(Object.entries(values || {}).map(([key, value]) => [key, cloneStoredValue(value)]));
 }
 
 const ScriptValues = {
@@ -275,7 +292,7 @@ const ScriptValues = {
   async get(scriptId, key, defaultValue) {
     await this.init(scriptId);
     const value = this.cache[scriptId][key];
-    return value !== undefined ? value : defaultValue;
+    return value !== undefined ? cloneStoredValue(value) : defaultValue;
   },
   
   // FIXED: Save immediately to prevent data loss on service worker termination
@@ -286,7 +303,8 @@ const ScriptValues = {
     const hadKey = Object.hasOwn(this.cache[scriptId], key);
 
     // Update cache immediately
-    setValueBagKey(this.cache[scriptId], key, value);
+    const nextValue = cloneStoredValue(value);
+    setValueBagKey(this.cache[scriptId], key, nextValue);
 
     // Save IMMEDIATELY - don't debounce persistence in MV3!
     // Service workers can be terminated at any time, losing unsaved data.
@@ -304,9 +322,9 @@ const ScriptValues = {
     }
 
     // Debounce notifications only (these are less critical)
-    this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
+    this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), cloneStoredValue(nextValue), senderTabId);
 
-    return value;
+    return cloneStoredValue(nextValue);
   },
   
   // Debounced notifications - batches rapid changes (notification loss is acceptable)
@@ -342,7 +360,7 @@ const ScriptValues = {
       setValueBagKey(this.cache[scriptId], key, oldValue);
       throw e;
     }
-    this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
+    this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), undefined, senderTabId);
   },
   
   async list(scriptId) {
@@ -364,8 +382,9 @@ const ScriptValues = {
     const changes = [];
     for (const [key, value] of Object.entries(values)) {
       const oldValue = this.cache[scriptId][key];
-      setValueBagKey(this.cache[scriptId], key, value);
-      changes.push([key, oldValue, value]);
+      const nextValue = cloneStoredValue(value);
+      setValueBagKey(this.cache[scriptId], key, nextValue);
+      changes.push([key, cloneStoredValue(oldValue), cloneStoredValue(nextValue)]);
     }
     try {
       await chrome.storage.local.set({
@@ -401,7 +420,7 @@ const ScriptValues = {
       if (!Object.hasOwn(this.cache[scriptId], key)) continue;
       const oldValue = this.cache[scriptId][key];
       delete this.cache[scriptId][key];
-      changes.push([key, oldValue]);
+      changes.push([key, cloneStoredValue(oldValue)]);
     }
     if (changes.length === 0) return;
     try {
@@ -413,7 +432,7 @@ const ScriptValues = {
       throw e;
     }
     for (const [key, oldValue] of changes) {
-      this.scheduleNotification(scriptId, key, oldValue, undefined, senderTabId);
+      this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), undefined, senderTabId);
     }
   },
   
