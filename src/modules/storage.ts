@@ -125,6 +125,21 @@ function cloneDefaultSettings(): Settings {
   return JSON.parse(JSON.stringify(settingsDefaultsData)) as Settings;
 }
 
+function cloneSettingsState<T extends object>(settings: T): T {
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(settings) as T;
+    } catch (_) {
+      // Fall through to JSON/shallow clone for legacy or non-cloneable values.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(settings)) as T;
+  } catch (_) {
+    return { ...settings } as T;
+  }
+}
+
 async function getSettingsValue<K extends keyof Settings>(key: K): Promise<Settings[K]>;
 async function getSettingsValue(): Promise<Settings>;
 async function getSettingsValue<K extends keyof Settings>(key?: K): Promise<Settings | Settings[K]> {
@@ -161,19 +176,38 @@ export const SettingsManager = {
 
   async set(key: keyof Settings | Partial<Settings>, value?: Settings[keyof Settings]): Promise<Settings> {
     await this.init();
+    const previous = cloneSettingsState(this.cache!);
+    let next: Settings;
     if (typeof key === 'object') {
-      this.cache = { ...this.cache!, ...key };
+      next = { ...this.cache!, ...key };
     } else {
-      (this.cache as any)![key] = value;
+      next = { ...this.cache!, [key]: value };
     }
-    await chrome.storage.local.set({ settings: this.cache });
+    try {
+      await chrome.storage.local.set({ settings: next });
+    } catch (e) {
+      this.cache = previous;
+      throw e;
+    }
+    this.cache = next;
     return this.cache!;
   },
 
   async reset(): Promise<Settings> {
-    this.defaults = cloneDefaultSettings();
-    this.cache = cloneDefaultSettings();
-    await chrome.storage.local.set({ settings: this.cache });
+    await this.init();
+    const previousDefaults = cloneSettingsState(this.defaults);
+    const previousCache = cloneSettingsState(this.cache!);
+    const nextDefaults = cloneDefaultSettings();
+    const nextCache = cloneDefaultSettings();
+    try {
+      await chrome.storage.local.set({ settings: nextCache });
+    } catch (e) {
+      this.defaults = previousDefaults;
+      this.cache = previousCache;
+      throw e;
+    }
+    this.defaults = nextDefaults;
+    this.cache = nextCache;
     return this.cache;
   },
 };

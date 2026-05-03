@@ -191,6 +191,21 @@ describe('source storage module', () => {
     expect(reset.theme).toBe('dark');
   });
 
+  it('keeps settings cache consistent when persistence fails', async () => {
+    await SettingsManager.set({ enabled: false, theme: 'oled', debugMode: false });
+
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(SettingsManager.set({ enabled: true, theme: 'light', debugMode: true })).rejects.toThrow('QUOTA');
+    expect(await SettingsManager.get('enabled')).toBe(false);
+    expect(await SettingsManager.get('theme')).toBe('oled');
+    expect(await SettingsManager.get('debugMode')).toBe(false);
+
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(SettingsManager.reset()).rejects.toThrow('QUOTA');
+    expect(await SettingsManager.get('enabled')).toBe(false);
+    expect(await SettingsManager.get('theme')).toBe('oled');
+  });
+
   it('persists, searches, duplicates, reorders, and deletes scripts', async () => {
     const alpha = makeScript();
     const beta = makeScript({
