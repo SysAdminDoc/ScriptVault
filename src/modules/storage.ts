@@ -50,6 +50,38 @@ interface PendingNotification {
   senderTabId?: number | null;
 }
 
+type ValueBag = Record<string, unknown>;
+
+function makeValueBag(values: Record<string, unknown> = {}): ValueBag {
+  const bag = Object.create(null) as ValueBag;
+  for (const [key, value] of Object.entries(values || {})) {
+    setValueBagKey(bag, key, value);
+  }
+  return bag;
+}
+
+function setValueBagKey(bag: ValueBag, key: string, value: unknown): void {
+  Object.defineProperty(bag, String(key), {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function setScriptValueBag(cache: Record<string, ValueBag>, scriptId: string, bag: ValueBag): void {
+  Object.defineProperty(cache, String(scriptId), {
+    value: bag,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function exportValueBag(values: ValueBag = {}): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(values || {}));
+}
+
 // Declare the global _notifCallbacks on the service-worker scope
 declare const self: typeof globalThis & {
   _notifCallbacks?: Map<string, NotifCallbackInfo>;
@@ -246,7 +278,7 @@ export const ScriptStorage = {
       throw e;
     }
     this.cache = {};
-    ScriptValues.cache = {};
+    ScriptValues.cache = Object.create(null) as Record<string, ValueBag>;
     void prev;
     notifyScriptChange();
   },
@@ -326,20 +358,20 @@ export const ScriptStorage = {
 // commit to IDB first, then update cache so a persist failure leaves no
 // in-memory drift.
 export const ScriptValues = {
-  cache: {} as Record<string, Record<string, unknown>>,
+  cache: Object.create(null) as Record<string, ValueBag>,
   listeners: new Map<string, ValueChangeListener>(),
   pendingNotifications: new Map<string, PendingNotification>(), // Debounce notifications only (not saves!)
   _initPromises: new Map<string, Promise<void>>(),
 
   async init(scriptId: string): Promise<void> {
-    if (this.cache[scriptId]) return;
+    if (Object.hasOwn(this.cache, scriptId)) return;
     const existing = this._initPromises.get(scriptId);
     if (existing) return existing;
     const p = (async () => {
       // ScriptStorage.init() runs the v2→v3 migration. We chain it here so
       // pure-values-only call paths still trigger the migration on cold boot.
       await ScriptStorage.init();
-      this.cache[scriptId] = await ValuesDAO.getAll(scriptId);
+      setScriptValueBag(this.cache, scriptId, makeValueBag(await ValuesDAO.getAll(scriptId)));
     })();
     this._initPromises.set(scriptId, p);
     try {
@@ -367,7 +399,7 @@ export const ScriptValues = {
     } catch (e) {
       throw e;
     }
-    this.cache[scriptId]![key] = value;
+    setValueBagKey(this.cache[scriptId]!, key, value);
 
     // Debounce notifications only (these are less critical)
     this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
@@ -419,7 +451,7 @@ export const ScriptValues = {
 
   async getAll(scriptId: string): Promise<Record<string, unknown>> {
     await this.init(scriptId);
-    return { ...this.cache[scriptId]! };
+    return exportValueBag(this.cache[scriptId]!);
   },
 
   async setAll(scriptId: string, values: Record<string, unknown>, senderTabId: number | null = null): Promise<void> {
@@ -435,7 +467,7 @@ export const ScriptValues = {
       throw e;
     }
     for (const [key, _o, v] of changes) {
-      this.cache[scriptId]![key] = v;
+      setValueBagKey(this.cache[scriptId]!, key, v);
     }
     for (const [key, oldValue, value] of changes) {
       this.scheduleNotification(scriptId, key, oldValue, value, senderTabId);
@@ -443,8 +475,17 @@ export const ScriptValues = {
   },
 
   async deleteAll(scriptId: string): Promise<void> {
+    const hadCache = Object.hasOwn(this.cache, scriptId);
+    const prev = hadCache ? this.cache[scriptId]! : undefined;
+    try {
+      await ValuesDAO.deleteAll(scriptId);
+    } catch (e) {
+      if (hadCache) {
+        setScriptValueBag(this.cache, scriptId, prev!);
+      }
+      throw e;
+    }
     delete this.cache[scriptId];
-    await ValuesDAO.deleteAll(scriptId);
   },
 
   // Delete multiple specific keys at once
