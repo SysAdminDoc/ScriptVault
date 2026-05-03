@@ -772,6 +772,26 @@ async function exportAllScripts(options = {}) {
   };
 }
 
+const RESERVED_IMPORT_SCRIPT_IDS = new Set(['__proto__', 'prototype', 'constructor']);
+function isSafeImportedScriptId(id) {
+  return (
+    typeof id === 'string' &&
+    /^script_[A-Za-z0-9._:-]{1,160}$/.test(id) &&
+    !RESERVED_IMPORT_SCRIPT_IDS.has(id)
+  );
+}
+
+function allocateImportedScriptId(preferredId, usedScriptIds) {
+  if (isSafeImportedScriptId(preferredId) && !usedScriptIds.has(preferredId)) {
+    return preferredId;
+  }
+  let nextId;
+  do {
+    nextId = generateId();
+  } while (usedScriptIds.has(nextId));
+  return nextId;
+}
+
 async function importScripts(data, options = {}) {
   const {
     overwrite = false,
@@ -791,53 +811,68 @@ async function importScripts(data, options = {}) {
   }
 
   // Cache existing count once to avoid O(n²) getAll() inside the loop
-  let _importPosition = (await ScriptStorage.getAll()).length;
+  const allExistingScripts = await ScriptStorage.getAll();
+  const usedScriptIds = new Set(allExistingScripts.map(script => script.id));
+  let _importPosition = allExistingScripts.length;
 
   for (const script of data.scripts) {
+    const rawScriptId = script && typeof script === 'object' ? script.id : undefined;
+    const requestedScriptId = isSafeImportedScriptId(rawScriptId) ? rawScriptId : '';
+    const errorName = requestedScriptId || (typeof rawScriptId === 'string' ? rawScriptId : '<unknown>');
     try {
-      const parsed = parseUserscript(script.code);
-      if (parsed.error) {
-        results.errors.push({ name: script.id, error: parsed.error });
+      if (!script || typeof script.code !== 'string') {
+        results.errors.push({ name: errorName, error: 'Invalid script entry' });
         continue;
       }
 
-      const existing = await ScriptStorage.get(script.id);
+      const parsed = parseUserscript(script.code);
+      if (parsed.error) {
+        results.errors.push({ name: errorName, error: parsed.error });
+        continue;
+      }
+
+      const existing = requestedScriptId ? await ScriptStorage.get(requestedScriptId) : null;
       if (existing && !overwrite) {
         results.skipped++;
         continue;
       }
+
+      const scriptId = existing?.id && isSafeImportedScriptId(existing.id)
+        ? existing.id
+        : allocateImportedScriptId(requestedScriptId, usedScriptIds);
+      usedScriptIds.add(scriptId);
 
       const nextSettings = importSettings && script.settings && typeof script.settings === 'object'
         ? { ...script.settings }
         : { ...(existing?.settings || {}) };
 
       const importEntry = {
-        id: script.id,
+        id: scriptId,
         code: script.code,
         meta: parsed.meta,
-        enabled: script.enabled ?? true,
+        enabled: script.enabled !== false,
         settings: nextSettings,
-        position: script.position ?? _importPosition++,
-        createdAt: script.createdAt || Date.now(),
-        updatedAt: script.updatedAt || Date.now()
+        position: Number.isFinite(script.position) ? script.position : _importPosition++,
+        createdAt: Number.isFinite(script.createdAt) ? script.createdAt : Date.now(),
+        updatedAt: Number.isFinite(script.updatedAt) ? script.updatedAt : Date.now()
       };
       if (script.versionHistory && Array.isArray(script.versionHistory)) {
         importEntry.versionHistory = script.versionHistory;
       }
-      await ScriptStorage.set(script.id, importEntry);
+      await ScriptStorage.set(scriptId, importEntry);
       if (importStorage) {
         const storedValues = script.storage && typeof script.storage === 'object' ? script.storage : {};
         if (Object.keys(storedValues).length > 0) {
-          await ScriptValues.deleteAll(script.id);
-          await ScriptValues.setAll(script.id, storedValues);
+          await ScriptValues.deleteAll(scriptId);
+          await ScriptValues.setAll(scriptId, storedValues);
           results.storageImported++;
         } else if (existing) {
-          await ScriptValues.deleteAll(script.id);
+          await ScriptValues.deleteAll(scriptId);
         }
       }
       results.imported++;
     } catch (e) {
-      results.errors.push({ name: script.id, error: e.message });
+      results.errors.push({ name: errorName, error: e.message });
     }
   }
   
@@ -992,7 +1027,7 @@ async function importFromZip(zipData, options = {}) {
           try {
             const optionsData = JSON.parse(fflate.strFromU8(optionsFileData));
             enabled = optionsData.settings?.enabled !== false;
-            preferredScriptId = typeof optionsData.scriptId === 'string' ? optionsData.scriptId : '';
+            preferredScriptId = isSafeImportedScriptId(optionsData.scriptId) ? optionsData.scriptId : '';
           } catch (e) {
             console.warn('Failed to parse options file:', e);
           }
@@ -1026,14 +1061,10 @@ async function importFromZip(zipData, options = {}) {
         
         // Create or update script
         let scriptId;
-        if (existing?.id) {
+        if (existing?.id && isSafeImportedScriptId(existing.id)) {
           scriptId = existing.id;
-        } else if (preferredScriptId && !usedScriptIds.has(preferredScriptId)) {
-          scriptId = preferredScriptId;
         } else {
-          do {
-            scriptId = generateId();
-          } while (usedScriptIds.has(scriptId));
+          scriptId = allocateImportedScriptId(preferredScriptId, usedScriptIds);
         }
         usedScriptIds.add(scriptId);
         const script = {
