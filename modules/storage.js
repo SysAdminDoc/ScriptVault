@@ -24,6 +24,10 @@ function cloneSettingsState(settings) {
   }
 }
 
+function cloneSettingsValue(value) {
+  return value && typeof value === 'object' ? cloneSettingsState(value) : value;
+}
+
 const SettingsManager = {
   defaults: cloneDefaultSettings(),
   
@@ -38,7 +42,7 @@ const SettingsManager = {
   
   async get(key) {
     await this.init();
-    return key ? this.cache[key] : { ...this.cache };
+    return key !== undefined ? cloneSettingsValue(this.cache[key]) : cloneSettingsState(this.cache);
   },
   
   async set(key, value) {
@@ -57,7 +61,7 @@ const SettingsManager = {
       throw e;
     }
     this.cache = next;
-    return this.cache;
+    return cloneSettingsState(this.cache);
   },
   
   async reset() {
@@ -75,7 +79,7 @@ const SettingsManager = {
     }
     this.defaults = nextDefaults;
     this.cache = nextCache;
-    return this.cache;
+    return cloneSettingsState(this.cache);
   }
 };
 

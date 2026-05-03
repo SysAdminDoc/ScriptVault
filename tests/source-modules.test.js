@@ -191,6 +191,23 @@ describe('source storage module', () => {
     expect(reset.theme).toBe('dark');
   });
 
+  it('returns isolated settings snapshots and keyed values', async () => {
+    const settings = await SettingsManager.get();
+    settings.deniedHosts.push('blocked.example');
+    settings.trustedSigningKeys.demo = { name: 'Demo', addedAt: 1 };
+
+    expect((await SettingsManager.get()).deniedHosts).toEqual([]);
+    expect((await SettingsManager.get()).trustedSigningKeys).toEqual({});
+
+    const deniedHosts = await SettingsManager.get('deniedHosts');
+    deniedHosts.push('blocked.example');
+    expect(await SettingsManager.get('deniedHosts')).toEqual([]);
+
+    const returned = await SettingsManager.set({ deniedHosts: ['persisted.example'] });
+    returned.deniedHosts.push('mutated.example');
+    expect(await SettingsManager.get('deniedHosts')).toEqual(['persisted.example']);
+  });
+
   it('keeps settings cache consistent when persistence fails', async () => {
     await SettingsManager.set({ enabled: false, theme: 'oled', debugMode: false });
 
