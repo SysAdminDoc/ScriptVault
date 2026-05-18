@@ -5387,15 +5387,16 @@
 
     <!-- View Settings moved to header -->
 
-    <!-- Setup Warning Banner (Chrome 138+ / Developer Mode) -->
+    <!-- Setup Warning Banner (Chrome 138+ / Developer Mode) — Phase 39.10 -->
     <div class="setup-warning-banner" id="setupWarningBanner" style="display: none;">
         <div class="setup-warning-content">
             <span class="setup-warning-icon">⚠️</span>
-            <div class="setup-warning-text">
-                <strong>Setup Required:</strong> User scripts are not enabled. 
-                For Chrome 138+, enable <strong>"Allow User Scripts"</strong> in extension settings. 
+            <div class="setup-warning-text" id="setupWarningText">
+                <strong>Setup Required:</strong> User scripts are not enabled.
+                For Chrome 138+, enable <strong>"Allow User Scripts"</strong> in extension settings.
                 For older Chrome versions, enable <strong>Developer Mode</strong> in chrome://extensions.
             </div>
+            <button type="button" class="btn btn-warning" id="btnOpenExtensionDetails">Open Extension Details</button>
             <button type="button" class="btn btn-warning" id="btnSetupHelp">How to Enable</button>
             <button type="button" class="setup-warning-dismiss" id="btnDismissWarning" title="Dismiss" aria-label="Dismiss setup warning">×</button>
         </div>
@@ -5935,6 +5936,7 @@
                             <option value="material-darker">Material Darker</option>
                             <option value="nord">Nord</option>
                             <option value="ayu-dark">Ayu Dark</option>
+                            <option value="claude">Claude</option>
                         </select>
                     </div>
                     <div class="setting-row">

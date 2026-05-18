@@ -1,0 +1,184 @@
+# Cross-Browser Build Pipeline — WXT Migration Plan
+
+**Phase:** 33 (Cross-Browser Support).
+**Status:** Design — pending engineering decision to start.
+**Owner:** Phase 33.1 lead (TBD).
+**Last reviewed:** 2026-05-17.
+
+---
+
+## Goal
+
+Migrate ScriptVault from its current esbuild-based single-target build (Chrome MV3) to a per-browser build pipeline that produces working extensions for:
+
+- Chrome / Chromium (current, baseline)
+- Firefox MV3 (AMO listing)
+- Microsoft Edge (Edge Add-ons store)
+- Brave / Vivaldi / Opera / Arc (Chromium derivatives, "free" from CWS build)
+- Orion (WebKit, supports both Chrome and Firefox extensions via shim)
+- Safari (long-tail, decision-gated per Phase 33.7)
+
+All from a single source tree; no manual fork per browser. This document is the **operational plan** for Phase 33.1 (build pipeline), which is the prerequisite to all other Phase 33 subtasks.
+
+## Why WXT (over Plasmo, manual esbuild, or `web-ext`)
+
+[WXT](https://wxt.dev/) is the recommended tool per the existing Phase 33.1 ROADMAP entry. The choice is reaffirmed here:
+
+| Tool | MV3 Chrome+Firefox dual-build | Hot reload | Manifest abstraction | Auto-imports | Verdict |
+|---|---|---|---|---|---|
+| **WXT** | yes (native) | yes (cross-browser) | yes (per-browser `manifest` fn) | optional | **Pick.** Smallest dep surface that handles MV2/MV3 + Firefox quirks. |
+| Plasmo | yes | yes | yes (overlay model) | yes (React-flavored) | Heavier; opinionated React tooling adds drag. |
+| Manual esbuild | yes (with custom plugin) | partial | no | no | What we have. Doesn't scale past 2 browsers. |
+| `web-ext` (Mozilla) | Firefox only | Firefox only | no | no | Useful as a Firefox lint complement, not a primary builder. |
+
+WXT also handles:
+- Per-browser manifest functions (return a different manifest object for Chrome vs Firefox).
+- Firefox `browser_specific_settings` (`gecko.id`, `gecko_android`).
+- Web-accessible resources UUID handling for Firefox's `moz-extension://` random UUIDs.
+- Auto-handling of `world_accessible_resources` matches.
+
+## Migration sequence
+
+### Stage 1 — Repo prep (zero behavior change)
+
+1. Add `wxt` to `devDependencies`.
+2. Move all source into `entrypoints/`:
+   - `background.core.js` → `entrypoints/background.ts` (Phase 1 TS migration prerequisite; can stay as `background.js` if TS migration not yet ready).
+   - `pages/popup.html` + `popup.js` → `entrypoints/popup/`.
+   - `pages/sidepanel.html` + `sidepanel.js` → `entrypoints/sidepanel/`.
+   - `pages/dashboard.html` + `dashboard.js` + `dashboard-*.js` → `entrypoints/options/`.
+   - `pages/install.html` + `install.js` → `entrypoints/install/`.
+   - `content.js` → `entrypoints/content.ts`.
+3. Create `wxt.config.ts` with the manifest factory.
+4. Keep the existing `esbuild.config.mjs` working in parallel for a transition period.
+5. Verify WXT-built Chrome extension is byte-equivalent (or better) to the current build.
+
+**Exit:** `npm run build:chrome:wxt` produces a working extension; existing `npm run build` still works.
+
+### Stage 2 — Firefox MV3 target
+
+1. Add `firefox` build target in `wxt.config.ts`.
+2. Add `browser_specific_settings.gecko` (id + strict_min_version 128).
+3. Bundle `webextension-polyfill` — wrap every `chrome.*` call in `browser.*` where Firefox semantics differ.
+4. Switch background to event-page format for Firefox (Firefox MV3 doesn't fully support service workers; it uses event pages with `persistent: false`).
+5. Handle Firefox's `userScripts` API as `optional_permissions` — implement first-run grant flow.
+6. Replace any `chrome-extension://` URL assumption with build-time resolution (Firefox uses per-install random `moz-extension://` UUIDs).
+7. Validate Xray Vision boundary: code touching `unsafeWindow` / page globals must use `wrappedJSObject` on Firefox.
+8. Skip features that don't apply (DNR rule limits are lower on Firefox; feature-detect before registering >5000 rules).
+
+**Exit:** `npm run build:firefox` produces an AMO-uploadable `.xpi` that passes `web-ext lint`.
+
+### Stage 3 — Edge target
+
+Edge accepts the Chrome ZIP as-is. Add a target that's a thin wrapper around the Chrome build:
+
+```typescript
+// wxt.config.ts
+export default defineConfig({
+  manifestVersion: 3,
+  manifest: ({ browser }) => ({
+    // ...shared fields...
+    ...(browser === 'edge' && {
+      // Edge-specific niceties (none required today; placeholder)
+    }),
+  }),
+});
+```
+
+**Exit:** `npm run build:edge` produces `scriptvault-edge.zip` for Partner Center upload.
+
+### Stage 4 — Chromium-derivative validation (Brave, Vivaldi, Opera, Arc)
+
+No new build targets needed — they accept the Chrome ZIP. Add a **compatibility matrix** to README:
+
+| Browser | Status | Quirks |
+|---|---|---|
+| Chrome 120+ | ✅ Tier 1 | Baseline |
+| Edge | ✅ Tier 1 | Same as Chrome |
+| Brave | ⚠️ Tier 2 | Brave Shields runs before extensions — can conflict with DNR rules; document workaround |
+| Vivaldi | ⚠️ Tier 2 | Command-chain API can bind ScriptVault actions to power keys (opt-in) |
+| Opera | ⚠️ Tier 2 | Sideload or Opera Add-ons store (separate listing) |
+| Arc | ⚠️ Tier 2 | Sidebar UI — verify popup renders in narrow chrome |
+
+Smoke-test each on every release tag.
+
+### Stage 5 — Orion validation
+
+Orion supports both Chrome and Firefox extensions via shim. Load the Firefox `.xpi` in Orion; verify `browser.userScripts` shim is complete enough. Document the install path in README.
+
+### Stage 6 — Safari (deferred per Phase 33.7)
+
+Decision gate: do we have 1k+ install community demand for Safari? If yes, fund 8–16 weeks of Swift work using `xcrun safari-web-extension-converter` plus a native shim modeled on [quoid/userscripts](https://github.com/quoid/userscripts). If no, document the workaround (use quoid/userscripts to import ScriptVault scripts).
+
+## API surface differences to abstract
+
+Concrete `chrome.*` / `browser.*` divergences ScriptVault hits:
+
+| API | Chrome | Firefox | Strategy |
+|---|---|---|---|
+| `chrome.userScripts` | Callback or Promise | Promise (always) + `optional_permissions` | Use `browser.userScripts` via polyfill; gate behind permission request |
+| `chrome.scripting.executeScript` | works | works in MV3 | Polyfill handles |
+| `chrome.declarativeNetRequest` | high rule limit | lower rule limit | Feature-detect rule cap on init |
+| `chrome.alarms` | works | works | Polyfill handles |
+| `chrome.storage.session` | works | works (Firefox 115+) | Polyfill handles |
+| `chrome.sidePanel` | works | not supported | Feature-detect; hide side panel UI on Firefox |
+| `chrome.identity.launchWebAuthFlow` | works | works (Firefox 60+) | Polyfill handles; URL params differ slightly |
+| `chrome.cookies` | works (with `cookies` perm) | works | Polyfill handles |
+| `chrome.offscreen` | works | not supported | Fall back to in-SW work for AST analysis on Firefox |
+| `unsafeWindow` / page DOM access | content script's MAIN world | requires `wrappedJSObject` | Wrap with a `getPageWindow()` helper that branches per build |
+
+## CI changes
+
+`.github/workflows/ci.yml` will grow a build matrix:
+
+```yaml
+strategy:
+  matrix:
+    target: [chrome, firefox, edge]
+```
+
+Each matrix entry:
+1. Build target with WXT.
+2. Lint (`web-ext lint` for Firefox, no lint for Chrome/Edge today).
+3. Smoke test (Puppeteer for Chrome/Edge; `web-ext run` for Firefox).
+4. Upload build artifact per browser.
+
+CI runtime impact: ~2x current runtime if matrix runs in parallel.
+
+## Estimated effort
+
+| Stage | Effort | Risk |
+|---|---|---|
+| Stage 1 (WXT scaffolding) | 1-2 weeks | Low — purely structural |
+| Stage 2 (Firefox MV3) | 3-5 weeks | Medium — Firefox MV3 quirks, AMO source review |
+| Stage 3 (Edge target) | 1-3 days | Trivial |
+| Stage 4 (Chromium derivatives) | 1 week | Low — mostly documentation + smoke |
+| Stage 5 (Orion) | 1-3 days | Low |
+| Stage 6 (Safari) | 8-16 weeks | High — Swift, App Store, iOS quirks |
+
+Total: 6-10 weeks for Chrome + Firefox + Edge + derivatives + Orion. Safari adds another 8-16 weeks behind a decision gate.
+
+## Open questions
+
+1. **TS migration prerequisite:** Phase 1 (TypeScript migration) is partially shipped. Some pages (`pages/dashboard.js`, etc.) are still JS. WXT supports both, but auto-imports + type checking work best with TS. Decision: ship Stage 1 with mixed JS/TS, finish Phase 1 in parallel.
+2. **Monaco bundling on Firefox:** Monaco's worker scripts require `web_accessible_resources` UUID handling. WXT handles this for the Chrome `chrome-extension://` UUID; Firefox's random UUIDs need build-time resolution. Verify Monaco loads correctly under Firefox before declaring Stage 2 complete.
+3. **Cloud sync on Firefox:** OAuth refresh tokens, PKCE flows — should work identically via `browser.identity.launchWebAuthFlow`. Test against Dropbox + Google Drive + OneDrive.
+4. **Firefox AMO source review:** AMO requires unminified source for any minified extension. The build pipeline must produce a source archive alongside the `.xpi`. WXT supports this via `build.sourceMap` and an archive step.
+5. **Version-string sync:** Chrome and Firefox manifests must declare the same version string. Add a CI lint that fails if `manifest.json` version ≠ `manifest-firefox.json` version (already partially in place).
+
+## Source citations
+
+- [WXT — Target different browsers](https://wxt.dev/guide/essentials/target-different-browsers.html)
+- [WXT — Manifest generation](https://wxt.dev/guide/essentials/manifest.html)
+- [MDN — browser_specific_settings](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/browser_specific_settings)
+- [Mozilla's webextension-polyfill](https://github.com/mozilla/webextension-polyfill)
+- [Firefox userScripts API (optional_permissions)](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts)
+- [Firefox declarativeNetRequest](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/declarativeNetRequest)
+- [Chrome vs Firefox API differences](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Chrome_incompatibilities)
+- [Edge Add-ons publish guide](https://learn.microsoft.com/en-us/microsoft-edge/extensions-chromium/publish/publish-extension)
+- [Brave Shields + extension interactions](https://brave.com/shields/)
+- [Orion browser (Kagi)](https://browser.kagi.com/)
+- [Safari Web Extensions](https://developer.apple.com/safari/extensions/)
+- [quoid/userscripts](https://github.com/quoid/userscripts)
+- ROADMAP.md Phase 33 (full subtask listing)
+- ROADMAP.md Round 9 sources 180–192

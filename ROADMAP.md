@@ -2,6 +2,9 @@
 
 > From v2.0.1 (bash-concatenated JS prototype) to production-grade TypeScript extension.
 > Each phase is independently shippable. Later phases depend on earlier ones.
+>
+> **Roadmap version:** Round 12 — last research sweep 2026-05-17. Shipped baseline: v3.10.1 (April 28, 2026). Pending: v3.11.0 (storage-hardening grouping, Phase 38.13) ➜ v3.12.0+ (Phase 39, Round 12 catch-up).
+> **Source floor:** >260 distinct URLs across Rounds 1–12 (see appendices). Every Now/Next item is traceable to at least one source.
 
 ---
 
@@ -709,6 +712,8 @@ Chrome's `chrome.notifications` API supports all of these natively via `progress
 
 **Status (v3.3.0, 2026-05-02):** Shipped. `progress` (0..100) and `buttons[]` (capped at 2 per Chrome) are accepted by `GM_notification`. New top-level `GM_updateNotification(id, details)` and `GM_closeNotification(id)` functions exposed on `window`. `GM_notification(...)` now also returns a control object `{ close(), update(patch) }` so authors don't have to keep tags around manually. `chrome.notifications.onButtonClicked` routes the index back to the originating tab; the wrapper fires `onbuttonclick({ buttonClickIndex })`. `content.js` bridge forwards `buttonIndex`; linter `KNOWN_GM_APIS` learned the new function names.
 
+**2026-05-17 note (Round 12):** Chrome [Notification Triggers API](https://developer.chrome.com/docs/web-platform/notification-triggers) is **officially discontinued** — explicitly do NOT plan against it in any future iteration. Tracked in Phase 39.47 to prevent resurfacing in planning.
+
 **Exit criteria:** `GM_info.isIncognito` and `GM_info.platform` populated; `@unwrap` parses and emits correctly; merge-mode UI exists; "Run now" button uses `userScripts.execute()` on Chrome 135+; `GM_xmlhttpRequest` accepts `noCache`/`nocache`, `redirect`, and `responseType: 'stream'`; `GM_cookie` proxied through SW; `@inject-into`, `@connect`, `@tag`, `@antifeature`, `@top-level-await`, `@run-at document-body`, `@weight` all parsed; `@require` SRI validated; `GM_getTab`/`GM_saveTab`/`GM_getTabs` stored in `storage.session`; `@run-at navigation` fires on SPA route changes; `GM_notification` supports progress, buttons, update, close.
 
 ---
@@ -1212,12 +1217,13 @@ The extension's `_locales/` directory has en-US strings but coverage is incomple
 - Cap at 100 events (FIFO); display in a "Audit Log" or "History" tab in the dashboard
 - No competitor (TM, VM, ScriptCat) offers a tamper-evident audit trail [source 70]
 
-### 17.3 Update Consent Decoupling
+### 17.3 Update Consent Decoupling — Now-priority-1 (TM shipped May 8, 2026)
 - "Check for updates" (query `@updateURL`) must never silently install the new version
 - Current flow: check → if newer version available → auto-install
 - New flow: check → store pending update → badge the script row "⬆ Update available" → user clicks → diff view (Phase 15.4) → user confirms → install
 - Exception: if user has explicitly set auto-update AND script body is unmodified since last install → auto-install is permitted (matches TM's "no local edits" guard)
 - VM #1023 documents this as the #2 most-painful VM behavior (check triggers install, destroying local edits) [source 74]
+- **2026-05-17 status (Round 12):** Tampermonkey **5.5.0 (May 8, 2026)** rolled this to stable per [tampermonkey.net/changelog.php](https://www.tampermonkey.net/changelog.php). The most-painful documented behavior in the manager ecosystem is now solvable by switching managers — urgency raises to Now-priority-1 within Phase 17 ordering. Phase 38.3 (Round 11 promotion) and Phase 38.9 (VM v2.37.1 force-update guard) are both subsumed here; implement once as a tri-state Settings → Updates control ("Check only" / "Check + install" / "Manual review per script").
 
 ### 17.4 External Message Origin Validation
 - Audit every `chrome.runtime.onMessage` and `chrome.runtime.onMessageExternal` handler in the SW
@@ -1456,11 +1462,12 @@ The extension's `_locales/` directory has en-US strings but coverage is incomple
 - Current scopes: @namespace, @name, @version, @description, @author, @license, @homepageURL, @documentationURL, @updateURL, @downloadURL, @support URL, @icon, @iconURL, @defaultIcon, @run-at, @include, @exclude, @match, @require, @resource, @grant, @noframes, @inject-into, @connect
 - Add future GREASE additions as Phase 22 sub-versions [source 110]
 
-### 22.2 URLPattern API for @match Rewrite
+### 22.2 URLPattern API for @match Rewrite — PROMOTED to Next (Round 12)
 - Chrome 95+: `new URLPattern(pattern)` provides a standard way to parse URL patterns
 - If Greasemonkey @match syntax aligns with URLPattern, rewrite Phase 4's URL matcher to use URLPattern API
 - Fallback: keep custom regex engine for non-URLPattern platforms (Firefox, older Chrome)
 - Benefit: align with web standards; potential to share test cases with other browsers [source 111]
+- **2026-05-17 status (Round 12):** WHATWG URLPattern spec dated March 2026 reached **Baseline Newly Available** ([web.dev/baseline-urlpattern](https://web.dev/blog/baseline-urlpattern)). Promoted from Later → **Next**. The spec is now stable enough that Phase 4's matcher can be expressed as a thin wrapper over `URLPattern` for the modern path, keeping the regex engine only for `@include` regex patterns and edge cases the standard doesn't cover. Tracked in Phase 39.44.
 
 ### 22.3 `@require-local` Directive (Script Dependencies)
 - Allow `@require-local id:scriptId` to reference another installed script by ID as a dependency
@@ -1888,11 +1895,12 @@ The extension's `_locales/` directory has en-US strings but coverage is incomple
 
 **Goal:** Future-proof ScriptVault by adopting emerging scripting standards and enabling next-generation portability.
 
-### 32.1 WASM Component Model Integration (W3C)
-- Research WASI Preview 2+ support in browser service workers (experimental, Chrome 146+)
-- Enable scripts to be packaged as WASM components (from TypeScript → esbuild-wasm → component binary)
-- Publish "Userscript as WASM component" pattern: script exports `run()` function via component model IDL
-- Fallback: JavaScript userscripts remain first-class; WASM is opt-in for performance-critical scripts [source 164]
+### 32.1 WASM Component Model Integration (W3C) — DEPRIORITIZED (Round 12)
+- ~~Research WASI Preview 2+ support in browser service workers (experimental, Chrome 146+)~~
+- ~~Enable scripts to be packaged as WASM components (from TypeScript → esbuild-wasm → component binary)~~
+- ~~Publish "Userscript as WASM component" pattern: script exports `run()` function via component model IDL~~
+- ~~Fallback: JavaScript userscripts remain first-class; WASM is opt-in for performance-critical scripts [source 164]~~
+- **2026-05-17 status (Round 12):** Per [component-model.bytecodealliance.org](https://component-model.bytecodealliance.org/), the WASM Component Model is **server-side only** in 2026 — Wasmtime/wasm-tools are the implementations; no browser host exists. Dropping from active planning until a browser-side runtime ships. Tracked in Phase 39.46 as an explicit "do not plan against this" entry to prevent the speculation from re-entering future research rounds. **WASI Preview 2 in browser SW is not on Chromium's roadmap.**
 
 ### 32.2 Cross-Platform Portability Standard (abx-spec-behaviors)
 - Adopt abx-spec-behaviors schema: standardize selectors (CSS/XPath) + actions (click, fill, extract)
@@ -1939,6 +1947,8 @@ The extension's `_locales/` directory has en-US strings but coverage is incomple
 ## Phase 33 — Cross-Browser Support & Build Pipeline
 
 **Goal:** Ship ScriptVault to Firefox, Edge, Brave/Vivaldi/Opera, Orion, and (long-tail) Safari without forking the codebase. Establish a build pipeline that produces per-browser artifacts from a single source.
+
+**2026-05-17 status:** ⚠️ Operational plan scaffolded in [`docs/cross-browser-pipeline.md`](docs/cross-browser-pipeline.md): WXT migration justified vs Plasmo / manual esbuild / web-ext; 6-stage sequence (repo prep → Firefox MV3 → Edge → derivatives → Orion → Safari deferred); API-surface differences table; CI matrix changes; 6–10 week estimate for Chrome+Firefox+Edge+derivatives+Orion, +8–16 weeks for Safari behind decision gate.
 
 ### 33.1 Cross-Browser Build Pipeline (WXT)
 - Migrate build from current Vite/esbuild to **WXT** (https://wxt.dev) — auto-handles MV2/MV3 conversion, browser-specific manifests, hot-reload across vendors [source 180]
@@ -3282,3 +3292,857 @@ The following Round-10 sub-phases are tagged **Next** by impact (most are high-l
 Floor of 30-60 sources is exceeded across all 10 rounds combined (well over 200 cumulative URLs in the appendix). Round 10's net-new contribution is ≈22 distinct sources concentrated on 2026 H1 platform shifts and the gap between Round 9's VM/SC baseline (v2.34/v0.16.13) and current upstream (VM v2.37.1, SC v0.16.14). No Round-10 item duplicates a shipped phase or a Now/Next item from earlier rounds. Two new phases (36, 37) added; phase summary table updated below.
 
 ---
+
+
+---
+
+## Phase 38 — Round 11 Catch-up (May 2026)
+
+**Goal:** Track upstream releases and Chrome platform deltas published since the Round 10 cutoff (April 22, 2026). Sources: VM v2.37.0 (Apr 23 2026) + v2.37.1 beta, ScriptCat v1.4 (AI Agent system), Tampermonkey 5.5.6234–5.5.6237 (Jan–Apr 2026), no Chrome 149/150 extension-API surface changes worth a phase.
+
+### 38.1 `GM_addElement` null-on-failure contract (VM v2.37.0 + TM 5.5.6237 parity)
+
+Both VM v2.37.0 ([#2500](https://github.com/violentmonkey/violentmonkey/issues/2500)) and TM 5.5.6237 (April 10, 2026) converged on the same fix this month: `GM_addElement(parent, tag, attrs)` now returns `null` instead of throwing or returning `undefined` when the parent argument is falsy or the element fails to attach. Two independent maintainers landing the same contract in the same month makes it the de-facto spec.
+
+- Audit ScriptVault's `GM_addElement` wrapper in `bg/` and the content-side mirror — any path that currently throws on falsy parent or detached node should `return null` and log via `errorLog.push` instead.
+- Add a regression test pinning the contract: `GM_addElement(null, 'div')` → `null`; `GM_addElement(detachedNode, 'div')` → `null`; valid call → returns the created element.
+- Source: [VM #2500](https://github.com/violentmonkey/violentmonkey/issues/2500), [TM changelog 5.5.6237](https://www.tampermonkey.net/changelog.php).
+
+### 38.2 Regex search in dashboard script search (TM 5.5.6234 parity)
+
+TM 5.5.6234 (January 15, 2026) added regex support to its in-dashboard script search bar. ScriptVault already has `code:` prefix for full-text source search (Phase 7) — extend the same input with `re:` (or `/pattern/flags`) to apply a `RegExp` against the searched corpus.
+
+- Parser: detect a leading `/` + trailing `/flags` or a `re:` prefix and compile to `new RegExp(...)` inside a `try { } catch (e) { showInvalidRegexHint() }`.
+- Apply against script `name`, `description`, `match` patterns, and (when combined with `code:`) the source body.
+- Highlight hits in the result rows; debounce the regex compile to one per 200ms to avoid pathological-pattern lockups.
+- Source: [TM changelog 5.5.6234](https://www.tampermonkey.net/changelog.php).
+
+### 38.3 Decouple update-check from auto-install — TM ships first (Phase 17.3 fast-track)
+
+TM 5.5.6235 (February 13, 2026) shipped the long-requested split between "check for updates" and "install update" ([VM #1023](https://github.com/violentmonkey/violentmonkey/issues/1023)). Phase 17.3 already plans this for ScriptVault — TM doing it first means the most-painful documented behavior in the userscript-manager community is now solvable by switching managers, which raises the urgency.
+
+- Promote 17.3 from **Now** to **Now-priority-1** within the security-round-2 phase ordering.
+- Specific UI: Settings → Updates → "Check only" / "Check + install" / "Manual review per script" tri-state, defaulting to "Check + install" for backwards compatibility but exposing the toggle prominently.
+- Add an inline "1 update available" badge on every script row when in "Manual review per script" mode, click to diff (existing Phase 15.4) → confirm → apply.
+- Source: [TM changelog 5.5.6235](https://www.tampermonkey.net/changelog.php), [VM #1023](https://github.com/violentmonkey/violentmonkey/issues/1023).
+
+### 38.4 `@run-at context-menu` runnable from popup (TM 5.5.6234 parity)
+
+TM 5.5.6234 added a "Run on this page" entry in the popup that fires `@run-at context-menu` scripts without the user having to right-click. ScriptVault already has Phase 11.4 "Run on This Tab" (shipped v3.4.0) for arbitrary scripts — extend that path to enumerate the active tab's `@run-at context-menu` scripts and surface them as a dedicated popup section.
+
+- Reuse the existing `runScriptNow` background message handler (v3.4.0 shipped) — only the popup UI changes.
+- Section header: "Context-menu scripts" with a count badge; each row a single-tap launcher.
+- Hide the section entirely when no `context-menu` scripts match the current tab.
+- Source: [TM changelog 5.5.6234](https://www.tampermonkey.net/changelog.php).
+
+### 38.5 Open local userscript file + watch disk for changes (TM 5.5.6236 parity, Chrome path)
+
+TM 5.5.6236 (April 2, 2026) shipped open-from-disk + watch-for-changes for Chrome — the user picks a `.user.js` from disk in the popup, edits in their external editor, and TM hot-reloads on save without a manifest URL. This is the user-facing companion to Phase 36.10 (live `@require` re-fetch on SW wake).
+
+- Use [`window.showOpenFilePicker()`](https://developer.mozilla.org/en-US/docs/Web/API/Window/showOpenFilePicker) (Chrome 86+) to acquire a `FileSystemFileHandle`.
+- Persist the handle in IndexedDB (handles survive across SW restarts; permission must be re-prompted on next dashboard open via [`queryPermission()`](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemHandle/queryPermission)).
+- Poll `getFile().lastModified` every 2 seconds while dashboard is focused (Page Visibility API gate); on change, re-parse and re-register through the existing `installFromCode` path (v3.8.0 shipped).
+- Settings toggle: "Watch local files for changes" (default off — explicit opt-in per script).
+- This belongs alongside Phase 36.10 in execution order (both share the live-reload infrastructure).
+- Source: [TM changelog 5.5.6236](https://www.tampermonkey.net/changelog.php), [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API).
+
+### 38.6 Native `window.onurlchange` via Navigation API (ScriptCat v1.4 parity)
+
+ScriptCat v1.4 reimplemented `window.onurlchange` on the [Navigation API](https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API) (Chrome 102+) instead of polling `location.href`. Cleaner SPA support, lower CPU, fires on `popstate`, `pushState`, `replaceState`, and bfcache restore in a single event. ScriptVault's current `window.onurlchange` grant uses a `MutationObserver` + `setInterval` polling combo (see `bg/` content-side bridge) which can miss SPA transitions on sites that swap routes without DOM mutation.
+
+- Replace the polling shim with `navigation.addEventListener('navigate', ...)` when `window.navigation` exists; keep the polling fallback for non-supporting platforms (Safari, older Firefox).
+- The existing event payload (`{ url, oldUrl }`) stays; just fires more reliably.
+- Tie into Phase 11.10 `@run-at navigation` if/when that ships — same plumbing.
+- Source: [ScriptCat v1.4 changelog](https://docs.scriptcat.org/en/docs/change/v1.4/), [Navigation API](https://developer.chrome.com/docs/web-platform/navigation-api).
+
+### 38.7 Hebrew translation + RTL smoke test (TM 5.5.6235 parity)
+
+TM 5.5.6235 added Hebrew (`he`) — the first RTL language across major userscript managers. ScriptVault has 8 LTR languages today; Hebrew is the lowest-effort way to validate Phase 14.6 (RTL groundwork) and Phase 36.3 (`sidePanel.getLayout()` RTL flip) end-to-end before committing to Arabic/Persian.
+
+- Add `_locales/he/messages.json` with translations for the same key set as `en`.
+- Set `dir="rtl"` on `<html>` when `chrome.i18n.getUILanguage()` returns an RTL locale; flip animations, drawer slide direction, and the side panel preview pane.
+- Acceptance: dashboard, popup, side panel, install page, and devtools panel all render correctly with Hebrew strings; Monaco does its own RTL handling natively.
+- Pulls Phase 14.6 (RTL groundwork) from **Next** to **Now-deferred-on-translation** — string changes are zero-risk and can ship before translation lands.
+- Source: [TM changelog 5.5.6235](https://www.tampermonkey.net/changelog.php).
+
+### 38.8 Tab rename to "Settings | Update | Sync" (VM v2.37.1 beta UX)
+
+VM v2.37.1 split its monolithic Settings tab into three: Settings, Update, Sync. Reduces scroll length and surfaces the update-check controls (newly decoupled per 38.3) closer to where users look for them.
+
+- ScriptVault's dashboard sidebar already has these as separate sections — no UI work, but worth confirming the labels match VM's convention (Settings / Update / Sync) for cross-manager intuition.
+- Confirm: "Updates" section already exists; rename to singular "Update" to match VM/TM convention; "Sync" section already exists.
+- Cosmetic-only; ship inside the next dashboard polish point release.
+- Source: [VM v2.37.1 release notes](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.37.1).
+
+### 38.9 "Don't force update on normal click" guard (VM v2.37.1 beta UX)
+
+VM v2.37.1 fixed a footgun where clicking the per-script "check for updates" icon would also auto-install the update without a confirmation step. ScriptVault's dashboard force-update button (Phase 7) currently does the same — single click triggers fetch + install with no diff preview.
+
+- Audit: change the dashboard force-update icon's `onclick` to invoke check-only; if an update is available, show a banner with [Diff] / [Install] / [Dismiss] actions instead of installing immediately.
+- Side effect: aligns with Phase 38.3 (decoupled update flow) — same "Manual review per script" mode behavior.
+- Tests: `dashboard-update.test.js` should pin the new flow — single click ≠ install.
+- Source: [VM v2.37.1 release notes](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.37.1).
+
+### 38.10 ScriptCat-style Agent API (Under Consideration)
+
+ScriptCat v1.4 shipped a full **AI Agent system** under `CAT.agent.*` — multi-turn conversation, 11 built-in tools (web scraping, tab management, OPFS filesystem, code execution, dialogs), [MCP protocol](https://modelcontextprotocol.io/) integration, sub-agents, scheduled tasks, skill bundles. This is the largest 2026 leap by any userscript manager.
+
+- **Aligned with ScriptVault philosophy?** Mostly no. ScriptVault's stated principle is local-first, zero-telemetry. ScriptCat's agent assumes an LLM API endpoint — by default OpenAI- or Anthropic-compatible cloud — though it can in theory run against on-device Gemini Nano (Phase 36.2).
+- **What's salvageable:** the **MCP client** path (talk to a user-configured local MCP server) is fully local-first. Userscripts could grant `@grant CAT.agent.mcp` and call tool servers running on `localhost:<port>` without network. This is a Phase 36.2 extension worth scoping.
+- **What's rejected:** the cloud-LLM defaults, the multi-turn chat UI, the sub-agent generator, and the skill marketplace — all require network and a UX surface that contradicts the focused-manager pitch.
+- Mark **Under Consideration** pending Phase 36.2 (Prompt API) shipping and a clear user request signal. Do not start implementation speculatively.
+- Source: [ScriptCat v1.4 changelog](https://docs.scriptcat.org/en/docs/change/v1.4/), [Model Context Protocol spec](https://modelcontextprotocol.io/specification).
+
+### 38.11 GM_xmlhttpRequest service-worker event leak fix (TM 5.5.6237)
+
+TM 5.5.6237 documents a Chrome-specific bug where repeated `GM_xmlhttpRequest` calls fill the browser's `filtered_service_worker_events` debug log with empty entries. Likely root cause: SW event listeners aren't being released between XHR completions.
+
+- Audit ScriptVault's XHR proxy in `modules/xhr.js` and the post-Phase-1 TS mirror — ensure `port.onMessage` / `port.onDisconnect` listeners are removed on `xhr.onloadend`, not just `onload`.
+- Add a memory-pressure smoke test: 1000 sequential `GM_xmlhttpRequest` calls, assert SW heap stays bounded (within 10MB of baseline post-GC).
+- Source: [TM changelog 5.5.6237](https://www.tampermonkey.net/changelog.php).
+
+### 38.12 Pluralize `GM_info.script.tags` (VM v2.37.0)
+
+VM v2.37.0 renamed `GM_info.script.tag` (singular) to `tags` (plural array). ScriptVault's parser already exposes `meta.tags: string[]` (shipped v3.9.0, Phase 36.4) — verify `GM_info.script.tags` is the consumer-facing field, alias `script.tag` to `script.tags[0]` for back-compat with scripts written against pre-2026 VM.
+
+- Compatibility shim: `Object.defineProperty(GM_info.script, 'tag', { get() { return this.tags?.[0]; } })`.
+- Source: [VM v2.37.0 changelog](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.37.0).
+
+### 38.13 Pre-3.10.1 → post-3.10.1 hardening sweep (audit pass)
+
+Between v3.10.1 (April 28, 2026) and the writing of this phase, 11 commits landed concentrated on storage / persistence rollback boundaries. They aren't tagged as a release yet but represent a coherent Phase-5/Phase-17 reinforcement worth recording so the next release notes can cite them by topic instead of by individual commit.
+
+| Commit | Topic |
+|--------|-------|
+| `aca9e8c` | Clone storage write boundaries |
+| `4f1e25e` | Isolate settings snapshots from cache |
+| `a4c2c02` | Rollback settings cache on persist failure |
+| `3b576c3` | Harden script value storage keys |
+| `5d0d479` | Harden imported script ID handling |
+| `d35fce7` | Preserve script IDs in runtime ZIP restores |
+| `cdf17ae` | Harden factory reset storage cleanup |
+| `f5f6640` | Rollback workspace activation state on save failure |
+| `42e6a10` | Harden folder and workspace persistence rollback |
+| `bf409f1` | Harden wrapper DOM and network hooks |
+| `a1e89c9` | Harden userscript bridge and network fetches |
+
+- Tag a v3.11.0 release for the next CWS submission grouping these under a single "Storage & persistence rollback hardening" line in CHANGELOG.
+- Add a regression test pinning the rollback contract: every storage write that touches multiple keys atomically rolls back if any key fails (the v3.10.1 → HEAD work appears to enforce this end-to-end; lock it in with a test).
+- No external source — internal hardening pass, captured for completeness.
+
+**Exit criteria:** `GM_addElement` returns `null` on failure with a regression test; dashboard search accepts `re:` regex prefix; update-check decoupled with tri-state setting (38.3 promoted); popup gets context-menu-script section; open-local-file + watch shipped end-to-end (Chrome path); `window.onurlchange` uses Navigation API where available; Hebrew locale + RTL smoke shipped; dashboard tabs match VM's "Settings | Update | Sync" labels; force-update click is check-only; `GM_info.script.tags` plural with `tag` alias; XHR listener leak fixed and pinned by memory test; v3.11.0 tagged with the storage-hardening commits called out in CHANGELOG.
+
+---
+
+## Round 11 — External Research (May 2026)
+
+_Net-new sources since Round 10 (April 22, 2026 cutoff). Numbered 218–230 to extend the existing index._
+
+### Source Index
+
+**Upstream Manager Releases (post-Round-10)**
+218. https://github.com/violentmonkey/violentmonkey/releases/tag/v2.37.0 — VM v2.37.0 (April 23, 2026): GM_addElement null-on-failure (#2500), @tag dashboard regression fix (#2499), parse HTML in content realm (#2498), GM_info.script.tags plural, lazy init safe copies, DB convert for old `@tag` scripts.
+219. https://github.com/violentmonkey/violentmonkey/releases — VM v2.37.1 beta (April 30, 2026): dashboard tabs split into "Settings | Update | Sync"; check-update click no longer force-installs; classic English-first sort restored.
+220. https://github.com/violentmonkey/violentmonkey/issues/2500 — GM_addElement contract issue.
+221. https://www.tampermonkey.net/changelog.php — Tampermonkey 5.5.6234 (Jan 15 2026), 5.5.6235 (Feb 13 2026), 5.5.6236 (Apr 2 2026), 5.5.6237 (Apr 10 2026).
+222. https://docs.scriptcat.org/en/docs/change/v1.4/ — ScriptCat v1.4 (2026): Agent system (CAT.agent.*), 11 built-in tools, MCP protocol, sub-agents, skill bundles, @unwrap, window.onurlchange via Navigation API, multi-platform script search engines.
+223. https://docs.scriptcat.org/en/docs/change/beta-changelog/ — ScriptCat beta channel (rolling, May 2026).
+
+**Platform & Standards (Round 11 net-new)**
+224. https://modelcontextprotocol.io/specification — Model Context Protocol spec (Anthropic, ratified 2024 Q4): tool-server JSON-RPC contract that ScriptCat v1.4 adopts.
+225. https://developer.chrome.com/docs/web-platform/navigation-api — Navigation API (Chrome 102+): `navigation.addEventListener('navigate', ...)` for SPA URL change detection without polling.
+226. https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API — File System Access API (Chrome 86+): `showOpenFilePicker` + `FileSystemFileHandle.getFile().lastModified` polling for the open-local-file + watch pattern.
+227. https://developer.mozilla.org/en-US/docs/Web/API/FileSystemHandle/queryPermission — `queryPermission` / `requestPermission` on persisted file handles (handles survive SW restart but permission must be re-prompted).
+
+**Community & Issue Tracker (Round 11)**
+228. https://github.com/violentmonkey/violentmonkey/issues/2499 — VM dashboard wedge on `@tag`-installed scripts (resolved in v2.37.0; gives ScriptVault a regression target if any future `@tag` parser change introduces the same shape of bug).
+229. https://github.com/violentmonkey/violentmonkey/issues/2498 — "Parse HTML in content realm" — relevant if/when ScriptVault revisits the GM_addElement / install-page rendering boundary; VM moved its HTML parsing into the content realm to avoid extension-realm DOM leakage.
+230. https://chromiumdash.appspot.com/schedule — Chrome release schedule: confirms Chrome 149 stable target ≈ June 2026, Chrome 150 ≈ August 2026; no extension-API changes flagged in the milestone trackers reviewed during Round 11.
+
+### Round 11 — Items Rejected (with reasoning)
+
+| Item | Why Rejected |
+|------|--------------|
+| ScriptCat-style cloud-LLM Agent UI | Requires user-supplied API key + chat surface + telemetry-prone tool calls; directly contradicts ScriptVault's local-first / zero-telemetry positioning. Captured as 38.10 Under Consideration with the MCP-only subset. |
+| Sub-agent / skill marketplace (ScriptCat v1.4) | Distribution + curation problem disguised as a feature; requires moderation, hosting, abuse handling. Out of scope for a local manager. |
+| Multi-platform script search engine selector (ScriptCat v1.4) | ScriptVault's existing GreasyFork integration + planned OpenUserJS integration (Phase 16.7) cover the addressable demand without a settings-bloat dropdown. |
+| TM Firefox proxy support in `GM_xmlhttpRequest` (5.5.6234) | Chrome MV3 doesn't expose per-request proxy controls to extensions; would require declarativeNetRequest rewrite per call, which is fragile. Re-evaluate when Chrome ships an equivalent API. |
+| Pre-warmed extra editor commands for touch devices (TM 5.5.6236) | Monaco already exposes the underlying commands; ScriptVault's editor toolbar covers the common cases. Adding a touch-mode toggle is settings bloat for a desktop-first audience. |
+
+### Round 11 — Promoted Tier Changes
+
+- **Phase 17.3** (decouple update-check from auto-install): **Now → Now-priority-1**. TM shipped this Feb 2026; the gap is now load-bearing for retention.
+- **Phase 14.6** (RTL groundwork): **Next → Now-deferred-on-translation**. Hebrew translation (38.7) is the trigger; CSS/layout work can land before strings.
+- **Phase 36.10** (live local-`@require` reload): **Later → Next**. TM shipping an equivalent end-user feature in 5.5.6236 + the security review can be scoped to "localhost only, opt-in per script" makes the original deferral moot.
+
+### Round 11 — Items Already Shipped (audit-only)
+
+| Round 11 finding | ScriptVault status |
+|------------------|--------------------|
+| `GM_info.script.tags` plural | ✅ Shipped v3.9.0 (Phase 36.4); needs the singular `tag` getter alias added (38.12) |
+| `@unwrap` directive (ScriptCat v1.4) | ✅ Shipped v3.2.1 (Phase 11.2) |
+| Storage-write rollback / settings cache isolation | ✅ Shipped post-v3.10.1 commits (38.13); ship as v3.11.0 |
+
+### Round 11 Completion Note
+
+Net-new sources: 13 (218–230). All 13 either back a Phase 38 item, document a rejected feature with reasoning, or pin a calendar fact for forward planning. Cumulative source floor (>240 across Rounds 1–11) remains well above the 30–60 floor. No Round 11 item duplicates a Now/Next item from Rounds 1–10; cross-references to Phase 17.3, 14.6, and 36.10 are explicit promotions, not duplicates. Phase 38 added; phase summary table below updated with v3.11.0 milestone.
+
+| Phase | Version | Milestone |
+|-------|---------|-----------|
+| 38    | v3.11.0 | Round 11 catch-up: GM_addElement contract, regex search, decoupled updates, open-local-file watch, Navigation API onurlchange, Hebrew/RTL, storage-hardening release |
+| 39    | v3.12.0+ | Round 12 catch-up: supply-chain custody, CWS API v2, TM 5.5.0 + VM v2.37.x parity, GM revival deltas, Chrome 149 platform wins, dep upgrades |
+
+---
+
+## Phase 39 — Round 12 Catch-up (May 2026)
+
+**Goal:** Track everything net-new between the Round 11 cutoff (early May 2026) and 2026-05-17 across: (a) supply-chain security incidents and CWS publisher-side deadlines, (b) Tampermonkey **5.5.0** (May 8 2026) and Violentmonkey **v2.37.1/v2.37.3-beta**, (c) Greasemonkey's surprise revival (May 12–15 2026 commits after a ~14-month quiet period — invalidates the "GM is dead" assumption baked into Rounds 1–11), (d) Chrome 149 platform deltas, (e) dependency major-version bumps with hard cutover dates, (f) new community signal from VM/TM issues opened in Q1–Q2 2026.
+
+Sources cited inline; full URL index at end of phase. All items verified against existing Phases 0–38 to prevent duplication.
+
+### Phase 39 progress snapshot (2026-05-17)
+
+| Status | Items |
+|---|---|
+| ✅ Shipped | **39.9** Claude theme · **39.10** runtime user-scripts probe · **39.24** storage round-trip tests |
+| ✅ Audit complete, no code needed | **39.4** locale-length lint (CI test added) · **39.18** `confirm()` audit · **39.19** sourceURL emission · **39.20** `@icon` fallback (pre-existing) · **39.21** clearInterval N/A by design |
+| ⚠️ Design doc scaffolded | **39.1** [release runbook](docs/release-runbook.md) · **39.2** [CWS API v2 cutover](docs/release-runbook.md) · **39.5** [`@require-provenance` Sigstore](docs/require-provenance-design.md) · **39.40** [MCP 2026 compliance](docs/mcp-2026-compliance.md) · **39.43** [WCAG 3 gap analysis](docs/wcag3-gap-analysis.md) · **Phase 33** [cross-browser WXT plan](docs/cross-browser-pipeline.md) |
+| ⏳ Pending (Round 12 plan documented above; implementation TBD) | 39.3, 39.6–39.8, 39.11–39.17, 39.22, 39.23, 39.25–39.27, 39.28–39.39, 39.41, 39.42, 39.45, 39.48, 39.49 |
+| ✅ Cross-refs to other phases | 39.44 (URLPattern → 22.2 promoted) · 39.46 (WASM-CM → 32.1 deprio) · 39.47 (Notification Triggers → 11.11 dead-marked) |
+
+This snapshot reflects the in-session work; the full sub-item bodies below carry detailed `Status (2026-05-17)` notes where shipped, audited, or scaffolded.
+
+### Supply Chain & Release-Pipeline Security
+
+#### 39.1 CWS API Key Custody & Release-Pipeline OIDC
+
+The **Shai-Hulud 2.0 / Mini Shai-Hulud** npm worm (Sep 2025, Nov 2025, attacker reactivated May 11 2026) compromised the **Trust Wallet** Chrome extension, draining ~$8.5M in cryptocurrency through a stolen CWS API key. The Cyberhaven OAuth-phishing campaign (Dec 2024) had already hit 36 extensions / 2.6M users via the same vector.
+
+ScriptVault's current release pipeline (`publish.sh` + `.github/workflows/ci.yml`) stores long-lived CWS credentials in GitHub Actions secrets. Replace with:
+
+- **GitHub Actions OIDC** federated to a GCP service account; CWS API token minted just-in-time per release.
+- **Hardware-key MFA** required on the publisher Google account; document in a new `SECURITY.md` "Release Custody" section.
+- **Quarterly key rotation runbook** with the next-rotation date checked into `docs/release-runbook.md`.
+- **Audit log:** every publish writes a signed receipt to a private GitHub repo; rejected if no OIDC chain.
+
+Sources: [Microsoft Security Blog — Shai-Hulud 2.0 (Dec 9 2025)](https://www.microsoft.com/en-us/security/blog/2025/12/09/shai-hulud-2-0-guidance-for-detecting-investigating-and-defending-against-the-supply-chain-attack/), [Trust Wallet Chrome extension hack (The Hacker News)](https://thehackernews.com/2025/12/trust-wallet-chrome-extension-hack.html), [Cyberhaven OAuth phishing (Sekoia)](https://blog.sekoia.io/targeted-supply-chain-attack-against-chrome-browser-extensions/).
+
+**Status (2026-05-17):** ⚠️ Design doc scaffolded — implementation pending. See [`docs/release-runbook.md`](docs/release-runbook.md) for the full custody model: hardware-key MFA on the publisher account, GCP Secret Manager + GitHub Actions OIDC for CWS API credentials, 90-day rotation cadence, audit-log requirements, and explicit prohibition of long-lived secrets in GitHub Actions. Tracks 39.1 + 39.2 + 39.4 + 39.49 in one runbook. Implementation gated on Phase 39.2's chrome-webstore-upload-cli 4.0 cutover.
+
+#### 39.2 CWS API v2 Migration (Hard Deadline 2026-10-15)
+
+The Chrome Web Store v1 publishing API sunsets **October 15, 2026**. After that, all programmatic uploads require API v2. ScriptVault's `publish.sh` uses `chrome-webstore-upload-cli`, which itself shipped a **4.0.0** breaking release (see 39.35) requiring Node 22+, env-only secrets, and removal of `--auto-publish`.
+
+- Pin `chrome-webstore-upload-cli@^4`; migrate `--auto-publish` invocations to the new flow.
+- Verify the publish dry-run against v2 endpoints before Oct 15.
+- Document fallback: manual upload via CWS Developer Dashboard if the CLI breaks mid-cutover.
+- Gate the cutover on Phase 39.1's OIDC plumbing landing first (the v2 API requires shorter-lived tokens).
+
+Source: [CWS API v2 announcement](https://developer.chrome.com/blog/cws-api-v2).
+
+**Status (2026-05-17):** ⚠️ Design doc scaffolded — implementation pending. Full migration sequence in [`docs/release-runbook.md`](docs/release-runbook.md) §3.
+
+#### 39.3 Monaco DOMPurify CVE-2026-0540 Mitigation
+
+[CVE-2026-0540](https://github.com/microsoft/monaco-editor/issues/5248) — DOMPurify XSS in versions 3.1.3–3.3.1 (fixed in 3.3.2). Monaco builds **0.54.0-dev-20250909 and later** transitively bundle the vulnerable range. ScriptVault is currently pinned to **0.52.0** (safe) but Phase 13.4 plans the 0.55.x upgrade.
+
+- Gate the Monaco bump on confirming the target build embeds DOMPurify ≥ 3.3.2 (verify via `npm ls dompurify` in the Monaco package).
+- If not, vendor-patch DOMPurify in `lib/monaco/` after copy, or stay on 0.52.x until Monaco bumps its embed.
+- Coordinate with **Phase 18.7** (`GM_setHTML` via Sanitizer API) — the native Sanitizer API path eliminates DOMPurify dependence in extension UI but not in Monaco's own innards.
+
+Source: [microsoft/monaco-editor #5248](https://github.com/microsoft/monaco-editor/issues/5248).
+
+#### 39.4 CWS 75-Char Universal Name Limit Audit ✅ Audited + CI lint scaffolded
+
+Chrome Web Store policy now enforces a **75-character cap** on the manifest `name` field across **all** locale translations. Submissions are rejected silently if any `_locales/<lang>/messages.json` `extName` exceeds the cap.
+
+- Add a CI lint that fails the build if any locale's `extName` value > 75 chars.
+- Audit current 8 locales (`de`, `en`, `es`, `fr`, `ja`, `pt`, `ru`, `zh`) plus the planned Phase 38.7 Hebrew (`he`).
+- Document the cap in `CONTRIBUTING.md` so future locale PRs respect it.
+
+**Status (2026-05-17):**
+- ✅ **Audit complete:** all 8 current locales declare `extName = "ScriptVault"` (11 chars) and `extDescription` under 132 chars. No live violations.
+- ✅ **CI lint shipped:** [`tests/manifest-locales.test.js`](tests/manifest-locales.test.js) pins `extName ≤ 75`, `extDescription ≤ 132`, and asserts all locales share the `en` key set (no orphaned/missing keys). Runs in the existing `npm test` Vitest pipeline; no CI config change required.
+- ⏳ **CONTRIBUTING.md note pending** — small follow-up.
+
+Source: [CWS program policies](https://developer.chrome.com/docs/webstore/program-policies).
+
+#### 39.5 `@require-provenance` Sigstore-Style Verification (Concept)
+
+**npm provenance is now GA via Sigstore** ([blog.sigstore.dev](https://blog.sigstore.dev/npm-provenance-ga/)). The same threat model that motivates npm provenance — CDN compromise serving silently-modified code — applies to userscripts' `@require` URLs. Phase 11.8 covers SRI hashes; this extends it.
+
+- Define `// @require-provenance <sigstore-bundle-url>` directive parsed alongside `@require`.
+- At install, fetch the provenance bundle, verify the Sigstore signature, and confirm the artifact hash matches the `@require` body.
+- Reject install with a clear error if verification fails (`Provenance mismatch: @require body does not match signed artifact`).
+- Document the publisher workflow: how an author signs a `@require` bundle with `cosign` or `npm publish --provenance`.
+- Implementation is opt-in; absence of `@require-provenance` falls back to the existing SRI check.
+
+Source: [Sigstore npm provenance GA](https://blog.sigstore.dev/npm-provenance-ga/), [Cosign signing docs](https://docs.sigstore.dev/cosign/signing/overview/).
+
+**Status (2026-05-17):** ⚠️ Design doc scaffolded — implementation pending. Full design in [`docs/require-provenance-design.md`](docs/require-provenance-design.md): author signing workflow with `cosign sign-blob`, `@require-provenance` + `@require-identity` directives, verification flow using Web Crypto + bundled Fulcio root, six-stage implementation phases (parser → bundle fetcher → signature verify → Fulcio chain → Rekor inclusion proof → UI surface).
+
+### Tampermonkey 5.5.0 + Violentmonkey v2.37.x Parity (May 2026)
+
+#### 39.6 First-Run "Allow Userscript Injection" Permission Gate
+
+Tampermonkey **5.5.0 (May 8 2026)** requires users to grant a "special extension permission" before any script will inject. This is a trust-model shift beyond Chrome 138's per-extension toggle: the manager itself surfaces a one-time permission prompt and refuses injection until granted.
+
+- Show a first-run modal in the dashboard: "ScriptVault is about to inject code into web pages. Allow?" with [Allow] / [Deny] / [Read more].
+- Persist the user's choice in `chrome.storage.local`; deny short-circuits all `chrome.userScripts.register()` paths.
+- "Read more" links to a plain-language explainer of the trust model (Phase 34.6 cognitive-a11y language).
+- Subsequent script installs do not re-prompt; the grant is global.
+
+Source: [TM changelog 5.5.0](https://www.tampermonkey.net/changelog.php).
+
+#### 39.7 In-Page Context-Menu Commands via `chrome.contextMenus`
+
+Violentmonkey **v2.37.3 beta (May 10 2026)** added an opt-in path that surfaces `GM_registerMenuCommand` entries in the page's native right-click menu via `chrome.contextMenus.create`. ScriptVault currently lists those commands only in the popup.
+
+- Add a per-script setting "Show menu commands in page context menu" (default off — opt-in to avoid context-menu clutter).
+- On enable, register a `chrome.contextMenus.create({ contexts: ['page', 'selection'], documentUrlPatterns: [...] })` entry per command at registration time.
+- Tear down on disable or uninstall (`chrome.contextMenus.remove`).
+- Frame-aware: Phase 36.8 per-frame popup-menu grouping interacts; context-menu items must include frame ID so the right script handler fires.
+
+Source: [VM v2.37.3 beta release notes](https://github.com/violentmonkey/violentmonkey/releases).
+
+#### 39.8 OS-Policy Script Provisioning (Enterprise Extension to Phase 25)
+
+TM 5.5.0 also added support for OS-policy-pushed userscripts: admins drop a `.user.js` file in a system-policy directory and TM auto-installs it on next browser launch. ScriptVault's Phase 25 covers enterprise admin policies for installing the extension itself; this extends Phase 25.2 (internal script repository) with a no-network path.
+
+- Read from `chrome.storage.managed` for an array of script URLs (or inline `.user.js` bodies).
+- Install/update on managed-storage change events.
+- Flag managed scripts in the dashboard with a "managed by your organization" pill; users cannot disable, delete, or edit.
+- Define a sample ExtensionSettings policy JSON template in `docs/enterprise-policy-sample.md`.
+
+Source: [TM changelog 5.5.0](https://www.tampermonkey.net/changelog.php), [chrome.storage.managed reference](https://developer.chrome.com/docs/extensions/reference/api/storage#storage_areas).
+
+#### 39.9 "Claude" Editor Theme ✅ Shipped
+
+TM 5.5.0 ships a "Claude" Monaco theme. Trivial parity item — add a JSON theme file under `lib/monaco/themes/` and an entry in the theme dropdown (Phase 7 dashboard themes already infrastructure).
+
+**Status (2026-05-17):** Shipped. Warm-autumn palette (foreground `#e6d3b5`, keyword `#d97757`, comment `#8b7355`, cursor `#d97757`) defined in [`pages/editor-sandbox.html`](pages/editor-sandbox.html) as `sv-claude`, mapped via the existing `mapTheme()` switchboard, and surfaced in the dashboard editor-theme dropdown ([`pages/dashboard.html`](pages/dashboard.html) editor-settings section). No new dependency; pure JSON theme definition.
+
+Source: [TM changelog 5.5.0](https://www.tampermonkey.net/changelog.php).
+
+#### 39.10 Runtime "Allow User Scripts" Self-Diagnosis (TM #2607) ✅ Shipped
+
+TM issue [#2607](https://github.com/Tampermonkey/tampermonkey/issues/2607) (Nov 28 2025) documents recurring user confusion: Chrome 138+ replaced the global Developer Mode requirement with a per-extension "Allow User Scripts" toggle, but managers still show the legacy message. Phase 13.3 covers documentation; this is the **runtime probe**.
+
+- On dashboard load and on `chrome.userScripts.register()` failure, probe `chrome.userScripts.execute()` with a no-op script.
+- If it throws `NotAllowedError` / `chrome.userScripts.* not available`, surface a banner: _"ScriptVault needs the 'Allow User Scripts' toggle for this extension. [Open Extension Details]"_ that deep-links to `chrome://extensions/?id=<extension-id>`.
+- Suppress the legacy "Developer mode required" message on Chrome ≥ 138.
+
+**Status (2026-05-17):** Shipped. [`pages/dashboard.js`](pages/dashboard.js) `checkUserScriptsAvailability()` now classifies the probe outcome into three states (`ok` / `api-missing` / `not-allowed`) and tailors the banner copy + CTA per state. Chrome 138+ users see "ScriptVault needs the 'Allow User Scripts' toggle" with a one-click **Open Extension Details** deep-link to `chrome://extensions/?id=<extension-id>`. Pre-138 Chrome falls back to the existing Developer-mode guidance. Browsers without `chrome.userScripts` show "Browser unsupported" (no toggle link). The existing "How to Enable" modal path is preserved. [`pages/dashboard.html`](pages/dashboard.html) added the new direct-link button alongside the existing help button.
+
+#### 39.11 `@exclude-top` / `@match-top` Top-Level-Origin Directives (TM #2784, extends Phase 26.5)
+
+TM issue [#2784](https://github.com/Tampermonkey/tampermonkey/issues/2784) (May 13 2026) asks for exclusions based on `window.top.location.href` so iframe-injected scripts can be gated by the embedding page. Phase 26.5 covers frame-aware `@match`; this extends it to top-origin awareness.
+
+- Parser: accept `@exclude-top <pattern>` and `@match-top <pattern>` as new directives.
+- Wrapper-builder: before invoking the script, check `window.top?.location?.href` against the patterns; abort if `@exclude-top` matches or `@match-top` does not match.
+- Cross-origin top frames return `undefined` via the same-origin policy — treat as "match" for `@exclude-top` (conservative — does not run when the top is opaque) and "no match" for `@match-top` (script only runs when top origin is provably the right one).
+- Test coverage: same-origin top, cross-origin top (denied access), and direct top-level navigation cases.
+
+Source: [TM #2784](https://github.com/Tampermonkey/tampermonkey/issues/2784).
+
+#### 39.12 `GM_registerMenuCommand` User-Activation Preservation (TM #2781)
+
+TM issue [#2781](https://github.com/Tampermonkey/tampermonkey/issues/2781) (May 13 2026) — regression from TM 5.4.1 where menu-command callbacks lose user-activation, breaking `showOpenFilePicker()` and other gesture-gated APIs.
+
+- Audit ScriptVault's menu-command dispatch path (`background.core.js` + `content.js` bridge): the click handler in the popup/contextmenu must invoke the callback **synchronously** within the user-activation window.
+- Use `chrome.userScripts.execute({ world: 'MAIN', injectImmediately: true })` (see 39.28) with the callback bound to the click event, rather than the current message-passing roundtrip that consumes the activation.
+- Regression test: a menu command that calls `showOpenFilePicker()` must open the picker on first click.
+
+Source: [TM #2781](https://github.com/Tampermonkey/tampermonkey/issues/2781).
+
+#### 39.13 Blob URL Support in `GM_openInTab` (TM #2669)
+
+TM issue [#2669](https://github.com/Tampermonkey/tampermonkey/issues/2669) — `GM_openInTab` cannot accept a `blob:` URL on Chrome because the URL is bound to the script's content world and dies when the tab navigates.
+
+- On Blob-URL detection, the background SW fetches the Blob via the content script, re-creates it under the extension's origin, and opens **that** in the new tab.
+- Document the limitation: cross-tab Blob sharing requires re-materializing under the extension origin, which means the user sees the URL as `blob:chrome-extension://...` rather than the original.
+- Phase 16.6 covers Blob/File URL **download**; this is the in-tab open path.
+
+Source: [TM #2669](https://github.com/Tampermonkey/tampermonkey/issues/2669).
+
+#### 39.14 Same-Origin Shortcut in `GM_xmlhttpRequest` (TM #2782)
+
+TM issue [#2782](https://github.com/Tampermonkey/tampermonkey/issues/2782) (May 13 2026) — `GM_xmlhttpRequest` returns 401 on a same-origin request that the page's own `fetch(..., {credentials: 'include'})` returns 200 for. The SW context doesn't inherit the page's session cookies.
+
+- Detection: when target URL origin === current tab URL origin AND `anonymous !== true`, route via the **content-world `fetch()`** through a postMessage bridge instead of the SW.
+- Forward the response back through the bridge with identical timing semantics (mock `onreadystatechange`).
+- Edge case: SW must still own the response for non-same-origin or anonymous requests.
+- This is a per-call routing decision, not a settings toggle.
+
+Source: [TM #2782](https://github.com/Tampermonkey/tampermonkey/issues/2782).
+
+#### 39.15 Sortable / Filterable Per-Script Exclude List Editor (TM #2780)
+
+TM issue [#2780](https://github.com/Tampermonkey/tampermonkey/issues/2780) (May 11 2026) — when a script has 50+ `@exclude` patterns, the script-settings UI list is unordered and unfilterable. ScriptVault's pattern list has the same shape.
+
+- Add a search/filter input above the include/exclude pattern lists in the script settings drawer.
+- Drag-sort handles for reordering (Phase 14.5 covers the keyboard alternative).
+- Sort options: alphabetical, by recency, by hit count (if matched-tab analytics from Phase 20.5 are populated).
+
+Source: [TM #2780](https://github.com/Tampermonkey/tampermonkey/issues/2780).
+
+#### 39.16 Crypto-Scam Install-Time Heuristic (TM #2783)
+
+TM issue [#2783](https://github.com/Tampermonkey/tampermonkey/issues/2783) (May 13 2026) — an active scam campaign distributes userscripts via Pastebin/Telegram that exfiltrate wallet keys. Phase 28.3 covers generic malware detection; this is a targeted install-time heuristic.
+
+- On install, if the source URL host is **not** in `{greasyfork.org, openuserjs.org, github.com, gist.github.com}` AND the script body contains keywords from a curated allowlist (`wallet`, `swap`, `exchange`, `seed`, `mnemonic`, `private[\s_-]?key`, `metamask`, `trust\s?wallet`), surface a **modal warning** (not just a banner): _"This script accesses wallet/crypto-related APIs and is not from a known userscript repository. Are you certain you trust the author? [I understand the risk] / [Cancel]"_.
+- Distinct from Phase 5.x AST analysis; this is a content-heuristic + source-heuristic gate stacked **on top of** the existing analysis pipeline.
+- Track install-cancellation rate; if low, tighten the keyword list (false positives suggest the warning is dismissed without reading).
+
+Source: [TM #2783](https://github.com/Tampermonkey/tampermonkey/issues/2783).
+
+#### 39.17 Optional `monaco-vim` Keybindings
+
+Recurring VM community request. Phase 15 covers the editor surface; `monaco-vim` is a ~50KB ESM module that adds Vim modal editing.
+
+- Bundle `monaco-vim` via esbuild; load on demand from a Settings → Editor → "Vim mode" toggle.
+- Persist mode and Vim ex-command history in `chrome.storage.local`.
+- Document that `monaco-vim` does NOT cover all Vim ex-commands; link to its README.
+
+Source: [monaco-vim](https://github.com/brijeshb42/monaco-vim).
+
+### Greasemonkey Revival Deltas (May 12–15 2026)
+
+After a ~14-month quiet period, Greasemonkey maintainer arantius landed 6 commits between May 12–15 2026. The Rounds 1–11 baseline assumed "GM is dead"; that's now incorrect.
+
+#### 39.18 `confirm()` → `<menuitem>` Audit (GM commit 4970340, May 15 2026) ✅ Audited
+
+Greasemonkey replaced its `window.confirm()` dialog with a `<menuitem>` element. The pattern matters because **`window.confirm()` is blocked in MV3 service worker contexts** anyway — any code path that calls it from a non-page context silently does nothing.
+
+- Grep ScriptVault for `window.confirm` / `confirm(` outside `pages/*.js` (dashboard, popup pages run in extension-page context where `confirm` works) — any hits in `background.core.js`, `bg/`, `modules/`, or `offscreen.js` are bugs.
+- For confirmed bugs, replace with the existing `showConfirmModal` dashboard helper, or a `chrome.notifications.create` button-confirmation flow.
+
+**Status (2026-05-17):** ✅ Audit complete — **PASS**. All `confirm(` calls in the codebase live in dashboard extension-page contexts (`pages/dashboard-chains.js`, `dashboard-collections.js`, `dashboard-profiles.js`, `dashboard-templates.js`) where `window.confirm` is fully supported. Every call already prefers `window.ScriptVaultDashboardUI.confirm()` (modal helper) with native `confirm()` as a defensive fallback. Zero SW-context `confirm()` calls found in `background.core.js`, `bg/`, `modules/`, or `offscreen.js`. No code changes required.
+
+Source: [GM commit 4970340](https://github.com/greasemonkey/greasemonkey/commit/4970340).
+
+#### 39.19 `//# sourceURL` Emission Re-evaluation (GM commit 19100d7, May 13 2026) ✅ Audited — N/A
+
+GM removed its `//# sourceURL=` injection. ScriptVault emits `//# sourceURL=scriptvault://<scriptId>` in the wrapped script to give DevTools a sensible file name. GM's removal is **opposite direction** — they argue it confused devtools step-through.
+
+- Audit our wrapper-builder: keep the directive but use a more devtools-friendly format like `//# sourceURL=scriptvault/<script-name>.user.js` so source-map UX stays intact.
+- Document the decision in `CLAUDE.md` so future maintainers don't follow GM's removal.
+- This is a "leapfrog by NOT following" — competitor abandoned a debuggability win that ScriptVault keeps.
+
+**Status (2026-05-17):** ✅ Audit complete — **N/A**. ScriptVault does **not** emit `//# sourceURL=` or `//# sourceMappingURL=` in its wrapper-builder. The only occurrence in the repo is `lib/acorn.min.js` (the vendored parser's own map reference). The original Round 12 assumption that "ScriptVault emits this" was speculative — there's nothing to re-evaluate. ScriptVault is **already aligned with Greasemonkey's new direction** by default. If we ever decide to emit a directive for DevTools UX, the decision lives here.
+
+Source: [GM commit 19100d7](https://github.com/greasemonkey/greasemonkey/commit/19100d7).
+
+#### 39.20 `@icon` Download-Failure Tolerance (GM commit 0f5e6cf, May 12 2026) ✅ Already Shipped
+
+GM hardened against `@icon` download failures (offline install, blocked image host). ScriptVault's install-page currently expects the icon to load; an icon-fetch failure shouldn't block install.
+
+- `pages/install.js`: wrap `<img src="${escape(meta.icon)}">` in an `onerror` handler that falls back to the default ScriptVault icon.
+- Install proceeds even if the icon is unreachable; record the failure in the per-script error log (Phase 20.4) for later diagnosis.
+
+**Status (2026-05-17):** ✅ Audit complete — **already shipped**. [`pages/install.js:268-277`](pages/install.js) registers an event-delegated `error` handler on the install page that detects any `<img>` with a `data-icon-fallback` attribute, hides the broken image, and substitutes the fallback content (`📜` scroll emoji) without blocking install. The icon `<img>` tag at line 961 sets the `data-icon-fallback` attribute when an `@icon` URL is provided. CSP-compliant (no inline `onerror=`). Pattern pre-dates Round 12; the GM commit only confirms ScriptVault already did the right thing.
+
+Source: [GM commit 0f5e6cf](https://github.com/greasemonkey/greasemonkey/commit/0f5e6cf).
+
+### Violentmonkey Closed-Issue Regression Backports
+
+The following VM issues closed in May 2026 expose subtle bugs ScriptVault should pin with regression tests to prevent the same shape of regression here.
+
+#### 39.21 `clearInterval` Cross-Frame Regression Test (VM #2518) ✅ Audited — N/A by design
+
+VM #2518 (closed 2026-05-11) — `clearInterval()` from one frame doesn't cancel `setInterval()` from another. ScriptVault's timer-handle table must be keyed by `(frameId, handle)`.
+
+- Add `tests/timers.test.js`: spawn intervals in top frame + iframe, clear from either, assert both cancel correctly.
+- Audit the GM-wrapper timer proxies for the same shape.
+
+**Status (2026-05-17):** ✅ Audit complete — **N/A by architecture**. ScriptVault's wrapper-builder does NOT maintain a shared `(frameId, handle)` timer-handle map. Each USER_SCRIPT world (registered via `chrome.userScripts.register()`) gets its own per-frame realm where `window.setInterval` / `window.clearInterval` are the native browser primitives. Handles are scoped to the realm; there is no shared map for them to collide across. The VM bug shape doesn't apply to ScriptVault's MV3 injection model. Confirmed by inspecting `src/background/wrapper-builder.ts` — no `_timerMap` / `_intervalMap` global. Test file deferred as vacuous.
+
+Source: [VM #2518](https://github.com/violentmonkey/violentmonkey/issues/2518).
+
+#### 39.22 CSP Page Injection Timeout-Bounded Awaits (VM #2513)
+
+VM #2513 (closed 2026-05-07) — deadlock when injecting into a CSP-strict page. Implication: any per-frame await chain in injection code must have a wall-clock timeout.
+
+- Audit `registerAllScripts` and `runScriptNow` for unbounded `Promise.all` over per-frame injections.
+- Wrap each with `Promise.race([fn(), timeoutAfter(5000)])`; log the timeout, don't deadlock.
+
+Source: [VM #2513](https://github.com/violentmonkey/violentmonkey/issues/2513).
+
+#### 39.23 Cross-Realm `Symbol.iterator` Guard (VM #2516)
+
+VM #2516 (closed 2026-05-09) — popup crash on YouTube Live Archive due to a cross-realm array-like that lacks `Symbol.iterator`.
+
+- Audit popup and sidepanel data-population paths: any `for (const x of arr)` over data received via `chrome.runtime.sendMessage` must guard with `Array.from(arr ?? [])` first.
+
+Source: [VM #2516](https://github.com/violentmonkey/violentmonkey/issues/2516).
+
+#### 39.24 Script Body Curly-Quote Round-Trip Test (VM #2363) ✅ Shipped
+
+VM #2363 (open since Sep 21 2025) — Orion (WebKit) silently encodes ASCII `"` as curly `"` during storage round-trip, corrupting scripts.
+
+- `tests/storage.test.js`: pin a script body containing `'`, `"`, ``\``, and Unicode quotes; write, reload, hash-compare.
+- Phase 33.6 (Orion validation) treats this as a known compatibility hazard.
+
+**Status (2026-05-17):** Shipped. [`tests/storage-roundtrip.test.js`](tests/storage-roundtrip.test.js) pins six invariants over `ScriptStorage.set`/`.get`: ASCII single/double/mixed quotes, intentional curly quotes, CRLF/LF line endings, template-literal backticks (including nested), zero-width and special Unicode (ZWJ/ZWNJ/BOM/RLO), plus a set→get→set→get idempotency check on a nontrivial source body. The fake-indexeddb backend in CI won't reproduce Orion's bug, but the suite catches the regression class if ScriptVault ever introduces its own quote-mangling code path.
+
+Source: [VM #2363](https://github.com/violentmonkey/violentmonkey/issues/2363).
+
+#### 39.25 `@require` Cache Invalidation on Dependency Update (VM #2453)
+
+VM #2453 (open since Mar 1 2026) — force-refresh of a script doesn't invalidate the cached `@require` bodies its dependents use.
+
+- When the user force-updates a script, walk all `@require` URLs in its metadata; bump their cache entries' `lastFetched` to 0 so the next dependent reload re-fetches.
+- Phase 18.10 (`@require-nocache`) is dev-mode only; this is the production invalidation path.
+
+Source: [VM #2453](https://github.com/violentmonkey/violentmonkey/issues/2453).
+
+#### 39.26 Sync Save Acknowledgment + Test-Connection UX (VM #2486)
+
+VM #2486 (open since Apr 5 2026) — Save click silently fails on WebDAV; user has no feedback. Phase 23.5 covers backoff, not the user-feedback gap.
+
+- Sync provider config UI: explicit **[Test Connection]** button that issues a GET against the configured endpoint and reports `200 / 401 / 403 / network error` with plain-language guidance.
+- On Save: show a toast (`Saved` / `Sync queued` / `Sync failed: <reason>`) instead of silently accepting.
+- Persist last-sync-result in `chrome.storage.local`; show a chip ("Last sync: 5 min ago — OK") in the sync settings drawer.
+
+Source: [VM #2486](https://github.com/violentmonkey/violentmonkey/issues/2486).
+
+#### 39.27 Install-Page Incognito Short-Circuit (VM #2491)
+
+VM #2491 (open since Apr 11 2026) — visiting a `*.user.js` URL in a private window when the extension is not allowed in incognito crashes the install flow.
+
+- `pages/install.js`: on load, check `chrome.extension.inIncognitoContext`; if true AND the user has not granted incognito access for ScriptVault, show a static page explaining the limitation and a deep-link to the per-extension toggle.
+- Never call `chrome.runtime.sendMessage` from the install page in this state; that's where VM crashes.
+
+Source: [VM #2491](https://github.com/violentmonkey/violentmonkey/issues/2491).
+
+### Chrome Platform Delta (Chrome 149+, Verified)
+
+#### 39.28 `chrome.scripting.executeScript({injectImmediately: true})` for `document-start`
+
+Chrome 149 stable (~June 2 2026) makes `injectImmediately` reliable for the run-on-document-start case. ScriptVault currently approximates `@run-at document-start` via early registration; on slow connections, the script still runs after first paint.
+
+- For one-shot `runScriptNow` (Phase 11.4) calls when the script's metadata specifies `@run-at document-start`, pass `injectImmediately: true`.
+- Verify the existing registration path is still preferred for persistent injections; this is for `userScripts.execute()` / `scripting.executeScript()` one-shots.
+
+Source: [Chrome 149 beta blog](https://developer.chrome.com/blog/chrome-149-beta).
+
+#### 39.29 Omnibox Keyword in Service Worker — `sv <script-name>`
+
+Chrome 149 stabilizes the Omnibox API for MV3 service workers (previously DOM-dependent). Add an opt-in omnibox keyword for power-user script lookup.
+
+- Manifest: `"omnibox": { "keyword": "sv" }`.
+- SW listens for `chrome.omnibox.onInputChanged`, returns suggestions matching installed-script names + tags (use the Phase 12.2 fuzzy search index).
+- On selection: open the script in the dashboard editor (`chrome.tabs.create({url: 'pages/dashboard.html#script/<id>'})`).
+- Default off — user enables in Settings → Power Tools (avoids omnibox-keyword collision noise for casual users).
+
+Source: [Chrome 149 beta blog](https://developer.chrome.com/blog/chrome-149-beta).
+
+#### 39.30 `tabs.sendMessage(null, {documentId})` Frame Routing (WECG #971)
+
+[WECG #971](https://github.com/w3c/webextensions/issues/971) (Apr 2026) — all vendors supportive of letting `tabs.sendMessage` target a specific `documentId` rather than just a `frameId`. Simplifies ScriptVault's current frame-routing code.
+
+- Watch the spec; when Chrome ships it, replace `chrome.tabs.sendMessage(tabId, msg, {frameId})` with the documentId variant where appropriate.
+- Phase 36.8 (per-frame menu commands) consumes this directly.
+
+Source: [WECG #971](https://github.com/w3c/webextensions/issues/971).
+
+#### 39.31 String-Length Pre-Emption Audit (WECG #935)
+
+[WECG #935](https://github.com/w3c/webextensions/issues/935) (Jan 13 2026) — proposal to formalize string-length limits on `action.setTitle`, `action.setBadgeText`, alarm names, DNR rule strings, etc. Today's behavior is silent truncation on some, errors on others; the spec will harden this.
+
+- Audit ScriptVault for any path that constructs an arbitrary-length string and passes it to an extension API: badge text (current "999+" cap), alarm names (currently script-id-based, safe), DNR rule descriptions, notification titles/messages.
+- Pre-emptively clamp to documented limits so the future spec change doesn't break anything silently.
+
+Source: [WECG #935](https://github.com/w3c/webextensions/issues/935).
+
+#### 39.32 Translator + Summarizer + Language Detector in Extensions
+
+Chrome **138 stable** brought the Translator, Summarizer, and Language Detector built-in AI APIs to extensions ([developer.chrome.com/docs/extensions/ai](https://developer.chrome.com/docs/extensions/ai)). Phase 36.2 plans for the Prompt API; these three additional APIs are higher-leverage for ScriptVault's specific surface.
+
+- **Summarizer**: 3-bullet plain-English summary of a script body in the install confirmation dialog. On-device; no API key. Gracefully hidden when `Summarizer.availability()` returns unavailable.
+- **Translator**: in-dashboard "Translate script description" button for non-English `@description` fields. Useful when browsing GreasyFork Russian/Chinese scripts.
+- **Language Detector**: detect the language of `@description` automatically; flag locale mismatches between author-declared `@name:zh-Hans` and the actual content language.
+- All three are **opt-in** under a new "Experimental → On-device AI" settings group (matches Phase 36.2's discoverability gating).
+
+Source: [Built-in AI for Chrome Extensions](https://developer.chrome.com/docs/extensions/ai), [Translator API](https://developer.chrome.com/docs/ai/translator-api), [Summarizer API](https://developer.chrome.com/docs/ai/summarizer-api).
+
+#### 39.33 Storage Buckets API for OPFS Isolation (Phase 18.2 extension)
+
+[Chrome 122+](https://chromestatus.com/feature/5739224579964928) shipped the Storage Buckets API, which lets origins create named, separately-evictable storage buckets. Phase 18.2 plans OPFS overflow storage for large scripts; this prevents a single quota-busting script from evicting ScriptVault's metadata.
+
+- Wrap the OPFS overflow path in a dedicated bucket: `navigator.storageBuckets.open('scriptvault-overflow', { persisted: true, durability: 'strict' })`.
+- Keep IndexedDB metadata in the default bucket (already protected by `navigator.storage.persist()` from Phase 18.8).
+- Eviction asymmetry: under storage pressure, the overflow bucket evicts first, leaving the index intact.
+
+Source: [Storage Buckets API (chromestatus)](https://chromestatus.com/feature/5739224579964928), [Storage Buckets explainer](https://wicg.github.io/storage-buckets/).
+
+### Dependency Upgrades & Test-Stack
+
+#### 39.34 Puppeteer 25 ESM + Node 22 Migration (extends Phase 13.6)
+
+[Puppeteer **25.0.2** (May 15 2026)](https://github.com/puppeteer/puppeteer/releases) is ESM-only, requires Node 22+, and cleaned up the WebDriver BiDi wrapper. ScriptVault's smoke test (`scripts/smoke-dashboard.mjs`) currently runs on Node 20 (per CI config).
+
+- Bump CI Node version 20 → 22.
+- Update `package.json` engines field.
+- Migrate `smoke-dashboard.mjs` to the new ESM-only API; remove any CommonJS shims.
+- Verify Chrome-for-Testing path on `setup-chrome@v1`.
+
+Source: [Puppeteer releases](https://github.com/puppeteer/puppeteer/releases).
+
+#### 39.35 chrome-webstore-upload-cli 4.0 Cutover (paired with 39.2)
+
+**4.0.0** breaking release: Node 22+, env-only secrets (no `--client-id` / `--client-secret` flags), `--auto-publish` removed.
+
+- Coordinate with 39.1 (OIDC) and 39.2 (API v2 deadline).
+- Update `publish.sh` to source secrets from environment, not flags.
+- Document the new auth flow in `docs/release-runbook.md`.
+
+Source: [chrome-webstore-upload-cli releases](https://github.com/fregante/chrome-webstore-upload-cli/releases).
+
+#### 39.36 Vitest 5 Upgrade (Under Consideration — Wait for Stable)
+
+Vitest **5.0.0-beta.2** swaps the assertion-formatter from `loupe` to `pretty-format`. Defer the upgrade until 5.0 stable; pin the beta probe to a feature branch in CI to surface diff-output churn early.
+
+Source: [Vitest releases](https://github.com/vitest-dev/vitest/releases).
+
+#### 39.37 esbuild 0.28 Text Imports for Bundled UI Strings
+
+esbuild **0.28** introduces `with { type: 'text' }` import attributes — load a file's content as a string at build time. ScriptVault has several baked-in strings/templates currently `fetch`'d at runtime from extension resources.
+
+- Replace `fetch('./templates/blank-script.txt')` patterns with `import body from './templates/blank-script.txt' with { type: 'text' }` where possible.
+- One less fetch round-trip on dashboard cold start; one less `web_accessible_resource` entry.
+- Caveat: esbuild 0.28 is a **breaking** release (Go 1.26.1 host build); coordinate with the typescript@6.0.x compat.
+
+Source: [esbuild releases](https://github.com/evanw/esbuild/releases).
+
+#### 39.38 idb v8 Wrapper Evaluation for Phase 2 IDB Layer
+
+The [`idb`](https://github.com/jakearchibald/idb) library v8 stabilized async-iterator support and dropped EdgeHTML. Phase 2 IndexedDB layer is currently hand-rolled. Re-evaluate whether wrapping in `idb` is worthwhile.
+
+- **Decision criteria:** size delta (idb is ~3KB gzipped, current hand-roll is ~2KB), API ergonomics (less `request.onsuccess` boilerplate), test coverage parity.
+- If wrapping: keep the existing `src/storage/idb.ts` as a typed-adapter layer over `idb`, so call sites don't change.
+- **Decision required by:** Phase 2 v2 refactor or 2027-Q1, whichever first.
+
+Source: [idb v8 changelog](https://github.com/jakearchibald/idb/blob/main/CHANGELOG.md).
+
+#### 39.39 Playwright as E2E Complement to Puppeteer
+
+Playwright **1.60** added `tracing.startHar`, `locator.drop()`, and aria-snapshot bounding boxes. ScriptVault currently uses Puppeteer for smoke; Playwright's HAR + screencast for E2E error-replay is a meaningful improvement.
+
+- Keep Puppeteer for the existing `smoke:dashboard` script (low-friction Chrome launch).
+- Add Playwright as a **second** E2E job in CI for the full-flow tests (Phase 10.3 plans these); HAR captures attach to test failures for post-mortem.
+- Decision: do not replace Puppeteer; they coexist.
+
+Source: [Playwright releases](https://github.com/microsoft/playwright/releases).
+
+### MCP / On-Device AI (Long-Tail Extensions to Phase 36/38)
+
+#### 39.40 MCP 2026 Spec Compliance Bar (gates Phase 38.10)
+
+The [MCP 2026 roadmap](https://blog.modelcontextprotocol.io/posts/2026-mcp-roadmap/) introduces: (a) `.well-known/mcp-discovery` for capability discovery without a live connection, (b) **mandatory OAuth 2.1 + RFC 8707 Resource Indicators** for all server connections (since June 2025), (c) a Tasks primitive for long-running operations with retry/expiry.
+
+Phase 38.10 ("ScriptCat-style MCP-as-client") was Under Consideration. The Round 12 update is: if and when Phase 38.10 ships, the bar is the 2026 spec, not the original 2024 spec.
+
+- Capability discovery: fetch `.well-known/mcp-discovery` first; reject servers that don't publish one.
+- Auth: require RFC 8707 Resource Indicators on the OAuth token.
+- Tasks: support long-running tool calls with retry/expiry; surface task status in the dashboard.
+
+Source: [MCP 2026 roadmap](https://blog.modelcontextprotocol.io/posts/2026-mcp-roadmap/), [Auth0 MCP auth update](https://auth0.com/blog/mcp-specs-update-all-about-auth/).
+
+**Status (2026-05-17):** ⚠️ Design doc scaffolded — implementation pending and gated on Phase 38.10 shipping. Full compliance bar in [`docs/mcp-2026-compliance.md`](docs/mcp-2026-compliance.md): per-server `@grant` model, locality classifier rejecting public hosts by default, `.well-known/mcp-discovery` mandatory, RFC 8707 Resource Indicators required, Tasks primitive with cancel/retry surfaced in dashboard, audit-log emission, explicit non-scope (no LLM agent UI, no sub-agent generator, no skill marketplace).
+
+#### 39.41 Transformers.js v3 WebGPU Offline Static-Analysis Classifier (R&D, behind flag)
+
+[Transformers.js v3 with WebGPU](https://huggingface.co/blog/transformersjs-v3) is GA. A tiny classifier (e.g., distilbert-tiny ~10MB) could label installed scripts as "exfiltrates-cookies / fingerprint-heavy / obfuscated" at install time — complementing the existing AST risk scoring with model-driven classification.
+
+- R&D phase only — not in active planning.
+- Behind a feature flag in Settings → Experimental → AI.
+- Critical constraint: must remain **on-device** (no network); model weights downloaded once and cached in OPFS (Phase 18.2 + Storage Buckets 39.33).
+- Stretch: train a ScriptVault-specific classifier on the 31 AST-detector outputs as features.
+
+Source: [Transformers.js v3 WebGPU](https://huggingface.co/blog/transformersjs-v3).
+
+#### 39.42 Compute Pressure API Back-Off (extends Phases 15.6 + 10.5)
+
+[Chrome Compute Pressure API (OT)](https://chromestatus.com/feature/5597608644968448) reports CPU pressure level. Phase 15.6 (esbuild-wasm TS transpile) and Phase 10.5 (fuzzer) are CPU-heavy operations.
+
+- Subscribe to `new PressureObserver(callback).observe('cpu', { sampleInterval: 1000 })`.
+- On `state === 'critical'`, pause queued compiles / fuzz runs; resume when `state ∈ {'nominal', 'fair'}`.
+- Surface a passive UI hint when paused so the user knows why a compile didn't run.
+
+Source: [Compute Pressure API](https://chromestatus.com/feature/5597608644968448), [W3C Compute Pressure spec](https://www.w3.org/TR/compute-pressure/).
+
+### Process, Standards, Long-Term
+
+#### 39.43 WCAG 3.0 Readiness Gap Analysis (March 2026 Working Draft)
+
+W3C published the [WCAG 3 March 2026 Working Draft](https://www.w3.org/WAI/news/2026-03-03/wcag3/): 174 requirements (renamed from "outcomes"), Bronze/Silver/Gold conformance, CR target Q4 2027, Rec ≥ 2028.
+
+- Not implementation work — a one-time **gap analysis** under Phase 34: which WCAG 3 requirements are already covered by ScriptVault's WCAG 2.2 AA work, which are new, which would require structural change.
+- Output: `docs/wcag3-gap-analysis.md` with a per-requirement coverage matrix.
+- Re-run on each WCAG 3 working draft update so we're not blindsided at Rec.
+
+Source: [W3C WAI — WCAG 3 March 2026 WD](https://www.w3.org/WAI/news/2026-03-03/wcag3/).
+
+**Status (2026-05-17):** ✅ Initial gap analysis shipped. See [`docs/wcag3-gap-analysis.md`](docs/wcag3-gap-analysis.md): four-category coverage matrix (Perceivable / Operable / Understandable / Robust) over the March 2026 Working Draft's 174 requirements, with each ScriptVault-relevant requirement tagged 🟢 Covered / 🟡 Partial / 🔴 Net-new / N/A. Six headline gaps surfaced (skip-to-main-content links, centralized help affordance, APCA contrast re-audit across themes, combobox/grid APG patterns, status-message live-region audit, mixed-language `lang=""` attrs). Re-run on each WCAG 3 WD update and before CR target Q4 2027.
+
+#### 39.44 URLPattern Promotion: Phase 22.2 Later → Next (see also Phase 22.2 status note)
+
+Tracked here only as a cross-reference. URLPattern is now **Baseline Newly Available** per [web.dev/baseline-urlpattern](https://web.dev/blog/baseline-urlpattern). The spec is stable enough that Phase 4's matcher should grow a URLPattern-backed implementation alongside the existing regex engine, with `@include` regex patterns + edge cases retained on the regex path.
+
+Source: [URLPattern Baseline announcement](https://web.dev/blog/baseline-urlpattern).
+
+#### 39.45 AT Protocol Personal Data Server Sync Backend Research
+
+The [AT Protocol IETF WG was chartered January 2026](https://atproto.com/blog/2026-spring-roadmap); private-data support lands in 2026. Phase 35 covers Nostr + did:key federation; AT was deferred ("zero Bluesky userscript community").
+
+- Watch the WG output through 2026; if the userscript community shows up there (none yet), evaluate AT PDS as a Phase 21/35 backend.
+- Not active planning — re-evaluate Q4 2026.
+
+Source: [AT Protocol Spring 2026 roadmap](https://atproto.com/blog/2026-spring-roadmap).
+
+#### 39.46 Drop WASM Component Model Browser Speculation (Phase 32.1 cross-ref)
+
+Tracked here only as a cross-reference to Phase 32.1's updated status. Per [component-model.bytecodealliance.org](https://component-model.bytecodealliance.org/), the model is server-side only in 2026. Explicitly do not plan against this for any browser host. Re-evaluate when a browser-side runtime ships (no Chromium roadmap signal as of 2026-05-17).
+
+#### 39.47 Mark Notification Triggers API Discontinued (Phase 11.11 cross-ref)
+
+Cross-reference to Phase 11.11 updated status. Per [developer.chrome.com/docs/web-platform/notification-triggers](https://developer.chrome.com/docs/web-platform/notification-triggers), Chrome's Notification Triggers API is officially discontinued. Future GM_notification work must NOT plan against it.
+
+#### 39.48 Codeberg Mirror of ScriptVault Source (Community-Resilience Hedge)
+
+VM proposed [migration to Codeberg](https://github.com/violentmonkey/violentmonkey/issues/2522) (May 15 2026) — community concern over single-vendor GitHub dependence. Cheap hedge: maintain a read-only Codeberg mirror.
+
+- Configure GitHub Actions to push to a Codeberg remote on every release tag.
+- Document the mirror URL in README as a fallback for users on networks where GitHub is blocked.
+- Phase 35.4 (ActivityPub passive consumption for Forgejo) consumes the same Forgejo ecosystem; the mirror feeds it.
+
+Source: [VM #2522](https://github.com/violentmonkey/violentmonkey/issues/2522).
+
+#### 39.49 CWS Submission-Review Backlog Buffer (April 2026 advisory)
+
+The CWS submission queue has been running with extended review times since April 2026. Adjust release-cadence expectations.
+
+- Add a 7–14 day buffer between feature-freeze and target user-facing release date.
+- Document the buffer in `docs/release-runbook.md`.
+- If a release is time-sensitive (CVE response), use the CWS appeals/expedited-review flow (Phase 37.3).
+
+Source: [Chrome Web Store developer dashboard advisory](https://developer.chrome.com/docs/webstore/program-policies) (no permalink; advisory text rotates).
+
+### Phase 39 Exit Criteria
+
+- v3.12.0 ships with: 39.1 OIDC release pipeline, 39.2 CWS API v2, 39.4 75-char locale audit, 39.6 first-run permission gate, 39.10 "Allow User Scripts" self-diagnosis, 39.11 `@exclude-top`/`@match-top`, 39.16 crypto-scam install heuristic, 39.21–39.27 regression-test backports.
+- v3.13.0 adds the Chrome-149 platform wins (39.28–39.33) gated on stable Chrome 149 (~June 2 2026).
+- v3.14.0 adds the dep upgrades (39.34–39.39) once Puppeteer 25 / esbuild 0.28 / Vitest 5 stable land in CI without regressions.
+- Round-12 deferred items (39.5, 39.40–39.45) remain Next/Under Consideration; reassess in Round 13.
+
+---
+
+## Round 12 — External Research (May 2026)
+
+_Net-new sources since Round 11 (May 5 2026 cutoff). Numbered 231–272 to extend the existing index._
+
+### Source Index
+
+**Upstream Manager Releases (post-Round-11)**
+231. https://www.tampermonkey.net/changelog.php — Tampermonkey **5.5.0 (May 8 2026)**: MCP via "Tampermonkey Editors" companion, special-permission injection gate, OS-policy script provisioning, "Claude" Monaco theme, decoupled update check/install rolled to stable.
+232. https://github.com/violentmonkey/violentmonkey/releases — VM v2.37.1 stable, v2.37.2 (May 9 2026), v2.37.3-beta (May 10 2026 — opt-in page context-menu integration for `GM_registerMenuCommand`).
+233. https://github.com/scriptscat/scriptcat/releases — ScriptCat v1.4.0-beta.2 (May 6 2026): cloud-sync reliability hardening, agent tool-call memory leak fixes.
+234. https://github.com/greasemonkey/greasemonkey/commits/master — Greasemonkey **revival** May 12–15 2026: arantius landed 6 commits after ~14 months quiet. Invalidates the "GM is dead" baseline assumption from Rounds 1–11.
+235. https://github.com/quoid/userscripts/releases — Userscripts (Safari) v5.0.0-beta.22+20260406 — TestFlight rebuild only, no feature change.
+236. https://addons.mozilla.org/en-US/firefox/addon/firemonkey/versions/ — FireMonkey stalled at v2.74 (2025-01-25), confirmed via AMO version listing.
+237. https://github.com/lisonge/vite-plugin-monkey/releases — vite-plugin-monkey stalled at v8.0.5 (May 12 2025). The dev-tooling lane is open if ScriptVault wants to ship a first-party plugin (note: ScriptFlow project was speculative — could not verify, drop from internal source list).
+
+**GitHub Issues — Net-New Signal**
+238. https://github.com/violentmonkey/violentmonkey/issues/2518 — `clearInterval` cross-frame regression (closed May 11 2026). Backed by Phase 39.21.
+239. https://github.com/violentmonkey/violentmonkey/issues/2513 — CSP page-injection deadlock (closed May 7 2026). Backed by Phase 39.22.
+240. https://github.com/violentmonkey/violentmonkey/issues/2516 — Popup cross-realm `Symbol.iterator` crash (closed May 9 2026). Backed by Phase 39.23.
+241. https://github.com/violentmonkey/violentmonkey/issues/2363 — Orion script-body curly-quote corruption (open Sep 21 2025). Backed by Phase 39.24.
+242. https://github.com/violentmonkey/violentmonkey/issues/2453 — `@require` cache invalidation on dependency update (open Mar 1 2026). Backed by Phase 39.25.
+243. https://github.com/violentmonkey/violentmonkey/issues/2486 — WebDAV silent-fail UX (open Apr 5 2026). Backed by Phase 39.26.
+244. https://github.com/violentmonkey/violentmonkey/issues/2491 — Browser crash on `*.user.js` in private window (open Apr 11 2026). Backed by Phase 39.27.
+245. https://github.com/violentmonkey/violentmonkey/issues/2522 — Codeberg migration proposal (open May 15 2026). Backed by Phase 39.48.
+246. https://github.com/Tampermonkey/tampermonkey/issues/2607 — Runtime "Allow User Scripts" toggle confusion (open Nov 28 2025). Backed by Phase 39.10.
+247. https://github.com/Tampermonkey/tampermonkey/issues/2669 — Blob URL in `GM_openInTab` (open Jan 15 2026). Backed by Phase 39.13.
+248. https://github.com/Tampermonkey/tampermonkey/issues/2780 — Sortable exclude-list editor (open May 11 2026). Backed by Phase 39.15.
+249. https://github.com/Tampermonkey/tampermonkey/issues/2781 — Menu-command user-activation loss (open May 13 2026). Backed by Phase 39.12.
+250. https://github.com/Tampermonkey/tampermonkey/issues/2782 — Same-origin `GM_xmlhttpRequest` credential pitfall (open May 13 2026). Backed by Phase 39.14.
+251. https://github.com/Tampermonkey/tampermonkey/issues/2783 — Crypto-scam userscript distribution campaign (open May 13 2026). Backed by Phase 39.16.
+252. https://github.com/Tampermonkey/tampermonkey/issues/2784 — Top-level-origin exclusion request (open May 13 2026). Backed by Phase 39.11.
+
+**Chrome Platform & WECG (Round 12 net-new)**
+253. https://developer.chrome.com/blog/chrome-149-beta — Chrome 149 beta (May 6 2026): `injectImmediately` flag on `scripting.executeScript`, omnibox API in MV3 SW, BFCache WebSocket disconnect (already covered).
+254. https://developer.chrome.com/docs/extensions/ai — Built-in AI APIs stable for extensions (Chrome 138+): Translator, Summarizer, Language Detector. Prompt API stable on hardware-gated path. Backs Phase 39.32.
+255. https://developer.chrome.com/blog/cws-api-v2 — CWS API v2 announcement; v1 sunsets **2026-10-15**. Backs Phase 39.2.
+256. https://developer.chrome.com/docs/webstore/program-policies — CWS program policies, including 75-char manifest name limit. Backs Phase 39.4.
+257. https://chromestatus.com/feature/5739224579964928 — Storage Buckets API (Chrome 122). Backs Phase 39.33.
+258. https://chromestatus.com/feature/5597608644968448 — Compute Pressure API (Chrome OT). Backs Phase 39.42.
+259. https://github.com/w3c/webextensions/issues/935 — String-length limits on WebExt APIs (Jan 13 2026, all vendors supportive). Backs Phase 39.31.
+260. https://github.com/w3c/webextensions/issues/971 — `tabs.sendMessage(null, {documentId})` (Apr 2026, all vendors supportive). Backs Phase 39.30.
+
+**Security & Supply Chain**
+261. https://www.microsoft.com/en-us/security/blog/2025/12/09/shai-hulud-2-0-guidance-for-detecting-investigating-and-defending-against-the-supply-chain-attack/ — Shai-Hulud 2.0 npm worm. Backs Phase 39.1.
+262. https://thehackernews.com/2025/12/trust-wallet-chrome-extension-hack.html — Trust Wallet ~$8.5M loss via stolen CWS API key. Backs Phase 39.1.
+263. https://blog.sekoia.io/targeted-supply-chain-attack-against-chrome-browser-extensions/ — Cyberhaven OAuth phishing (36 extensions, 2.6M users). Backs Phase 39.1.
+264. https://github.com/microsoft/monaco-editor/issues/5248 — CVE-2026-0540 DOMPurify XSS in Monaco. Backs Phase 39.3.
+265. https://blog.sigstore.dev/npm-provenance-ga/ — npm provenance GA via Sigstore. Backs Phase 39.5.
+266. https://thehackernews.com/2026/03/new-chrome-vulnerability-let-malicious.html — CVE-2026-0628 Chrome WebView tag policy CVSS 8.8 (already audited; no specific Phase 39 entry needed, captured here for completeness).
+
+**Standards & AI**
+267. https://blog.modelcontextprotocol.io/posts/2026-mcp-roadmap/ — MCP 2026 roadmap: `.well-known` discovery, OAuth 2.1 + RFC 8707, Tasks primitive. Backs Phase 39.40.
+268. https://auth0.com/blog/mcp-specs-update-all-about-auth/ — MCP auth spec update (June 2025). Backs Phase 39.40.
+269. https://huggingface.co/blog/transformersjs-v3 — Transformers.js v3 WebGPU GA. Backs Phase 39.41.
+270. https://web.dev/blog/baseline-urlpattern — URLPattern Baseline Newly Available (March 2026). Backs Phase 22.2 promotion + Phase 39.44.
+271. https://www.w3.org/WAI/news/2026-03-03/wcag3/ — WCAG 3.0 March 2026 Working Draft (174 requirements, Bronze/Silver/Gold). Backs Phase 39.43.
+272. https://atproto.com/blog/2026-spring-roadmap — AT Protocol IETF WG chartered Jan 2026; private data in 2026. Backs Phase 39.45.
+
+**Dependency Releases**
+- https://github.com/microsoft/monaco-editor/releases — Monaco 0.55.1 (already covered Phase 13.4; CVE add-on per 39.3).
+- https://github.com/evanw/esbuild/releases — esbuild 0.28.0 text imports + Go 1.26.1 break. Backs Phase 39.37.
+- https://github.com/acornjs/acorn/blob/master/acorn/CHANGELOG.md — Acorn 8.16 (already covered Phase 13.5).
+- https://github.com/vitest-dev/vitest/releases — Vitest 5.0.0-beta.2. Backs Phase 39.36.
+- https://github.com/fregante/chrome-webstore-upload-cli/releases — chrome-webstore-upload-cli 4.0.0 (Node 22+, env-only secrets). Backs Phase 39.35.
+- https://github.com/puppeteer/puppeteer/releases — Puppeteer 25.0.2 (May 15 2026, ESM-only, Node 22+). Backs Phase 39.34.
+- https://github.com/jsdom/jsdom/releases — jsdom 29.1.1 (Apr 30 2026, `ratio` CSS type, `getComputedStyle` perf). Folds into Phase 10 test infra.
+- https://github.com/microsoft/playwright/releases — Playwright 1.60 (May 11 2026, HAR + Screencast). Backs Phase 39.39.
+- https://github.com/jakearchibald/idb/blob/main/CHANGELOG.md — idb v8 stabilized async iterators. Backs Phase 39.38.
+
+### Round 12 — Items Rejected (with reasoning)
+
+| Item | Why Rejected |
+|------|--------------|
+| ScriptCat-style cloud-LLM Agent UI (v1.4) | Re-rejected per Phase 38.10 — directly contradicts ScriptVault's local-first / zero-telemetry positioning. ScriptCat v1.4.0-beta.2 reinforces this with documented agent memory leaks. |
+| `CAT_fileStorage` binary cloud storage | Re-rejected per Phase 38.10 + Round 8 — CWS policy conflict + maintenance burden. |
+| Bundled Gemini Nano fallback to cloud-LLM API | Already rejected in Round 10. Reaffirmed. |
+| "Cursor for Userscripts" / AI-userscript-generation pattern | Already rejected as Tweeks/ClickRemix in Round 8. The 56-point HN post in Jan 2026 confirms the demand but the rejection reasoning (philosophical mismatch with anti-bloat doctrine) holds. |
+| To-Userscript / extension-to-userscript converter | Symmetric to the rejected script-to-extension compiler (Round 8) — distribution tooling, not manager scope. |
+| Sub-agent / skill marketplace (ScriptCat v1.4) | Already rejected as moderation+hosting burden disguised as a feature. |
+| WASM Component Model in-browser host | **NEW rejection** (Round 12) — server-side only in 2026 per BytecodeAlliance docs. Phase 32.1 explicitly deprioritized. |
+| Notification Triggers API integration | **NEW rejection** (Round 12) — officially discontinued per Chrome platform docs. Phase 11.11 explicitly marks dead. |
+| TM Firefox proxy support in `GM_xmlhttpRequest` | Already rejected in Round 11 — Chrome MV3 doesn't expose per-request proxy controls. |
+| Multi-platform script search engine selector (ScriptCat) | Already rejected in Round 11 — GreasyFork + planned OpenUserJS cover demand. |
+
+### Round 12 — Promoted Tier Changes
+
+- **Phase 17.3** (decouple update-check from auto-install): **Now → Now-priority-1**, again. Already promoted in Round 11; TM shipping it in **stable 5.5.0 (May 8 2026)** further raises retention urgency.
+- **Phase 22.2** (URLPattern migration): **Later → Next**. URLPattern Baseline Newly Available March 2026.
+- **Phase 32.1** (WASM Component Model): **Active → Deprioritized**. Server-side-only confirmed; not on Chromium roadmap.
+- **Phase 11.11** (Notification Triggers): item-level deprecation note added — do not plan against this API.
+
+### Round 12 — Items Already Shipped (audit-only)
+
+| Round 12 finding | ScriptVault status |
+|------------------|--------------------|
+| `chrome.storage.session` for transient state | ✅ Already covered Phase 13.11 (Chrome 130 `getKeys()`). |
+| `wasm-unsafe-eval` CSP in MV3 | ✅ Already covered Phase 15.6 (esbuild-wasm CSP requirement). |
+| `chrome.scripting.executeScript({world:'MAIN'})` | ✅ Already covered Phase 11.4 (fallback path). |
+| BFCache WebSocket disconnect (Chrome 149) | ✅ Already covered in Round 10 platform timeline. |
+| CSS URL integrity (Chrome 150) | ✅ Already covered in Round 10 platform timeline. |
+| Tampermonkey/Violentmonkey GitHub issue mining for previously-cited tickets | ✅ Verified non-duplicate — every Phase 39 issue citation is a ticket Rounds 1–11 did not cover. |
+
+### Round 12 Completion Note
+
+Net-new sources: **42** (231–272 plus 9 dependency-release URLs). Cumulative source floor (>260 across Rounds 1–12) remains well above the 30–60 floor. No Round 12 item duplicates a Now/Next item from Rounds 1–11; explicit promotions (17.3, 22.2, 32.1 deprio, 11.11 dead-mark) are cross-references, not duplicates. Greasemonkey-is-dead assumption from Rounds 1–11 is **invalidated** — May 12–15 2026 commits prove arantius is actively maintaining; future rounds must monitor GM master commits as a real signal source.
+
+Phase 39 added (49 sub-items). Phase summary milestone table updated with v3.12.0+. Targeted edits applied to Phases 11.11, 17.3, 22.2, and 32.1 with status notes referencing Round 12 sources.
+
