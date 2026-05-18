@@ -1991,37 +1991,85 @@
         }
     }
 
-    // Check if userScripts API is available and enabled
+    // Phase 39.10 — runtime "Allow User Scripts" self-diagnosis.
+    // Probe chrome.userScripts to determine whether the API is missing (old
+    // Chrome / unsupported browser) or present-but-not-permitted (Chrome 138+
+    // with the per-extension toggle disabled). Tailor the banner text and
+    // CTA so users see the right next step instead of the legacy
+    // "Developer mode required" string. Source: TM #2607.
     async function checkUserScriptsAvailability() {
         const banner = document.getElementById('setupWarningBanner');
+        const text = document.getElementById('setupWarningText');
         const btnHelp = document.getElementById('btnSetupHelp');
+        const btnDirect = document.getElementById('btnOpenExtensionDetails');
         const btnDismiss = document.getElementById('btnDismissWarning');
-        
+
         if (!banner) return;
-        
+
+        const chromeVersion = parseInt(navigator.userAgent.match(/Chrome\/(\d+)/)?.[1] || '0', 10);
+
+        // Three diagnostic outcomes:
+        //   'ok'           — API exists AND probe succeeds.
+        //   'api-missing'  — chrome.userScripts undefined (old Chrome, FF MV2).
+        //   'not-allowed'  — API exists but threw on probe (toggle off on Chrome 138+
+        //                    OR Developer mode off on Chrome <138).
+        let state = 'ok';
         try {
             if (!chrome.userScripts) {
-                banner.style.display = 'block';
-                return;
+                state = 'api-missing';
+            } else {
+                await chrome.userScripts.getScripts();
             }
-            
-            // Try to use the API to see if it's enabled
-            await chrome.userScripts.getScripts();
-            banner.style.display = 'none';
-        } catch (error) {
-            console.warn('userScripts API not available:', error.message);
-            banner.style.display = 'block';
+        } catch (_error) {
+            state = 'not-allowed';
         }
-        
-        // Setup help button
+
+        if (state === 'ok') {
+            banner.style.display = 'none';
+            return;
+        }
+
+        // Tailor copy + visibility per state.
+        if (text) {
+            if (state === 'not-allowed' && chromeVersion >= 138) {
+                text.innerHTML =
+                    '<strong>Setup required:</strong> ScriptVault needs the ' +
+                    '<strong>"Allow User Scripts"</strong> toggle for this extension. ' +
+                    'Open Extension Details and enable it.';
+            } else if (state === 'not-allowed') {
+                text.innerHTML =
+                    '<strong>Setup required:</strong> Enable ' +
+                    '<strong>Developer Mode</strong> in <code>chrome://extensions</code> ' +
+                    'so ScriptVault can inject userscripts.';
+            } else {
+                // 'api-missing'
+                text.innerHTML =
+                    '<strong>Browser unsupported:</strong> the <code>chrome.userScripts</code> ' +
+                    'API is not available. ScriptVault needs Chrome 120+ (or a Chromium ' +
+                    'derivative that exposes it).';
+            }
+        }
+        banner.style.display = 'block';
+
+        // The deep-link button is most useful on Chrome 138+ (one click to the
+        // toggle). On older Chrome it still helps — same Details page — but
+        // the user needs to flip Developer Mode separately. Hide on api-missing
+        // where the toggle doesn't exist.
+        if (btnDirect) {
+            btnDirect.style.display = state === 'api-missing' ? 'none' : '';
+        }
+
+        btnDirect?.addEventListener('click', () => {
+            try {
+                chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id });
+            } catch (_e) { /* extension context invalidated */ }
+        }, { once: true });
         btnHelp?.addEventListener('click', () => {
             showSetupInstructions();
-        });
-        
-        // Dismiss button
+        }, { once: true });
         btnDismiss?.addEventListener('click', () => {
             banner.style.display = 'none';
-        });
+        }, { once: true });
     }
     
     function showSetupInstructions() {

@@ -305,6 +305,30 @@
         }
       });
 
+      // Claude theme — warm autumn palette inspired by Claude's brand (Phase 39.9)
+      monaco.editor.defineTheme('sv-claude', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: '8b7355', fontStyle: 'italic' },
+          { token: 'keyword', foreground: 'd97757' },
+          { token: 'string', foreground: 'c39c79' },
+          { token: 'number', foreground: 'e8a87c' },
+          { token: 'type', foreground: 'a6745c' },
+          { token: 'function', foreground: 'd97757' },
+          { token: 'variable', foreground: 'e6d3b5' }
+        ],
+        colors: {
+          'editor.background': '#1f1b16',
+          'editor.foreground': '#e6d3b5',
+          'editorLineNumber.foreground': '#5c4a3a',
+          'editor.lineHighlightBackground': '#2a241e',
+          'editor.selectionBackground': '#4a3a2c',
+          'editorGutter.background': '#1f1b16',
+          'editorCursor.foreground': '#d97757'
+        }
+      });
+
       isReady = true;
       loading.style.display = 'none';
 
@@ -407,7 +431,7 @@
       dark: 'sv-dark', light: 'sv-light', catppuccin: 'sv-catppuccin', oled: 'sv-oled',
       nord: 'sv-nord', dracula: 'sv-dracula', gruvbox: 'sv-gruvbox',
       'solarized-dark': 'sv-solarized-dark', 'solarized-light': 'sv-light',
-      monokai: 'sv-gruvbox', default: 'sv-dark'
+      monokai: 'sv-gruvbox', claude: 'sv-claude', default: 'sv-dark'
     };
     return map[theme] || 'sv-dark';
   }
