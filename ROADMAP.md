@@ -4,6 +4,7 @@
 > Each phase is independently shippable. Later phases depend on earlier ones.
 >
 > **Roadmap version:** Round 13 — last research sweep 2026-05-18. Shipped baseline: v3.10.1 (April 28, 2026) + three-commit audit-hardening pass (`d1e3ee2`, `e306b2b`, `325db86` on 2026-05-18) folded in. Pending: v3.11.0 (storage-hardening grouping, Phase 38.13) ➜ v3.12.0+ (Phase 39, Round 12 catch-up) ➜ Phase 40 (Round 13 audit productionization).
+> **2026-05-19 autonomous sweep:** Phase 38 parity wave landed — **38.1** (GM_addElement null-on-failure), **38.8** (Update tab label parity), **38.12** (singular `tag` alias on `GM_info.script`), and **38.13** (multi-key rollback contract regression suite). 11 new vitest cases; 701 total tests green; tsc strict clean.
 > **Source floor:** >294 distinct URLs across Rounds 1–13 (272 carried from Round 12 + 22 net-new for Round 13, indexed 273–294). Every Now/Next item is traceable to at least one source.
 
 ---
@@ -3300,13 +3301,15 @@ Floor of 30-60 sources is exceeded across all 10 rounds combined (well over 200 
 
 **Goal:** Track upstream releases and Chrome platform deltas published since the Round 10 cutoff (April 22, 2026). Sources: VM v2.37.0 (Apr 23 2026) + v2.37.1 beta, ScriptCat v1.4 (AI Agent system), Tampermonkey 5.5.6234–5.5.6237 (Jan–Apr 2026), no Chrome 149/150 extension-API surface changes worth a phase.
 
-### 38.1 `GM_addElement` null-on-failure contract (VM v2.37.0 + TM 5.5.6237 parity)
+### 38.1 `GM_addElement` null-on-failure contract (VM v2.37.0 + TM 5.5.6237 parity) ✅ Shipped (2026-05-19)
 
 Both VM v2.37.0 ([#2500](https://github.com/violentmonkey/violentmonkey/issues/2500)) and TM 5.5.6237 (April 10, 2026) converged on the same fix this month: `GM_addElement(parent, tag, attrs)` now returns `null` instead of throwing or returning `undefined` when the parent argument is falsy or the element fails to attach. Two independent maintainers landing the same contract in the same month makes it the de-facto spec.
 
 - Audit ScriptVault's `GM_addElement` wrapper in `bg/` and the content-side mirror — any path that currently throws on falsy parent or detached node should `return null` and log via `errorLog.push` instead.
 - Add a regression test pinning the contract: `GM_addElement(null, 'div')` → `null`; `GM_addElement(detachedNode, 'div')` → `null`; valid call → returns the created element.
 - Source: [VM #2500](https://github.com/violentmonkey/violentmonkey/issues/2500), [TM changelog 5.5.6237](https://www.tampermonkey.net/changelog.php).
+
+**Status (2026-05-19):** ✅ Shipped. Both `background.core.js` `GM_addElement()` and the TS mirror at [`src/background/wrapper-builder.ts`](src/background/wrapper-builder.ts) now return `null` on every failure path: non-string/empty `tag`, `document.createElement(tag)` throws, falsy parent, parent without `appendChild`, or `appendChild()` throws. Attribute-application errors no longer abort the call (they're caught so the element can still be attached). Regression suite [`tests/wrapper-dom-security.test.js`](tests/wrapper-dom-security.test.js) added 3 cases pinning the null-on-failure contract for null parent, detached parent, empty tag, numeric tag, malformed tag, plus the happy path.
 
 ### 38.2 Regex search in dashboard script search (TM 5.5.6234 parity)
 
@@ -3365,7 +3368,7 @@ TM 5.5.6235 added Hebrew (`he`) — the first RTL language across major userscri
 - Pulls Phase 14.6 (RTL groundwork) from **Next** to **Now-deferred-on-translation** — string changes are zero-risk and can ship before translation lands.
 - Source: [TM changelog 5.5.6235](https://www.tampermonkey.net/changelog.php).
 
-### 38.8 Tab rename to "Settings | Update | Sync" (VM v2.37.1 beta UX)
+### 38.8 Tab rename to "Settings | Update | Sync" (VM v2.37.1 beta UX) ✅ Shipped (2026-05-19)
 
 VM v2.37.1 split its monolithic Settings tab into three: Settings, Update, Sync. Reduces scroll length and surfaces the update-check controls (newly decoupled per 38.3) closer to where users look for them.
 
@@ -3373,6 +3376,8 @@ VM v2.37.1 split its monolithic Settings tab into three: Settings, Update, Sync.
 - Confirm: "Updates" section already exists; rename to singular "Update" to match VM/TM convention; "Sync" section already exists.
 - Cosmetic-only; ship inside the next dashboard polish point release.
 - Source: [VM v2.37.1 release notes](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.37.1).
+
+**Status (2026-05-19):** ✅ Shipped. Per-script settings panel in [`pages/dashboard.html`](pages/dashboard.html) renamed `Updates` → `Update` (singular) to match VM v2.37.1 / TM split convention. The top-level dashboard sidebar already used Settings / Utilities / Trash / Script Store; there is no separate top-level "Update" or "Sync" tab because those live as sections inside Settings (matches the VM v2.37.1 layout). Cosmetic-only change, zero risk.
 
 ### 38.9 "Don't force update on normal click" guard (VM v2.37.1 beta UX)
 
@@ -3401,12 +3406,14 @@ TM 5.5.6237 documents a Chrome-specific bug where repeated `GM_xmlhttpRequest` c
 - Add a memory-pressure smoke test: 1000 sequential `GM_xmlhttpRequest` calls, assert SW heap stays bounded (within 10MB of baseline post-GC).
 - Source: [TM changelog 5.5.6237](https://www.tampermonkey.net/changelog.php).
 
-### 38.12 Pluralize `GM_info.script.tags` (VM v2.37.0)
+### 38.12 Pluralize `GM_info.script.tags` (VM v2.37.0) ✅ Shipped (2026-05-19)
 
 VM v2.37.0 renamed `GM_info.script.tag` (singular) to `tags` (plural array). ScriptVault's parser already exposes `meta.tags: string[]` (shipped v3.9.0, Phase 36.4) — verify `GM_info.script.tags` is the consumer-facing field, alias `script.tag` to `script.tags[0]` for back-compat with scripts written against pre-2026 VM.
 
 - Compatibility shim: `Object.defineProperty(GM_info.script, 'tag', { get() { return this.tags?.[0]; } })`.
 - Source: [VM v2.37.0 changelog](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.37.0).
+
+**Status (2026-05-19):** ✅ Shipped. `GM_info.script.tags` was already the canonical plural array (shipped v3.9.0). Added a singular `tag` getter to both `background.core.js` and [`src/background/wrapper-builder.ts`](src/background/wrapper-builder.ts) using an object-literal getter (`get tag() { return Array.isArray(this.tags) ? this.tags[0] : undefined; }`) so legacy scripts written against pre-2026 Violentmonkey can read either form. Regression suite [`tests/wrapper-dom-security.test.js`](tests/wrapper-dom-security.test.js) added 2 cases verifying tags/tag round-trip + undefined-on-empty.
 
 ### 38.13 Pre-3.10.1 → post-3.10.1 hardening sweep (audit pass)
 
@@ -3427,7 +3434,7 @@ Between v3.10.1 (April 28, 2026) and the writing of this phase, 11 commits lande
 | `a1e89c9` | Harden userscript bridge and network fetches |
 
 - Tag a v3.11.0 release for the next CWS submission grouping these under a single "Storage & persistence rollback hardening" line in CHANGELOG.
-- Add a regression test pinning the rollback contract: every storage write that touches multiple keys atomically rolls back if any key fails (the v3.10.1 → HEAD work appears to enforce this end-to-end; lock it in with a test).
+- Add a regression test pinning the rollback contract: every storage write that touches multiple keys atomically rolls back if any key fails (the v3.10.1 → HEAD work appears to enforce this end-to-end; lock it in with a test). ✅ Shipped 2026-05-19 — [`tests/storage.test.js`](tests/storage.test.js) `Phase 38.13 — multi-key rollback contract` suite adds 7 cases pinning: ScriptStorage.set cache-≡-persisted (update + insert), ScriptStorage.delete cross-key atomic restore (script + values), ScriptStorage.clear all-or-nothing restore across multiple value bags, ScriptValues.setAll batch atomicity, FolderStorage.update field preservation, SettingsManager.set cache revert, and invalidateMatchSet suppression on rollback.
 - No external source — internal hardening pass, captured for completeness.
 
 **Exit criteria:** `GM_addElement` returns `null` on failure with a regression test; dashboard search accepts `re:` regex prefix; update-check decoupled with tri-state setting (38.3 promoted); popup gets context-menu-script section; open-local-file + watch shipped end-to-end (Chrome path); `window.onurlchange` uses Navigation API where available; Hebrew locale + RTL smoke shipped; dashboard tabs match VM's "Settings | Update | Sync" labels; force-update click is check-only; `GM_info.script.tags` plural with `tag` alias; XHR listener leak fixed and pinned by memory test; v3.11.0 tagged with the storage-hardening commits called out in CHANGELOG.

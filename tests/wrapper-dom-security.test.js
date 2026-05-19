@@ -128,6 +128,10 @@ describe('wrapper DOM API hardening', () => {
     Reflect.deleteProperty(window, '__gmDirect');
     Reflect.deleteProperty(window, '__gmHtml');
     Reflect.deleteProperty(window, '__scriptRan');
+    for (const k of [
+      '__nullParent', '__detachedParent', '__noTag', '__numericTag',
+      '__weirdTag', '__validCall', '__svTags', '__svTag', '__svTagType',
+    ]) Reflect.deleteProperty(window, k);
   });
 
   it('sanitizes GM_addElement direct attributes and innerHTML URL attributes', async () => {
@@ -177,5 +181,65 @@ window.__gmDirect = GM_addElement('div', { textContent: 'ran' });
 
     expect(window.__gmDirect).toBeInstanceOf(HTMLDivElement);
     expect(window.__gmDirect.textContent).toBe('ran');
+  });
+
+  // Phase 38.1 — VM v2.37.0 + TM 5.5.6237 contract: GM_addElement returns
+  // null (never throws) for any failure path. Pins so a future refactor that
+  // swaps the try/return-null guards for a throw fails CI loudly.
+  it('GM_addElement returns null instead of throwing on failure paths', async () => {
+    const wrapped = buildWrappedScript(makeScript(`
+window.__nullParent     = GM_addElement(null, 'div');
+window.__detachedParent = GM_addElement({}, 'div');
+window.__noTag          = GM_addElement(document.body, '');
+window.__numericTag     = GM_addElement(document.body, 42);
+window.__weirdTag       = GM_addElement(document.body, '<<<');
+window.__validCall      = GM_addElement(document.body, 'span', { textContent: 'ok' });
+`));
+
+    new Function(wrapped)();
+    await flushWrappedScript();
+
+    expect(window.__nullParent).toBeNull();
+    expect(window.__detachedParent).toBeNull();
+    expect(window.__noTag).toBeNull();
+    expect(window.__numericTag).toBeNull();
+    expect(window.__weirdTag).toBeNull();
+    expect(window.__validCall).toBeInstanceOf(HTMLSpanElement);
+    expect(window.__validCall.textContent).toBe('ok');
+  });
+
+  // Phase 38.12 — VM v2.37.0 pluralized GM_info.script.tag → tags. Keep the
+  // singular `tag` getter for back-compat with pre-2026 scripts.
+  it('GM_info.script exposes both `tags` (plural array) and `tag` (singular alias for tags[0])', async () => {
+    const script = makeScript(`
+window.__svTags    = GM_info.script.tags;
+window.__svTag     = GM_info.script.tag;
+window.__svTagType = typeof GM_info.script.tag;
+`);
+    script.meta.tag = ['alpha', 'beta', 'gamma'];
+
+    const wrapped = buildWrappedScript(script);
+    new Function(wrapped)();
+    await flushWrappedScript();
+
+    expect(window.__svTags).toEqual(['alpha', 'beta', 'gamma']);
+    expect(window.__svTag).toBe('alpha');
+    expect(window.__svTagType).toBe('string');
+  });
+
+  it('GM_info.script.tag returns undefined when no tags are present', async () => {
+    const script = makeScript(`
+window.__svTags = GM_info.script.tags;
+window.__svTag  = GM_info.script.tag;
+`);
+    // makeScript already sets tag: [] but be explicit.
+    script.meta.tag = [];
+
+    const wrapped = buildWrappedScript(script);
+    new Function(wrapped)();
+    await flushWrappedScript();
+
+    expect(window.__svTags).toEqual([]);
+    expect(window.__svTag).toBeUndefined();
   });
 });
