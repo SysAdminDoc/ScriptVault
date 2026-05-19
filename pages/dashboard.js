@@ -3928,12 +3928,70 @@
         }
     }
 
+    // Phase 38.2 — Parse regex shapes for the dashboard search input. Both
+    // `re:<pattern>` and `/pattern/flags` are accepted. `code:` prefix can
+    // be combined with regex (e.g. `code:re:fetch\(`). Invalid patterns
+    // never throw — they short-circuit to no-match and surface via
+    // aria-invalid / title on the input. Debouncing is handled by the
+    // existing queueScriptTableRender / SCRIPT_SEARCH_DEBOUNCE_MS path.
+    function parseDashboardSearchRegex(raw) {
+        if (!raw) return null;
+        // /pattern/flags shape — must have a trailing slash with optional
+        // flags. Flags are honored verbatim (case-sensitive search is
+        // intentional when the user omits 'i').
+        const slashShape = raw.match(/^\/(.+)\/([gimsuy]*)$/);
+        if (slashShape) {
+            return { source: slashShape[1], flags: slashShape[2] || '' };
+        }
+        // `re:<pattern>` shape — defaults to case-insensitive to match the
+        // substring-search ergonomics that ScriptVault has always used.
+        if (raw.startsWith('re:')) {
+            return { source: raw.slice(3), flags: 'i' };
+        }
+        return null;
+    }
+
+    function setScriptSearchError(message) {
+        const input = elements.scriptSearch;
+        if (!input) return;
+        if (message) {
+            input.setAttribute('aria-invalid', 'true');
+            input.title = message;
+        } else {
+            input.removeAttribute('aria-invalid');
+            // Don't clobber an existing tooltip placed by another module.
+            if (input.title.startsWith('Invalid regex:')) input.removeAttribute('title');
+        }
+    }
+
     function getFilteredScripts() {
-        const searchFilter = (elements.scriptSearch?.value || '').toLowerCase();
+        const rawSearch = (elements.scriptSearch?.value || '').trim();
         const statusFilter = elements.filterSelect?.value || 'all';
 
-        const isCodeSearch = searchFilter.startsWith('code:');
-        const effectiveSearch = isCodeSearch ? searchFilter.slice(5) : searchFilter;
+        // Strip an optional `code:` prefix BEFORE parsing the regex shape so
+        // `code:re:fetch\(` and `code:/foo/i` both work end-to-end.
+        const isCodeSearch = rawSearch.toLowerCase().startsWith('code:');
+        const payload = isCodeSearch ? rawSearch.slice(5).trim() : rawSearch;
+
+        // Try a regex parse; fall back to substring search if absent or invalid.
+        const regexSpec = parseDashboardSearchRegex(payload);
+        let regexFilter = null;
+        if (regexSpec) {
+            try {
+                regexFilter = new RegExp(regexSpec.source, regexSpec.flags);
+                setScriptSearchError('');
+            } catch (err) {
+                setScriptSearchError('Invalid regex: ' + (err?.message || 'malformed pattern'));
+                // Return nothing — empty result set + visible aria-invalid
+                // signal is preferable to surfacing the unfiltered list,
+                // which would silently mask the typo.
+                return [];
+            }
+        } else {
+            setScriptSearchError('');
+        }
+
+        const effectiveSearch = regexFilter ? null : payload.toLowerCase();
 
         const filtered = state.scripts.filter(s => {
             // Search filter
@@ -3941,7 +3999,18 @@
             const desc = s.metadata?.description || '';
             const author = s.metadata?.author || '';
             let matchesSearch;
-            if (isCodeSearch && effectiveSearch) {
+            if (regexFilter) {
+                if (isCodeSearch) {
+                    matchesSearch = regexFilter.test(s.code || '');
+                } else {
+                    matchesSearch = regexFilter.test(name)
+                        || regexFilter.test(desc)
+                        || regexFilter.test(author);
+                }
+                // Each test() call advances lastIndex when the regex has /g;
+                // reset so the next row starts clean.
+                regexFilter.lastIndex = 0;
+            } else if (isCodeSearch && effectiveSearch) {
                 matchesSearch = (s.code || '').toLowerCase().includes(effectiveSearch);
             } else if (effectiveSearch) {
                 matchesSearch = name.toLowerCase().includes(effectiveSearch) ||
@@ -4737,7 +4806,13 @@
             showToast(s.settings.pinned ? 'Pinned' : 'Unpinned', 'success');
         });
         tr.querySelector('[data-action="updateScript"]')?.addEventListener('click', async (e) => {
-            await checkScriptForUpdates(script.id, { triggerEl: e.currentTarget });
+            // Phase 38.9 — VM v2.37.1 footgun fix: normal click is
+            // check-only with a confirmation banner instead of immediate
+            // install. Right-click below still triggers the force-update
+            // bypass-cache path. Bulk update + popup "update" entry still
+            // call the auto-install path (those have their own confirmation
+            // surface via the bulk-progress UI).
+            await interactiveCheckAndConfirmUpdate(script.id, e.currentTarget);
         });
         // Right-click = force update (bypass HTTP cache)
         tr.querySelector('[data-action="updateScript"]')?.addEventListener('contextmenu', async (e) => {
@@ -6027,6 +6102,113 @@
             return true;
         } catch (e) {
             if (!skipReload) showToast('Failed', 'error');
+            return false;
+        }
+    }
+
+    // Phase 38.9 — VM v2.37.1 fix: per-script "check for updates" icon must
+    // be check-only on a normal click. If an update is available, surface a
+    // confirmation modal with [View diff] / [Install] / [Cancel] instead of
+    // installing immediately. Right-click still triggers force update.
+    //
+    // Bulk update + popup "update" entries keep calling checkScriptForUpdates
+    // directly because they already operate through their own progress UIs
+    // (the bulk-progress modal IS the confirmation surface for those flows).
+    async function interactiveCheckAndConfirmUpdate(scriptId, triggerEl = null) {
+        const script = state.scripts.find(s => s.id === scriptId);
+        const name = script?.metadata?.name || scriptId;
+        const oldVersion = script?.metadata?.version || '?';
+
+        if (triggerEl) {
+            if ('disabled' in triggerEl) triggerEl.disabled = true;
+            else {
+                triggerEl.style.opacity = '0.4';
+                triggerEl.style.pointerEvents = 'none';
+            }
+        }
+
+        let updates;
+        try {
+            showToast(`Checking ${name}…`, 'info');
+            updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId });
+        } catch (err) {
+            showToast('Update check failed', 'error');
+            return false;
+        } finally {
+            if (triggerEl) {
+                if ('disabled' in triggerEl) triggerEl.disabled = false;
+                else {
+                    triggerEl.style.opacity = '';
+                    triggerEl.style.pointerEvents = '';
+                }
+            }
+        }
+
+        if (updates?.error) {
+            showToast(updates.error || 'Update check failed', 'error');
+            return false;
+        }
+        if (!Array.isArray(updates) || updates.length === 0) {
+            showToast(`${name} is up to date`, 'info');
+            return false;
+        }
+
+        const update = updates[0];
+        const newVersion = update?.newVersion || '?';
+        // Three-button confirmation modal. The "View diff" action opens the
+        // existing diff viewer and resolves with a sentinel so the loop
+        // re-asks afterwards — users can ping-pong between diff and decision
+        // without losing context.
+        const askConfirmation = () => new Promise(resolve => {
+            let settled = false;
+            const finish = (r) => {
+                if (settled) return;
+                settled = true;
+                modalDismissHandler = null;
+                closeModalShell();
+                resolve(r);
+            };
+            showModal(
+                `Update ${escapeHtml(name)}?`,
+                `<p>An update is available: <strong>v${escapeHtml(oldVersion)} → v${escapeHtml(newVersion)}</strong>.</p>` +
+                `<p>Install now, or open the diff first?</p>`,
+                [
+                    { label: 'Cancel', class: '', callback: () => finish('cancel') },
+                    { label: 'View diff', class: '', callback: () => finish('diff') },
+                    { label: 'Install update', class: 'btn-primary', callback: () => finish('install') },
+                ],
+                { onDismiss: () => finish('cancel') }
+            );
+        });
+
+        while (true) {
+            const choice = await askConfirmation();
+            if (choice === 'diff') {
+                showDiffView(
+                    script?.code || '',
+                    update.code || '',
+                    `v${oldVersion}`,
+                    `v${newVersion}`
+                );
+                continue;
+            }
+            if (choice !== 'install') return false;
+            break;
+        }
+
+        try {
+            const response = await chrome.runtime.sendMessage({
+                action: 'applyUpdate', scriptId, code: update.code,
+            });
+            if (response?.error) {
+                showToast(response.error || 'Update failed', 'error');
+                return false;
+            }
+            showToast(`${name} updated to v${newVersion}`, 'success');
+            setTimeout(() => loadScripts(), 800);
+            return true;
+        } catch (err) {
+            showToast('Update failed', 'error');
             return false;
         }
     }

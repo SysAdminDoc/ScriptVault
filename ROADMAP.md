@@ -3,8 +3,8 @@
 > From v2.0.1 (bash-concatenated JS prototype) to production-grade TypeScript extension.
 > Each phase is independently shippable. Later phases depend on earlier ones.
 >
-> **Roadmap version:** Round 13 — last research sweep 2026-05-18. Shipped baseline: v3.10.1 (April 28, 2026) + three-commit audit-hardening pass (`d1e3ee2`, `e306b2b`, `325db86` on 2026-05-18) folded in. Pending: v3.11.0 (storage-hardening grouping, Phase 38.13) ➜ v3.12.0+ (Phase 39, Round 12 catch-up) ➜ Phase 40 (Round 13 audit productionization).
-> **2026-05-19 autonomous sweep:** Phase 38 parity wave landed — **38.1** (GM_addElement null-on-failure), **38.8** (Update tab label parity), **38.12** (singular `tag` alias on `GM_info.script`), and **38.13** (multi-key rollback contract regression suite). 11 new vitest cases; 701 total tests green; tsc strict clean.
+> **Roadmap version:** Round 13 — last research sweep 2026-05-18. Shipped baseline: **v3.11.0 (2026-05-19, tag pushed)** rolls up the v3.10.1 → HEAD storage-hardening sweep PLUS nine Phase 38 sub-items closed in the 2026-05-19 autonomous session (38.1, 38.2, 38.4, 38.6, 38.8, 38.9, 38.11 audited, 38.12, 38.13). Pending: v3.12.0+ (Phase 39, Round 12 catch-up — remaining deferred items 39.1, 39.5, 39.15, 39.32, 39.40) ➜ Phase 40 already shipped (Round 13 audit productionization).
+> **2026-05-19 autonomous sweep:** Phase 38 parity wave landed and tagged as v3.11.0. 24 new vitest cases across three commits; 712 total tests green; tsc strict clean.
 > **Source floor:** >294 distinct URLs across Rounds 1–13 (272 carried from Round 12 + 22 net-new for Round 13, indexed 273–294). Every Now/Next item is traceable to at least one source.
 
 ---
@@ -3311,7 +3311,7 @@ Both VM v2.37.0 ([#2500](https://github.com/violentmonkey/violentmonkey/issues/2
 
 **Status (2026-05-19):** ✅ Shipped. Both `background.core.js` `GM_addElement()` and the TS mirror at [`src/background/wrapper-builder.ts`](src/background/wrapper-builder.ts) now return `null` on every failure path: non-string/empty `tag`, `document.createElement(tag)` throws, falsy parent, parent without `appendChild`, or `appendChild()` throws. Attribute-application errors no longer abort the call (they're caught so the element can still be attached). Regression suite [`tests/wrapper-dom-security.test.js`](tests/wrapper-dom-security.test.js) added 3 cases pinning the null-on-failure contract for null parent, detached parent, empty tag, numeric tag, malformed tag, plus the happy path.
 
-### 38.2 Regex search in dashboard script search (TM 5.5.6234 parity)
+### 38.2 Regex search in dashboard script search (TM 5.5.6234 parity) ✅ Shipped (2026-05-19)
 
 TM 5.5.6234 (January 15, 2026) added regex support to its in-dashboard script search bar. ScriptVault already has `code:` prefix for full-text source search (Phase 7) — extend the same input with `re:` (or `/pattern/flags`) to apply a `RegExp` against the searched corpus.
 
@@ -3319,6 +3319,8 @@ TM 5.5.6234 (January 15, 2026) added regex support to its in-dashboard script se
 - Apply against script `name`, `description`, `match` patterns, and (when combined with `code:`) the source body.
 - Highlight hits in the result rows; debounce the regex compile to one per 200ms to avoid pathological-pattern lockups.
 - Source: [TM changelog 5.5.6234](https://www.tampermonkey.net/changelog.php).
+
+**Status (2026-05-19):** ✅ Shipped. [`pages/dashboard.js`](pages/dashboard.js) adds `parseDashboardSearchRegex()` recognizing both `re:<pattern>` (case-insensitive default to match substring ergonomics) and `/pattern/flags` (flags honored verbatim) shapes. `getFilteredScripts()` compiles the pattern in a try/catch — invalid regex surfaces via `aria-invalid="true"` + descriptive `title` tooltip on the search input and yields an empty result set so the typo is visible instead of masked. `code:` prefix composes with regex (`code:re:fetch\(`). Existing 90ms debounce in `queueScriptTableRender()` is well under the 200ms recommendation. Regression suite [`tests/dashboard-search-regex.test.js`](tests/dashboard-search-regex.test.js) adds 8 cases pinning the parser shape, flag handling, case-sensitivity defaults, and the malformed-regex throws-at-construction contract that the caller relies on.
 
 ### 38.3 Decouple update-check from auto-install — TM ships first (Phase 17.3 fast-track)
 
@@ -3383,7 +3385,7 @@ VM v2.37.1 split its monolithic Settings tab into three: Settings, Update, Sync.
 
 **Status (2026-05-19):** ✅ Shipped. Per-script settings panel in [`pages/dashboard.html`](pages/dashboard.html) renamed `Updates` → `Update` (singular) to match VM v2.37.1 / TM split convention. The top-level dashboard sidebar already used Settings / Utilities / Trash / Script Store; there is no separate top-level "Update" or "Sync" tab because those live as sections inside Settings (matches the VM v2.37.1 layout). Cosmetic-only change, zero risk.
 
-### 38.9 "Don't force update on normal click" guard (VM v2.37.1 beta UX)
+### 38.9 "Don't force update on normal click" guard (VM v2.37.1 beta UX) ✅ Shipped (2026-05-19)
 
 VM v2.37.1 fixed a footgun where clicking the per-script "check for updates" icon would also auto-install the update without a confirmation step. ScriptVault's dashboard force-update button (Phase 7) currently does the same — single click triggers fetch + install with no diff preview.
 
@@ -3391,6 +3393,8 @@ VM v2.37.1 fixed a footgun where clicking the per-script "check for updates" ico
 - Side effect: aligns with Phase 38.3 (decoupled update flow) — same "Manual review per script" mode behavior.
 - Tests: `dashboard-update.test.js` should pin the new flow — single click ≠ install.
 - Source: [VM v2.37.1 release notes](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.37.1).
+
+**Status (2026-05-19):** ✅ Shipped. [`pages/dashboard.js`](pages/dashboard.js) new `interactiveCheckAndConfirmUpdate()` is wired to the per-row update icon's `click` handler. The function calls `checkUpdates` only — if an update is available it surfaces a three-button modal (`View diff` / `Install update` / `Cancel`) via the existing `showModal()` helper. "View diff" opens the existing `showDiffView` with old/new code and ping-pongs back to the confirmation. Right-click still triggers `checkScriptForUpdates(id, { force: true })` (cache-bypass force update). Bulk update + popup "update" entries keep calling the auto-install path because they have their own progress-modal confirmation surface.
 
 ### 38.10 ScriptCat-style Agent API (Under Consideration)
 
