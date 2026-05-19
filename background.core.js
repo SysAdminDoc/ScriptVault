@@ -4539,7 +4539,7 @@ chrome.commands.onCommand.addListener(async (command) => {
       await SettingsManager.set('enabled', !settings.enabled);
       await registerAllScripts(true);
       await updateBadge();
-      
+
       chrome.notifications.create({
         type: 'basic',
         iconUrl: 'images/icon128.png',
@@ -4550,6 +4550,80 @@ chrome.commands.onCommand.addListener(async (command) => {
     }
   }
 });
+
+// ============================================================================
+// Phase 39.29 — Omnibox keyword "sv"
+// ============================================================================
+// Type `sv ` in the address bar, then a fragment of any installed script's
+// name or @tag. Suggestions surface inline; Enter opens the script in the
+// dashboard editor. Chrome 149+ stabilized the Omnibox API for MV3 SW
+// contexts (previously the listeners required a DOM-backed page).
+//
+// Suggestion budget: Chrome shows at most ~6 suggestions; we cap our matches
+// at 8 to leave room for default-suggestion render slop. Matching is a simple
+// case-insensitive substring across name + namespace + tags — Phase 12.2's
+// fuzzy index isn't wired through to the SW yet.
+
+if (chrome.omnibox?.onInputChanged) {
+  chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
+    try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
+    const query = (text || '').trim().toLowerCase();
+    if (!query) {
+      suggest([]);
+      return;
+    }
+    try {
+      const scripts = await ScriptStorage.getAll();
+      const matches = [];
+      for (const s of scripts) {
+        const name = (s.meta?.name || '').toLowerCase();
+        const ns = (s.meta?.namespace || '').toLowerCase();
+        const tags = Array.isArray(s.meta?.tag) ? s.meta.tag.map(t => String(t).toLowerCase()) : [];
+        if (name.includes(query) || ns.includes(query) || tags.some(t => t.includes(query))) {
+          matches.push(s);
+          if (matches.length >= 8) break;
+        }
+      }
+      suggest(matches.map(s => ({
+        // `content` is the value that becomes the URL bar text on Enter; we
+        // encode the script ID so onInputEntered can dispatch without a
+        // second lookup.
+        content: `id:${s.id}`,
+        // `description` is HTML-allowed but limited — clamp the script name
+        // through the same WECG #935 string-length guard used for context-
+        // menu titles.
+        description: `<match>${_clampString((s.meta?.name || s.id), SV_CONTEXT_MENU_TITLE_MAX)}</match>` +
+          (s.meta?.version ? ` <dim>v${escapeOmnibox(s.meta.version)}</dim>` : '') +
+          (s.enabled === false ? ' <dim>(disabled)</dim>' : '')
+      })));
+    } catch (e) {
+      console.warn('[ScriptVault] Omnibox onInputChanged failed:', e?.message || e);
+      suggest([]);
+    }
+  });
+
+  chrome.omnibox.onInputEntered.addListener(async (text, _disposition) => {
+    try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
+    let scriptId = null;
+    const m = (text || '').match(/^id:(.+)$/);
+    if (m) {
+      scriptId = m[1].trim();
+    } else {
+      // User typed a query and hit Enter without picking a suggestion — open
+      // the dashboard with the search pre-filled.
+      chrome.tabs.create({ url: `pages/dashboard.html?search=${encodeURIComponent(text || '')}` });
+      return;
+    }
+    chrome.tabs.create({ url: `pages/dashboard.html#script/${encodeURIComponent(scriptId)}` });
+  });
+}
+
+// Minimal HTML-entity escape for omnibox description strings. The omnibox
+// renderer accepts a small XML subset (<match>, <dim>, <url>); content
+// outside those tags must be escaped or Chrome silently drops the suggestion.
+function escapeOmnibox(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 // ============================================================================
 // Alarms (Auto-update & Sync)
