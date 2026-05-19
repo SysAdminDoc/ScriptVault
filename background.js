@@ -11010,6 +11010,9 @@ function parseUserscript(code) {
     include: [],
     exclude: [],
     excludeMatch: [],
+    // Phase 39.11 — TM #2784 top-level origin gates.
+    matchTop: [],
+    excludeTop: [],
     grant: [],
     require: [],
     resource: {},
@@ -11090,7 +11093,18 @@ function parseUserscript(code) {
       case 'tag':
       case 'compatible':
       case 'incompatible':
-        const arrayKey = key === 'exclude-match' ? 'excludeMatch' : key;
+      // Phase 39.11 — TM #2784 top-level-origin gates. Patterns are matched
+      // against window.top.location.href at runtime (in the wrapper). Same
+      // array-directive shape as @match/@exclude so the parser, dedup, and
+      // splittable-comma conveniences carry over.
+      case 'match-top':
+      case 'matchTop':
+      case 'exclude-top':
+      case 'excludeTop':
+        const arrayKey = key === 'exclude-match' ? 'excludeMatch'
+          : key === 'match-top' ? 'matchTop'
+          : key === 'exclude-top' ? 'excludeTop'
+          : key;
         if (!meta[arrayKey]) meta[arrayKey] = [];
         if (value) {
           // Phase 36.6 — comma-separated convenience syntax for URL pattern
@@ -11102,6 +11116,8 @@ function parseUserscript(code) {
             arrayKey === 'include' ||
             arrayKey === 'exclude' ||
             arrayKey === 'excludeMatch' ||
+            arrayKey === 'matchTop' ||
+            arrayKey === 'excludeTop' ||
             arrayKey === 'connect';
           if (splittable && value.includes(',')) {
             for (const part of value.split(',')) {
@@ -11699,6 +11715,21 @@ async function exportAllScripts(options = {}) {
     ...(includeSettings ? { settings } : {}),
     scripts: exportedScripts
   };
+}
+
+// Phase 39.22 — bound any await chain that could deadlock on a CSP-strict /
+// hung remote target (VM #2513). Rejects with a labelled timeout error after
+// `ms` milliseconds; the caller is responsible for treating the rejection as
+// a soft failure (Promise.allSettled, .catch, etc.).
+function _withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Timeout after ${ms}ms: ${label}`)), ms);
+  });
+  return Promise.race([
+    Promise.resolve(promise).finally(() => clearTimeout(timer)),
+    timeout
+  ]);
 }
 
 // chrome.cookies.* only accepts http(s) URLs. Front-validate to give scripts a
@@ -15988,7 +16019,14 @@ async function init() {
   console.log('[ScriptVault] Service worker ready');
 }
 
-// Remove expired persistent cache entries and stale trash items to prevent storage bloat
+// Remove expired persistent cache entries and stale trash items to prevent storage bloat.
+//
+// Phase 39.25 — VM #2453 @require cache invalidation on dependency update.
+// In addition to age-based TTL eviction, drop require_cache_* entries whose
+// URL hash is no longer referenced by any installed script. A script that
+// bumps its @require from `lib@1.0.0` to `lib@1.1.0` previously kept the old
+// entry until the 7-day TTL fired; now the orphan is evicted on the next
+// cleanup tick.
 async function cleanupStaleCaches() {
   try {
     const all = await chrome.storage.local.get(null);
@@ -15997,9 +16035,38 @@ async function cleanupStaleCaches() {
     const maxResourceAge = ResourceCache.maxAge; // 24 hours
     const keysToRemove = [];
 
+    // Phase 39.25 — compute the live set of `require_cache_<sha256(url)>` keys
+    // from every script's @require list. Anything in storage outside this set
+    // is an orphan (no script references it).
+    let liveRequireKeys = null;
+    try {
+      const scripts = await ScriptStorage.getAll();
+      const urls = new Set();
+      for (const s of scripts || []) {
+        const reqs = Array.isArray(s?.meta?.require) ? s.meta.require : [];
+        for (const u of reqs) if (typeof u === 'string' && u) urls.add(u);
+      }
+      // The cache key is sha256(full URL including any #sri fragment) — match
+      // the same hashing the fetcher uses (line 5765 region).
+      liveRequireKeys = new Set();
+      for (const u of urls) {
+        const buf = new TextEncoder().encode(u);
+        const hash = await crypto.subtle.digest('SHA-256', buf);
+        const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+        liveRequireKeys.add(`require_cache_${hex}`);
+      }
+    } catch (e) {
+      // If we can't enumerate live keys, fall back to age-only eviction
+      // (better than nothing). Logging only — non-critical.
+      debugLog('[Cache cleanup] live-key enumeration failed, falling back to age-only:', e?.message || e);
+      liveRequireKeys = null;
+    }
+
     for (const [key, value] of Object.entries(all)) {
       if (key.startsWith('require_cache_') && value?.timestamp) {
-        if (now - value.timestamp > maxRequireAge) keysToRemove.push(key);
+        const expired = now - value.timestamp > maxRequireAge;
+        const orphaned = liveRequireKeys !== null && !liveRequireKeys.has(key);
+        if (expired || orphaned) keysToRemove.push(key);
       } else if (key.startsWith('res_cache_') && value?.timestamp) {
         if (now - value.timestamp > maxResourceAge) keysToRemove.push(key);
       }
@@ -16148,11 +16215,15 @@ async function registerAllScripts(forceReregister = false) {
           }
           if (missingRequires.size > 0) {
             debugLog(`Preloading ${missingRequires.size} @require deps for ${missing.length} missing scripts`);
-            await Promise.allSettled([...missingRequires].map(url => fetchRequireScript(url)));
+            // Phase 39.22 — bound each fetch so a CSP-strict / slow server can't
+            // deadlock the whole wake path.
+            await Promise.allSettled([...missingRequires].map(url => _withTimeout(fetchRequireScript(url), 15000, `fetchRequire:${url}`)));
           }
 
           debugLog(`Registering ${missing.length} missing script(s) (diff from ${existing.length} already registered)`);
-          const diffResults = await Promise.allSettled(missing.map(script => registerScript(script)));
+          // Phase 39.22 — per-script registration timeout (VM #2513). Without
+          // this, one chrome.userScripts.register() hang blocks the rest.
+          const diffResults = await Promise.allSettled(missing.map(script => _withTimeout(registerScript(script), 5000, `registerScript:${script.id}`)));
           const diffFailures = diffResults.filter(r => r.status === 'rejected');
           if (diffFailures.length > 0) {
             console.warn(`[ScriptVault] ${diffFailures.length} missing script(s) failed to register:`, diffFailures.map(r => r.reason?.message || r.reason));
@@ -16202,12 +16273,14 @@ async function registerAllScripts(forceReregister = false) {
     if (allRequires.size > 0) {
       debugLog(`Preloading ${allRequires.size} @require dependencies`);
       const preloadStart = Date.now();
-      await Promise.allSettled([...allRequires].map(url => fetchRequireScript(url)));
+      // Phase 39.22 — see diff-path comment above.
+      await Promise.allSettled([...allRequires].map(url => _withTimeout(fetchRequireScript(url), 15000, `fetchRequire:${url}`)));
       debugLog(`Preloaded in ${Date.now() - preloadStart}ms`);
     }
 
     // Register all scripts in parallel — significantly faster on large script collections
-    const results = await Promise.allSettled(enabledScripts.map(script => registerScript(script)));
+    // Phase 39.22 — per-script timeout (VM #2513).
+    const results = await Promise.allSettled(enabledScripts.map(script => _withTimeout(registerScript(script), 5000, `registerScript:${script.id}`)));
     const failures = results.filter(r => r.status === 'rejected');
     if (failures.length > 0) {
       console.warn(`[ScriptVault] ${failures.length} script(s) failed to register:`, failures.map(r => r.reason?.message || r.reason));
@@ -17151,6 +17224,50 @@ ${req.code}
   // ============ End URL Guard ============
 `;
   })()}
+  ${(() => {
+    // Phase 39.11 — @match-top / @exclude-top runtime gates.
+    // Patterns are matched against window.top.location.href. Cross-origin
+    // top frames throw on access, so we treat opaque top as "no match" for
+    // @match-top (do not run — author asked for a specific top origin we
+    // can't verify) and "match" for @exclude-top (do not run — author asked
+    // to keep the script away from frames whose top we can't audit).
+    const matchTop = Array.isArray(meta.matchTop) ? meta.matchTop : [];
+    const excludeTop = Array.isArray(meta.excludeTop) ? meta.excludeTop : [];
+    if (matchTop.length === 0 && excludeTop.length === 0) return '';
+
+    // Build a runtime matcher that handles both glob (@match-style) and
+    // regex (`/.../flags`) patterns. Keep the matcher inside the wrapper
+    // so it doesn't depend on the background's matchPattern helper.
+    const patternsToLiteral = (arr) => arr.map(p => {
+      const m = p.match(/^\/(.+)\/([gimsuy]*)$/);
+      if (m) return `{re: new RegExp(${JSON.stringify(m[1])}, ${JSON.stringify(m[2])})}`;
+      return `{glob: ${JSON.stringify(p)}}`;
+    }).join(', ');
+
+    return `
+  // ============ @match-top / @exclude-top Guard (Phase 39.11) ============
+  {
+    let __topUrl;
+    try { __topUrl = window.top && window.top.location && window.top.location.href; } catch (_e) { __topUrl = null; }
+    const __testTop = (pattern) => {
+      if (pattern.re) return pattern.re.test(__topUrl);
+      // Glob: convert @match-style to RegExp on-demand. Handles * / scheme / host / path
+      // wildcards conservatively — anchored ^...$ with `.*` substituted for `*`.
+      const escaped = pattern.glob.replace(/[.+^$()|[\\]{}]/g, '\\\\$&').replace(/\\*/g, '.*').replace(/\\?/g, '.');
+      try { return new RegExp('^' + escaped + '$').test(__topUrl); } catch { return false; }
+    };
+    ${matchTop.length > 0 ? `
+    const __matchTopPatterns = [${patternsToLiteral(matchTop)}];
+    if (!__topUrl) return; // Cross-origin top → cannot verify match-top → bail.
+    if (!__matchTopPatterns.some(__testTop)) return;` : ''}
+    ${excludeTop.length > 0 ? `
+    const __excludeTopPatterns = [${patternsToLiteral(excludeTop)}];
+    if (!__topUrl) return; // Cross-origin top → conservatively bail.
+    if (__excludeTopPatterns.some(__testTop)) return;` : ''}
+  }
+  // ============ End @match-top / @exclude-top Guard ============
+`;
+  })()}
   const scriptId = ${JSON.stringify(script.id)};
   const meta = ${JSON.stringify(meta)};
   const grants = ${JSON.stringify(grants)};
@@ -17961,6 +18078,32 @@ ${req.code}
     if (!hasGrant('GM_openInTab') && !hasGrant('GM.openInTab')) return null;
     const opts = typeof options === 'boolean' ? { active: !options } : (options || {});
     const tabHandle = { closed: false, onclose: null, close: () => {} };
+
+    // Phase 39.13 — TM #2669: blob: URLs are bound to the creating context's
+    // blob registry. chrome.tabs.create() in the background SW cannot resolve
+    // a blob URL minted by a USER_SCRIPT world. Route blob: through window.open()
+    // in-context instead; that preserves the registry binding. data: and
+    // about:blank also resolve here without a background round-trip.
+    const isLocalOnly = typeof url === 'string' && /^(blob|data|about):/i.test(url);
+    if (isLocalOnly) {
+      try {
+        const target = opts.active === false || opts.background ? '_blank' : '_blank';
+        const features = opts.active === false ? 'noopener=yes' : '';
+        const win = window.open(url, target, features);
+        if (!win) {
+          // Pop-up blocker engaged. Surface a clear log so the script author
+          // knows GM_openInTab requires a user-gesture for blob: URLs.
+          console.warn('[ScriptVault] GM_openInTab(blob:) blocked by pop-up settings — call within a user-gesture handler');
+        }
+      } catch (e) {
+        console.warn('[ScriptVault] GM_openInTab(blob:) failed:', e?.message || e);
+      }
+      // window.open returns a Window we can't message-pass with; tabHandle
+      // gets a no-op close() and no onclose tracking (Chrome doesn't expose
+      // the new tab's id to the page).
+      return tabHandle;
+    }
+
     sendToBackground('GM_openInTab', {
       url, scriptId, trackClose: true,
       active: opts.active, insert: opts.insert,

@@ -338,8 +338,12 @@
           ? chrome.runtime.sendMessage({ action: 'getScriptsForUrl', url: currentUrl })
           : Promise.resolve([])
       ]);
-      allScripts = allRes?.scripts || Object.values(allRes || {});
-      pageScripts = Array.isArray(matchedRes) ? matchedRes : [];
+      // Phase 39.23 — VM #2516 cross-realm array guard. Coerce through
+      // Array.from so an array-like response from a foreign realm doesn't
+      // crash the subsequent for-of in renderPageScripts.
+      const rawAll = allRes?.scripts ?? Object.values(allRes || {});
+      allScripts = Array.isArray(rawAll) ? rawAll : Array.from(rawAll ?? []);
+      pageScripts = Array.isArray(matchedRes) ? matchedRes : Array.from(matchedRes ?? []);
       renderPageScripts();
       renderAllScripts();
     } catch (e) {
