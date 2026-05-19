@@ -3846,7 +3846,7 @@ Chrome 149 stable (~June 2 2026) makes `injectImmediately` reliable for the run-
 
 Source: [Chrome 149 beta blog](https://developer.chrome.com/blog/chrome-149-beta).
 
-#### 39.29 Omnibox Keyword in Service Worker — `sv <script-name>`
+#### 39.29 Omnibox Keyword in Service Worker — `sv <script-name>` ✅ Shipped
 
 Chrome 149 stabilizes the Omnibox API for MV3 service workers (previously DOM-dependent). Add an opt-in omnibox keyword for power-user script lookup.
 
@@ -3857,9 +3857,11 @@ Chrome 149 stabilizes the Omnibox API for MV3 service workers (previously DOM-de
 
 Source: [Chrome 149 beta blog](https://developer.chrome.com/blog/chrome-149-beta).
 
-#### 39.30 `tabs.sendMessage(null, {documentId})` Frame Routing (WECG #971)
+#### 39.30 `tabs.sendMessage(null, {documentId})` Frame Routing — Track only (WECG #971)
 
 [WECG #971](https://github.com/w3c/webextensions/issues/971) (Apr 2026) — all vendors supportive of letting `tabs.sendMessage` target a specific `documentId` rather than just a `frameId`. Simplifies ScriptVault's current frame-routing code.
+
+**Status (2026-05-19):** Tracked. Chrome hasn't shipped the documentId variant yet; the spec is still under discussion. No action needed until the API lands. Phase 36.8 (per-frame menu commands) consumes this directly once available.
 
 - Watch the spec; when Chrome ships it, replace `chrome.tabs.sendMessage(tabId, msg, {frameId})` with the documentId variant where appropriate.
 - Phase 36.8 (per-frame menu commands) consumes this directly.
@@ -3898,9 +3900,11 @@ Source: [Storage Buckets API (chromestatus)](https://chromestatus.com/feature/57
 
 ### Dependency Upgrades & Test-Stack
 
-#### 39.34 Puppeteer 25 ESM + Node 22 Migration (extends Phase 13.6)
+#### 39.34 Puppeteer 25 ESM + Node 22 Migration ⏳ Track — assess after next CI infra pass (extends Phase 13.6)
 
 [Puppeteer **25.0.2** (May 15 2026)](https://github.com/puppeteer/puppeteer/releases) is ESM-only, requires Node 22+, and cleaned up the WebDriver BiDi wrapper. ScriptVault's smoke test (`scripts/smoke-dashboard.mjs`) currently runs on Node 20 (per CI config).
+
+**Status (2026-05-19):** Tracked. `package.json` is pinned to `puppeteer-core ^24.42.0` (latest 24.x is stable for our smoke-test surface). Bumping Node 20 → 22 in CI is cheap; the actual blocker is that we have not yet hit a Puppeteer 24.x bug that motivates the bump. Combine this with the next CI infra refresh.
 
 - Bump CI Node version 20 → 22.
 - Update `package.json` engines field.
@@ -3917,9 +3921,11 @@ Source: [Puppeteer releases](https://github.com/puppeteer/puppeteer/releases).
 
 Source: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/fregante/chrome-webstore-upload-cli/releases/tag/v4.0.0).
 
-#### 39.36 Vitest 5 Upgrade (Under Consideration — Wait for Stable)
+#### 39.36 Vitest 5 Upgrade ⏳ Track — wait for stable (Under Consideration)
 
 Vitest **5.0.0-beta.2** swaps the assertion-formatter from `loupe` to `pretty-format`. Defer the upgrade until 5.0 stable; pin the beta probe to a feature branch in CI to surface diff-output churn early.
+
+**Status (2026-05-19):** Tracked. Pinned to `vitest ^4.1.3` (current latest on the 4.x line is 4.1.6). 5.0 still in beta; no immediate driver to migrate. Re-evaluate when 5.0 stable ships.
 
 Source: [Vitest releases](https://github.com/vitest-dev/vitest/releases).
 
@@ -3933,9 +3939,11 @@ esbuild **0.28** introduces `with { type: 'text' }` import attributes — load a
 
 Source: [esbuild releases](https://github.com/evanw/esbuild/releases).
 
-#### 39.38 idb v8 Wrapper Evaluation for Phase 2 IDB Layer
+#### 39.38 idb v8 Wrapper Evaluation for Phase 2 IDB Layer ⏳ Track — decision required by Phase 2 v2
 
 The [`idb`](https://github.com/jakearchibald/idb) library v8 stabilized async-iterator support and dropped EdgeHTML. Phase 2 IndexedDB layer is currently hand-rolled. Re-evaluate whether wrapping in `idb` is worthwhile.
+
+**Status (2026-05-19):** Tracked. Current hand-roll is working; no immediate driver to swap. Combine the decision with the next Phase 2 v2 refactor (no fixed date).
 
 - **Decision criteria:** size delta (idb is ~3KB gzipped, current hand-roll is ~2KB), API ergonomics (less `request.onsuccess` boilerplate), test coverage parity.
 - If wrapping: keep the existing `src/storage/idb.ts` as a typed-adapter layer over `idb`, so call sites don't change.
@@ -3943,9 +3951,11 @@ The [`idb`](https://github.com/jakearchibald/idb) library v8 stabilized async-it
 
 Source: [idb v8 changelog](https://github.com/jakearchibald/idb/blob/main/CHANGELOG.md).
 
-#### 39.39 Playwright as E2E Complement to Puppeteer
+#### 39.39 Playwright as E2E Complement to Puppeteer ⏳ Track — gated on Phase 10.3 E2E suite
 
 Playwright **1.60** added `tracing.startHar`, `locator.drop()`, and aria-snapshot bounding boxes. ScriptVault currently uses Puppeteer for smoke; Playwright's HAR + screencast for E2E error-replay is a meaningful improvement.
+
+**Status (2026-05-19):** Tracked. Adding a second CI job and a second test-runner dependency only pays off once Phase 10.3's full-flow E2E suite exists. Without those tests there's nothing for Playwright's HAR/screencast surface to attach to. Schedule alongside Phase 10.3.
 
 - Keep Puppeteer for the existing `smoke:dashboard` script (low-friction Chrome launch).
 - Add Playwright as a **second** E2E job in CI for the full-flow tests (Phase 10.3 plans these); HAR captures attach to test failures for post-mortem.
@@ -4037,9 +4047,11 @@ VM proposed [migration to Codeberg](https://github.com/violentmonkey/violentmonk
 
 Source: [VM #2522](https://github.com/violentmonkey/violentmonkey/issues/2522).
 
-#### 39.49 CWS Submission-Review Backlog Buffer (April 2026 advisory)
+#### 39.49 CWS Submission-Review Backlog Buffer ✅ Documented (April 2026 advisory)
 
 The CWS submission queue has been running with extended review times since April 2026. Adjust release-cadence expectations.
+
+**Status (2026-05-19):** Documented in the existing release runbook scope (referenced from 39.1 / 39.2). No code or pipeline change required this round — the buffer is a planning convention rather than an automated guard. Re-evaluate quarterly; if CWS review times normalize, the buffer can be dropped.
 
 - Add a 7–14 day buffer between feature-freeze and target user-facing release date.
 - Document the buffer in `docs/release-runbook.md`.

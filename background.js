@@ -11717,6 +11717,22 @@ async function exportAllScripts(options = {}) {
   };
 }
 
+// Phase 39.31 — WECG #935 pre-emptive string clamping. Chrome's
+// chrome.notifications.create() silently truncates `title` past ~100 chars
+// and `message` past ~300 chars; chrome.contextMenus.create() truncates
+// `title` past ~75 chars with ellipsis. WECG #935 proposes formalizing
+// these limits, after which silent truncation may become an explicit error.
+// Clamp at the source so a future spec change can't break us.
+const SV_NOTIF_TITLE_MAX = 96;     // Chrome notification title cap
+const SV_NOTIF_MESSAGE_MAX = 280;  // Chrome notification message cap
+const SV_CONTEXT_MENU_TITLE_MAX = 64; // visible context-menu label
+function _clampString(s, max) {
+  if (typeof s !== 'string') return s;
+  if (s.length <= max) return s;
+  // Use a single ellipsis char so we land exactly on `max`.
+  return s.slice(0, max - 1) + '\u2026';
+}
+
 // Phase 39.22 — bound any await chain that could deadlock on a CSP-strict /
 // hung remote target (VM #2513). Rejects with a labelled timeout error after
 // `ms` milliseconds; the caller is responsible for treating the rejection as
@@ -12812,17 +12828,59 @@ async function handleMessage(message, sender) {
       }
 
       // Sync
-      case 'sync':
-        return await CloudSync.sync();
-        
-      case 'testSync': {
-        const settings = await SettingsManager.get();
-        const provider = CloudSync.providers[settings.syncProvider];
-        if (provider) {
-          return await provider.test(settings);
-        }
-        return false;
+      case 'sync': {
+        const result = await CloudSync.sync();
+        // Phase 39.26 — persist last-sync outcome so the dashboard's sync chip
+        // can render "Last sync: 5 min ago — OK" without requiring a separate
+        // round-trip on every popup open.
+        try {
+          await chrome.storage.local.set({
+            lastSyncResult: {
+              timestamp: Date.now(),
+              ok: !!(result?.success || result?.skipped),
+              skipped: !!result?.skipped,
+              error: result?.error || null
+            }
+          });
+        } catch (_e) { /* non-critical */ }
+        return result;
       }
+
+      case 'testSync': {
+        // Phase 39.26 — VM #2486: explicit Test Connection with structured
+        // status. Accept an optional `data.provider` override so the dashboard
+        // can test a provider not currently selected (e.g. "verify the new
+        // WebDAV URL before saving").
+        const settings = await SettingsManager.get();
+        const providerName = data?.provider || settings.syncProvider;
+        const provider = CloudSync.providers[providerName];
+        if (!provider) {
+          return { ok: false, error: `Unknown provider: ${providerName}` };
+        }
+        try {
+          const raw = await provider.test(settings);
+          // Providers vary in return shape — normalize to { ok, error?, hint? }.
+          if (typeof raw === 'boolean') return { ok: raw };
+          if (raw && typeof raw === 'object') {
+            const ok = raw.success === true || raw.ok === true;
+            const error = raw.error || raw.message || null;
+            const hint = !ok ? (
+              error?.toLowerCase().includes('401') ? 'Authentication failed — re-connect the account.' :
+              error?.toLowerCase().includes('403') ? 'Server rejected the credentials — check the user has write access.' :
+              error?.toLowerCase().includes('404') ? 'Endpoint not found — verify the URL.' :
+              error?.toLowerCase().includes('network') ? 'Network error — check connectivity and CORS.' :
+              null
+            ) : null;
+            return hint ? { ok, error, hint } : { ok, error };
+          }
+          return { ok: false, error: 'Provider returned no status' };
+        } catch (e) {
+          return { ok: false, error: e?.message || String(e) };
+        }
+      }
+
+      case 'getLastSyncResult':
+        return (await chrome.storage.local.get('lastSyncResult'))?.lastSyncResult || null;
       
       // Cloud Sync Provider Management
       case 'connectSyncProvider': {
@@ -14024,8 +14082,11 @@ async function handleMessage(message, sender) {
         const notifOpts = {
           type: hasProgress ? 'progress' : 'basic',
           iconUrl: data.image || 'images/icon128.png',
-          title: data.title || 'ScriptVault',
-          message: data.text || '',
+          // Phase 39.31 — clamp to documented Chrome notification limits
+          // so the future WECG #935 spec change can't break user scripts
+          // that pass long titles/messages.
+          title: _clampString(data.title || 'ScriptVault', SV_NOTIF_TITLE_MAX),
+          message: _clampString(data.text || '', SV_NOTIF_MESSAGE_MAX),
           silent: data.silent || false
         };
         if (hasProgress) {
@@ -14238,6 +14299,12 @@ async function handleMessage(message, sender) {
 
           const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, [], []);
 
+          // Phase 39.28 — Chrome 149+ makes injectImmediately: true reliable
+          // for document-start one-shots. Pass it when the script declares
+          // @run-at document-start so the body runs before first paint
+          // instead of after.
+          const wantsDocumentStart = (script?.meta?.['run-at'] === 'document-start');
+
           // Prefer userScripts.execute() (Chrome 135+) — runs in the same
           // USER_SCRIPT world as a normal injection so unsafeWindow / GM_*
           // APIs behave identically.
@@ -14246,7 +14313,8 @@ async function handleMessage(message, sender) {
               await chrome.userScripts.execute({
                 target: { tabId: targetTabId },
                 js: [{ code: wrappedCode }],
-                world: 'USER_SCRIPT'
+                world: 'USER_SCRIPT',
+                ...(wantsDocumentStart ? { injectImmediately: true } : {})
               });
               return { success: true, mode: 'userScripts.execute' };
             } catch (e) {
@@ -14265,7 +14333,8 @@ async function handleMessage(message, sender) {
               func: (code) => {
                 try { (0, eval)(code); } catch (err) { console.error('[ScriptVault Run Now]', err); }
               },
-              args: [wrappedCode]
+              args: [wrappedCode],
+              ...(wantsDocumentStart ? { injectImmediately: true } : {})
             });
             return { success: true, mode: 'scripting.executeScript' };
           } catch (e) {
@@ -15230,7 +15299,10 @@ async function setupContextMenus() {
     for (const script of contextScripts) {
       chrome.contextMenus.create({
         id: `scriptvault-ctx-${script.id}`,
-        title: script.meta.name || script.id,
+        // Phase 39.31 — pre-emptive clamp; Chrome visually ellipsises long
+        // context-menu titles but the spec proposal may make oversize titles
+        // an error in the future.
+        title: _clampString(script.meta.name || script.id, SV_CONTEXT_MENU_TITLE_MAX),
         contexts: ['page', 'selection', 'link', 'image']
       });
     }
@@ -15378,7 +15450,7 @@ chrome.commands.onCommand.addListener(async (command) => {
       await SettingsManager.set('enabled', !settings.enabled);
       await registerAllScripts(true);
       await updateBadge();
-      
+
       chrome.notifications.create({
         type: 'basic',
         iconUrl: 'images/icon128.png',
@@ -15389,6 +15461,80 @@ chrome.commands.onCommand.addListener(async (command) => {
     }
   }
 });
+
+// ============================================================================
+// Phase 39.29 — Omnibox keyword "sv"
+// ============================================================================
+// Type `sv ` in the address bar, then a fragment of any installed script's
+// name or @tag. Suggestions surface inline; Enter opens the script in the
+// dashboard editor. Chrome 149+ stabilized the Omnibox API for MV3 SW
+// contexts (previously the listeners required a DOM-backed page).
+//
+// Suggestion budget: Chrome shows at most ~6 suggestions; we cap our matches
+// at 8 to leave room for default-suggestion render slop. Matching is a simple
+// case-insensitive substring across name + namespace + tags — Phase 12.2's
+// fuzzy index isn't wired through to the SW yet.
+
+if (chrome.omnibox?.onInputChanged) {
+  chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
+    try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
+    const query = (text || '').trim().toLowerCase();
+    if (!query) {
+      suggest([]);
+      return;
+    }
+    try {
+      const scripts = await ScriptStorage.getAll();
+      const matches = [];
+      for (const s of scripts) {
+        const name = (s.meta?.name || '').toLowerCase();
+        const ns = (s.meta?.namespace || '').toLowerCase();
+        const tags = Array.isArray(s.meta?.tag) ? s.meta.tag.map(t => String(t).toLowerCase()) : [];
+        if (name.includes(query) || ns.includes(query) || tags.some(t => t.includes(query))) {
+          matches.push(s);
+          if (matches.length >= 8) break;
+        }
+      }
+      suggest(matches.map(s => ({
+        // `content` is the value that becomes the URL bar text on Enter; we
+        // encode the script ID so onInputEntered can dispatch without a
+        // second lookup.
+        content: `id:${s.id}`,
+        // `description` is HTML-allowed but limited — clamp the script name
+        // through the same WECG #935 string-length guard used for context-
+        // menu titles.
+        description: `<match>${_clampString((s.meta?.name || s.id), SV_CONTEXT_MENU_TITLE_MAX)}</match>` +
+          (s.meta?.version ? ` <dim>v${escapeOmnibox(s.meta.version)}</dim>` : '') +
+          (s.enabled === false ? ' <dim>(disabled)</dim>' : '')
+      })));
+    } catch (e) {
+      console.warn('[ScriptVault] Omnibox onInputChanged failed:', e?.message || e);
+      suggest([]);
+    }
+  });
+
+  chrome.omnibox.onInputEntered.addListener(async (text, _disposition) => {
+    try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
+    let scriptId = null;
+    const m = (text || '').match(/^id:(.+)$/);
+    if (m) {
+      scriptId = m[1].trim();
+    } else {
+      // User typed a query and hit Enter without picking a suggestion — open
+      // the dashboard with the search pre-filled.
+      chrome.tabs.create({ url: `pages/dashboard.html?search=${encodeURIComponent(text || '')}` });
+      return;
+    }
+    chrome.tabs.create({ url: `pages/dashboard.html#script/${encodeURIComponent(scriptId)}` });
+  });
+}
+
+// Minimal HTML-entity escape for omnibox description strings. The omnibox
+// renderer accepts a small XML subset (<match>, <dim>, <url>); content
+// outside those tags must be escaped or Chrome silently drops the suggestion.
+function escapeOmnibox(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 // ============================================================================
 // Alarms (Auto-update & Sync)
