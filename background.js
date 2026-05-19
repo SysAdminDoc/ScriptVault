@@ -18886,6 +18886,27 @@ ${req.code}
         }
       }
 
+      // Phase 38.6 — Native Navigation API (Chrome 102+, our min-Chrome is
+      // 130 so always present in supported Chromium builds; missing on
+      // Safari and older Firefox where the polling shim below still wins).
+      // The 'navigate' event fires for every SPA navigation including
+      // direct location assignment, which the pushState/replaceState patch
+      // misses, and runs in microtask order so the dispatch lands before
+      // the next page paint. Falls through to the polling shim if the API
+      // is missing (Firefox port path).
+      const _nav = (typeof window !== 'undefined') ? window.navigation : undefined;
+      if (_nav && typeof _nav.addEventListener === 'function') {
+        try {
+          _nav.addEventListener('navigate', (event) => {
+            // Schedule on a microtask so location.href reflects the new URL
+            // by the time __checkUrlChange reads it. The navigate event
+            // fires BEFORE the document URL updates for traverse-style
+            // navigations, but always before render.
+            Promise.resolve().then(__checkUrlChange);
+          });
+        } catch (_e) { /* fall through to polling shim */ }
+      }
+
       const _origPushState = history.pushState;
       const _origReplaceState = history.replaceState;
       history.pushState = function () {

@@ -188,6 +188,90 @@
             background: var(--popup-text-dim);
         }
 
+        /* Phase 38.4 — @run-at context-menu section */
+        .context-menu-scripts-section {
+            margin: 6px 4px 8px;
+            padding: 6px 8px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--popup-border);
+            border-radius: 10px;
+        }
+        .context-menu-scripts-section[hidden] { display: none; }
+        .context-menu-scripts-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            padding: 0 2px;
+        }
+        .context-menu-scripts-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--popup-text-dim);
+        }
+        .context-menu-scripts-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 6px;
+            font-size: 10px;
+            font-weight: 700;
+            background: var(--accent-blue, #4f8cff);
+            color: #fff;
+            /* Per project rule: backdrop radius stays in 4–12 range. */
+            border-radius: 6px;
+        }
+        .context-menu-scripts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .context-menu-script-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 6px 8px;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            color: inherit;
+            font: inherit;
+            text-align: left;
+            cursor: pointer;
+            transition: background 90ms ease, border-color 90ms ease;
+        }
+        .context-menu-script-row:hover,
+        .context-menu-script-row:focus-visible {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: var(--popup-border);
+            outline: none;
+        }
+        .context-menu-script-row .ctx-icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .context-menu-script-row .ctx-name {
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 12px;
+        }
+        .context-menu-script-row .ctx-run-hint {
+            font-size: 10px;
+            color: var(--popup-text-dim);
+        }
+
         /* Script list */
         .script-list {
             max-height: 300px;
@@ -915,6 +999,18 @@
             User scripts are not enabled. Enable <strong>"Allow User Scripts"</strong> in extension settings or enable <strong>Developer Mode</strong>.
         </div>
         <button class="setup-warning-link" id="btnOpenExtSettings" type="button">Open Extension Settings</button>
+    </div>
+
+    <!-- Phase 38.4 — @run-at context-menu scripts for the current tab.
+         Surfaced as a dedicated, one-tap launcher section above the normal
+         script list (matches TM 5.5.6234 "Run on this page" UX). Hidden when
+         no context-menu scripts match the active URL. -->
+    <div class="context-menu-scripts-section" id="contextMenuSection" hidden>
+        <div class="context-menu-scripts-header">
+            <span class="context-menu-scripts-title">Context-menu scripts</span>
+            <span class="context-menu-scripts-count" id="contextMenuScriptsCount" aria-label="Count of context-menu scripts">0</span>
+        </div>
+        <div class="context-menu-scripts-list" id="contextMenuScriptsList" role="list" aria-label="Run a context-menu script on this tab"></div>
     </div>
 
     <!-- Scripts for this page -->

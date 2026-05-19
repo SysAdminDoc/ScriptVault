@@ -181,3 +181,62 @@ describe('XhrManager.buildFetchOptions', () => {
     expect(XhrManager.buildFetchOptions({ anonymous: 1 }).credentials).toBe('include');
   });
 });
+
+// Phase 38.11 — TM 5.5.6237 reports SW event-listener accumulation on
+// repeated GM_xmlhttpRequest. ScriptVault's architecture uses
+// AbortController + one-shot chrome.tabs.sendMessage (no persistent
+// port.onMessage subscribers), so the TM bug class doesn't translate.
+// Pin the underlying invariant: the request table + per-request cleanup
+// timers always drop to zero once each request is removed.
+describe('Phase 38.11 — XhrManager has no per-request listener/timer leak', () => {
+  it('1000 sequential create→remove cycles leave the table empty and timers cleared', () => {
+    vi.useFakeTimers();
+    const created = [];
+    for (let i = 0; i < 1000; i++) {
+      const req = XhrManager.create(1, 'leakprobe', { url: 'https://example.test/' + i });
+      created.push(req);
+    }
+    expect(XhrManager.getActiveCount()).toBe(1000);
+    for (const req of created) XhrManager.remove(req.id);
+    expect(XhrManager.getActiveCount()).toBe(0);
+    // Advance past the auto-cleanup delay; nothing should be left to fire.
+    vi.advanceTimersByTime(XhrManager.cleanupDelayMs + 1000);
+    expect(XhrManager.getActiveCount()).toBe(0);
+    vi.useRealTimers();
+  });
+
+  it('abortByScript() removes the matching requests without leaving zombie entries', () => {
+    const a = XhrManager.create(1, 'scriptA', {});
+    const b = XhrManager.create(1, 'scriptA', {});
+    const c = XhrManager.create(1, 'scriptB', {});
+    a.controller = { abort: vi.fn() };
+    b.controller = { abort: vi.fn() };
+    c.controller = { abort: vi.fn() };
+
+    XhrManager.abortByScript('scriptA');
+
+    expect(a.controller.abort).toHaveBeenCalled();
+    expect(b.controller.abort).toHaveBeenCalled();
+    expect(c.controller.abort).not.toHaveBeenCalled();
+    expect(XhrManager.get(a.id)).toBeUndefined();
+    expect(XhrManager.get(b.id)).toBeUndefined();
+    expect(XhrManager.get(c.id)).toBe(c);
+    expect(XhrManager.getActiveCount()).toBe(1);
+  });
+
+  it('abortByTab() removes the matching requests without leaving zombie entries', () => {
+    const a = XhrManager.create(7, 's1', {});
+    const b = XhrManager.create(7, 's2', {});
+    const c = XhrManager.create(8, 's1', {});
+    a.controller = { abort: vi.fn() };
+    b.controller = { abort: vi.fn() };
+    c.controller = { abort: vi.fn() };
+
+    XhrManager.abortByTab(7);
+
+    expect(XhrManager.get(a.id)).toBeUndefined();
+    expect(XhrManager.get(b.id)).toBeUndefined();
+    expect(XhrManager.get(c.id)).toBe(c);
+    expect(XhrManager.getActiveCount()).toBe(1);
+  });
+});

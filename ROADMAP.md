@@ -3329,7 +3329,7 @@ TM 5.5.6235 (February 13, 2026) shipped the long-requested split between "check 
 - Add an inline "1 update available" badge on every script row when in "Manual review per script" mode, click to diff (existing Phase 15.4) → confirm → apply.
 - Source: [TM changelog 5.5.6235](https://www.tampermonkey.net/changelog.php), [VM #1023](https://github.com/violentmonkey/violentmonkey/issues/1023).
 
-### 38.4 `@run-at context-menu` runnable from popup (TM 5.5.6234 parity)
+### 38.4 `@run-at context-menu` runnable from popup (TM 5.5.6234 parity) ✅ Shipped (2026-05-19)
 
 TM 5.5.6234 added a "Run on this page" entry in the popup that fires `@run-at context-menu` scripts without the user having to right-click. ScriptVault already has Phase 11.4 "Run on This Tab" (shipped v3.4.0) for arbitrary scripts — extend that path to enumerate the active tab's `@run-at context-menu` scripts and surface them as a dedicated popup section.
 
@@ -3337,6 +3337,8 @@ TM 5.5.6234 added a "Run on this page" entry in the popup that fires `@run-at co
 - Section header: "Context-menu scripts" with a count badge; each row a single-tap launcher.
 - Hide the section entirely when no `context-menu` scripts match the current tab.
 - Source: [TM changelog 5.5.6234](https://www.tampermonkey.net/changelog.php).
+
+**Status (2026-05-19):** ✅ Shipped. [`pages/popup.html`](pages/popup.html) declares a new `#contextMenuSection` block (header, count badge with 6px corner radius per project no-stadium-shape rule, list) above the main `#scriptList`. [`pages/popup.js`](pages/popup.js) `renderContextMenuScripts()` filters the existing `pageScripts` for `meta['run-at'] === 'context-menu'` enabled scripts, hides the section entirely when empty, and renders each as a single-tap launcher that calls the existing `runScriptNow` background handler (v3.4.0 shipped). No new background plumbing; no new permissions.
 
 ### 38.5 Open local userscript file + watch disk for changes (TM 5.5.6236 parity, Chrome path)
 
@@ -3349,7 +3351,7 @@ TM 5.5.6236 (April 2, 2026) shipped open-from-disk + watch-for-changes for Chrom
 - This belongs alongside Phase 36.10 in execution order (both share the live-reload infrastructure).
 - Source: [TM changelog 5.5.6236](https://www.tampermonkey.net/changelog.php), [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API).
 
-### 38.6 Native `window.onurlchange` via Navigation API (ScriptCat v1.4 parity)
+### 38.6 Native `window.onurlchange` via Navigation API (ScriptCat v1.4 parity) ✅ Shipped (2026-05-19)
 
 ScriptCat v1.4 reimplemented `window.onurlchange` on the [Navigation API](https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API) (Chrome 102+) instead of polling `location.href`. Cleaner SPA support, lower CPU, fires on `popstate`, `pushState`, `replaceState`, and bfcache restore in a single event. ScriptVault's current `window.onurlchange` grant uses a `MutationObserver` + `setInterval` polling combo (see `bg/` content-side bridge) which can miss SPA transitions on sites that swap routes without DOM mutation.
 
@@ -3357,6 +3359,8 @@ ScriptCat v1.4 reimplemented `window.onurlchange` on the [Navigation API](https:
 - The existing event payload (`{ url, oldUrl }`) stays; just fires more reliably.
 - Tie into Phase 11.10 `@run-at navigation` if/when that ships — same plumbing.
 - Source: [ScriptCat v1.4 changelog](https://docs.scriptcat.org/en/docs/change/v1.4/), [Navigation API](https://developer.chrome.com/docs/web-platform/navigation-api).
+
+**Status (2026-05-19):** ✅ Shipped. Added a Navigation API hook (`window.navigation.addEventListener('navigate', ...)`) inside the page-scoped one-time setup in both `background.core.js` and the TS mirror at [`src/background/wrapper-builder.ts`](src/background/wrapper-builder.ts). Dispatches `__checkUrlChange` on the next microtask so `location.href` reflects the new URL by the time the per-script handlers run. The pushState/replaceState/popstate/hashchange shim is preserved as a backstop for the Firefox port and for SPA libraries that bypass the Navigation API. minimum_chrome_version 130 (Phase 40.23) guarantees the API is always present in supported Chromium builds, so the Chrome path now uses native event dispatch rather than poll-on-history-mutate.
 
 ### 38.7 Hebrew translation + RTL smoke test (TM 5.5.6235 parity)
 
@@ -3398,13 +3402,15 @@ ScriptCat v1.4 shipped a full **AI Agent system** under `CAT.agent.*` — multi-
 - Mark **Under Consideration** pending Phase 36.2 (Prompt API) shipping and a clear user request signal. Do not start implementation speculatively.
 - Source: [ScriptCat v1.4 changelog](https://docs.scriptcat.org/en/docs/change/v1.4/), [Model Context Protocol spec](https://modelcontextprotocol.io/specification).
 
-### 38.11 GM_xmlhttpRequest service-worker event leak fix (TM 5.5.6237)
+### 38.11 GM_xmlhttpRequest service-worker event leak fix (TM 5.5.6237) ✅ Audited + regression suite (2026-05-19)
 
 TM 5.5.6237 documents a Chrome-specific bug where repeated `GM_xmlhttpRequest` calls fill the browser's `filtered_service_worker_events` debug log with empty entries. Likely root cause: SW event listeners aren't being released between XHR completions.
 
 - Audit ScriptVault's XHR proxy in `modules/xhr.js` and the post-Phase-1 TS mirror — ensure `port.onMessage` / `port.onDisconnect` listeners are removed on `xhr.onloadend`, not just `onload`.
 - Add a memory-pressure smoke test: 1000 sequential `GM_xmlhttpRequest` calls, assert SW heap stays bounded (within 10MB of baseline post-GC).
 - Source: [TM changelog 5.5.6237](https://www.tampermonkey.net/changelog.php).
+
+**Status (2026-05-19):** ✅ Audited — TM's bug class does not translate to ScriptVault. The XHR dispatch path uses `AbortController` + one-shot `chrome.tabs.sendMessage` (no persistent `port.onMessage` / `port.onDisconnect` subscribers per request). The `setTimeout` timeout handle is cleared in a `try/finally` on the inner IIFE. `XhrManager.create()` stages a fallback 5-minute auto-cleanup timer that is also cleared on `remove()`. Added [`tests/xhr.test.js`](tests/xhr.test.js) `Phase 38.11` describe block with 3 cases pinning the no-leak invariant: 1000 sequential create→remove cycles leave the table empty after the auto-cleanup window elapses, `abortByScript()` removes the matching requests without zombies, `abortByTab()` removes the matching requests without zombies.
 
 ### 38.12 Pluralize `GM_info.script.tags` (VM v2.37.0) ✅ Shipped (2026-05-19)
 

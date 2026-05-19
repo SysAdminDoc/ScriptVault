@@ -41,6 +41,10 @@
         emptyStateIcon: document.getElementById('emptyStateIcon'),
         emptyStateTitle: document.getElementById('emptyStateTitle'),
         emptyStateHint: document.getElementById('emptyStateHint'),
+        // Phase 38.4 — @run-at context-menu script section
+        contextMenuSection: document.getElementById('contextMenuSection'),
+        contextMenuScriptsList: document.getElementById('contextMenuScriptsList'),
+        contextMenuScriptsCount: document.getElementById('contextMenuScriptsCount'),
         menuSection: document.getElementById('menuSection'),
         btnFindScripts: document.getElementById('btnFindScripts'),
         btnNewScript: document.getElementById('btnNewScript'),
@@ -611,12 +615,79 @@
     }
 
     // Render script list
+    // Phase 38.4 — Render the @run-at context-menu script section as a
+    // dedicated one-tap-launcher block above the normal script list.
+    // ScriptVault already supports `@run-at context-menu` end-to-end (parser
+    // + ctx menu registration); the popup surface matches TM 5.5.6234's
+    // "Run on this page" UX. Click → runScriptNow via the existing handler
+    // that v3.4.0 shipped.
+    function renderContextMenuScripts(scripts) {
+        const section = elements.contextMenuSection;
+        const list = elements.contextMenuScriptsList;
+        const count = elements.contextMenuScriptsCount;
+        if (!section || !list || !count) return;
+
+        const ctxScripts = (scripts || []).filter((s) => {
+            if (s.enabled === false) return false;
+            const meta = s.metadata || s.meta || {};
+            return meta['run-at'] === 'context-menu';
+        });
+
+        if (ctxScripts.length === 0) {
+            section.hidden = true;
+            list.innerHTML = '';
+            count.textContent = '0';
+            return;
+        }
+
+        section.hidden = false;
+        count.textContent = String(ctxScripts.length);
+        list.innerHTML = ctxScripts.map((script) => {
+            const meta = script.metadata || script.meta || {};
+            const name = meta.name || 'Unnamed Script';
+            const icon = getScriptIcon(script);
+            const idAttr = escapeHtml(script.id);
+            return `
+                <button class="context-menu-script-row" type="button" role="listitem"
+                        data-ctx-run-id="${idAttr}" aria-label="Run ${escapeHtml(name)} on this tab">
+                    <span class="ctx-icon" aria-hidden="true">${icon}</span>
+                    <span class="ctx-name">${escapeHtml(name)}</span>
+                    <span class="ctx-run-hint" aria-hidden="true">Run</span>
+                </button>
+            `;
+        }).join('');
+
+        list.querySelectorAll('.context-menu-script-row').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const scriptId = btn.getAttribute('data-ctx-run-id');
+                if (!scriptId) return;
+                await runScriptAction(scriptId, async () => {
+                    try {
+                        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                        if (!tab?.id) { showPopupToast('No active tab', 'error'); return; }
+                        const result = await chrome.runtime.sendMessage({
+                            action: 'runScriptNow', scriptId, tabId: tab.id,
+                        });
+                        if (result?.success) showPopupToast('Script ran on this tab');
+                        else showPopupToast(result?.error || 'Run failed', 'error');
+                    } catch (err) {
+                        showPopupToast(err?.message || 'Run failed', 'error');
+                    }
+                });
+            });
+        });
+    }
+
     function renderScriptList() {
         if (!elements.scriptList) return;
         const focusDescriptor = pendingPopupFocusDescriptor
             || (elements.scriptList.contains(document.activeElement) ? getPopupFocusDescriptor(document.activeElement) : null);
         pendingPopupFocusDescriptor = null;
         closeScriptDropdown();
+
+        // Phase 38.4 — Surface @run-at context-menu scripts above the
+        // normal list. The dedicated section is hidden when none match.
+        renderContextMenuScripts(pageScripts);
 
         // Work on a copy to avoid mutating the canonical pageScripts array
         let displayScripts = [...pageScripts];
