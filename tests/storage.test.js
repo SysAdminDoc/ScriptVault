@@ -512,3 +512,150 @@ describe('ScriptValues rollback', () => {
     expect(await ScriptValues.get('s1', 'draft', false)).toBe(true);
   });
 });
+
+// ── Phase 38.13 — Rollback Contract Invariant ────────────────────────────
+// "Every storage write that touches multiple keys atomically rolls back if
+// any key fails." Pins the cache↔persisted-state consistency invariant so a
+// future refactor that drops a rollback branch fails CI loudly. The
+// v3.10.1 → HEAD storage-hardening sweep enforces this end-to-end; the
+// suite below is the executable spec.
+describe('Phase 38.13 — multi-key rollback contract', () => {
+  const mockScript = {
+    id: 'rb1',
+    enabled: true,
+    code: '// orig',
+    meta: { name: 'Rollback Probe' },
+  };
+
+  it('ScriptStorage.set: failed write leaves cache ≡ persisted state', async () => {
+    await ScriptStorage.set('rb1', mockScript);
+    const snapshotPersisted = (await chrome.storage.local.get('userscripts')).userscripts;
+
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(
+      ScriptStorage.set('rb1', { ...mockScript, code: '// changed' })
+    ).rejects.toThrow('QUOTA');
+
+    expect(ScriptStorage.cache.rb1).toEqual(mockScript);
+    const afterPersisted = (await chrome.storage.local.get('userscripts')).userscripts;
+    expect(afterPersisted).toEqual(snapshotPersisted);
+    expect(ScriptStorage.cache).toEqual(afterPersisted);
+  });
+
+  it('ScriptStorage.set: failed insert of a new id leaves cache ≡ persisted state', async () => {
+    await ScriptStorage.set('keep', mockScript);
+    const before = (await chrome.storage.local.get('userscripts')).userscripts;
+
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(
+      ScriptStorage.set('newId', { ...mockScript, id: 'newId' })
+    ).rejects.toThrow('QUOTA');
+
+    expect(ScriptStorage.cache.newId).toBeUndefined();
+    expect(ScriptStorage.cache.keep).toEqual(mockScript);
+    const after = (await chrome.storage.local.get('userscripts')).userscripts;
+    expect(after).toEqual(before);
+    expect(ScriptStorage.cache).toEqual(after);
+  });
+
+  it('ScriptStorage.delete: failed values-cleanup atomically restores BOTH script record AND values', async () => {
+    await ScriptStorage.set('rb1', mockScript);
+    await ScriptValues.set('rb1', 'k', 'v');
+
+    chrome.storage.local.remove.mockRejectedValueOnce(new Error('REMOVE_FAILED'));
+    await expect(ScriptStorage.delete('rb1')).rejects.toThrow('REMOVE_FAILED');
+
+    expect(ScriptStorage.cache.rb1).toEqual(mockScript);
+    expect(await ScriptValues.get('rb1', 'k', null)).toBe('v');
+    const persisted = await chrome.storage.local.get(['userscripts', 'values_rb1']);
+    expect(persisted.userscripts.rb1).toEqual(mockScript);
+    expect(persisted.values_rb1).toEqual({ k: 'v' });
+  });
+
+  it('ScriptStorage.clear: failed values-cleanup atomically restores ALL scripts AND values', async () => {
+    await ScriptStorage.set('rb1', mockScript);
+    await ScriptStorage.set('rb2', { ...mockScript, id: 'rb2', meta: { name: 'Second' } });
+    await ScriptValues.set('rb1', 'k', 'v1');
+    await ScriptValues.set('rb2', 'k', 'v2');
+
+    chrome.storage.local.remove.mockRejectedValueOnce(new Error('REMOVE_FAILED'));
+    await expect(ScriptStorage.clear()).rejects.toThrow('REMOVE_FAILED');
+
+    expect(Object.keys(ScriptStorage.cache).sort()).toEqual(['rb1', 'rb2']);
+    expect(await ScriptValues.get('rb1', 'k', null)).toBe('v1');
+    expect(await ScriptValues.get('rb2', 'k', null)).toBe('v2');
+    const persisted = await chrome.storage.local.get(['userscripts', 'values_rb1', 'values_rb2']);
+    expect(persisted.userscripts.rb1).toEqual(mockScript);
+    expect(persisted.userscripts.rb2.id).toBe('rb2');
+    expect(persisted.values_rb1).toEqual({ k: 'v1' });
+    expect(persisted.values_rb2).toEqual({ k: 'v2' });
+  });
+
+  it('ScriptValues.setAll: partial batch failure rolls back entire batch atomically (no half-applied keys)', async () => {
+    await ScriptValues.set('rb1', 'a', 1);
+    await ScriptValues.set('rb1', 'b', 2);
+    const before = (await chrome.storage.local.get('values_rb1')).values_rb1;
+
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(
+      ScriptValues.setAll('rb1', { a: 99, b: 99, c: 99, d: 99 })
+    ).rejects.toThrow('QUOTA');
+
+    expect(await ScriptValues.get('rb1', 'a')).toBe(1);
+    expect(await ScriptValues.get('rb1', 'b')).toBe(2);
+    expect(await ScriptValues.get('rb1', 'c', 'MISSING')).toBe('MISSING');
+    expect(await ScriptValues.get('rb1', 'd', 'MISSING')).toBe('MISSING');
+    const after = (await chrome.storage.local.get('values_rb1')).values_rb1;
+    expect(after).toEqual(before);
+  });
+
+  it('FolderStorage.update: failed partial update preserves unrelated fields', async () => {
+    const folder = await FolderStorage.create('Original Name', '#111111');
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+
+    await expect(
+      FolderStorage.update(folder.id, { name: 'Changed', color: '#222222' })
+    ).rejects.toThrow('QUOTA');
+
+    const after = (await FolderStorage.getAll()).find(f => f.id === folder.id);
+    expect(after.name).toBe('Original Name');
+    expect(after.color).toBe('#111111');
+    expect(after.collapsed).toBe(false);
+    expect(after.scriptIds).toEqual([]);
+  });
+
+  it('SettingsManager.set: cache reverts to last-persisted snapshot on failed write', async () => {
+    await SettingsManager.get();
+    await SettingsManager.set('theme', 'oled');
+    const before = (await chrome.storage.local.get('settings')).settings;
+    expect(before.theme).toBe('oled');
+
+    chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+    await expect(SettingsManager.set('theme', 'catppuccin')).rejects.toThrow('QUOTA');
+
+    const cached = await SettingsManager.get();
+    expect(cached.theme).toBe('oled');
+    const persistedNow = (await chrome.storage.local.get('settings')).settings;
+    expect(persistedNow.theme).toBe('oled');
+  });
+
+  it('avoids surfacing the avoid-write to invalidateMatchSet on rollback', async () => {
+    // Sanity: invalidateMatchSet should not fire for a write that was rolled
+    // back, otherwise downstream caches treat the cache as having changed
+    // when it has not.
+    const originalInvalidate = globalThis.invalidateMatchSet;
+    const invalidateSpy = vi.fn();
+    globalThis.invalidateMatchSet = invalidateSpy;
+    try {
+      await ScriptStorage.set('rb1', mockScript);
+      invalidateSpy.mockClear();
+      chrome.storage.local.set.mockRejectedValueOnce(new Error('QUOTA'));
+      await expect(
+        ScriptStorage.set('rb1', { ...mockScript, code: '// changed' })
+      ).rejects.toThrow('QUOTA');
+      expect(invalidateSpy).not.toHaveBeenCalled();
+    } finally {
+      globalThis.invalidateMatchSet = originalInvalidate;
+    }
+  });
+});

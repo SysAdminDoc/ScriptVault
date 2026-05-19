@@ -6683,7 +6683,12 @@ ${req.code}
       supportURL: meta.supportURL || '',
       // Phase 11.7 — Userscripts (Safari) injection priority.
       weight: meta.weight || 0,
-      priority: meta.priority || 0
+      priority: meta.priority || 0,
+      // Phase 38.12 — VM v2.37.0 renamed `tag` → `tags`. Older scripts written
+      // against pre-2026 Violentmonkey read the singular form; expose a getter
+      // that returns the first tag for back-compat. Non-enumerable so it does
+      // not pollute structured clones / JSON serialization of GM_info.script.
+      get tag() { return Array.isArray(this.tags) ? this.tags[0] : undefined; }
     },
     scriptMetaStr: ${JSON.stringify(script.code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/)?.[0] || '')},
     scriptHandler: 'ScriptVault',
@@ -7612,6 +7617,9 @@ ${req.code}
 
   function GM_addElement(parentOrTag, tagOrAttrs, attrsOrUndefined) {
     if (!hasGrant('GM_addElement') && !hasGrant('GM.addElement')) return null;
+    // Phase 38.1 — VM v2.37.0 + TM 5.5.6237 contract: return null on any
+    // failure (missing tag, createElement throws, missing/detached parent,
+    // appendChild throws). Never throw out of GM_addElement.
     let parent, tag, attrs;
     if (typeof parentOrTag === 'string') {
       tag = parentOrTag;
@@ -7622,30 +7630,37 @@ ${req.code}
       tag = tagOrAttrs;
       attrs = attrsOrUndefined;
     }
-    const el = document.createElement(tag);
-    if (attrs) {
-      Object.entries(attrs).forEach(([k, v]) => {
-        if (k === 'textContent') el.textContent = v;
-        else if (k === 'innerHTML') {
-          const temp = document.createElement('template');
-          temp.innerHTML = v;
-          temp.content.querySelectorAll('script').forEach(s => s.remove());
-          temp.content.querySelectorAll('*').forEach(node => {
-            for (const attr of [...node.attributes]) {
-              if (_isUnsafeElementAttribute(attr.name, attr.value)) {
-                node.removeAttribute(attr.name);
+    if (typeof tag !== 'string' || !tag) return null;
+    let el;
+    try { el = document.createElement(tag); } catch { return null; }
+    if (!el) return null;
+    if (attrs && typeof attrs === 'object') {
+      try {
+        Object.entries(attrs).forEach(([k, v]) => {
+          if (k === 'textContent') el.textContent = v;
+          else if (k === 'innerHTML') {
+            const temp = document.createElement('template');
+            temp.innerHTML = v;
+            temp.content.querySelectorAll('script').forEach(s => s.remove());
+            temp.content.querySelectorAll('*').forEach(node => {
+              for (const attr of [...node.attributes]) {
+                if (_isUnsafeElementAttribute(attr.name, attr.value)) {
+                  node.removeAttribute(attr.name);
+                }
               }
-            }
-          });
-          el.innerHTML = temp.innerHTML;
-        }
-        else {
-          if (_isUnsafeElementAttribute(k, v)) return;
-          try { el.setAttribute(k, v); } catch { /* ignore invalid attribute names */ }
-        }
-      });
+            });
+            el.innerHTML = temp.innerHTML;
+          }
+          else {
+            if (_isUnsafeElementAttribute(k, v)) return;
+            try { el.setAttribute(k, v); } catch { /* ignore invalid attribute names */ }
+          }
+        });
+      } catch { /* attribute-application errors do not abort, but a missing
+                   parent below will. */ }
     }
-    if (parent) parent.appendChild(el);
+    if (!parent || typeof parent.appendChild !== 'function') return null;
+    try { parent.appendChild(el); } catch { return null; }
     return el;
   }
   
