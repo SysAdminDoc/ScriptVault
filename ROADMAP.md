@@ -3542,13 +3542,15 @@ Source: [CWS API v2 announcement](https://developer.chrome.com/blog/cws-api-v2).
 
 **Status (2026-05-17):** ⚠️ Design doc scaffolded — implementation pending. Full migration sequence in [`docs/release-runbook.md`](docs/release-runbook.md) §3.
 
-#### 39.3 Monaco DOMPurify CVE-2026-0540 Mitigation
+#### 39.3 Monaco DOMPurify CVE-2026-0540 Mitigation ✅ Audited — currently safe
 
-[CVE-2026-0540](https://github.com/microsoft/monaco-editor/issues/5248) — DOMPurify XSS in versions 3.1.3–3.3.1 (fixed in 3.3.2). Monaco builds **0.54.0-dev-20250909 and later** transitively bundle the vulnerable range. ScriptVault is currently pinned to **0.52.0** (safe) but Phase 13.4 plans the 0.55.x upgrade.
+[CVE-2026-0540](https://github.com/microsoft/monaco-editor/issues/5248) — DOMPurify XSS in versions 3.1.3–3.3.1 (fixed in 3.3.2). Monaco builds **0.54.0-dev-20250909 and later** transitively bundle the vulnerable range. ScriptVault is currently pinned to **0.52.0** (safe — verified `package-lock.json` resolves to 0.52.2 and the 0.52.x range never embedded the vulnerable DOMPurify) and Phase 13.4 plans the 0.55.x upgrade.
 
 - Gate the Monaco bump on confirming the target build embeds DOMPurify ≥ 3.3.2 (verify via `npm ls dompurify` in the Monaco package).
 - If not, vendor-patch DOMPurify in `lib/monaco/` after copy, or stay on 0.52.x until Monaco bumps its embed.
 - Coordinate with **Phase 18.7** (`GM_setHTML` via Sanitizer API) — the native Sanitizer API path eliminates DOMPurify dependence in extension UI but not in Monaco's own innards.
+
+**Status (2026-05-18, Round 13 audit):** ✅ Audit confirms no live exposure. `package-lock.json` line 2681 resolves `monaco-editor` to `0.52.2.tgz`. The 0.52.x range predates the DOMPurify dep bump (Monaco only started bundling DOMPurify in 0.54.0-dev), so we are not transitively vulnerable. Re-audit gate persists for any future 0.54.x+ bump. No code change required this round.
 
 Source: [microsoft/monaco-editor #5248](https://github.com/microsoft/monaco-editor/issues/5248).
 
