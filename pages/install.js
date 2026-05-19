@@ -276,6 +276,43 @@ async function init() {
     }
   }, true);
 
+  // Phase 39.27 — VM #2491 incognito short-circuit.
+  // Visiting *.user.js in a private window when the extension is not
+  // allowed in incognito crashes VM's install flow. We probe up-front: if
+  // we are in incognito context, chrome.runtime.sendMessage may still work
+  // (extension *is* allowed in incognito) — but the test of allowed-ness
+  // is whether chrome.storage.local responds within a short timeout. If it
+  // doesn't, render a static guidance page with a deep-link to the
+  // per-extension toggle and skip the rest of init() entirely.
+  const isIncognito = !!(chrome?.extension?.inIncognitoContext);
+  if (isIncognito) {
+    try {
+      const probe = await Promise.race([
+        chrome.storage.local.get('__sv_incognito_probe__'),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 1500))
+      ]);
+      // Probe succeeded — incognito access is granted, continue normal init.
+      void probe;
+    } catch (_e) {
+      // Probe failed / timed out — extension is loaded in private window but
+      // can't reach storage. Render guidance and bail.
+      const content = document.getElementById('content');
+      if (content) {
+        const extId = (typeof chrome?.runtime?.id === 'string') ? chrome.runtime.id : '';
+        const detailsHref = extId ? `chrome://extensions/?id=${encodeURIComponent(extId)}` : 'chrome://extensions/';
+        content.innerHTML = `
+          <div class="install-error" style="margin:24px;padding:16px;border:1px solid rgba(249,115,22,0.4);border-radius:8px;background:rgba(249,115,22,0.08)">
+            <h2 style="margin:0 0 8px;font-size:18px">ScriptVault is not allowed in private windows</h2>
+            <p style="margin:0 0 12px">This script can't be installed from an incognito window because ScriptVault doesn't have permission to run there.</p>
+            <p style="margin:0 0 12px">Open the extension details page and toggle <strong>"Allow in Incognito"</strong>, then re-open the script URL in a private window — or install it from a regular window.</p>
+            <p style="margin:0"><a href="${escapeHtml(detailsHref)}" target="_blank" rel="noopener">Open extension details ↗</a></p>
+          </div>
+        `;
+      }
+      return;
+    }
+  }
+
   // Load and apply theme
   const settings = await chrome.runtime.sendMessage({ action: 'getSettings' });
   const themeSettings = settings?.settings || settings || {};
@@ -864,6 +901,33 @@ function renderInstallUI(sourceUrl) {
       'is-danger',
       'Elevated Browser Access',
       `This script requests ${numberFormatter.format(dangerousPermissions.length)} high-trust permission${dangerousPermissions.length === 1 ? '' : 's'}, including ${dangerousPermissions.slice(0, 3).map(escapeHtml).join(', ')}.`
+    ));
+  }
+
+  // Phase 39.16 — Crypto-scam install-time heuristic (TM #2783).
+  // Active scam campaigns distribute wallet-key exfiltration scripts via
+  // Pastebin / Telegram / random repos. Stack a content+source heuristic on
+  // top of the existing alert chain: if the install source is NOT one of
+  // the known userscript catalogs AND the body mentions wallet / crypto
+  // tokens, surface a distinct danger alert.
+  //
+  // This is intentionally a high-visibility alert, not a hard block — the
+  // user can still install. The goal is to interrupt the "click install
+  // without reading" reflex with a specific reason to pause.
+  const CRYPTO_TRUSTED_HOSTS = new Set([
+    'greasyfork.org', 'sleazyfork.org', 'openuserjs.org',
+    'github.com', 'gist.github.com', 'raw.githubusercontent.com'
+  ]);
+  const CRYPTO_KEYWORD_REGEX = /\b(wallet|swap|exchange|seed|mnemonic|private[\s_-]?key|metamask|trust\s?wallet|coinbase|phantom|ledger|trezor|crypto|bitcoin|ethereum|web3)\b/i;
+  let sourceHost = '';
+  try { sourceHost = new URL(sourceUrl || installSourceUrl || '').hostname.toLowerCase(); } catch { /* no-op */ }
+  const fromTrustedCatalog = !!sourceHost && [...CRYPTO_TRUSTED_HOSTS].some(h => sourceHost === h || sourceHost.endsWith('.' + h));
+  const cryptoKeywordMatch = CRYPTO_KEYWORD_REGEX.test(scriptCode);
+  if (cryptoKeywordMatch && !fromTrustedCatalog) {
+    alerts.push(buildInstallAlert(
+      'is-danger',
+      'Crypto / Wallet Keywords from Untrusted Source',
+      `This script mentions wallet, seed phrase, or other crypto-related terms AND was loaded from a source that is not a known userscript repository (Greasy Fork, OpenUserJS, GitHub). Active scam campaigns distribute wallet-draining scripts this way — verify the author before installing.`
     ));
   }
   if (scriptMeta.antifeature.length > 0) {

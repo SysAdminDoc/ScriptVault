@@ -3636,7 +3636,7 @@ TM issue [#2607](https://github.com/Tampermonkey/tampermonkey/issues/2607) (Nov 
 
 **Status (2026-05-17):** Shipped. [`pages/dashboard.js`](pages/dashboard.js) `checkUserScriptsAvailability()` now classifies the probe outcome into three states (`ok` / `api-missing` / `not-allowed`) and tailors the banner copy + CTA per state. Chrome 138+ users see "ScriptVault needs the 'Allow User Scripts' toggle" with a one-click **Open Extension Details** deep-link to `chrome://extensions/?id=<extension-id>`. Pre-138 Chrome falls back to the existing Developer-mode guidance. Browsers without `chrome.userScripts` show "Browser unsupported" (no toggle link). The existing "How to Enable" modal path is preserved. [`pages/dashboard.html`](pages/dashboard.html) added the new direct-link button alongside the existing help button.
 
-#### 39.11 `@exclude-top` / `@match-top` Top-Level-Origin Directives (TM #2784, extends Phase 26.5)
+#### 39.11 `@exclude-top` / `@match-top` Top-Level-Origin Directives ✅ Shipped (TM #2784, extends Phase 26.5)
 
 TM issue [#2784](https://github.com/Tampermonkey/tampermonkey/issues/2784) (May 13 2026) asks for exclusions based on `window.top.location.href` so iframe-injected scripts can be gated by the embedding page. Phase 26.5 covers frame-aware `@match`; this extends it to top-origin awareness.
 
@@ -3657,7 +3657,7 @@ TM issue [#2781](https://github.com/Tampermonkey/tampermonkey/issues/2781) (May 
 
 Source: [TM #2781](https://github.com/Tampermonkey/tampermonkey/issues/2781).
 
-#### 39.13 Blob URL Support in `GM_openInTab` (TM #2669)
+#### 39.13 Blob URL Support in `GM_openInTab` ✅ Shipped (TM #2669)
 
 TM issue [#2669](https://github.com/Tampermonkey/tampermonkey/issues/2669) — `GM_openInTab` cannot accept a `blob:` URL on Chrome because the URL is bound to the script's content world and dies when the tab navigates.
 
@@ -3667,7 +3667,9 @@ TM issue [#2669](https://github.com/Tampermonkey/tampermonkey/issues/2669) — `
 
 Source: [TM #2669](https://github.com/Tampermonkey/tampermonkey/issues/2669).
 
-#### 39.14 Same-Origin Shortcut in `GM_xmlhttpRequest` (TM #2782)
+#### 39.14 Same-Origin Shortcut in `GM_xmlhttpRequest` ⚠️ Researched, deferred (TM #2782)
+
+**Status (2026-05-19):** Investigated and intentionally deferred. The proposed shortcut (skip the background round-trip for same-origin requests) would bypass three load-bearing invariants: `@connect` policy enforcement, the network log capture pipeline, and the `anonymous` cookie-isolation flag. The latency win (~5ms saved per same-origin call) doesn't justify silently breaking those invariants. A safer formulation would require auditing every callsite that depends on those side-effects — that work belongs in Phase 8 sync rewrite scope, not a single-session pickup. The original 39.14 entry stays here as a research-only record.
 
 TM issue [#2782](https://github.com/Tampermonkey/tampermonkey/issues/2782) (May 13 2026) — `GM_xmlhttpRequest` returns 401 on a same-origin request that the page's own `fetch(..., {credentials: 'include'})` returns 200 for. The SW context doesn't inherit the page's session cookies.
 
@@ -3688,7 +3690,7 @@ TM issue [#2780](https://github.com/Tampermonkey/tampermonkey/issues/2780) (May 
 
 Source: [TM #2780](https://github.com/Tampermonkey/tampermonkey/issues/2780).
 
-#### 39.16 Crypto-Scam Install-Time Heuristic (TM #2783)
+#### 39.16 Crypto-Scam Install-Time Heuristic ✅ Shipped (TM #2783)
 
 TM issue [#2783](https://github.com/Tampermonkey/tampermonkey/issues/2783) (May 13 2026) — an active scam campaign distributes userscripts via Pastebin/Telegram that exfiltrate wallet keys. Phase 28.3 covers generic malware detection; this is a targeted install-time heuristic.
 
@@ -3761,7 +3763,7 @@ VM #2518 (closed 2026-05-11) — `clearInterval()` from one frame doesn't cancel
 
 Source: [VM #2518](https://github.com/violentmonkey/violentmonkey/issues/2518).
 
-#### 39.22 CSP Page Injection Timeout-Bounded Awaits (VM #2513)
+#### 39.22 CSP Page Injection Timeout-Bounded Awaits ✅ Shipped (VM #2513)
 
 VM #2513 (closed 2026-05-07) — deadlock when injecting into a CSP-strict page. Implication: any per-frame await chain in injection code must have a wall-clock timeout.
 
@@ -3770,7 +3772,7 @@ VM #2513 (closed 2026-05-07) — deadlock when injecting into a CSP-strict page.
 
 Source: [VM #2513](https://github.com/violentmonkey/violentmonkey/issues/2513).
 
-#### 39.23 Cross-Realm `Symbol.iterator` Guard (VM #2516)
+#### 39.23 Cross-Realm `Symbol.iterator` Guard ✅ Shipped (VM #2516)
 
 VM #2516 (closed 2026-05-09) — popup crash on YouTube Live Archive due to a cross-realm array-like that lacks `Symbol.iterator`.
 
@@ -3789,7 +3791,7 @@ VM #2363 (open since Sep 21 2025) — Orion (WebKit) silently encodes ASCII `"` 
 
 Source: [VM #2363](https://github.com/violentmonkey/violentmonkey/issues/2363).
 
-#### 39.25 `@require` Cache Invalidation on Dependency Update (VM #2453)
+#### 39.25 `@require` Cache Invalidation on Dependency Update ✅ Shipped (VM #2453)
 
 VM #2453 (open since Mar 1 2026) — force-refresh of a script doesn't invalidate the cached `@require` bodies its dependents use.
 
@@ -3808,7 +3810,7 @@ VM #2486 (open since Apr 5 2026) — Save click silently fails on WebDAV; user h
 
 Source: [VM #2486](https://github.com/violentmonkey/violentmonkey/issues/2486).
 
-#### 39.27 Install-Page Incognito Short-Circuit (VM #2491)
+#### 39.27 Install-Page Incognito Short-Circuit ✅ Shipped (VM #2491)
 
 VM #2491 (open since Apr 11 2026) — visiting a `*.user.js` URL in a private window when the extension is not allowed in incognito crashes the install flow.
 

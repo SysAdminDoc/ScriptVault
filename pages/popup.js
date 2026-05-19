@@ -74,11 +74,16 @@
         updateEmptyStateHint();
     }
 
-    // Load all scripts for total count
+    // Load all scripts for total count.
+    // Phase 39.23 — VM #2516: defensively coerce response arrays through
+    // Array.from so a cross-realm array-like (e.g. one minted in the SW realm
+    // and lacking [Symbol.iterator] when surfaced in the popup realm) doesn't
+    // crash subsequent for-of loops on YouTube Live Archive-style pages.
     async function loadAllScripts() {
         try {
             const response = await chrome.runtime.sendMessage({ action: 'getScripts' });
-            allScripts = response?.scripts || [];
+            const raw = response?.scripts;
+            allScripts = Array.isArray(raw) ? raw : Array.from(raw ?? []);
         } catch (e) {
             allScripts = [];
         }
@@ -423,7 +428,8 @@
                 new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
             ]);
 
-            pageScripts = Array.isArray(response) ? response : [];
+            // Phase 39.23 — defensive coercion, see loadAllScripts() comment.
+            pageScripts = Array.isArray(response) ? response : Array.from(response ?? []);
             renderScriptList();
             updateEnabledState();
         } catch (error) {
