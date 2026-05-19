@@ -561,6 +561,13 @@ const CloudSync = {
   },
 
   _syncInProgress: false,
+  // Phase 40.12 — Hoisted AbortController lets the 90s timeout actually cancel
+  // the in-flight provider fetches (Promise.race alone does not cancel the
+  // loser, leaving orphaned writes that can race a subsequent sync). Providers
+  // that accept `opts.signal` short-circuit their fetches when the controller
+  // aborts; providers that haven't been threaded yet still time out on their
+  // own internal `fetch()` timeouts (slower fallback, but correct).
+  _abortController: null,
 
   async sync() {
     // Prevent concurrent syncs — second call defers until first completes
@@ -569,25 +576,33 @@ const CloudSync = {
       return { skipped: true };
     }
     this._syncInProgress = true;
+    this._abortController = new AbortController();
 
     let _timeoutId;
     try {
       const timeoutPromise = new Promise((_, reject) => {
-        _timeoutId = setTimeout(() => reject(new Error('Sync timed out after 90s')), 90000);
+        _timeoutId = setTimeout(() => {
+          // Cancel any in-flight provider fetches before the race rejects.
+          try { this._abortController.abort(new Error('Sync timed out after 90s')); } catch {}
+          reject(new Error('Sync timed out after 90s'));
+        }, 90000);
       });
-      return await Promise.race([this._performSync(), timeoutPromise]);
+      return await Promise.race([this._performSync({ signal: this._abortController.signal }), timeoutPromise]);
     } catch (e) {
       console.error('[ScriptVault] Sync failed:', e);
       return { error: e.message };
     } finally {
       clearTimeout(_timeoutId);
       this._syncInProgress = false;
+      this._abortController = null;
     }
   },
 
-  async _performSync() {
+  async _performSync(opts = {}) {
+    const { signal } = opts;
     const settings = await SettingsManager.get();
     if (!settings.syncEnabled || settings.syncProvider === 'none') return;
+    if (signal?.aborted) throw new Error('Sync aborted');
 
     const provider = this.providers[settings.syncProvider];
     if (!provider) return;
@@ -613,7 +628,8 @@ const CloudSync = {
     };
 
     // Get remote data
-    const remoteData = await provider.download(settings);
+    const remoteData = await provider.download(settings, { signal });
+    if (signal?.aborted) throw new Error('Sync aborted');
 
     if (remoteData) {
       // Merge tombstones from remote so deletions propagate across devices
@@ -692,10 +708,12 @@ const CloudSync = {
       // Upload merged data (includes tombstones)
       merged.timestamp = Date.now();
       merged.tombstones = mergedTombstones;
-      await provider.upload(merged, settings);
+      if (signal?.aborted) throw new Error('Sync aborted');
+      await provider.upload(merged, settings, { signal });
     } else {
       // First sync, just upload (include tombstones so remote gets deletion info)
-      await provider.upload(localData, settings);
+      if (signal?.aborted) throw new Error('Sync aborted');
+      await provider.upload(localData, settings, { signal });
     }
 
     await SettingsManager.set('lastSync', Date.now());
@@ -5048,6 +5066,14 @@ async function init() {
     try { await EasyCloudSync.init(); } catch (e) { console.error('[ScriptVault] EasyCloudSync init error:', e); }
   }
 
+  // Phase 40.10 — Reconcile DNR rule map against live DNR + ScriptStorage now
+  // that both are hydrated. Catches orphan rules left behind when the SW was
+  // killed mid-delete or mid-update. Fire-and-forget so a slow DNR query
+  // doesn't block the rest of the wake path.
+  reconcileWebRequestRuleMap().catch(e => {
+    console.warn('[ScriptVault] DNR reconcile failed on init:', e?.message || e);
+  });
+
   console.log('[ScriptVault] Service worker ready');
 }
 
@@ -6004,6 +6030,81 @@ async function removeWebRequestRules(scriptId) {
   }
 }
 
+// Phase 40.10 — Reconcile persisted DNR rule map against the live DNR state
+// and the current ScriptStorage on SW wake. Without this, three drift modes
+// silently accumulate orphans:
+//   (a) A script was deleted while a previous SW was alive: its DNR rules were
+//       removed correctly but the map entry might have lagged if `_persist`
+//       failed mid-delete.
+//   (b) The SW was killed mid-delete: the script record is gone from
+//       ScriptStorage but the DNR rules and the map entry both survive.
+//   (c) `updateDynamicRules` was applied by a prior SW generation but the
+//       persist write failed: rules exist in DNR with no map entry to clean
+//       them up later.
+//
+// Reconciliation is best-effort and lossy in the (c) direction: if a rule
+// exists in DNR with no map entry pointing at any script, we leave it alone
+// rather than risk removing a rule another extension might have inserted.
+async function reconcileWebRequestRuleMap() {
+  if (!chrome.declarativeNetRequest) return;
+  await _hydrateWebRequestRuleMap();
+
+  let mutated = false;
+  let scripts;
+  try {
+    scripts = await ScriptStorage.getAll();
+  } catch (e) {
+    console.warn('[ScriptVault] DNR reconcile: ScriptStorage.getAll failed:', e?.message || e);
+    return;
+  }
+  const scriptIds = new Set((scripts || []).map(s => s.id));
+
+  // Pass 1: drop map entries whose script no longer exists; queue the DNR
+  // rule IDs for removal so the live engine catches up.
+  const toRemoveRuleIds = [];
+  for (const [scriptId, ruleIds] of _webRequestRuleMap.entries()) {
+    if (!scriptIds.has(scriptId)) {
+      if (Array.isArray(ruleIds)) toRemoveRuleIds.push(...ruleIds);
+      _webRequestRuleMap.delete(scriptId);
+      mutated = true;
+    }
+  }
+
+  // Pass 2: drop map rule IDs that no longer exist in DNR (stale entries).
+  let liveRuleIds;
+  try {
+    const liveRules = await chrome.declarativeNetRequest.getDynamicRules();
+    liveRuleIds = new Set(liveRules.map(r => r.id));
+  } catch (e) {
+    console.warn('[ScriptVault] DNR reconcile: getDynamicRules failed:', e?.message || e);
+    liveRuleIds = null;
+  }
+  if (liveRuleIds) {
+    for (const [scriptId, ruleIds] of _webRequestRuleMap.entries()) {
+      const filtered = (ruleIds || []).filter(id => liveRuleIds.has(id));
+      if (filtered.length !== (ruleIds || []).length) {
+        if (filtered.length === 0) _webRequestRuleMap.delete(scriptId);
+        else _webRequestRuleMap.set(scriptId, filtered);
+        mutated = true;
+      }
+    }
+  }
+
+  // Apply the queued DNR removal in one batched call.
+  if (toRemoveRuleIds.length > 0) {
+    try {
+      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: toRemoveRuleIds });
+      debugLog(`[GM_webRequest] Reconcile removed ${toRemoveRuleIds.length} orphan DNR rule(s)`);
+    } catch (e) {
+      console.warn('[ScriptVault] DNR reconcile: updateDynamicRules removal failed:', e?.message || e);
+    }
+  }
+
+  if (mutated) {
+    await _persistWebRequestRuleMap();
+  }
+}
+
 async function unregisterScript(scriptId) {
   // Clear @crontab alarm if present
   chrome.alarms.clear('crontab_' + scriptId).catch(() => {});
@@ -6814,8 +6915,14 @@ ${req.code}
   // self._notifCallbacks — without this, a misbehaving script that spams
   // GM_notification and never receives click/done events can grow the Map
   // unbounded for the lifetime of the host tab.
+  //
+  // Phase 40.14 — Eviction counter surfaces leaks via the existing console
+  // capture pipe (the wrapper already pipes console.* into the per-script
+  // DevTools panel via _captureConsole). A non-zero count for any script is
+  // a smell — the script is missing an ondone/onload/onclose handler.
   const _notifCallbacks = new Map();
   const _NOTIF_CALLBACKS_CAP = 500;
+  let _notifCallbacksEvicted = 0;
   function GM_notification(details, ondone) {
     if (!hasGrant('GM_notification') && !hasGrant('GM.notification')) {
       return { close: () => {}, update: () => {} };
@@ -6836,6 +6943,10 @@ ${req.code}
     if (_notifCallbacks.size >= _NOTIF_CALLBACKS_CAP) {
       const oldest = _notifCallbacks.keys().next().value;
       if (oldest !== undefined) _notifCallbacks.delete(oldest);
+      _notifCallbacksEvicted += 1;
+      if (_notifCallbacksEvicted === 1 || _notifCallbacksEvicted % 100 === 0) {
+        console.warn('[ScriptVault] GM_notification callback cap evict — script may be missing ondone/onclick handler. Evicted so far:', _notifCallbacksEvicted);
+      }
     }
     _notifCallbacks.set(notifTag, {
       onclick: opts.onclick,
@@ -6931,8 +7042,10 @@ ${req.code}
   // openedTabClosed event (background crashed, content bridge missed the
   // signal, tab killed before bridge attached) can't leak unbounded handles
   // in the USER_SCRIPT world for the lifetime of the host tab.
+  // Phase 40.14 — Eviction counter (see _notifCallbacks for rationale).
   const _openedTabs = new Map();
   const _OPENED_TABS_CAP = 200;
+  let _openedTabsEvicted = 0;
   function GM_openInTab(url, options) {
     if (!hasGrant('GM_openInTab') && !hasGrant('GM.openInTab')) return null;
     const opts = typeof options === 'boolean' ? { active: !options } : (options || {});
@@ -6946,6 +7059,10 @@ ${req.code}
         if (_openedTabs.size >= _OPENED_TABS_CAP) {
           const oldest = _openedTabs.keys().next().value;
           if (oldest !== undefined) _openedTabs.delete(oldest);
+          _openedTabsEvicted += 1;
+          if (_openedTabsEvicted === 1 || _openedTabsEvicted % 100 === 0) {
+            console.warn('[ScriptVault] GM_openInTab cap evict — script may be opening tabs without listening for openedTabClosed. Evicted so far:', _openedTabsEvicted);
+          }
         }
         _openedTabs.set(result.tabId, tabHandle);
         tabHandle.close = () => {
@@ -6962,8 +7079,10 @@ ${req.code}
   // that fires GM_download in a loop where the load/error/timeout event never
   // arrives (download removed from history, SW restart between request and
   // response, etc.).
+  // Phase 40.14 — Eviction counter (see _notifCallbacks for rationale).
   const _downloadCallbacks = new Map();
   const _DOWNLOAD_CALLBACKS_CAP = 200;
+  let _downloadCallbacksEvicted = 0;
   function GM_download(details) {
     if (!hasGrant('GM_download') && !hasGrant('GM.download')) return;
     let opts;
@@ -6985,6 +7104,10 @@ ${req.code}
         if (_downloadCallbacks.size >= _DOWNLOAD_CALLBACKS_CAP) {
           const oldest = _downloadCallbacks.keys().next().value;
           if (oldest !== undefined) _downloadCallbacks.delete(oldest);
+          _downloadCallbacksEvicted += 1;
+          if (_downloadCallbacksEvicted === 1 || _downloadCallbacksEvicted % 100 === 0) {
+            console.warn('[ScriptVault] GM_download cap evict — script may be missing onload/onerror handlers. Evicted so far:', _downloadCallbacksEvicted);
+          }
         }
         _downloadCallbacks.set(result.downloadId, callbacks);
       }
@@ -7366,39 +7489,80 @@ ${req.code}
   window.GM = GM;
 
   // ========== window.onurlchange (SPA navigation detection) ==========
-  // Tampermonkey-compatible: fires when URL changes via pushState/replaceState/popstate
+  // Tampermonkey-compatible: fires when URL changes via pushState/replaceState/popstate.
+  //
+  // Phase 40.11 — Page-scoped monkey-patch + shared dispatcher.
+  //
+  // Previously every wrapper registration patched history.pushState / replaceState,
+  // added popstate / hashchange listeners, and Proxied window.addEventListener /
+  // removeEventListener on its own. Re-injection (script update applied while the
+  // host tab is open) stacked new patches on top of the old ones; old wrap's
+  // _urlChangeHandlers closures stayed reachable in the proxy chain forever.
+  //
+  // Now the page-level monkey-patch runs at most once per host tab, gated by
+  // window.__svUrlChangeBound__ (non-enumerable, non-writable). The patch fires
+  // a CustomEvent('__sv_urlchange__') on every URL change; each script's wrapper
+  // attaches its own per-script listener to that event, scoped to its own
+  // _urlChangeHandlers array. On the next re-injection, the page-level guard
+  // short-circuits — only the per-script listener is re-attached, and the old
+  // one is implicitly orphaned with the previous wrapper's closure.
   if (hasGrant('window.onurlchange')) {
-    let _lastUrl = location.href;
     const _urlChangeHandlers = [];
 
-    function __checkUrlChange() {
-      const newUrl = location.href;
-      if (newUrl !== _lastUrl) {
-        const oldUrl = _lastUrl;
-        _lastUrl = newUrl;
-        const event = { url: newUrl, oldUrl };
-        _urlChangeHandlers.forEach(fn => { try { fn(event); } catch(e) {} });
-        if (typeof window.onurlchange === 'function') {
-          try { window.onurlchange(event); } catch(e) {}
-        }
+    function __dispatchUrlChangeToHandlers(detail) {
+      _urlChangeHandlers.forEach(fn => { try { fn(detail); } catch (e) {} });
+      if (typeof window.onurlchange === 'function') {
+        try { window.onurlchange(detail); } catch (e) {}
       }
     }
 
-    // Intercept history API
-    const _origPushState = history.pushState;
-    const _origReplaceState = history.replaceState;
-    history.pushState = function() {
-      _origPushState.apply(this, arguments);
-      __checkUrlChange();
-    };
-    history.replaceState = function() {
-      _origReplaceState.apply(this, arguments);
-      __checkUrlChange();
-    };
-    window.addEventListener('popstate', __checkUrlChange);
-    window.addEventListener('hashchange', __checkUrlChange);
+    // One-time page-level setup. The defineProperty guard survives the
+    // wrapper-closure swap on re-injection.
+    if (!window.__svUrlChangeBound__) {
+      try {
+        Object.defineProperty(window, '__svUrlChangeBound__', {
+          value: true, writable: false, configurable: false, enumerable: false
+        });
+      } catch (_e) {
+        // Property already locked by an earlier ScriptVault wrapper; treat as bound.
+      }
 
-    // Allow adding multiple handlers via addEventListener pattern
+      let _lastUrl = location.href;
+      function __checkUrlChange() {
+        const newUrl = location.href;
+        if (newUrl !== _lastUrl) {
+          const oldUrl = _lastUrl;
+          _lastUrl = newUrl;
+          const detail = { url: newUrl, oldUrl };
+          // Fan out to every wrapper that subscribed.
+          window.dispatchEvent(new CustomEvent('__sv_urlchange__', { detail }));
+        }
+      }
+
+      const _origPushState = history.pushState;
+      const _origReplaceState = history.replaceState;
+      history.pushState = function () {
+        _origPushState.apply(this, arguments);
+        __checkUrlChange();
+      };
+      history.replaceState = function () {
+        _origReplaceState.apply(this, arguments);
+        __checkUrlChange();
+      };
+      window.addEventListener('popstate', __checkUrlChange);
+      window.addEventListener('hashchange', __checkUrlChange);
+    }
+
+    // Per-script subscription to the page-level event. Detaches itself if the
+    // wrapper IIFE returns or throws (the closure becomes unreachable; the
+    // function reference passed to addEventListener is its only liveness root).
+    const __svUrlChangeListener = (event) => __dispatchUrlChangeToHandlers(event.detail);
+    window.addEventListener('__sv_urlchange__', __svUrlChangeListener);
+
+    // Allow adding multiple per-script handlers via the addEventListener pattern.
+    // The Proxy is per-wrapper; re-injection installs a new proxy on the prior
+    // (possibly-still-proxied) addEventListener. Each layer only intercepts
+    // 'urlchange' and forwards everything else, so the chain stays correct.
     window.addEventListener = new Proxy(window.addEventListener, {
       apply(target, thisArg, args) {
         if (args[0] === 'urlchange') {
@@ -7420,7 +7584,7 @@ ${req.code}
         return Reflect.apply(target, thisArg, args);
       }
     });
-    window.onurlchange = null; // Initialize as settable
+    if (typeof window.onurlchange === 'undefined') window.onurlchange = null;
   }
 
   // ========== window.close / window.focus grants ==========

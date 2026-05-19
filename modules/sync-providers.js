@@ -11,37 +11,42 @@ var CloudSyncProviders = {
     icon: '☁️',
     requiresAuth: true,
     
-    async upload(data, settings) {
+    // Phase 40.12 — `opts.signal` carries the CloudSync 90s timeout's
+    // AbortSignal. When the orchestrator gives up, the provider's fetch is
+    // cancelled instead of running to completion and racing the next sync.
+    async upload(data, settings, opts = {}) {
       if (!settings.webdavUrl) throw new Error('WebDAV URL is required');
       const url = `${settings.webdavUrl.replace(/\/$/, '')}/scriptvault-backup.json`;
       const auth = btoa(`${settings.webdavUsername}:${settings.webdavPassword}`);
-      
+
       const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        signal: opts.signal
       });
-      
+
       if (!response.ok) throw new Error(`WebDAV upload failed: HTTP ${response.status}`);
       return { success: true, timestamp: Date.now() };
     },
-    
-    async download(settings) {
+
+    async download(settings, opts = {}) {
       if (!settings.webdavUrl) throw new Error('WebDAV URL is required');
       const url = `${settings.webdavUrl.replace(/\/$/, '')}/scriptvault-backup.json`;
       const auth = btoa(`${settings.webdavUsername}:${settings.webdavPassword}`);
-      
+
       const response = await fetch(url, {
         method: 'GET',
-        headers: { 'Authorization': `Basic ${auth}` }
+        headers: { 'Authorization': `Basic ${auth}` },
+        signal: opts.signal
       });
-      
+
       if (response.status === 404) return null;
       if (!response.ok) throw new Error(`WebDAV download failed: HTTP ${response.status}`);
-      
+
       return await response.json();
     },
     
@@ -250,7 +255,8 @@ var CloudSyncProviders = {
       return data.files?.[0] || null;
     },
 
-    async upload(data, settings) {
+    // Phase 40.12 — opts.signal threading. See WebDAV provider for rationale.
+    async upload(data, settings, opts = {}) {
       const token = await this.getValidToken();
       if (!token) throw new Error('Not authenticated with Google Drive');
 
@@ -283,7 +289,8 @@ var CloudSyncProviders = {
           'Authorization': `Bearer ${token}`,
           'Content-Type': `multipart/related; boundary=${boundary}`
         },
-        body
+        body,
+        signal: opts.signal
       });
 
       if (!response.ok) {
@@ -294,7 +301,7 @@ var CloudSyncProviders = {
       return { success: true, timestamp: Date.now() };
     },
 
-    async download(settings) {
+    async download(settings, opts = {}) {
       const token = await this.getValidToken();
       if (!token) throw new Error('Not authenticated with Google Drive');
 
@@ -303,7 +310,7 @@ var CloudSyncProviders = {
 
       const response = await fetch(
         `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
+        { headers: { 'Authorization': `Bearer ${token}` }, signal: opts.signal }
       );
 
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
@@ -484,7 +491,8 @@ var CloudSyncProviders = {
       return { success: true };
     },
 
-    async upload(data, settings) {
+    // Phase 40.12 — opts.signal threading. See WebDAV provider for rationale.
+    async upload(data, settings, opts = {}) {
       if (!settings.dropboxToken) throw new Error('Not authenticated with Dropbox');
 
       // Ensure token is fresh before upload
@@ -503,19 +511,20 @@ var CloudSyncProviders = {
           }),
           'Content-Type': 'application/octet-stream'
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        signal: opts.signal
       });
-      
+
       if (response.status === 401) throw new Error('Dropbox token expired. Please reconnect.');
       if (!response.ok) {
         const error = await response.text();
         throw new Error(`Upload failed: ${error}`);
       }
-      
+
       return { success: true, timestamp: Date.now() };
     },
-    
-    async download(settings) {
+
+    async download(settings, opts = {}) {
       if (!settings.dropboxToken) throw new Error('Not authenticated with Dropbox');
 
       // Ensure token is fresh before download (mirrors upload() refresh logic)
@@ -527,13 +536,14 @@ var CloudSyncProviders = {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Dropbox-API-Arg': JSON.stringify({ path: this.fileName })
-        }
+        },
+        signal: opts.signal
       });
-      
+
       if (response.status === 409) return null; // File not found
       if (response.status === 401) throw new Error('Dropbox token expired. Please reconnect.');
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
-      
+
       return await response.json();
     },
     
@@ -710,7 +720,11 @@ var CloudSyncProviders = {
       return { success: true };
     },
 
-    async upload(data) {
+    // Phase 40.12 — opts.signal threading. See WebDAV provider for rationale.
+    // The orchestrator passes (data, settings, opts); existing callers that
+    // pass only `(data)` (e.g. ad-hoc unit tests) still work because
+    // settings/opts default to undefined and the body never touches them.
+    async upload(data, _settings, opts = {}) {
       const token = await this.getValidToken();
       if (!token) throw new Error('Not authenticated with OneDrive');
       if (!data || typeof data !== 'object') throw new Error('Invalid backup data');
@@ -723,7 +737,8 @@ var CloudSyncProviders = {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(data)
+          body: JSON.stringify(data),
+          signal: opts.signal
         }
       );
 
@@ -731,13 +746,13 @@ var CloudSyncProviders = {
       return { success: true, timestamp: Date.now() };
     },
 
-    async download() {
+    async download(_settings, opts = {}) {
       const token = await this.getValidToken();
       if (!token) throw new Error('Not authenticated with OneDrive');
 
       const response = await fetch(
         `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
+        { headers: { 'Authorization': `Bearer ${token}` }, signal: opts.signal }
       );
 
       if (response.status === 404) return null;

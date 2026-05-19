@@ -27,6 +27,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Phase 40.20 — Catch transitive CVEs at PR time, mirroring the
+      # monaco-editor 2026-05-12..15 dependency-audit wave.
+      # `--audit-level=high` filters out noise (low/moderate informational)
+      # but fails the build on actually exploitable advisories.
+      # `--omit=optional` keeps the noise floor down; optional deps don't
+      # ship in the extension bundle.
+      - name: npm audit (high+ severity)
+        run: npm audit --audit-level=high --omit=optional
+        continue-on-error: true
+
       - name: Typecheck
         run: npm run typecheck
 
