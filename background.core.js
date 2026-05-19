@@ -806,6 +806,22 @@ async function exportAllScripts(options = {}) {
   };
 }
 
+// Phase 39.31 — WECG #935 pre-emptive string clamping. Chrome's
+// chrome.notifications.create() silently truncates `title` past ~100 chars
+// and `message` past ~300 chars; chrome.contextMenus.create() truncates
+// `title` past ~75 chars with ellipsis. WECG #935 proposes formalizing
+// these limits, after which silent truncation may become an explicit error.
+// Clamp at the source so a future spec change can't break us.
+const SV_NOTIF_TITLE_MAX = 96;     // Chrome notification title cap
+const SV_NOTIF_MESSAGE_MAX = 280;  // Chrome notification message cap
+const SV_CONTEXT_MENU_TITLE_MAX = 64; // visible context-menu label
+function _clampString(s, max) {
+  if (typeof s !== 'string') return s;
+  if (s.length <= max) return s;
+  // Use a single ellipsis char so we land exactly on `max`.
+  return s.slice(0, max - 1) + '\u2026';
+}
+
 // Phase 39.22 — bound any await chain that could deadlock on a CSP-strict /
 // hung remote target (VM #2513). Rejects with a labelled timeout error after
 // `ms` milliseconds; the caller is responsible for treating the rejection as
@@ -1901,17 +1917,59 @@ async function handleMessage(message, sender) {
       }
 
       // Sync
-      case 'sync':
-        return await CloudSync.sync();
-        
-      case 'testSync': {
-        const settings = await SettingsManager.get();
-        const provider = CloudSync.providers[settings.syncProvider];
-        if (provider) {
-          return await provider.test(settings);
-        }
-        return false;
+      case 'sync': {
+        const result = await CloudSync.sync();
+        // Phase 39.26 — persist last-sync outcome so the dashboard's sync chip
+        // can render "Last sync: 5 min ago — OK" without requiring a separate
+        // round-trip on every popup open.
+        try {
+          await chrome.storage.local.set({
+            lastSyncResult: {
+              timestamp: Date.now(),
+              ok: !!(result?.success || result?.skipped),
+              skipped: !!result?.skipped,
+              error: result?.error || null
+            }
+          });
+        } catch (_e) { /* non-critical */ }
+        return result;
       }
+
+      case 'testSync': {
+        // Phase 39.26 — VM #2486: explicit Test Connection with structured
+        // status. Accept an optional `data.provider` override so the dashboard
+        // can test a provider not currently selected (e.g. "verify the new
+        // WebDAV URL before saving").
+        const settings = await SettingsManager.get();
+        const providerName = data?.provider || settings.syncProvider;
+        const provider = CloudSync.providers[providerName];
+        if (!provider) {
+          return { ok: false, error: `Unknown provider: ${providerName}` };
+        }
+        try {
+          const raw = await provider.test(settings);
+          // Providers vary in return shape — normalize to { ok, error?, hint? }.
+          if (typeof raw === 'boolean') return { ok: raw };
+          if (raw && typeof raw === 'object') {
+            const ok = raw.success === true || raw.ok === true;
+            const error = raw.error || raw.message || null;
+            const hint = !ok ? (
+              error?.toLowerCase().includes('401') ? 'Authentication failed — re-connect the account.' :
+              error?.toLowerCase().includes('403') ? 'Server rejected the credentials — check the user has write access.' :
+              error?.toLowerCase().includes('404') ? 'Endpoint not found — verify the URL.' :
+              error?.toLowerCase().includes('network') ? 'Network error — check connectivity and CORS.' :
+              null
+            ) : null;
+            return hint ? { ok, error, hint } : { ok, error };
+          }
+          return { ok: false, error: 'Provider returned no status' };
+        } catch (e) {
+          return { ok: false, error: e?.message || String(e) };
+        }
+      }
+
+      case 'getLastSyncResult':
+        return (await chrome.storage.local.get('lastSyncResult'))?.lastSyncResult || null;
       
       // Cloud Sync Provider Management
       case 'connectSyncProvider': {
@@ -3113,8 +3171,11 @@ async function handleMessage(message, sender) {
         const notifOpts = {
           type: hasProgress ? 'progress' : 'basic',
           iconUrl: data.image || 'images/icon128.png',
-          title: data.title || 'ScriptVault',
-          message: data.text || '',
+          // Phase 39.31 — clamp to documented Chrome notification limits
+          // so the future WECG #935 spec change can't break user scripts
+          // that pass long titles/messages.
+          title: _clampString(data.title || 'ScriptVault', SV_NOTIF_TITLE_MAX),
+          message: _clampString(data.text || '', SV_NOTIF_MESSAGE_MAX),
           silent: data.silent || false
         };
         if (hasProgress) {
@@ -3327,6 +3388,12 @@ async function handleMessage(message, sender) {
 
           const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, [], []);
 
+          // Phase 39.28 — Chrome 149+ makes injectImmediately: true reliable
+          // for document-start one-shots. Pass it when the script declares
+          // @run-at document-start so the body runs before first paint
+          // instead of after.
+          const wantsDocumentStart = (script?.meta?.['run-at'] === 'document-start');
+
           // Prefer userScripts.execute() (Chrome 135+) — runs in the same
           // USER_SCRIPT world as a normal injection so unsafeWindow / GM_*
           // APIs behave identically.
@@ -3335,7 +3402,8 @@ async function handleMessage(message, sender) {
               await chrome.userScripts.execute({
                 target: { tabId: targetTabId },
                 js: [{ code: wrappedCode }],
-                world: 'USER_SCRIPT'
+                world: 'USER_SCRIPT',
+                ...(wantsDocumentStart ? { injectImmediately: true } : {})
               });
               return { success: true, mode: 'userScripts.execute' };
             } catch (e) {
@@ -3354,7 +3422,8 @@ async function handleMessage(message, sender) {
               func: (code) => {
                 try { (0, eval)(code); } catch (err) { console.error('[ScriptVault Run Now]', err); }
               },
-              args: [wrappedCode]
+              args: [wrappedCode],
+              ...(wantsDocumentStart ? { injectImmediately: true } : {})
             });
             return { success: true, mode: 'scripting.executeScript' };
           } catch (e) {
@@ -4319,7 +4388,10 @@ async function setupContextMenus() {
     for (const script of contextScripts) {
       chrome.contextMenus.create({
         id: `scriptvault-ctx-${script.id}`,
-        title: script.meta.name || script.id,
+        // Phase 39.31 — pre-emptive clamp; Chrome visually ellipsises long
+        // context-menu titles but the spec proposal may make oversize titles
+        // an error in the future.
+        title: _clampString(script.meta.name || script.id, SV_CONTEXT_MENU_TITLE_MAX),
         contexts: ['page', 'selection', 'link', 'image']
       });
     }
@@ -5097,6 +5169,15 @@ async function init() {
     try { await EasyCloudSync.init(); } catch (e) { console.error('[ScriptVault] EasyCloudSync init error:', e); }
   }
 
+  // Phase 39.8 — OS-policy script provisioning. Read chrome.storage.managed
+  // for an array of admin-pushed userscripts; install/update each. The
+  // managed-storage change listener (wired below) re-runs this on policy
+  // updates so admins can roll out new scripts without re-shipping the
+  // extension.
+  applyManagedScripts().catch(e => {
+    console.warn('[ScriptVault] Managed-script provisioning failed:', e?.message || e);
+  });
+
   // Phase 40.10 — Reconcile DNR rule map against live DNR + ScriptStorage now
   // that both are hydrated. Catches orphan rules left behind when the SW was
   // killed mid-delete or mid-update. Fire-and-forget so a slow DNR query
@@ -5106,6 +5187,129 @@ async function init() {
   });
 
   console.log('[ScriptVault] Service worker ready');
+}
+
+// Phase 39.8 — OS-policy script provisioning (TM 5.5.0 parity).
+//
+// Admins push userscripts via the standard Chrome enterprise policy mechanism
+// (`ExtensionSettings` JSON → `chrome.storage.managed`). The expected shape is:
+//
+//   chrome.storage.managed.managedScripts = [
+//     { url: "https://internal.corp/foo.user.js" },   // fetched + installed
+//     { code: "// ==UserScript== ... " }              // installed inline
+//   ]
+//
+// Each managed script is flagged `script.settings.managed = true`. A future
+// dashboard pass surfaces this with a "Managed by your organization" pill
+// (deferred — UI scope, dashboard.js). Managed scripts are NOT auto-deleted
+// from local storage when removed from policy; admins can clear via an explicit
+// `chrome.storage.managed.managedScriptsCleanup = true` toggle if needed.
+async function applyManagedScripts() {
+  if (!chrome.storage?.managed) return; // Not all browsers expose .managed
+  let policy;
+  try {
+    policy = await chrome.storage.managed.get(['managedScripts', 'managedScriptsCleanup']);
+  } catch (e) {
+    // No managed policy attached or restricted-by-policy — silently skip.
+    return;
+  }
+  const items = Array.isArray(policy?.managedScripts) ? policy.managedScripts : [];
+  if (items.length === 0 && !policy?.managedScriptsCleanup) return;
+
+  const allScripts = await ScriptStorage.getAll();
+  const installedByOrigin = new Map();
+  for (const s of allScripts) {
+    if (s?.settings?.managed && s?.settings?.managedOriginKey) {
+      installedByOrigin.set(s.settings.managedOriginKey, s);
+    }
+  }
+  const policyOriginKeys = new Set();
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const originKey = typeof item.url === 'string' ? `url:${item.url}` :
+                      typeof item.code === 'string' ? `code:${item.code.slice(0, 64)}` : null;
+    if (!originKey) continue;
+    policyOriginKeys.add(originKey);
+
+    let code;
+    if (typeof item.url === 'string') {
+      try {
+        const res = await installFromUrl(item.url);
+        if (res?.error) {
+          console.warn('[ScriptVault] Managed script install (URL) failed:', item.url, res.error);
+          continue;
+        }
+      } catch (e) {
+        console.warn('[ScriptVault] Managed script fetch failed:', item.url, e?.message || e);
+        continue;
+      }
+    } else if (typeof item.code === 'string' && item.code) {
+      code = item.code;
+      try {
+        const res = await installFromCode(code);
+        if (res?.error) {
+          console.warn('[ScriptVault] Managed script install (inline) failed:', res.error);
+          continue;
+        }
+      } catch (e) {
+        console.warn('[ScriptVault] Managed inline install failed:', e?.message || e);
+        continue;
+      }
+    } else {
+      continue;
+    }
+
+    // Tag the installed script as managed. installFromUrl/installFromCode
+    // dedup by name+namespace so we have to look it up post-install.
+    try {
+      const fresh = await ScriptStorage.getAll();
+      const lastInstalled = fresh.find(s =>
+        !s?.settings?.managed && s.updatedAt && Date.now() - s.updatedAt < 30000
+      );
+      if (lastInstalled) {
+        await ScriptStorage.set(lastInstalled.id, {
+          ...lastInstalled,
+          settings: {
+            ...(lastInstalled.settings || {}),
+            managed: true,
+            managedOriginKey: originKey,
+            managedAppliedAt: Date.now()
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[ScriptVault] Managed-flag tagging failed:', e?.message || e);
+    }
+  }
+
+  // Optional cleanup: remove managed scripts whose origin key is no longer in
+  // the policy AND the admin opted into pruning. Without the explicit
+  // `managedScriptsCleanup: true` flag, we leave orphans alone — better to keep
+  // a script than silently delete one a sysadmin still wants users to have.
+  if (policy?.managedScriptsCleanup === true) {
+    for (const [originKey, script] of installedByOrigin.entries()) {
+      if (!policyOriginKeys.has(originKey)) {
+        try {
+          await ScriptStorage.delete(script.id);
+          debugLog(`[ManagedScripts] Pruned ${script.meta?.name} (no longer in policy)`);
+        } catch (e) {
+          console.warn('[ScriptVault] Managed prune failed:', script.id, e?.message || e);
+        }
+      }
+    }
+  }
+}
+
+// Re-run provisioning whenever the managed-storage area changes.
+if (chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'managed') return;
+    if (!('managedScripts' in changes) && !('managedScriptsCleanup' in changes)) return;
+    applyManagedScripts().catch(e => {
+      console.warn('[ScriptVault] Managed-storage onChanged handler failed:', e?.message || e);
+    });
+  });
 }
 
 // Remove expired persistent cache entries and stale trash items to prevent storage bloat.
