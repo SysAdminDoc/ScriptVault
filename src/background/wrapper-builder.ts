@@ -1288,7 +1288,22 @@ ${req.code}
       }
     }
 
-    // Intercept history API
+    // Phase 38.6 — Prefer the Navigation API (Chrome 102+, our min-Chrome
+    // 130 so always present here; Firefox port falls through to the polling
+    // shim). Catches SPA navigations that don't route through pushState /
+    // replaceState (e.g. direct location.href assignment + render-frame
+    // routers).
+    const _nav = (typeof window !== 'undefined') ? window.navigation : undefined;
+    if (_nav && typeof _nav.addEventListener === 'function') {
+      try {
+        _nav.addEventListener('navigate', () => {
+          Promise.resolve().then(__checkUrlChange);
+        });
+      } catch (_e) { /* fall through to polling shim */ }
+    }
+
+    // Intercept history API (kept as a backstop for non-Navigation-API
+    // browsers and for any SPA library that bypasses navigation.navigate).
     const _origPushState = history.pushState;
     const _origReplaceState = history.replaceState;
     history.pushState = function() {
