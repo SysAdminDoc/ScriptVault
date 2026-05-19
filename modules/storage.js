@@ -46,14 +46,30 @@ function cloneStoredValue(value) {
 
 const SettingsManager = {
   defaults: cloneDefaultSettings(),
-  
+
   cache: null,
-  
+  _initPromise: null,
+
+  // Serialize concurrent cold-start callers. Without the promise gate, two
+  // parallel get()/set() invocations both pass the `cache === null` check
+  // before either finishes loading; the second resolves later and clobbers
+  // mutations the first has already applied to the cache. Clearing the
+  // promise in `finally` lets callers retry after a test reset or persisted
+  // failure.
   async init() {
     if (this.cache !== null) return;
-    const data = await chrome.storage.local.get('settings');
-    this.cache = { ...cloneDefaultSettings(), ...data.settings };
-    console.log('[ScriptVault] Settings loaded');
+    if (!this._initPromise) {
+      this._initPromise = (async () => {
+        const data = await chrome.storage.local.get('settings');
+        this.cache = { ...cloneDefaultSettings(), ...data.settings };
+        console.log('[ScriptVault] Settings loaded');
+      })();
+    }
+    try {
+      return await this._initPromise;
+    } finally {
+      this._initPromise = null;
+    }
   },
   
   async get(key) {
@@ -110,12 +126,22 @@ const SettingsManager = {
 
 const ScriptStorage = {
   cache: null,
-  
+  _initPromise: null,
+
   async init() {
     if (this.cache !== null) return;
-    const data = await chrome.storage.local.get('userscripts');
-    this.cache = data.userscripts || {};
-    console.log('[ScriptVault] Loaded', Object.keys(this.cache).length, 'scripts');
+    if (!this._initPromise) {
+      this._initPromise = (async () => {
+        const data = await chrome.storage.local.get('userscripts');
+        this.cache = data.userscripts || {};
+        console.log('[ScriptVault] Loaded', Object.keys(this.cache).length, 'scripts');
+      })();
+    }
+    try {
+      return await this._initPromise;
+    } finally {
+      this._initPromise = null;
+    }
   },
   
   async save() {
@@ -282,11 +308,23 @@ const ScriptValues = {
   cache: Object.create(null),
   listeners: new Map(),
   pendingNotifications: new Map(), // Debounce notifications only (not saves!)
-  
+  _initPromises: new Map(), // scriptId → in-flight init promise (cleared in finally)
+
   async init(scriptId) {
     if (Object.hasOwn(this.cache, scriptId)) return;
-    const data = await chrome.storage.local.get(`values_${scriptId}`);
-    setScriptValueBag(this.cache, scriptId, makeValueBag(data[`values_${scriptId}`] || {}));
+    let p = this._initPromises.get(scriptId);
+    if (!p) {
+      p = (async () => {
+        const data = await chrome.storage.local.get(`values_${scriptId}`);
+        setScriptValueBag(this.cache, scriptId, makeValueBag(data[`values_${scriptId}`] || {}));
+      })();
+      this._initPromises.set(scriptId, p);
+    }
+    try {
+      return await p;
+    } finally {
+      this._initPromises.delete(scriptId);
+    }
   },
   
   async get(scriptId, key, defaultValue) {
@@ -531,11 +569,21 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 const FolderStorage = {
   cache: null,
+  _initPromise: null,
 
   async init() {
     if (this.cache !== null) return;
-    const data = await chrome.storage.local.get('scriptFolders');
-    this.cache = data.scriptFolders || [];
+    if (!this._initPromise) {
+      this._initPromise = (async () => {
+        const data = await chrome.storage.local.get('scriptFolders');
+        this.cache = data.scriptFolders || [];
+      })();
+    }
+    try {
+      return await this._initPromise;
+    } finally {
+      this._initPromise = null;
+    }
   },
 
   async save() {
