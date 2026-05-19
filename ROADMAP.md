@@ -3888,7 +3888,7 @@ Chrome **138 stable** brought the Translator, Summarizer, and Language Detector 
 
 Source: [Built-in AI for Chrome Extensions](https://developer.chrome.com/docs/extensions/ai), [Translator API](https://developer.chrome.com/docs/ai/translator-api), [Summarizer API](https://developer.chrome.com/docs/ai/summarizer-api).
 
-#### 39.33 Storage Buckets API for OPFS Isolation (Phase 18.2 extension)
+#### 39.33 Storage Buckets API for OPFS Isolation ⏳ Track — gated on Phase 18.2 (Phase 18.2 extension)
 
 [Chrome 122+](https://chromestatus.com/feature/5739224579964928) shipped the Storage Buckets API, which lets origins create named, separately-evictable storage buckets. Phase 18.2 plans OPFS overflow storage for large scripts; this prevents a single quota-busting script from evicting ScriptVault's metadata.
 
@@ -3929,9 +3929,11 @@ Vitest **5.0.0-beta.2** swaps the assertion-formatter from `loupe` to `pretty-fo
 
 Source: [Vitest releases](https://github.com/vitest-dev/vitest/releases).
 
-#### 39.37 esbuild 0.28 Text Imports for Bundled UI Strings
+#### 39.37 esbuild 0.28 Text Imports for Bundled UI Strings ⏳ Track — gated on next esbuild bump
 
 esbuild **0.28** introduces `with { type: 'text' }` import attributes — load a file's content as a string at build time. ScriptVault has several baked-in strings/templates currently `fetch`'d at runtime from extension resources.
+
+**Status (2026-05-19):** Tracked. Pinned to `esbuild ^0.27.4`. The 0.28 bump is a breaking release (Go 1.26.1 host); fold the text-imports refactor into that same bump session so it's a single audit instead of two.
 
 - Replace `fetch('./templates/blank-script.txt')` patterns with `import body from './templates/blank-script.txt' with { type: 'text' }` where possible.
 - One less fetch round-trip on dashboard cold start; one less `web_accessible_resource` entry.
@@ -3979,7 +3981,7 @@ Source: [MCP 2026 roadmap](https://blog.modelcontextprotocol.io/posts/2026-mcp-r
 
 **Status (2026-05-17):** ⚠️ Design doc scaffolded — implementation pending and gated on Phase 38.10 shipping. Full compliance bar in [`docs/mcp-2026-compliance.md`](docs/mcp-2026-compliance.md): per-server `@grant` model, locality classifier rejecting public hosts by default, `.well-known/mcp-discovery` mandatory, RFC 8707 Resource Indicators required, Tasks primitive with cancel/retry surfaced in dashboard, audit-log emission, explicit non-scope (no LLM agent UI, no sub-agent generator, no skill marketplace).
 
-#### 39.41 Transformers.js v3 WebGPU Offline Static-Analysis Classifier (R&D, behind flag)
+#### 39.41 Transformers.js v3 WebGPU Offline Static-Analysis Classifier ⏳ Track — R&D, behind flag (R&D, behind flag)
 
 [Transformers.js v3 with WebGPU](https://huggingface.co/blog/transformersjs-v3) is GA. A tiny classifier (e.g., distilbert-tiny ~10MB) could label installed scripts as "exfiltrates-cookies / fingerprint-heavy / obfuscated" at install time — complementing the existing AST risk scoring with model-driven classification.
 
@@ -3990,9 +3992,11 @@ Source: [MCP 2026 roadmap](https://blog.modelcontextprotocol.io/posts/2026-mcp-r
 
 Source: [Transformers.js v3 WebGPU](https://huggingface.co/blog/transformersjs-v3).
 
-#### 39.42 Compute Pressure API Back-Off (extends Phases 15.6 + 10.5)
+#### 39.42 Compute Pressure API Back-Off ⏳ Track — gated on Phases 15.6 + 10.5 (extends them)
 
 [Chrome Compute Pressure API (OT)](https://chromestatus.com/feature/5597608644968448) reports CPU pressure level. Phase 15.6 (esbuild-wasm TS transpile) and Phase 10.5 (fuzzer) are CPU-heavy operations.
+
+**Status (2026-05-19):** Tracked. Neither Phase 15.6 (TS transpile in-extension) nor Phase 10.5 (fuzzer) is implemented yet, so there's nothing CPU-heavy that would benefit from pressure-based back-off. Schedule alongside whichever of those lands first.
 
 - Subscribe to `new PressureObserver(callback).observe('cpu', { sampleInterval: 1000 })`.
 - On `state === 'critical'`, pause queued compiles / fuzz runs; resume when `state ∈ {'nominal', 'fair'}`.
@@ -4014,13 +4018,13 @@ Source: [W3C WAI — WCAG 3 March 2026 WD](https://www.w3.org/WAI/news/2026-03-0
 
 **Status (2026-05-17):** ✅ Initial gap analysis shipped. See [`docs/wcag3-gap-analysis.md`](docs/wcag3-gap-analysis.md): four-category coverage matrix (Perceivable / Operable / Understandable / Robust) over the March 2026 Working Draft's 174 requirements, with each ScriptVault-relevant requirement tagged 🟢 Covered / 🟡 Partial / 🔴 Net-new / N/A. Six headline gaps surfaced (skip-to-main-content links, centralized help affordance, APCA contrast re-audit across themes, combobox/grid APG patterns, status-message live-region audit, mixed-language `lang=""` attrs). Re-run on each WCAG 3 WD update and before CR target Q4 2027.
 
-#### 39.44 URLPattern Promotion: Phase 22.2 Later → Next (see also Phase 22.2 status note)
+#### 39.44 URLPattern Promotion: Phase 22.2 Later → Next ✅ Promoted (see also Phase 22.2 status note)
 
 Tracked here only as a cross-reference. URLPattern is now **Baseline Newly Available** per [web.dev/baseline-urlpattern](https://web.dev/blog/baseline-urlpattern). The spec is stable enough that Phase 4's matcher should grow a URLPattern-backed implementation alongside the existing regex engine, with `@include` regex patterns + edge cases retained on the regex path.
 
 Source: [URLPattern Baseline announcement](https://web.dev/blog/baseline-urlpattern).
 
-#### 39.45 AT Protocol Personal Data Server Sync Backend Research
+#### 39.45 AT Protocol Personal Data Server Sync Backend ⏳ Track — Research
 
 The [AT Protocol IETF WG was chartered January 2026](https://atproto.com/blog/2026-spring-roadmap); private-data support lands in 2026. Phase 35 covers Nostr + did:key federation; AT was deferred ("zero Bluesky userscript community").
 
@@ -4037,7 +4041,7 @@ Tracked here only as a cross-reference to Phase 32.1's updated status. Per [comp
 
 Cross-reference to Phase 11.11 updated status. Per [developer.chrome.com/docs/web-platform/notification-triggers](https://developer.chrome.com/docs/web-platform/notification-triggers), Chrome's Notification Triggers API is officially discontinued. Future GM_notification work must NOT plan against it. Phase 11.11 carries the active dead-mark note.
 
-#### 39.48 Codeberg Mirror of ScriptVault Source (Community-Resilience Hedge)
+#### 39.48 Codeberg Mirror of ScriptVault Source ⏳ Track — Community-Resilience Hedge (Community-Resilience Hedge)
 
 VM proposed [migration to Codeberg](https://github.com/violentmonkey/violentmonkey/issues/2522) (May 15 2026) — community concern over single-vendor GitHub dependence. Cheap hedge: maintain a read-only Codeberg mirror.
 
