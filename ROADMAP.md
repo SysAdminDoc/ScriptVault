@@ -3585,9 +3585,13 @@ Source: [Sigstore npm provenance GA](https://blog.sigstore.dev/npm-provenance-ga
 
 ### Tampermonkey 5.5.0 + Violentmonkey v2.37.x Parity (May 2026)
 
-#### 39.6 First-Run "Allow Userscript Injection" Permission Gate
+#### 39.6 First-Run "Allow Userscript Injection" Permission Gate ⚠️ Deferred — redundant with Chrome 138 toggle
 
 Tampermonkey **5.5.0 (May 8 2026)** requires users to grant a "special extension permission" before any script will inject. This is a trust-model shift beyond Chrome 138's per-extension toggle: the manager itself surfaces a one-time permission prompt and refuses injection until granted.
+
+**Status (2026-05-19):** Deferred after evaluation. Chrome 138's `chrome.userScripts` per-extension toggle (already surfaced by Phase 39.10's runtime self-diagnosis banner) gates injection at the browser layer for new installs. Adding a second in-extension consent gate on top of the browser one creates redundant friction without a measurable security improvement — the user who installed ScriptVault and flipped the Chrome toggle has already given two layers of consent. TM 5.5.0's model is defensible for an enterprise-shipped product but works against ScriptVault's zero-friction-for-power-users positioning. Re-evaluate if CWS policy changes mandate a manager-side prompt.
+
+If we revisit:
 
 - Show a first-run modal in the dashboard: "ScriptVault is about to inject code into web pages. Allow?" with [Allow] / [Deny] / [Read more].
 - Persist the user's choice in `chrome.storage.local`; deny short-circuits all `chrome.userScripts.register()` paths.
@@ -3596,9 +3600,11 @@ Tampermonkey **5.5.0 (May 8 2026)** requires users to grant a "special extension
 
 Source: [TM changelog 5.5.0](https://www.tampermonkey.net/changelog.php).
 
-#### 39.7 In-Page Context-Menu Commands via `chrome.contextMenus`
+#### 39.7 In-Page Context-Menu Commands via `chrome.contextMenus` ⚠️ Deferred — needs per-script settings UI
 
 Violentmonkey **v2.37.3 beta (May 10 2026)** added an opt-in path that surfaces `GM_registerMenuCommand` entries in the page's native right-click menu via `chrome.contextMenus.create`. ScriptVault currently lists those commands only in the popup.
+
+**Status (2026-05-19):** Deferred. The clean implementation requires a new per-script setting "Show menu commands in page context menu" (default off) plus the dashboard UI to toggle it — that surface lives in the 10K-line `pages/dashboard.js`. A half-implementation (global setting, all-or-nothing) would be UX-worse than no implementation because the user can't opt out of clutter for high-frequency scripts. Bundle this with the next dashboard-settings-UX pass.
 
 - Add a per-script setting "Show menu commands in page context menu" (default off — opt-in to avoid context-menu clutter).
 - On enable, register a `chrome.contextMenus.create({ contexts: ['page', 'selection'], documentUrlPatterns: [...] })` entry per command at registration time.
@@ -3607,7 +3613,7 @@ Violentmonkey **v2.37.3 beta (May 10 2026)** added an opt-in path that surfaces 
 
 Source: [VM v2.37.3 beta release notes](https://github.com/violentmonkey/violentmonkey/releases).
 
-#### 39.8 OS-Policy Script Provisioning (Enterprise Extension to Phase 25)
+#### 39.8 OS-Policy Script Provisioning ✅ Shipped (Enterprise Extension to Phase 25)
 
 TM 5.5.0 also added support for OS-policy-pushed userscripts: admins drop a `.user.js` file in a system-policy directory and TM auto-installs it on next browser launch. ScriptVault's Phase 25 covers enterprise admin policies for installing the extension itself; this extends Phase 25.2 (internal script repository) with a no-network path.
 
@@ -3647,13 +3653,17 @@ TM issue [#2784](https://github.com/Tampermonkey/tampermonkey/issues/2784) (May 
 
 Source: [TM #2784](https://github.com/Tampermonkey/tampermonkey/issues/2784).
 
-#### 39.12 `GM_registerMenuCommand` User-Activation Preservation (TM #2781)
+#### 39.12 `GM_registerMenuCommand` User-Activation Preservation ⚠️ Audited — known platform limitation
 
 TM issue [#2781](https://github.com/Tampermonkey/tampermonkey/issues/2781) (May 13 2026) — regression from TM 5.4.1 where menu-command callbacks lose user-activation, breaking `showOpenFilePicker()` and other gesture-gated APIs.
 
-- Audit ScriptVault's menu-command dispatch path (`background.core.js` + `content.js` bridge): the click handler in the popup/contextmenu must invoke the callback **synchronously** within the user-activation window.
-- Use `chrome.userScripts.execute({ world: 'MAIN', injectImmediately: true })` (see 39.28) with the callback bound to the click event, rather than the current message-passing roundtrip that consumes the activation.
-- Regression test: a menu command that calls `showOpenFilePicker()` must open the picker on first click.
+**Status (2026-05-19):** Audited. ScriptVault's dispatch path is `popup-click → chrome.tabs.sendMessage(content.js) → window.postMessage(page) → wrapper invokes callback`. Two `chrome.*` IPC hops consume the user activation by Chrome's platform rules (cross-process messaging never carries activation). This is a platform-wide limitation that affects every userscript manager using the same architecture — TM's #2781 fix narrows their own activation loss in synchronous-context-only cases, but does not solve it for popup-triggered commands.
+
+The proposed `chrome.userScripts.execute({ world: 'MAIN' })` shortcut from the popup click also crosses a process boundary and loses activation; it's a partial workaround at best.
+
+**Recommendation for authors:** Document in the GM API reference that menu-command callbacks invoked via the popup may not preserve user activation. Gesture-gated APIs (`showOpenFilePicker`, `requestStorageAccess`, transient activation-required postMessage targets) should be wired via direct `document.addEventListener('contextmenu', ...)` in the page instead.
+
+No code change in this round; logging the audit so future rounds don't re-derive the analysis. Re-evaluate if Chrome ships a "preserve user activation across runtime messaging" platform API (none on the roadmap as of 2026-05).
 
 Source: [TM #2781](https://github.com/Tampermonkey/tampermonkey/issues/2781).
 
@@ -3700,9 +3710,11 @@ TM issue [#2783](https://github.com/Tampermonkey/tampermonkey/issues/2783) (May 
 
 Source: [TM #2783](https://github.com/Tampermonkey/tampermonkey/issues/2783).
 
-#### 39.17 Optional `monaco-vim` Keybindings
+#### 39.17 Optional `monaco-vim` Keybindings ⏳ Track — bundle on demand
 
 Recurring VM community request. Phase 15 covers the editor surface; `monaco-vim` is a ~50KB ESM module that adds Vim modal editing.
+
+**Status (2026-05-19):** Tracked but not scheduled. ~50KB bundled lazy-load is acceptable but the feature is niche relative to other Phase 15 priorities (IntelliSense, version-history UI, snippet manager). Defer until a clean Settings → Editor pane lands so the toggle has a natural home.
 
 - Bundle `monaco-vim` via esbuild; load on demand from a Settings → Editor → "Vim mode" toggle.
 - Persist mode and Vim ex-command history in `chrome.storage.local`.
@@ -3800,7 +3812,11 @@ VM #2453 (open since Mar 1 2026) — force-refresh of a script doesn't invalidat
 
 Source: [VM #2453](https://github.com/violentmonkey/violentmonkey/issues/2453).
 
-#### 39.26 Sync Save Acknowledgment + Test-Connection UX (VM #2486)
+#### 39.26 Sync Save Acknowledgment + Test-Connection UX ✅ Handler shipped (VM #2486)
+
+Background handlers in place: `testSync` now returns structured `{ ok, error?, hint? }` with plain-language hints (401 → "Authentication failed", 403 → "Server rejected", 404 → "Endpoint not found", network → "Check connectivity and CORS"). `sync` persists `lastSyncResult` to `chrome.storage.local` on every call. New `getLastSyncResult` action exposes it to the dashboard chip.
+
+The dashboard-side chip ("Last sync: 5 min ago — OK") still pending — dashboard.js work surface; the data plumbing is ready.
 
 VM #2486 (open since Apr 5 2026) — Save click silently fails on WebDAV; user has no feedback. Phase 23.5 covers backoff, not the user-feedback gap.
 
@@ -3821,7 +3837,7 @@ Source: [VM #2491](https://github.com/violentmonkey/violentmonkey/issues/2491).
 
 ### Chrome Platform Delta (Chrome 149+, Verified)
 
-#### 39.28 `chrome.scripting.executeScript({injectImmediately: true})` for `document-start`
+#### 39.28 `chrome.scripting.executeScript({injectImmediately: true})` for `document-start` ✅ Shipped
 
 Chrome 149 stable (~June 2 2026) makes `injectImmediately` reliable for the run-on-document-start case. ScriptVault currently approximates `@run-at document-start` via early registration; on slow connections, the script still runs after first paint.
 
@@ -3850,7 +3866,7 @@ Source: [Chrome 149 beta blog](https://developer.chrome.com/blog/chrome-149-beta
 
 Source: [WECG #971](https://github.com/w3c/webextensions/issues/971).
 
-#### 39.31 String-Length Pre-Emption Audit (WECG #935)
+#### 39.31 String-Length Pre-Emption Audit ✅ Shipped (WECG #935)
 
 [WECG #935](https://github.com/w3c/webextensions/issues/935) (Jan 13 2026) — proposal to formalize string-length limits on `action.setTitle`, `action.setBadgeText`, alarm names, DNR rule strings, etc. Today's behavior is silent truncation on some, errors on others; the spec will harden this.
 
@@ -3893,15 +3909,13 @@ Source: [Storage Buckets API (chromestatus)](https://chromestatus.com/feature/57
 
 Source: [Puppeteer releases](https://github.com/puppeteer/puppeteer/releases).
 
-#### 39.35 chrome-webstore-upload-cli 4.0 Cutover (paired with 39.2)
+#### 39.35 chrome-webstore-upload-cli 4.0 Cutover ✅ Shipped via Phase 40.18 (paired with 39.2)
 
-**4.0.0** breaking release: Node 22+, env-only secrets (no `--client-id` / `--client-secret` flags), `--auto-publish` removed.
+**4.0.0** breaking release: Node 22+ (actually 20+ per the release notes), env-only secrets (no `--client-id` / `--client-secret` flags), `--auto-publish` removed, `--source` forbidden on `publish`.
 
-- Coordinate with 39.1 (OIDC) and 39.2 (API v2 deadline).
-- Update `publish.sh` to source secrets from environment, not flags.
-- Document the new auth flow in `docs/release-runbook.md`.
+**Status (2026-05-19):** Shipped via [Phase 40.18](#4018-chrome-webstore-upload-cli-v40-migration-path--shipped--confirms-phase-3935). `package.json` pinned to `^4.0.0`; `publish.sh` and `cws-setup.sh` updated for the env-only secret model + new `PUBLISHER_ID`. 39.2 (API v2 deadline 2026-10-15) coordinated. 39.1 (OIDC) remains pending — short-term we keep the long-lived refresh-token model documented in [`docs/release-runbook.md`](docs/release-runbook.md).
 
-Source: [chrome-webstore-upload-cli releases](https://github.com/fregante/chrome-webstore-upload-cli/releases).
+Source: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/fregante/chrome-webstore-upload-cli/releases/tag/v4.0.0).
 
 #### 39.36 Vitest 5 Upgrade (Under Consideration — Wait for Stable)
 
@@ -4005,13 +4019,13 @@ The [AT Protocol IETF WG was chartered January 2026](https://atproto.com/blog/20
 
 Source: [AT Protocol Spring 2026 roadmap](https://atproto.com/blog/2026-spring-roadmap).
 
-#### 39.46 Drop WASM Component Model Browser Speculation (Phase 32.1 cross-ref)
+#### 39.46 Drop WASM Component Model Browser Speculation ✅ Documented (Phase 32.1 cross-ref)
 
-Tracked here only as a cross-reference to Phase 32.1's updated status. Per [component-model.bytecodealliance.org](https://component-model.bytecodealliance.org/), the model is server-side only in 2026. Explicitly do not plan against this for any browser host. Re-evaluate when a browser-side runtime ships (no Chromium roadmap signal as of 2026-05-17).
+Tracked here only as a cross-reference to Phase 32.1's updated status. Per [component-model.bytecodealliance.org](https://component-model.bytecodealliance.org/), the model is server-side only in 2026. Explicitly do not plan against this for any browser host. Re-evaluate when a browser-side runtime ships (no Chromium roadmap signal as of 2026-05-17). Phase 32.1 carries the active item-level deprio note.
 
-#### 39.47 Mark Notification Triggers API Discontinued (Phase 11.11 cross-ref)
+#### 39.47 Mark Notification Triggers API Discontinued ✅ Documented (Phase 11.11 cross-ref)
 
-Cross-reference to Phase 11.11 updated status. Per [developer.chrome.com/docs/web-platform/notification-triggers](https://developer.chrome.com/docs/web-platform/notification-triggers), Chrome's Notification Triggers API is officially discontinued. Future GM_notification work must NOT plan against it.
+Cross-reference to Phase 11.11 updated status. Per [developer.chrome.com/docs/web-platform/notification-triggers](https://developer.chrome.com/docs/web-platform/notification-triggers), Chrome's Notification Triggers API is officially discontinued. Future GM_notification work must NOT plan against it. Phase 11.11 carries the active dead-mark note.
 
 #### 39.48 Codeberg Mirror of ScriptVault Source (Community-Resilience Hedge)
 

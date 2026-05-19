@@ -16008,6 +16008,15 @@ async function init() {
     try { await EasyCloudSync.init(); } catch (e) { console.error('[ScriptVault] EasyCloudSync init error:', e); }
   }
 
+  // Phase 39.8 — OS-policy script provisioning. Read chrome.storage.managed
+  // for an array of admin-pushed userscripts; install/update each. The
+  // managed-storage change listener (wired below) re-runs this on policy
+  // updates so admins can roll out new scripts without re-shipping the
+  // extension.
+  applyManagedScripts().catch(e => {
+    console.warn('[ScriptVault] Managed-script provisioning failed:', e?.message || e);
+  });
+
   // Phase 40.10 — Reconcile DNR rule map against live DNR + ScriptStorage now
   // that both are hydrated. Catches orphan rules left behind when the SW was
   // killed mid-delete or mid-update. Fire-and-forget so a slow DNR query
@@ -16017,6 +16026,129 @@ async function init() {
   });
 
   console.log('[ScriptVault] Service worker ready');
+}
+
+// Phase 39.8 — OS-policy script provisioning (TM 5.5.0 parity).
+//
+// Admins push userscripts via the standard Chrome enterprise policy mechanism
+// (`ExtensionSettings` JSON → `chrome.storage.managed`). The expected shape is:
+//
+//   chrome.storage.managed.managedScripts = [
+//     { url: "https://internal.corp/foo.user.js" },   // fetched + installed
+//     { code: "// ==UserScript== ... " }              // installed inline
+//   ]
+//
+// Each managed script is flagged `script.settings.managed = true`. A future
+// dashboard pass surfaces this with a "Managed by your organization" pill
+// (deferred — UI scope, dashboard.js). Managed scripts are NOT auto-deleted
+// from local storage when removed from policy; admins can clear via an explicit
+// `chrome.storage.managed.managedScriptsCleanup = true` toggle if needed.
+async function applyManagedScripts() {
+  if (!chrome.storage?.managed) return; // Not all browsers expose .managed
+  let policy;
+  try {
+    policy = await chrome.storage.managed.get(['managedScripts', 'managedScriptsCleanup']);
+  } catch (e) {
+    // No managed policy attached or restricted-by-policy — silently skip.
+    return;
+  }
+  const items = Array.isArray(policy?.managedScripts) ? policy.managedScripts : [];
+  if (items.length === 0 && !policy?.managedScriptsCleanup) return;
+
+  const allScripts = await ScriptStorage.getAll();
+  const installedByOrigin = new Map();
+  for (const s of allScripts) {
+    if (s?.settings?.managed && s?.settings?.managedOriginKey) {
+      installedByOrigin.set(s.settings.managedOriginKey, s);
+    }
+  }
+  const policyOriginKeys = new Set();
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const originKey = typeof item.url === 'string' ? `url:${item.url}` :
+                      typeof item.code === 'string' ? `code:${item.code.slice(0, 64)}` : null;
+    if (!originKey) continue;
+    policyOriginKeys.add(originKey);
+
+    let code;
+    if (typeof item.url === 'string') {
+      try {
+        const res = await installFromUrl(item.url);
+        if (res?.error) {
+          console.warn('[ScriptVault] Managed script install (URL) failed:', item.url, res.error);
+          continue;
+        }
+      } catch (e) {
+        console.warn('[ScriptVault] Managed script fetch failed:', item.url, e?.message || e);
+        continue;
+      }
+    } else if (typeof item.code === 'string' && item.code) {
+      code = item.code;
+      try {
+        const res = await installFromCode(code);
+        if (res?.error) {
+          console.warn('[ScriptVault] Managed script install (inline) failed:', res.error);
+          continue;
+        }
+      } catch (e) {
+        console.warn('[ScriptVault] Managed inline install failed:', e?.message || e);
+        continue;
+      }
+    } else {
+      continue;
+    }
+
+    // Tag the installed script as managed. installFromUrl/installFromCode
+    // dedup by name+namespace so we have to look it up post-install.
+    try {
+      const fresh = await ScriptStorage.getAll();
+      const lastInstalled = fresh.find(s =>
+        !s?.settings?.managed && s.updatedAt && Date.now() - s.updatedAt < 30000
+      );
+      if (lastInstalled) {
+        await ScriptStorage.set(lastInstalled.id, {
+          ...lastInstalled,
+          settings: {
+            ...(lastInstalled.settings || {}),
+            managed: true,
+            managedOriginKey: originKey,
+            managedAppliedAt: Date.now()
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[ScriptVault] Managed-flag tagging failed:', e?.message || e);
+    }
+  }
+
+  // Optional cleanup: remove managed scripts whose origin key is no longer in
+  // the policy AND the admin opted into pruning. Without the explicit
+  // `managedScriptsCleanup: true` flag, we leave orphans alone — better to keep
+  // a script than silently delete one a sysadmin still wants users to have.
+  if (policy?.managedScriptsCleanup === true) {
+    for (const [originKey, script] of installedByOrigin.entries()) {
+      if (!policyOriginKeys.has(originKey)) {
+        try {
+          await ScriptStorage.delete(script.id);
+          debugLog(`[ManagedScripts] Pruned ${script.meta?.name} (no longer in policy)`);
+        } catch (e) {
+          console.warn('[ScriptVault] Managed prune failed:', script.id, e?.message || e);
+        }
+      }
+    }
+  }
+}
+
+// Re-run provisioning whenever the managed-storage area changes.
+if (chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'managed') return;
+    if (!('managedScripts' in changes) && !('managedScriptsCleanup' in changes)) return;
+    applyManagedScripts().catch(e => {
+      console.warn('[ScriptVault] Managed-storage onChanged handler failed:', e?.message || e);
+    });
+  });
 }
 
 // Remove expired persistent cache entries and stale trash items to prevent storage bloat.
