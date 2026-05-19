@@ -2303,7 +2303,28 @@
             color: var(--accent-error);
             background: rgba(239, 68, 68, 0.2);
         }
-        
+
+        /* Phase 39.15 — Hidden tags collapse so the list reflows without
+           dead whitespace. Save path uses DOM, but the save reads from
+           the full childList so filter visibility never affects persisted
+           state. */
+        .url-pattern-editable .pattern-tag[hidden] {
+            display: none !important;
+        }
+        .pattern-filter-input {
+            width: 120px;
+            height: 24px;
+            padding: 2px 8px;
+            font-size: 11px;
+            /* Square-ish input, 6px corners per project no-stadium rule. */
+            border-radius: 6px;
+        }
+        .pattern-sort-btn[aria-pressed="true"] {
+            background: var(--accent-blue, #4f8cff);
+            color: #fff;
+            border-color: var(--accent-blue, #4f8cff);
+        }
+
         .url-pattern-input {
             display: none;
             margin-top: 8px;
@@ -7452,6 +7473,18 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                     <div class="url-override-header">
                                         <span class="label-text url-override-title danger">User @exclude</span>
                                         <div class="url-override-actions">
+                                            <!-- Phase 39.15 — TM #2780: filter + sort over the
+                                                 @exclude list so 50+ pattern lists are manageable. -->
+                                            <input type="search" class="input-field pattern-filter-input"
+                                                   id="userExcludesFilter"
+                                                   data-pattern-filter="userExcludesList"
+                                                   placeholder="Filter…"
+                                                   aria-label="Filter @exclude patterns">
+                                            <button type="button" class="btn btn-sm pattern-sort-btn"
+                                                    id="userExcludesSortBtn"
+                                                    data-pattern-sort="userExcludesList"
+                                                    aria-pressed="false"
+                                                    title="Toggle alphabetical sort">A→Z</button>
                                             <button type="button" class="btn btn-sm" id="btnAddUserExclude" title="Add pattern">+ Add</button>
                                         </div>
                                     </div>

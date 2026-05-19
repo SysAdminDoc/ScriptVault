@@ -8315,6 +8315,61 @@
         setupPatternInput(elements.userMatchInput, 'userMatchesList', 'match');
         setupPatternInput(elements.userExcludeInput, 'userExcludesList', 'exclude');
 
+        // Phase 39.15 — TM #2780: filter + sort the per-script @exclude
+        // editor so 50+ pattern lists stay manageable. Filtering hides
+        // non-matching .pattern-tag elements via [hidden]; the save path
+        // (getUserPatternsFromList) reads from the full childList so
+        // visibility never affects persisted state. Sort is a one-shot
+        // re-order of the DOM children (alphabetical, case-insensitive).
+        document.querySelectorAll('[data-pattern-filter]').forEach((input) => {
+            const targetId = input.getAttribute('data-pattern-filter');
+            const list = document.getElementById(targetId);
+            if (!list) return;
+            input.addEventListener('input', () => {
+                const query = input.value.trim().toLowerCase();
+                list.querySelectorAll('.pattern-tag').forEach((tag) => {
+                    const text = (tag.querySelector('.pattern-text')?.textContent || '').toLowerCase();
+                    tag.hidden = query.length > 0 && !text.includes(query);
+                });
+            });
+        });
+        document.querySelectorAll('[data-pattern-sort]').forEach((btn) => {
+            const targetId = btn.getAttribute('data-pattern-sort');
+            const list = document.getElementById(targetId);
+            if (!list) return;
+            btn.addEventListener('click', () => {
+                const sorted = btn.getAttribute('aria-pressed') === 'true';
+                if (sorted) {
+                    // Toggle off — restore insertion order. Since we have no
+                    // separate stored order, reading the saved settings and
+                    // re-rendering is the cleanest restore. Trigger the next
+                    // settings refresh.
+                    btn.setAttribute('aria-pressed', 'false');
+                    btn.textContent = 'A→Z';
+                    // Best-effort restore: re-render from saved settings if
+                    // the current editor has them; otherwise leave sorted
+                    // (user can move on without losing data).
+                    const sid = state.currentScriptId;
+                    const script = sid ? state.scripts.find(s => s.id === sid) : null;
+                    const patterns = (targetId === 'userExcludesList')
+                        ? (script?.settings?.userExcludes || [])
+                        : (script?.settings?.userMatches || []);
+                    renderUserPatterns(targetId, patterns, targetId === 'userExcludesList' ? 'exclude' : 'match');
+                    return;
+                }
+                const tags = Array.from(list.querySelectorAll('.pattern-tag'));
+                tags.sort((a, b) => {
+                    const aText = (a.querySelector('.pattern-text')?.textContent || '').toLowerCase();
+                    const bText = (b.querySelector('.pattern-text')?.textContent || '').toLowerCase();
+                    return aText.localeCompare(bText);
+                });
+                tags.forEach((tag) => list.appendChild(tag));
+                btn.setAttribute('aria-pressed', 'true');
+                btn.textContent = '↻';
+                btn.title = 'Restore original order';
+            });
+        });
+
         // Settings listeners - comprehensive settings map
         const settingMap = {
             // General

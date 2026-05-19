@@ -3707,7 +3707,7 @@ TM issue [#2782](https://github.com/Tampermonkey/tampermonkey/issues/2782) (May 
 
 Source: [TM #2782](https://github.com/Tampermonkey/tampermonkey/issues/2782).
 
-#### 39.15 Sortable / Filterable Per-Script Exclude List Editor (TM #2780)
+#### 39.15 Sortable / Filterable Per-Script Exclude List Editor (TM #2780) ✅ Shipped (2026-05-19)
 
 TM issue [#2780](https://github.com/Tampermonkey/tampermonkey/issues/2780) (May 11 2026) — when a script has 50+ `@exclude` patterns, the script-settings UI list is unordered and unfilterable. ScriptVault's pattern list has the same shape.
 
@@ -3716,6 +3716,8 @@ TM issue [#2780](https://github.com/Tampermonkey/tampermonkey/issues/2780) (May 
 - Sort options: alphabetical, by recency, by hit count (if matched-tab analytics from Phase 20.5 are populated).
 
 Source: [TM #2780](https://github.com/Tampermonkey/tampermonkey/issues/2780).
+
+**Status (2026-05-19):** ✅ Shipped (User @exclude editor only — User @match / Include get the same treatment when symmetry is requested). [`pages/dashboard.html`](pages/dashboard.html) `userExcludesList` group adds a `pattern-filter-input` (case-insensitive substring filter) and a `pattern-sort-btn` (A→Z toggle that re-orders DOM children alphabetically; clicking again restores insertion order from saved settings). Filter hides `.pattern-tag[hidden]` elements via CSS — the save path (`getUserPatternsFromList`) reads from the full DOM childList so filter visibility never affects persisted state. Sort button uses `aria-pressed` to track state and shows ↻ when sorted (click again to restore). Hit-count sort deferred (Phase 20.5 matched-tab analytics not yet populated). Drag-handle reorder deferred to Phase 14.5 keyboard-alternative work.
 
 #### 39.16 Crypto-Scam Install-Time Heuristic ✅ Shipped (TM #2783)
 
