@@ -658,6 +658,21 @@
             const rowLabel = [name, version ? `version ${version}` : ''].filter(Boolean).join(', ');
             const scriptIdAttr = escapeHtml(script.id);
 
+            // Phase 40.17 — Surface the script's execution-world intent inline
+            // with the name. ScriptVault always registers via chrome.userScripts
+            // (USER_SCRIPT world), but `@inject-into content` is a deliberate
+            // author signal that the script depends on isolated-world semantics
+            // (no unsafeWindow, page CSP applies). `@inject-into page` signals
+            // MAIN-world intent (currently falls back to USER_SCRIPT — flagged
+            // so the user knows the author asked for it). Default `auto` shows
+            // no badge to avoid wall-of-toggles clutter.
+            const injectInto = meta['inject-into'];
+            const worldBadgeHtml = injectInto === 'content'
+                ? `<span class="script-world-badge world-content" title="Author requested content-script (isolated) world via @inject-into content">C</span>`
+                : injectInto === 'page'
+                    ? `<span class="script-world-badge world-page" title="Author requested MAIN world via @inject-into page (currently runs in USER_SCRIPT world)">M</span>`
+                    : '';
+
             return `
                 <div class="script-item${enabled ? '' : ' not-running'}" data-script-id="${scriptIdAttr}" role="listitem" tabindex="0" aria-posinset="${i + 1}" aria-setsize="${displayScripts.length}" aria-label="${escapeHtml(rowLabel)}" ${animDelay}>
                     <label class="script-toggle">
@@ -667,7 +682,7 @@
                     <div class="script-icon">${icon}</div>
                     <div class="script-main">
                         <button class="script-name-btn" data-edit-id="${scriptIdAttr}" type="button" aria-label="Open ${escapeHtml(name)} in editor">
-                            <span class="script-name-label">${escapeHtml(name)}</span>${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}
+                            <span class="script-name-label">${escapeHtml(name)}</span>${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}${worldBadgeHtml}
                         </button>
                     </div>
                     <button class="script-quick-edit" data-quickedit-id="${scriptIdAttr}" type="button" aria-label="Quick edit ${escapeHtml(name)}" title="Quick edit">

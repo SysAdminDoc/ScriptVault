@@ -4157,7 +4157,9 @@ Phase 39 added (49 sub-items). Phase summary milestone table updated with v3.12.
 | Status | Items |
 |---|---|
 | ✅ Shipped (already in main) | **40.1** Storage cache-init race · **40.2** GM_cookie scheme validation · **40.3** webNav dedup tab-redirect gap · **40.4** `installFromUrl` scheme defense · **40.5** Wrapper-side Map LRU caps · **40.6** Storage quota-warn reset hysteresis · **40.7** Case-folded file-extension checks · **40.8** `publish.sh --draft` artifact preservation · **40.9** Script-store XSS defang on third-party catalog hrefs |
-| ⏳ Pending (Round 13 plan documented; implementation TBD) | **40.10** DNR rule orphan across SW restart · **40.11** `window.onurlchange` monkey-patch stack-up · **40.12** Cloud sync `Promise.race` doesn't cancel `_performSync` · **40.13** `src/types/messages.ts` ResponseMap completeness · **40.14** Telemetry-free leak probe for wrapper Maps |
+| ✅ Shipped (this autonomous session) | **40.10** DNR rule orphan reconciliation · **40.11** `window.onurlchange` page-scoped guard + shared dispatcher · **40.12** Cloud sync `AbortController` plumbing (orchestrator + all 4 providers) · **40.13** `messages.ts` ResponseMap expansion (~25 → ~95 actions) · **40.14** Telemetry-free leak-probe via console-capture warning · **40.16** `@run-at context-menu` parser tolerance (verified already done — full handler at line 4263 + context-menu dispatch) · **40.17** Popup C-indicator world-context badge · **40.18** `chrome-webstore-upload-cli` v4 migration · **40.19** fflate v0.8.2 → v0.8.3 (Zip64 fix) · **40.20** `npm audit --audit-level=high` CI step · **40.23** `minimum_chrome_version` 120 → 130 · **40.24** `sourceURL` injection audit (none present — Greasemonkey lesson already followed) |
+| ⏳ Deferred to Phase 21 sync rewrite | **40.15** S3-compatible sync backend — meaningful new feature requiring SigV4 signing or pre-signed-URL design; scoped to its own focused session |
+| ⏳ Track only | **40.21** WECG `async_initialization` opt-in (spec) · **40.22** WECG `i18n.getAvailableLanguages()` (spec) · **40.25** Adjacent-tool pattern harvest |
 
 ### 40.1 Storage Cache-Init Race ✅ Shipped (commit `d1e3ee2`)
 
@@ -4235,7 +4237,7 @@ Fix: new `safeExternalUrl()` helper in dashboard-store.js enforces a scheme allo
 
 Source: this audit pass. Helper at [`pages/dashboard-store.js`](pages/dashboard-store.js) `safeExternalUrl`.
 
-### 40.10 DNR Rule Orphan Across SW Restart (deferred refactor)
+### 40.10 DNR Rule Orphan Across SW Restart ✅ Shipped (autonomous-session commit)
 
 `background.core.js` tracks `@webRequest` / `GM_webRequest` declarative-net-request rule IDs in an in-memory `_webRequestRuleMap`. When a script is deleted, `removeWebRequestRules(scriptId)` looks up the IDs in the map and calls `chrome.declarativeNetRequest.updateDynamicRules({removeRuleIds})`. If the service worker dies between rule creation and rule deletion, the map is gone but the rules persist in Chrome's DNR engine — orphans that keep filtering / redirecting traffic for a script the user has uninstalled.
 
@@ -4245,7 +4247,7 @@ Effort: 2/5 (mostly mechanical, plus one reconciliation function). Risk: 2/5 —
 
 Source: this audit pass (deferred from the in-session fix because of cross-handler scope).
 
-### 40.11 `window.onurlchange` Monkey-Patch Stack-Up Across Script Re-Injection (deferred refactor)
+### 40.11 `window.onurlchange` Monkey-Patch Stack-Up Across Script Re-Injection ✅ Shipped (autonomous-session commit)
 
 The wrapper template for any script with `@grant window.onurlchange` monkey-patches `history.pushState`, `history.replaceState`, `window.addEventListener`, and `window.removeEventListener` on each injection, plus registers `popstate` and `hashchange` listeners. When a script is re-registered while the host tab is open (update applied, settings changed, manual reload), a NEW wrapper is injected and a new layer of patching is added on top of the previous layer. Old `_urlChangeHandlers` arrays stay reachable via the old wrap's closure; old patches stay in the chain.
 
@@ -4255,7 +4257,7 @@ Effort: 3/5 (touches USER_SCRIPT-world template — needs careful testing of cro
 
 Source: this audit pass. Cross-reference: existing `@grant window.onurlchange` block in [`background.core.js`](background.core.js) around line 7368.
 
-### 40.12 Cloud Sync `Promise.race` Doesn't Cancel In-Flight `_performSync` (deferred refactor)
+### 40.12 Cloud Sync `Promise.race` Doesn't Cancel In-Flight `_performSync` ✅ Shipped (autonomous-session commit)
 
 `CloudSync.sync()` in `background.core.js` uses `Promise.race([this._performSync(), timeoutPromise])` with a 90-second timeout. When the timeout wins, `await Promise.race(...)` throws, the `catch` returns `{ error: 'Sync timed out after 90s' }`, and the `finally` clears `_syncInProgress = false`. But `_performSync()` is still running — `Promise.race` doesn't cancel the loser. The orphaned sync continues until it eventually settles, possibly writing to `chrome.storage.local` long after a new sync has started, possibly corrupting the new sync's view of state.
 
@@ -4267,7 +4269,7 @@ Effort: 3/5 (signal threading through 4 providers — Google Drive, Dropbox, One
 
 Source: this audit pass.
 
-### 40.13 `src/types/messages.ts` ResponseMap Completeness (existing gap, formalize as a Phase 40 task)
+### 40.13 `src/types/messages.ts` ResponseMap Completeness ✅ Shipped (autonomous-session commit)
 
 Round 12 left a standing note that `ResponseMap` in [`src/types/messages.ts`](src/types/messages.ts) covers only ~25 of 135+ background message actions; the rest fall back to `unknown`, defeating the typed-messaging guarantee Phase 1 set out to deliver. The audit didn't fix this (it's a long-tail typing task, not a bug per se) but Round 13 formalizes the work item rather than leaving it implicit.
 
@@ -4277,7 +4279,7 @@ Effort: 3/5 (mostly typing, but every entry needs to inspect what the handler ac
 
 Source: this audit pass + the standing Round 12 gap note.
 
-### 40.14 Telemetry-Free Leak Probe for Wrapper Maps (Next)
+### 40.14 Telemetry-Free Leak Probe for Wrapper Maps ✅ Shipped (autonomous-session commit)
 
 40.5 capped the wrapper-side Maps but we have no way to know whether real-world scripts ever hit the cap. ScriptVault's zero-telemetry positioning rules out shipping a "Maps cap hit, count: N" beacon, but a debug-only DevTools panel surface is fine.
 
@@ -4293,7 +4295,7 @@ Round 12's cutoff was 2026-05-17 so this delta is ~24h of net-new platform / dep
 
 **Tier tags below:** **Now** = blocks the next release (v3.11.x / v3.12.x). **Next** = scheduled within the next two releases. **Later** = tracked but not committed. **Track** = follow upstream; no immediate work.
 
-#### 40.15 ScriptCat S3-Compatible Cloud Sync Backend — Next (extends Phase 21)
+#### 40.15 ScriptCat S3-Compatible Cloud Sync Backend — Deferred to Phase 21 (extends Phase 21)
 
 ScriptCat shipped an S3-compatible sync provider on 2026-05-17 (commit [a00bc65](https://github.com/scriptscat/scriptcat/commit/a00bc65)). Targets any S3-compatible backend — AWS, Cloudflare R2, Backblaze B2, MinIO, Wasabi. Tampermonkey has WebDAV / TamperDAV; ScriptVault has WebDAV + 3 OAuth providers but no self-host-friendly object-store target.
 
@@ -4301,7 +4303,9 @@ R2 and Backblaze are zero-egress at the relevant traffic levels, which makes the
 
 Effort: 3/5. Risk: 2/5 (S3 auth is well-understood; bucket-policy mistakes are the main user-side risk). Dependencies: Phase 8 sync rewrite framing; the new provider slots in alongside the existing WebDAV adapter.
 
-#### 40.16 ScriptCat `@run-at context-menu` Parser Tolerance — Next (cross-ref Phase 11)
+#### 40.16 ScriptCat `@run-at context-menu` Parser Tolerance ✅ Verified already done (cross-ref Phase 11)
+
+Audit confirmed full handler already in production: parser stores the raw value at [`background.core.js:168`](background.core.js#L168), `setupContextMenus()` filters scripts where `meta['run-at'] === 'context-menu'` at line 4263, context menu entries are registered with per-script IDs, and click dispatch handles `scriptvault-ctx-*` menu items via `chrome.contextMenus.onClicked.addListener` at line 4356. No code change required.
 
 ScriptCat re-added `@run-at context-menu` on 2026-05-15 (commit [e012e9e](https://github.com/scriptscat/scriptcat/commit/e012e9e)). It's a directive that gates script execution to right-click invocation, deliberately separate from `GM_registerMenuCommand`. ScriptVault's parser currently maps unknown `@run-at` values to `document-idle` — verify, then decide:
 
@@ -4311,23 +4315,34 @@ ScriptCat re-added `@run-at context-menu` on 2026-05-15 (commit [e012e9e](https:
 
 Effort: 1/5 (parser tolerance) → 3/5 (full support). Risk: 1/5. Dependencies: Phase 39.7 (`chrome.contextMenus` already plumbed for `GM_registerMenuCommand`).
 
-#### 40.17 Popup "C" Indicator for Content-Script-World Scripts — Now
+#### 40.17 Popup "C" Indicator for Content-Script-World Scripts ✅ Shipped
 
 ScriptCat shipped a "C" badge in its popup on 2026-05-15 (commit [5fef662](https://github.com/scriptscat/scriptcat/commit/5fef662)) to indicate scripts running in content-script world rather than user-script world. ScriptVault's popup is a wall of toggles — a per-row world-context badge is cheap UX. Pairs naturally with Phase 11.4's MAIN-world fallback work and Phase 12 popup polish.
 
 Effort: 1/5. Risk: 1/5. Dependencies: none.
 
-#### 40.18 `chrome-webstore-upload-cli` v6.0.0 Migration Path — Now (supersedes Phase 39.35)
+#### 40.18 `chrome-webstore-upload-cli` v4.0.0 Migration Path ✅ Shipped — confirms Phase 39.35
 
-`chrome-webstore-upload-cli` reached **v6.0.0** on 2026-05-12 — completed migration to CWS API v2 and added a required `publisherId` config from the CWS Developer Dashboard ([release notes](https://github.com/fregante/chrome-webstore-upload/releases/tag/v6.0.0)). Round 12 / Phase 39.35 planned for v4.0.0; the actual cutover happens at v6.
+The Round 12 entry (39.35) correctly named **v4.0.0** as the cutover; the Round 13 external-research agent surfaced an incorrect "v6.0.0" URL that was hallucinated. `npm view chrome-webstore-upload-cli version` returns `4.0.0` as the latest; there is no v5/v6 published. The real v4 release (May 2026) is what we migrated to:
 
-- Update `publish.sh` and `cws-setup.sh` to source `PUBLISHER_ID` from `.env` alongside the existing `EXTENSION_ID` / `CLIENT_ID` / `CLIENT_SECRET` / `REFRESH_TOKEN`.
-- Update [`docs/release-runbook.md`](docs/release-runbook.md) §3 (CWS API v2 migration) with the v6 invocation pattern.
-- Pin `chrome-webstore-upload-cli@^6` in `package.json` `devDependencies` once `npm test` confirms the breaking changes don't bleed into our tooling.
+- **PUBLISHER_ID is now required** as env or `--publisher-id` flag. Find it in the CWS Developer Dashboard Account / Settings page.
+- **Secrets are env-only.** CLI flags for `--client-id` / `--client-secret` / `--refresh-token` were removed in v4.
+- **`--auto-publish` is gone.** Calling `chrome-webstore-upload` with no subcommand performs upload-then-publish in one invocation.
+- **`--source` is forbidden on `publish`** (only valid on `upload`).
+- Node 20+ minimum.
 
-Effort: 2/5. Risk: 2/5 (config-only break; reversible). Dependencies: Phase 39.1 OIDC plumbing for short-lived tokens (the v2 API requires shorter lifetimes).
+Shipped changes:
 
-#### 40.19 fflate v0.8.3 Zip64 Buffer Over-Read Fix — Now
+- [`package.json`](package.json) bumped `chrome-webstore-upload-cli` from `^3.5.0` → `^4.0.0`.
+- [`publish.sh`](publish.sh) now `set -a; source .env; set +a` so the v4 CLI inherits secrets from env; explicit `--publisher-id "$PUBLISHER_ID"` on both `upload` and `publish` invocations; removed the four secret-passing CLI flags. Hard error and abort if `PUBLISHER_ID` is missing.
+- [`cws-setup.sh`](cws-setup.sh) prompts for a fifth value (Publisher ID) and writes it to `.env`.
+- [`.env.example`](.env.example) adds `PUBLISHER_ID` with a comment pointing to the dashboard.
+
+Sources: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/fregante/chrome-webstore-upload-cli/releases/tag/v4.0.0), [npm registry](https://www.npmjs.com/package/chrome-webstore-upload-cli) confirming `4.0.0` is the latest.
+
+Dependencies: Phase 39.1 OIDC plumbing (CWS API v2 token short lifetimes) remains pending — short-term we keep the long-lived refresh-token model documented in [`docs/release-runbook.md`](docs/release-runbook.md).
+
+#### 40.19 fflate v0.8.3 Zip64 Buffer Over-Read Fix ✅ Shipped
 
 fflate shipped **v0.8.3** on 2026-05-16 — first release in 2+ years ([changelog](https://github.com/101arrowz/fflate/releases/tag/v0.8.3)). Fixes:
 
@@ -4340,7 +4355,7 @@ Low-risk pickup: bump `lib/fflate.js` to v0.8.3, regression-test with the existi
 
 Effort: 1/5. Risk: 1/5. Dependencies: none.
 
-#### 40.20 Monaco Dependency Audit Sweep — Next (mirrors upstream)
+#### 40.20 Monaco Dependency Audit Sweep ✅ Shipped (CI step added; full sweep deferred to PR triggers)
 
 Microsoft's `monaco-editor` repo shipped six dependency-bump commits 2026-05-12 → 2026-05-15 ([main commits](https://github.com/microsoft/monaco-editor/commits/main)) on `postcss`, `fast-uri`, `@babel/plugin-transform-modules-systemjs`, plus an `npm audit fix` (#5326). No new Monaco release yet, but the lockfile drift in upstream points at transitive CVEs ScriptVault should mirror in its own `package-lock.json`.
 
@@ -4367,7 +4382,7 @@ If the API lands, replace the popup language picker's locale array with a runtim
 
 Effort: 1/5 (once the API ships). Risk: 0/5. Dependencies: spec + browser support.
 
-#### 40.23 Chrome 148 Stable Security Wave — Next (audit ScriptVault for CVE-2026-8587 fallout)
+#### 40.23 Chrome 148 Stable Security Wave ✅ Shipped — `minimum_chrome_version` 120 → 130
 
 Chrome 148.0.7778.x security release 2026-05-12 ([Chrome Releases blog](https://chromereleases.googleblog.com/2026/05/)) patches CVE-2026-8587 — use-after-free in Extensions on Mac. Not a ScriptVault code bug, but:
 
@@ -4376,7 +4391,7 @@ Chrome 148.0.7778.x security release 2026-05-12 ([Chrome Releases blog](https://
 
 Effort: 1/5. Risk: 2/5 (raising min version cuts off the long-tail of legacy users; check telemetry-free heuristics before pulling the trigger).
 
-#### 40.24 Greasemonkey "Drop `sourceURL` Injection" Lesson — Next (audit our own)
+#### 40.24 Greasemonkey "Drop `sourceURL` Injection" Lesson ✅ Verified — none present
 
 Greasemonkey removed broken `sourceURL` injection on 2026-05-13 ([commit 19100d7](https://github.com/greasemonkey/greasemonkey/commit/19100d7)) — they gave up on tying DevTools console source lines back to userscript files. ScriptVault has the same problem space and Phase 39.19 already noted the gap. Round 13 confirms Greasemonkey's conclusion: don't sink a sprint into trying to fix this.
 
@@ -4436,7 +4451,7 @@ The audit's parallel agents surfaced ~25 candidate findings; ~10 were verified a
 | 281 | https://github.com/scriptscat/scriptcat/commit/a00bc65 | 40.15 ScriptCat S3-compatible sync |
 | 282 | https://github.com/scriptscat/scriptcat/commit/e012e9e | 40.16 ScriptCat `@run-at context-menu` |
 | 283 | https://github.com/scriptscat/scriptcat/commit/5fef662 | 40.17 popup C-indicator badge |
-| 284 | https://github.com/fregante/chrome-webstore-upload/releases/tag/v6.0.0 | 40.18 CWS upload v6 cutover |
+| 284 | https://github.com/fregante/chrome-webstore-upload-cli/releases/tag/v4.0.0 | 40.18 CWS upload-cli v4 cutover (corrects hallucinated v6.0.0 URL from external-research pass) |
 | 285 | https://github.com/101arrowz/fflate/releases/tag/v0.8.3 | 40.19 fflate Zip64 fix |
 | 286 | https://github.com/microsoft/monaco-editor/commits/main | 40.20 monaco dependency wave |
 | 287 | https://github.com/w3c/webextensions/issues/989 | 40.21 `async_initialization` opt-in |
@@ -4451,7 +4466,7 @@ The audit's parallel agents surfaced ~25 candidate findings; ~10 were verified a
 ### Round 13 — Promoted Tier Changes (delta from Round 12)
 
 - **Phase 21** (Extended Sync Backends, S3 sub-task): **Later → Next.** ScriptCat's 2026-05-17 S3-compatible provider plus TM's existing WebDAV / TamperDAV validates the "self-host-friendly object-store target" design — second major manager is signal enough to promote.
-- **Phase 39.35** (chrome-webstore-upload v4.0.0): **superseded by 40.18** — actual cutover lives at v6.0.0 (2026-05-12). v4 spec stays as historical record but the active work item is v6.
+- **Phase 39.35** (chrome-webstore-upload-cli v4.0.0): **confirmed and shipped via 40.18.** Round 13 external-research agent surfaced a hallucinated "v6.0.0" URL; the real npm-published latest is v4.0.0. Phase 39.35's original v4 plan was correct.
 - **Phase 13.11** (`chrome.storage.session`): explicit cross-reference added — 40.10 (DNR rule orphan reconciliation) depends on the same persistence pattern.
 - **Phase 1** (TypeScript migration): 40.13 (ResponseMap completeness) folded in as a hard exit criterion. Phase 1 isn't "done" until `messages.ts` covers every action.
 - **Phase 20** (Observability surface): 40.14 (leak probe) added as a non-blocking enhancement once the DevTools panel exists.

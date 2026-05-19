@@ -1054,8 +1054,36 @@ interface ErrorResponse {
   error: string;
 }
 
-/** Maps message types to their response types */
+/**
+ * Generic "background-handler returned {success: true, ...payload} OR {error}".
+ * The vast majority of write-side handlers conform to this shape; the payload
+ * differs per action so consumers narrow on the discriminant `success` /
+ * `error` before reading domain fields.
+ */
+type SuccessOrError<T = Record<string, unknown>> =
+  | ({ success: true } & T)
+  | ErrorResponse;
+
+/**
+ * Phase 40.13 — Maps message types to their response types.
+ *
+ * Categories:
+ *   1. Domain-typed handlers (Script CRUD, settings, trash) keep their existing
+ *      explicit response interfaces.
+ *   2. GM_* APIs that proxy a userscript call are uniformly typed via
+ *      `SuccessOrError` because the bridge returns `{success, ...payload}` or
+ *      an error string — the consumer is the wrapper, not arbitrary callsites.
+ *   3. Folder / Workspace / Sync write actions follow the same SuccessOrError
+ *      pattern.
+ *   4. Read-side telemetry handlers (getRecentUpdates, getErrorLog, etc.)
+ *      return arrays directly (no wrapper object).
+ *
+ * Any action not in this map falls back to `unknown` via `ResponseFor<T>`.
+ * `unknown` is intentional: TypeScript will refuse to let callers read fields
+ * without narrowing, which is the correct behavior for an untyped surface.
+ */
 export interface ResponseMap {
+  // ── Script CRUD ─────────────────────────────────────────────────────
   getScripts: GetScriptsResponse;
   getScript: Script | null;
   saveScript: SaveScriptResponse | ErrorResponse;
@@ -1065,29 +1093,161 @@ export interface ResponseMap {
   duplicateScript: { success: true; script: Script } | ErrorResponse;
   searchScripts: { scripts: Script[] };
   reorderScripts: SuccessResponse;
+  importScript: SuccessOrError<{ script?: Script }>;
+  bulkDeleteScripts: SuccessOrError<{ deleted: number }>;
+  bulkToggleScripts: SuccessOrError<{ toggled: number }>;
+  bulkExportScripts: SuccessOrError<{ data: string }>;
+  forceUpdate: SuccessOrError<{ updated: boolean }>;
+  checkUpdates: SuccessOrError<{ updates: { id: string; name: string; newVersion: string }[] }>;
+  applyUpdate: SuccessOrError<{ script?: Script }>;
+  getRecentUpdates: { id: string; name: string; previousVersion: string; newVersion: string; appliedAt: number }[];
+  clearRecentUpdates: SuccessResponse;
 
+  // ── Trash ──────────────────────────────────────────────────────────
   getTrash: GetTrashResponse;
   restoreFromTrash: SuccessResponse | ErrorResponse;
   emptyTrash: SuccessResponse;
   permanentlyDelete: SuccessResponse;
 
+  // ── Settings ───────────────────────────────────────────────────────
   getSettings: GetSettingsResponse;
   getSetting: unknown;
   setSettings: unknown;
+  setScriptSettings: SuccessOrError;
   resetSettings: unknown;
   getExtensionStatus: ExtensionStatusResponse;
 
+  // ── Version history ────────────────────────────────────────────────
   getVersionHistory: VersionHistoryResponse;
   rollbackScript: { success: true; script: Script } | ErrorResponse;
 
+  // ── Install flow ───────────────────────────────────────────────────
   installFromUrl: { success: true } | ErrorResponse;
   installFromCode: { success: true } | ErrorResponse;
 
+  // ── Storage / quota ────────────────────────────────────────────────
   getStorageUsage: StorageUsageResponse;
+  getScriptStorage: unknown;
+  setScriptStorage: SuccessOrError;
+  clearScriptStorage: SuccessOrError;
+  cleanupStorage: SuccessOrError<{ removed: number }>;
 
+  // ── Import (vendor backups) ───────────────────────────────────────
   importTampermonkeyBackup: ImportBackupResponse;
   importViolentmonkeyBackup: ImportBackupResponse;
   importGreasemonkeyBackup: ImportBackupResponse;
+  importFromZip: SuccessOrError<{ imported: number; skipped: number; errors: string[] }>;
+  exportAllScripts: SuccessOrError<{ data: string }>;
+  exportStatsCSV: SuccessOrError<{ data: string }>;
+
+  // ── Folders ────────────────────────────────────────────────────────
+  createFolder: SuccessOrError<{ folder: { id: string; name: string } }>;
+  deleteFolder: SuccessOrError;
+  renameFolder: SuccessOrError;
+  moveScriptToFolder: SuccessResponse;
+  addScriptToFolder: SuccessOrError;
+  removeScriptFromFolder: SuccessOrError;
+  getFolders: { folders: { id: string; name: string; color?: string; scriptIds: string[] }[] };
+
+  // ── Workspaces ─────────────────────────────────────────────────────
+  getWorkspaces: { active: string | null; list: { id: string; name: string }[] };
+  createWorkspace: SuccessOrError<{ workspace: { id: string; name: string } }>;
+  activateWorkspace: SuccessOrError<{ name: string }>;
+  saveWorkspace: SuccessOrError<{ workspace: { id: string; name: string } }>;
+  deleteWorkspace: SuccessOrError;
+  renameWorkspace: SuccessOrError;
+
+  // ── Cloud sync ─────────────────────────────────────────────────────
+  cloudExport: SuccessOrError;
+  cloudImport: SuccessOrError;
+  cloudStatus: SuccessOrError<{ connected: boolean; provider?: string; lastSync?: number }>;
+  syncNow: SuccessOrError | { skipped: true };
+  connectGoogleDrive: SuccessOrError<{ user?: { email?: string; name?: string } }>;
+  disconnectGoogleDrive: SuccessResponse;
+  connectDropbox: SuccessOrError<{ user?: { email?: string; name?: string } }>;
+  disconnectDropbox: SuccessResponse;
+  connectOnedrive: SuccessOrError<{ user?: { email?: string; name?: string } }>;
+  disconnectOnedrive: SuccessResponse;
+  testSyncProvider: SuccessOrError;
+
+  // ── Backups (scheduler) ────────────────────────────────────────────
+  createBackup: SuccessOrError<{ backupId: string }>;
+  listBackups: { backups: { id: string; timestamp: number; scriptCount: number; size: number }[] };
+  restoreBackup: SuccessOrError<{ restored: number }>;
+  deleteBackup: SuccessOrError;
+
+  // ── Logging / observability ────────────────────────────────────────
+  getErrorLog: { entries: { scriptId: string; scriptName: string; error: string; url?: string; timestamp: number }[] };
+  clearErrorLog: SuccessResponse;
+  getNetworkLog: { entries: unknown[] };
+  clearNetworkLog: SuccessResponse;
+  getScriptStats: unknown;
+  resetScriptStats: SuccessResponse;
+  getScriptConsole: { entries: unknown[] };
+  clearScriptConsole: SuccessResponse;
+
+  // ── Static analysis / signing ─────────────────────────────────────
+  analyzeScript: { totalRisk: number; riskLevel: string; findings: unknown[]; categories: Record<string, unknown[]>; summary: string };
+  signScript: SuccessOrError<{ signature: string; publicKey: string; algorithm: string; timestamp: number }>;
+  verifyScript: { valid: boolean; trusted?: boolean; trustedName?: string | null; reason?: string };
+  trustSigningKey: SuccessOrError;
+  untrustSigningKey: SuccessResponse;
+  getTrustedSigningKeys: Record<string, { name: string; addedAt: number }>;
+
+  // ── Resources / npm ────────────────────────────────────────────────
+  fetchResource: SuccessOrError<{ data: string; mimeType?: string }>;
+  resolveNpmPackage: SuccessOrError<{ url: string; version: string; integrity?: string }>;
+
+  // ── Public API control surface (external messaging) ───────────────
+  apiPing: { ok: true; version: string };
+  apiGetPermissions: { permissions: string[] };
+  apiSetWebhook: SuccessOrError;
+  apiTrustOrigin: SuccessOrError;
+
+  // ── DevTools / debugger ────────────────────────────────────────────
+  attachDebugger: SuccessOrError;
+  detachDebugger: SuccessResponse;
+  getDebuggerEntries: { entries: unknown[] };
+
+  // ── Misc utility ───────────────────────────────────────────────────
+  factoryReset: SuccessOrError;
+  openDashboard: SuccessResponse;
+  reloadAllTabs: SuccessResponse;
+  ping: { pong: true };
+
+  // ── GM_* APIs (proxied from USER_SCRIPT world via the wrapper) ────
+  GM_setValue: SuccessOrError;
+  GM_getValue: { value: unknown };
+  GM_deleteValue: SuccessOrError;
+  GM_setValues: SuccessOrError;
+  GM_getValues: { values: Record<string, unknown> };
+  GM_deleteValues: SuccessOrError;
+  GM_listValues: { keys: string[] };
+  GM_xmlhttpRequest: SuccessOrError<{ requestId: string }>;
+  GM_xmlhttpRequest_abort: SuccessResponse;
+  GM_cookie_list: SuccessOrError<{ cookies: chrome.cookies.Cookie[] }>;
+  GM_cookie_set: SuccessOrError<{ cookie?: chrome.cookies.Cookie }>;
+  GM_cookie_delete: SuccessOrError;
+  GM_download: SuccessOrError<{ downloadId: number }>;
+  GM_notification: SuccessOrError<{ id: string }>;
+  GM_updateNotification: SuccessOrError;
+  GM_closeNotification: SuccessResponse;
+  GM_openInTab: SuccessOrError<{ tabId: number }>;
+  GM_closeTab: SuccessResponse;
+  GM_focusTab: SuccessResponse;
+  GM_getTab: SuccessOrError<{ data: unknown }>;
+  GM_saveTab: SuccessOrError;
+  GM_getTabs: SuccessOrError<{ tabs: Record<string, unknown> }>;
+  GM_registerMenuCommand: SuccessOrError<{ commandId: string }>;
+  GM_unregisterMenuCommand: SuccessResponse;
+  GM_getResourceURL: string | null;
+  GM_getResourceText: string | null;
+  GM_loadScript: SuccessOrError;
+  GM_webRequest: SuccessOrError<{ ruleIds: number[] }>;
+  GM_audio_setMute: SuccessResponse;
+  GM_audio_getState: { muted: boolean; audible: boolean };
+  GM_audio_watchState: SuccessResponse;
+  GM_audio_unwatchState: SuccessResponse;
 }
 
 /**

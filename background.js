@@ -130,7 +130,7 @@ const SCRIPTVAULT_SETTINGS_DEFAULTS = {
 };
 
 // ============================================================================
-// INLINED: fflate v0.8.2 - Browser-only ZIP library
+// INLINED: fflate v0.8.3 - Browser-only ZIP library
 // ============================================================================
 (function() {
   'use strict';
@@ -329,7 +329,7 @@ var ec = [
     'invalid distance',
     'stream finished',
     'no stream handler',
-    ,
+    , // determined by compression function
     'no callback',
     'invalid UTF-8 data',
     'extra field too long',
@@ -1046,12 +1046,12 @@ var cbify = function (dat, opts, fns, init, id, cb) {
 var astrm = function (strm) {
     strm.ondata = function (dat, final) { return postMessage([dat, final], [dat.buffer]); };
     return function (ev) {
-        if (ev.data.length) {
+        if (ev.data[0]) {
             strm.push(ev.data[0], ev.data[1]);
             postMessage([ev.data[0].length]);
         }
         else
-            strm.flush();
+            strm.flush(ev.data[1]);
     };
 };
 // async stream attach
@@ -1081,17 +1081,19 @@ var astrmify = function (fns, strm, opts, init, id, flush, ext) {
         if (t)
             strm.ondata(err(4, 0, 1), null, !!f);
         strm.queuedSize += d.length;
-        w.postMessage([d, t = f], [d.buffer]);
+        // can fail for cross-realm Uint8Array, but ok - only a small performance penalty
+        w.postMessage([d, t = f], d.buffer instanceof ArrayBuffer ? [d.buffer] : []);
     };
     strm.terminate = function () { w.terminate(); };
     if (flush) {
-        strm.flush = function () { w.postMessage([]); };
+        strm.flush = function (sync) { w.postMessage([0, sync]); };
     }
 };
 // read 2 bytes
 var b2 = function (d, b) { return d[b] | (d[b + 1] << 8); };
 // read 4 bytes
 var b4 = function (d, b) { return (d[b] | (d[b + 1] << 8) | (d[b + 2] << 16) | (d[b + 3] << 24)) >>> 0; };
+// read 8 bytes
 var b8 = function (d, b) { return b4(d, b) + (b4(d, b + 4) * 4294967296); };
 // write bytes
 var wbytes = function (d, b, v) {
@@ -1212,18 +1214,37 @@ var Deflate = /*#__PURE__*/ (function () {
             this.p(this.b, final || false);
             this.s.w = this.s.i, this.s.i -= 2;
         }
+        if (final) {
+            // cleanup unneeded buffers/state to reduce memory usage
+            this.s = this.o = {};
+            this.b = et;
+        }
     };
     /**
      * Flushes buffered uncompressed data. Useful to immediately retrieve the
      * deflated output for small inputs.
+     * @param sync Whether to flush to a byte boundary. A sync flush takes 4-5
+     *             extra bytes, but guarantees all pushed data is immediately
+     *             decompressible. A separate DEFLATE stream may be concatenated
+     *             with the current output after a sync flush.
      */
-    Deflate.prototype.flush = function () {
+    Deflate.prototype.flush = function (sync) {
         if (!this.ondata)
             err(5);
         if (this.s.l)
             err(4);
         this.p(this.b, false);
         this.s.w = this.s.i, this.s.i -= 2;
+        // could technically skip writing the type-0 block for (this.s.r & 7) == 0,
+        // but the deterministic trailer (00 00 FF FF) is useful in some situations
+        if (sync) {
+            var c = new u8(6);
+            c[0] = this.s.r >> 3;
+            // write empty, non-final type-0 block
+            var ep = wfblk(c, this.s.r, et);
+            this.s.r = 0;
+            this.ondata(c.subarray(0, ep >> 3), false);
+        }
     };
     return Deflate;
 }());
@@ -1334,12 +1355,6 @@ function inflate(data, opts, cb) {
         bInflt
     ], function (ev) { return pbf(inflateSync(ev.data[0], gopt(ev.data[1]))); }, 1, cb);
 }
-/**
- * Expands DEFLATE data with no wrapper
- * @param data The data to decompress
- * @param opts The decompression options
- * @returns The decompressed version of the data
- */
 function inflateSync(data, opts) {
     return inflt(data, { i: 2 }, opts && opts.out, opts && opts.dictionary);
 }
@@ -1375,9 +1390,12 @@ var Gzip = /*#__PURE__*/ (function () {
     /**
      * Flushes buffered uncompressed data. Useful to immediately retrieve the
      * GZIPped output for small inputs.
+     * @param sync Whether to flush to a byte boundary. A sync flush takes 4-5
+     *             extra bytes, but guarantees all pushed data is immediately
+     *             decompressible.
      */
-    Gzip.prototype.flush = function () {
-        Deflate.prototype.flush.call(this);
+    Gzip.prototype.flush = function (sync) {
+        Deflate.prototype.flush.call(this, sync);
     };
     return Gzip;
 }());
@@ -1455,13 +1473,16 @@ var Gunzip = /*#__PURE__*/ (function () {
         }
         // necessary to prevent TS from using the closure value
         // This allows for workerization to function correctly
-        Inflate.prototype.c.call(this, final);
+        Inflate.prototype.c.call(this, 0);
         // process concatenated GZIP
-        if (this.s.f && !this.s.l && !final) {
+        if (this.s.f && !this.s.l) {
             this.v = shft(this.s.p) + 9;
             this.s = { i: 0 };
             this.o = new u8(0);
             this.push(new u8(0), final);
+        }
+        else if (final) {
+            Inflate.prototype.c.call(this, final);
         }
     };
     return Gunzip;
@@ -1497,12 +1518,6 @@ function gunzip(data, opts, cb) {
         function () { return [gunzipSync]; }
     ], function (ev) { return pbf(gunzipSync(ev.data[0], ev.data[1])); }, 3, cb);
 }
-/**
- * Expands GZIP data
- * @param data The data to decompress
- * @param opts The decompression options
- * @returns The decompressed version of the data
- */
 function gunzipSync(data, opts) {
     var st = gzs(data);
     if (st + 8 > data.length)
@@ -1538,9 +1553,12 @@ var Zlib = /*#__PURE__*/ (function () {
     /**
      * Flushes buffered uncompressed data. Useful to immediately retrieve the
      * zlibbed output for small inputs.
+     * @param sync Whether to flush to a byte boundary. A sync flush takes 4-5
+     *             extra bytes, but guarantees all pushed data is immediately
+     *             decompressible.
      */
-    Zlib.prototype.flush = function () {
-        Deflate.prototype.flush.call(this);
+    Zlib.prototype.flush = function (sync) {
+        Deflate.prototype.flush.call(this, sync);
     };
     return Zlib;
 }());
@@ -1647,12 +1665,6 @@ function unzlib(data, opts, cb) {
         function () { return [unzlibSync]; }
     ], function (ev) { return pbf(unzlibSync(ev.data[0], gopt(ev.data[1]))); }, 5, cb);
 }
-/**
- * Expands Zlib data
- * @param data The data to decompress
- * @param opts The decompression options
- * @returns The decompressed version of the data
- */
 function unzlibSync(data, opts) {
     return inflt(data.subarray(zls(data, opts && opts.dictionary), -4), { i: 2 }, opts && opts.out, opts && opts.dictionary);
 }
@@ -1773,7 +1785,7 @@ var fltn = function (d, p, t, o) {
         var val = d[k], n = p + k, op = o;
         if (Array.isArray(val))
             op = mrg(o, val[1]), val = val[0];
-        if (val instanceof u8)
+        if (ArrayBuffer.isView(val))
             t[n] = [val, op];
         else {
             t[n += '/'] = [new u8(0), op];
@@ -1958,15 +1970,30 @@ var dbf = function (l) { return l == 1 ? 3 : l < 6 ? 2 : l == 9 ? 1 : 0; };
 var slzh = function (d, b) { return b + 30 + b2(d, b + 26) + b2(d, b + 28); };
 // read zip header
 var zh = function (d, b, z) {
-    var fnl = b2(d, b + 28), fn = strFromU8(d.subarray(b + 46, b + 46 + fnl), !(b2(d, b + 8) & 2048)), es = b + 46 + fnl, bs = b4(d, b + 20);
-    var _a = z && bs == 4294967295 ? z64e(d, es) : [bs, b4(d, b + 24), b4(d, b + 42)], sc = _a[0], su = _a[1], off = _a[2];
-    return [b2(d, b + 10), sc, su, fn, es + b2(d, b + 30) + b2(d, b + 32), off];
+    var fnl = b2(d, b + 28), efl = b2(d, b + 30), fn = strFromU8(d.subarray(b + 46, b + 46 + fnl), !(b2(d, b + 8) & 2048)), es = b + 46 + fnl;
+    var _a = z64hs(d, es, efl, z, b4(d, b + 20), b4(d, b + 24), b4(d, b + 42)), sc = _a[0], su = _a[1], off = _a[2];
+    return [b2(d, b + 10), sc, su, fn, es + efl + b2(d, b + 32), off];
 };
-// read zip64 extra field
-var z64e = function (d, b) {
-    for (; b2(d, b) != 1; b += 4 + b2(d, b + 2))
-        ;
-    return [b8(d, b + 12), b8(d, b + 4), b8(d, b + 20)];
+// read zip64 header sizes
+var z64hs = function (d, b, l, z, sc, su, off) {
+    var nsc = sc == 4294967295, nsu = su == 4294967295, noff = off == 4294967295, e = b + l;
+    var nf = nsc + nsu + noff;
+    if (z && nf) {
+        for (; b + 4 < e; b += 4 + b2(d, b + 2)) {
+            if (b2(d, b) == 1) {
+                return [
+                    nsc ? b8(d, b + 4 + 8 * nsu) : sc,
+                    nsu ? b8(d, b + 4) : su,
+                    noff ? b8(d, b + 4 + 8 * (nsu + nsc)) : off,
+                    1
+                ];
+            }
+        }
+        // z == 2 for unknown whether or not zip64
+        if (z < 2)
+            err(13);
+    }
+    return [sc, su, off, 0];
 };
 // extra field length
 var exfl = function (ex) {
@@ -2068,6 +2095,8 @@ var ZipPassThrough = /*#__PURE__*/ (function () {
         this.size += chunk.length;
         if (final)
             this.crc = this.c.d();
+        // we shouldn't really do this cast, but properly handling ArrayBufferLike
+        // makes the API unergonomic with Buffer
         this.process(chunk, final || false);
     };
     return ZipPassThrough;
@@ -2447,8 +2476,9 @@ function zipSync(data, opts) {
 var UnzipPassThrough = /*#__PURE__*/ (function () {
     function UnzipPassThrough() {
     }
-    UnzipPassThrough.prototype.push = function (data, final) {
-        this.ondata(null, data, final);
+    UnzipPassThrough.prototype.push = function (chunk, final) {
+        // same as ZipPassThrough: cast to retain Buffer ergonomics
+        this.ondata(null, chunk, final);
     };
     UnzipPassThrough.compression = 0;
     return UnzipPassThrough;
@@ -2468,9 +2498,9 @@ var UnzipInflate = /*#__PURE__*/ (function () {
             _this.ondata(null, dat, final);
         });
     }
-    UnzipInflate.prototype.push = function (data, final) {
+    UnzipInflate.prototype.push = function (chunk, final) {
         try {
-            this.i.push(data, final);
+            this.i.push(chunk, final);
         }
         catch (e) {
             this.ondata(e, null, final);
@@ -2501,10 +2531,10 @@ var AsyncUnzipInflate = /*#__PURE__*/ (function () {
             this.terminate = this.i.terminate;
         }
     }
-    AsyncUnzipInflate.prototype.push = function (data, final) {
+    AsyncUnzipInflate.prototype.push = function (chunk, final) {
         if (this.i.terminate)
-            data = slc(data, 0);
-        this.i.push(data, final);
+            chunk = slc(chunk, 0);
+        this.i.push(chunk, final);
     };
     AsyncUnzipInflate.compression = 8;
     return AsyncUnzipInflate;
@@ -2561,7 +2591,6 @@ var Unzip = /*#__PURE__*/ (function () {
             }
             var l = buf.length, oc = this.c, add = oc && this.d;
             var _loop_2 = function () {
-                var _a;
                 var sig = b4(buf, i);
                 if (sig == 0x4034B50) {
                     f = 1, is = i;
@@ -2572,13 +2601,11 @@ var Unzip = /*#__PURE__*/ (function () {
                         var chks_3 = [];
                         this_1.k.unshift(chks_3);
                         f = 2;
-                        var sc_1 = b4(buf, i + 18), su_1 = b4(buf, i + 22);
+                        var lsc = b4(buf, i + 18), lsu = b4(buf, i + 22);
                         var fn_1 = strFromU8(buf.subarray(i + 30, i += 30 + fnl), !u);
-                        if (sc_1 == 4294967295) {
-                            _a = dd ? [-2] : z64e(buf, i), sc_1 = _a[0], su_1 = _a[1];
-                        }
-                        else if (dd)
-                            sc_1 = -1;
+                        var _a = z64hs(buf, i, es, 2, lsc, lsu, 0), sc_1 = _a[0], su_1 = _a[1], z64 = _a[3];
+                        if (dd)
+                            sc_1 = -1 - z64;
                         i += es;
                         this_1.c = sc_1;
                         var d_1;
@@ -2691,7 +2718,7 @@ function unzip(data, opts, cb) {
     if (lft) {
         var c = lft;
         var o = b4(data, e + 16);
-        var z = o == 4294967295 || c == 65535;
+        var z = b4(data, e - 20) == 0x7064B50;
         if (z) {
             var ze = b4(data, e - 12);
             z = b4(data, ze) == 0x6064B50;
@@ -2771,7 +2798,7 @@ function unzipSync(data, opts) {
     if (!c)
         return {};
     var o = b4(data, e + 16);
-    var z = o == 4294967295 || c == 65535;
+    var z = b4(data, e - 20) == 0x7064B50;
     if (z) {
         var ze = b4(data, e - 12);
         z = b4(data, ze) == 0x6064B50;
@@ -2800,7 +2827,7 @@ function unzipSync(data, opts) {
     }
     return files;
 }
-    
+
     // Export needed functions to self.fflate
     self.fflate = {
       zipSync: zipSync,
@@ -2835,37 +2862,42 @@ var CloudSyncProviders = {
     icon: '☁️',
     requiresAuth: true,
     
-    async upload(data, settings) {
+    // Phase 40.12 — `opts.signal` carries the CloudSync 90s timeout's
+    // AbortSignal. When the orchestrator gives up, the provider's fetch is
+    // cancelled instead of running to completion and racing the next sync.
+    async upload(data, settings, opts = {}) {
       if (!settings.webdavUrl) throw new Error('WebDAV URL is required');
       const url = `${settings.webdavUrl.replace(/\/$/, '')}/scriptvault-backup.json`;
       const auth = btoa(`${settings.webdavUsername}:${settings.webdavPassword}`);
-      
+
       const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        signal: opts.signal
       });
-      
+
       if (!response.ok) throw new Error(`WebDAV upload failed: HTTP ${response.status}`);
       return { success: true, timestamp: Date.now() };
     },
-    
-    async download(settings) {
+
+    async download(settings, opts = {}) {
       if (!settings.webdavUrl) throw new Error('WebDAV URL is required');
       const url = `${settings.webdavUrl.replace(/\/$/, '')}/scriptvault-backup.json`;
       const auth = btoa(`${settings.webdavUsername}:${settings.webdavPassword}`);
-      
+
       const response = await fetch(url, {
         method: 'GET',
-        headers: { 'Authorization': `Basic ${auth}` }
+        headers: { 'Authorization': `Basic ${auth}` },
+        signal: opts.signal
       });
-      
+
       if (response.status === 404) return null;
       if (!response.ok) throw new Error(`WebDAV download failed: HTTP ${response.status}`);
-      
+
       return await response.json();
     },
     
@@ -3074,7 +3106,8 @@ var CloudSyncProviders = {
       return data.files?.[0] || null;
     },
 
-    async upload(data, settings) {
+    // Phase 40.12 — opts.signal threading. See WebDAV provider for rationale.
+    async upload(data, settings, opts = {}) {
       const token = await this.getValidToken();
       if (!token) throw new Error('Not authenticated with Google Drive');
 
@@ -3107,7 +3140,8 @@ var CloudSyncProviders = {
           'Authorization': `Bearer ${token}`,
           'Content-Type': `multipart/related; boundary=${boundary}`
         },
-        body
+        body,
+        signal: opts.signal
       });
 
       if (!response.ok) {
@@ -3118,7 +3152,7 @@ var CloudSyncProviders = {
       return { success: true, timestamp: Date.now() };
     },
 
-    async download(settings) {
+    async download(settings, opts = {}) {
       const token = await this.getValidToken();
       if (!token) throw new Error('Not authenticated with Google Drive');
 
@@ -3127,7 +3161,7 @@ var CloudSyncProviders = {
 
       const response = await fetch(
         `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
+        { headers: { 'Authorization': `Bearer ${token}` }, signal: opts.signal }
       );
 
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
@@ -3308,7 +3342,8 @@ var CloudSyncProviders = {
       return { success: true };
     },
 
-    async upload(data, settings) {
+    // Phase 40.12 — opts.signal threading. See WebDAV provider for rationale.
+    async upload(data, settings, opts = {}) {
       if (!settings.dropboxToken) throw new Error('Not authenticated with Dropbox');
 
       // Ensure token is fresh before upload
@@ -3327,19 +3362,20 @@ var CloudSyncProviders = {
           }),
           'Content-Type': 'application/octet-stream'
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        signal: opts.signal
       });
-      
+
       if (response.status === 401) throw new Error('Dropbox token expired. Please reconnect.');
       if (!response.ok) {
         const error = await response.text();
         throw new Error(`Upload failed: ${error}`);
       }
-      
+
       return { success: true, timestamp: Date.now() };
     },
-    
-    async download(settings) {
+
+    async download(settings, opts = {}) {
       if (!settings.dropboxToken) throw new Error('Not authenticated with Dropbox');
 
       // Ensure token is fresh before download (mirrors upload() refresh logic)
@@ -3351,13 +3387,14 @@ var CloudSyncProviders = {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Dropbox-API-Arg': JSON.stringify({ path: this.fileName })
-        }
+        },
+        signal: opts.signal
       });
-      
+
       if (response.status === 409) return null; // File not found
       if (response.status === 401) throw new Error('Dropbox token expired. Please reconnect.');
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
-      
+
       return await response.json();
     },
     
@@ -3534,7 +3571,11 @@ var CloudSyncProviders = {
       return { success: true };
     },
 
-    async upload(data) {
+    // Phase 40.12 — opts.signal threading. See WebDAV provider for rationale.
+    // The orchestrator passes (data, settings, opts); existing callers that
+    // pass only `(data)` (e.g. ad-hoc unit tests) still work because
+    // settings/opts default to undefined and the body never touches them.
+    async upload(data, _settings, opts = {}) {
       const token = await this.getValidToken();
       if (!token) throw new Error('Not authenticated with OneDrive');
       if (!data || typeof data !== 'object') throw new Error('Invalid backup data');
@@ -3547,7 +3588,8 @@ var CloudSyncProviders = {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(data)
+          body: JSON.stringify(data),
+          signal: opts.signal
         }
       );
 
@@ -3555,13 +3597,13 @@ var CloudSyncProviders = {
       return { success: true, timestamp: Date.now() };
     },
 
-    async download() {
+    async download(_settings, opts = {}) {
       const token = await this.getValidToken();
       if (!token) throw new Error('Not authenticated with OneDrive');
 
       const response = await fetch(
         `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
+        { headers: { 'Authorization': `Bearer ${token}` }, signal: opts.signal }
       );
 
       if (response.status === 404) return null;
@@ -11430,6 +11472,13 @@ const CloudSync = {
   },
 
   _syncInProgress: false,
+  // Phase 40.12 — Hoisted AbortController lets the 90s timeout actually cancel
+  // the in-flight provider fetches (Promise.race alone does not cancel the
+  // loser, leaving orphaned writes that can race a subsequent sync). Providers
+  // that accept `opts.signal` short-circuit their fetches when the controller
+  // aborts; providers that haven't been threaded yet still time out on their
+  // own internal `fetch()` timeouts (slower fallback, but correct).
+  _abortController: null,
 
   async sync() {
     // Prevent concurrent syncs — second call defers until first completes
@@ -11438,25 +11487,33 @@ const CloudSync = {
       return { skipped: true };
     }
     this._syncInProgress = true;
+    this._abortController = new AbortController();
 
     let _timeoutId;
     try {
       const timeoutPromise = new Promise((_, reject) => {
-        _timeoutId = setTimeout(() => reject(new Error('Sync timed out after 90s')), 90000);
+        _timeoutId = setTimeout(() => {
+          // Cancel any in-flight provider fetches before the race rejects.
+          try { this._abortController.abort(new Error('Sync timed out after 90s')); } catch {}
+          reject(new Error('Sync timed out after 90s'));
+        }, 90000);
       });
-      return await Promise.race([this._performSync(), timeoutPromise]);
+      return await Promise.race([this._performSync({ signal: this._abortController.signal }), timeoutPromise]);
     } catch (e) {
       console.error('[ScriptVault] Sync failed:', e);
       return { error: e.message };
     } finally {
       clearTimeout(_timeoutId);
       this._syncInProgress = false;
+      this._abortController = null;
     }
   },
 
-  async _performSync() {
+  async _performSync(opts = {}) {
+    const { signal } = opts;
     const settings = await SettingsManager.get();
     if (!settings.syncEnabled || settings.syncProvider === 'none') return;
+    if (signal?.aborted) throw new Error('Sync aborted');
 
     const provider = this.providers[settings.syncProvider];
     if (!provider) return;
@@ -11482,7 +11539,8 @@ const CloudSync = {
     };
 
     // Get remote data
-    const remoteData = await provider.download(settings);
+    const remoteData = await provider.download(settings, { signal });
+    if (signal?.aborted) throw new Error('Sync aborted');
 
     if (remoteData) {
       // Merge tombstones from remote so deletions propagate across devices
@@ -11561,10 +11619,12 @@ const CloudSync = {
       // Upload merged data (includes tombstones)
       merged.timestamp = Date.now();
       merged.tombstones = mergedTombstones;
-      await provider.upload(merged, settings);
+      if (signal?.aborted) throw new Error('Sync aborted');
+      await provider.upload(merged, settings, { signal });
     } else {
       // First sync, just upload (include tombstones so remote gets deletion info)
-      await provider.upload(localData, settings);
+      if (signal?.aborted) throw new Error('Sync aborted');
+      await provider.upload(localData, settings, { signal });
     }
 
     await SettingsManager.set('lastSync', Date.now());
@@ -15917,6 +15977,14 @@ async function init() {
     try { await EasyCloudSync.init(); } catch (e) { console.error('[ScriptVault] EasyCloudSync init error:', e); }
   }
 
+  // Phase 40.10 — Reconcile DNR rule map against live DNR + ScriptStorage now
+  // that both are hydrated. Catches orphan rules left behind when the SW was
+  // killed mid-delete or mid-update. Fire-and-forget so a slow DNR query
+  // doesn't block the rest of the wake path.
+  reconcileWebRequestRuleMap().catch(e => {
+    console.warn('[ScriptVault] DNR reconcile failed on init:', e?.message || e);
+  });
+
   console.log('[ScriptVault] Service worker ready');
 }
 
@@ -16873,6 +16941,81 @@ async function removeWebRequestRules(scriptId) {
   }
 }
 
+// Phase 40.10 — Reconcile persisted DNR rule map against the live DNR state
+// and the current ScriptStorage on SW wake. Without this, three drift modes
+// silently accumulate orphans:
+//   (a) A script was deleted while a previous SW was alive: its DNR rules were
+//       removed correctly but the map entry might have lagged if `_persist`
+//       failed mid-delete.
+//   (b) The SW was killed mid-delete: the script record is gone from
+//       ScriptStorage but the DNR rules and the map entry both survive.
+//   (c) `updateDynamicRules` was applied by a prior SW generation but the
+//       persist write failed: rules exist in DNR with no map entry to clean
+//       them up later.
+//
+// Reconciliation is best-effort and lossy in the (c) direction: if a rule
+// exists in DNR with no map entry pointing at any script, we leave it alone
+// rather than risk removing a rule another extension might have inserted.
+async function reconcileWebRequestRuleMap() {
+  if (!chrome.declarativeNetRequest) return;
+  await _hydrateWebRequestRuleMap();
+
+  let mutated = false;
+  let scripts;
+  try {
+    scripts = await ScriptStorage.getAll();
+  } catch (e) {
+    console.warn('[ScriptVault] DNR reconcile: ScriptStorage.getAll failed:', e?.message || e);
+    return;
+  }
+  const scriptIds = new Set((scripts || []).map(s => s.id));
+
+  // Pass 1: drop map entries whose script no longer exists; queue the DNR
+  // rule IDs for removal so the live engine catches up.
+  const toRemoveRuleIds = [];
+  for (const [scriptId, ruleIds] of _webRequestRuleMap.entries()) {
+    if (!scriptIds.has(scriptId)) {
+      if (Array.isArray(ruleIds)) toRemoveRuleIds.push(...ruleIds);
+      _webRequestRuleMap.delete(scriptId);
+      mutated = true;
+    }
+  }
+
+  // Pass 2: drop map rule IDs that no longer exist in DNR (stale entries).
+  let liveRuleIds;
+  try {
+    const liveRules = await chrome.declarativeNetRequest.getDynamicRules();
+    liveRuleIds = new Set(liveRules.map(r => r.id));
+  } catch (e) {
+    console.warn('[ScriptVault] DNR reconcile: getDynamicRules failed:', e?.message || e);
+    liveRuleIds = null;
+  }
+  if (liveRuleIds) {
+    for (const [scriptId, ruleIds] of _webRequestRuleMap.entries()) {
+      const filtered = (ruleIds || []).filter(id => liveRuleIds.has(id));
+      if (filtered.length !== (ruleIds || []).length) {
+        if (filtered.length === 0) _webRequestRuleMap.delete(scriptId);
+        else _webRequestRuleMap.set(scriptId, filtered);
+        mutated = true;
+      }
+    }
+  }
+
+  // Apply the queued DNR removal in one batched call.
+  if (toRemoveRuleIds.length > 0) {
+    try {
+      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: toRemoveRuleIds });
+      debugLog(`[GM_webRequest] Reconcile removed ${toRemoveRuleIds.length} orphan DNR rule(s)`);
+    } catch (e) {
+      console.warn('[ScriptVault] DNR reconcile: updateDynamicRules removal failed:', e?.message || e);
+    }
+  }
+
+  if (mutated) {
+    await _persistWebRequestRuleMap();
+  }
+}
+
 async function unregisterScript(scriptId) {
   // Clear @crontab alarm if present
   chrome.alarms.clear('crontab_' + scriptId).catch(() => {});
@@ -17683,8 +17826,14 @@ ${req.code}
   // self._notifCallbacks — without this, a misbehaving script that spams
   // GM_notification and never receives click/done events can grow the Map
   // unbounded for the lifetime of the host tab.
+  //
+  // Phase 40.14 — Eviction counter surfaces leaks via the existing console
+  // capture pipe (the wrapper already pipes console.* into the per-script
+  // DevTools panel via _captureConsole). A non-zero count for any script is
+  // a smell — the script is missing an ondone/onload/onclose handler.
   const _notifCallbacks = new Map();
   const _NOTIF_CALLBACKS_CAP = 500;
+  let _notifCallbacksEvicted = 0;
   function GM_notification(details, ondone) {
     if (!hasGrant('GM_notification') && !hasGrant('GM.notification')) {
       return { close: () => {}, update: () => {} };
@@ -17705,6 +17854,10 @@ ${req.code}
     if (_notifCallbacks.size >= _NOTIF_CALLBACKS_CAP) {
       const oldest = _notifCallbacks.keys().next().value;
       if (oldest !== undefined) _notifCallbacks.delete(oldest);
+      _notifCallbacksEvicted += 1;
+      if (_notifCallbacksEvicted === 1 || _notifCallbacksEvicted % 100 === 0) {
+        console.warn('[ScriptVault] GM_notification callback cap evict — script may be missing ondone/onclick handler. Evicted so far:', _notifCallbacksEvicted);
+      }
     }
     _notifCallbacks.set(notifTag, {
       onclick: opts.onclick,
@@ -17800,8 +17953,10 @@ ${req.code}
   // openedTabClosed event (background crashed, content bridge missed the
   // signal, tab killed before bridge attached) can't leak unbounded handles
   // in the USER_SCRIPT world for the lifetime of the host tab.
+  // Phase 40.14 — Eviction counter (see _notifCallbacks for rationale).
   const _openedTabs = new Map();
   const _OPENED_TABS_CAP = 200;
+  let _openedTabsEvicted = 0;
   function GM_openInTab(url, options) {
     if (!hasGrant('GM_openInTab') && !hasGrant('GM.openInTab')) return null;
     const opts = typeof options === 'boolean' ? { active: !options } : (options || {});
@@ -17815,6 +17970,10 @@ ${req.code}
         if (_openedTabs.size >= _OPENED_TABS_CAP) {
           const oldest = _openedTabs.keys().next().value;
           if (oldest !== undefined) _openedTabs.delete(oldest);
+          _openedTabsEvicted += 1;
+          if (_openedTabsEvicted === 1 || _openedTabsEvicted % 100 === 0) {
+            console.warn('[ScriptVault] GM_openInTab cap evict — script may be opening tabs without listening for openedTabClosed. Evicted so far:', _openedTabsEvicted);
+          }
         }
         _openedTabs.set(result.tabId, tabHandle);
         tabHandle.close = () => {
@@ -17831,8 +17990,10 @@ ${req.code}
   // that fires GM_download in a loop where the load/error/timeout event never
   // arrives (download removed from history, SW restart between request and
   // response, etc.).
+  // Phase 40.14 — Eviction counter (see _notifCallbacks for rationale).
   const _downloadCallbacks = new Map();
   const _DOWNLOAD_CALLBACKS_CAP = 200;
+  let _downloadCallbacksEvicted = 0;
   function GM_download(details) {
     if (!hasGrant('GM_download') && !hasGrant('GM.download')) return;
     let opts;
@@ -17854,6 +18015,10 @@ ${req.code}
         if (_downloadCallbacks.size >= _DOWNLOAD_CALLBACKS_CAP) {
           const oldest = _downloadCallbacks.keys().next().value;
           if (oldest !== undefined) _downloadCallbacks.delete(oldest);
+          _downloadCallbacksEvicted += 1;
+          if (_downloadCallbacksEvicted === 1 || _downloadCallbacksEvicted % 100 === 0) {
+            console.warn('[ScriptVault] GM_download cap evict — script may be missing onload/onerror handlers. Evicted so far:', _downloadCallbacksEvicted);
+          }
         }
         _downloadCallbacks.set(result.downloadId, callbacks);
       }
@@ -18235,39 +18400,80 @@ ${req.code}
   window.GM = GM;
 
   // ========== window.onurlchange (SPA navigation detection) ==========
-  // Tampermonkey-compatible: fires when URL changes via pushState/replaceState/popstate
+  // Tampermonkey-compatible: fires when URL changes via pushState/replaceState/popstate.
+  //
+  // Phase 40.11 — Page-scoped monkey-patch + shared dispatcher.
+  //
+  // Previously every wrapper registration patched history.pushState / replaceState,
+  // added popstate / hashchange listeners, and Proxied window.addEventListener /
+  // removeEventListener on its own. Re-injection (script update applied while the
+  // host tab is open) stacked new patches on top of the old ones; old wrap's
+  // _urlChangeHandlers closures stayed reachable in the proxy chain forever.
+  //
+  // Now the page-level monkey-patch runs at most once per host tab, gated by
+  // window.__svUrlChangeBound__ (non-enumerable, non-writable). The patch fires
+  // a CustomEvent('__sv_urlchange__') on every URL change; each script's wrapper
+  // attaches its own per-script listener to that event, scoped to its own
+  // _urlChangeHandlers array. On the next re-injection, the page-level guard
+  // short-circuits — only the per-script listener is re-attached, and the old
+  // one is implicitly orphaned with the previous wrapper's closure.
   if (hasGrant('window.onurlchange')) {
-    let _lastUrl = location.href;
     const _urlChangeHandlers = [];
 
-    function __checkUrlChange() {
-      const newUrl = location.href;
-      if (newUrl !== _lastUrl) {
-        const oldUrl = _lastUrl;
-        _lastUrl = newUrl;
-        const event = { url: newUrl, oldUrl };
-        _urlChangeHandlers.forEach(fn => { try { fn(event); } catch(e) {} });
-        if (typeof window.onurlchange === 'function') {
-          try { window.onurlchange(event); } catch(e) {}
-        }
+    function __dispatchUrlChangeToHandlers(detail) {
+      _urlChangeHandlers.forEach(fn => { try { fn(detail); } catch (e) {} });
+      if (typeof window.onurlchange === 'function') {
+        try { window.onurlchange(detail); } catch (e) {}
       }
     }
 
-    // Intercept history API
-    const _origPushState = history.pushState;
-    const _origReplaceState = history.replaceState;
-    history.pushState = function() {
-      _origPushState.apply(this, arguments);
-      __checkUrlChange();
-    };
-    history.replaceState = function() {
-      _origReplaceState.apply(this, arguments);
-      __checkUrlChange();
-    };
-    window.addEventListener('popstate', __checkUrlChange);
-    window.addEventListener('hashchange', __checkUrlChange);
+    // One-time page-level setup. The defineProperty guard survives the
+    // wrapper-closure swap on re-injection.
+    if (!window.__svUrlChangeBound__) {
+      try {
+        Object.defineProperty(window, '__svUrlChangeBound__', {
+          value: true, writable: false, configurable: false, enumerable: false
+        });
+      } catch (_e) {
+        // Property already locked by an earlier ScriptVault wrapper; treat as bound.
+      }
 
-    // Allow adding multiple handlers via addEventListener pattern
+      let _lastUrl = location.href;
+      function __checkUrlChange() {
+        const newUrl = location.href;
+        if (newUrl !== _lastUrl) {
+          const oldUrl = _lastUrl;
+          _lastUrl = newUrl;
+          const detail = { url: newUrl, oldUrl };
+          // Fan out to every wrapper that subscribed.
+          window.dispatchEvent(new CustomEvent('__sv_urlchange__', { detail }));
+        }
+      }
+
+      const _origPushState = history.pushState;
+      const _origReplaceState = history.replaceState;
+      history.pushState = function () {
+        _origPushState.apply(this, arguments);
+        __checkUrlChange();
+      };
+      history.replaceState = function () {
+        _origReplaceState.apply(this, arguments);
+        __checkUrlChange();
+      };
+      window.addEventListener('popstate', __checkUrlChange);
+      window.addEventListener('hashchange', __checkUrlChange);
+    }
+
+    // Per-script subscription to the page-level event. Detaches itself if the
+    // wrapper IIFE returns or throws (the closure becomes unreachable; the
+    // function reference passed to addEventListener is its only liveness root).
+    const __svUrlChangeListener = (event) => __dispatchUrlChangeToHandlers(event.detail);
+    window.addEventListener('__sv_urlchange__', __svUrlChangeListener);
+
+    // Allow adding multiple per-script handlers via the addEventListener pattern.
+    // The Proxy is per-wrapper; re-injection installs a new proxy on the prior
+    // (possibly-still-proxied) addEventListener. Each layer only intercepts
+    // 'urlchange' and forwards everything else, so the chain stays correct.
     window.addEventListener = new Proxy(window.addEventListener, {
       apply(target, thisArg, args) {
         if (args[0] === 'urlchange') {
@@ -18289,7 +18495,7 @@ ${req.code}
         return Reflect.apply(target, thisArg, args);
       }
     });
-    window.onurlchange = null; // Initialize as settable
+    if (typeof window.onurlchange === 'undefined') window.onurlchange = null;
   }
 
   // ========== window.close / window.focus grants ==========

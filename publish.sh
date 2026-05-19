@@ -21,10 +21,23 @@ if [ ! -f "$ENV_FILE" ]; then
   echo "ERROR: .env file not found. Run 'bash cws-setup.sh' first."
   exit 1
 fi
+set -a
 source "$ENV_FILE"
+set +a
 
 if [ -z "$EXTENSION_ID" ] || [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ] || [ -z "$REFRESH_TOKEN" ]; then
   echo "ERROR: Missing credentials in .env. Run 'bash cws-setup.sh' to reconfigure."
+  exit 1
+fi
+
+# chrome-webstore-upload-cli v4 (CWS API v2) requires PUBLISHER_ID in addition
+# to the legacy four fields. Fall back gracefully so an older .env (without
+# PUBLISHER_ID) prints a clear instruction instead of a cryptic CLI error.
+if [ -z "$PUBLISHER_ID" ]; then
+  echo "ERROR: PUBLISHER_ID is missing from .env."
+  echo "       chrome-webstore-upload-cli v4 (CWS API v2) requires it."
+  echo "       Re-run 'bash cws-setup.sh' to add it, or fetch it from the CWS"
+  echo "       Developer Dashboard (Account / Settings)."
   exit 1
 fi
 
@@ -102,14 +115,17 @@ echo "  Built: $ZIP_NAME ($SIZE)"
 # Keep $ZIP_NAME on disk through upload + publish so a transient CWS failure
 # (rate limit, expired refresh token, etc.) doesn't force a full rebuild. Only
 # remove the artifact on a clean success path.
+#
+# chrome-webstore-upload-cli v4 reads CLIENT_ID / CLIENT_SECRET / REFRESH_TOKEN
+# from env (CLI flags for secrets were removed). EXTENSION_ID and PUBLISHER_ID
+# are still passed via flags. `--source` is only valid on the upload subcommand
+# (forbidden on publish in v4).
 echo ""
 echo "[2/3] Uploading to Chrome Web Store..."
 npx chrome-webstore-upload upload \
   --source "$ZIP_NAME" \
   --extension-id "$EXTENSION_ID" \
-  --client-id "$CLIENT_ID" \
-  --client-secret "$CLIENT_SECRET" \
-  --refresh-token "$REFRESH_TOKEN"
+  --publisher-id "$PUBLISHER_ID"
 
 # ── Publish (unless --draft) ─────────────────────────────────────────────────
 if [ "$1" = "--draft" ]; then
@@ -128,9 +144,7 @@ echo ""
 echo "[3/3] Publishing..."
 npx chrome-webstore-upload publish \
   --extension-id "$EXTENSION_ID" \
-  --client-id "$CLIENT_ID" \
-  --client-secret "$CLIENT_SECRET" \
-  --refresh-token "$REFRESH_TOKEN"
+  --publisher-id "$PUBLISHER_ID"
 
 # ── Cleanup ──────────────────────────────────────────────────────────────────
 rm -f "$ZIP_NAME"
