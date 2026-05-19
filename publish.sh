@@ -99,6 +99,9 @@ SIZE=$(du -h "$ZIP_NAME" | cut -f1)
 echo "  Built: $ZIP_NAME ($SIZE)"
 
 # ── Upload ───────────────────────────────────────────────────────────────────
+# Keep $ZIP_NAME on disk through upload + publish so a transient CWS failure
+# (rate limit, expired refresh token, etc.) doesn't force a full rebuild. Only
+# remove the artifact on a clean success path.
 echo ""
 echo "[2/3] Uploading to Chrome Web Store..."
 npx chrome-webstore-upload upload \
@@ -113,15 +116,21 @@ if [ "$1" = "--draft" ]; then
   echo ""
   echo "[3/3] Skipped publish (--draft mode). Review at:"
   echo "  https://chrome.google.com/webstore/devconsole"
-else
+  echo "  Build kept at: $ZIP_NAME"
   echo ""
-  echo "[3/3] Publishing..."
-  npx chrome-webstore-upload publish \
-    --extension-id "$EXTENSION_ID" \
-    --client-id "$CLIENT_ID" \
-    --client-secret "$CLIENT_SECRET" \
-    --refresh-token "$REFRESH_TOKEN"
+  echo "========================================"
+  echo "  ScriptVault v${VERSION} uploaded (draft)"
+  echo "========================================"
+  exit 0
 fi
+
+echo ""
+echo "[3/3] Publishing..."
+npx chrome-webstore-upload publish \
+  --extension-id "$EXTENSION_ID" \
+  --client-id "$CLIENT_ID" \
+  --client-secret "$CLIENT_SECRET" \
+  --refresh-token "$REFRESH_TOKEN"
 
 # ── Cleanup ──────────────────────────────────────────────────────────────────
 rm -f "$ZIP_NAME"

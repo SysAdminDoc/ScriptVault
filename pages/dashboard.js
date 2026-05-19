@@ -6863,10 +6863,15 @@
             if (quotaText) {
                 quotaText.textContent = `${formatBytes(usedBytes)} / ${formatBytes(QUOTA_BYTES)} (${pct.toFixed(1)}%)`;
             }
-            // Show warning toast if over 85%
+            // Show warning toast if over 85%. Reset the flag once usage drops
+            // back below 70% so a user who cleans up and then refills storage
+            // gets warned again — previously the flag stuck for the whole
+            // dashboard session.
             if (pct > 85 && !state._quotaWarned) {
                 state._quotaWarned = true;
                 showToast(`Storage at ${pct.toFixed(0)}% capacity - consider cleaning up`, 'warning');
+            } else if (pct < 70 && state._quotaWarned) {
+                state._quotaWarned = false;
             }
         } catch (e) {
             if (elements.statTotalStorage) elements.statTotalStorage.textContent = '-';
@@ -8871,9 +8876,11 @@
             }
             if (elements.importFileName) elements.importFileName.textContent = file.name;
             try {
-                const isZip = file.name.endsWith('.zip');
+                // Lower-case before suffix match so MyScript.USER.JS / FOO.ZIP work.
+                const lowerName = (file.name || '').toLowerCase();
+                const isZip = lowerName.endsWith('.zip');
                 const transfer = getTransferPreferences();
-                const isScriptFile = file.name.endsWith('.user.js') || file.name.endsWith('.js');
+                const isScriptFile = lowerName.endsWith('.user.js') || lowerName.endsWith('.js');
                 const confirmMessage = isZip
                     ? buildImportConfirmationMessage(file.name, {
                         supportsStorage: true,
@@ -8906,7 +8913,7 @@
                             r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
                             r?.error ? 'error' : getImportResultTone(r)
                         );
-                    } else if (file.name.endsWith('.user.js') || file.name.endsWith('.js')) {
+                    } else if (lowerName.endsWith('.user.js') || lowerName.endsWith('.js')) {
                         const code = await file.text();
                         updateProgress(1, 2, 'Installing script...');
                         const r = await chrome.runtime.sendMessage({ action: 'saveScript', code });
@@ -9263,13 +9270,14 @@
                 const file = files[i];
                 updateProgress(i + 1, files.length, file.name);
                 try {
-                    if (file.name.endsWith('.user.js') || file.name.endsWith('.js')) {
+                    const lower = (file.name || '').toLowerCase();
+                    if (lower.endsWith('.user.js') || lower.endsWith('.js')) {
                         const code = await file.text();
                         if (!code.includes('==UserScript==')) { errors++; continue; }
                         const res = await chrome.runtime.sendMessage({ action: 'importScript', code });
                         if (res?.success) installed++;
                         else errors++;
-                    } else if (file.name.endsWith('.zip')) {
+                    } else if (lower.endsWith('.zip')) {
                         const buf = await file.arrayBuffer();
                         const bytes = new Uint8Array(buf);
                         let binary = '';
