@@ -941,6 +941,21 @@ const ScriptStore = (() => {
         return el.innerHTML;
     }
 
+    // Defang user-controlled URLs from third-party APIs (Greasy Fork, OpenUserJS,
+    // GitHub script catalogs). The card renderer interpolates these into `<a href>`,
+    // and escapeHtml alone does not stop `javascript:` or `data:` schemes — those
+    // need a scheme allowlist. Returns '' (rendered as inert link) for unsafe input.
+    function safeExternalUrl(url) {
+        if (!url || typeof url !== 'string') return '';
+        const trimmed = url.replace(/[\u0000-\u0020\u007f]+/g, '');
+        if (!trimmed) return '';
+        if (/^(javascript|data|vbscript|blob|file):/i.test(trimmed)) return '';
+        if (/^(https?|ftp):/i.test(trimmed)) return trimmed;
+        // Disallow any other explicit scheme (chrome-extension:, mailto:, etc.)
+        if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return '';
+        return trimmed;
+    }
+
     function formatNumber(n) {
         if (n == null) return '0';
         if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
@@ -1495,8 +1510,12 @@ const ScriptStore = (() => {
             const rating = s.rating || (s.fan_score ? parseFloat(s.fan_score).toFixed(0) + '%' : '--');
             const updated = formatDate(s.updatedAt || s.code_updated_at);
             const installed = isInstalled({ name, author });
-            const codeUrl = s.codeUrl || s.code_url || '';
-            const pageUrl = s.pageUrl || s.url || '';
+            // Scheme-validate URLs before they reach `<a href>` — values come
+            // from third-party catalog APIs (Greasy Fork, OpenUserJS, GitHub)
+            // and a poisoned response could ship `javascript:` or `data:` URLs
+            // that escapeHtml does not neutralize.
+            const codeUrl = safeExternalUrl(s.codeUrl || s.code_url || '');
+            const pageUrl = safeExternalUrl(s.pageUrl || s.url || '');
             const source = s.source || 'greasyfork';
             const srcDef = SOURCES[source];
             const sourceBadge = srcDef ? `<span class="ss-source-badge" style="background:${srcDef.color};color:#fff">${srcDef.label}</span>` : '';

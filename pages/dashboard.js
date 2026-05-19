@@ -7080,10 +7080,16 @@
             const isInstalled = installedNames.has((s.name || '').toLowerCase());
             const installedBadge = isInstalled ? '<span class="find-installed-badge">Installed</span>' : '';
 
+            // Greasy Fork API responses are trusted but not authenticated end-
+            // to-end — pass each URL through sanitizeUrl so a poisoned listing
+            // can't render a javascript: / data: href that bypasses escapeHtml.
+            const safeS_url = sanitizeUrl(s.url || '') || '';
             return `<div class="find-script-card${isInstalled ? ' already-installed' : ''}">
                 <div class="find-script-info">
                     <div class="find-script-name">
-                        <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.name)}</a>
+                        ${safeS_url
+                            ? `<a href="${escapeHtml(safeS_url)}" target="_blank" rel="noopener">${escapeHtml(s.name)}</a>`
+                            : `<span>${escapeHtml(s.name)}</span>`}
                         ${s.version ? `<span class="find-script-version">v${escapeHtml(s.version)}</span>` : ''}
                         ${installedBadge}
                     </div>
