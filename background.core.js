@@ -772,6 +772,19 @@ async function exportAllScripts(options = {}) {
   };
 }
 
+// chrome.cookies.* only accepts http(s) URLs. Front-validate to give scripts a
+// clear error instead of leaking the raw Chrome exception, and to reject
+// chrome-extension://, javascript:, data:, blob:, file: payloads up-front.
+function isHttpCookieUrl(url) {
+  if (typeof url !== 'string') return false;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 const RESERVED_IMPORT_SCRIPT_IDS = new Set(['__proto__', 'prototype', 'constructor']);
 function isSafeImportedScriptId(id) {
   return (
@@ -3391,10 +3404,18 @@ async function handleMessage(message, sender) {
       }
       
       // GM_cookie API
+      // chrome.cookies.* only accepts http(s) URLs. Front-validate so blob:/
+      // data:/javascript:/chrome-extension: URLs from a malicious script return
+      // a clear error instead of leaking the raw Chrome error (and to make sure
+      // we never pass an attacker-controlled URL into a future Chrome API that
+      // is more permissive about schemes).
       case 'GM_cookie_list': {
         try {
           const details = {};
-          if (data.url) details.url = data.url;
+          if (data.url) {
+            if (!isHttpCookieUrl(data.url)) return { error: 'url must be http(s)://' };
+            details.url = data.url;
+          }
           if (data.domain) details.domain = data.domain;
           if (data.name) details.name = data.name;
           if (data.path) details.path = data.path;
@@ -3409,6 +3430,7 @@ async function handleMessage(message, sender) {
         try {
           if (!data.url) return { error: 'url is required for cookie set' };
           if (!data.name) return { error: 'name is required for cookie set' };
+          if (!isHttpCookieUrl(data.url)) return { error: 'url must be http(s)://' };
           const cookie = await chrome.cookies.set({
             url: data.url,
             name: data.name,
@@ -3429,6 +3451,7 @@ async function handleMessage(message, sender) {
       case 'GM_cookie_delete': {
         try {
           if (!data.url || !data.name) return { error: 'url and name are required for cookie delete' };
+          if (!isHttpCookieUrl(data.url)) return { error: 'url must be http(s)://' };
           await chrome.cookies.remove({
             url: data.url,
             name: data.name
@@ -4759,8 +4782,47 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
 // ============================================================================
 
 // Intercept navigation to .user.js files
-const _pendingFetches = new Set(); // Dedup concurrent fetches
+// Map<url, Promise<'install' | 'pass-through'>> dedups concurrent fetches for
+// the same URL and lets later callers reuse the first fetch's result. Without
+// this, opening the same .user.js in two tabs at once left the second tab on
+// the raw script source (the dedup short-circuit returned before it could
+// redirect to install.html).
+const _pendingFetches = new Map();
 const MAX_SCRIPT_SIZE = 5 * 1024 * 1024; // 5MB limit
+
+async function _fetchPendingUserscript(url) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+    if (contentLength > MAX_SCRIPT_SIZE) {
+      throw new Error(`Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+    }
+    const code = await response.text();
+    if (code.length > MAX_SCRIPT_SIZE) {
+      throw new Error(`Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+    }
+    if (!code.includes('==UserScript==')) {
+      return { action: 'pass-through' };
+    }
+    await chrome.storage.local.set({
+      pendingInstall: { url, code, timestamp: Date.now() }
+    });
+    return { action: 'install' };
+  } catch (error) {
+    console.error('[ScriptVault] Failed to fetch script:', error);
+    await chrome.storage.local.set({
+      pendingInstall: { url, error: error.message, timestamp: Date.now() }
+    });
+    return { action: 'install' };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   // Only handle main frame navigation
@@ -4774,77 +4836,31 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   // Don't intercept extension pages
   if (url.startsWith('chrome-extension://')) return;
 
-  // Dedup concurrent fetches for same URL
-  if (_pendingFetches.has(url)) return;
-  _pendingFetches.add(url);
-
   debugLog('Intercepting userscript URL:', url);
 
-  try {
-    // Fetch with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-    let code;
-    try {
-      const response = await fetch(url, { signal: controller.signal });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      // Check content length before reading body
-      const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-      if (contentLength > MAX_SCRIPT_SIZE) {
-        throw new Error(`Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
-      }
-
-      code = await response.text();
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    if (code.length > MAX_SCRIPT_SIZE) {
-      throw new Error(`Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
-    }
-    
-    // Verify it looks like a userscript
-    if (!code.includes('==UserScript==')) {
-      debugLog('Not a valid userscript, allowing normal navigation');
+  let pending = _pendingFetches.get(url);
+  if (!pending) {
+    pending = _fetchPendingUserscript(url).finally(() => {
       _pendingFetches.delete(url);
+    });
+    _pendingFetches.set(url, pending);
+  }
+
+  try {
+    const result = await pending;
+    if (result.action === 'install') {
+      chrome.tabs.update(details.tabId, {
+        url: chrome.runtime.getURL('pages/install.html')
+      });
+    } else {
+      // Not a userscript — let this tab's navigation continue and clear any
+      // stale pendingInstall written by an earlier interception of the same URL.
       await chrome.storage.local.remove('pendingInstall');
-      return;
     }
-    
-    // Store pending install data
-    await chrome.storage.local.set({
-      pendingInstall: {
-        url: url,
-        code: code,
-        timestamp: Date.now()
-      }
-    });
-    
-    // Redirect to install page
-    chrome.tabs.update(details.tabId, {
-      url: chrome.runtime.getURL('pages/install.html')
-    });
-    
-  } catch (error) {
-    console.error('[ScriptVault] Failed to fetch script:', error);
-    // Store error for install page to display
-    await chrome.storage.local.set({
-      pendingInstall: {
-        url: url,
-        error: error.message,
-        timestamp: Date.now()
-      }
-    });
-    
-    chrome.tabs.update(details.tabId, {
-      url: chrome.runtime.getURL('pages/install.html')
-    });
-  } finally {
-    _pendingFetches.delete(url);
+  } catch (e) {
+    // _fetchPendingUserscript catches its own errors; any throw here means the
+    // tab update or storage cleanup failed. Surface so it appears in logs.
+    console.error('[ScriptVault] webNav handler error:', e);
   }
 }, {
   url: [
@@ -4901,6 +4917,22 @@ async function installFromCode(code) {
 // Handle direct script installation from URL
 async function installFromUrl(url) {
   try {
+    // Reject non-http(s) schemes (file://, data:, blob:, chrome-extension://,
+    // javascript:). The dashboard/popup are the only legitimate callers, but
+    // defense-in-depth keeps a malformed install request from triggering a
+    // fetch on an unexpected scheme.
+    if (typeof url !== 'string' || !url) {
+      throw new Error('No URL provided');
+    }
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      throw new Error('Invalid URL');
+    }
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      throw new Error('URL must be http(s)://');
+    }
     // Timeout after 30 seconds
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);

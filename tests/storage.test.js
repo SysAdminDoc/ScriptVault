@@ -177,6 +177,21 @@ describe('SettingsManager', () => {
     // get() is called once internally per init, but init guards with cache !== null
     expect(chrome.storage.local.get).toHaveBeenCalledTimes(1);
   });
+
+  it('init() serializes concurrent cold-start callers', async () => {
+    // Without the _initPromise gate, two parallel callers both pass the
+    // `cache === null` check before either resolves and the second clobbers
+    // mutations the first applied. Force the issue by running 5 in parallel
+    // and asserting storage.local.get fires exactly once.
+    await Promise.all([
+      SettingsManager.init(),
+      SettingsManager.init(),
+      SettingsManager.init(),
+      SettingsManager.init(),
+      SettingsManager.init(),
+    ]);
+    expect(chrome.storage.local.get).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ── ScriptStorage ────────────────────────────────────────────────────────
