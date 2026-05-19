@@ -17679,7 +17679,12 @@ ${req.code}
   // highlight, url, plus Phase 11.11 progress + buttons + update + close).
   // Returns a control object with { close(), update(details) } so script
   // authors don't have to keep notification IDs around manually.
+  // Wrapper-side LRU cap mirrors the 500-entry cap on the background side at
+  // self._notifCallbacks — without this, a misbehaving script that spams
+  // GM_notification and never receives click/done events can grow the Map
+  // unbounded for the lifetime of the host tab.
   const _notifCallbacks = new Map();
+  const _NOTIF_CALLBACKS_CAP = 500;
   function GM_notification(details, ondone) {
     if (!hasGrant('GM_notification') && !hasGrant('GM.notification')) {
       return { close: () => {}, update: () => {} };
@@ -17696,7 +17701,11 @@ ${req.code}
     }
     if (typeof ondone === 'function') opts.ondone = ondone;
     const notifTag = opts.tag || ('notif_' + Math.random().toString(36).substring(2));
-    // Store callbacks
+    // Store callbacks; evict oldest when capped to avoid memory growth.
+    if (_notifCallbacks.size >= _NOTIF_CALLBACKS_CAP) {
+      const oldest = _notifCallbacks.keys().next().value;
+      if (oldest !== undefined) _notifCallbacks.delete(oldest);
+    }
     _notifCallbacks.set(notifTag, {
       onclick: opts.onclick,
       ondone: opts.ondone,
@@ -17787,7 +17796,12 @@ ${req.code}
   }
   
   // GM_openInTab (with close(), onclose, insert, setParent, incognito)
+  // Cap the handle map so a misbehaving script that never receives the
+  // openedTabClosed event (background crashed, content bridge missed the
+  // signal, tab killed before bridge attached) can't leak unbounded handles
+  // in the USER_SCRIPT world for the lifetime of the host tab.
   const _openedTabs = new Map();
+  const _OPENED_TABS_CAP = 200;
   function GM_openInTab(url, options) {
     if (!hasGrant('GM_openInTab') && !hasGrant('GM.openInTab')) return null;
     const opts = typeof options === 'boolean' ? { active: !options } : (options || {});
@@ -17798,6 +17812,10 @@ ${req.code}
       setParent: opts.setParent, background: opts.background
     }).then(result => {
       if (result && result.tabId) {
+        if (_openedTabs.size >= _OPENED_TABS_CAP) {
+          const oldest = _openedTabs.keys().next().value;
+          if (oldest !== undefined) _openedTabs.delete(oldest);
+        }
         _openedTabs.set(result.tabId, tabHandle);
         tabHandle.close = () => {
           sendToBackground('GM_closeTab', { tabId: result.tabId }).catch(() => {});
@@ -17807,9 +17825,14 @@ ${req.code}
     }).catch(() => {});
     return tabHandle;
   }
-  
+
   // GM_download (with onload, onerror, onprogress, ontimeout callbacks)
+  // Same LRU eviction as _openedTabs — protects a long-lived tab from a script
+  // that fires GM_download in a loop where the load/error/timeout event never
+  // arrives (download removed from history, SW restart between request and
+  // response, etc.).
   const _downloadCallbacks = new Map();
+  const _DOWNLOAD_CALLBACKS_CAP = 200;
   function GM_download(details) {
     if (!hasGrant('GM_download') && !hasGrant('GM.download')) return;
     let opts;
@@ -17828,6 +17851,10 @@ ${req.code}
     opts.hasCallbacks = !!(callbacks.onload || callbacks.onerror || callbacks.onprogress || callbacks.ontimeout);
     sendToBackground('GM_download', opts).then(result => {
       if (result && result.downloadId) {
+        if (_downloadCallbacks.size >= _DOWNLOAD_CALLBACKS_CAP) {
+          const oldest = _downloadCallbacks.keys().next().value;
+          if (oldest !== undefined) _downloadCallbacks.delete(oldest);
+        }
         _downloadCallbacks.set(result.downloadId, callbacks);
       }
       if (result && result.error) {
