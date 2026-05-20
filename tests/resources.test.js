@@ -108,6 +108,102 @@ describe('ResourceCache', () => {
 
       expect(ResourceCache.cache['https://cdn.example.com/huge-body.js']).toBeUndefined();
     });
+
+    // LR-002 — concurrent fetch dedup
+    it('deduplicates concurrent fetches of the same URL into a single network call', async () => {
+      const body = new Uint8Array([0x76, 0x61, 0x72]); // "var"
+      // Resolve fetch on the next microtask so both callers race the cache-miss check.
+      const fetchMock = vi.fn(() => new Promise((resolve) => {
+        queueMicrotask(() => resolve({
+          ok: true,
+          status: 200,
+          headers: {
+            get: vi.fn((name) => (name === 'content-type' ? 'text/javascript' : null)),
+          },
+          arrayBuffer: vi.fn().mockResolvedValue(body.buffer),
+        }));
+      }));
+      globalThis.fetch = fetchMock;
+      ResourceCache = createFresh();
+
+      const url = 'https://cdn.example.com/shared-lib.js';
+      const [r1, r2, r3] = await Promise.all([
+        ResourceCache.fetchResource(url),
+        ResourceCache.fetchResource(url),
+        ResourceCache.fetchResource(url),
+      ]);
+      expect(r1).toBe('var');
+      expect(r2).toBe('var');
+      expect(r3).toBe('var');
+      // The whole point: only one network call.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      // Pending map drained.
+      expect(ResourceCache._pendingFetches.has(url)).toBe(false);
+    });
+
+    it('a failed concurrent fetch clears the pending map so the next caller can retry', async () => {
+      // Single fetch mock with sequenced behavior: first call rejects
+      // (concurrent callers share this rejection), second call (after the
+      // pending map is cleared) succeeds. Re-creating ResourceCache between
+      // calls would wipe state and make the test vacuous, since createFresh
+      // snapshots globalThis.fetch at construction time.
+      const body = new Uint8Array([0x6f, 0x6b]); // "ok"
+      const fetchMock = vi.fn()
+        .mockImplementationOnce(() => new Promise((_, reject) => {
+          queueMicrotask(() => reject(new TypeError('network error')));
+        }))
+        .mockImplementationOnce(() => Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: {
+            get: vi.fn((name) => (name === 'content-type' ? 'text/javascript' : null)),
+          },
+          arrayBuffer: vi.fn().mockResolvedValue(body.buffer),
+        }));
+      globalThis.fetch = fetchMock;
+      ResourceCache = createFresh();
+
+      const url = 'https://cdn.example.com/flaky.js';
+      // Two concurrent callers — both must reject from the SAME in-flight
+      // promise. Wrap each in its own catch handler so the rejection is
+      // registered before settlement (avoids unhandled-rejection probe).
+      const e1 = ResourceCache.fetchResource(url).then(
+        v => ({ status: 'fulfilled', value: v }),
+        e => ({ status: 'rejected', reason: e })
+      );
+      const e2 = ResourceCache.fetchResource(url).then(
+        v => ({ status: 'fulfilled', value: v }),
+        e => ({ status: 'rejected', reason: e })
+      );
+      const [r1, r2] = await Promise.all([e1, e2]);
+      expect(r1.status).toBe('rejected');
+      expect(r2.status).toBe('rejected');
+      // Critical assertion: only ONE network call serviced both callers.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      // Pending map drained so the next call won't inherit the rejection.
+      expect(ResourceCache._pendingFetches.has(url)).toBe(false);
+
+      // Subsequent call: same ResourceCache, same bound fetchMock, but the
+      // second mockImplementationOnce returns success. Verifies the failure
+      // didn't poison the URL.
+      const recovered = await ResourceCache.fetchResource(url);
+      expect(recovered).toBe('ok');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('cache hit short-circuits before consulting _pendingFetches', async () => {
+      const fetchMock = vi.fn();
+      globalThis.fetch = fetchMock;
+      ResourceCache = createFresh();
+
+      const url = 'https://cdn.example.com/already-cached.js';
+      await ResourceCache.set(url, 'cached body', 'data:text/javascript;base64,Y2FjaGVk');
+
+      const result = await ResourceCache.fetchResource(url);
+      expect(result).toBe('cached body');
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(ResourceCache._pendingFetches.has(url)).toBe(false);
+    });
   });
 
   describe('clear', () => {
