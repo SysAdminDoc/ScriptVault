@@ -5,9 +5,19 @@
 const ErrorLog = {
   STORAGE_KEY: 'errorLog',
   MAX_ENTRIES: 500,
+  // ERRLOG-PERF — debounce the storage.local.set call so a burst of N
+  // errors per second pays the serialization cost ONCE per debounce
+  // window instead of N times. Each save serializes the full 500-entry
+  // log (~150KB), so the savings under bursty load are substantial.
+  // 200ms is short enough that the in-memory cache + persisted state
+  // stay near-identical for the dashboard view and long enough to
+  // coalesce a meaningful burst. clear() and explicit flush() bypass
+  // the debounce.
+  SAVE_DEBOUNCE_MS: 200,
 
   // In-memory cache; loaded on first access
   _cache: null,
+  _pendingSaveTimer: null,
 
   // ---------------------------------------------------------------------------
   // Core Operations
@@ -51,7 +61,10 @@ const ErrorLog = {
     }
 
     this._cache = entries;
-    await this._save();
+    // ERRLOG-PERF — schedule (don't block) the persistence. Callers that
+    // need an immediate flush (clear, factory reset, before-tab-close)
+    // call ErrorLog.flush() explicitly.
+    this._scheduleSave();
 
     return record;
   },
@@ -230,11 +243,13 @@ const ErrorLog = {
     if (scriptId) {
       const entries = await this._load();
       this._cache = entries.filter(e => e.scriptId !== scriptId);
-      await this._save();
     } else {
       this._cache = [];
-      await this._save();
     }
+    // ERRLOG-PERF — clear is user-initiated; flush immediately rather
+    // than letting a 200ms debounce delay storage commit. Cancels any
+    // pending debounced save so we don't double-write.
+    await this.flush();
   },
 
   /**
@@ -343,7 +358,42 @@ const ErrorLog = {
     return this._cache;
   },
 
-  async _save() {
+  // ERRLOG-PERF — schedule a debounced write. Multiple calls within the
+  // SAVE_DEBOUNCE_MS window collapse into one storage.local.set.
+  _scheduleSave() {
+    if (this._pendingSaveTimer) return;
+    this._pendingSaveTimer = setTimeout(() => {
+      this._pendingSaveTimer = null;
+      // Fire-and-forget — failures are logged but don't surface to
+      // the original log() caller (whose return value didn't promise
+      // persistence since this commit).
+      this._writeCacheToStorage().catch((e) => {
+        console.warn('[ErrorLog] debounced save failed:', e?.message || e);
+      });
+    }, this.SAVE_DEBOUNCE_MS);
+  },
+
+  /**
+   * Flush any pending debounced save synchronously (well, awaitably).
+   * Public API — call before factory reset / log export / tab close
+   * when the caller needs a hard persistence guarantee.
+   */
+  async flush() {
+    if (this._pendingSaveTimer) {
+      clearTimeout(this._pendingSaveTimer);
+      this._pendingSaveTimer = null;
+    }
+    await this._writeCacheToStorage();
+  },
+
+  async _writeCacheToStorage() {
+    if (this._cache === null) return;
     await chrome.storage.local.set({ [this.STORAGE_KEY]: this._cache });
+  },
+
+  // Legacy alias retained for any external caller still invoking _save
+  // directly. Now equivalent to flush() — bypass debounce.
+  async _save() {
+    await this.flush();
   }
 };
