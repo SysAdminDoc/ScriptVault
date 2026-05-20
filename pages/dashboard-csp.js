@@ -78,11 +78,22 @@ const CSPReporter = (() => {
   let _container = null;
   let _styleEl = null;
   let _reports = [];        // { id, url, hostname, scriptId, scriptName, directive, detail, timestamp }
-  let _bypassSettings = {}; // { hostname: { enabled, directives[] } }
+  let _bypassSettings = {}; // { hostname: { enabled, directives[], ruleId } }
   let _sortBy = 'timestamp';
   let _sortAsc = false;
   let _filter = '';
   let _initialized = false;
+
+  // CSP-RULEID — sequential DNR ruleId allocator (replaces the legacy
+  // hashCode-based allocation which suffered birthday-paradox collisions
+  // at ~20 bypass hostnames within a 100K-ID pool). _ruleIdCounter is
+  // derived on load from the max existing ruleId so a fresh install
+  // starts at RULE_ID_BASE and an upgraded install picks up where it
+  // left off without colliding with any previously-allocated rule.
+  const RULE_ID_BASE = 900000;
+  const RULE_ID_MAX = 999999999;  // bounded so dynamic-rule space stays comfortably clear of other DNR users
+  let _ruleIdCounter = RULE_ID_BASE;
+  let _legacyReconciled = false;  // one-shot per-page-load cleanup of pre-fix hash-allocated rules
 
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
@@ -476,6 +487,58 @@ const CSPReporter = (() => {
       _reports = [];
       _bypassSettings = {};
     }
+    // CSP-RULEID — derive the next counter value from the max stored
+    // ruleId so subsequent allocations never collide with any rule we
+    // already installed (across page reloads or SW wakes). Entries
+    // without a ruleId are legacy — they'll get one assigned on first
+    // apply, and the legacy hash-allocated DNR rule will be swept on the
+    // next reconcile pass below.
+    let maxId = RULE_ID_BASE;
+    for (const entry of Object.values(_bypassSettings)) {
+      if (entry && Number.isFinite(entry.ruleId)) {
+        maxId = Math.max(maxId, entry.ruleId);
+      }
+    }
+    _ruleIdCounter = maxId;
+  }
+
+  // CSP-RULEID — allocate the next sequential DNR rule ID. Bounded so the
+  // pool stays comfortably clear of other DNR-using extensions / app
+  // logic. If we ever reach RULE_ID_MAX (unlikely — would require ~100M
+  // bypass rules) we throw rather than wrap; wrapping would collide with
+  // the lowest-allocated rules.
+  function _allocRuleId() {
+    _ruleIdCounter += 1;
+    if (_ruleIdCounter > RULE_ID_MAX) {
+      throw new Error('[CSPReporter] DNR rule ID pool exhausted');
+    }
+    return _ruleIdCounter;
+  }
+
+  // CSP-RULEID — one-shot pass that removes any DNR dynamic rule in our
+  // legacy hash-allocated range (900000..999999) that doesn't correspond
+  // to a known entry's stored ruleId. Cleans up orphans left by the
+  // pre-fix hashCode() allocation so the live DNR state matches storage.
+  async function _reconcileLegacyRules() {
+    if (_legacyReconciled) return;
+    _legacyReconciled = true;
+    try {
+      const live = await chrome.declarativeNetRequest.getDynamicRules();
+      const knownIds = new Set();
+      for (const entry of Object.values(_bypassSettings)) {
+        if (entry && Number.isFinite(entry.ruleId)) knownIds.add(entry.ruleId);
+      }
+      const stale = live
+        .filter(r => r && Number.isFinite(r.id) && r.id >= 900000 && r.id <= 999999)
+        .filter(r => !knownIds.has(r.id))
+        .map(r => r.id);
+      if (stale.length > 0) {
+        await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: stale });
+      }
+    } catch (e) {
+      // Reconcile is best-effort — never block the apply/remove flow on it.
+      console.warn('[CSPReporter] legacy-rule reconcile failed:', e?.message || e);
+    }
   }
 
   async function saveReports() {
@@ -799,7 +862,19 @@ const CSPReporter = (() => {
 
   async function applyBypassRule(hostname) {
     try {
-      const ruleId = hashCode(hostname);
+      // CSP-RULEID — ensure a sequential ruleId is allocated for this
+      // host BEFORE issuing the DNR update, and persist immediately so a
+      // crash mid-flow doesn't leak a DNR rule with no stored mapping.
+      // Sweep any legacy hash-allocated rules first (one-shot).
+      await _reconcileLegacyRules();
+      if (!_bypassSettings[hostname]) {
+        _bypassSettings[hostname] = { enabled: false, directives: [] };
+      }
+      if (!Number.isFinite(_bypassSettings[hostname].ruleId)) {
+        _bypassSettings[hostname].ruleId = _allocRuleId();
+        await saveBypass();
+      }
+      const ruleId = _bypassSettings[hostname].ruleId;
       await chrome.declarativeNetRequest.updateDynamicRules({
         addRules: [{
           id: ruleId,
@@ -825,7 +900,14 @@ const CSPReporter = (() => {
 
   async function removeBypassRule(hostname) {
     try {
-      const ruleId = hashCode(hostname);
+      // CSP-RULEID — use the entry's stored ruleId so removals always
+      // target the rule we actually installed. Migration grace: an entry
+      // that predates the fix and has no stored ruleId falls back to the
+      // legacy hashCode allocation so the user's existing rule can still
+      // be torn down. The reconcile pass on the next applyBypassRule
+      // call will sweep any genuinely-orphan rules afterwards.
+      const stored = _bypassSettings[hostname]?.ruleId;
+      const ruleId = Number.isFinite(stored) ? stored : _legacyHashRuleId(hostname);
       await chrome.declarativeNetRequest.updateDynamicRules({
         removeRuleIds: [ruleId]
       });
@@ -834,14 +916,15 @@ const CSPReporter = (() => {
     }
   }
 
-  // Generate a stable, deterministic rule ID from hostname string
-  // Uses a simple hash to produce a consistent ID across page reloads
-  function hashCode(str) {
+  // CSP-RULEID — legacy hash allocator. Retained ONLY for migration
+  // grace: pre-fix entries that have no stored ruleId need a way to
+  // identify their existing DNR rule for removal. New rules never go
+  // through this path.
+  function _legacyHashRuleId(str) {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
     }
-    // Map to a high range (900000-999999) to avoid conflicts with other DNR rules
     return 900000 + (Math.abs(hash) % 100000);
   }
 
