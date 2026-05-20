@@ -101,8 +101,21 @@
     }
 
     function getScriptRow(scriptId) {
-        if (!elements.scriptList || !scriptId) return null;
-        return elements.scriptList.querySelector(`[data-script-id="${escapeSelectorValue(scriptId)}"]`);
+        if (!scriptId) return null;
+        // Primary: main script list row keyed on data-script-id.
+        if (elements.scriptList) {
+            const row = elements.scriptList.querySelector(`[data-script-id="${escapeSelectorValue(scriptId)}"]`);
+            if (row) return row;
+        }
+        // Phase 38.4 — also surface the busy state on the context-menu
+        // launcher row so the user sees a disabled-state on the button they
+        // just clicked. Without this fallback the per-script lock still
+        // bounces double-clicks but the user has no visual cue.
+        if (elements.contextMenuScriptsList) {
+            const ctxRow = elements.contextMenuScriptsList.querySelector(`[data-ctx-run-id="${escapeSelectorValue(scriptId)}"]`);
+            if (ctxRow) return ctxRow;
+        }
+        return null;
     }
 
     function setScriptRowBusy(scriptId, isBusy) {
