@@ -260,9 +260,22 @@ function parseUserscript(code) {
           const colonIdx = key.indexOf(':');
           const baseKey = key.slice(0, colonIdx);
           const locale = key.slice(colonIdx + 1);
-          if (baseKey && locale) {
-            if (!meta.localized) meta.localized = {};
-            if (!meta.localized[locale]) meta.localized[locale] = {};
+          // SECURITY: reject prototype-pollution keys. A malicious script
+          // with `// @name:__proto__ EVIL` would otherwise reach
+          // `meta.localized["__proto__"]["name"] = "EVIL"` — the bracket
+          // accessor returns Object.prototype, and the subsequent
+          // `.name = ...` mutates it directly. That contaminates every
+          // object in the SW context (e.g. `{}.name === "EVIL"`),
+          // corrupting all downstream code that reads `.name`/`.constructor`/
+          // `.toString` etc. via inheritance.
+          const POLLUTED = ['__proto__', 'constructor', 'prototype'];
+          if (baseKey && locale
+              && !POLLUTED.includes(baseKey)
+              && !POLLUTED.includes(locale)) {
+            if (!meta.localized) meta.localized = Object.create(null);
+            if (!Object.hasOwn(meta.localized, locale)) {
+              meta.localized[locale] = Object.create(null);
+            }
             meta.localized[locale][baseKey] = value;
           }
         }

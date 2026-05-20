@@ -153,10 +153,20 @@ function parseUserscript(code) {
         break;
       default:
         if (key.includes(':')) {
-          const [baseKey, locale] = key.split(':');
-          if (!meta.localized) meta.localized = {};
-          if (!meta.localized[locale]) meta.localized[locale] = {};
-          meta.localized[locale][baseKey] = value;
+          // Mirror of background.core.js parser: indexOf/slice preserves
+          // multi-segment locales like zh-Hans, and the prototype-
+          // pollution guard rejects __proto__/constructor/prototype keys
+          // so a malicious script with @name:__proto__ cannot reach
+          // Object.prototype via the bracket accessor.
+          const colonIdx = key.indexOf(':');
+          const baseKey = key.slice(0, colonIdx);
+          const locale = key.slice(colonIdx + 1);
+          const POLLUTED = ['__proto__', 'constructor', 'prototype'];
+          if (baseKey && locale && !POLLUTED.includes(baseKey) && !POLLUTED.includes(locale)) {
+            if (!meta.localized) meta.localized = Object.create(null);
+            if (!Object.hasOwn(meta.localized, locale)) meta.localized[locale] = Object.create(null);
+            meta.localized[locale][baseKey] = value;
+          }
         }
     }
   }
@@ -410,6 +420,58 @@ describe('parseUserscript', () => {
     // The current split(':') only splits into two parts, so "zh-Hans" stays intact
     expect(meta.localized['zh-Hans']).toBeDefined();
     expect(meta.localized['zh-Hans'].name).toBe('简体中文测试');
+  });
+
+  // SECURITY: prototype pollution via @<base>:__proto__ <value>. Previously
+  // the parser reached `meta.localized["__proto__"][baseKey] = value` which
+  // mutates Object.prototype (the bracket accessor returns the prototype,
+  // and the subsequent property assignment lands on it). Every {} in the
+  // SW context then inherits the polluted property. Three cases pin the
+  // contract: baseKey rejected, locale rejected, both rejected, plus a
+  // post-parse check that Object.prototype is unchanged.
+  describe('SECURITY: @name:__proto__ prototype-pollution rejection', () => {
+    it('rejects @name:__proto__ <value> (locale = __proto__)', () => {
+      const code = '// ==UserScript==\n// @name Safe\n// @name:__proto__ EVIL\n// ==/UserScript==\n';
+      const { meta } = parseUserscript(code);
+      // Reject quietly — the line is dropped.
+      expect(meta.localized?.__proto__).toBeUndefined();
+      // The smoking gun: no global pollution.
+      expect({}.name).toBeUndefined();
+      expect(({}).name).toBeUndefined();
+    });
+
+    it('rejects @__proto__:en <value> (baseKey = __proto__)', () => {
+      const code = '// ==UserScript==\n// @name Safe\n// @__proto__:en EVIL\n// ==/UserScript==\n';
+      const { meta } = parseUserscript(code);
+      expect(meta.localized?.en?.__proto__).toBeUndefined();
+      expect({}.name).toBeUndefined();
+    });
+
+    it('rejects @constructor:en and @prototype:en too', () => {
+      const code = '// ==UserScript==\n// @name Safe\n// @constructor:en EVIL\n// @prototype:en EVIL\n// ==/UserScript==\n';
+      const { meta } = parseUserscript(code);
+      expect(meta.localized?.en?.constructor).toBeUndefined();
+      expect(meta.localized?.en?.prototype).toBeUndefined();
+    });
+
+    it('Object.prototype.name remains untouched after parsing a malicious meta block', () => {
+      // Run multiple malicious variants in sequence.
+      const malicious = [
+        '// @name:__proto__ EVIL',
+        '// @__proto__:en EVIL',
+        '// @name:constructor EVIL',
+        '// @constructor:__proto__ EVIL',
+        '// @prototype:__proto__ EVIL',
+      ];
+      for (const line of malicious) {
+        const code = `// ==UserScript==\n// @name X\n${line}\n// ==/UserScript==\n`;
+        parseUserscript(code);
+        // After each, no pollution.
+        expect({}.name).toBeUndefined();
+        expect({}.constructor).toBe(Object);
+        expect({}.hasOwnProperty).toBeDefined();
+      }
+    });
   });
 
   it('last @name wins when duplicated', () => {
