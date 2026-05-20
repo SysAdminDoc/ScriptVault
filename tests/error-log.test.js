@@ -14,6 +14,14 @@ ErrorLog = mods.ErrorLog;
 beforeEach(() => {
   globalThis.__resetStorageMock();
   ErrorLog._cache = null;
+  // ERRLOG-PERF — make sure pending debounce timer from a prior test
+  // doesn't suppress the next test's schedule. The earlier tests now
+  // call ErrorLog.log() which schedules but doesn't await, so the
+  // timer is non-null when the test concludes.
+  if (ErrorLog._pendingSaveTimer) {
+    clearTimeout(ErrorLog._pendingSaveTimer);
+    ErrorLog._pendingSaveTimer = null;
+  }
   vi.clearAllMocks();
 });
 
@@ -110,5 +118,75 @@ describe('ErrorLog', () => {
     expect(text).toContain('TestScript');
     expect(text).toContain('fail');
     expect(text).toContain('example.com');
+  });
+
+  // ERRLOG-PERF — coalesce bursty writes into one storage.local.set
+  describe('debounced save', () => {
+    it('100 rapid log() calls produce ONE storage.local.set after flush window', async () => {
+      vi.useFakeTimers();
+      const setSpy = vi.spyOn(chrome.storage.local, 'set');
+      setSpy.mockClear();
+
+      for (let i = 0; i < 100; i += 1) {
+        await ErrorLog.log({ scriptId: 's1', error: `error ${i}` });
+      }
+
+      // No storage writes yet — debounce hasn't fired.
+      expect(setSpy).not.toHaveBeenCalled();
+
+      // Cache contains all 100 entries (in-memory updates are synchronous).
+      const inMemory = await ErrorLog.getAll();
+      expect(inMemory).toHaveLength(100);
+
+      // Run any pending timer (the debounced save) AND its trailing
+      // microtask chain (the storage.local.set promise inside).
+      await vi.runAllTimersAsync();
+
+      expect(setSpy).toHaveBeenCalledTimes(1);
+      // And the persisted snapshot has all 100 entries.
+      expect(setSpy.mock.calls[0][0]).toHaveProperty(ErrorLog.STORAGE_KEY);
+      expect(setSpy.mock.calls[0][0][ErrorLog.STORAGE_KEY]).toHaveLength(100);
+
+      vi.useRealTimers();
+    });
+
+    it('clear() bypasses the debounce and flushes immediately', async () => {
+      vi.useFakeTimers();
+      const setSpy = vi.spyOn(chrome.storage.local, 'set');
+
+      await ErrorLog.log({ scriptId: 's1', error: 'pending' });
+      setSpy.mockClear();
+
+      // No debounced save fired yet.
+      expect(setSpy).not.toHaveBeenCalled();
+
+      // clear() must persist immediately — user intent is "make storage empty NOW"
+      await ErrorLog.clear();
+
+      expect(setSpy).toHaveBeenCalledTimes(1);
+      expect(setSpy.mock.calls[0][0][ErrorLog.STORAGE_KEY]).toEqual([]);
+
+      vi.useRealTimers();
+    });
+
+    it('flush() cancels the pending debounced timer (no double-write)', async () => {
+      vi.useFakeTimers();
+      const setSpy = vi.spyOn(chrome.storage.local, 'set');
+      setSpy.mockClear();
+
+      await ErrorLog.log({ scriptId: 's1', error: 'one' });
+      expect(ErrorLog._pendingSaveTimer).not.toBeNull();
+
+      // Explicit flush
+      await ErrorLog.flush();
+      expect(setSpy).toHaveBeenCalledTimes(1);
+      expect(ErrorLog._pendingSaveTimer).toBeNull();
+
+      // Advance past the debounce window — no SECOND save fires.
+      await vi.advanceTimersByTimeAsync(ErrorLog.SAVE_DEBOUNCE_MS + 50);
+      expect(setSpy).toHaveBeenCalledTimes(1);
+
+      vi.useRealTimers();
+    });
   });
 });
