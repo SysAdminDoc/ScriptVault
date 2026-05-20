@@ -4,6 +4,13 @@
 
 const ResourceCache = {
   cache: {},
+  // LR-002 — in-flight fetch dedup. Map<url, Promise<text>>. Two scripts
+  // hitting the same @require URL simultaneously used to both miss the
+  // cache, both call fetch(), and race on cache.set — wasting bandwidth
+  // and producing last-write-wins on the dataUri. Now the second caller
+  // awaits the first's in-flight promise. Mirrors the _pendingFetches
+  // pattern already used in background.core.js for userscript install.
+  _pendingFetches: new Map(),
   maxAge: 86400000, // 24 hours
   maxEntries: 200,
   maxResourceBytes: 5 * 1024 * 1024,
@@ -60,47 +67,67 @@ const ResourceCache = {
       throw new Error('Only HTTP(S) URLs allowed for @resource/@require');
     }
 
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.fetchTimeoutMs);
+    // LR-002 — share the in-flight fetch with any concurrent caller for
+    // the same URL. The set() below MUST happen before any await so the
+    // second caller (which may arrive on the same microtask tick) sees
+    // the promise. A failed fetch CLEARS the entry in finally so the
+    // next call re-tries instead of inheriting the failure. `return await`
+    // is intentional (not the usual anti-pattern): it attaches THIS
+    // function as a handler of the in-flight rejection, preventing Node
+    // from flagging an unhandled-rejection between settle time and the
+    // caller's own await.
+    const pending = this._pendingFetches.get(url);
+    if (pending) return await pending;
+
+    const fetchPromise = (async () => {
       try {
-        const response = await fetch(url, { signal: controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const contentType = response.headers.get('content-type') || 'text/plain';
-        const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
-        if (Number.isFinite(contentLength) && contentLength > this.maxResourceBytes) {
-          throw new Error('Resource exceeds maximum allowed size (5 MB)');
-        }
-        const buffer = await response.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        if (bytes.length > this.maxResourceBytes) {
-          throw new Error('Resource exceeds maximum allowed size (5 MB)');
-        }
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), this.fetchTimeoutMs);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const contentType = response.headers.get('content-type') || 'text/plain';
+          const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
+          if (Number.isFinite(contentLength) && contentLength > this.maxResourceBytes) {
+            throw new Error('Resource exceeds maximum allowed size (5 MB)');
+          }
+          const buffer = await response.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          if (bytes.length > this.maxResourceBytes) {
+            throw new Error('Resource exceeds maximum allowed size (5 MB)');
+          }
 
-        // Generate text representation
-        let text;
-        if (contentType.includes('text') || contentType.includes('json') || contentType.includes('xml') || contentType.includes('css') || contentType.includes('javascript')) {
-          text = new TextDecoder().decode(bytes);
-        } else {
-          text = '';
-        }
+          // Generate text representation
+          let text;
+          if (contentType.includes('text') || contentType.includes('json') || contentType.includes('xml') || contentType.includes('css') || contentType.includes('javascript')) {
+            text = new TextDecoder().decode(bytes);
+          } else {
+            text = '';
+          }
 
-        // Generate data URI for binary resources (images, fonts, etc.)
-        const chunks = [];
-        for (let i = 0; i < bytes.length; i += 8192) {
-          chunks.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)));
-        }
-        const base64 = btoa(chunks.join(''));
-        const dataUri = `data:${contentType};base64,${base64}`;
+          // Generate data URI for binary resources (images, fonts, etc.)
+          const chunks = [];
+          for (let i = 0; i < bytes.length; i += 8192) {
+            chunks.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)));
+          }
+          const base64 = btoa(chunks.join(''));
+          const dataUri = `data:${contentType};base64,${base64}`;
 
-        await this.set(url, text, dataUri);
-        return text;
-      } finally {
-        clearTimeout(timeout);
+          await this.set(url, text, dataUri);
+          return text;
+        } finally {
+          clearTimeout(timeout);
+        }
+      } catch (e) {
+        console.error('[ScriptVault] Failed to fetch resource:', url, e);
+        throw e;
       }
-    } catch (e) {
-      console.error('[ScriptVault] Failed to fetch resource:', url, e);
-      throw e;
+    })();
+    this._pendingFetches.set(url, fetchPromise);
+    try {
+      return await fetchPromise;
+    } finally {
+      this._pendingFetches.delete(url);
     }
   },
 
