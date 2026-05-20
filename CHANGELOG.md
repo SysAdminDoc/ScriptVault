@@ -2,6 +2,14 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## Unreleased
+
+- **LR-001** OAuth refresh wraps fetch in AbortController + 15s timeout. Google / Dropbox / OneDrive `refreshToken()` paths previously called `fetch()` with no signal — a slow or unresponsive network would hang every `getValidToken()` caller until the OS gave up (minutes). New `_oauthFetchWithTimeout` helper in `modules/sync-providers.js` returns null cleanly on AbortError or any network-level rejection, matching the existing null-return contract. 5 new regression cases in `tests/oauth-refresh-timeout.test.js`.
+- **LR-002** ResourceCache concurrent-fetch dedup. Two scripts requesting the same `@require` URL simultaneously used to both miss the cache, both call `fetch()`, and race on `cache.set` — wasting bandwidth and producing last-write-wins on the persisted dataUri. Added `_pendingFetches: Map<url, Promise<text>>` so concurrent callers share the in-flight promise. Failed fetch clears the entry so retries aren't poisoned. 3 new regression cases in `tests/resources.test.js` (dedup, failure-recovery, cache-hit-short-circuit).
+- **LR-003** AST analyzer detectors for three obfuscation patterns the literal-`eval` detector misses: indirect-eval (`(0, eval)(x)` SequenceExpression shape, invokes eval in global scope bypassing closure isolation), dynamic-property-call on globals (`window[<computed>](args)`, gated to known global receivers to avoid noise), and Function-constructor via `.apply`/`.call`/`.bind` (catches `Function.apply(null, ['return x'])` which the `new Function()` detector misses). 26 new regression cases in `tests/analyzer-ast-detectors.test.js` (positive + negative + malformed-AST + array integrity).
+- **D-phase** `npm audit fix` clears 4 advisories (1 high, 3 moderate) in transitive devDependencies (basic-ftp/ip-address from puppeteer-core; postcss/ws from vitest tooling). None ship in the extension bundle.
+- Tests: 44 test files, 756/756 green. `tsc --noEmit` strict clean. background.js 19,542 lines.
+
 ## [v3.11.0] — Storage & persistence rollback hardening + Phase 38 parity wave (2026-05-19)
 
 - Added: **Phase 38.1** `GM_addElement` returns `null` (never throws) on every failure path — non-string/empty tag, `createElement` throws, falsy parent, parent without `appendChild`, or `appendChild` throws. Matches VM v2.37.0 + TM 5.5.6237 contract. Attribute-application errors no longer abort the call. Both runtime JS and TS mirror updated. 3 regression cases.
