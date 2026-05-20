@@ -284,7 +284,13 @@ function generateSummary(riskLevel, findings) {
 function analyze(code) {
   const findings = [];
   let totalRisk = 0;
-  const strippedCode = code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  // Mirror of bg/analyzer.js stripper — must NOT eat URL schemes inside
+  // string literals. The (^|[^:]) prefix ensures `//` preceded by `:`
+  // (i.e. URL scheme separator) is treated as part of the URL, not a
+  // comment marker.
+  const strippedCode = code
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
   for (const pattern of patterns) {
     pattern.regex.lastIndex = 0;
     const matches = strippedCode.match(pattern.regex);
@@ -374,6 +380,32 @@ describe('Analyzer: comment stripping', () => {
     const evalFinding = result.findings.find(f => f.id === 'eval');
     expect(evalFinding).toBeDefined();
     expect(evalFinding.count).toBe(1);
+  });
+
+  // Hardening: the old stripper used /\/\/.*$/gm which ate URL schemes
+  // inside string literals (everything after "https:" on a line containing
+  // a URL was deleted), causing fetch()/document.cookie/etc. patterns
+  // BEFORE OR AFTER the URL on the same line to be missed when they were
+  // adjacent. Verify the URL-preserving stripper holds.
+  it('does not eat URL schemes inside string literals (regression for URL-strip bug)', () => {
+    const code = 'var url = "https://example.com/path"; fetch(url); document.cookie;';
+    const result = analyze(code);
+    expect(result.findings.find(f => f.id === 'fetch-call')).toBeDefined();
+    expect(result.findings.find(f => f.id === 'cookie-access')).toBeDefined();
+  });
+
+  it('still recognises tail-of-line comments after code (no // before code)', () => {
+    const code = 'var x = 1; // eval("ignored")';
+    const result = analyze(code);
+    expect(result.findings.find(f => f.id === 'eval')).toBeUndefined();
+  });
+
+  it('still recognises mid-line comments without URL prefix', () => {
+    const code = 'foo(); // eval("commented")\neval("real")';
+    const result = analyze(code);
+    const e = result.findings.find(f => f.id === 'eval');
+    expect(e).toBeDefined();
+    expect(e.count).toBe(1);
   });
 });
 

@@ -2958,8 +2958,15 @@ var CloudSyncProviders = {
         }
         return null;
       }
-      const data = await resp.json();
-      if (data.access_token) {
+      // Malformed JSON from the OAuth endpoint should surface as a clean
+      // null return, not an unhandled promise rejection in callers that
+      // pattern `const token = await refreshToken(); if (!token) ...`.
+      let data;
+      try { data = await resp.json(); } catch (e) {
+        console.warn('[CloudSync] Google token refresh JSON parse failed:', e?.message || e);
+        return null;
+      }
+      if (data && data.access_token) {
         await SettingsManager.set({ googleDriveToken: data.access_token });
         if (data.refresh_token) {
           await SettingsManager.set({ googleDriveRefreshToken: data.refresh_token });
@@ -3308,8 +3315,12 @@ var CloudSyncProviders = {
         }
         return null;
       }
-      const data = await resp.json();
-      if (data.access_token) {
+      let data;
+      try { data = await resp.json(); } catch (e) {
+        console.warn('[CloudSync] Dropbox token refresh JSON parse failed:', e?.message || e);
+        return null;
+      }
+      if (data && data.access_token) {
         await SettingsManager.set({ dropboxToken: data.access_token });
         return data.access_token;
       }
@@ -3539,8 +3550,12 @@ var CloudSyncProviders = {
         }
         return null;
       }
-      const data = await resp.json();
-      if (data.access_token) {
+      let data;
+      try { data = await resp.json(); } catch (e) {
+        console.warn('[CloudSync] OneDrive token refresh JSON parse failed:', e?.message || e);
+        return null;
+      }
+      if (data && data.access_token) {
         await SettingsManager.set({
           onedriveToken: data.access_token,
           onedriveRefreshToken: data.refresh_token || refreshTok
@@ -9691,12 +9706,31 @@ const PublicAPI = (() => {
     const hook = _webhooks[eventType];
     if (!hook || !hook.enabled || !hook.url) return;
 
-    const body = {
-      event: eventType,
-      timestamp: Date.now(),
-      version: API_VERSION,
-      data: payload
-    };
+    // Defense in depth: re-validate the persisted URL before each fire so
+    // that any bug allowing storage corruption (or a future migration that
+    // bypasses setWebhook validation) cannot silently turn webhooks into an
+    // SSRF vector. The same isInternalWebhookUrl check setWebhook uses.
+    const guardReason = isInternalWebhookUrl(hook.url);
+    if (guardReason) {
+      console.warn(`[PublicAPI] webhook ${eventType} blocked at fire time: ${guardReason}`);
+      return;
+    }
+
+    // JSON.stringify will throw on circular payloads. Catch defensively so a
+    // pathological payload from a future caller can't surface as an
+    // unhandled promise rejection that the rest of the dispatch swallows.
+    let bodyString;
+    try {
+      bodyString = JSON.stringify({
+        event: eventType,
+        timestamp: Date.now(),
+        version: API_VERSION,
+        data: payload
+      });
+    } catch (e) {
+      console.warn(`[PublicAPI] webhook ${eventType} payload serialization failed:`, e?.message || e);
+      return;
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
@@ -9704,7 +9738,7 @@ const PublicAPI = (() => {
       await fetch(hook.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: bodyString,
         signal: controller.signal
       });
     } catch (e) {
@@ -10426,7 +10460,16 @@ const ScriptAnalyzer = {
   analyze(code) {
     const findings = [];
     let totalRisk = 0;
-    const strippedCode = code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    // Strip line comments WITHOUT eating URLs in string literals. The
+    // previous regex (/\/\/.*$/gm) destroyed any line containing a URL like
+    // "https://example.com" — everything after "https:" was stripped,
+    // causing the URL-based exfiltration patterns below to miss obvious
+    // tells. Requiring the // to NOT be preceded by ':' filters out URL
+    // scheme separators while still catching real comments (preceded by
+    // whitespace, ;, ,, }, etc.).
+    const strippedCode = code
+      .replace(/(^|[^:])\/\/.*$/gm, '$1')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
     for (const pattern of this.patterns) {
       pattern.regex.lastIndex = 0;
       const matches = strippedCode.match(pattern.regex);
