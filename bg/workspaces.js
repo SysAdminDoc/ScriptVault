@@ -8,19 +8,25 @@ const WorkspaceManager = {
   async _init() {
     if (this._cache !== null) return;
     // Serialize concurrent cold-start callers so a late-resolving get()
-    // can't clobber mutations already applied to _cache by an earlier caller.
+    // can't clobber mutations already applied to _cache by an earlier
+    // caller. WORKSPACES-INIT — clear _initPromise in a try/finally on
+    // BOTH success and failure (mirrors modules/storage.js init pattern).
+    // Without the success-side clear, a test or factory-reset that nulls
+    // _cache to force a reload would see the stale resolved promise and
+    // no-op without re-loading from storage.
     if (!this._initPromise) {
       this._initPromise = (async () => {
         const data = await chrome.storage.local.get('workspaces');
         if (this._cache === null) {
           this._cache = data.workspaces || { active: null, list: [] };
         }
-      })().catch(e => {
-        this._initPromise = null;
-        throw e;
-      });
+      })();
     }
-    return this._initPromise;
+    try {
+      return await this._initPromise;
+    } finally {
+      this._initPromise = null;
+    }
   },
 
   async _save() {

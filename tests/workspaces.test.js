@@ -188,4 +188,40 @@ describe('WorkspaceManager', () => {
 
     expect((await WorkspaceManager.getAll()).list[0].snapshot.s1).toBe(true);
   });
+
+  // WORKSPACES-INIT — _initPromise must clear on BOTH success and failure
+  // so a subsequent _cache null-out (factory reset, test isolation) gets a
+  // fresh storage load. Pre-fix the resolved promise stuck around forever,
+  // and any caller after `_cache = null` saw the stale promise and no-op'd.
+  describe('WORKSPACES-INIT — _initPromise lifecycle', () => {
+    it('clears _initPromise after successful init', async () => {
+      await WorkspaceManager.getAll();  // triggers _init
+      expect(WorkspaceManager._initPromise).toBeNull();
+    });
+
+    it('clears _initPromise after failed init', async () => {
+      chrome.storage.local.get.mockRejectedValueOnce(new Error('STORAGE_FAIL'));
+      await expect(WorkspaceManager.getAll()).rejects.toThrow('STORAGE_FAIL');
+      expect(WorkspaceManager._initPromise).toBeNull();
+    });
+
+    it('null-ing _cache forces a real storage reload on the next _init', async () => {
+      // Seed storage; cache populates from it.
+      chrome.storage.local.set({ workspaces: { active: null, list: [{ id: 'ws1', name: 'First' }] } });
+      const r1 = await WorkspaceManager.getAll();
+      expect(r1.list).toHaveLength(1);
+      expect(r1.list[0].name).toBe('First');
+
+      // Mutate storage out-of-band, null the cache to force a reload.
+      chrome.storage.local.set({ workspaces: { active: null, list: [{ id: 'ws2', name: 'Second' }] } });
+      WorkspaceManager._cache = null;
+
+      // Pre-fix: this would return the OLD cached value because
+      // _initPromise still pointed at a resolved (now stale) promise
+      // and short-circuited the storage re-read.
+      const r2 = await WorkspaceManager.getAll();
+      expect(r2.list).toHaveLength(1);
+      expect(r2.list[0].name).toBe('Second');
+    });
+  });
 });
