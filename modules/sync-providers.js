@@ -2,6 +2,35 @@
 // INLINED: cloud-sync.js - Cloud Sync Providers
 // (inlined to bypass Chrome service worker importScripts caching)
 // ============================================================================
+
+// LR-001 — OAuth refresh hardening. Wrap a fetch in an AbortController with
+// a wall-clock timeout so a slow/dead network can't hang getValidToken()
+// callers indefinitely (pre-fix, the fetch hung until the OS gave up,
+// minutes later, often after the SW had died and re-spawned).
+//
+// 15-second budget matches the existing pattern in modules/resources.js
+// fetchTimeoutMs. Callers expect the same null-on-failure contract; any
+// AbortError surfaces as a clean null with a warning log, not an
+// unhandled rejection.
+async function _oauthFetchWithTimeout(url, init, providerLabel, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (e) {
+    if (e && (e.name === 'AbortError' || /aborted|timed?\s*out/i.test(e.message || ''))) {
+      console.warn(`[CloudSync] ${providerLabel} token refresh timed out after ${timeoutMs}ms`);
+      return null;
+    }
+    // Network-level errors (DNS, connection refused, etc.) — also surface
+    // as null so getValidToken can fall back to "user must re-auth" UX.
+    console.warn(`[CloudSync] ${providerLabel} token refresh network error:`, e?.message || e);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 var CloudSyncProviders = {
   // ============================================================================
   // WebDAV Provider
@@ -90,15 +119,22 @@ var CloudSyncProviders = {
       if (!refreshToken) return null;
 
       const clientId = settings.googleClientId || this.clientId;
-      const resp = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: clientId,
-          grant_type: 'refresh_token',
-          refresh_token: refreshToken
-        })
-      });
+      // LR-001 — abort after 15s so a hung fetch can't block callers
+      // forever. Helper returns null on timeout / network error.
+      const resp = await _oauthFetchWithTimeout(
+        'https://oauth2.googleapis.com/token',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: clientId,
+            grant_type: 'refresh_token',
+            refresh_token: refreshToken
+          })
+        },
+        'Google'
+      );
+      if (!resp) return null;
 
       if (!resp.ok) {
         console.warn('[CloudSync] Google token refresh failed:', resp.status);
@@ -446,15 +482,21 @@ var CloudSyncProviders = {
       const clientId = settings.dropboxClientId;
       if (!refreshTok || !clientId) return null;
 
-      const resp = await fetch('https://api.dropboxapi.com/oauth2/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: clientId,
-          grant_type: 'refresh_token',
-          refresh_token: refreshTok
-        })
-      });
+      // LR-001 — 15s wall-clock abort to bound caller wait time.
+      const resp = await _oauthFetchWithTimeout(
+        'https://api.dropboxapi.com/oauth2/token',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: clientId,
+            grant_type: 'refresh_token',
+            refresh_token: refreshTok
+          })
+        },
+        'Dropbox'
+      );
+      if (!resp) return null;
 
       if (!resp.ok) {
         console.warn('[CloudSync] Dropbox token refresh failed:', resp.status);
@@ -681,16 +723,22 @@ var CloudSyncProviders = {
       const clientId = settings.onedriveClientId;
       if (!refreshTok || !clientId) return null;
 
-      const resp = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: clientId,
-          grant_type: 'refresh_token',
-          refresh_token: refreshTok,
-          scope: 'Files.ReadWrite.AppFolder User.Read offline_access'
-        })
-      });
+      // LR-001 — 15s wall-clock abort to bound caller wait time.
+      const resp = await _oauthFetchWithTimeout(
+        'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: clientId,
+            grant_type: 'refresh_token',
+            refresh_token: refreshTok,
+            scope: 'Files.ReadWrite.AppFolder User.Read offline_access'
+          })
+        },
+        'OneDrive'
+      );
+      if (!resp) return null;
 
       if (!resp.ok) {
         console.warn('[CloudSync] OneDrive token refresh failed:', resp.status);
