@@ -149,8 +149,14 @@ const ScriptDebugger = (() => {
     return args.map(a => {
       if (a === null) return 'null';
       if (a === undefined) return 'undefined';
-      if (typeof a === 'object') return JSON.stringify(a, null, 2);
-      return String(a);
+      if (typeof a === 'object') {
+        // The wrapper-side capture already round-trips through JSON to
+        // strip circular references, but defensive: a custom `toJSON()`
+        // can still throw, and any malformed reconstruction here would
+        // tear down the whole console render. Fall back to a label.
+        try { return JSON.stringify(a, null, 2); } catch { return '[unserializable]'; }
+      }
+      try { return String(a); } catch { return '[unprintable]'; }
     }).join(' ');
   }
 

@@ -245,14 +245,28 @@ export function parseUserscript(code: string): ParseResult {
           // Handle localized metadata like @name:ja or @name:zh-Hans.
           // Use indexOf/slice to preserve multi-segment locale tags — split(':')
           // would truncate "zh-Hans" or similar hyphenated subtags.
+          //
+          // SECURITY: reject prototype-pollution keys. A malicious script
+          // with `// @name:__proto__ EVIL` would otherwise reach
+          // `meta.localized["__proto__"]["name"] = "EVIL"` — the bracket
+          // accessor returns Object.prototype, and the subsequent
+          // `.name = ...` mutates it directly. That contaminates every
+          // object in the SW context (e.g. `{}.name === "EVIL"`),
+          // corrupting all downstream code that reads `.name`/`.constructor`/
+          // `.toString` etc. via inheritance.
           {
             const colonIdx: number = key.indexOf(':');
             if (colonIdx > 0) {
               const baseKey: string = key.slice(0, colonIdx);
               const locale: string = key.slice(colonIdx + 1);
-              if (!meta.localized) meta.localized = {};
-              if (!meta.localized[locale]) meta.localized[locale] = {};
-              meta.localized[locale]![baseKey] = value;
+              const POLLUTED = ['__proto__', 'constructor', 'prototype'];
+              if (!POLLUTED.includes(baseKey) && !POLLUTED.includes(locale)) {
+                if (!meta.localized) meta.localized = Object.create(null) as Record<string, Record<string, string>>;
+                if (!Object.hasOwn(meta.localized, locale)) {
+                  meta.localized[locale] = Object.create(null) as Record<string, string>;
+                }
+                meta.localized[locale]![baseKey] = value;
+              }
             }
           }
       }
