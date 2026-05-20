@@ -96,18 +96,15 @@ const QuotaManager = (() => {
       const all = await chrome.storage.local.get(null);
       const expiredKeys = [];
       const now = Date.now();
+      const TTL_MS = 7 * 24 * 60 * 60 * 1000;
       for (const [key, value] of Object.entries(all)) {
-        if (key.startsWith('require_cache_') && value.timestamp) {
-          if (now - value.timestamp > 7 * 24 * 60 * 60 * 1000) {
-            expiredKeys.push(key);
-            freedBytes += JSON.stringify(value).length;
-          }
-        }
-        if (key.startsWith('res_cache_') && value.timestamp) {
-          if (now - value.timestamp > 7 * 24 * 60 * 60 * 1000) {
-            expiredKeys.push(key);
-            freedBytes += JSON.stringify(value).length;
-          }
+        // Defensive: value can be null/primitive for legacy keys; only object
+        // values with a numeric .timestamp participate in TTL eviction.
+        if (!value || typeof value !== 'object' || typeof value.timestamp !== 'number') continue;
+        if (!(key.startsWith('require_cache_') || key.startsWith('res_cache_'))) continue;
+        if (now - value.timestamp > TTL_MS) {
+          expiredKeys.push(key);
+          try { freedBytes += JSON.stringify(value).length; } catch { /* circular value — ignore */ }
         }
       }
       if (expiredKeys.length > 0) {
