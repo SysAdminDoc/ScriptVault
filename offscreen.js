@@ -46,6 +46,77 @@ const RISK_PATTERNS = [
     desc: 'Creates functions from strings, equivalent to eval',
     match: node => node.type === 'NewExpression' && isIdent(node.callee, 'Function')
   },
+  // LR-003 — Indirect eval. `(0, eval)(x)` (and any (foo, eval)(x) shape
+  // with eval as the final term in a SequenceExpression) invokes eval in
+  // GLOBAL scope, bypassing the userscript's closure isolation. This is
+  // a standard obfuscation pattern that the literal-`eval` detector
+  // above misses. The match shape: CallExpression whose callee is a
+  // SequenceExpression whose last expression is the identifier `eval`.
+  {
+    id: 'indirect-eval', label: 'Indirect eval ((0, eval))', risk: 30, category: 'execution',
+    desc: 'Indirect eval runs in global scope, bypassing local closures (obfuscation pattern)',
+    match: node => {
+      if (node?.type !== 'CallExpression') return false;
+      const callee = node.callee;
+      if (callee?.type !== 'SequenceExpression') return false;
+      const exprs = callee.expressions;
+      if (!Array.isArray(exprs) || exprs.length === 0) return false;
+      return isIdent(exprs[exprs.length - 1], 'eval');
+    }
+  },
+  // LR-003 — Dynamic-property call on a global. `window[<computed>](args)`
+  // or `globalThis[<computed>](args)` where the property name isn't a
+  // static literal — typical obfuscation shape (`window['ev'+'al']`,
+  // `window[atob('ZXZhbA==')]`). We DON'T flag `window['eval']` (static
+  // string literal — the literal-`eval` detector already covers it via
+  // member access) and we DON'T flag computed reads (`window[x]` without
+  // a following call) since reads aren't immediately executable.
+  {
+    id: 'dynamic-property-call', label: 'Dynamic-property global call', risk: 25, category: 'obfuscation',
+    desc: 'Calls a globally-scoped function via computed property access (eval obfuscation)',
+    match: node => {
+      if (node?.type !== 'CallExpression') return false;
+      const callee = node.callee;
+      if (callee?.type !== 'MemberExpression') return false;
+      if (callee.computed !== true) return false;
+      // Static string literal property — let the more specific detector
+      // (eval / cookie-access) catch it; avoid double-counting.
+      if (callee.property?.type === 'Literal' && typeof callee.property.value === 'string') return false;
+      // Only flag when the receiver is a known global, to avoid noise from
+      // legitimate dynamic indexing like obj[handlerName](e).
+      return isIdent(callee.object, 'window')
+          || isIdent(callee.object, 'globalThis')
+          || isIdent(callee.object, 'self')
+          || isIdent(callee.object, 'unsafeWindow');
+    }
+  },
+  // LR-003 — Function-constructor invoked via .apply/.call/.bind. The
+  // `new Function(...)` detector catches the constructor form, but
+  // `Function.apply(null, ['return x'])` or
+  // `Function.prototype.constructor.call(null, body)` slip past. Match
+  // CallExpressions on Function.{apply,call,bind} OR Function.prototype.*.
+  {
+    id: 'function-ctor-apply', label: 'Function constructor via .apply/.call/.bind', risk: 25, category: 'execution',
+    desc: 'Calling Function() via .apply/.call/.bind is equivalent to new Function()',
+    match: node => {
+      if (node?.type !== 'CallExpression') return false;
+      const callee = node.callee;
+      if (callee?.type !== 'MemberExpression') return false;
+      const methodName = callee.property?.name;
+      if (methodName !== 'apply' && methodName !== 'call' && methodName !== 'bind') return false;
+      // Direct shape: Function.apply(...)
+      if (isIdent(callee.object, 'Function')) return true;
+      // Function.prototype.apply(...) or Function.prototype.constructor.apply(...)
+      if (callee.object?.type === 'MemberExpression') {
+        if (isMember(callee.object, 'Function', 'prototype')) return true;
+        // .constructor.apply where .constructor's parent is Function.prototype
+        if (callee.object?.property?.name === 'constructor'
+            && callee.object?.object?.type === 'MemberExpression'
+            && isMember(callee.object.object, 'Function', 'prototype')) return true;
+      }
+      return false;
+    }
+  },
   {
     id: 'settimeout-str', label: 'setTimeout with string', risk: 20, category: 'execution',
     desc: 'String argument to setTimeout acts like eval',
