@@ -242,4 +242,61 @@ window.__svTag  = GM_info.script.tag;
     expect(window.__svTags).toEqual([]);
     expect(window.__svTag).toBeUndefined();
   });
+
+  // Hardening: the @unwrap banner used JSON.stringify(name).slice(1, -1)
+  // and interpolated the result into a single-quoted JS string. A name
+  // containing a literal single quote (e.g. "John's Script") leaked the
+  // quote into the string body and produced invalid JS — the wrapper
+  // failed to parse, the script never ran, and the dashboard surfaced a
+  // misleading "script execution error" instead of "@unwrap is set".
+  it('@unwrap banner handles script names containing apostrophes without breaking the wrapper', () => {
+    const script = makeScript(`window.__unwrapRan = true;`);
+    script.meta.name = "John's Tricky Script";
+    script.meta.unwrap = true;
+
+    const wrapped = buildWrappedScript(script);
+    // Most importantly: the wrapper must parse. new Function() throws
+    // SyntaxError on an unbalanced single quote; a passing parse is the
+    // pin.
+    expect(() => new Function(wrapped)).not.toThrow();
+
+    // And the user code should still execute.
+    new Function(wrapped)();
+    expect(window.__unwrapRan).toBe(true);
+    Reflect.deleteProperty(window, '__unwrapRan');
+  });
+
+  it('@unwrap banner handles double-quote, backslash, and unicode in script names', () => {
+    const script = makeScript(`window.__unwrapRan = 'yes';`);
+    // Real-world script names users have written. Each previously had a
+    // distinct failure mode under the slice-based interpolation.
+    script.meta.name = `Weird "quoted" \\back\\slash 漢字 \u2028 line-sep`;
+    script.meta.unwrap = true;
+
+    const wrapped = buildWrappedScript(script);
+    expect(() => new Function(wrapped)).not.toThrow();
+    new Function(wrapped)();
+    expect(window.__unwrapRan).toBe('yes');
+    Reflect.deleteProperty(window, '__unwrapRan');
+  });
+
+  // Hardening: GM_addElement with attrs passed as an array used to fall
+  // into Object.entries which returns numeric-index pairs, silently
+  // creating attributes like 0="value". TM/VM spec says attrs is an
+  // object map; reject arrays explicitly.
+  it('GM_addElement rejects array-shaped attrs (must be an object map per TM/VM contract)', async () => {
+    const wrapped = buildWrappedScript(makeScript(`
+window.__arrAttrs = GM_addElement(document.body, 'span', ['textContent', 'leak']);
+`));
+    new Function(wrapped)();
+    await flushWrappedScript();
+
+    // Element is still created and attached (defensive), but the array
+    // attrs are dropped — no numeric-named attributes leak through.
+    expect(window.__arrAttrs).toBeInstanceOf(HTMLSpanElement);
+    expect(window.__arrAttrs.getAttribute('0')).toBeNull();
+    expect(window.__arrAttrs.getAttribute('1')).toBeNull();
+    expect(window.__arrAttrs.textContent).toBe('');
+    Reflect.deleteProperty(window, '__arrAttrs');
+  });
 });

@@ -10273,18 +10273,15 @@ const QuotaManager = (() => {
       const all = await chrome.storage.local.get(null);
       const expiredKeys = [];
       const now = Date.now();
+      const TTL_MS = 7 * 24 * 60 * 60 * 1000;
       for (const [key, value] of Object.entries(all)) {
-        if (key.startsWith('require_cache_') && value.timestamp) {
-          if (now - value.timestamp > 7 * 24 * 60 * 60 * 1000) {
-            expiredKeys.push(key);
-            freedBytes += JSON.stringify(value).length;
-          }
-        }
-        if (key.startsWith('res_cache_') && value.timestamp) {
-          if (now - value.timestamp > 7 * 24 * 60 * 60 * 1000) {
-            expiredKeys.push(key);
-            freedBytes += JSON.stringify(value).length;
-          }
+        // Defensive: value can be null/primitive for legacy keys; only object
+        // values with a numeric .timestamp participate in TTL eviction.
+        if (!value || typeof value !== 'object' || typeof value.timestamp !== 'number') continue;
+        if (!(key.startsWith('require_cache_') || key.startsWith('res_cache_'))) continue;
+        if (now - value.timestamp > TTL_MS) {
+          expiredKeys.push(key);
+          try { freedBytes += JSON.stringify(value).length; } catch { /* circular value — ignore */ }
         }
       }
       if (expiredKeys.length > 0) {
@@ -18588,7 +18585,10 @@ ${req.code}
     let el;
     try { el = document.createElement(tag); } catch { return null; }
     if (!el) return null;
-    if (attrs && typeof attrs === 'object') {
+    // Reject arrays — Object.entries(array) returns numeric-index pairs that
+    // would silently create attributes like 0="value". TM/VM contract says
+    // attrs is an object map, never an array.
+    if (attrs && typeof attrs === 'object' && !Array.isArray(attrs)) {
       try {
         Object.entries(attrs).forEach(([k, v]) => {
           if (k === 'textContent') el.textContent = v;
@@ -19317,7 +19317,13 @@ ${libraryExports}
   // authors who set @unwrap by mistake can spot it. Console-capture and
   // error suppression are also disabled in this mode.
   if (meta.unwrap === true) {
-    const banner = `console.warn('[ScriptVault] ${JSON.stringify(meta.name || 'Unnamed').slice(1, -1)}: @unwrap is set — GM_* APIs are unavailable.');`;
+    // JSON.stringify produces a properly-escaped double-quoted JS string.
+    // Don't slice off the quotes — a name like "John's Script" contains a
+    // single quote, which the previous slice-based interpolation surfaced
+    // verbatim into a single-quoted host string and broke the wrapper's
+    // syntax. The full JSON-quoted form is a valid JS string literal.
+    const nameLit = JSON.stringify(meta.name || 'Unnamed');
+    const banner = `console.warn('[ScriptVault] ' + ${nameLit} + ': @unwrap is set — GM_* APIs are unavailable.');`;
     return banner + '\n' + userCode;
   }
 

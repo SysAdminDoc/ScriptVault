@@ -990,7 +990,10 @@ ${req.code}
     let el;
     try { el = document.createElement(tag); } catch { return null; }
     if (!el) return null;
-    if (attrs && typeof attrs === 'object') {
+    // Reject arrays — Object.entries(array) returns numeric-index pairs that
+    // would silently create attributes like 0="value". TM/VM contract says
+    // attrs is an object map, never an array.
+    if (attrs && typeof attrs === 'object' && !Array.isArray(attrs)) {
       try {
         Object.entries(attrs).forEach(([k, v]) => {
           if (k === 'textContent') el.textContent = v;
@@ -1657,8 +1660,14 @@ ${libraryExports}
   // this mode; we log a one-line console.warn so authors who set @unwrap by
   // mistake can spot it.
   if (meta.unwrap === true) {
-    const safeName = JSON.stringify(meta.name || 'Unnamed').slice(1, -1);
-    const banner = `console.warn('[ScriptVault] ${safeName}: @unwrap is set — GM_* APIs are unavailable.');`;
+    // JSON.stringify yields a properly-escaped double-quoted JS string.
+    // Don't .slice(1, -1) — a name like "John's Script" contains a single
+    // quote, which the slice-based form surfaced verbatim into a
+    // single-quoted host string and broke the wrapper's syntax. The full
+    // JSON-quoted form is a valid JS string literal that concatenates
+    // cleanly inside the console.warn() call.
+    const nameLit = JSON.stringify(meta.name || 'Unnamed');
+    const banner = `console.warn('[ScriptVault] ' + ${nameLit} + ': @unwrap is set — GM_* APIs are unavailable.');`;
     return banner + '\n' + userCode;
   }
 
