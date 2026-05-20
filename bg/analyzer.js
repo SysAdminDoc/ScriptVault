@@ -77,7 +77,16 @@ const ScriptAnalyzer = {
   analyze(code) {
     const findings = [];
     let totalRisk = 0;
-    const strippedCode = code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    // Strip line comments WITHOUT eating URLs in string literals. The
+    // previous regex (/\/\/.*$/gm) destroyed any line containing a URL like
+    // "https://example.com" — everything after "https:" was stripped,
+    // causing the URL-based exfiltration patterns below to miss obvious
+    // tells. Requiring the // to NOT be preceded by ':' filters out URL
+    // scheme separators while still catching real comments (preceded by
+    // whitespace, ;, ,, }, etc.).
+    const strippedCode = code
+      .replace(/(^|[^:])\/\/.*$/gm, '$1')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
     for (const pattern of this.patterns) {
       pattern.regex.lastIndex = 0;
       const matches = strippedCode.match(pattern.regex);

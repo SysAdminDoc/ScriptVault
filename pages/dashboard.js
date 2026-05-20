@@ -6114,102 +6114,114 @@
     // Bulk update + popup "update" entries keep calling checkScriptForUpdates
     // directly because they already operate through their own progress UIs
     // (the bulk-progress modal IS the confirmation surface for those flows).
+    //
+    // Per-script in-flight set prevents a double-click on the update icon
+    // from firing two concurrent check requests (which would race the
+    // confirmation modal — second modal stacks on top of first, user sees
+    // a duplicated UI).
+    const _updateCheckInFlight = new Set();
     async function interactiveCheckAndConfirmUpdate(scriptId, triggerEl = null) {
-        const script = state.scripts.find(s => s.id === scriptId);
-        const name = script?.metadata?.name || scriptId;
-        const oldVersion = script?.metadata?.version || '?';
-
-        if (triggerEl) {
-            if ('disabled' in triggerEl) triggerEl.disabled = true;
-            else {
-                triggerEl.style.opacity = '0.4';
-                triggerEl.style.pointerEvents = 'none';
-            }
-        }
-
-        let updates;
+        if (_updateCheckInFlight.has(scriptId)) return false;
+        _updateCheckInFlight.add(scriptId);
         try {
-            showToast(`Checking ${name}…`, 'info');
-            updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId });
-        } catch (err) {
-            showToast('Update check failed', 'error');
-            return false;
-        } finally {
+            const script = state.scripts.find(s => s.id === scriptId);
+            const name = script?.metadata?.name || scriptId;
+            const oldVersion = script?.metadata?.version || '?';
+
             if (triggerEl) {
-                if ('disabled' in triggerEl) triggerEl.disabled = false;
+                if ('disabled' in triggerEl) triggerEl.disabled = true;
                 else {
-                    triggerEl.style.opacity = '';
-                    triggerEl.style.pointerEvents = '';
+                    triggerEl.style.opacity = '0.4';
+                    triggerEl.style.pointerEvents = 'none';
                 }
             }
-        }
 
-        if (updates?.error) {
-            showToast(updates.error || 'Update check failed', 'error');
-            return false;
-        }
-        if (!Array.isArray(updates) || updates.length === 0) {
-            showToast(`${name} is up to date`, 'info');
-            return false;
-        }
-
-        const update = updates[0];
-        const newVersion = update?.newVersion || '?';
-        // Three-button confirmation modal. The "View diff" action opens the
-        // existing diff viewer and resolves with a sentinel so the loop
-        // re-asks afterwards — users can ping-pong between diff and decision
-        // without losing context.
-        const askConfirmation = () => new Promise(resolve => {
-            let settled = false;
-            const finish = (r) => {
-                if (settled) return;
-                settled = true;
-                modalDismissHandler = null;
-                closeModalShell();
-                resolve(r);
-            };
-            showModal(
-                `Update ${escapeHtml(name)}?`,
-                `<p>An update is available: <strong>v${escapeHtml(oldVersion)} → v${escapeHtml(newVersion)}</strong>.</p>` +
-                `<p>Install now, or open the diff first?</p>`,
-                [
-                    { label: 'Cancel', class: '', callback: () => finish('cancel') },
-                    { label: 'View diff', class: '', callback: () => finish('diff') },
-                    { label: 'Install update', class: 'btn-primary', callback: () => finish('install') },
-                ],
-                { onDismiss: () => finish('cancel') }
-            );
-        });
-
-        while (true) {
-            const choice = await askConfirmation();
-            if (choice === 'diff') {
-                showDiffView(
-                    script?.code || '',
-                    update.code || '',
-                    `v${oldVersion}`,
-                    `v${newVersion}`
-                );
-                continue;
+            let updates;
+            try {
+                showToast(`Checking ${name}…`, 'info');
+                updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId });
+            } catch (err) {
+                showToast('Update check failed', 'error');
+                return false;
+            } finally {
+                if (triggerEl) {
+                    if ('disabled' in triggerEl) triggerEl.disabled = false;
+                    else {
+                        triggerEl.style.opacity = '';
+                        triggerEl.style.pointerEvents = '';
+                    }
+                }
             }
-            if (choice !== 'install') return false;
-            break;
-        }
 
-        try {
-            const response = await chrome.runtime.sendMessage({
-                action: 'applyUpdate', scriptId, code: update.code,
-            });
-            if (response?.error) {
-                showToast(response.error || 'Update failed', 'error');
+            if (updates?.error) {
+                showToast(updates.error || 'Update check failed', 'error');
                 return false;
             }
-            showToast(`${name} updated to v${newVersion}`, 'success');
-            setTimeout(() => loadScripts(), 800);
-            return true;
-        } catch (err) {
-            showToast('Update failed', 'error');
-            return false;
+            if (!Array.isArray(updates) || updates.length === 0) {
+                showToast(`${name} is up to date`, 'info');
+                return false;
+            }
+
+            const update = updates[0];
+            const newVersion = update?.newVersion || '?';
+            // Three-button confirmation modal. The "View diff" action opens the
+            // existing diff viewer and resolves with a sentinel so the loop
+            // re-asks afterwards — users can ping-pong between diff and
+            // decision without losing context.
+            const askConfirmation = () => new Promise(resolve => {
+                let settled = false;
+                const finish = (r) => {
+                    if (settled) return;
+                    settled = true;
+                    modalDismissHandler = null;
+                    closeModalShell();
+                    resolve(r);
+                };
+                showModal(
+                    `Update ${escapeHtml(name)}?`,
+                    `<p>An update is available: <strong>v${escapeHtml(oldVersion)} → v${escapeHtml(newVersion)}</strong>.</p>` +
+                    `<p>Install now, or open the diff first?</p>`,
+                    [
+                        { label: 'Cancel', class: '', callback: () => finish('cancel') },
+                        { label: 'View diff', class: '', callback: () => finish('diff') },
+                        { label: 'Install update', class: 'btn-primary', callback: () => finish('install') },
+                    ],
+                    { onDismiss: () => finish('cancel') }
+                );
+            });
+
+            while (true) {
+                const choice = await askConfirmation();
+                if (choice === 'diff') {
+                    showDiffView(
+                        script?.code || '',
+                        update.code || '',
+                        `v${oldVersion}`,
+                        `v${newVersion}`
+                    );
+                    continue;
+                }
+                if (choice !== 'install') return false;
+                break;
+            }
+
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'applyUpdate', scriptId, code: update.code,
+                });
+                if (response?.error) {
+                    showToast(response.error || 'Update failed', 'error');
+                    return false;
+                }
+                showToast(`${name} updated to v${newVersion}`, 'success');
+                setTimeout(() => loadScripts(), 800);
+                return true;
+            } catch (err) {
+                showToast('Update failed', 'error');
+                return false;
+            }
+        } finally {
+            _updateCheckInFlight.delete(scriptId);
         }
     }
 
@@ -8333,6 +8345,12 @@
                 });
             });
         });
+        // Phase 39.15 sort — snapshot the DOM order before sorting so the
+        // "restore" toggle returns the user's ACTUAL ordering (which may
+        // include patterns added via the input AFTER opening the panel).
+        // Reading from settings.userExcludes would silently lose those
+        // unsaved additions.
+        const _sortOrderSnapshots = new WeakMap();
         document.querySelectorAll('[data-pattern-sort]').forEach((btn) => {
             const targetId = btn.getAttribute('data-pattern-sort');
             const list = document.getElementById(targetId);
@@ -8340,24 +8358,31 @@
             btn.addEventListener('click', () => {
                 const sorted = btn.getAttribute('aria-pressed') === 'true';
                 if (sorted) {
-                    // Toggle off — restore insertion order. Since we have no
-                    // separate stored order, reading the saved settings and
-                    // re-rendering is the cleanest restore. Trigger the next
-                    // settings refresh.
                     btn.setAttribute('aria-pressed', 'false');
                     btn.textContent = 'A→Z';
-                    // Best-effort restore: re-render from saved settings if
-                    // the current editor has them; otherwise leave sorted
-                    // (user can move on without losing data).
-                    const sid = state.currentScriptId;
-                    const script = sid ? state.scripts.find(s => s.id === sid) : null;
-                    const patterns = (targetId === 'userExcludesList')
-                        ? (script?.settings?.userExcludes || [])
-                        : (script?.settings?.userMatches || []);
-                    renderUserPatterns(targetId, patterns, targetId === 'userExcludesList' ? 'exclude' : 'match');
+                    btn.title = 'Toggle alphabetical sort';
+                    const snapshot = _sortOrderSnapshots.get(list);
+                    if (snapshot && snapshot.length > 0) {
+                        // Restore by re-appending in snapshot order. Any tags
+                        // added or removed while sorted are reconciled:
+                        // additions get appended at the end (preserving the
+                        // "newest-last" insertion semantics); deletions are
+                        // naturally dropped because the DOM lookup misses.
+                        const currentTags = new Set(list.querySelectorAll('.pattern-tag'));
+                        for (const tag of snapshot) {
+                            if (currentTags.has(tag)) {
+                                list.appendChild(tag);
+                                currentTags.delete(tag);
+                            }
+                        }
+                        for (const tag of currentTags) list.appendChild(tag);
+                    }
+                    _sortOrderSnapshots.delete(list);
                     return;
                 }
                 const tags = Array.from(list.querySelectorAll('.pattern-tag'));
+                // Stash the live DOM order so the restore path is exact.
+                _sortOrderSnapshots.set(list, tags.slice());
                 tags.sort((a, b) => {
                     const aText = (a.querySelector('.pattern-text')?.textContent || '').toLowerCase();
                     const bText = (b.querySelector('.pattern-text')?.textContent || '').toLowerCase();

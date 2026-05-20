@@ -107,8 +107,15 @@ var CloudSyncProviders = {
         }
         return null;
       }
-      const data = await resp.json();
-      if (data.access_token) {
+      // Malformed JSON from the OAuth endpoint should surface as a clean
+      // null return, not an unhandled promise rejection in callers that
+      // pattern `const token = await refreshToken(); if (!token) ...`.
+      let data;
+      try { data = await resp.json(); } catch (e) {
+        console.warn('[CloudSync] Google token refresh JSON parse failed:', e?.message || e);
+        return null;
+      }
+      if (data && data.access_token) {
         await SettingsManager.set({ googleDriveToken: data.access_token });
         if (data.refresh_token) {
           await SettingsManager.set({ googleDriveRefreshToken: data.refresh_token });
@@ -457,8 +464,12 @@ var CloudSyncProviders = {
         }
         return null;
       }
-      const data = await resp.json();
-      if (data.access_token) {
+      let data;
+      try { data = await resp.json(); } catch (e) {
+        console.warn('[CloudSync] Dropbox token refresh JSON parse failed:', e?.message || e);
+        return null;
+      }
+      if (data && data.access_token) {
         await SettingsManager.set({ dropboxToken: data.access_token });
         return data.access_token;
       }
@@ -688,8 +699,12 @@ var CloudSyncProviders = {
         }
         return null;
       }
-      const data = await resp.json();
-      if (data.access_token) {
+      let data;
+      try { data = await resp.json(); } catch (e) {
+        console.warn('[CloudSync] OneDrive token refresh JSON parse failed:', e?.message || e);
+        return null;
+      }
+      if (data && data.access_token) {
         await SettingsManager.set({
           onedriveToken: data.access_token,
           onedriveRefreshToken: data.refresh_token || refreshTok

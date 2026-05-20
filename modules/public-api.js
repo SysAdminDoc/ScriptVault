@@ -728,12 +728,31 @@ const PublicAPI = (() => {
     const hook = _webhooks[eventType];
     if (!hook || !hook.enabled || !hook.url) return;
 
-    const body = {
-      event: eventType,
-      timestamp: Date.now(),
-      version: API_VERSION,
-      data: payload
-    };
+    // Defense in depth: re-validate the persisted URL before each fire so
+    // that any bug allowing storage corruption (or a future migration that
+    // bypasses setWebhook validation) cannot silently turn webhooks into an
+    // SSRF vector. The same isInternalWebhookUrl check setWebhook uses.
+    const guardReason = isInternalWebhookUrl(hook.url);
+    if (guardReason) {
+      console.warn(`[PublicAPI] webhook ${eventType} blocked at fire time: ${guardReason}`);
+      return;
+    }
+
+    // JSON.stringify will throw on circular payloads. Catch defensively so a
+    // pathological payload from a future caller can't surface as an
+    // unhandled promise rejection that the rest of the dispatch swallows.
+    let bodyString;
+    try {
+      bodyString = JSON.stringify({
+        event: eventType,
+        timestamp: Date.now(),
+        version: API_VERSION,
+        data: payload
+      });
+    } catch (e) {
+      console.warn(`[PublicAPI] webhook ${eventType} payload serialization failed:`, e?.message || e);
+      return;
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
@@ -741,7 +760,7 @@ const PublicAPI = (() => {
       await fetch(hook.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: bodyString,
         signal: controller.signal
       });
     } catch (e) {

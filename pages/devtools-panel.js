@@ -406,12 +406,18 @@
   }
 
   function section(title, rows) {
+    // Defense in depth: escape title here even though all current call sites
+    // pass hard-coded string literals. A future contributor adding e.g.
+    // `section(entry.scriptName, ...)` would silently introduce XSS without
+    // this guard. Row keys/values are still passed pre-escaped by callers
+    // (intentional — values are escaped at construction time so the
+    // escapeHtml(String(v)) call there can also coerce non-string values).
     const rowsHtml = rows.map(([k, v]) => `
       <div class="net-detail-row">
         <span class="net-detail-key">${k}:</span>
         <span class="net-detail-val">${v}</span>
       </div>`).join('');
-    return `<div class="net-detail-section"><div class="net-detail-section-title">${title}</div>${rowsHtml}</div>`;
+    return `<div class="net-detail-section"><div class="net-detail-section-title">${escapeHtml(String(title))}</div>${rowsHtml}</div>`;
   }
 
   // ── Execution rendering ───────────────────────────────────────────────────
