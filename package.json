@@ -17,6 +17,8 @@
     "test": "vitest run",
     "test:a11y": "vitest run tests/dashboard-a11y.test.js tests/popup-a11y.test.js tests/gui-ux-audit.test.js tests/accessibility-surface-pass.test.js",
     "smoke:dashboard": "node scripts/smoke-dashboard.mjs",
+    "smoke:large-library": "node scripts/smoke-large-library.mjs",
+    "smoke:large-library:check": "node scripts/smoke-large-library.mjs --check",
     "cws:check": "node scripts/check-cws-publish-tooling.mjs",
     "store-copy:check": "node scripts/check-permission-copy.mjs",
     "support:matrix": "node scripts/generate-browser-support-matrix.mjs",
