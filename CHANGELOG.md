@@ -4,6 +4,37 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Restore receipts, backup verification, and undoable imports
+
+- Added `BackupScheduler.verifyBackup(backupId, { parseUserscript })` which
+  walks every userscript in an archive, validates options/storage JSON plus
+  `global-settings.json`/`folders.json`/`workspaces.json`, and reports
+  per-script parse errors, missing options, structural validity, and
+  install-id conflicts without mutating state. Exposed via the new
+  `verifyBackup` background action and a **Verify** button in the backup
+  review modal.
+- `restoreBackup` now snapshots the live script + values state (plus
+  settings/folders/workspaces on full restore) before mutation and persists
+  a `restoreReceipts` ledger entry (FIFO cap 10). The receipt id is returned
+  in the result so the dashboard restore toast can offer a 15-second
+  **Undo** action.
+- Added `rollbackRestore` background action that re-applies the snapshotted
+  state, deletes scripts the restore added (via the receipt's
+  `addedScriptIds`), and marks the receipt as rolled back so a second
+  rollback responds with `alreadyRolledBack`.
+- `importScripts` and `importFromZip` now snapshot every overwritten script
+  into `versionHistory` (with `source: 'import'` + caller-supplied label)
+  and record an import receipt with the same shape as restore receipts.
+  Dashboard ZIP/JSON import toasts now surface the same **Undo** action so
+  an overwriting import is reversible end-to-end.
+- Added `getRestoreReceipts`, `getRestoreReceipt`, and
+  `clearRestoreReceipts` actions so the dashboard can inspect or clear the
+  ledger.
+- Added regression coverage in `tests/backup-receipts.test.js`
+  (verifyBackup, restoreBackup snapshot, rollback, retention) and
+  `tests/import-snapshot.test.js` (versionHistory push + receipt recording
+  for both `importScripts` and `importFromZip`).
+
 ### 2026-05-24 — Sync safety cockpit
 
 - Added shared sync-provider health metadata for WebDAV, Google Drive,
