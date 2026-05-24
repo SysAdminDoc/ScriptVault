@@ -23,7 +23,9 @@ runtimes now come from TypeScript sources. `modules/storage.js` was promoted
 next using the same generator with multi-global output, so the production
 runtime now consumes the v3 IndexedDB-backed `src/modules/storage.ts`
 implementation while preserving the script-mode globals expected by
-`background.core.js`.
+`background.core.js`. The sync/import tranche has also started with
+`modules/migration.js`, generated from `src/modules/migration.ts` after
+aligning the migration version stamp with the current v2.3.0 runtime marker.
 
 ## 1. Problem statement
 
@@ -197,7 +199,8 @@ Pilot exit criteria:
    the storage module promotion later the same day.
 6. **Sync/import modules.** Promote `sync-easycloud`, `backup-scheduler`,
    `public-api`, `migration`, and then `sync-providers` after the TS source
-   owns the full runtime implementation.
+   owns the full runtime implementation. Started 2026-05-24 with
+   `modules/migration.js`.
 7. **Background helpers.** Promote `bg/*.js`.
 8. **Main worker leaves.** Promote parser, matcher, registration,
    wrapper-builder, update/install/import, cloud sync, DNR, badge, tab
@@ -279,4 +282,8 @@ pilot should avoid that broader build-system change.
    `modules/xhr.js`, `modules/internal-host-guard.js`, and
    `modules/resources.js`.
 7. Promote `modules/storage.js` or move to the sync/import tranche if storage
-   needs a separate design pass.
+   needs a separate design pass. Shipped 2026-05-24 with `modules/storage.js`,
+   followed by the sync/import tranche starting with `modules/migration.js`.
+8. Continue the sync/import tranche with `backup-scheduler`,
+   `sync-easycloud`, or `public-api`, leaving `sync-providers` until the TS
+   source owns the full runtime implementation.

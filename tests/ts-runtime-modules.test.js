@@ -75,6 +75,12 @@ describe('TS runtime module generator', () => {
           'setScriptChangeListener',
         ]),
       }),
+      expect.objectContaining({
+        id: 'migration',
+        source: 'src/modules/migration.ts',
+        output: 'modules/migration.js',
+        exportName: 'Migration',
+      }),
     ]));
   });
 

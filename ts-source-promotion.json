@@ -90,7 +90,8 @@
     {
       "runtime": "modules/migration.js",
       "sources": ["src/modules/migration.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "modules/quota-manager.js",
