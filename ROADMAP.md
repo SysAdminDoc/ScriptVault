@@ -410,12 +410,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
 
 #### Later - Staged Enhancements After Trust Gates
 
-- [ ] P2 - Evaluate generated multi-target manifest/build system
+- [x] P2 - Evaluate generated multi-target manifest/build system
   - Why: WXT-like manifest generation could reduce Chrome/Firefox/Edge drift after current release gates stabilize.
   - Evidence: S62-S65,H019.
   - Touches: build config, manifest files, docs, CI.
   - Acceptance: Design document chooses WXT, custom generator, or status quo with measured migration cost.
   - Verify: proof-of-concept build for Chrome and Firefox from one config.
+  - Status: Shipped 2026-05-24 as `docs/manifest-generation-design.md`. Measured drift between `manifest.json` and `manifest-firefox.json` (108 diff lines across 8 sections) and the per-release maintenance cost (~10 minutes plus the standing risk of forgetting a section). Evaluated three options — WXT, a thin generator script, or status quo — against migration cost, drift surface, build complexity, loss of the inlined `background.js` contract, Edge add-on readiness, contributor onboarding, HMR availability, and CI risk. Chose **Option B (thin generator helper)**: a Node script that produces `manifest-firefox.json` from `manifest.json` plus a small declarative transformation file, keeping the existing source layout / esbuild pipeline / test suite intact. Documented concrete follow-up steps (write the generator, wire `build-firefox.sh` to assert byte-for-byte parity, repeat for Edge, then gitignore the generated manifests). Existing `build-firefox.sh` is the proof-of-concept that Chrome + Firefox builds already come from one source tree — only the manifest transformation needs externalising. No code changes needed for this slice; the generator is the next P2 roadmap item.
 
 - [ ] P2 - Add Edge Add-ons package path
   - Why: Edge is a natural Chromium distribution once release provenance is reliable.

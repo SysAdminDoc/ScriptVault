@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Manifest generation design doc
+
+- Added `docs/manifest-generation-design.md`. Measured the current Chrome
+  vs Firefox manifest drift (108 diff lines across 8 sections), evaluated
+  WXT vs a thin generator script vs status quo, and chose Option B
+  (generator) with documented next steps. WXT was rejected because it
+  conflicts with the inlined service-worker build pipeline that Chrome
+  MV3 requires.
+
 ### 2026-05-24 — Locale coverage CI gate
 
 - Added `scripts/check-locales.mjs` which audits `_locales/*/messages.json`,
