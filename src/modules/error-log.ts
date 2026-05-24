@@ -83,19 +83,21 @@ export interface ScriptErrorData {
 declare const ScriptStorage: { get(id: string): Promise<{ meta?: { name?: string } } | null> } | undefined;
 
 const STORAGE_KEY = 'errorLog';
-const MAX_ENTRIES = 500;
+let MAX_ENTRIES = 500;
+const SAVE_DEBOUNCE_MS = 200;
 
 // In-memory cache; loaded on first access
 let _cache: ErrorLogRecord[] | null = null;
 // Pending load promise — ensures concurrent callers share one storage read
 let _loadPromise: Promise<ErrorLogRecord[]> | null = null;
+let _pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ---------------------------------------------------------------------------
 // Internal Storage
 // ---------------------------------------------------------------------------
 
 async function _load(): Promise<ErrorLogRecord[]> {
-  if (_cache) return _cache;
+  if (_cache !== null) return _cache;
   if (!_loadPromise) {
     _loadPromise = (async () => {
       const data = await chrome.storage.local.get(STORAGE_KEY);
@@ -106,8 +108,31 @@ async function _load(): Promise<ErrorLogRecord[]> {
   return _loadPromise;
 }
 
-async function _save(): Promise<void> {
+async function _writeCacheToStorage(): Promise<void> {
+  if (_cache === null) return;
   await chrome.storage.local.set({ [STORAGE_KEY]: _cache });
+}
+
+function _scheduleSave(): void {
+  if (_pendingSaveTimer) return;
+  _pendingSaveTimer = setTimeout(() => {
+    _pendingSaveTimer = null;
+    _writeCacheToStorage().catch((e) => {
+      console.warn('[ErrorLog] debounced save failed:', e?.message || e);
+    });
+  }, SAVE_DEBOUNCE_MS);
+}
+
+export async function flush(): Promise<void> {
+  if (_pendingSaveTimer) {
+    clearTimeout(_pendingSaveTimer);
+    _pendingSaveTimer = null;
+  }
+  await _writeCacheToStorage();
+}
+
+export async function _save(): Promise<void> {
+  await flush();
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +144,7 @@ async function _save(): Promise<void> {
  * entry: { scriptId, scriptName?, error, stack?, url?, line?, col?, context? }
  */
 export async function log(entry: ErrorLogEntry): Promise<ErrorLogRecord> {
-  const entries = await _load();
+  let entries = await _load();
 
   const errorValue = entry.error;
   const errorObj = errorValue as { message?: string; stack?: string } | undefined;
@@ -153,11 +178,11 @@ export async function log(entry: ErrorLogEntry): Promise<ErrorLogRecord> {
 
   // FIFO: trim to max entries
   if (entries.length > MAX_ENTRIES) {
-    entries.splice(0, entries.length - MAX_ENTRIES);
+    entries = entries.slice(-MAX_ENTRIES);
   }
 
   _cache = entries;
-  await _save();
+  _scheduleSave();
 
   return record;
 }
@@ -348,11 +373,10 @@ export async function clear(scriptId?: string): Promise<void> {
   if (scriptId) {
     const entries = await _load();
     _cache = entries.filter(e => e.scriptId !== scriptId);
-    await _save();
   } else {
     _cache = [];
-    await _save();
   }
+  await flush();
 }
 
 /**
@@ -465,8 +489,21 @@ export async function logGMError(
 // ---------------------------------------------------------------------------
 
 const ErrorLog = {
-  STORAGE_KEY,
-  MAX_ENTRIES,
+  get STORAGE_KEY(): string { return STORAGE_KEY; },
+  get MAX_ENTRIES(): number { return MAX_ENTRIES; },
+  set MAX_ENTRIES(value: number) {
+    MAX_ENTRIES = Number.isFinite(value) && value > 0 ? Math.floor(value) : 500;
+  },
+  get SAVE_DEBOUNCE_MS(): number { return SAVE_DEBOUNCE_MS; },
+  get _cache(): ErrorLogRecord[] | null { return _cache; },
+  set _cache(value: ErrorLogRecord[] | null) {
+    _cache = value;
+    if (value === null) _loadPromise = null;
+  },
+  get _pendingSaveTimer(): ReturnType<typeof setTimeout> | null { return _pendingSaveTimer; },
+  set _pendingSaveTimer(value: ReturnType<typeof setTimeout> | null) {
+    _pendingSaveTimer = value;
+  },
   log,
   getAll,
   getGrouped,
@@ -478,6 +515,8 @@ const ErrorLog = {
   registerGlobalHandlers,
   logScriptError,
   logGMError,
+  flush,
+  _save,
 };
 
 export default ErrorLog;

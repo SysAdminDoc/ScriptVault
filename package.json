@@ -22,6 +22,8 @@
     "cws:check": "node scripts/check-cws-publish-tooling.mjs",
     "ts-source:check": "node scripts/check-ts-source-drift.mjs",
     "ts-source:report": "node scripts/check-ts-source-drift.mjs --report",
+    "ts-runtime:generate": "node scripts/generate-ts-runtime-modules.mjs",
+    "ts-runtime:check": "node scripts/generate-ts-runtime-modules.mjs --check",
     "store-copy:check": "node scripts/check-permission-copy.mjs",
     "support:matrix": "node scripts/generate-browser-support-matrix.mjs",
     "support:matrix:check": "node scripts/generate-browser-support-matrix.mjs --check",
