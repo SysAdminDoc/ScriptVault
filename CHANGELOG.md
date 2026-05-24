@@ -4,6 +4,20 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Per-script trust receipt diffs
+
+- `createScriptTrustReceipt` now records `@require` body hashes, byte counts,
+  and added/removed/changed/unverified dependency changes when an update is
+  applied.
+- Update receipts now diff `@grant`, `@connect`, and `@match` permissions
+  against the previous script version, while preserving rollback-point receipt
+  behavior for version history entries.
+- The dashboard recent-update banner includes a `Review changes` action when
+  auto-updated scripts carry dependency or permission deltas, opening a modal
+  that lists each changed dependency and permission addition/removal.
+- Added `tests/trust-receipt-diff.test.js` for dependency hashes, permission
+  diffs, `applyUpdate` persistence, and dashboard/banner wiring.
+
 ### 2026-05-24 — Dashboard large-library virtualization
 
 - Added `pages/dashboard-virtual-rows.js`, a small table virtualizer that
