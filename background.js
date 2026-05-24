@@ -12404,17 +12404,6 @@ async function importFromZip(zipData, options = {}) {
 // Message Handlers
 // ============================================================================
 
-// Regular message listener (content scripts, popup, dashboard)
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  handleMessage(message, sender)
-    .then(sendResponse)
-    .catch(e => {
-      console.error('[ScriptVault] Unhandled message error:', e);
-      sendResponse({ error: e.message });
-    });
-  return true;
-});
-
 // USER_SCRIPT world message listener (for GM_* APIs)
 // This is SEPARATE from onMessage and required for messaging: true to work
 //
@@ -12432,6 +12421,52 @@ function isUserScriptAllowedAction(action) {
   if (action.startsWith('GM_') || action.startsWith('GM.')) return true;
   return USER_SCRIPT_ALLOWED_EXTRAS.has(action);
 }
+
+// True when the dedicated user-script messaging API is available (Chrome 131+).
+// On older runtimes the wrapper's chrome.runtime.sendMessage calls fall back to
+// onMessage, so the same allowlist must gate tab-origin messages there.
+const USER_SCRIPT_MESSAGING_AVAILABLE = typeof chrome !== 'undefined'
+  && !!(chrome.runtime && chrome.runtime.onUserScriptMessage);
+
+// Decide whether a chrome.runtime.onMessage sender represents a trusted
+// extension surface (popup, dashboard, install page, sidebar) versus a tab
+// context (content script or — on Chrome <131 — a user script falling back to
+// onMessage). Extension surfaces may call any handleMessage action; tab
+// contexts are restricted to the user-script allowlist.
+function isExtensionSurfaceSender(sender) {
+  if (!sender) return false;
+  const extensionId = chrome.runtime?.id;
+  if (!extensionId) return false;
+  const ownExtensionPrefix = 'chrome-extension://' + extensionId + '/';
+  const url = typeof sender.url === 'string' ? sender.url : '';
+  if (url.startsWith(ownExtensionPrefix)) return true;
+  // Service-worker → service-worker self-messages have no sender.tab/url; treat
+  // them as trusted since only this extension's own code can originate them.
+  if (sender.id === extensionId && !sender.tab && !url) return true;
+  return false;
+}
+
+// Regular message listener (content scripts, popup, dashboard).
+//
+// Tab-origin messages are gated by isUserScriptAllowedAction so that, when the
+// dedicated user-script channel is unavailable (Chrome <131 / Firefox without
+// onUserScriptMessage), the same allowlist still applies. Extension surfaces
+// (popup, dashboard, install page) keep full access.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!isExtensionSurfaceSender(sender)) {
+    if (!message || !isUserScriptAllowedAction(message.action)) {
+      sendResponse({ error: 'Action not permitted from non-extension context' });
+      return false;
+    }
+  }
+  handleMessage(message, sender)
+    .then(sendResponse)
+    .catch(e => {
+      console.error('[ScriptVault] Unhandled message error:', e);
+      sendResponse({ error: e.message });
+    });
+  return true;
+});
 
 function normalizeConnectHost(value) {
   if (typeof value !== 'string') return '';
