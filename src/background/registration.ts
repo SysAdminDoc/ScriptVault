@@ -36,6 +36,27 @@ declare function buildWrappedScript(
 declare function debugWarn(...args: unknown[]): void;
 
 // ---------------------------------------------------------------------------
+// Phase 39.22 — bound any await chain that could deadlock on a CSP-strict /
+// hung remote target (VM #2513). Rejects with a labelled timeout error after
+// `ms` milliseconds; the caller is responsible for treating the rejection as
+// a soft failure (Promise.allSettled, .catch, etc.). Mirrors the
+// `_withTimeout` helper in `background.core.js`.
+// ---------------------------------------------------------------------------
+
+function _withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout: Promise<T> = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Timeout after ${ms}ms: ${label}`)), ms);
+  });
+  return Promise.race<T>([
+    Promise.resolve<T>(promise).finally(() => {
+      if (timer !== undefined) clearTimeout(timer);
+    }),
+    timeout,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -99,13 +120,25 @@ export async function registerAllScripts(): Promise<void> {
     if (allRequires.size > 0) {
       debugLog(`Preloading ${allRequires.size} @require dependencies`);
       const preloadStart: number = Date.now();
-      await Promise.allSettled([...allRequires].map(url => fetchRequireScript(url)));
+      // Phase 39.22 — bound each fetch so a CSP-strict / slow server
+      // can't deadlock the registration sweep (VM #2513). 15s per URL
+      // matches the runtime JS at `background.core.js:5598+`.
+      await Promise.allSettled(
+        [...allRequires].map(url =>
+          _withTimeout(fetchRequireScript(url), 15000, `fetchRequire:${url}`),
+        ),
+      );
       debugLog(`Preloaded in ${Date.now() - preloadStart}ms`);
     }
 
-    // Register all scripts in parallel — significantly faster on large script collections
+    // Register all scripts in parallel — significantly faster on large
+    // script collections. Phase 39.22 — bound each per-script registration
+    // so a single hung script can't deadlock the sweep (VM #2513). 5s per
+    // script matches the runtime JS at `background.core.js:5606+`.
     const results: PromiseSettledResult<void>[] = await Promise.allSettled(
-      enabledScripts.map(script => registerScript(script)),
+      enabledScripts.map(script =>
+        _withTimeout(registerScript(script), 5000, `registerScript:${script.id}`),
+      ),
     );
     const failures = results.filter(
       (r): r is PromiseRejectedResult => r.status === 'rejected',
