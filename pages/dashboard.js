@@ -4085,6 +4085,67 @@
         }
     }
 
+    // Build a flattened lowercased search corpus from every searchable
+    // field on a script: name/description/author, URL patterns (match,
+    // include, exclude, plus user overrides), tags, grants, source URLs,
+    // and an ISO yyyy-mm-dd last-run timestamp. Returning a single string
+    // lets the dashboard search bar do one substring/regex pass per row
+    // instead of N pre-tokenized field checks.
+    function buildScriptSearchCorpus(script) {
+        if (!script) return '';
+        if (script._searchCorpus && script._searchCorpusUpdatedAt === script.updatedAt) {
+            return script._searchCorpus;
+        }
+        const meta = script.metadata || {};
+        const settings = script.settings || {};
+        const parts = [];
+        const push = (value) => {
+            if (value == null) return;
+            if (Array.isArray(value)) {
+                for (const item of value) push(item);
+                return;
+            }
+            if (typeof value === 'object') {
+                for (const item of Object.values(value)) push(item);
+                return;
+            }
+            const str = String(value).trim();
+            if (str) parts.push(str);
+        };
+        push(meta.name);
+        push(meta.description);
+        push(meta.author);
+        push(meta.namespace);
+        push(meta.version);
+        push(meta.homepage);
+        push(meta.supportURL);
+        push(meta.updateURL);
+        push(meta.downloadURL);
+        push(meta.match);
+        push(meta.include);
+        push(meta.exclude);
+        push(meta.grant);
+        push(meta.tag);
+        push(settings.userMatches);
+        push(settings.userIncludes);
+        push(settings.userExcludes);
+        push(settings.tags);
+        if (Number.isFinite(script.stats?.lastRun)) {
+            try { push(new Date(script.stats.lastRun).toISOString().slice(0, 10)); } catch (_) {}
+        }
+        if (Number.isFinite(script.updatedAt)) {
+            try { push(new Date(script.updatedAt).toISOString().slice(0, 10)); } catch (_) {}
+        }
+        const corpus = parts.join('\n').toLowerCase();
+        // Memoize per-script keyed on updatedAt so repeated keystrokes in
+        // the search bar don't rebuild the corpus.
+        try {
+            Object.defineProperty(script, '_searchCorpus', { value: corpus, configurable: true, enumerable: false });
+            Object.defineProperty(script, '_searchCorpusUpdatedAt', { value: script.updatedAt, configurable: true, enumerable: false });
+        } catch (_) {}
+        return corpus;
+    }
+
     function getFilteredScripts() {
         const rawSearch = (elements.scriptSearch?.value || '').trim();
         const statusFilter = elements.filterSelect?.value || 'all';
@@ -4134,15 +4195,14 @@
             const name = s.metadata?.name || '';
             const desc = s.metadata?.description || '';
             const author = s.metadata?.author || '';
+            const corpus = buildScriptSearchCorpus(s);
             let matchesSearch;
             const hasSearchQuery = !!regexFilter || !!effectiveSearch;
             if (regexFilter) {
                 if (isCodeSearch) {
                     matchesSearch = regexFilter.test(s.code || '');
                 } else {
-                    matchesSearch = regexFilter.test(name)
-                        || regexFilter.test(desc)
-                        || regexFilter.test(author);
+                    matchesSearch = regexFilter.test(corpus);
                 }
                 // Each test() call advances lastIndex when the regex has /g;
                 // reset so the next row starts clean.
@@ -4150,9 +4210,7 @@
             } else if (isCodeSearch && effectiveSearch) {
                 matchesSearch = (s.code || '').toLowerCase().includes(effectiveSearch);
             } else if (effectiveSearch) {
-                matchesSearch = name.toLowerCase().includes(effectiveSearch) ||
-                    desc.toLowerCase().includes(effectiveSearch) ||
-                    author.toLowerCase().includes(effectiveSearch);
+                matchesSearch = corpus.includes(effectiveSearch);
             } else {
                 matchesSearch = true;
             }

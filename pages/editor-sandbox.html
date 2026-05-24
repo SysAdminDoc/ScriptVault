@@ -162,6 +162,25 @@
         parent.postMessage({ type: 'change', value: editor.getValue() }, '*');
       });
 
+      // ── Find widget search-history bridge ───────────────────────────────────
+      // Forward every find-widget searchString change to the dashboard so it
+      // can persist the term in chrome.storage.local. The dashboard later
+      // posts the persisted list back as a `prime-find` message so the
+      // widget opens with the user's most recent term across sessions.
+      try {
+        const finder = editor.getContribution('editor.contrib.findController');
+        const findState = finder && finder.getState && finder.getState();
+        if (findState && typeof findState.onFindReplaceStateChange === 'function') {
+          let lastReported = '';
+          findState.onFindReplaceStateChange(() => {
+            const value = (findState.searchString || '').trim();
+            if (!value || value === lastReported) return;
+            lastReported = value;
+            parent.postMessage({ type: 'find-search', value }, '*');
+          });
+        }
+      } catch (_) { /* older Monaco builds may not expose the controller */ }
+
       // ── Cursor tracking ────────────────────────────────────────────────────
       editor.onDidChangeCursorPosition(e => {
         parent.postMessage({ type: 'cursor', line: e.position.lineNumber, col: e.position.column }, '*');
@@ -398,6 +417,19 @@
           const act = editor.getAction(msg.id);
           if (act) act.run();
           else editor.trigger('adapter', msg.id, null);
+        }
+        break;
+      case 'prime-find':
+        // Seed the find widget's searchString with the most recent saved
+        // term so Ctrl+F opens the widget pre-filled. Does not auto-open.
+        if (editor && Array.isArray(msg.history) && msg.history.length > 0) {
+          try {
+            const finder = editor.getContribution('editor.contrib.findController');
+            const state = finder && finder.getState && finder.getState();
+            if (state && typeof state.change === 'function') {
+              state.change({ searchString: String(msg.history[0]) }, false);
+            }
+          } catch (_) {}
         }
         break;
     }
