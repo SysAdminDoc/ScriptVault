@@ -32,6 +32,56 @@ const NpmResolver = (() => {
     default: () => npm_resolve_default
   });
   module.exports = __toCommonJS(npm_resolve_exports);
+  var MAX_NPM_FETCH_BYTES = 5 * 1024 * 1024;
+  var NPM_FETCH_SIZE_ERROR = "NPM response exceeds maximum allowed size (5 MB)";
+  function utf8Length(text) {
+    return new TextEncoder().encode(text).byteLength;
+  }
+  async function readTextBounded(response, maxBytes) {
+    const contentLength = Number.parseInt(response.headers?.get?.("content-length") || "", 10);
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      throw new Error(NPM_FETCH_SIZE_ERROR);
+    }
+    const body = response.body;
+    if (body && typeof body.getReader === "function") {
+      const reader = body.getReader();
+      const chunks = [];
+      let totalBytes = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!value) continue;
+          totalBytes += value.byteLength;
+          if (totalBytes > maxBytes) {
+            try {
+              await reader.cancel();
+            } catch {
+            }
+            throw new Error(NPM_FETCH_SIZE_ERROR);
+          }
+          chunks.push(value);
+        }
+      } finally {
+        try {
+          reader.releaseLock();
+        } catch {
+        }
+      }
+      const decoder = new TextDecoder();
+      let text2 = "";
+      for (let i = 0; i < chunks.length; i++) {
+        text2 += decoder.decode(chunks[i], { stream: i < chunks.length - 1 });
+      }
+      text2 += decoder.decode();
+      return text2;
+    }
+    const text = await response.text();
+    if (utf8Length(text) > maxBytes) {
+      throw new Error(NPM_FETCH_SIZE_ERROR);
+    }
+    return text;
+  }
   var NpmResolver = {
     CACHE_KEY: "npmCache",
     CACHE_TTL: 864e5,
@@ -247,7 +297,7 @@ const NpmResolver = (() => {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status} for ${url}`);
         }
-        return await response.text();
+        return await readTextBounded(response, MAX_NPM_FETCH_BYTES);
       } finally {
         clearTimeout(timer);
       }

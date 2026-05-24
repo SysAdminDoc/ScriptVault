@@ -49,6 +49,57 @@ interface FetchOptions {
   isJson?: boolean;
 }
 
+const MAX_NPM_FETCH_BYTES = 5 * 1024 * 1024;
+const NPM_FETCH_SIZE_ERROR = 'NPM response exceeds maximum allowed size (5 MB)';
+
+function utf8Length(text: string): number {
+  return new TextEncoder().encode(text).byteLength;
+}
+
+async function readTextBounded(response: Response, maxBytes: number): Promise<string> {
+  const contentLength = Number.parseInt(response.headers?.get?.('content-length') || '', 10);
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw new Error(NPM_FETCH_SIZE_ERROR);
+  }
+
+  const body = response.body;
+  if (body && typeof body.getReader === 'function') {
+    const reader = body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+          try { await reader.cancel(); } catch { /* ignore cancel failures */ }
+          throw new Error(NPM_FETCH_SIZE_ERROR);
+        }
+        chunks.push(value);
+      }
+    } finally {
+      try { reader.releaseLock(); } catch { /* ignore release failures */ }
+    }
+
+    const decoder = new TextDecoder();
+    let text = '';
+    for (let i = 0; i < chunks.length; i++) {
+      text += decoder.decode(chunks[i], { stream: i < chunks.length - 1 });
+    }
+    text += decoder.decode();
+    return text;
+  }
+
+  const text = await response.text();
+  if (utf8Length(text) > maxBytes) {
+    throw new Error(NPM_FETCH_SIZE_ERROR);
+  }
+  return text;
+}
+
 const NpmResolver = {
   CACHE_KEY: 'npmCache' as const,
   CACHE_TTL: 86400000, // 24 hours
@@ -308,7 +359,7 @@ const NpmResolver = {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status} for ${url}`);
       }
-      return await response.text();
+      return await readTextBounded(response, MAX_NPM_FETCH_BYTES);
     } finally {
       clearTimeout(timer);
     }

@@ -5,11 +5,11 @@ import { resolve } from 'path';
 const code = readFileSync(resolve(__dirname, '../modules/npm-resolve.js'), 'utf8');
 
 let NpmResolver;
-function createFresh() {
+function createFresh(fetchMock = vi.fn()) {
   const fn = new Function('chrome', 'console', 'fetch', 'crypto', 'TextEncoder', 'btoa',
     code + '\nreturn NpmResolver;'
   );
-  return fn(globalThis.chrome, console, vi.fn(), globalThis.crypto, TextEncoder, globalThis.btoa);
+  return fn(globalThis.chrome, console, fetchMock, globalThis.crypto, TextEncoder, globalThis.btoa);
 }
 
 beforeEach(() => {
@@ -115,6 +115,51 @@ describe('NpmResolver', () => {
         integrity: 'sha256-test',
         version: '4.17.21',
       });
+    });
+  });
+
+  describe('_fetchWithTimeout', () => {
+    it('rejects oversized responses before reading when content-length is available', async () => {
+      const text = vi.fn();
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: { get: vi.fn((name) => (name === 'content-length' ? String(5 * 1024 * 1024 + 1) : null)) },
+        text,
+      });
+      NpmResolver = createFresh(fetchMock);
+
+      await expect(NpmResolver._fetchWithTimeout('https://cdn.example/pkg.js')).rejects.toThrow('maximum allowed size');
+
+      expect(text).not.toHaveBeenCalled();
+    });
+
+    it('stops reading streamed responses that exceed the cap without content-length', async () => {
+      const chunk = new Uint8Array(1024 * 1024);
+      let reads = 0;
+      const reader = {
+        read: vi.fn().mockImplementation(async () => {
+          reads += 1;
+          return reads <= 6 ? { done: false, value: chunk } : { done: true };
+        }),
+        cancel: vi.fn().mockResolvedValue(undefined),
+        releaseLock: vi.fn(),
+      };
+      const text = vi.fn();
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: { get: vi.fn(() => null) },
+        body: { getReader: vi.fn(() => reader) },
+        text,
+      });
+      NpmResolver = createFresh(fetchMock);
+
+      await expect(NpmResolver._fetchWithTimeout('https://cdn.example/pkg.js')).rejects.toThrow('maximum allowed size');
+
+      expect(reader.cancel).toHaveBeenCalled();
+      expect(reader.releaseLock).toHaveBeenCalled();
+      expect(text).not.toHaveBeenCalled();
     });
   });
 

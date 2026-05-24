@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — NPM resolver response-size hardening
+
+- Added bounded streamed response reads to the `npm:` package resolver so CDN
+  and registry responses without `Content-Length` cannot buffer beyond the
+  5 MB cap before rejection.
+- Regenerated the promoted `modules/npm-resolve.js` runtime artifact and
+  rebuilt `background.js` from the updated TypeScript source.
+- Added regressions for declared oversized responses and chunked oversized
+  responses, including reader cancellation and no `response.text()` fallback.
+
 ### 2026-05-24 — Resource cache streamed-body hardening
 
 - Replaced `@resource`/resource-cache `arrayBuffer()` reads with a bounded
