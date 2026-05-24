@@ -4876,6 +4876,21 @@
         const errorHtml = hasErrors
           ? `<span class="script-health-badge alert" title="${escapeHtml(String(script.stats?.errors || 0))} execution error(s) recorded.">Errors</span>`
           : '';
+        // Install-source trust badge — durable across edits and visible at a
+        // glance in the script list. `tone: 'warn'` paints alert, `'good'`
+        // paints success; otherwise neutral.
+        let sourceBadgeHtml = '';
+        if (script.installSource && script.installSource.id && script.installSource.id !== 'local') {
+          const src = script.installSource;
+          const cls = src.tone === 'warn' ? 'alert' : src.tone === 'good' ? 'good' : 'neutral';
+          const title = src.url
+            ? `Installed from ${src.name} (${src.hostname || ''}). Source URL: ${src.url}`
+            : `Installed from ${src.name}.`;
+          sourceBadgeHtml = `<span class="script-health-badge ${cls}" data-source-badge="${escapeHtml(src.id)}" title="${escapeHtml(title)}">${escapeHtml(src.name)}</span>`;
+        }
+        const sourceChangedHtml = script.settings?.sourceIdentityChanged
+          ? `<span class="script-health-badge alert" title="The update channel now points to a different registry than the original install (${escapeHtml(script.previousInstallSource?.name || 'unknown')} → ${escapeHtml(script.installSource?.name || 'unknown')}). Review before trusting future updates.">Source changed</span>`
+          : '';
         if (hasErrors) tr.classList.add('row-has-errors');
         if (isStale) tr.classList.add('row-stale');
         if (overBudget) tr.classList.add('row-over-budget');
@@ -4903,6 +4918,8 @@
                             ${script.metadata?.author ? `<span class="script-author">by ${escapeHtml(script.metadata.author)}</span>` : ''}
                         </div>
                         <div class="script-name-badges">
+                            ${sourceBadgeHtml}
+                            ${sourceChangedHtml}
                             ${localEditsHtml}
                             ${errorHtml}
                             ${slowHtml}

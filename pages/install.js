@@ -644,13 +644,30 @@ function getProvenanceSummary(sourceUrl, meta) {
     detail = 'Local install with a remote update channel declared in metadata.';
   }
 
+  // Surface a source-registry change when the user is updating a script and
+  // the new install URL classifies to a different known registry than the
+  // existing record. Existing script lookup is shared with `pages/install.js`
+  // confirmation flow; we re-derive the classification here to avoid
+  // round-tripping through background for an idempotent computation.
+  let sourceChange = null;
+  if (typeof classifyInstallSource === 'function' && existingScript?.installSource?.id) {
+    const newSource = classifyInstallSource(sourceUrl || downloadUrl || updateUrl || '');
+    if (newSource.id !== 'local' && newSource.id !== existingScript.installSource.id) {
+      sourceChange = {
+        previous: existingScript.installSource,
+        next: newSource
+      };
+    }
+  }
+
   return {
     label,
     detail,
     installSource,
     updateUrl,
     downloadUrl,
-    homepageUrl
+    homepageUrl,
+    sourceChange
   };
 }
 
@@ -710,6 +727,15 @@ function renderTrustCard(sourceUrl) {
         </div>
         <span class="trust-link">${provenance.installSource.safeUrl ? renderExternalLink(provenance.installSource.label, 'Open') : 'Local'}</span>
       </div>
+      ${provenance.sourceChange ? `
+        <div class="trust-row" role="alert">
+          <div class="trust-copy">
+            <strong>Source registry changed</strong>
+            <span>Previous install came from ${escapeHtml(provenance.sourceChange.previous.name)} (${escapeHtml(provenance.sourceChange.previous.hostname || '—')}). This update is from ${escapeHtml(provenance.sourceChange.next.name)} (${escapeHtml(provenance.sourceChange.next.hostname || '—')}). Confirm you trust the new origin before installing.</span>
+          </div>
+          <span class="count status-warn">Review</span>
+        </div>
+      ` : ''}
       ${provenance.updateUrl ? `
         <div class="trust-row">
           <div class="trust-copy">

@@ -50,6 +50,68 @@ function sanitizeUrl(url) {
 }
 
 /**
+ * Classify an install/update URL into a known userscript registry. Returns a
+ * stable shape used by both the install confirmation page and the dashboard
+ * source-trust badge. Unknown URLs fall back to `id: 'other'` with their
+ * hostname preserved; falsy input returns the local-import shape.
+ *
+ * The `id` is what `script.installSource.id` is keyed on, so changing labels
+ * is safe but renaming an `id` will cause source-identity-change warnings to
+ * fire on every script.
+ *
+ * @param {string} url
+ * @returns {{ id: string, name: string, hostname: string, tone: 'good'|'neutral'|'warn', url: string }}
+ */
+function classifyInstallSource(url) {
+  if (typeof url !== 'string' || !url.trim()) {
+    return { id: 'local', name: 'Local import', hostname: '', tone: 'neutral', url: '' };
+  }
+  let host = '';
+  let path = '';
+  try {
+    const u = new URL(url);
+    host = (u.hostname || '').toLowerCase();
+    path = u.pathname || '';
+  } catch (_) {
+    return { id: 'other', name: 'Unknown source', hostname: '', tone: 'warn', url };
+  }
+  if (host === 'greasyfork.org' || host === 'www.greasyfork.org') {
+    return { id: 'greasyfork', name: 'Greasy Fork', hostname: host, tone: 'good', url };
+  }
+  if (host === 'sleazyfork.org' || host === 'www.sleazyfork.org') {
+    return { id: 'sleazyfork', name: 'Sleazy Fork', hostname: host, tone: 'warn', url };
+  }
+  if (host === 'openuserjs.org' || host === 'www.openuserjs.org') {
+    return { id: 'openuserjs', name: 'OpenUserJS', hostname: host, tone: 'good', url };
+  }
+  if (host === 'gist.github.com' || host === 'gist.githubusercontent.com') {
+    return { id: 'github-gist', name: 'GitHub Gist', hostname: host, tone: 'neutral', url };
+  }
+  if (host === 'raw.githubusercontent.com') {
+    return { id: 'github-raw', name: 'GitHub raw', hostname: host, tone: 'neutral', url };
+  }
+  if (host === 'github.com' || host === 'www.github.com') {
+    if (/\/releases\/(download|latest)/i.test(path)) {
+      return { id: 'github-release', name: 'GitHub release', hostname: host, tone: 'good', url };
+    }
+    return { id: 'github', name: 'GitHub', hostname: host, tone: 'neutral', url };
+  }
+  if (host === 'gitlab.com' || host === 'www.gitlab.com') {
+    return { id: 'gitlab', name: 'GitLab', hostname: host, tone: 'neutral', url };
+  }
+  if (host === 'codeberg.org') {
+    return { id: 'codeberg', name: 'Codeberg', hostname: host, tone: 'neutral', url };
+  }
+  if (host === 'bitbucket.org') {
+    return { id: 'bitbucket', name: 'Bitbucket', hostname: host, tone: 'neutral', url };
+  }
+  if (host === 'tampermonkey.net' || host === 'www.tampermonkey.net') {
+    return { id: 'tampermonkey', name: 'Tampermonkey site', hostname: host, tone: 'neutral', url };
+  }
+  return { id: 'other', name: host || 'Unknown source', hostname: host, tone: 'warn', url };
+}
+
+/**
  * Format byte count as human-readable string.
  * @param {number} bytes - The byte count to format
  * @returns {string} Human-readable string like '1.5 MB'

@@ -634,6 +634,19 @@ const UpdateSystem = {
     script.updatedAt = Date.now();
     script.trustReceipt = trustReceipt;
 
+    // Re-classify the install source. If the update came from a different
+    // registry than the install, flag it for the dashboard banner.
+    const updateSourceUrl = sourceUrl || parsed.meta.downloadURL || parsed.meta.updateURL || '';
+    const updatedSource = classifyInstallSource(updateSourceUrl);
+    if (script.installSource?.id && updatedSource.id !== 'local'
+        && script.installSource.id !== updatedSource.id) {
+      script.settings = { ...(script.settings || {}), sourceIdentityChanged: true };
+      script.previousInstallSource = script.installSource;
+      script.installSource = updatedSource;
+    } else if (!script.installSource && updatedSource.id !== 'local') {
+      script.installSource = updatedSource;
+    }
+
     // Re-register FIRST so we can verify the new code works before persisting
     try {
       await unregisterScript(scriptId);
@@ -5877,6 +5890,17 @@ async function installFromCode(code, receiptOptions = {}) {
       });
     }
 
+    // Classify the install source (Greasy Fork / OpenUserJS / GitHub / ...)
+    // so the dashboard can render a durable trust badge and so a future
+    // update from a different registry surfaces as a "source changed" flag.
+    const effectiveSourceUrl = receiptOptions.sourceUrl || meta.downloadURL || meta.updateURL || '';
+    const installSource = classifyInstallSource(effectiveSourceUrl);
+    let sourceIdentityChanged = false;
+    if (existing && existing.installSource && existing.installSource.id && installSource.id !== 'local'
+        && existing.installSource.id !== installSource.id) {
+      sourceIdentityChanged = true;
+    }
+
     const script = {
       ...existing,
       id,
@@ -5886,8 +5910,15 @@ async function installFromCode(code, receiptOptions = {}) {
       position: existing ? existing.position : allScripts.length,
       createdAt: existing ? existing.createdAt : Date.now(),
       updatedAt: Date.now(),
-      trustReceipt
+      trustReceipt,
+      installSource: installSource.id === 'local' && existing?.installSource
+        ? existing.installSource
+        : installSource
     };
+    if (sourceIdentityChanged) {
+      script.settings = { ...(script.settings || existing?.settings || {}), sourceIdentityChanged: true };
+      script.previousInstallSource = existing.installSource;
+    }
     if (versionHistory.length > 0) script.versionHistory = versionHistory;
 
     await ScriptStorage.set(id, script);
