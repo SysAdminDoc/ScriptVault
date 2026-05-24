@@ -30,6 +30,12 @@ export const TS_RUNTIME_MODULES = [
     output: 'modules/npm-resolve.js',
     exportName: 'NpmResolver',
   },
+  {
+    id: 'quota-manager',
+    source: 'src/modules/quota-manager.ts',
+    output: 'modules/quota-manager.js',
+    exportName: 'QuotaManager',
+  },
 ];
 
 function normalizeNewlines(text) {

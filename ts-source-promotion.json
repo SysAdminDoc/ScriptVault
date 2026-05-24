@@ -90,7 +90,8 @@
     {
       "runtime": "modules/quota-manager.js",
       "sources": ["src/modules/quota-manager.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "bg/analyzer.js",

@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Quota manager TypeScript promotion
+
+- Promoted `modules/quota-manager.js` to a generated runtime artifact from
+  `src/modules/quota-manager.ts`, preserving the background concatenation
+  contract while making the stronger TS implementation authoritative.
+- Added `tests/quota-manager.test.js` to exercise the generated runtime
+  artifact against object-map script breakdowns, cleanup actions, and
+  aggressive critical-storage cleanup merging.
+- Extended TS runtime artifact and drift-gate coverage to four promoted
+  modules: ErrorLog, NotificationSystem, NpmResolver, and QuotaManager.
+
 ### 2026-05-24 — NPM resolver TypeScript promotion
 
 - Promoted `modules/npm-resolve.js` to a TS-derived runtime artifact from
