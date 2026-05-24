@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — TypeScript source drift gate
+
+- Added `ts-source-promotion.json` to inventory each runtime JS surface, its
+  TypeScript source counterpart, and whether it is mirrored, a promotion
+  candidate, promoted, or intentionally divergent.
+- Added `scripts/check-ts-source-drift.mjs` plus `npm run ts-source:check`
+  and `npm run ts-source:report`; the default gate fails when promoted
+  runtime JS changes without the matching TS source or generated artifact.
+- Wired the TS source drift gate into CI and added
+  `tests/ts-source-drift-gate.test.js` for map validation, report output,
+  promoted-module violations, and candidate/divergent exemptions.
+
 ### 2026-05-24 — TypeScript authoritative-source design
 
 - Added `docs/ts-authoritative-source-design.md`, choosing a staged

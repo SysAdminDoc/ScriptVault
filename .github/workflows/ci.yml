@@ -50,6 +50,9 @@ jobs:
       - name: Store permission copy check
         run: npm run store-copy:check
 
+      - name: TypeScript source drift gate
+        run: npm run ts-source:check
+
       - name: Release artifact parity
         run: npm run release:check
 
