@@ -80,6 +80,9 @@ jobs:
       - name: Firefox lint and package
         run: npm run firefox:package
 
+      - name: Browser support matrix check
+        run: npm run support:matrix:check
+
       - name: Release trust gate
         run: npm run release:trust
 

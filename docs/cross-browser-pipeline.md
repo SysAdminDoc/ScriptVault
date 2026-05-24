@@ -97,18 +97,22 @@ export default defineConfig({
 
 ### Stage 4 — Chromium-derivative validation (Brave, Vivaldi, Opera, Arc)
 
-No new build targets needed — they accept the Chrome ZIP. Add a **compatibility matrix** to README:
+No new build targets needed — they accept the Chrome ZIP. The generated support matrix below is the current README source of truth for Chrome, Edge, Firefox, and derivative-browser claims. Smoke-test derivative browsers on release tags before promoting them beyond the watchlist.
 
-| Browser | Status | Quirks |
-|---|---|---|
-| Chrome 120+ | ✅ Tier 1 | Baseline |
-| Edge | ✅ Tier 1 | Same as Chrome |
-| Brave | ⚠️ Tier 2 | Brave Shields runs before extensions — can conflict with DNR rules; document workaround |
-| Vivaldi | ⚠️ Tier 2 | Command-chain API can bind ScriptVault actions to power keys (opt-in) |
-| Opera | ⚠️ Tier 2 | Sideload or Opera Add-ons store (separate listing) |
-| Arc | ⚠️ Tier 2 | Sidebar UI — verify popup renders in narrow chrome |
+## Current Generated Support Matrix
 
-Smoke-test each on every release tag.
+<!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:START -->
+_Last generated: 2026-05-24 with `npm run support:matrix`. Version source: `manifest.json` / `manifest-firefox.json` 3.11.0._
+
+| Browser | Support level | Tested version / target | Last successful verification | Verification evidence | Unsupported or deferred APIs |
+|---|---|---|---|---|---|
+| Chrome / Chromium | Tier 1 published target | Chrome 130+ MV3 | 2026-05-24 | `npm run smoke:dashboard`, `npm run cws:check`, Chrome ZIP packaging in CI | Chrome 138+ requires per-extension Allow User Scripts; per-script `worldId` is Chrome 133+ and feature-gated |
+| Microsoft Edge | Tier 1 compatible package; separate store automation pending | Edge 130+ Chromium MV3 package | 2026-05-24 package/manifests; no separate Edge CI smoke yet | Same ZIP as Chrome; smoke harness can run with Edge via `SCRIPT_VAULT_CHROME_PATH` | Edge Add-ons package/publish path is not automated yet |
+| Firefox Desktop | AMO validation target, not a published listing | Firefox 140.0+ MV3 | 2026-05-24 | `npm run firefox:package`; web-ext lint 0 errors / 0 notices / 138 warnings | `sidePanel`, `offscreen`, `identity` OAuth, and some `userScripts.execute` flows are unsupported/deferred; Firefox package omits Monaco until the Firefox editor-loading pass |
+| Firefox for Android | Manifest validation target | Firefox for Android 142.0+ | 2026-05-24 package/manifests; no Android device smoke yet | `manifest-firefox.json` `gecko_android` target plus Firefox source/package ZIP | Same Firefox API deferrals; no side panel; Android device smoke is not wired |
+| Brave / Vivaldi / Opera / Arc | Chromium derivative watchlist | Chrome 130+ package may load | Not release-verified | No CI smoke or store package for these browsers | Store policy, shields/sidebar behavior, and extension UI chrome are unverified |
+| Orion / Safari | Not supported | Not a current target | Not verified | No build, smoke, or package path | Requires separate WebKit/Orion validation and likely native Safari extension work |
+<!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:END -->
 
 ### Stage 5 — Orion validation
 

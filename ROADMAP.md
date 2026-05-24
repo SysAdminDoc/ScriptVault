@@ -344,12 +344,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
 
 #### Next - v3.13.x Cross-Browser and Workflow Completion
 
-- [ ] P1 - Generate browser support matrix from build/lint/smoke results
+- [x] P1 - Generate browser support matrix from build/lint/smoke results
   - Why: README support claims should track real Chrome/Firefox/Edge validation.
   - Evidence: L06, L11, H021.
   - Touches: `docs/cross-browser-pipeline.md`, `README.md`, `.github/workflows/ci.yml`, `scripts/`.
   - Acceptance: Support matrix names tested versions, unsupported APIs, and last successful verification date.
   - Verify: run matrix-generation script after CI smoke.
+  - Status: Shipped 2026-05-24. Added `scripts/generate-browser-support-matrix.mjs`, `npm run support:matrix`, and `npm run support:matrix:check`; generated matrix blocks now live in `README.md` and `docs/cross-browser-pipeline.md` with manifest-derived Chrome/Edge/Firefox targets, latest verification date, Firefox lint counts, and unsupported/deferred API notes. CI now runs the matrix check after Chrome smoke and Firefox package. Added `scripts/run-bash.mjs` so Firefox packaging works from Windows PowerShell when Git Bash is installed but not on PATH. Verification: support matrix check passed, Firefox package passed with web-ext lint 0 errors / 0 notices / 138 warnings, and the dashboard smoke harness passed against a local scratch extension copy because Chrome/Edge close during `Extensions.loadUnpacked` when loading directly from the VMware shared drive.
 
 - [ ] P1 - Add sync token health, revoke, manual sync, and dry-run conflict preview
   - Why: ScriptVault has many sync providers but fragmented trust and recovery states.

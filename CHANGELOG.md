@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Browser support matrix generator
+
+- Added `scripts/generate-browser-support-matrix.mjs` plus
+  `npm run support:matrix` / `npm run support:matrix:check` to generate the
+  README and cross-browser pipeline support matrix from the Chrome and Firefox
+  manifests plus the latest Firefox lint artifact.
+- CI now checks the generated matrix after Chrome dashboard smoke and Firefox
+  package validation, so manifest target or lint-result drift must update the
+  support claims.
+- Added `scripts/run-bash.mjs` and routed Firefox package scripts through it so
+  Windows PowerShell can find Git Bash even when `bash` is not on `PATH`.
+
 ### 2026-05-24 — Accessibility surface pass
 
 - Added forced-colors system-color fallbacks for dashboard, popup, side panel,
