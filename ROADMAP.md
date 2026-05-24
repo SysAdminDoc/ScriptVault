@@ -3517,17 +3517,23 @@ Net-new sources: 13 (218–230). All 13 either back a Phase 38 item, document a 
 
 Sources cited inline; full URL index at end of phase. All items verified against existing Phases 0–38 to prevent duplication.
 
-### Phase 39 progress snapshot (2026-05-17)
+### Phase 39 progress snapshot (last updated 2026-05-24)
 
 | Status | Items |
 |---|---|
-| ✅ Shipped | **39.9** Claude theme · **39.10** runtime user-scripts probe · **39.24** storage round-trip tests |
-| ✅ Audit complete, no code needed | **39.4** locale-length lint (CI test added) · **39.18** `confirm()` audit · **39.19** sourceURL emission · **39.20** `@icon` fallback (pre-existing) · **39.21** clearInterval N/A by design |
+| ✅ Shipped (runtime JS + TS mirror) | **39.9** Claude theme · **39.10** runtime user-scripts probe · **39.11** `@match-top`/`@exclude-top` (TS port + 12 regression tests, 2026-05-24) · **39.13** `GM_openInTab` blob URL re-routing (TS port + tests, 2026-05-24) · **39.22** CSP page-injection timeout-bound awaits (TS port, 2026-05-24) · **39.24** storage round-trip tests |
+| ✅ Shipped (runtime JS only — TS mirror pending Phase 1.5 wave 5) | **39.16** crypto-scam install-time heuristic · **39.25** `@require` cache invalidation via orphan cleanup · **39.26** sync acknowledgment background handlers · **39.27** install-page incognito short-circuit · **39.28** `injectImmediately` for document-start · **39.29** omnibox keyword `sv` · **39.31** string-length clamps · **39.15** sortable exclude-list editor |
+| ✅ Audit complete, no code needed | **39.4** locale-length lint (CI test added) · **39.18** `confirm()` audit · **39.19** sourceURL emission · **39.20** `@icon` fallback (pre-existing) · **39.21** clearInterval N/A by design · **39.23** cross-realm Symbol.iterator guards (already in popup/sidepanel) · **39.12** menu-command user-activation (platform limitation) · **39.14** same-origin XHR shortcut (deferred — breaks @connect enforcement) |
 | ⚠️ Design doc scaffolded | **39.1** [release runbook](docs/release-runbook.md) · **39.2** [CWS API v2 cutover](docs/release-runbook.md) · **39.5** [`@require-provenance` Sigstore](docs/require-provenance-design.md) · **39.40** [MCP 2026 compliance](docs/mcp-2026-compliance.md) · **39.43** [WCAG 3 gap analysis](docs/wcag3-gap-analysis.md) · **Phase 33** [cross-browser WXT plan](docs/cross-browser-pipeline.md) |
-| ⏳ Pending (Round 12 plan documented above; implementation TBD) | 39.3, 39.6–39.8, 39.11–39.17, 39.22, 39.23, 39.25–39.27, 39.28–39.39, 39.41, 39.42, 39.45, 39.48, 39.49 |
+| ⏳ Pending | 39.3, 39.6–39.8, 39.17, 39.30, 39.32–39.39, 39.41, 39.42, 39.45, 39.48, 39.49 |
 | ✅ Cross-refs to other phases | 39.44 (URLPattern → 22.2 promoted) · 39.46 (WASM-CM → 32.1 deprio) · 39.47 (Notification Triggers → 11.11 dead-marked) |
 
-This snapshot reflects the in-session work; the full sub-item bodies below carry detailed `Status (2026-05-17)` notes where shipped, audited, or scaffolded.
+The 2026-05-24 autonomous-loop pass paired with this update closed three
+TS-mirror drift bugs (Phases 39.11, 39.13, 39.22) plus the Phase 40.5
+wrapper-Map caps + Phase 40.14 eviction counters that were missing from
+`src/background/wrapper-builder.ts`. See CHANGELOG.md § Unreleased.
+
+This snapshot reflects the cumulative in-session work; the full sub-item bodies below carry detailed `Status (...)` notes where shipped, audited, or scaffolded.
 
 ### Supply Chain & Release-Pipeline Security
 

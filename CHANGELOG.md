@@ -4,6 +4,63 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — TS-mirror drift cleanup + repo hygiene
+
+- **Phase 39.11** TS-mirror parity. `@match-top` / `@exclude-top` (TM #2784)
+  was shipped in `background.core.js` during the v3.11.0 wave but the
+  typed mirror lagged. Added `matchTop` / `excludeTop` to `ScriptMeta`,
+  taught the TS parser the hyphenated + camelCase forms via a new
+  `ARRAY_ALIASES` map (also extends Phase 36.6 comma-split desugar to
+  both keys), and ported the wrapper-side runtime guard block to
+  `src/background/wrapper-builder.ts`. New `tests/match-top-39-11.test.js`
+  pins 12 cases against the real TS parser + wrapper-builder.
+- **Phase 39.13** TS-mirror parity. `GM_openInTab` now routes `blob:`,
+  `data:`, and `about:` URLs through `window.open()` in-context in the
+  TS wrapper too (was only in runtime JS). The blob registry binding
+  survives because the URL never crosses into the background SW.
+- **Phase 40.5** TS-mirror parity. `_notifCallbacks` (cap 500),
+  `_openedTabs` (cap 200), and `_downloadCallbacks` (cap 200) in
+  `src/background/wrapper-builder.ts` now each evict the oldest entry
+  on cap. Prevents a misbehaving script that never receives the
+  corresponding event from leaking unbounded entries in the
+  USER_SCRIPT world.
+- **Phase 40.14** TS-mirror parity. Eviction counters
+  (`_notifCallbacksEvicted`, `_openedTabsEvicted`,
+  `_downloadCallbacksEvicted`) log a one-line warning on the first
+  eviction and every 100th thereafter so the DevTools panel can
+  surface a "this script is leaking callbacks" hint without any
+  telemetry beacon. New `tests/wrapper-gm-tabs-39-13.test.js` pins 8
+  cases.
+- **Phase 39.22** TS-mirror parity. The `_withTimeout` helper (VM
+  #2513 — CSP-strict-page deadlock prevention) is now also in
+  `src/background/registration.ts`: 15s per `@require` preload and 5s
+  per `registerScript()` call inside `registerAllScripts`.
+- **Repo hygiene**:
+  - Removed `build-background.sh` (deprecated since CLAUDE.md Round 10;
+    `esbuild.config.mjs` has been the canonical builder for months).
+    `build-firefox.sh` no longer falls back to the legacy bash builder.
+  - Removed `pages/devtools-panel-v2.js` (orphaned — never reached by
+    any caller; the active DevTools panel loads via
+    `pages/devtools-panel.html` → `devtools-panel.js`). Dropped the
+    dead `devtools` entry from `pages/dashboard-lazy-loader.js`
+    `ON_DEMAND_MODULES`.
+  - Synced `manifest-firefox.json` version 2.1.8 → 3.11.0 to stop the
+    Firefox-port branch from drifting further during Phase 1 of the port.
+  - Added the omnibox keyword `sv` to the README quick-start so users
+    can discover the Phase 39.29 address-bar fuzzy-search affordance.
+  - Added `RESEARCH_FEATURE_PLAN.md` (companion to `ROADMAP.md`)
+    capturing the prioritized P0–P3 punch list (NF-1..NF-10,
+    EI-1..EI-17) from a 2026-05-24 deep audit pass.
+  - Added `CLAUDE.md` / `AGENTS.md` / `.factory/` to `.gitignore` as
+    local-only autonomous-loop runtime state.
+
+tsc --noEmit clean; focused vitest runs 19/19 green (match-top-39-11 +
+wrapper-gm-tabs-39-13); full-suite vitest 663/663 passing with the
+known HGFS worker-spawn flake on this VM (6 worker timeouts unrelated
+to the changes).
+
+### Earlier iter-2 work (still unreleased)
+
 - **LR-001** OAuth refresh wraps fetch in AbortController + 15s timeout. Google / Dropbox / OneDrive `refreshToken()` paths previously called `fetch()` with no signal — a slow or unresponsive network would hang every `getValidToken()` caller until the OS gave up (minutes). New `_oauthFetchWithTimeout` helper in `modules/sync-providers.js` returns null cleanly on AbortError or any network-level rejection, matching the existing null-return contract. 5 new regression cases in `tests/oauth-refresh-timeout.test.js`.
 - **LR-002** ResourceCache concurrent-fetch dedup. Two scripts requesting the same `@require` URL simultaneously used to both miss the cache, both call `fetch()`, and race on `cache.set` — wasting bandwidth and producing last-write-wins on the persisted dataUri. Added `_pendingFetches: Map<url, Promise<text>>` so concurrent callers share the in-flight promise. Failed fetch clears the entry so retries aren't poisoned. 3 new regression cases in `tests/resources.test.js` (dedup, failure-recovery, cache-hit-short-circuit).
 - **LR-003** AST analyzer detectors for three obfuscation patterns the literal-`eval` detector misses: indirect-eval (`(0, eval)(x)` SequenceExpression shape, invokes eval in global scope bypassing closure isolation), dynamic-property-call on globals (`window[<computed>](args)`, gated to known global receivers to avoid noise), and Function-constructor via `.apply`/`.call`/`.bind` (catches `Function.apply(null, ['return x'])` which the `new Function()` detector misses). 26 new regression cases in `tests/analyzer-ast-detectors.test.js` (positive + negative + malformed-AST + array integrity).
