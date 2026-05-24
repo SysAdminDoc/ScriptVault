@@ -7,8 +7,8 @@ ScriptVault is a Chrome Manifest V3 userscript manager at local version 3.11.0 w
 Top opportunities, in priority order:
 
 1. **P0 - Reconcile release state and publishing automation.** Verified local tags reach `v3.11.0`, `manifest.json` and `package.json` are 3.11.0, but the latest GitHub release is still `v2.3.4`.
-2. **P0 - Close TypeScript/runtime drift before making TS canonical.** Verified drift remains in `src/background/install-handler.ts`, and the current working tree has runtime-only stream-bounded fetch hardening in `background.core.js`.
-3. **P0 - Finish stream-bounded remote script and update fetch hardening.** Verified uncommitted local work addresses a real DoS class but needs TS mirror coverage and tests before it is shippable.
+2. **P0 - Close TypeScript/runtime drift before making TS canonical.** Verified drift remains in `src/background/install-handler.ts`, and recent runtime stream-bounded fetch hardening has not been ported to the background TS mirror.
+3. **P0 - Finish stream-bounded remote script and update fetch parity.** Verified commit `053c1a5` closes the runtime DoS class with tests; remaining work is TS mirror parity and release verification.
 4. **P0 - Add a global pending-update inbox and consent mode.** Per-script interactive updates exist, while `UpdateSystem.autoUpdate()` still auto-applies when `settings.autoUpdate` is true.
 5. **P0 - Move userscript messaging/XHR off the page `postMessage` bridge where Chrome supports `runtime.onUserScriptMessage`.** Chrome's official docs now describe dedicated user-script message handlers for less-trusted user-script contexts.
 6. **P1 - Virtualize dashboard, card, and side-panel script lists.** `pages/dashboard.js::renderScriptTable()` still renders the list directly and is repeatedly called after search, sort, restore, update, and settings actions.
@@ -25,13 +25,13 @@ Local files and directories inspected:
 - `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`, `esbuild.config.mjs`, `build.sh`, `publish.sh`, `.gitignore`.
 - `.github/workflows/ci.yml`, `.factory/state.yaml`, `.factory/large-repo-state.yaml`.
 - `background.core.js`, generated/runtime `background.js` policy from repo notes, `modules/*.js`, `shared/*.js`, `bg/*.js`, `pages/*.js`, `src/**/*.ts`, `tests/*.test.js`, `docs/*.md`.
-- Current dirty files outside this report: `background.core.js`, generated `background.js`, `modules/error-log.js`, `modules/public-api.js`, `pages/dashboard.js`, `pages/dashboard-csp.js`, `src/modules/error-log.ts`, `src/modules/public-api.ts`, `tests/error-log.test.js`, and untracked `tests/fetch-bounded.test.js`. These were not changed or staged by this research pass.
+- Current dirty files outside this report at verification time: `pages/dashboard-gist.js` and `src/background/wrapper-builder.ts`. They appear to be local hardening drafts for Gist token storage write failures and TS wrapper `@grant` parity. They were not changed or staged by this research pass.
 
 Git, build, and release evidence:
 
-- Current branch: `main`, tracking `origin/main`, ahead by 5 commits before this report change.
-- Current recent HEAD before this report: `740785f ROADMAP + CHANGELOG: reflect 2026-05-24 TS-mirror drift cleanup`.
-- `rtk git log -10` reviewed commits from `740785f` through recent Phase 39/40 and repo-hygiene work.
+- Current branch: `main`, tracking `origin/main`, ahead by 6 commits before this report change.
+- Current recent HEAD before this report: `053c1a5 Hardening pass: stream-bounded fetch, CSV injection defang, badge safety`.
+- `rtk git log -10` reviewed commits from `053c1a5` through recent Phase 39/40 and repo-hygiene work.
 - `gh issue list --limit 50 --state all`: no issues returned.
 - `git tag --sort=-v:refname`: latest local tag `v3.11.0`.
 - `gh release list --limit 10`: latest GitHub release `v2.3.4` from 2026-04-29.
@@ -57,7 +57,8 @@ Areas that could not be verified in this pass:
 - Live Firefox temporary sideload result.
 - Chrome Web Store dashboard state, publish queue, privacy disclosure form, and OAuth project ownership.
 - Real cloud sync credentials and provider-specific token refresh behavior.
-- Whether the current uncommitted hardening edits and tests are user-authored final work or a local draft.
+- Live installed-browser behavior for the newly committed hardening pass.
+- Whether the current uncommitted Gist storage and TS wrapper grant edits are final or local drafts.
 
 ## Current Product Map
 
@@ -124,7 +125,7 @@ Important permissions, integrations, and data flows:
 - **User value:** Quickly install scripts from `.user.js` URLs, pasted code, local import, or programmatic URL actions.
 - **Entry point:** `.user.js` navigation interception, dashboard install/import controls, `installFromUrl`, install page.
 - **Main code locations:** `background.core.js::_fetchPendingUserscript`, `background.core.js::installFromUrl`, `pages/install.*`, `src/background/install-handler.ts`, tests around install/update flows.
-- **Current maturity:** Partial. Core behavior exists, but current uncommitted runtime hardening shows the previous implementation could buffer oversized remote bodies before rejecting them.
+- **Current maturity:** Partial. Core behavior exists, and commit `053c1a5` adds runtime bounded-fetch protection, but background TS mirror files still show the older buffered pattern.
 - **Tests/docs coverage:** Covered by install docs and tests, but stream-bounded fetch behavior needs explicit JS and TS tests.
 - **Improvement opportunities:** Finish `_fetchTextBounded` in both runtime and TS mirror; add fake `ReadableStream` tests; add storage quota failure tests for `pendingInstall`; add DNS rebinding post-fetch verification for remote install.
 
@@ -153,7 +154,7 @@ Important permissions, integrations, and data flows:
 - **Main code locations:** `pages/editor.js`, `pages/editor.css`, Monaco assets, parser modules, tests around metadata/editor if present.
 - **Current maturity:** Complete and differentiated.
 - **Tests/docs coverage:** README and roadmap document editor capabilities.
-- **Improvement opportunities:** Add metadata grant assistant; add update-diff editor merge UX; add autosave conflict recovery for edits made while an upstream update is pending.
+- **Improvement opportunities:** Add metadata grant advisor; add update-diff editor merge UX; add autosave conflict recovery for edits made while an upstream update is pending.
 
 ### Update Checking and Applying
 
@@ -181,6 +182,7 @@ Important permissions, integrations, and data flows:
 - **Current maturity:** Feature-rich but disclosure-sensitive.
 - **Tests/docs coverage:** README advertises providers; privacy policy is stale; release docs mention disclosure work.
 - **Improvement opportunities:** Update privacy text and store disclosures; add token refresh diagnostics; add encrypted export/import option; add provider capability matrix; add conflict previews before overwrite.
+- **Additional evidence:** Current uncommitted `pages/dashboard-gist.js` changes replace legacy callback-wrapped `chrome.storage.local` writes with Promise API calls so quota/disk failures do not hang the UI.
 
 ### Static Analyzer, Signing, and Trust
 
@@ -197,8 +199,8 @@ Important permissions, integrations, and data flows:
 - **Entry point:** DevTools panel, dashboard logs, export buttons.
 - **Main code locations:** `pages/devtools-*`, `modules/error-log.js`, `modules/public-api.js`, TS mirrors, background log handlers.
 - **Current maturity:** Useful but fragmented.
-- **Tests/docs coverage:** Tests exist for modules; current dirty work adds CSV injection mitigation and public API error hardening.
-- **Improvement opportunities:** Commit/test dirty hardening if accepted; add a unified diagnostics bundle; include extension version, manifest version, Chrome version, permissions state, failed registrations, sync status, and recent errors.
+- **Tests/docs coverage:** Tests exist for modules; commit `053c1a5` adds CSV injection mitigation and public API error hardening.
+- **Improvement opportunities:** Add public API fuzz tests and a unified diagnostics bundle; include extension version, manifest version, Chrome version, permissions state, failed registrations, sync status, and recent errors.
 
 ### Public API and Web Page Bridge
 
@@ -206,7 +208,7 @@ Important permissions, integrations, and data flows:
 - **Entry point:** `window.postMessage` bridge and public API handlers.
 - **Main code locations:** `modules/public-api.js`, `src/modules/public-api.ts`.
 - **Current maturity:** Partial and security-sensitive.
-- **Tests/docs coverage:** Current dirty work adds type guards and removes internal error detail from external responses.
+- **Tests/docs coverage:** Commit `053c1a5` adds type guards and removes internal error detail from external responses; targeted public API fuzz tests are still recommended.
 - **Improvement opportunities:** Add origin allowlist UI/audit review; add fuzz tests for structured-clone payloads; commit generic-error behavior; document external API stability and versioning.
 
 ### Side Panel, Popup, Context Menus, Omnibox
@@ -311,7 +313,7 @@ Important permissions, integrations, and data flows:
 ### P0 - Dedicated User-Script Messaging Path
 
 - **User problem solved:** The current bridge surface is larger than necessary for less-trusted script contexts and external page messages.
-- **Evidence:** Chrome docs describe `runtime.onUserScriptMessage` and `runtime.onUserScriptConnect` as dedicated handlers that help identify less-trusted user-script messages; `background.core.js` already has an `onUserScriptMessage` listener; `.factory/large-repo-state.yaml` keeps `XHR-PRIVACY` as a remaining large task; `modules/public-api.js` has uncommitted hardening around arbitrary `postMessage` payloads.
+- **Evidence:** Chrome docs describe `runtime.onUserScriptMessage` and `runtime.onUserScriptConnect` as dedicated handlers that help identify less-trusted user-script messages; `background.core.js` already has an `onUserScriptMessage` listener; `.factory/large-repo-state.yaml` keeps `XHR-PRIVACY` as a remaining large task; commit `053c1a5` hardened arbitrary `postMessage` payload handling in the public API.
 - **Proposed behavior:** Route user-script GM API messages through `chrome.runtime.onUserScriptMessage` when available, with a compatibility fallback for older Chrome or disabled messaging. Keep web-page public API messages on a separate explicitly permissioned bridge.
 - **Implementation areas:** `background.core.js`, `modules/xhr.js`, GM API wrappers, registration `configureWorld({ messaging: true })`, `src/background/registration.ts`, `src/types/messages.ts`, tests.
 - **Data model/API/UI implications:** Add capability detection status and diagnostics; no user data format change expected.
@@ -323,7 +325,7 @@ Important permissions, integrations, and data flows:
 ### P0 - Stream-Bounded Remote Fetch Guardrail
 
 - **User problem solved:** A hostile update/install/require server can omit or lie about `Content-Length` and force the service worker to buffer an oversized response before rejection.
-- **Evidence:** Current dirty `background.core.js` adds `_fetchTextBounded()` and replaces `response.text()` in update, install, URL fetch, and `@require` code paths; untracked `tests/fetch-bounded.test.js` exercises the helper by slicing it from runtime source; `src/background/update-checker.ts` and `src/background/install-handler.ts` still use buffered `response.text()`.
+- **Evidence:** Commit `053c1a5` adds `_fetchTextBounded()` to `background.core.js`, replaces `response.text()` in update, install, URL fetch, and `@require` code paths, and adds `tests/fetch-bounded.test.js`; `src/background/update-checker.ts` and `src/background/install-handler.ts` still use buffered `response.text()`.
 - **Proposed behavior:** Ship a shared bounded text fetch helper across runtime and TS source, with tests using a stream that exceeds the cap after multiple chunks.
 - **Implementation areas:** `background.core.js`, `src/background/update-checker.ts`, `src/background/install-handler.ts`, require loader code, tests.
 - **Data model/API/UI implications:** Error strings should stay user-readable and compatible with current install/update UI.
@@ -383,7 +385,7 @@ Important permissions, integrations, and data flows:
 ### P2 - `@require` Provenance Verification
 
 - **User problem solved:** Remote dependencies are a high-risk supply-chain path that can change independently of the userscript itself.
-- **Evidence:** `docs/require-provenance-design.md` exists; `fetchWithRetry()` currently fetches remote require code; current dirty hardening adds bounded fetch but not provenance.
+- **Evidence:** `docs/require-provenance-design.md` exists; `fetchWithRetry()` fetches remote require code; commit `053c1a5` adds bounded fetch but not provenance.
 - **Proposed behavior:** Support optional `@require-provenance` metadata with hashes/signatures, show provenance status, and block or warn on mismatch depending on policy.
 - **Implementation areas:** parser, require loader, install/update UI, analyzer, settings, docs.
 - **Data model/API/UI implications:** Store dependency hash/provenance metadata and policy decision.
@@ -395,7 +397,7 @@ Important permissions, integrations, and data flows:
 ### P2 - Unified Diagnostics Bundle
 
 - **User problem solved:** Users and maintainers need one exportable evidence package when scripts fail, sync breaks, or registration disappears.
-- **Evidence:** Error log, DevTools panel, netlog, settings, registration and sync diagnostics exist as separate surfaces; current dirty changes harden CSV export, dashboard stats CSV export, and public API errors.
+- **Evidence:** Error log, DevTools panel, netlog, settings, registration and sync diagnostics exist as separate surfaces; commit `053c1a5` hardens CSV export, dashboard stats CSV export, and public API errors.
 - **Proposed behavior:** Add a "Create diagnostics bundle" action that exports sanitized JSON plus optional CSV logs, including version, manifest, permissions, userScripts toggle result, registered script count, failed registrations, sync provider status, recent errors, and storage usage.
 - **Implementation areas:** dashboard diagnostics UI, error log module, registration diagnostics, sync providers, privacy redaction utilities.
 - **Data model/API/UI implications:** No persistent data required; add redaction rules.
@@ -404,7 +406,7 @@ Important permissions, integrations, and data flows:
 - **Estimated complexity:** M.
 - **Priority:** P2.
 
-### P2 - Metadata Grant Assistant
+### P2 - Metadata Grant Advisor
 
 - **User problem solved:** Script authors often miss or over-grant metadata permissions.
 - **Evidence:** Monaco editor and analyzer exist; GM API modules are broad; install trust already parses grants.
@@ -421,7 +423,7 @@ Important permissions, integrations, and data flows:
 ### Release State and Public Artifact Drift
 
 - **Current behavior:** Local source, manifests, package, and tags are at 3.11.0; GitHub Releases latest is 2.3.4; no release workflow exists.
-- **Problem or missed opportunity:** Users and agents cannot tell what the current public artifact is. This weakens trust and makes regression reports ambiguous.
+- **Problem or missed opportunity:** Users and maintainers cannot tell what the current public artifact is. This weakens trust and makes regression reports ambiguous.
 - **Recommended change:** Create a release reconciliation checklist and workflow that packages artifacts, verifies versions, creates or updates GitHub Releases, and links Chrome Web Store status.
 - **Code locations likely affected:** `.github/workflows/ci.yml`, `docs/release-runbook.md`, `publish.sh`, `build.sh`, `CHANGELOG.md`, `README.md`.
 - **Backward compatibility concerns:** Do not republish old version numbers with different artifacts; choose patch/minor version intentionally.
@@ -497,9 +499,9 @@ Important permissions, integrations, and data flows:
 
 ### Public API Error Detail and Message Type Guard
 
-- **Current behavior:** Dirty local changes remove internal error detail from external API responses and guard `data.type` before calling `.startsWith()`.
-- **Problem or missed opportunity:** Without this, external pages can trigger unhandled listener errors or probe internal exception details.
-- **Recommended change:** Finish, test, and commit this hardening if accepted.
+- **Current behavior:** Commit `053c1a5` removes internal error detail from external API responses and guards `data.type` before calling `.startsWith()`.
+- **Problem or missed opportunity:** The behavior is improved, but a targeted public API fuzz test was not observed in the same way error-log CSV tests were.
+- **Recommended change:** Backfill tests for arbitrary structured-clone `postMessage` payloads and generic external exception responses.
 - **Code locations likely affected:** `modules/public-api.js`, `src/modules/public-api.ts`, tests.
 - **Backward compatibility concerns:** External callers lose the `detail` field on internal exceptions; this is a security-positive breaking change for undocumented internals.
 - **Verification plan:** Fuzz `postMessage` payloads with non-string `type`; handler exception fixture should return `{ error: "Internal error" }` only.
@@ -508,9 +510,9 @@ Important permissions, integrations, and data flows:
 
 ### CSV Formula Injection in Error Export
 
-- **Current behavior:** Dirty local changes prefix dangerous CSV cells in error log export.
-- **Problem or missed opportunity:** User-controlled error text can become spreadsheet formulas when exported and opened.
-- **Recommended change:** Finish, test, and commit the mitigation, including TS mirror.
+- **Current behavior:** Commit `053c1a5` prefixes dangerous CSV cells in error log export, dashboard CSP export, and dashboard stats export.
+- **Problem or missed opportunity:** User-controlled error text, script names, URLs, tags, and match patterns can become spreadsheet formulas when exported and opened.
+- **Recommended change:** Keep the mitigation; add or confirm dashboard CSV export tests in addition to the committed error-log tests.
 - **Code locations likely affected:** `modules/error-log.js`, `src/modules/error-log.ts`, tests.
 - **Backward compatibility concerns:** CSV values starting with formula characters gain a visible apostrophe in spreadsheet tools.
 - **Verification plan:** Export errors beginning with `=`, `+`, `-`, `@`, tab, and carriage return; verify CSV opens as literal text.
@@ -532,13 +534,13 @@ Important permissions, integrations, and data flows:
 
 - Verified release drift is the largest trust issue: current public GitHub Releases do not represent the local 3.x product state.
 - Verified high-trust permissions are necessary for a userscript manager, but they increase the need for onboarding, disclosure, and diagnostics.
-- Verified remote fetch paths still need TS parity and committed tests before the current dirty hardening can be considered shipped; an untracked bounded-fetch test draft is present.
+- Verified remote fetch paths now have runtime bounded-fetch tests, but still need background TS mirror parity.
 - Verified `XHR-PRIVACY` remains an open factory task; migrate user-script messages away from broad page bridge paths where possible.
 - Verified `DNS-REBIND` remains open; remote install/update trust should include post-fetch IP verification or equivalent host/IP consistency checks where APIs allow.
 - Verified cloud sync disclosures are stale relative to shipped providers.
 - Verified CI audit currently cannot fail the build despite a zero-vulnerability baseline today.
-- Verified uncommitted public API hardening should be completed because it prevents internal error detail leaks and message listener type crashes.
-- Verified uncommitted CSV export hardening should be completed because exported logs and dashboard stats exports include user-controlled strings.
+- Verified public API hardening should be backed by focused fuzz tests because it prevents internal error detail leaks and message listener type crashes.
+- Verified CSV export hardening should be kept and expanded with dashboard export coverage because exported logs and dashboard stats exports include user-controlled strings.
 - Recovery needs: IDB-backed trash or an explicit storage.local quota policy, update rollback from pending-update records, backup conflict preview, and diagnostics bundles that redact tokens and script bodies by default.
 
 ## UX, Accessibility, and Trust
@@ -555,6 +557,7 @@ Important permissions, integrations, and data flows:
 ## Architecture and Maintainability
 
 - The runtime/TS split is now the central maintainability risk. A TS mirror that passes typecheck but is not build-canonical can silently reintroduce bugs when promoted.
+- Current uncommitted `src/background/wrapper-builder.ts` edits fix a latent TS mirror grant-check drift where an empty grants array could grant all APIs; this reinforces the need for runtime/TS parity tests.
 - `background.core.js` remains a large shared surface. The current roadmap already points toward service-worker module splitting; do it after parity tests, not before.
 - `pages/dashboard.js` is a large UI controller with repeated `renderScriptTable()` calls. Virtualization and state separation should happen before additional dashboard features.
 - Message action typing has improved, but runtime dispatch and `src/types/messages.ts::ResponseMap` need an automated coverage guard.
@@ -573,7 +576,7 @@ Important permissions, integrations, and data flows:
 
 - [ ] P0 - Port current remote-fetch hardening to TS mirror and tests
   - Why: Oversized remote bodies can DoS the service worker if size checks happen after buffering.
-  - Evidence: Dirty `background.core.js` adds `_fetchTextBounded()` and untracked `tests/fetch-bounded.test.js` drafts coverage; `src/background/update-checker.ts` and `src/background/install-handler.ts` still use `response.text()`.
+  - Evidence: Commit `053c1a5` adds `_fetchTextBounded()` and `tests/fetch-bounded.test.js`; `src/background/update-checker.ts` and `src/background/install-handler.ts` still use `response.text()`.
   - Touches: `background.core.js`, `src/background/update-checker.ts`, `src/background/install-handler.ts`, require loader code, tests.
   - Acceptance: Install, update, direct URL fetch, and `@require` paths all use bounded stream reads in runtime and TS; oversized stream fixtures fail before full buffering.
   - Verify: `npm run typecheck`; targeted Vitest bounded-fetch tests; `npm run build`.
@@ -594,7 +597,7 @@ Important permissions, integrations, and data flows:
 
 - [ ] P0 - Migrate GM/XHR messaging to dedicated user-script handlers
   - Why: Chrome provides `runtime.onUserScriptMessage` for less-trusted user-script contexts, reducing reliance on page bridge patterns.
-  - Evidence: Chrome userScripts docs; `.factory/large-repo-state.yaml` `XHR-PRIVACY`; existing `background.core.js` listener; dirty public API hardening.
+  - Evidence: Chrome userScripts docs; `.factory/large-repo-state.yaml` `XHR-PRIVACY`; existing `background.core.js` listener; committed public API hardening.
   - Touches: `background.core.js`, `modules/xhr.js`, GM API wrappers, `src/background/registration.ts`, `src/types/messages.ts`, tests.
   - Acceptance: Supported Chrome versions route GM/XHR messages through dedicated user-script events; fallback remains tested; web public API cannot reach GM internals.
   - Verify: Fixture userscript XHR test; fallback compatibility test; postMessage fuzz test.
@@ -641,11 +644,11 @@ Important permissions, integrations, and data flows:
   - Acceptance: CI fails on high+ advisories while preserving optional-dependency noise handling.
   - Verify: `npm audit --audit-level=high --omit=optional`; CI run.
 
-- [ ] P1 - Finish public API and CSV export hardening
-  - Why: Current dirty work fixes concrete external-input risks but is not committed or fully tested.
-  - Evidence: Dirty `modules/public-api.js`, `src/modules/public-api.ts`, `modules/error-log.js`, `src/modules/error-log.ts`, `pages/dashboard.js`, `pages/dashboard-csp.js`, and `tests/error-log.test.js`.
+- [ ] P1 - Backfill public API and dashboard CSV hardening tests
+  - Why: Commit `053c1a5` fixes concrete external-input risks; remaining value is preventing regressions across every export and bridge path.
+  - Evidence: Commit `053c1a5` modifies `modules/public-api.js`, `src/modules/public-api.ts`, `modules/error-log.js`, `src/modules/error-log.ts`, `pages/dashboard.js`, `pages/dashboard-csp.js`, and `tests/error-log.test.js`.
   - Touches: Those modules/pages and tests.
-  - Acceptance: External handler exceptions return no internal detail; non-string `postMessage.type` is ignored; CSV dangerous cells are defanged in error-log and dashboard stats exports.
+  - Acceptance: External handler exceptions return no internal detail; non-string `postMessage.type` is ignored; CSV dangerous cells are defanged in error-log and dashboard stats exports, all with tests.
   - Verify: Targeted Vitest tests for public API fuzz and CSV formula prefixes; manual dashboard stats CSV export.
 
 - [ ] P2 - Add unified diagnostics bundle
@@ -696,8 +699,8 @@ Important permissions, integrations, and data flows:
 - Update `PRIVACY.md` with cloud sync provider disclosures and token/data handling.
 - Make CI high-severity audit blocking now that the current audit is clean.
 - Add a release checklist command block that includes `gh release list --limit 5` and `git tag --sort=-v:refname`.
-- Review, fix if needed, and commit the current `tests/error-log.test.js` CSV formula-defanging draft.
-- Add a test for `modules/public-api.js` non-string `postMessage.type` handling from the current dirty draft.
+- Add dashboard stats and CSP CSV export tests to complement the committed error-log CSV formula-defanging tests.
+- Add a test for `modules/public-api.js` non-string `postMessage.type` handling and generic external exception responses.
 - Add a parity test that fails if `src/background/install-handler.ts` keeps `Set<string>` duplicate handling while runtime uses promise-based dedupe.
 - Add a docs note to `FIREFOX-PORT.md` that root `ScriptVault-firefox-v2.1.7.xpi` is stale local artifact, not current release output.
 - Add dashboard performance fixture generation for 500, 1,000, and 2,000 scripts before virtual list implementation.
@@ -723,5 +726,8 @@ Important permissions, integrations, and data flows:
 
 ## Open Questions
 
-- Should the next public release be `v3.11.1` as a release-drift fix or `v3.12.0` if the current uncommitted security hardening is included?
-- F                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
+- Should the next public release be `v3.11.1` as a release-drift fix or `v3.12.0` now that commit `053c1a5` added security hardening after 3.11.0?
+- For the first Firefox beta, should cloud sync be WebDAV-only or should Google/Dropbox/OneDrive/Easy Cloud be carried forward immediately?
+- For trash, is the intended product contract IDB-backed recovery for large deleted scripts, or is the current `chrome.storage.local` implementation acceptable if documented and quota-tested?
+- For update consent, should existing users with `autoUpdate: true` be migrated to `review` by default, or preserved as `autoInstallTrusted` with an in-app notice?
+- Who owns the Chrome Web Store API v2/OIDC credentials and publisher account needed for release automation?
