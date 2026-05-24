@@ -973,7 +973,7 @@
                     try {
                         const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId });
                         if (updates && updates.length > 0) {
-                            await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId, code: updates[0].code });
+                            await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId, code: updates[0].code, sourceUrl: updates[0].sourceUrl || '' });
                             showPopupToast(`Updated to v${updates[0].newVersion}`);
                             await loadPageScripts();
                         } else {

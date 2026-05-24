@@ -4,10 +4,11 @@
  * Strict TypeScript migration from background.core.js lines 3541-3697.
  */
 
-import type { Script, ScriptMeta } from '../types/script';
+import type { Script, ScriptMeta, VersionHistoryEntry } from '../types/script';
 import type { Settings } from '../types/settings';
 import { fetchTextBounded } from './fetch-bounded';
 import { assertExternalFetchUrl, classifyResponseUrl } from './internal-host-guard';
+import { createScriptTrustReceipt } from './trust-receipt';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -150,11 +151,16 @@ export interface InstallResult {
   error?: string;
 }
 
+interface InstallReceiptOptions {
+  sourceUrl?: string;
+  operation?: 'install' | 'update' | 'reinstall' | 'downgrade' | 'local-save';
+}
+
 /**
  * Install a userscript directly from raw source text — used by both
  * `installFromUrl` (after fetch) and `installFromCode` (file picker / drag-drop).
  */
-export async function installFromCode(code: string): Promise<InstallResult> {
+export async function installFromCode(code: string, receiptOptions: InstallReceiptOptions = {}): Promise<InstallResult> {
   try {
     if (typeof code !== 'string' || !code) {
       throw new Error('No script content provided');
@@ -181,8 +187,48 @@ export async function installFromCode(code: string): Promise<InstallResult> {
       (s) => s.meta.name === meta.name && s.meta.namespace === meta.namespace,
     );
     const id: string = existing ? existing.id : generateId();
+    const previousScript: Script | null = existing && existing.code !== code
+      ? { ...existing, meta: { ...existing.meta }, code: existing.code, updatedAt: existing.updatedAt || Date.now() }
+      : null;
+    const versionHistory: VersionHistoryEntry[] = Array.isArray(existing?.versionHistory)
+      ? [...existing.versionHistory]
+      : [];
+    let historyEntry: VersionHistoryEntry | null = null;
+    let rollbackIndex = -1;
+    if (previousScript) {
+      historyEntry = {
+        version: existing!.meta.version,
+        code: existing!.code,
+        updatedAt: existing!.updatedAt || Date.now(),
+      };
+      versionHistory.push(historyEntry);
+      if (versionHistory.length > 5) versionHistory.splice(0, versionHistory.length - 5);
+      rollbackIndex = versionHistory.indexOf(historyEntry);
+    }
+    const operation = receiptOptions.operation || (existing ? 'update' : 'install');
+    const trustReceipt = await createScriptTrustReceipt({
+      operation,
+      code,
+      meta,
+      sourceUrl: receiptOptions.sourceUrl,
+      previousScript,
+      rollbackIndex,
+    });
+    if (historyEntry && previousScript) {
+      const previousReceipt = previousScript.trustReceipt;
+      const previousSourceUrl = previousReceipt
+        ? previousReceipt.source.installUrl
+        : previousScript.meta.downloadURL || previousScript.meta.updateURL;
+      historyEntry.trustReceipt = previousReceipt || await createScriptTrustReceipt({
+        operation: 'rollback-point',
+        code: previousScript.code,
+        meta: previousScript.meta,
+        sourceUrl: previousSourceUrl,
+      });
+    }
 
     const script: Script = {
+      ...existing,
       id,
       code,
       meta,
@@ -190,7 +236,9 @@ export async function installFromCode(code: string): Promise<InstallResult> {
       position: existing ? existing.position : allScripts.length,
       createdAt: existing ? existing.createdAt : Date.now(),
       updatedAt: Date.now(),
+      trustReceipt,
     };
+    if (versionHistory.length > 0) script.versionHistory = versionHistory;
 
     await ScriptStorage.set(id, script);
     await registerAllScripts();
@@ -233,7 +281,7 @@ export async function installFromUrl(url: string): Promise<InstallResult> {
 
     const code: string = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
 
-    return await installFromCode(code);
+    return await installFromCode(code, { sourceUrl: url, operation: 'install' });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return { success: false, error: message };

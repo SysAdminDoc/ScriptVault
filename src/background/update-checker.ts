@@ -2,10 +2,11 @@
 // Update System — strict TypeScript migration from background.core.js
 // ============================================================================
 
-import type { Script, ScriptMeta } from '../types/script';
+import type { Script, ScriptMeta, VersionHistoryEntry } from '../types/script';
 import type { Settings } from '../types/settings';
 import { fetchTextBounded } from './fetch-bounded';
 import { classifyFetchUrl, classifyResponseUrl } from './internal-host-guard';
+import { createScriptTrustReceipt } from './trust-receipt';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -47,6 +48,7 @@ export interface UpdateInfo {
   currentVersion: string;
   newVersion: string;
   code: string;
+  sourceUrl?: string;
 }
 
 export interface ApplyUpdateSuccess {
@@ -168,6 +170,7 @@ export const UpdateSystem = {
             currentVersion: script.meta.version,
             newVersion: parsedMeta.version,
             code: newCode,
+            sourceUrl: updateUrl,
           });
         }
       } catch (e: unknown) {
@@ -207,32 +210,63 @@ export const UpdateSystem = {
   /**
    * Apply a fetched update to a script, storing a rollback snapshot.
    */
-  async applyUpdate(scriptId: string, newCode: string): Promise<ApplyUpdateResult> {
+  async applyUpdate(
+    scriptId: string,
+    newCode: string,
+    options: { force?: boolean; sourceUrl?: string } = {},
+  ): Promise<ApplyUpdateResult> {
     const script: Script | null = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
     // Don't auto-update scripts the user has locally edited
-    if (script.settings?.userModified) return { skipped: true, reason: 'user-modified' };
+    if (!options.force && script.settings?.userModified) return { skipped: true, reason: 'user-modified' };
 
     const parsed = parseUserscript(newCode);
     if (parsed.error !== undefined || !parsed.meta) return { error: parsed.error ?? 'Parse failed' };
 
     const parsedMeta: ScriptMeta = parsed.meta;
+    const previousScript: Script = {
+      ...script,
+      meta: { ...script.meta },
+      code: script.code,
+      updatedAt: script.updatedAt || Date.now(),
+    };
 
     // Store previous version for rollback (keep last 3)
     if (!script.versionHistory) script.versionHistory = [];
-    script.versionHistory.push({
+    const historyEntry: VersionHistoryEntry = {
       version: script.meta.version,
       code: script.code,
       updatedAt: script.updatedAt || Date.now(),
-    });
+    };
+    script.versionHistory.push(historyEntry);
     // Trim to last 5 versions
     if (script.versionHistory.length > 5) {
       script.versionHistory = script.versionHistory.slice(-5);
     }
+    const rollbackIndex = script.versionHistory.indexOf(historyEntry);
+    const trustReceipt = await createScriptTrustReceipt({
+      operation: options.force ? 'manual-update' : 'auto-update',
+      code: newCode,
+      meta: parsedMeta,
+      sourceUrl: options.sourceUrl || script.meta.downloadURL || script.meta.updateURL,
+      previousScript,
+      rollbackIndex,
+    });
+    const previousReceipt = previousScript.trustReceipt;
+    const previousSourceUrl = previousReceipt
+      ? previousReceipt.source.installUrl
+      : previousScript.meta.downloadURL || previousScript.meta.updateURL;
+    historyEntry.trustReceipt = previousReceipt || await createScriptTrustReceipt({
+      operation: 'rollback-point',
+      code: previousScript.code,
+      meta: previousScript.meta,
+      sourceUrl: previousSourceUrl,
+    });
 
     script.code = newCode;
     script.meta = parsedMeta;
     script.updatedAt = Date.now();
+    script.trustReceipt = trustReceipt;
 
     // Re-register the script after updating (persist happens below; registration errors
     // are recorded on the script so the UI can surface them, but don't block save)
@@ -276,7 +310,7 @@ export const UpdateSystem = {
     const updates: UpdateInfo[] = await this.checkForUpdates();
     // Apply all pending updates in parallel — each applyUpdate is independent
     const results: PromiseSettledResult<ApplyUpdateResult>[] = await Promise.allSettled(
-      updates.map((update: UpdateInfo) => this.applyUpdate(update.id, update.code)),
+      updates.map((update: UpdateInfo) => this.applyUpdate(update.id, update.code, { sourceUrl: update.sourceUrl })),
     );
     const failed: PromiseRejectedResult[] = results.filter(
       (r): r is PromiseRejectedResult => r.status === 'rejected',

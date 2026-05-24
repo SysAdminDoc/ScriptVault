@@ -1286,6 +1286,7 @@
         elements.infoUpdateUrl = document.getElementById('infoUpdateUrl');
         elements.infoDownloadUrl = document.getElementById('infoDownloadUrl');
         elements.infoProvenance = document.getElementById('infoProvenance');
+        elements.infoTrustReceipt = document.getElementById('infoTrustReceipt');
         elements.infoGrants = document.getElementById('infoGrants');
         elements.infoMatches = document.getElementById('infoMatches');
         elements.infoResources = document.getElementById('infoResources');
@@ -4396,7 +4397,7 @@
                         if (!Array.isArray(updates) || updates.length === 0) {
                             return { skipped: true, reason: 'Already up to date' };
                         }
-                        const response = await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId, code: updates[0].code });
+                        const response = await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId, code: updates[0].code, sourceUrl: updates[0].sourceUrl || '' });
                         if (response?.error) throw new Error(response.error);
                     }
                 });
@@ -5573,6 +5574,41 @@
                trimmed.split('\n').filter(l => l.trim() && !l.trim().startsWith('//') && l.trim() !== '(function() {' && l.trim() !== "'use strict';" && l.trim() !== '})();').length === 0;
     }
 
+    function renderTrustReceiptInfo(receipt) {
+        if (!receipt || !receipt.hashes?.sha256) {
+            return '<span class="panel-empty-inline">No receipt recorded yet</span>';
+        }
+        const source = receipt.source?.installHost || receipt.source?.installUrl || 'local';
+        const diff = receipt.diff || {};
+        const deps = receipt.dependencies || {};
+        const rollback = receipt.rollback?.available
+            ? `Rollback action saved for v${receipt.rollback.version || '?'}`
+            : 'No previous-version rollback point';
+        return `
+            <div class="conflict-list">
+                <div class="conflict-list-item">
+                    <span>
+                        <strong>${escapeHtml(receipt.operation || 'recorded')}</strong>
+                        <div class="panel-empty-inline" style="margin-top:4px">${escapeHtml(source)} - SHA-256 ${escapeHtml(receipt.hashes.sha256.slice(0, 16))}</div>
+                    </span>
+                    <span class="info-tag">${escapeHtml(formatTime(receipt.createdAt))}</span>
+                </div>
+                <div class="conflict-list-item">
+                    <span>Diff <span class="panel-empty-inline">+${numberFormatter.format(diff.addedLines || 0)} / -${numberFormatter.format(diff.removedLines || 0)}</span></span>
+                    <span class="info-tag">${escapeHtml(diff.previousVersion || 'new')} -> ${escapeHtml(diff.nextVersion || 'current')}</span>
+                </div>
+                <div class="conflict-list-item">
+                    <span>Dependencies <span class="panel-empty-inline">${numberFormatter.format(deps.requireCount || 0)} require, ${numberFormatter.format(deps.resourceCount || 0)} resource</span></span>
+                    <span class="info-tag">${numberFormatter.format((receipt.grants || []).length)} grants</span>
+                </div>
+                <div class="conflict-list-item">
+                    <span>${escapeHtml(rollback)}</span>
+                    <span class="info-tag">${receipt.rollback?.available ? 'Restorable' : 'Snapshot only'}</span>
+                </div>
+            </div>
+        `;
+    }
+
     function loadScriptInfo(script) {
         const m = script.metadata || {};
         if (elements.infoName) elements.infoName.textContent = m.name || '-';
@@ -5590,6 +5626,9 @@
         if (elements.infoProvenance) {
             const provenance = describeScriptProvenance(script);
             elements.infoProvenance.innerHTML = `<strong>${escapeHtml(provenance.label)}</strong>${provenance.detail ? `<div class="panel-empty-inline" style="margin-top:4px">${escapeHtml(provenance.detail)}</div>` : ''}`;
+        }
+        if (elements.infoTrustReceipt) {
+            elements.infoTrustReceipt.innerHTML = renderTrustReceiptInfo(script.trustReceipt);
         }
 
         // @contributionURL
@@ -6245,7 +6284,7 @@
 
             try {
                 const response = await chrome.runtime.sendMessage({
-                    action: 'applyUpdate', scriptId, code: update.code,
+                    action: 'applyUpdate', scriptId, code: update.code, sourceUrl: update.sourceUrl || '',
                 });
                 if (response?.error) {
                     showToast(response.error || 'Update failed', 'error');
@@ -8026,7 +8065,7 @@
                 if (updates && updates.length > 0) {
                     for (let i = 0; i < updates.length; i++) {
                         updateProgress(i + 1, updates.length, `Updating ${updates[i].name || updates[i].id} (${i + 1}/${updates.length})`);
-                        await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: updates[i].id, code: updates[i].code });
+                        await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: updates[i].id, code: updates[i].code, sourceUrl: updates[i].sourceUrl || '' });
                     }
                     await loadScripts();
                     hideProgress();
