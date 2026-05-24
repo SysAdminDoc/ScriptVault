@@ -4,8 +4,10 @@
 *.xpi
 build/
 build-firefox/
+build-edge/
 dist/
 firefox-artifacts/
+edge-artifacts/
 release-artifacts/
 background.js
 lib/monaco/
