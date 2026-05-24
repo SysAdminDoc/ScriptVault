@@ -38,7 +38,7 @@ describe('TS source drift gate', () => {
     const map = await loadPromotionMap(resolve(ROOT, 'ts-source-promotion.json'), { rootDir: ROOT });
 
     expect(map.errors).toEqual([]);
-    expect(map.entries.some((entry) => entry.runtime === 'modules/error-log.js' && entry.status === 'candidate')).toBe(true);
+    expect(map.entries.some((entry) => entry.runtime === 'modules/error-log.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'background.core.js' && entry.status === 'intentionally-divergent')).toBe(true);
   });
 
@@ -47,7 +47,8 @@ describe('TS source drift gate', () => {
     const report = analyzeSourceDrift(map, []);
     const text = formatTextReport(report, { reportMode: true });
 
-    expect(report.totals.candidate).toBe(1);
+    expect(report.totals.promoted).toBe(1);
+    expect(report.totals.candidate).toBe(0);
     expect(report.totals['intentionally-divergent']).toBeGreaterThanOrEqual(2);
     expect(text).toContain('modules/error-log.js -> src/modules/error-log.ts');
     expect(text).toContain('background.core.js -> src/background/badge.ts');
@@ -75,8 +76,22 @@ describe('TS source drift gate', () => {
     expect(withGenerated.violations).toEqual([]);
   });
 
-  it('does not gate candidate or intentionally divergent runtime files yet', async () => {
-    const map = await loadPromotionMap(resolve(ROOT, 'ts-source-promotion.json'), { rootDir: ROOT });
+  it('does not gate candidate or intentionally divergent runtime files yet', () => {
+    const map = normalizePromotionMap({
+      schemaVersion: 1,
+      entries: [
+        {
+          runtime: 'modules/error-log.js',
+          sources: ['src/modules/error-log.ts'],
+          status: 'candidate',
+        },
+        {
+          runtime: 'modules/sync-providers.js',
+          sources: ['src/modules/sync-providers.ts'],
+          status: 'intentionally-divergent',
+        },
+      ],
+    }, { rootDir: ROOT });
     const report = analyzeSourceDrift(map, ['modules/error-log.js', 'modules/sync-providers.js']);
 
     expect(report.ok).toBe(true);

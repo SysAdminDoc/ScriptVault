@@ -4,6 +4,20 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — ErrorLog TypeScript promotion pilot
+
+- Promoted `modules/error-log.js` to a generated runtime artifact from
+  `src/modules/error-log.ts`, preserving the single-file background build
+  while making the TypeScript source authoritative for the module.
+- Added `scripts/generate-ts-runtime-modules.mjs`, `npm run
+  ts-runtime:generate`, and `npm run ts-runtime:check`; CI now verifies the
+  committed ErrorLog runtime artifact is in sync with its TS source.
+- Reconciled the TS ErrorLog implementation with runtime debounce/flush
+  behavior, including `SAVE_DEBOUNCE_MS`, `flush()`, `_save()`, cache reset
+  hooks, and mutable `MAX_ENTRIES` compatibility for existing tests.
+- Added `tests/ts-runtime-modules.test.js` and updated the source drift gate
+  so `modules/error-log.js` is the first `promoted` TS-authoritative module.
+
 ### 2026-05-24 — TypeScript source drift gate
 
 - Added `ts-source-promotion.json` to inventory each runtime JS surface, its

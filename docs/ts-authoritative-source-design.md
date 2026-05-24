@@ -6,8 +6,9 @@ whole concatenated service-worker pipeline in one commit.
 
 Status update, 2026-05-24: the promotion map and first CI drift gate now
 ship as `ts-source-promotion.json` and
-`scripts/check-ts-source-drift.mjs`. The first pilot implementation remains
-`modules/error-log.js`.
+`scripts/check-ts-source-drift.mjs`. The first pilot also shipped:
+`modules/error-log.js` is generated from `src/modules/error-log.ts` via
+`scripts/generate-ts-runtime-modules.mjs`.
 
 ## 1. Problem statement
 
@@ -248,6 +249,11 @@ pilot should avoid that broader build-system change.
 1. Add the promotion map and drift script. Shipped 2026-05-24 via
    `ts-source-promotion.json` and `scripts/check-ts-source-drift.mjs`.
 2. Reconcile `src/modules/error-log.ts` with the runtime debounce/flush
-   behavior.
+   behavior. Shipped 2026-05-24.
 3. Teach `esbuild.config.mjs` to use the TS-derived error-log artifact.
-4. Mark `modules/error-log.js` as generated or compatibility-only.
+   Shipped 2026-05-24.
+4. Mark `modules/error-log.js` as generated or compatibility-only. Shipped
+   2026-05-24.
+5. Promote the next low-dependency module (`modules/notifications.js`,
+   `modules/npm-resolve.js`, `modules/userstyles.js`, or
+   `modules/quota-manager.js`).

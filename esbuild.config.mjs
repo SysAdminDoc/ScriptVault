@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { build } from "esbuild";
+import { generateTsRuntimeModules } from "./scripts/generate-ts-runtime-modules.mjs";
 
 const ROOT = resolve(import.meta.dirname || ".");
 const args = process.argv.slice(2);
@@ -64,6 +65,7 @@ async function buildBackground() {
   const version = readVersion();
   const settingsDefaults = readJson("src/config/settings-defaults.json");
   console.log(`Building background.js v${version}${production ? " (production)" : ""}...`);
+  await generateTsRuntimeModules({ rootDir: ROOT });
 
   const separator = "\n";
 
@@ -163,7 +165,7 @@ async function startWatch() {
   console.log(`Watching for changes (v${version})...`);
 
   // Directories to watch for changes
-  const watchDirs = ["shared", "modules", "lib", "bg"];
+  const watchDirs = ["shared", "modules", "lib", "bg", "src"];
   const watchFiles = ["background.core.js", "manifest.json"];
 
   // Manual FS watch approach since we are concatenating source files,
