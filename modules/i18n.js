@@ -1,484 +1,496 @@
 // ============================================================================
-// INLINED: i18n.js - Internationalization Module
-// (inlined to bypass Chrome service worker importScripts caching)
+// Generated from src/modules/i18n.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
-var I18n = (function() {
-  'use strict';
 
-  let currentLocale = 'en';
-  
-  // All translations
-  const translations = {
+const I18n = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/modules/i18n.ts
+  var i18n_exports = {};
+  __export(i18n_exports, {
+    I18n: () => I18n,
+    default: () => i18n_default
+  });
+  module.exports = __toCommonJS(i18n_exports);
+  var currentLocale = "en";
+  var translations = {
     en: {
       // General
-      appName: 'ScriptVault',
-      enabled: 'Enabled',
-      disabled: 'Disabled',
-      save: 'Save',
-      cancel: 'Cancel',
-      delete: 'Delete',
-      edit: 'Edit',
-      close: 'Close',
-      confirm: 'Confirm',
-      yes: 'Yes',
-      no: 'No',
-      ok: 'OK',
-      error: 'Error',
-      success: 'Success',
-      warning: 'Warning',
-      loading: 'Loading...',
-      search: 'Search',
-      refresh: 'Refresh',
-      
+      appName: "ScriptVault",
+      enabled: "Enabled",
+      disabled: "Disabled",
+      save: "Save",
+      cancel: "Cancel",
+      delete: "Delete",
+      edit: "Edit",
+      close: "Close",
+      confirm: "Confirm",
+      yes: "Yes",
+      no: "No",
+      ok: "OK",
+      error: "Error",
+      success: "Success",
+      warning: "Warning",
+      loading: "Loading...",
+      search: "Search",
+      refresh: "Refresh",
       // Navigation
-      tabScripts: 'Installed Userscripts',
-      tabSettings: 'Settings',
-      tabUtilities: 'Utilities',
-      tabHelp: 'Help',
-      tabValues: 'Values Editor',
-      
+      tabScripts: "Installed Userscripts",
+      tabSettings: "Settings",
+      tabUtilities: "Utilities",
+      tabHelp: "Help",
+      tabValues: "Values Editor",
       // Scripts
-      newScript: 'New Script',
-      importScript: 'Import',
-      checkUpdates: 'Check Updates',
-      searchScripts: 'Search scripts...',
-      noScripts: 'No userscripts installed',
-      noScriptsDesc: 'Create a new script or import one to get started.',
-      scriptName: 'Name',
-      scriptVersion: 'Version',
-      scriptAuthor: 'Author',
-      scriptDescription: 'Description',
-      scriptSize: 'Size',
-      scriptUpdated: 'Updated',
-      scriptEnabled: 'Script Enabled',
-      scriptDisabled: 'Script Disabled',
-      
+      newScript: "New Script",
+      importScript: "Import",
+      checkUpdates: "Check Updates",
+      searchScripts: "Search scripts...",
+      noScripts: "No userscripts installed",
+      noScriptsDesc: "Create a new script or import one to get started.",
+      scriptName: "Name",
+      scriptVersion: "Version",
+      scriptAuthor: "Author",
+      scriptDescription: "Description",
+      scriptSize: "Size",
+      scriptEnabled: "Script Enabled",
+      scriptDisabled: "Script Disabled",
       // Editor
-      editorCode: 'Code',
-      editorInfo: 'Info',
-      editorStorage: 'Storage',
-      editorSettings: 'Settings',
-      editorSave: 'Save',
-      editorClose: 'Close',
-      editorToggle: 'Toggle',
-      editorDuplicate: 'Duplicate',
-      editorDelete: 'Delete',
-      
+      editorCode: "Code",
+      editorInfo: "Info",
+      editorStorage: "Storage",
+      editorSettings: "Settings",
+      editorSave: "Save",
+      editorClose: "Close",
+      editorToggle: "Toggle",
+      editorDuplicate: "Duplicate",
+      editorDelete: "Delete",
       // Settings sections
-      settingsGeneral: 'General',
-      settingsNotifications: 'Notifications',
-      settingsEditor: 'Editor',
-      settingsUpdates: 'Updates',
-      settingsSync: 'Cloud Sync',
-      settingsAdvanced: 'Advanced',
-      
+      settingsGeneral: "General",
+      settingsNotifications: "Notifications",
+      settingsEditor: "Editor",
+      settingsUpdates: "Updates",
+      settingsSync: "Cloud Sync",
+      settingsAdvanced: "Advanced",
       // Sync
-      syncProvider: 'Sync Provider',
-      syncProviderNone: 'Disabled',
-      syncProviderWebdav: 'WebDAV',
-      syncProviderGoogleDrive: 'Google Drive',
-      syncProviderDropbox: 'Dropbox',
-      syncConnected: 'Connected',
-      syncDisconnected: 'Not connected',
-      syncConnect: 'Connect',
-      syncDisconnect: 'Disconnect',
-      syncNow: 'Sync Now',
-      syncTest: 'Test',
-      lastSync: 'Last sync',
-      syncSuccess: 'Sync completed successfully',
-      syncError: 'Sync failed',
-      
+      syncProvider: "Sync Provider",
+      syncProviderNone: "Disabled",
+      syncProviderWebdav: "WebDAV",
+      syncProviderGoogleDrive: "Google Drive",
+      syncProviderDropbox: "Dropbox",
+      syncConnected: "Connected",
+      syncDisconnected: "Not connected",
+      syncConnect: "Connect",
+      syncDisconnect: "Disconnect",
+      syncNow: "Sync Now",
+      syncTest: "Test",
+      lastSync: "Last sync",
+      syncSuccess: "Sync completed successfully",
+      syncError: "Sync failed",
       // Values Editor
-      valuesTitle: 'Script Values Editor',
-      valuesDesc: 'View and edit GM_getValue/GM_setValue storage',
-      valuesAllScripts: 'All Scripts',
-      valuesNoData: 'No stored values found',
-      valuesKey: 'Key',
-      valuesValue: 'Value',
-      valuesType: 'Type',
-      valuesScript: 'Script',
-      valuesAdd: 'Add Value',
-      valuesEdit: 'Edit Value',
-      valuesDelete: 'Delete',
-      valuesDeleteSelected: 'Delete Selected',
-      valuesSaved: 'Value saved',
-      valuesDeleted: 'Value deleted',
-      
+      valuesTitle: "Script Values Editor",
+      valuesDesc: "View and edit GM_getValue/GM_setValue storage",
+      valuesAllScripts: "All Scripts",
+      valuesNoData: "No stored values found",
+      valuesKey: "Key",
+      valuesValue: "Value",
+      valuesType: "Type",
+      valuesScript: "Script",
+      valuesAdd: "Add Value",
+      valuesEdit: "Edit Value",
+      valuesDelete: "Delete",
+      valuesDeleteSelected: "Delete Selected",
+      valuesSaved: "Value saved",
+      valuesDeleted: "Value deleted",
       // Per-script settings
-      scriptSettingsTitle: 'Per-Script Settings',
-      scriptAutoUpdate: 'Auto-update this script',
-      scriptNotifyUpdates: 'Notify on updates',
-      scriptNotifyErrors: 'Notify on errors',
-      scriptRunAt: 'Run at',
-      scriptInjectInto: 'Inject into',
-      scriptExcludes: 'Additional excludes',
-      runAtDefault: 'Default (from metadata)',
-      runAtDocumentStart: 'Document Start',
-      runAtDocumentEnd: 'Document End',
-      runAtDocumentIdle: 'Document Idle',
-      injectAuto: 'Auto',
-      injectPage: 'Page Context',
-      injectContent: 'Content Script',
-      
+      scriptSettingsTitle: "Per-Script Settings",
+      scriptAutoUpdate: "Auto-update this script",
+      scriptNotifyUpdates: "Notify on updates",
+      scriptNotifyErrors: "Notify on errors",
+      scriptRunAt: "Run at",
+      scriptInjectInto: "Inject into",
+      scriptExcludes: "Additional excludes",
+      runAtDefault: "Default (from metadata)",
+      runAtDocumentStart: "Document Start",
+      runAtDocumentEnd: "Document End",
+      runAtDocumentIdle: "Document Idle",
+      injectAuto: "Auto",
+      injectPage: "Page Context",
+      injectContent: "Content Script",
       // Utilities
-      exportAll: 'Export All',
-      exportZip: 'Export as ZIP',
-      importFile: 'Import from File',
-      importUrl: 'Import from URL',
-      importText: 'Import from Text',
-      chooseFile: 'Choose File',
-      noFileSelected: 'No file selected',
-      
+      exportAll: "Export All",
+      exportZip: "Export as ZIP",
+      importFile: "Import from File",
+      importUrl: "Import from URL",
+      importText: "Import from Text",
+      chooseFile: "Choose File",
+      noFileSelected: "No file selected",
       // Messages
-      scriptInstalled: 'Script installed',
-      scriptUpdated: 'Script updated',
-      scriptDeleted: 'Script deleted',
-      settingsSaved: 'Settings saved',
-      confirmDelete: 'Are you sure you want to delete this script?',
-      confirmDeleteMultiple: 'Delete {count} selected scripts?',
-      updateAvailable: 'Update available',
-      noUpdates: 'All scripts are up to date'
+      scriptInstalled: "Script installed",
+      scriptUpdated: "Script updated",
+      scriptDeleted: "Script deleted",
+      settingsSaved: "Settings saved",
+      confirmDelete: "Are you sure you want to delete this script?",
+      confirmDeleteMultiple: "Delete {count} selected scripts?",
+      updateAvailable: "Update available",
+      noUpdates: "All scripts are up to date"
     },
-    
     es: {
-      appName: 'ScriptVault',
-      enabled: 'Activado',
-      disabled: 'Desactivado',
-      save: 'Guardar',
-      cancel: 'Cancelar',
-      delete: 'Eliminar',
-      edit: 'Editar',
-      close: 'Cerrar',
-      confirm: 'Confirmar',
-      yes: 'Sí',
-      no: 'No',
-      ok: 'OK',
-      error: 'Error',
-      success: 'Éxito',
-      warning: 'Advertencia',
-      loading: 'Cargando...',
-      search: 'Buscar',
-      refresh: 'Actualizar',
-      tabScripts: 'Scripts Instalados',
-      tabSettings: 'Configuración',
-      tabUtilities: 'Utilidades',
-      tabHelp: 'Ayuda',
-      tabValues: 'Editor de Valores',
-      newScript: 'Nuevo Script',
-      importScript: 'Importar',
-      checkUpdates: 'Buscar Actualizaciones',
-      searchScripts: 'Buscar scripts...',
-      noScripts: 'No hay scripts instalados',
-      noScriptsDesc: 'Crea un nuevo script o importa uno para comenzar.',
-      syncProvider: 'Proveedor de Sincronización',
-      syncProviderNone: 'Desactivado',
-      syncConnect: 'Conectar',
-      syncDisconnect: 'Desconectar',
-      syncNow: 'Sincronizar Ahora',
-      lastSync: 'Última sincronización',
-      valuesTitle: 'Editor de Valores',
-      valuesAllScripts: 'Todos los Scripts',
-      valuesNoData: 'No se encontraron valores almacenados'
+      appName: "ScriptVault",
+      enabled: "Activado",
+      disabled: "Desactivado",
+      save: "Guardar",
+      cancel: "Cancelar",
+      delete: "Eliminar",
+      edit: "Editar",
+      close: "Cerrar",
+      confirm: "Confirmar",
+      yes: "S\xED",
+      no: "No",
+      ok: "OK",
+      error: "Error",
+      success: "\xC9xito",
+      warning: "Advertencia",
+      loading: "Cargando...",
+      search: "Buscar",
+      refresh: "Actualizar",
+      tabScripts: "Scripts Instalados",
+      tabSettings: "Configuraci\xF3n",
+      tabUtilities: "Utilidades",
+      tabHelp: "Ayuda",
+      tabValues: "Editor de Valores",
+      newScript: "Nuevo Script",
+      importScript: "Importar",
+      checkUpdates: "Buscar Actualizaciones",
+      searchScripts: "Buscar scripts...",
+      noScripts: "No hay scripts instalados",
+      noScriptsDesc: "Crea un nuevo script o importa uno para comenzar.",
+      syncProvider: "Proveedor de Sincronizaci\xF3n",
+      syncProviderNone: "Desactivado",
+      syncConnect: "Conectar",
+      syncDisconnect: "Desconectar",
+      syncNow: "Sincronizar Ahora",
+      lastSync: "\xDAltima sincronizaci\xF3n",
+      valuesTitle: "Editor de Valores",
+      valuesAllScripts: "Todos los Scripts",
+      valuesNoData: "No se encontraron valores almacenados"
     },
-    
     fr: {
-      appName: 'ScriptVault',
-      enabled: 'Activé',
-      disabled: 'Désactivé',
-      save: 'Enregistrer',
-      cancel: 'Annuler',
-      delete: 'Supprimer',
-      edit: 'Modifier',
-      close: 'Fermer',
-      confirm: 'Confirmer',
-      yes: 'Oui',
-      no: 'Non',
-      ok: 'OK',
-      error: 'Erreur',
-      success: 'Succès',
-      warning: 'Avertissement',
-      loading: 'Chargement...',
-      search: 'Rechercher',
-      refresh: 'Actualiser',
-      tabScripts: 'Scripts Installés',
-      tabSettings: 'Paramètres',
-      tabUtilities: 'Utilitaires',
-      tabHelp: 'Aide',
-      tabValues: 'Éditeur de Valeurs',
-      newScript: 'Nouveau Script',
-      importScript: 'Importer',
-      checkUpdates: 'Vérifier les Mises à Jour',
-      searchScripts: 'Rechercher des scripts...',
-      noScripts: 'Aucun script installé',
-      syncProvider: 'Fournisseur de Synchronisation',
-      syncProviderNone: 'Désactivé',
-      syncConnect: 'Connecter',
-      syncDisconnect: 'Déconnecter',
-      syncNow: 'Synchroniser',
-      lastSync: 'Dernière synchronisation'
+      appName: "ScriptVault",
+      enabled: "Activ\xE9",
+      disabled: "D\xE9sactiv\xE9",
+      save: "Enregistrer",
+      cancel: "Annuler",
+      delete: "Supprimer",
+      edit: "Modifier",
+      close: "Fermer",
+      confirm: "Confirmer",
+      yes: "Oui",
+      no: "Non",
+      ok: "OK",
+      error: "Erreur",
+      success: "Succ\xE8s",
+      warning: "Avertissement",
+      loading: "Chargement...",
+      search: "Rechercher",
+      refresh: "Actualiser",
+      tabScripts: "Scripts Install\xE9s",
+      tabSettings: "Param\xE8tres",
+      tabUtilities: "Utilitaires",
+      tabHelp: "Aide",
+      tabValues: "\xC9diteur de Valeurs",
+      newScript: "Nouveau Script",
+      importScript: "Importer",
+      checkUpdates: "V\xE9rifier les Mises \xE0 Jour",
+      searchScripts: "Rechercher des scripts...",
+      noScripts: "Aucun script install\xE9",
+      syncProvider: "Fournisseur de Synchronisation",
+      syncProviderNone: "D\xE9sactiv\xE9",
+      syncConnect: "Connecter",
+      syncDisconnect: "D\xE9connecter",
+      syncNow: "Synchroniser",
+      lastSync: "Derni\xE8re synchronisation"
     },
-    
     de: {
-      appName: 'ScriptVault',
-      enabled: 'Aktiviert',
-      disabled: 'Deaktiviert',
-      save: 'Speichern',
-      cancel: 'Abbrechen',
-      delete: 'Löschen',
-      edit: 'Bearbeiten',
-      close: 'Schließen',
-      confirm: 'Bestätigen',
-      yes: 'Ja',
-      no: 'Nein',
-      ok: 'OK',
-      error: 'Fehler',
-      success: 'Erfolg',
-      warning: 'Warnung',
-      loading: 'Laden...',
-      search: 'Suchen',
-      refresh: 'Aktualisieren',
-      tabScripts: 'Installierte Scripts',
-      tabSettings: 'Einstellungen',
-      tabUtilities: 'Werkzeuge',
-      tabHelp: 'Hilfe',
-      tabValues: 'Werte-Editor',
-      newScript: 'Neues Script',
-      importScript: 'Importieren',
-      checkUpdates: 'Updates prüfen',
-      searchScripts: 'Scripts suchen...',
-      noScripts: 'Keine Scripts installiert',
-      syncProvider: 'Sync-Anbieter',
-      syncProviderNone: 'Deaktiviert',
-      syncConnect: 'Verbinden',
-      syncDisconnect: 'Trennen',
-      syncNow: 'Jetzt synchronisieren',
-      lastSync: 'Letzte Synchronisation'
+      appName: "ScriptVault",
+      enabled: "Aktiviert",
+      disabled: "Deaktiviert",
+      save: "Speichern",
+      cancel: "Abbrechen",
+      delete: "L\xF6schen",
+      edit: "Bearbeiten",
+      close: "Schlie\xDFen",
+      confirm: "Best\xE4tigen",
+      yes: "Ja",
+      no: "Nein",
+      ok: "OK",
+      error: "Fehler",
+      success: "Erfolg",
+      warning: "Warnung",
+      loading: "Laden...",
+      search: "Suchen",
+      refresh: "Aktualisieren",
+      tabScripts: "Installierte Scripts",
+      tabSettings: "Einstellungen",
+      tabUtilities: "Werkzeuge",
+      tabHelp: "Hilfe",
+      tabValues: "Werte-Editor",
+      newScript: "Neues Script",
+      importScript: "Importieren",
+      checkUpdates: "Updates pr\xFCfen",
+      searchScripts: "Scripts suchen...",
+      noScripts: "Keine Scripts installiert",
+      syncProvider: "Sync-Anbieter",
+      syncProviderNone: "Deaktiviert",
+      syncConnect: "Verbinden",
+      syncDisconnect: "Trennen",
+      syncNow: "Jetzt synchronisieren",
+      lastSync: "Letzte Synchronisation"
     },
-    
     zh: {
-      appName: 'ScriptVault',
-      enabled: '已启用',
-      disabled: '已禁用',
-      save: '保存',
-      cancel: '取消',
-      delete: '删除',
-      edit: '编辑',
-      close: '关闭',
-      confirm: '确认',
-      yes: '是',
-      no: '否',
-      ok: '确定',
-      error: '错误',
-      success: '成功',
-      warning: '警告',
-      loading: '加载中...',
-      search: '搜索',
-      refresh: '刷新',
-      tabScripts: '已安装脚本',
-      tabSettings: '设置',
-      tabUtilities: '工具',
-      tabHelp: '帮助',
-      tabValues: '值编辑器',
-      newScript: '新建脚本',
-      importScript: '导入',
-      checkUpdates: '检查更新',
-      searchScripts: '搜索脚本...',
-      noScripts: '没有安装脚本',
-      syncProvider: '同步服务',
-      syncProviderNone: '禁用',
-      syncConnect: '连接',
-      syncDisconnect: '断开',
-      syncNow: '立即同步',
-      lastSync: '上次同步'
+      appName: "ScriptVault",
+      enabled: "\u5DF2\u542F\u7528",
+      disabled: "\u5DF2\u7981\u7528",
+      save: "\u4FDD\u5B58",
+      cancel: "\u53D6\u6D88",
+      delete: "\u5220\u9664",
+      edit: "\u7F16\u8F91",
+      close: "\u5173\u95ED",
+      confirm: "\u786E\u8BA4",
+      yes: "\u662F",
+      no: "\u5426",
+      ok: "\u786E\u5B9A",
+      error: "\u9519\u8BEF",
+      success: "\u6210\u529F",
+      warning: "\u8B66\u544A",
+      loading: "\u52A0\u8F7D\u4E2D...",
+      search: "\u641C\u7D22",
+      refresh: "\u5237\u65B0",
+      tabScripts: "\u5DF2\u5B89\u88C5\u811A\u672C",
+      tabSettings: "\u8BBE\u7F6E",
+      tabUtilities: "\u5DE5\u5177",
+      tabHelp: "\u5E2E\u52A9",
+      tabValues: "\u503C\u7F16\u8F91\u5668",
+      newScript: "\u65B0\u5EFA\u811A\u672C",
+      importScript: "\u5BFC\u5165",
+      checkUpdates: "\u68C0\u67E5\u66F4\u65B0",
+      searchScripts: "\u641C\u7D22\u811A\u672C...",
+      noScripts: "\u6CA1\u6709\u5B89\u88C5\u811A\u672C",
+      syncProvider: "\u540C\u6B65\u670D\u52A1",
+      syncProviderNone: "\u7981\u7528",
+      syncConnect: "\u8FDE\u63A5",
+      syncDisconnect: "\u65AD\u5F00",
+      syncNow: "\u7ACB\u5373\u540C\u6B65",
+      lastSync: "\u4E0A\u6B21\u540C\u6B65"
     },
-    
     ja: {
-      appName: 'ScriptVault',
-      enabled: '有効',
-      disabled: '無効',
-      save: '保存',
-      cancel: 'キャンセル',
-      delete: '削除',
-      edit: '編集',
-      close: '閉じる',
-      confirm: '確認',
-      yes: 'はい',
-      no: 'いいえ',
-      ok: 'OK',
-      error: 'エラー',
-      success: '成功',
-      warning: '警告',
-      loading: '読み込み中...',
-      search: '検索',
-      refresh: '更新',
-      tabScripts: 'インストール済みスクリプト',
-      tabSettings: '設定',
-      tabUtilities: 'ユーティリティ',
-      tabHelp: 'ヘルプ',
-      tabValues: '値エディタ',
-      newScript: '新規スクリプト',
-      importScript: 'インポート',
-      checkUpdates: '更新を確認',
-      searchScripts: 'スクリプトを検索...',
-      noScripts: 'スクリプトがインストールされていません',
-      syncProvider: '同期プロバイダー',
-      syncProviderNone: '無効',
-      syncConnect: '接続',
-      syncDisconnect: '切断',
-      syncNow: '今すぐ同期',
-      lastSync: '最終同期'
+      appName: "ScriptVault",
+      enabled: "\u6709\u52B9",
+      disabled: "\u7121\u52B9",
+      save: "\u4FDD\u5B58",
+      cancel: "\u30AD\u30E3\u30F3\u30BB\u30EB",
+      delete: "\u524A\u9664",
+      edit: "\u7DE8\u96C6",
+      close: "\u9589\u3058\u308B",
+      confirm: "\u78BA\u8A8D",
+      yes: "\u306F\u3044",
+      no: "\u3044\u3044\u3048",
+      ok: "OK",
+      error: "\u30A8\u30E9\u30FC",
+      success: "\u6210\u529F",
+      warning: "\u8B66\u544A",
+      loading: "\u8AAD\u307F\u8FBC\u307F\u4E2D...",
+      search: "\u691C\u7D22",
+      refresh: "\u66F4\u65B0",
+      tabScripts: "\u30A4\u30F3\u30B9\u30C8\u30FC\u30EB\u6E08\u307F\u30B9\u30AF\u30EA\u30D7\u30C8",
+      tabSettings: "\u8A2D\u5B9A",
+      tabUtilities: "\u30E6\u30FC\u30C6\u30A3\u30EA\u30C6\u30A3",
+      tabHelp: "\u30D8\u30EB\u30D7",
+      tabValues: "\u5024\u30A8\u30C7\u30A3\u30BF",
+      newScript: "\u65B0\u898F\u30B9\u30AF\u30EA\u30D7\u30C8",
+      importScript: "\u30A4\u30F3\u30DD\u30FC\u30C8",
+      checkUpdates: "\u66F4\u65B0\u3092\u78BA\u8A8D",
+      searchScripts: "\u30B9\u30AF\u30EA\u30D7\u30C8\u3092\u691C\u7D22...",
+      noScripts: "\u30B9\u30AF\u30EA\u30D7\u30C8\u304C\u30A4\u30F3\u30B9\u30C8\u30FC\u30EB\u3055\u308C\u3066\u3044\u307E\u305B\u3093",
+      syncProvider: "\u540C\u671F\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC",
+      syncProviderNone: "\u7121\u52B9",
+      syncConnect: "\u63A5\u7D9A",
+      syncDisconnect: "\u5207\u65AD",
+      syncNow: "\u4ECA\u3059\u3050\u540C\u671F",
+      lastSync: "\u6700\u7D42\u540C\u671F"
     },
-    
     pt: {
-      appName: 'ScriptVault',
-      enabled: 'Ativado',
-      disabled: 'Desativado',
-      save: 'Salvar',
-      cancel: 'Cancelar',
-      delete: 'Excluir',
-      edit: 'Editar',
-      close: 'Fechar',
-      confirm: 'Confirmar',
-      yes: 'Sim',
-      no: 'Não',
-      ok: 'OK',
-      error: 'Erro',
-      success: 'Sucesso',
-      warning: 'Aviso',
-      loading: 'Carregando...',
-      search: 'Pesquisar',
-      refresh: 'Atualizar',
-      tabScripts: 'Scripts Instalados',
-      tabSettings: 'Configurações',
-      tabUtilities: 'Utilitários',
-      tabHelp: 'Ajuda',
-      tabValues: 'Editor de Valores',
-      newScript: 'Novo Script',
-      importScript: 'Importar',
-      checkUpdates: 'Verificar Atualizações',
-      searchScripts: 'Pesquisar scripts...',
-      noScripts: 'Nenhum script instalado',
-      syncProvider: 'Provedor de Sincronização',
-      syncProviderNone: 'Desativado',
-      syncConnect: 'Conectar',
-      syncDisconnect: 'Desconectar',
-      syncNow: 'Sincronizar Agora',
-      lastSync: 'Última sincronização'
+      appName: "ScriptVault",
+      enabled: "Ativado",
+      disabled: "Desativado",
+      save: "Salvar",
+      cancel: "Cancelar",
+      delete: "Excluir",
+      edit: "Editar",
+      close: "Fechar",
+      confirm: "Confirmar",
+      yes: "Sim",
+      no: "N\xE3o",
+      ok: "OK",
+      error: "Erro",
+      success: "Sucesso",
+      warning: "Aviso",
+      loading: "Carregando...",
+      search: "Pesquisar",
+      refresh: "Atualizar",
+      tabScripts: "Scripts Instalados",
+      tabSettings: "Configura\xE7\xF5es",
+      tabUtilities: "Utilit\xE1rios",
+      tabHelp: "Ajuda",
+      tabValues: "Editor de Valores",
+      newScript: "Novo Script",
+      importScript: "Importar",
+      checkUpdates: "Verificar Atualiza\xE7\xF5es",
+      searchScripts: "Pesquisar scripts...",
+      noScripts: "Nenhum script instalado",
+      syncProvider: "Provedor de Sincroniza\xE7\xE3o",
+      syncProviderNone: "Desativado",
+      syncConnect: "Conectar",
+      syncDisconnect: "Desconectar",
+      syncNow: "Sincronizar Agora",
+      lastSync: "\xDAltima sincroniza\xE7\xE3o"
     },
-    
     ru: {
-      appName: 'ScriptVault',
-      enabled: 'Включено',
-      disabled: 'Отключено',
-      save: 'Сохранить',
-      cancel: 'Отмена',
-      delete: 'Удалить',
-      edit: 'Редактировать',
-      close: 'Закрыть',
-      confirm: 'Подтвердить',
-      yes: 'Да',
-      no: 'Нет',
-      ok: 'OK',
-      error: 'Ошибка',
-      success: 'Успешно',
-      warning: 'Предупреждение',
-      loading: 'Загрузка...',
-      search: 'Поиск',
-      refresh: 'Обновить',
-      tabScripts: 'Установленные скрипты',
-      tabSettings: 'Настройки',
-      tabUtilities: 'Утилиты',
-      tabHelp: 'Помощь',
-      tabValues: 'Редактор значений',
-      newScript: 'Новый скрипт',
-      importScript: 'Импорт',
-      checkUpdates: 'Проверить обновления',
-      searchScripts: 'Поиск скриптов...',
-      noScripts: 'Нет установленных скриптов',
-      syncProvider: 'Провайдер синхронизации',
-      syncProviderNone: 'Отключено',
-      syncConnect: 'Подключить',
-      syncDisconnect: 'Отключить',
-      syncNow: 'Синхронизировать',
-      lastSync: 'Последняя синхронизация'
+      appName: "ScriptVault",
+      enabled: "\u0412\u043A\u043B\u044E\u0447\u0435\u043D\u043E",
+      disabled: "\u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E",
+      save: "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C",
+      cancel: "\u041E\u0442\u043C\u0435\u043D\u0430",
+      delete: "\u0423\u0434\u0430\u043B\u0438\u0442\u044C",
+      edit: "\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C",
+      close: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C",
+      confirm: "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044C",
+      yes: "\u0414\u0430",
+      no: "\u041D\u0435\u0442",
+      ok: "OK",
+      error: "\u041E\u0448\u0438\u0431\u043A\u0430",
+      success: "\u0423\u0441\u043F\u0435\u0448\u043D\u043E",
+      warning: "\u041F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0435\u043D\u0438\u0435",
+      loading: "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430...",
+      search: "\u041F\u043E\u0438\u0441\u043A",
+      refresh: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C",
+      tabScripts: "\u0423\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044B\u0435 \u0441\u043A\u0440\u0438\u043F\u0442\u044B",
+      tabSettings: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438",
+      tabUtilities: "\u0423\u0442\u0438\u043B\u0438\u0442\u044B",
+      tabHelp: "\u041F\u043E\u043C\u043E\u0449\u044C",
+      tabValues: "\u0420\u0435\u0434\u0430\u043A\u0442\u043E\u0440 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0439",
+      newScript: "\u041D\u043E\u0432\u044B\u0439 \u0441\u043A\u0440\u0438\u043F\u0442",
+      importScript: "\u0418\u043C\u043F\u043E\u0440\u0442",
+      checkUpdates: "\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F",
+      searchScripts: "\u041F\u043E\u0438\u0441\u043A \u0441\u043A\u0440\u0438\u043F\u0442\u043E\u0432...",
+      noScripts: "\u041D\u0435\u0442 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044B\u0445 \u0441\u043A\u0440\u0438\u043F\u0442\u043E\u0432",
+      syncProvider: "\u041F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u0438",
+      syncProviderNone: "\u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E",
+      syncConnect: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C",
+      syncDisconnect: "\u041E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C",
+      syncNow: "\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C",
+      lastSync: "\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u044F\u044F \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u044F"
     }
   };
-
-  // Detect browser language
-  function detectLocale() {
-    const browserLang = navigator.language || navigator.userLanguage || 'en';
-    const shortLang = browserLang.split('-')[0].toLowerCase();
-    return translations[shortLang] ? shortLang : 'en';
+  var localeNames = {
+    en: "English",
+    es: "Espa\xF1ol",
+    fr: "Fran\xE7ais",
+    de: "Deutsch",
+    zh: "\u4E2D\u6587",
+    ja: "\u65E5\u672C\u8A9E",
+    pt: "Portugu\xEAs",
+    ru: "\u0420\u0443\u0441\u0441\u043A\u0438\u0439"
+  };
+  function resolveLocale(locale) {
+    const normalized = (locale ?? "").trim().split(/[-_]/)[0]?.toLowerCase();
+    return normalized && translations[normalized] ? normalized : null;
   }
-
-  // Get message with optional placeholder substitution
+  function normalizeLocale(locale) {
+    return resolveLocale(locale) ?? "en";
+  }
+  function detectLocale() {
+    const browserLang = navigator.language || navigator.userLanguage || "en";
+    return normalizeLocale(browserLang);
+  }
   function getMessage(key, placeholders = {}) {
-    const locale = translations[currentLocale] || translations.en;
-    let message = locale[key] || translations.en[key] || key;
-    
-    // Replace placeholders like {count}, {name}, etc.
-    Object.keys(placeholders).forEach(placeholder => {
-      const escaped = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      message = message.replace(new RegExp(`\\{${escaped}\\}`, 'g'), placeholders[placeholder]);
+    const locale = translations[currentLocale] ?? translations.en;
+    let message = locale[key] ?? translations.en[key] ?? key;
+    Object.keys(placeholders).forEach((placeholder) => {
+      message = message.replace(
+        new RegExp(`\\{${placeholder}\\}`, "g"),
+        placeholders[placeholder]
+      );
     });
-    
     return message;
   }
-
-  return {
+  var I18n = {
     init(locale) {
-      currentLocale = locale === 'auto' ? detectLocale() : (translations[locale] ? locale : 'en');
-      console.log('[I18n] Initialized with locale:', currentLocale);
+      currentLocale = locale === "auto" ? detectLocale() : normalizeLocale(locale);
+      console.log("[I18n] Initialized with locale:", currentLocale);
       return currentLocale;
     },
-    
     setLocale(locale) {
-      if (translations[locale]) {
-        currentLocale = locale;
-        return true;
-      }
-      return false;
+      const normalized = resolveLocale(locale);
+      if (!normalized) return false;
+      currentLocale = normalized;
+      return true;
     },
-    
     getLocale() {
       return currentLocale;
     },
-    
     getMessage,
-    t: getMessage, // Shorthand alias
-    
+    t: getMessage,
+    // Shorthand alias
     getAvailableLocales() {
-      return Object.keys(translations).map(code => ({
-        code,
-        name: {
-          en: 'English', es: 'Español', fr: 'Français', de: 'Deutsch',
-          zh: '中文', ja: '日本語', pt: 'Português', ru: 'Русский'
-        }[code] || code
-      }));
+      return Object.keys(translations).map(
+        (code) => ({
+          code,
+          name: localeNames[code] ?? code
+        })
+      );
     },
-    
     // Apply translations to DOM elements with data-i18n attribute
     applyToDOM(container = document) {
-      container.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        el.textContent = getMessage(key);
+      container.querySelectorAll("[data-i18n]").forEach((el) => {
+        const key = el.getAttribute("data-i18n");
+        if (key) {
+          el.textContent = getMessage(key);
+        }
       });
-      container.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-        const key = el.getAttribute('data-i18n-placeholder');
-        el.placeholder = getMessage(key);
+      container.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+        const key = el.getAttribute("data-i18n-placeholder");
+        if (key) {
+          el.placeholder = getMessage(key);
+        }
       });
-      container.querySelectorAll('[data-i18n-title]').forEach(el => {
-        const key = el.getAttribute('data-i18n-title');
-        el.title = getMessage(key);
+      container.querySelectorAll("[data-i18n-title]").forEach((el) => {
+        const key = el.getAttribute("data-i18n-title");
+        if (key) {
+          el.title = getMessage(key);
+        }
       });
     }
   };
+  var i18n_default = I18n;
+  return module.exports.default || module.exports.I18n || module.exports;
 })();
-
-// Export for use in pages
-if (typeof window !== 'undefined') {
-  window.I18n = I18n;
-}
-if (typeof self !== 'undefined') {
-  self.I18n = I18n;
-}

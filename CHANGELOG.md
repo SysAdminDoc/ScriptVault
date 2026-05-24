@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — I18n TypeScript promotion
+
+- Promoted `modules/i18n.js` to a generated runtime artifact from
+  `src/modules/i18n.ts`, moving another early service-worker module under the
+  TypeScript authoritative-source generator.
+- Updated the locale coverage extractor to accept generated CommonJS
+  `var translations = ...` declarations as well as handwritten `const`
+  dictionaries, keeping `npm run locale:check` compatible with generated
+  runtime output.
+- Added generated-runtime i18n coverage for regional locale normalization,
+  placeholder substitution, and DOM translation attributes.
+
 ### 2026-05-24 — Analyzer TypeScript promotion
 
 - Promoted `bg/analyzer.js` to a generated runtime artifact from
