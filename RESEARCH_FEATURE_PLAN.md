@@ -8,7 +8,7 @@ Top opportunities, in priority order:
 
 1. **P0 - Reconcile release state and publishing automation.** Verified local tags reach `v3.11.0`, `manifest.json` and `package.json` are 3.11.0, but the latest GitHub release is still `v2.3.4`.
 2. **P0 - Close TypeScript/runtime drift before making TS canonical.** Verified drift remains in `src/background/install-handler.ts`, and recent runtime stream-bounded fetch hardening has not been ported to the background TS mirror.
-3. **P0 - Finish stream-bounded remote script and update fetch parity.** Verified commit `053c1a5` closes the runtime DoS class with tests; remaining work is TS mirror parity and release verification.
+3. **P0 - Finish stream-bounded remote script and update fetch parity.** Verified commit `053c1a5` closes the runtime DoS class with tests; remaining work is background TS mirror parity and release verification.
 4. **P0 - Add a global pending-update inbox and consent mode.** Per-script interactive updates exist, while `UpdateSystem.autoUpdate()` still auto-applies when `settings.autoUpdate` is true.
 5. **P0 - Move userscript messaging/XHR off the page `postMessage` bridge where Chrome supports `runtime.onUserScriptMessage`.** Chrome's official docs now describe dedicated user-script message handlers for less-trusted user-script contexts.
 6. **P1 - Virtualize dashboard, card, and side-panel script lists.** `pages/dashboard.js::renderScriptTable()` still renders the list directly and is repeatedly called after search, sort, restore, update, and settings actions.
@@ -25,13 +25,13 @@ Local files and directories inspected:
 - `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`, `esbuild.config.mjs`, `build.sh`, `publish.sh`, `.gitignore`.
 - `.github/workflows/ci.yml`, `.factory/state.yaml`, `.factory/large-repo-state.yaml`.
 - `background.core.js`, generated/runtime `background.js` policy from repo notes, `modules/*.js`, `shared/*.js`, `bg/*.js`, `pages/*.js`, `src/**/*.ts`, `tests/*.test.js`, `docs/*.md`.
-- Current dirty files outside this report at verification time: `pages/dashboard-gist.js` and `src/background/wrapper-builder.ts`. They appear to be local hardening drafts for Gist token storage write failures and TS wrapper `@grant` parity. They were not changed or staged by this research pass.
+- No dirty files outside this report at verification time.
 
 Git, build, and release evidence:
 
-- Current branch: `main`, tracking `origin/main`, ahead by 6 commits before this report change.
-- Current recent HEAD before this report: `053c1a5 Hardening pass: stream-bounded fetch, CSV injection defang, badge safety`.
-- `rtk git log -10` reviewed commits from `053c1a5` through recent Phase 39/40 and repo-hygiene work.
+- Current branch: `main`, tracking `origin/main`, ahead by 1 commit before this report change.
+- Current recent HEAD before this report: `428b718 Hardening pass round 2: gist token promise hang fix + TS @grant none drift`.
+- `rtk git log -10` reviewed commits from `428b718` through recent Phase 39/40 and repo-hygiene work.
 - `gh issue list --limit 50 --state all`: no issues returned.
 - `git tag --sort=-v:refname`: latest local tag `v3.11.0`.
 - `gh release list --limit 10`: latest GitHub release `v2.3.4` from 2026-04-29.
@@ -57,8 +57,7 @@ Areas that could not be verified in this pass:
 - Live Firefox temporary sideload result.
 - Chrome Web Store dashboard state, publish queue, privacy disclosure form, and OAuth project ownership.
 - Real cloud sync credentials and provider-specific token refresh behavior.
-- Live installed-browser behavior for the newly committed hardening pass.
-- Whether the current uncommitted Gist storage and TS wrapper grant edits are final or local drafts.
+- Live installed-browser behavior for the newly committed hardening passes `053c1a5` and `428b718`.
 
 ## Current Product Map
 
@@ -182,7 +181,7 @@ Important permissions, integrations, and data flows:
 - **Current maturity:** Feature-rich but disclosure-sensitive.
 - **Tests/docs coverage:** README advertises providers; privacy policy is stale; release docs mention disclosure work.
 - **Improvement opportunities:** Update privacy text and store disclosures; add token refresh diagnostics; add encrypted export/import option; add provider capability matrix; add conflict previews before overwrite.
-- **Additional evidence:** Current uncommitted `pages/dashboard-gist.js` changes replace legacy callback-wrapped `chrome.storage.local` writes with Promise API calls so quota/disk failures do not hang the UI.
+- **Additional evidence:** Commit `428b718` replaces legacy callback-wrapped Gist token `chrome.storage.local` writes with Promise API calls so quota/disk failures do not hang the UI.
 
 ### Static Analyzer, Signing, and Trust
 
@@ -519,6 +518,28 @@ Important permissions, integrations, and data flows:
 - **Estimated complexity:** S.
 - **Priority:** P1.
 
+### Gist Token Storage Failure Handling
+
+- **Current behavior:** Commit `428b718` updates `pages/dashboard-gist.js` so token save/clear/autosync persistence uses the MV3 Promise API and no longer hangs if `chrome.storage.local.set()` or `.remove()` rejects.
+- **Problem or missed opportunity:** The failure mode is fixed in code, but no focused test was found for quota/disk-write rejection paths.
+- **Recommended change:** Add a dashboard-gist storage failure test that mocks rejected Promise API calls and verifies the UI reports or logs the failure without leaving buttons/spinners stuck.
+- **Code locations likely affected:** `pages/dashboard-gist.js`, `tests/gui-secondary-audit.test.js` or a new focused gist test.
+- **Backward compatibility concerns:** None expected; failed persistence should now surface rather than hanging silently.
+- **Verification plan:** Mock `chrome.storage.local.set` rejection for token save and autosync; confirm the Promise settles and UI state recovers.
+- **Estimated complexity:** S.
+- **Priority:** P1.
+
+### TS Wrapper `@grant none` Drift
+
+- **Current behavior:** Commit `428b718` updates `src/background/wrapper-builder.ts` so empty grant arrays deny GM APIs like `@grant none` instead of granting all APIs.
+- **Problem or missed opportunity:** The parser usually defaults missing grants to `['none']`, so the bug was latent; a future caller bypassing the parser could still regress without a direct wrapper test.
+- **Recommended change:** Add a direct `buildWrappedScript()` test for `grant: []` and `grant: ['none']` that asserts GM APIs are unavailable except `GM_info`.
+- **Code locations likely affected:** `src/background/wrapper-builder.ts`, `tests/wrapper-gm-tabs-39-13.test.js` or a new wrapper grant test.
+- **Backward compatibility concerns:** Scripts relying on missing metadata granting all APIs were already outside the documented contract.
+- **Verification plan:** Vitest fixture builds wrappers with empty grants and asserts `GM_xmlhttpRequest`, `GM_setValue`, and other GM APIs are not exposed.
+- **Estimated complexity:** S.
+- **Priority:** P1.
+
 ### Dependency Refresh Batch
 
 - **Current behavior:** Several dev dependencies are behind wanted/latest versions; Monaco is pinned below latest major/minor.
@@ -535,6 +556,8 @@ Important permissions, integrations, and data flows:
 - Verified release drift is the largest trust issue: current public GitHub Releases do not represent the local 3.x product state.
 - Verified high-trust permissions are necessary for a userscript manager, but they increase the need for onboarding, disclosure, and diagnostics.
 - Verified remote fetch paths now have runtime bounded-fetch tests, but still need background TS mirror parity.
+- Verified Gist token persistence no longer uses callback-wrapped storage writes after `428b718`, but focused rejection-path tests are still missing.
+- Verified TS wrapper empty-grant behavior now denies GM APIs after `428b718`, but direct grant-empty wrapper tests are still missing.
 - Verified `XHR-PRIVACY` remains an open factory task; migrate user-script messages away from broad page bridge paths where possible.
 - Verified `DNS-REBIND` remains open; remote install/update trust should include post-fetch IP verification or equivalent host/IP consistency checks where APIs allow.
 - Verified cloud sync disclosures are stale relative to shipped providers.
@@ -557,7 +580,7 @@ Important permissions, integrations, and data flows:
 ## Architecture and Maintainability
 
 - The runtime/TS split is now the central maintainability risk. A TS mirror that passes typecheck but is not build-canonical can silently reintroduce bugs when promoted.
-- Current uncommitted `src/background/wrapper-builder.ts` edits fix a latent TS mirror grant-check drift where an empty grants array could grant all APIs; this reinforces the need for runtime/TS parity tests.
+- Commit `428b718` fixes a latent TS mirror grant-check drift where an empty grants array could grant all APIs; this reinforces the need for runtime/TS parity tests.
 - `background.core.js` remains a large shared surface. The current roadmap already points toward service-worker module splitting; do it after parity tests, not before.
 - `pages/dashboard.js` is a large UI controller with repeated `renderScriptTable()` calls. Virtualization and state separation should happen before additional dashboard features.
 - Message action typing has improved, but runtime dispatch and `src/types/messages.ts::ResponseMap` need an automated coverage guard.
@@ -651,6 +674,13 @@ Important permissions, integrations, and data flows:
   - Acceptance: External handler exceptions return no internal detail; non-string `postMessage.type` is ignored; CSV dangerous cells are defanged in error-log and dashboard stats exports, all with tests.
   - Verify: Targeted Vitest tests for public API fuzz and CSV formula prefixes; manual dashboard stats CSV export.
 
+- [ ] P1 - Backfill tests for Gist storage failure and empty-grant wrapper behavior
+  - Why: Commit `428b718` closes two real hardening gaps, but the most direct rejection and empty-grant cases should be pinned before the next TS/runtime migration wave.
+  - Evidence: `pages/dashboard-gist.js` now uses Promise API writes for token/autosync persistence; `src/background/wrapper-builder.ts` now denies GM APIs when `grants.length === 0`.
+  - Touches: `pages/dashboard-gist.js`, `src/background/wrapper-builder.ts`, `tests/gui-secondary-audit.test.js` or new focused tests.
+  - Acceptance: Rejected Gist storage writes settle without hanging UI state; wrappers built with `grant: []` deny GM APIs except `GM_info`.
+  - Verify: Targeted Vitest tests for mocked `chrome.storage.local.set/remove` rejection and `buildWrappedScript(makeScript([]))`.
+
 - [ ] P2 - Add unified diagnostics bundle
   - Why: Debugging registration, sync, and update failures currently requires several disconnected surfaces.
   - Evidence: Error log, DevTools, netlog, sync, and registration diagnostics exist separately.
@@ -701,6 +731,8 @@ Important permissions, integrations, and data flows:
 - Add a release checklist command block that includes `gh release list --limit 5` and `git tag --sort=-v:refname`.
 - Add dashboard stats and CSP CSV export tests to complement the committed error-log CSV formula-defanging tests.
 - Add a test for `modules/public-api.js` non-string `postMessage.type` handling and generic external exception responses.
+- Add a focused Gist token storage rejection test for the `428b718` Promise API change.
+- Add a focused wrapper grant test for `grant: []` so the `428b718` TS mirror fix cannot regress.
 - Add a parity test that fails if `src/background/install-handler.ts` keeps `Set<string>` duplicate handling while runtime uses promise-based dedupe.
 - Add a docs note to `FIREFOX-PORT.md` that root `ScriptVault-firefox-v2.1.7.xpi` is stale local artifact, not current release output.
 - Add dashboard performance fixture generation for 500, 1,000, and 2,000 scripts before virtual list implementation.
@@ -726,7 +758,7 @@ Important permissions, integrations, and data flows:
 
 ## Open Questions
 
-- Should the next public release be `v3.11.1` as a release-drift fix or `v3.12.0` now that commit `053c1a5` added security hardening after 3.11.0?
+- Should the next public release be `v3.11.1` as a release-drift fix or `v3.12.0` now that commits `053c1a5` and `428b718` added security and reliability hardening after 3.11.0?
 - For the first Firefox beta, should cloud sync be WebDAV-only or should Google/Dropbox/OneDrive/Easy Cloud be carried forward immediately?
 - For trash, is the intended product contract IDB-backed recovery for large deleted scripts, or is the current `chrome.storage.local` implementation acceptable if documented and quota-tested?
 - For update consent, should existing users with `autoUpdate: true` be migrated to `review` by default, or preserved as `autoInstallTrusted` with an in-app notice?
