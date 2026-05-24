@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Release artifact reconciliation
+
+- Published the missing GitHub Release for `v3.11.0` and attached
+  `ScriptVault-v3.11.0.zip` built from the `v3.11.0` tag.
+- Removed the stale root `ScriptVault-firefox-v2.1.7.xpi` artifact from the
+  working tree so root package artifacts no longer contradict the current
+  3.11.0 manifests.
+- Added `npm run release:check` / `npm run release:check:public` to verify
+  package, Chrome manifest, Firefox manifest, README, changelog, local root
+  artifacts, Git tag, latest GitHub release, and release asset alignment.
+
 ### 2026-05-24 — Engineering hardening pass
 
 - Hardened GM_webRequest declarativeNetRequest cleanup so failed DNR removals

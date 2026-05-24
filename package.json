@@ -14,6 +14,8 @@
     "test": "vitest run",
     "test:a11y": "vitest run tests/dashboard-a11y.test.js",
     "smoke:dashboard": "node scripts/smoke-dashboard.mjs",
+    "release:check": "node scripts/check-release-artifacts.mjs",
+    "release:check:public": "node scripts/check-release-artifacts.mjs --public",
     "test:cov": "vitest run --coverage",
     "check": "tsc --noEmit && vitest run",
     "clean": "node --input-type=commonjs -e \"const fs=require('fs'); fs.rmSync('background.js',{force:true}); fs.rmSync('lib/monaco',{recursive:true,force:true});\"",
