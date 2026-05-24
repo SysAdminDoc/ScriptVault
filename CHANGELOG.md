@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Dashboard large-library virtualization
+
+- Added `pages/dashboard-virtual-rows.js`, a small table virtualizer that
+  renders only the visible script rows plus before/after spacer rows for large
+  flat dashboard libraries.
+- Dashboard table rendering now switches to the virtual path when
+  `state.scripts.length` exceeds the tunable
+  `dashboardVirtualizationThreshold` setting, while preserving the direct
+  render path for smaller libraries and folder-grouped views.
+- Extended `scripts/smoke-large-library.mjs` with 1k and 10k dashboard render
+  p99 checks, and added `tests/dashboard-virtual-rows.test.js` for spacer
+  math plus visible-window rendering.
+
 ### 2026-05-24 — Disabled ESM userscript bundler R-1
 
 - Added the off-by-default `experimentalESMUserscripts` setting and parser

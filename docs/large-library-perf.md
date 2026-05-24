@@ -6,7 +6,7 @@ Two harnesses keep that claim honest:
 - `npm run smoke:large-library` — Node script that generates **1k and 10k**
   synthetic scripts, exercises the authoritative `MatchSet` from
   `src/background/url-matcher.ts`, and reports build / lookup / search /
-  sort latency.
+  sort latency plus dashboard virtual-row render latency.
 - `npm run smoke:large-library:check` — same harness, exits non-zero if any
   measurement exceeds the documented threshold below.
 - `tests/large-library-perf.test.js` — vitest spec that runs the 1k pass with
@@ -31,12 +31,21 @@ also run in CI on cloud runners. Tighten only with measurement evidence.
 | `getMatching(url)` p99               |     8 ms |     50 ms |
 | substring search over all names      |    25 ms |    250 ms |
 | `localeCompare` sort over all names  |    20 ms |    200 ms |
+| dashboard virtual render p99         |    50 ms |    100 ms |
 
 The thresholds intentionally cover an order of magnitude headroom over the
 typical observed runs (build 10k ≈ 8 ms, `getMatching` 10k p99 ≈ 2 ms on
 maintainer hardware). The headroom protects against regressions like an
 O(N²) loop being reintroduced into the hot path, while still allowing
 high-variance shared-drive environments to pass.
+
+The dashboard render gate loads `pages/dashboard-virtual-rows.js` in JSDOM,
+computes 120 scroll windows over the synthetic library, and asserts each
+window can replace the table body with spacer rows plus the visible slice
+within the p99 limits above. The dashboard uses the same virtualizer for flat
+libraries once `state.scripts.length` exceeds
+`dashboardVirtualizationThreshold` (default 500); folder-grouped and small
+libraries keep the direct-render path.
 
 ## When to regenerate
 

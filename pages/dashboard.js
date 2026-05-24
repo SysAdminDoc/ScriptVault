@@ -165,6 +165,8 @@
         'activity log': 'diagnostics'
     };
     const SCRIPT_SEARCH_DEBOUNCE_MS = 90;
+    const SCRIPT_TABLE_VIRTUAL_ROW_HEIGHT = 72;
+    const SCRIPT_TABLE_VIRTUAL_MAX_ROWS = 60;
     const DASHBOARD_TABS = ['scripts', 'settings', 'utilities', 'trash', 'store', 'help'];
     const OAUTH_SYNC_PROVIDERS = ['googledrive', 'dropbox', 'onedrive'];
     let modalLastFocusedElement = null;
@@ -4720,9 +4722,13 @@
         }
     }
 
+    function getDashboardVirtualizationThreshold() {
+        const configured = Number(state.settings?.dashboardVirtualizationThreshold);
+        return Number.isFinite(configured) && configured >= 100 ? configured : 500;
+    }
+
     function renderScriptTable(filter = '') {
         if (!elements.scriptTableBody) return;
-        elements.scriptTableBody.innerHTML = '';
         
         const filtered = getFilteredScripts();
         syncScriptTableListSize(filtered.length);
@@ -4740,6 +4746,8 @@
         syncScriptWorkspaceStateToUrl();
 
         if (filtered.length === 0) {
+            if (typeof DashboardVirtualRows !== 'undefined') DashboardVirtualRows.destroy(elements.scriptTableBody);
+            elements.scriptTableBody.innerHTML = '';
             updateScriptEmptyState(filtered.length);
             if (elements.emptyState) elements.emptyState.style.display = 'block';
             return;
@@ -4752,6 +4760,31 @@
         // Render with folder grouping if folders exist
         const folders = state.folders || [];
         const collapsedFolders = state._collapsedFolders || new Set();
+        const shouldVirtualize = folders.length === 0
+            && state.scripts.length > getDashboardVirtualizationThreshold()
+            && typeof DashboardVirtualRows !== 'undefined';
+
+        if (shouldVirtualize) {
+            DashboardVirtualRows.mount({
+                tbody: elements.scriptTableBody,
+                scripts: filtered,
+                rowHeight: SCRIPT_TABLE_VIRTUAL_ROW_HEIGHT,
+                maxRows: SCRIPT_TABLE_VIRTUAL_MAX_ROWS,
+                columnCount: 13,
+                createRow: (script, index) => createScriptRow(script, index + 1),
+                onAfterRender: () => {
+                    updateBulkCheckboxes();
+                    applyColumnVisibility();
+                    if (typeof KeyboardNav !== 'undefined' && typeof KeyboardNav.resetFocus === 'function') {
+                        KeyboardNav.resetFocus();
+                    }
+                }
+            });
+            return;
+        }
+
+        if (typeof DashboardVirtualRows !== 'undefined') DashboardVirtualRows.destroy(elements.scriptTableBody);
+        elements.scriptTableBody.innerHTML = '';
         const fragment = document.createDocumentFragment();
 
         if (folders.length > 0) {
