@@ -293,6 +293,15 @@ export async function exportText(filters?: ErrorLogFilters): Promise<string> {
 
 /**
  * Export as CSV string.
+ *
+ * Security: user-controlled fields (`scriptName`, `error`, `url`,
+ * `context`) get CSV formula-injection mitigation (CWE-1236 / OWASP).
+ * Userscripts can throw `Error` instances with attacker-controlled
+ * `.message`; without defanging, payloads like `=HYPERLINK("http://evil")`
+ * or `+cmd|'/c calc'!A0` execute when the exported CSV is opened in
+ * Excel / LibreOffice / Numbers / Google Sheets. The standard
+ * mitigation prefixes any cell beginning with `=`, `+`, `-`, `@`,
+ * `\t`, or `\r` with a literal apostrophe.
  */
 export async function exportCSV(filters?: ErrorLogFilters): Promise<string> {
   const entries = await getAll(filters);
@@ -300,7 +309,10 @@ export async function exportCSV(filters?: ErrorLogFilters): Promise<string> {
 
   const escapeCSV = (val: string | number | null | undefined): string => {
     if (val == null) return '';
-    const str = String(val);
+    let str = String(val);
+    if (/^[=+\-@\t\r]/.test(str)) {
+      str = "'" + str;
+    }
     if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
       return '"' + str.replace(/"/g, '""') + '"';
     }

@@ -804,11 +804,16 @@ const PublicAPI = (() => {
     // Execute
     try {
       const result = await handler(message, sender);
-      audit(action, sender, message, result.error ? 'error' : 'ok');
+      audit(action, sender, message, result?.error ? 'error' : 'ok');
       return result;
     } catch (e) {
       audit(action, sender, message, 'exception');
-      return { error: 'Internal error', detail: e.message };
+      // Don't leak internal error details to external callers — log
+      // server-side for the operator (in the audit log + console) and
+      // return a generic message so an external page can't probe for
+      // stack frames / file paths / token hints via error text.
+      console.warn('[PublicAPI] external handler exception:', action, e);
+      return { error: 'Internal error' };
     }
   }
 
@@ -819,7 +824,13 @@ const PublicAPI = (() => {
     }
 
     const data = event.data;
-    if (!data || typeof data !== 'object' || !data.type) return;
+    if (!data || typeof data !== 'object') return;
+    // Type guard: postMessage payloads can be arbitrary structured-clone data.
+    // We must require `data.type` to be a string before calling `.startsWith`,
+    // otherwise a sender that passes `data.type = {}` triggers a TypeError that
+    // bubbles up to the window's 'message' listener (Chrome surfaces this as
+    // an unhandled error on chrome://extensions).
+    if (typeof data.type !== 'string') return;
     if (!data.type.startsWith('scriptvault:')) return;
 
     const senderId = `web:${event.origin}`;

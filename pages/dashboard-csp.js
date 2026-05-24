@@ -951,15 +951,27 @@ const CSPReporter = (() => {
   function exportCSV() {
     const aggregated = aggregateReports();
     const header = 'Site,CSP Directive,Severity,Affected Scripts,Issue Count,Last Seen';
+    // CSV formula-injection mitigation: `scriptNames` is composed from
+    // user-controlled `script.meta.name` fields. A malicious script author
+    // could name their script `=HYPERLINK("http://evil")` and target anyone
+    // who exports the CSP report to CSV. Prefix any field that starts with
+    // a formula-trigger char with a literal apostrophe per OWASP/CWE-1236.
+    // Defensively apply to all user-controlled fields (hostname rarely
+    // matters in practice but cheap to guard).
+    const csvCell = (raw) => {
+      let s = String(raw == null ? '' : raw);
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+      return '"' + s.replace(/"/g, '""') + '"';
+    };
     const rows = aggregated.map(r => {
       const sev = getSeverity(r.directive);
       return [
-        `"${r.hostname}"`,
-        `"${r.directive}"`,
-        `"${sev.label}"`,
-        `"${r.scriptNames.replace(/"/g, '""')}"`,
+        csvCell(r.hostname),
+        csvCell(r.directive),
+        csvCell(sev.label),
+        csvCell(r.scriptNames),
         r.count,
-        `"${new Date(r.lastSeen).toISOString()}"`
+        csvCell(new Date(r.lastSeen).toISOString())
       ].join(',');
     });
     return header + '\n' + rows.join('\n');

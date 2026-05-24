@@ -200,6 +200,16 @@ const ErrorLog = {
 
   /**
    * Export as CSV string.
+   *
+   * Security: user-controlled fields (`scriptName`, `error`, `url`,
+   * `context`) get **CSV formula injection** mitigation (CWE-1236 /
+   * OWASP). Userscripts can throw `Error` instances with attacker-
+   * controlled `.message`, and an attacker who knows the user exports
+   * the error log could craft payloads like `=HYPERLINK("http://evil")`
+   * or `+cmd|'/c calc'!A0` that Excel/LibreOffice/Numbers/Sheets
+   * execute on open. The standard mitigation is to prefix any field
+   * starting with `=`, `+`, `-`, `@`, `\t`, or `\r` with a literal
+   * apostrophe, which the spreadsheet renders harmlessly.
    */
   async exportCSV(filters) {
     const entries = await this.getAll(filters);
@@ -207,7 +217,13 @@ const ErrorLog = {
 
     const escapeCSV = (val) => {
       if (val == null) return '';
-      const str = String(val);
+      let str = String(val);
+      // Formula-injection mitigation — defang any cell that a spreadsheet
+      // would otherwise interpret as a formula. Apply BEFORE the quote
+      // wrap so the apostrophe survives the surrounding quotes intact.
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = "'" + str;
+      }
       if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
         return '"' + str.replace(/"/g, '""') + '"';
       }
@@ -217,6 +233,8 @@ const ErrorLog = {
     const rows = [headers.join(',')];
     for (const e of entries) {
       rows.push([
+        // timestamp + datetime are extension-controlled numerics — safe
+        // to write raw. Line/col are integers from chrome's error event.
         e.timestamp,
         new Date(e.timestamp).toISOString(),
         escapeCSV(e.scriptId),
