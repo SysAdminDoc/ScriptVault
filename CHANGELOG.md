@@ -4,6 +4,23 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Dashboard search corpus widened + editor find history
+
+- Dashboard search now matches against a single flattened corpus per
+  script: name/description/author/namespace/version plus every URL pattern
+  field (`match`, `include`, `exclude`, `userMatches`, `userIncludes`,
+  `userExcludes`), tags (`meta.tag` + `settings.tags`), grants,
+  homepage/support/update/download URLs, and ISO yyyy-mm-dd renderings of
+  `stats.lastRun` and `updatedAt`. Plain substring, `code:`, regex
+  (`re:` / `/.../flags`), and the invert prefixes (`!`, `not:`) all
+  benefit. Corpus is memoized per-script keyed on `updatedAt`.
+- Monaco find widget now persists its search history to
+  `chrome.storage.local.editorFindHistory` (FIFO 20, dedup) and primes
+  the widget with the most recent term when the editor opens. Sandbox
+  forwards every `findController` searchString change via
+  `postMessage({type:'find-search'})`; adapter records and primes via
+  `prime-find`.
+
 ### 2026-05-24 — Site-scoped controls, invert search, and per-script frame mode
 
 - Added a per-script `settings.frameMode` (`'top'` | `'all'` | `'default'`)

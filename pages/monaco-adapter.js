@@ -20,6 +20,38 @@
   let _useFallback = false;
   let _lastScriptId = null;
 
+  // Editor find-widget search history. Persisted to chrome.storage.local
+  // under `editorFindHistory` as a FIFO list (newest first), capped at 20.
+  const FIND_HISTORY_KEY = 'editorFindHistory';
+  const FIND_HISTORY_MAX = 20;
+
+  async function loadFindHistory() {
+    try {
+      const data = await chrome.storage.local.get(FIND_HISTORY_KEY);
+      const arr = Array.isArray(data?.[FIND_HISTORY_KEY]) ? data[FIND_HISTORY_KEY] : [];
+      return arr.filter(v => typeof v === 'string' && v.length > 0).slice(0, FIND_HISTORY_MAX);
+    } catch {
+      return [];
+    }
+  }
+
+  async function recordFindTerm(value) {
+    if (typeof value !== 'string') return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    try {
+      const list = await loadFindHistory();
+      const dedup = [trimmed, ...list.filter(v => v !== trimmed)].slice(0, FIND_HISTORY_MAX);
+      await chrome.storage.local.set({ [FIND_HISTORY_KEY]: dedup });
+    } catch {}
+  }
+
+  async function primeEditorFindHistory() {
+    const history = await loadFindHistory();
+    if (history.length === 0) return;
+    sendToFrame({ type: 'prime-find', history });
+  }
+
   // ── Message listener ────────────────────────────────────────────────────────
   window.addEventListener('message', function (e) {
     if (!e.data || typeof e.data !== 'object') return;
@@ -31,6 +63,8 @@
         _isReady = true;
         _pendingReady.forEach(fn => fn());
         _pendingReady = [];
+        // After ready, prime the find widget with saved history.
+        primeEditorFindHistory();
         break;
       case 'change':
         _value = msg.value;
@@ -46,6 +80,10 @@
         break;
       case 'close':
         if (typeof closeEditor === 'function') closeEditor();
+        break;
+      case 'find-search':
+        // Sandbox forwards each find-widget searchString change. Persist.
+        recordFindTerm(msg.value);
         break;
     }
   });
