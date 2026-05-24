@@ -15,6 +15,10 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
+function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).byteLength;
+}
+
 export async function fetchTextBounded(
   response: Response,
   maxBytes: number,
@@ -32,8 +36,9 @@ export async function fetchTextBounded(
   const body = response.body;
   if (!body || typeof body.getReader !== 'function') {
     const text = await response.text();
-    if (typeof text === 'string' && text.length > maxBytes) {
-      throw new Error(`${label} too large (${formatBytes(text.length)}). Maximum is ${formatBytes(maxBytes)}.`);
+    const bytes = typeof text === 'string' ? utf8ByteLength(text) : 0;
+    if (bytes > maxBytes) {
+      throw new Error(`${label} too large (${formatBytes(bytes)}). Maximum is ${formatBytes(maxBytes)}.`);
     }
     return text;
   }
