@@ -39,6 +39,7 @@ describe('TS source drift gate', () => {
 
     expect(map.errors).toEqual([]);
     expect(map.entries.some((entry) => entry.runtime === 'modules/error-log.js' && entry.status === 'promoted')).toBe(true);
+    expect(map.entries.some((entry) => entry.runtime === 'modules/notifications.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'background.core.js' && entry.status === 'intentionally-divergent')).toBe(true);
   });
 
@@ -47,7 +48,7 @@ describe('TS source drift gate', () => {
     const report = analyzeSourceDrift(map, []);
     const text = formatTextReport(report, { reportMode: true });
 
-    expect(report.totals.promoted).toBe(1);
+    expect(report.totals.promoted).toBe(2);
     expect(report.totals.candidate).toBe(0);
     expect(report.totals['intentionally-divergent']).toBeGreaterThanOrEqual(2);
     expect(text).toContain('modules/error-log.js -> src/modules/error-log.ts');

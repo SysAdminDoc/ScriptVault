@@ -125,6 +125,34 @@ describe('source notification system module', () => {
     });
   });
 
+  it('stores local click context with an alarm cleanup fallback when session storage is unavailable', async () => {
+    const NotificationSystem = await loadFreshNotificationSystem();
+    const originalSession = chrome.storage.session;
+    chrome.storage.session = undefined;
+
+    try {
+      await NotificationSystem.notifyUpdate({
+        id: 'script_local',
+        name: 'Local Fallback',
+        version: '1.0.0',
+      });
+
+      const [notifId] = chrome.notifications.create.mock.calls[0];
+      const key = `notifCtx_${notifId}`;
+      expect((await chrome.storage.local.get(key))[key]).toEqual({
+        action: 'openScript',
+        scriptId: 'script_local',
+      });
+      expect(chrome.alarms.create).toHaveBeenCalledWith(`notifCtx_clean_${notifId}`, { delayInMinutes: 5 });
+
+      await NotificationSystem.handleAlarm({ name: `notifCtx_clean_${notifId}` });
+
+      expect((await chrome.storage.local.get(key))[key]).toBeUndefined();
+    } finally {
+      chrome.storage.session = originalSession;
+    }
+  });
+
   it('keeps update events in the weekly digest during quiet hours even when no notification is shown', async () => {
     const NotificationSystem = await loadFreshNotificationSystem();
 
@@ -152,6 +180,20 @@ describe('source notification system module', () => {
         oldVersion: '2.9.0',
       }),
     ]);
+  });
+
+  it('resets consecutive error counts after an error notification is sent', async () => {
+    const NotificationSystem = await loadFreshNotificationSystem();
+
+    await NotificationSystem.notifyError('script_error', new Error('boom 1'));
+    await NotificationSystem.notifyError('script_error', new Error('boom 2'));
+    await NotificationSystem.notifyError('script_error', new Error('boom 3'));
+
+    const stored = await chrome.storage.local.get(['notifErrorCounts', 'notifRateLimits']);
+
+    expect(chrome.notifications.create).toHaveBeenCalledTimes(1);
+    expect(stored.notifErrorCounts.script_error).toBe(0);
+    expect(stored.notifRateLimits.script_error).toBeGreaterThan(0);
   });
 
   it('skips invalid storage percentage copy when quota is unavailable during digest generation', async () => {

@@ -18,6 +18,12 @@ export const TS_RUNTIME_MODULES = [
     output: 'modules/error-log.js',
     exportName: 'ErrorLog',
   },
+  {
+    id: 'notifications',
+    source: 'src/modules/notifications.ts',
+    output: 'modules/notifications.js',
+    exportName: 'NotificationSystem',
+  },
 ];
 
 function normalizeNewlines(text) {
