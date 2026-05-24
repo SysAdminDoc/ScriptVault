@@ -4,6 +4,7 @@
 // ============================================================================
 
 import { fetchTextBounded } from './fetch-bounded';
+import { classifyFetchUrl, classifyResponseUrl } from './internal-host-guard';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -254,6 +255,14 @@ export async function fetchRequireScript(url: string): Promise<string | null> {
 // ---------------------------------------------------------------------------
 
 export async function fetchWithRetry(url: string, retries: number = 2): Promise<string | null> {
+  // Pre-flight: reject internal/loopback/link-local hosts before any network
+  // I/O. @require sources should be public CDNs; allow http:/https: only and
+  // let the post-flight check catch redirects into private space.
+  const preCheck = classifyFetchUrl(url, ['http:', 'https:']);
+  if (!preCheck.ok) {
+    throw new Error(`@require URL rejected: ${preCheck.message}`);
+  }
+
   for (let i = 0; i <= retries; i++) {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -275,6 +284,11 @@ export async function fetchWithRetry(url: string, retries: number = 2): Promise<
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
+      }
+
+      const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+      if (!postCheck.ok) {
+        throw new Error(`@require URL redirected to ${postCheck.message}`);
       }
 
       const code = await fetchTextBounded(response, MAX_REQUIRE_BYTES, 'Response');

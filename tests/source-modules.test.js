@@ -477,6 +477,25 @@ describe('source resource cache module', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(ResourceCache.cache['https://example.com/huge.js']).toBeUndefined();
   });
+
+  it('rejects internal-host and redirected resource URLs without caching them', async () => {
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock;
+
+    await expect(ResourceCache.fetchResource('https://127.0.0.1/resource.js')).rejects.toThrow('@resource URL rejected');
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const response = new Response('window.redirected = true;', {
+      status: 200,
+      headers: { 'content-type': 'text/javascript' },
+    });
+    Object.defineProperty(response, 'url', { value: 'https://10.0.0.1/resource.js', configurable: true });
+    fetchMock.mockResolvedValueOnce(response);
+
+    await expect(ResourceCache.fetchResource('https://cdn.example.com/resource.js')).rejects.toThrow('@resource URL redirected');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(ResourceCache.cache['https://cdn.example.com/resource.js']).toBeUndefined();
+  });
 });
 
 describe('source xhr manager module', () => {

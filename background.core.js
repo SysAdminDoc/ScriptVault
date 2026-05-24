@@ -317,6 +317,15 @@ const UpdateSystem = {
   },
 
   async fetchUpdateCandidate(updateUrl, fetchOptions = {}) {
+    // Pre-flight: refuse update URLs that point at internal/loopback/link-local
+    // hosts. Userscript update URLs are stored from prior installs, so this
+    // catches both adversarial @updateURL metadata and rebinds that turned a
+    // public host into an internal one between checks.
+    const preCheck = InternalHostGuard.classifyFetchUrl(updateUrl, ['http:', 'https:']);
+    if (!preCheck.ok) {
+      throw new Error('Update URL rejected: ' + preCheck.message);
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this._FETCH_TIMEOUT_MS);
 
@@ -325,6 +334,13 @@ const UpdateSystem = {
 
       if (response.status === 304 || !response.ok) {
         return { response, code: '' };
+      }
+
+      // Post-flight: catch redirect targets that resolved to an internal host
+      // even though the original update URL was external.
+      const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+      if (!postCheck.ok) {
+        throw new Error('Update URL redirected to ' + postCheck.message);
       }
 
       // Stream-bounded read: a hostile update server can omit/lie about
@@ -2797,6 +2813,10 @@ async function handleMessage(message, sender) {
           if (!lsPolicy.allowed) {
             return { error: lsPolicy.error };
           }
+          const lsPreCheck = InternalHostGuard.classifyFetchUrl(data.url, ['http:', 'https:']);
+          if (!lsPreCheck.ok) {
+            return { error: 'GM_loadScript URL rejected: ' + lsPreCheck.message };
+          }
 
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), data.timeout || 30000);
@@ -2804,6 +2824,10 @@ async function handleMessage(message, sender) {
           try {
             const response = await fetch(data.url, { signal: controller.signal });
             if (!response.ok) return { error: `HTTP ${response.status}` };
+            const lsPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+            if (!lsPostCheck.ok) {
+              return { error: 'GM_loadScript URL redirected to ' + lsPostCheck.message };
+            }
             // Stream-bounded read so a remote script source can't OOM us
             // by serving an unbounded body. See _fetchTextBounded for
             // rationale.
@@ -4536,9 +4560,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       const linkUrl = info.linkUrl;
       if (linkUrl) {
         try {
+          InternalHostGuard.assertExternalFetchUrl(linkUrl, 'Script source', ['http:', 'https:']);
           const response = await fetch(linkUrl);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const code = await response.text();
+          const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+          if (!postCheck.ok) {
+            throw new Error('Script source redirected to ' + postCheck.message);
+          }
+          const code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
           if (code.includes('==UserScript==')) {
             await chrome.storage.local.set({
               pendingInstall: { code, url: linkUrl, timestamp: Date.now() }
@@ -5078,9 +5107,18 @@ async function _fetchPendingUserscript(url) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
   try {
+    // Pre-flight: reject internal/loopback/link-local install URLs before any
+    // network I/O.
+    InternalHostGuard.assertExternalFetchUrl(url, 'Script source', ['http:', 'https:']);
+
     const response = await fetch(url, { signal: controller.signal });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    // Post-flight: catch public URLs that redirect into internal address space.
+    const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) {
+      throw new Error('Script source redirected to ' + postCheck.message);
     }
     // Stream-bounded read so a hostile server can't OOM us by serving an
     // unbounded body (the previous content-length check was advisory and
@@ -5223,15 +5261,7 @@ async function installFromUrl(url) {
     if (typeof url !== 'string' || !url) {
       throw new Error('No URL provided');
     }
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      throw new Error('Invalid URL');
-    }
-    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-      throw new Error('URL must be http(s)://');
-    }
+    InternalHostGuard.assertExternalFetchUrl(url, 'Script source', ['http:', 'https:']);
     // Timeout after 30 seconds
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -5241,6 +5271,11 @@ async function installFromUrl(url) {
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
+      }
+
+      const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+      if (!postCheck.ok) {
+        throw new Error('Script source redirected to ' + postCheck.message);
       }
 
       // Stream-bounded read (same protection as the webNavigation handler);
@@ -6373,6 +6408,11 @@ async function fetchRequireScript(url) {
 
 // Fetch with retry and proper options
 async function fetchWithRetry(url, retries = 2) {
+  const preCheck = InternalHostGuard.classifyFetchUrl(url, ['http:', 'https:']);
+  if (!preCheck.ok) {
+    throw new Error('@require URL rejected: ' + preCheck.message);
+  }
+
   for (let i = 0; i <= retries; i++) {
     try {
       const controller = new AbortController();
@@ -6393,6 +6433,11 @@ async function fetchWithRetry(url, retries = 2) {
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
+        }
+
+        const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+        if (!postCheck.ok) {
+          throw new Error('@require URL redirected to ' + postCheck.message);
         }
 
         // Reject excessively large @require scripts (>5MB) to prevent memory

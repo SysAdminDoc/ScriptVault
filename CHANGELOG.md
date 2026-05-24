@@ -4,6 +4,32 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Shared internal-host / SSRF / redirect fetch policy
+
+- Added `src/background/internal-host-guard.ts` and the runtime mirror
+  `modules/internal-host-guard.js` as the canonical IPv4/IPv6
+  loopback/private/link-local/CGNAT/unspecified/broadcast/ULA classifier.
+  Handles `localhost*` aliases and both textual (`::ffff:10.0.0.1`) and
+  WHATWG-normalized (`::ffff:a00:1`) IPv4-mapped IPv6 forms, plus the
+  `169.254.169.254` cloud-metadata address.
+- Wired pre-flight `classifyFetchUrl` / `assertExternalFetchUrl` and
+  post-flight `classifyResponseUrl` (against the response's final URL) into:
+  - `installFromUrl`, context-menu link install, and the `webNavigation`
+    `.user.js` interceptor (script install paths).
+  - `fetchWithRetry`, `fetchRequireScript`, and `GM_loadScript` (dynamic
+    script/dependency loaders).
+  - `ResourceCache.fetchResource` in both runtime JS and the TypeScript mirror
+    (@resource fetcher).
+  - `UpdateChecker.fetchUpdateCandidate` in both runtime JS and the TypeScript
+    mirror (auto-update fetch).
+- Updated `esbuild.config.mjs` to concatenate `modules/internal-host-guard.js`
+  before `modules/resources.js` so the runtime mirror is in scope for
+  every fetch path that depends on it.
+- Added parity and focused end-to-end tests that compare the JS mirror and TS
+  module side-by-side across every CIDR block, IPv6 form, and edge case, then
+  prove install, update, @require, and @resource paths reject pre-fetch internal
+  hosts and post-fetch redirect targets that resolved to private space.
+
 ### 2026-05-24 — User-script messaging gate
 
 - Added `USER_SCRIPT_MESSAGING_AVAILABLE` feature detection for

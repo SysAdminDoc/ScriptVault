@@ -2,6 +2,8 @@
 // Resource Cache
 // ============================================================================
 
+import { classifyFetchUrl, classifyResponseUrl } from '../background/internal-host-guard';
+
 interface CacheEntry {
   text: string;
   dataUri: string;
@@ -84,12 +86,21 @@ const ResourceCache: ResourceCache = {
       throw new Error('Only HTTP(S) URLs allowed for @resource/@require');
     }
 
+    const preCheck = classifyFetchUrl(url, ['http:', 'https:']);
+    if (!preCheck.ok) {
+      throw new Error(`@resource URL rejected: ${preCheck.message}`);
+    }
+
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.fetchTimeoutMs);
       try {
         const response: Response = await fetch(url, { signal: controller.signal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+        if (!postCheck.ok) {
+          throw new Error(`@resource URL redirected to ${postCheck.message}`);
+        }
         const contentType = response.headers.get('content-type') || 'text/plain';
         const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
         if (Number.isFinite(contentLength) && contentLength > this.maxResourceBytes) {

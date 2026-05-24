@@ -5031,6 +5031,131 @@ const XhrManager = {
 };
 
 // ============================================================================
+// Internal-host guard (runtime JS mirror of src/background/internal-host-guard.ts)
+// ============================================================================
+//
+// Shared classifier used by the install handler, @require/@resource loader,
+// update checker, and webhook gate. Rejects URLs whose hostname is a
+// loopback / private / link-local / CGNAT / unspecified / broadcast / ULA
+// address (IPv4 + IPv6, including ::ffff: v4-mapped form and `localhost`
+// aliases). Re-checked after each fetch via the response's final URL so a
+// redirect or DNS rebind cannot smuggle an internal target past a pre-flight
+// pass.
+//
+// Behavior MUST stay in lock step with `src/background/internal-host-guard.ts`;
+// the parity contract is enforced by `tests/internal-host-guard.test.js`.
+
+const InternalHostGuard = {
+  _isInternalIPv4(ip) {
+    const parts = ip.split('.').map((p) => parseInt(p, 10));
+    if (parts.length !== 4 || parts.some((p) => !Number.isFinite(p) || p < 0 || p > 255)) return true;
+    const [a, b, c, d] = parts;
+    // 0.0.0.0/8 unspecified
+    if (a === 0) return true;
+    // 10.0.0.0/8
+    if (a === 10) return true;
+    // 127.0.0.0/8 loopback
+    if (a === 127) return true;
+    // 169.254.0.0/16 link-local (incl. 169.254.169.254 cloud metadata)
+    if (a === 169 && b === 254) return true;
+    // 172.16.0.0/12
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    // 192.168.0.0/16
+    if (a === 192 && b === 168) return true;
+    // 100.64.0.0/10 CGNAT
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    // 255.255.255.255 broadcast
+    if (a === 255 && b === 255 && c === 255 && d === 255) return true;
+    return false;
+  },
+
+  isInternalHost(rawHost) {
+    if (typeof rawHost !== 'string' || !rawHost) return true;
+    let h = rawHost.toLowerCase();
+    if (h.startsWith('[') && h.endsWith(']')) h = h.slice(1, -1);
+
+    if (h === 'localhost' || h === 'localhost.localdomain' || h === 'ip6-localhost' || h === 'ip6-loopback') {
+      return true;
+    }
+
+    if (h.includes(':')) {
+      if (h === '::1' || h === '::' || h === '::0' || h === '0:0:0:0:0:0:0:0' || h === '0:0:0:0:0:0:0:1') return true;
+      if (/^fe[89ab][0-9a-f]?:/.test(h)) return true;
+      if (/^f[cd][0-9a-f]{0,2}:/.test(h)) return true;
+      // IPv4-mapped IPv6 in textual dotted-quad form (::ffff:10.0.0.1)
+      const v4MappedDotted = h.match(/^::ffff:([0-9.]+)$/);
+      if (v4MappedDotted) return this._isInternalIPv4(v4MappedDotted[1]);
+      // IPv4-mapped IPv6 normalized by WHATWG URL parser (::ffff:a00:1 form).
+      // The two trailing hextets encode the 4 octets of the v4 address.
+      const v4MappedHex = h.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+      if (v4MappedHex) {
+        const hi = parseInt(v4MappedHex[1], 16);
+        const lo = parseInt(v4MappedHex[2], 16);
+        const dotted = [(hi >> 8) & 0xff, hi & 0xff, (lo >> 8) & 0xff, lo & 0xff].join('.');
+        return this._isInternalIPv4(dotted);
+      }
+      return false;
+    }
+
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) {
+      return this._isInternalIPv4(h);
+    }
+
+    return false;
+  },
+
+  classifyFetchUrl(url, allowedSchemes) {
+    const schemes = Array.isArray(allowedSchemes) && allowedSchemes.length ? allowedSchemes : ['https:'];
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch (_e) {
+      return { ok: false, reason: 'malformed-url', url: null, message: 'malformed URL' };
+    }
+    if (!schemes.includes(parsed.protocol)) {
+      return {
+        ok: false,
+        reason: 'unsupported-scheme',
+        url: parsed,
+        message: 'unsupported scheme ' + parsed.protocol
+      };
+    }
+    const host = parsed.hostname || '';
+    if (!host) {
+      return { ok: false, reason: 'empty-hostname', url: parsed, message: 'empty hostname' };
+    }
+    if (this.isInternalHost(host)) {
+      let reason = 'internal-host';
+      if (host === 'localhost' || host.endsWith('.localdomain') || host === 'ip6-localhost' || host === 'ip6-loopback') {
+        reason = 'localhost-alias';
+      } else if (host.includes(':')) {
+        reason = 'ipv6-internal';
+      } else if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+        reason = 'ipv4-internal';
+      }
+      return { ok: false, reason, url: parsed, message: 'internal host (' + reason + ')' };
+    }
+    return { ok: true, reason: null, url: parsed, message: '' };
+  },
+
+  assertExternalFetchUrl(url, label, allowedSchemes) {
+    const result = this.classifyFetchUrl(url, allowedSchemes);
+    if (!result.ok || !result.url) {
+      throw new Error(label + ': ' + (result.message || 'rejected URL'));
+    }
+    return result.url;
+  },
+
+  classifyResponseUrl(response, allowedSchemes) {
+    const finalUrl = response && typeof response.url === 'string' ? response.url : '';
+    if (!finalUrl) {
+      return { ok: true, reason: null, url: null, message: '' };
+    }
+    return this.classifyFetchUrl(finalUrl, allowedSchemes);
+  }
+};
+
+// ============================================================================
 // Resource Cache
 // ============================================================================
 
@@ -5099,6 +5224,14 @@ const ResourceCache = {
       throw new Error('Only HTTP(S) URLs allowed for @resource/@require');
     }
 
+    // Pre-flight: reject internal/loopback/link-local hosts before opening a
+    // socket. Matches the @require/@resource SSRF policy enforced in the TS
+    // resource-loader mirror.
+    const preCheck = InternalHostGuard.classifyFetchUrl(url, ['http:', 'https:']);
+    if (!preCheck.ok) {
+      throw new Error('@resource URL rejected: ' + preCheck.message);
+    }
+
     // LR-002 — share the in-flight fetch with any concurrent caller for
     // the same URL. The set() below MUST happen before any await so the
     // second caller (which may arrive on the same microtask tick) sees
@@ -5118,6 +5251,12 @@ const ResourceCache = {
         try {
           const response = await fetch(url, { signal: controller.signal });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          // Post-flight: catch redirects/DNS rebinds that landed on an
+          // internal host after the pre-flight check passed.
+          const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+          if (!postCheck.ok) {
+            throw new Error('@resource URL redirected to ' + postCheck.message);
+          }
           const contentType = response.headers.get('content-type') || 'text/plain';
           const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
           if (Number.isFinite(contentLength) && contentLength > this.maxResourceBytes) {
@@ -11428,6 +11567,15 @@ const UpdateSystem = {
   },
 
   async fetchUpdateCandidate(updateUrl, fetchOptions = {}) {
+    // Pre-flight: refuse update URLs that point at internal/loopback/link-local
+    // hosts. Userscript update URLs are stored from prior installs, so this
+    // catches both adversarial @updateURL metadata and rebinds that turned a
+    // public host into an internal one between checks.
+    const preCheck = InternalHostGuard.classifyFetchUrl(updateUrl, ['http:', 'https:']);
+    if (!preCheck.ok) {
+      throw new Error('Update URL rejected: ' + preCheck.message);
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this._FETCH_TIMEOUT_MS);
 
@@ -11436,6 +11584,13 @@ const UpdateSystem = {
 
       if (response.status === 304 || !response.ok) {
         return { response, code: '' };
+      }
+
+      // Post-flight: catch redirect targets that resolved to an internal host
+      // even though the original update URL was external.
+      const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+      if (!postCheck.ok) {
+        throw new Error('Update URL redirected to ' + postCheck.message);
       }
 
       // Stream-bounded read: a hostile update server can omit/lie about
@@ -13908,6 +14063,10 @@ async function handleMessage(message, sender) {
           if (!lsPolicy.allowed) {
             return { error: lsPolicy.error };
           }
+          const lsPreCheck = InternalHostGuard.classifyFetchUrl(data.url, ['http:', 'https:']);
+          if (!lsPreCheck.ok) {
+            return { error: 'GM_loadScript URL rejected: ' + lsPreCheck.message };
+          }
 
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), data.timeout || 30000);
@@ -13915,6 +14074,10 @@ async function handleMessage(message, sender) {
           try {
             const response = await fetch(data.url, { signal: controller.signal });
             if (!response.ok) return { error: `HTTP ${response.status}` };
+            const lsPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+            if (!lsPostCheck.ok) {
+              return { error: 'GM_loadScript URL redirected to ' + lsPostCheck.message };
+            }
             // Stream-bounded read so a remote script source can't OOM us
             // by serving an unbounded body. See _fetchTextBounded for
             // rationale.
@@ -15647,9 +15810,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       const linkUrl = info.linkUrl;
       if (linkUrl) {
         try {
+          InternalHostGuard.assertExternalFetchUrl(linkUrl, 'Script source', ['http:', 'https:']);
           const response = await fetch(linkUrl);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const code = await response.text();
+          const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+          if (!postCheck.ok) {
+            throw new Error('Script source redirected to ' + postCheck.message);
+          }
+          const code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
           if (code.includes('==UserScript==')) {
             await chrome.storage.local.set({
               pendingInstall: { code, url: linkUrl, timestamp: Date.now() }
@@ -16189,9 +16357,18 @@ async function _fetchPendingUserscript(url) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
   try {
+    // Pre-flight: reject internal/loopback/link-local install URLs before any
+    // network I/O.
+    InternalHostGuard.assertExternalFetchUrl(url, 'Script source', ['http:', 'https:']);
+
     const response = await fetch(url, { signal: controller.signal });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    // Post-flight: catch public URLs that redirect into internal address space.
+    const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) {
+      throw new Error('Script source redirected to ' + postCheck.message);
     }
     // Stream-bounded read so a hostile server can't OOM us by serving an
     // unbounded body (the previous content-length check was advisory and
@@ -16334,15 +16511,7 @@ async function installFromUrl(url) {
     if (typeof url !== 'string' || !url) {
       throw new Error('No URL provided');
     }
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      throw new Error('Invalid URL');
-    }
-    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-      throw new Error('URL must be http(s)://');
-    }
+    InternalHostGuard.assertExternalFetchUrl(url, 'Script source', ['http:', 'https:']);
     // Timeout after 30 seconds
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -16352,6 +16521,11 @@ async function installFromUrl(url) {
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
+      }
+
+      const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+      if (!postCheck.ok) {
+        throw new Error('Script source redirected to ' + postCheck.message);
       }
 
       // Stream-bounded read (same protection as the webNavigation handler);
@@ -17484,6 +17658,11 @@ async function fetchRequireScript(url) {
 
 // Fetch with retry and proper options
 async function fetchWithRetry(url, retries = 2) {
+  const preCheck = InternalHostGuard.classifyFetchUrl(url, ['http:', 'https:']);
+  if (!preCheck.ok) {
+    throw new Error('@require URL rejected: ' + preCheck.message);
+  }
+
   for (let i = 0; i <= retries; i++) {
     try {
       const controller = new AbortController();
@@ -17504,6 +17683,11 @@ async function fetchWithRetry(url, retries = 2) {
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
+        }
+
+        const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+        if (!postCheck.ok) {
+          throw new Error('@require URL redirected to ' + postCheck.message);
         }
 
         // Reject excessively large @require scripts (>5MB) to prevent memory

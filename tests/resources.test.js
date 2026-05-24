@@ -3,14 +3,18 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 const code = readFileSync(resolve(__dirname, '../modules/resources.js'), 'utf8');
+// modules/resources.js references the InternalHostGuard global declared by
+// modules/internal-host-guard.js (concatenated by the production build).
+// Re-create the same effect for tests by prepending the guard source.
+const guardCode = readFileSync(resolve(__dirname, '../modules/internal-host-guard.js'), 'utf8');
 const originalFetch = globalThis.fetch;
 
 let ResourceCache;
 function createFresh() {
-  const fn = new Function('chrome', 'console', 'fetch', 'btoa', 'TextDecoder',
-    code + '\nreturn ResourceCache;'
+  const fn = new Function('chrome', 'console', 'fetch', 'btoa', 'TextDecoder', 'URL',
+    guardCode + '\n' + code + '\nreturn ResourceCache;'
   );
-  return fn(globalThis.chrome, console, globalThis.fetch, globalThis.btoa, TextDecoder);
+  return fn(globalThis.chrome, console, globalThis.fetch, globalThis.btoa, TextDecoder, URL);
 }
 
 beforeEach(() => {
@@ -70,6 +74,32 @@ describe('ResourceCache', () => {
       await expect(ResourceCache.fetchResource('file:///tmp/local.js')).rejects.toThrow('Only HTTP(S)');
 
       expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects internal-host resource URLs before fetching', async () => {
+      const fetchMock = vi.fn();
+      globalThis.fetch = fetchMock;
+      ResourceCache = createFresh();
+
+      await expect(ResourceCache.fetchResource('https://127.0.0.1/lib.js')).rejects.toThrow('@resource URL rejected');
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects resource redirects into internal hosts before caching', async () => {
+      const response = new Response('var redirected = true;', {
+        status: 200,
+        headers: { 'content-type': 'text/javascript' },
+      });
+      Object.defineProperty(response, 'url', { value: 'https://10.0.0.1/lib.js', configurable: true });
+      const fetchMock = vi.fn().mockResolvedValue(response);
+      globalThis.fetch = fetchMock;
+      ResourceCache = createFresh();
+
+      await expect(ResourceCache.fetchResource('https://cdn.example.com/lib.js')).rejects.toThrow('@resource URL redirected');
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(ResourceCache.cache['https://cdn.example.com/lib.js']).toBeUndefined();
     });
 
     it('rejects oversized resources before reading the body when content-length is available', async () => {
