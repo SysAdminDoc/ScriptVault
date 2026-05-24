@@ -529,6 +529,28 @@ describe('source xhr manager module', () => {
     vi.advanceTimersByTime(1);
     expect(XhrManager.get(request.id)).toBeUndefined();
   });
+
+  it('builds fetch options with cache, redirect, and anonymous controls', () => {
+    const headers = { 'cache-control': 'no-store' };
+    const options = XhrManager.buildFetchOptions({
+      method: 'post',
+      headers,
+      noCache: true,
+      redirect: 'manual',
+      anonymous: true,
+    });
+
+    expect(options).toMatchObject({
+      method: 'POST',
+      credentials: 'omit',
+      redirect: 'manual',
+    });
+    expect(options.headers).toEqual({
+      'cache-control': 'no-store',
+      Pragma: 'no-cache',
+    });
+    expect(headers).toEqual({ 'cache-control': 'no-store' });
+  });
 });
 
 describe('source npm resolver module', () => {
