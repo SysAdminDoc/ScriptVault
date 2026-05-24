@@ -857,7 +857,17 @@ ${req.code}
   }
 
   // GM_notification (with onclick, ondone, timeout, tag, silent, highlight, url)
+  // Phase 40.5 — Cap _notifCallbacks at 500 entries with oldest-first
+  // eviction so a misbehaving script that fires GM_notification in a loop
+  // without listening for ondone can't leak unbounded entries for the
+  // lifetime of the host tab. Cleanup paths on actual events are
+  // unchanged.
+  // Phase 40.14 — Telemetry-free eviction counter. A non-zero count is
+  // a smell the DevTools panel can surface as a "this script is leaking
+  // GM_notification callbacks" hint.
   const _notifCallbacks = new Map();
+  const _NOTIF_CALLBACKS_CAP = 500;
+  let _notifCallbacksEvicted = 0;
   function GM_notification(details, ondone) {
     if (!hasGrant('GM_notification') && !hasGrant('GM.notification')) return;
     let opts;
@@ -872,7 +882,15 @@ ${req.code}
     }
     if (typeof ondone === 'function') opts.ondone = ondone;
     const notifTag = opts.tag || ('notif_' + Math.random().toString(36).substring(2));
-    // Store callbacks
+    // Store callbacks (with cap eviction).
+    if (_notifCallbacks.size >= _NOTIF_CALLBACKS_CAP) {
+      const oldest = _notifCallbacks.keys().next().value;
+      if (oldest !== undefined) _notifCallbacks.delete(oldest);
+      _notifCallbacksEvicted += 1;
+      if (_notifCallbacksEvicted === 1 || _notifCallbacksEvicted % 100 === 0) {
+        console.warn('[ScriptVault] GM_notification cap evict — script may be missing ondone handlers. Evicted so far:', _notifCallbacksEvicted);
+      }
+    }
     _notifCallbacks.set(notifTag, {
       onclick: opts.onclick, ondone: opts.ondone
     });
@@ -895,18 +913,50 @@ ${req.code}
     }).catch(() => {});
   }
 
-  // GM_openInTab (with close(), onclose, insert, setParent, incognito)
+  // GM_openInTab (with close(), onclose, insert, setParent, incognito).
+  // Phase 40.5 + 40.14 — Cap + eviction counter (see _notifCallbacks).
   const _openedTabs = new Map();
+  const _OPENED_TABS_CAP = 200;
+  let _openedTabsEvicted = 0;
   function GM_openInTab(url, options) {
     if (!hasGrant('GM_openInTab') && !hasGrant('GM.openInTab')) return null;
     const opts = typeof options === 'boolean' ? { active: !options } : (options || {});
     const tabHandle = { closed: false, onclose: null, close: () => {} };
+
+    // Phase 39.13 — TM #2669: blob: URLs are bound to the creating context's
+    // blob registry. chrome.tabs.create() in the background SW cannot resolve
+    // a blob URL minted by a USER_SCRIPT world. Route blob:, data:, and
+    // about: URLs through window.open() in-context to preserve the registry
+    // binding. window.open returns a Window we can't message-pass with,
+    // so the returned tabHandle keeps its no-op close() and no onclose
+    // tracking (Chrome doesn't expose the new tab's id to the page).
+    const isLocalOnly = typeof url === 'string' && /^(blob|data|about):/i.test(url);
+    if (isLocalOnly) {
+      try {
+        const win = window.open(url, '_blank', opts.active === false ? 'noopener=yes' : '');
+        if (!win) {
+          console.warn('[ScriptVault] GM_openInTab(blob:) blocked by pop-up settings — call within a user-gesture handler');
+        }
+      } catch (e) {
+        console.warn('[ScriptVault] GM_openInTab(blob:) failed:', e?.message || e);
+      }
+      return tabHandle;
+    }
+
     sendToBackground('GM_openInTab', {
       url, scriptId, trackClose: true,
       active: opts.active, insert: opts.insert,
       setParent: opts.setParent, background: opts.background
     }).then(result => {
       if (result && result.tabId) {
+        if (_openedTabs.size >= _OPENED_TABS_CAP) {
+          const oldest = _openedTabs.keys().next().value;
+          if (oldest !== undefined) _openedTabs.delete(oldest);
+          _openedTabsEvicted += 1;
+          if (_openedTabsEvicted === 1 || _openedTabsEvicted % 100 === 0) {
+            console.warn('[ScriptVault] GM_openInTab cap evict — script may be opening tabs without listening for openedTabClosed. Evicted so far:', _openedTabsEvicted);
+          }
+        }
         _openedTabs.set(result.tabId, tabHandle);
         tabHandle.close = () => {
           sendToBackground('GM_closeTab', { tabId: result.tabId }).catch(() => {});
@@ -917,8 +967,11 @@ ${req.code}
     return tabHandle;
   }
 
-  // GM_download (with onload, onerror, onprogress, ontimeout callbacks)
+  // GM_download (with onload, onerror, onprogress, ontimeout callbacks).
+  // Phase 40.5 + 40.14 — Cap + eviction counter (see _notifCallbacks).
   const _downloadCallbacks = new Map();
+  const _DOWNLOAD_CALLBACKS_CAP = 200;
+  let _downloadCallbacksEvicted = 0;
   function GM_download(details) {
     if (!hasGrant('GM_download') && !hasGrant('GM.download')) return;
     let opts;
@@ -937,6 +990,14 @@ ${req.code}
     opts.hasCallbacks = !!(callbacks.onload || callbacks.onerror || callbacks.onprogress || callbacks.ontimeout);
     sendToBackground('GM_download', opts).then(result => {
       if (result && result.downloadId) {
+        if (_downloadCallbacks.size >= _DOWNLOAD_CALLBACKS_CAP) {
+          const oldest = _downloadCallbacks.keys().next().value;
+          if (oldest !== undefined) _downloadCallbacks.delete(oldest);
+          _downloadCallbacksEvicted += 1;
+          if (_downloadCallbacksEvicted === 1 || _downloadCallbacksEvicted % 100 === 0) {
+            console.warn('[ScriptVault] GM_download cap evict — script may be missing onload/onerror handlers. Evicted so far:', _downloadCallbacksEvicted);
+          }
+        }
         _downloadCallbacks.set(result.downloadId, callbacks);
       }
       if (result && result.error && callbacks.onerror) {
