@@ -15,6 +15,7 @@
     "test:a11y": "vitest run tests/dashboard-a11y.test.js",
     "smoke:dashboard": "node scripts/smoke-dashboard.mjs",
     "cws:check": "node scripts/check-cws-publish-tooling.mjs",
+    "release:rollback-drill": "vitest run tests/storage-rollback-drill.test.js",
     "release:check": "node scripts/check-release-artifacts.mjs",
     "release:check:public": "node scripts/check-release-artifacts.mjs --public",
     "test:cov": "vitest run --coverage",

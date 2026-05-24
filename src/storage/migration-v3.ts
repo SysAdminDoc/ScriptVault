@@ -17,6 +17,14 @@ const LEGACY_VALUE_PREFIX = 'values_';
 const LEGACY_TOMBSTONE_KEY = '_v2LegacyTombstone';
 const LEGACY_TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
+interface LegacyTombstone {
+  migratedAt: number;
+  fromSchema?: number;
+  toSchema?: number;
+  scriptsMigrated?: number;
+  valuesMigrated?: number;
+}
+
 export interface MigrationStatus {
   schemaVersion: number;
   migratedAt: number | null;
@@ -63,7 +71,13 @@ export async function ensureV3Migration(): Promise<MigrationResult> {
   // Stamp tombstone metadata so a future cleanup pass knows when it's safe
   // to wipe the legacy chrome.storage keys.
   await chrome.storage.local.set({
-    [LEGACY_TOMBSTONE_KEY]: { migratedAt: Date.now() },
+    [LEGACY_TOMBSTONE_KEY]: {
+      migratedAt: Date.now(),
+      fromSchema: current,
+      toSchema: SCHEMA_TARGET,
+      scriptsMigrated: counts.scripts,
+      valuesMigrated: counts.values,
+    } satisfies LegacyTombstone,
   });
   await setSchemaVersion(SCHEMA_TARGET);
 
@@ -127,7 +141,7 @@ async function migrateLegacyToIDB(): Promise<MigrationCounts> {
 // the data sits as a recovery safety net.
 export async function maybeWipeLegacyData(now: number = Date.now()): Promise<boolean> {
   const data = await chrome.storage.local.get(LEGACY_TOMBSTONE_KEY);
-  const tombstone = data[LEGACY_TOMBSTONE_KEY] as { migratedAt: number } | undefined;
+  const tombstone = data[LEGACY_TOMBSTONE_KEY] as LegacyTombstone | undefined;
   if (!tombstone || typeof tombstone.migratedAt !== 'number') return false;
   if (now - tombstone.migratedAt < LEGACY_TOMBSTONE_TTL_MS) return false;
 
@@ -154,15 +168,15 @@ export async function getMigrationStatus(): Promise<MigrationStatus> {
   const [schemaVersion, tombstone, scriptCount] = await Promise.all([
     getSchemaVersion(),
     chrome.storage.local.get(LEGACY_TOMBSTONE_KEY).then(
-      (d) => (d[LEGACY_TOMBSTONE_KEY] as { migratedAt: number } | undefined) ?? null,
+      (d) => (d[LEGACY_TOMBSTONE_KEY] as LegacyTombstone | undefined) ?? null,
     ),
     ScriptsDAO.count().catch(() => 0),
   ]);
   return {
     schemaVersion,
     migratedAt: tombstone?.migratedAt ?? null,
-    scriptsMigrated: scriptCount,
-    valuesMigrated: 0,
+    scriptsMigrated: tombstone?.scriptsMigrated ?? scriptCount,
+    valuesMigrated: tombstone?.valuesMigrated ?? 0,
   };
 }
 

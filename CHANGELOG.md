@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Release rollback storage drill
+
+- Added `npm run release:rollback-drill`, a focused Vitest command that seeds
+  the previous public `chrome.storage.local` script/value shape, upgrades
+  through the current v3 storage migration, verifies current IndexedDB reads,
+  verifies rollback-readable legacy keys, and confirms the 30-day legacy wipe
+  gate.
+- Wired the rollback drill into CI and the release runbook so storage migration
+  regressions block release before users depend on browser rollback.
+- Extended v3 migration tombstone metadata with migrated script/value counts
+  and made `getMigrationStatus()` report those counts instead of returning
+  zero migrated values.
+
 ### 2026-05-24 — Release runbook and CWS audit gate
 
 - Updated `docs/release-runbook.md` so the documented release path matches the
