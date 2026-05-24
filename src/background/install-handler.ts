@@ -7,6 +7,7 @@
 import type { Script, ScriptMeta } from '../types/script';
 import type { Settings } from '../types/settings';
 import { fetchTextBounded } from './fetch-bounded';
+import { assertExternalFetchUrl, classifyResponseUrl } from './internal-host-guard';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -68,6 +69,10 @@ export function registerWebNavigationListener(): void {
       debugLog('Intercepting userscript URL:', url);
 
       try {
+        // Pre-flight: refuse to fetch internal/loopback/link-local targets and
+        // non-https schemes; mirrors the public install-API guard.
+        assertExternalFetchUrl(url, 'Script source', ['http:', 'https:']);
+
         // Fetch with timeout
         const controller = new AbortController();
         const timeoutId: ReturnType<typeof setTimeout> = setTimeout(
@@ -79,6 +84,13 @@ export function registerWebNavigationListener(): void {
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        // Post-flight: re-check the final URL so a redirect into an internal
+        // host is still rejected after the round trip.
+        const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+        if (!postCheck.ok) {
+          throw new Error(`Script source redirected to ${postCheck.message}`);
         }
 
         const code: string = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
@@ -194,6 +206,11 @@ export async function installFromCode(code: string): Promise<InstallResult> {
 
 export async function installFromUrl(url: string): Promise<InstallResult> {
   try {
+    // Pre-flight: refuse internal/loopback/link-local hosts. installFromUrl
+    // is called from extension surfaces and from the public-API path, so this
+    // is the canonical SSRF gate for direct script installs.
+    assertExternalFetchUrl(url, 'Script source', ['http:', 'https:']);
+
     // Timeout after 30 seconds
     const controller = new AbortController();
     const timeoutId: ReturnType<typeof setTimeout> = setTimeout(
@@ -206,6 +223,12 @@ export async function installFromUrl(url: string): Promise<InstallResult> {
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
+    }
+
+    // Post-flight: catch redirect targets that resolved to an internal host.
+    const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) {
+      throw new Error(`Script source redirected to ${postCheck.message}`);
     }
 
     const code: string = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');

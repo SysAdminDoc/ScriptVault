@@ -5,6 +5,7 @@
 import type { Script, ScriptMeta } from '../types/script';
 import type { Settings } from '../types/settings';
 import { fetchTextBounded } from './fetch-bounded';
+import { classifyFetchUrl, classifyResponseUrl } from './internal-host-guard';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -82,11 +83,21 @@ export const UpdateSystem = {
     updateUrl: string,
     fetchOptions: RequestInit = {},
   ): Promise<{ response: Response; code: string }> {
+    const preCheck = classifyFetchUrl(updateUrl, ['http:', 'https:']);
+    if (!preCheck.ok) {
+      throw new Error(`Update URL rejected: ${preCheck.message}`);
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this._FETCH_TIMEOUT_MS);
 
     try {
       const response: Response = await fetch(updateUrl, { ...fetchOptions, signal: controller.signal });
+
+      const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+      if (!postCheck.ok) {
+        throw new Error(`Update URL redirected to ${postCheck.message}`);
+      }
 
       if (response.status === 304 || !response.ok) {
         return { response, code: '' };

@@ -31,6 +31,14 @@ export {
 
 export { UpdateSystem } from './update-checker';
 
+export {
+  assertExternalFetchUrl,
+  classifyFetchUrl,
+  classifyResponseUrl,
+  isInternalHost,
+} from './internal-host-guard';
+export type { InternalHostCheckResult, InternalHostReason } from './internal-host-guard';
+
 export { CloudSync } from './cloud-sync';
 
 export {
