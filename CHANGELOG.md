@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Permission and store-copy drift gate
+
+- Added `docs/store-listing-copy.md` as the reviewer-facing permission and
+  privacy copy source for Chrome Web Store and AMO submissions.
+- Expanded `PRIVACY.md` with a generated-checkable manifest surface inventory
+  covering permissions, optional permissions, host matches, content-script
+  matches, web-accessible resources, sandbox pages, and Firefox data-collection
+  declarations.
+- Added `npm run store-copy:check` and wired it into CI/release docs so
+  manifest permission changes now fail unless privacy/store copy is updated.
+- Added a README permission review section that points maintainers to the
+  store-copy source and local validation command.
+
 ### 2026-05-24 — Chrome 138+ userScripts onboarding
 
 - Centralized the runtime `chrome.userScripts.getScripts()` availability probe

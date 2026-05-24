@@ -1,6 +1,6 @@
 # ScriptVault Privacy Policy
 
-**Last Updated: March 7, 2026**
+**Last Updated: May 24, 2026**
 
 ## Overview
 
@@ -58,17 +58,42 @@ As a userscript manager, ScriptVault executes JavaScript code from external sour
 
 ## Permissions Explained
 
-| Permission | Why It's Needed |
-|------------|-----------------|
-| `storage` | Save your userscripts and settings locally |
-| `unlimitedStorage` | Store multiple scripts and cached dependencies |
-| `userScripts` | Register and execute userscripts on web pages |
-| `scripting` | Inject the content script bridge for API communication |
-| `tabs` | Match scripts to URLs, support GM_openInTab |
-| `webNavigation` | Inject scripts at correct document lifecycle stages |
-| `alarms` | Schedule update checks and sync operations |
-| `downloads` | Support GM_download API for userscripts |
-| `<all_urls>` | Allow userscripts to run on any site you choose |
+### Permissions inventory
+
+| Surface | Token | Why it's needed |
+|---------|-------|-----------------|
+| permission | `storage` | Save installed scripts, local values, folders, backups, and settings on your device. |
+| permission | `tabs` | Read the active tab URL/title for matching and support user-triggered `GM_openInTab`. |
+| permission | `notifications` | Show update status, script notifications, sync results, and install results. |
+| permission | `contextMenus` | Add context-menu actions so you can run scripts or open ScriptVault tools from a page. |
+| permission | `menus` | Firefox context-menu equivalent for run scripts and ScriptVault tools. |
+| permission | `scripting` | Inject the content bridge and script injection support for installed userscripts. |
+| permission | `userScripts` | Register installed userscripts in the browser `USER_SCRIPT world`. |
+| permission | `webNavigation` | Observe frame navigation and document lifecycle events so scripts run at the right time. |
+| permission | `unlimitedStorage` | Store larger script libraries, cached dependencies, backup history, and import/export data. |
+| permission | `alarms` | Schedule update checks, scheduled sync, periodic backups, and local maintenance. |
+| permission | `downloads` | Support `GM_download`, script export, backup export, and report export. |
+| permission | `declarativeNetRequest` | Apply per-script network rules and local webRequest metadata declared by userscript metadata. |
+| permission | `declarativeNetRequestWithHostAccess` | Apply host-backed DNR rules only on matching sites where a user-enabled script may operate. |
+| permission | `sidePanel` | Show ScriptVault's browser side panel for quick script management. |
+| permission | `offscreen` | Use an offscreen document for background export and UI-adjacent tasks that cannot run inside the service worker. |
+| optional_permission | `clipboardWrite` | optional clipboard write access for user-triggered copy/export actions and script APIs. |
+| optional_permission | `clipboardRead` | optional clipboard read access for user-triggered paste/import actions and script APIs. |
+| optional_permission | `identity` | Optional Chrome OAuth support for cloud sync providers when you sign in. |
+| optional_permission | `cookies` | optional cookie access for user-requested scripts that need site cookies. |
+| optional_permission | `userScripts` | Firefox optional grant for the `USER_SCRIPT world`. |
+| host_permission | `<all_urls>` | Host permission is required because userscripts can run on user-chosen sites across the web; each script is still limited by metadata and your controls. |
+| content_script_match | `<all_urls>` | Content script match lets ScriptVault detect `.user.js install` pages and connect the content bridge on sites where scripts may run. |
+| web_accessible_match | `<all_urls>` | Web-accessible match exposes the install confirmation page to pages that hand a `.user.js` install to ScriptVault. |
+| web_accessible_resource | `pages/install.html` | The install confirmation page is the web-accessible resource that lets you review a script before saving or running it. |
+| sandbox_page | `pages/editor-sandbox.html` | The sandboxed editor hosts Monaco so editing tools stay isolated from extension pages. |
+| data_collection_required | `none` | Required data collection is none: ScriptVault does not require telemetry, accounts, analytics, or developer-operated storage. |
+| data_collection_optional | `authenticationInfo` | Authentication info such as OAuth tokens is used only when you configure a cloud sync provider. |
+| data_collection_optional | `technicalAndInteraction` | Technical and interaction data such as settings, support exports, and error diagnostics stays local unless you choose to export or sync it. |
+| data_collection_optional | `websiteActivity` | Website activity is used locally to match installed scripts to selected pages and may leave your device only through scripts or sync/export actions you configure. |
+| data_collection_optional | `websiteContent` | Website content can be accessed by installed scripts and `GM_xmlhttpRequest`/resource flows, then sent only to URLs selected by you or by installed script metadata. |
+
+The reviewer-facing store copy for the same inventory is maintained in `docs/store-listing-copy.md` and checked by `npm run store-copy:check`.
 
 ## Data Sharing
 
@@ -77,6 +102,11 @@ We do not share any data with third parties. Period.
 The only way your data leaves your device is:
 1. When you manually export scripts (creates a local file)
 2. When network requests are made to fetch scripts/resources you requested
+3. When you configure a cloud sync provider and choose to sync data with that provider
+
+## Limited Use
+
+The use of information received from Google APIs will adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements. ScriptVault uses Google API information only to provide user-configured extension functionality such as cloud sync, does not sell or transfer that information for advertising, and does not allow human access except where legally required or explicitly authorized by you for support.
 
 ## Your Rights and Control
 
