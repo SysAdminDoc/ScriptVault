@@ -60,6 +60,21 @@ describe('TS runtime module generator', () => {
         output: 'modules/resources.js',
         exportName: 'ResourceCache',
       }),
+      expect.objectContaining({
+        id: 'storage',
+        source: 'src/modules/storage.ts',
+        output: 'modules/storage.js',
+        moduleName: 'StorageModule',
+        globalExports: expect.arrayContaining([
+          'SettingsManager',
+          'ScriptStorage',
+          'ScriptValues',
+          'TabStorage',
+          'FolderStorage',
+          '_openTabTrackers',
+          'setScriptChangeListener',
+        ]),
+      }),
     ]));
   });
 
@@ -71,6 +86,18 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const QuotaManager = (() => {');
     expect(text).toContain('return module.exports.default || module.exports.QuotaManager || module.exports;');
     expect(text).not.toContain('export default');
+  });
+
+  it('generates multi-global runtime artifacts for storage', async () => {
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'storage');
+    const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
+
+    expect(text).toContain('Generated from src/modules/storage.ts');
+    expect(text).toContain('const StorageModule = (() => {');
+    expect(text).toContain('const SettingsManager = StorageModule.SettingsManager;');
+    expect(text).toContain('const ScriptStorage = StorageModule.ScriptStorage;');
+    expect(text).toContain('const setScriptChangeListener = StorageModule.setScriptChangeListener;');
+    expect(text).not.toContain('const debugLog = StorageModule.debugLog;');
   });
 
   it('keeps committed runtime artifacts in sync', async () => {

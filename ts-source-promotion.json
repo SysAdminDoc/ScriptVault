@@ -27,7 +27,8 @@
     {
       "runtime": "modules/storage.js",
       "sources": ["src/modules/storage.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs; now uses the v3 IndexedDB storage engine."
     },
     {
       "runtime": "modules/xhr.js",

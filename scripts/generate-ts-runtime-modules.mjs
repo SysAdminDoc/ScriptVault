@@ -60,6 +60,21 @@ export const TS_RUNTIME_MODULES = [
     output: 'modules/resources.js',
     exportName: 'ResourceCache',
   },
+  {
+    id: 'storage',
+    source: 'src/modules/storage.ts',
+    output: 'modules/storage.js',
+    moduleName: 'StorageModule',
+    globalExports: [
+      'SettingsManager',
+      'ScriptStorage',
+      'ScriptValues',
+      'TabStorage',
+      'FolderStorage',
+      '_openTabTrackers',
+      'setScriptChangeListener',
+    ],
+  },
 ];
 
 function normalizeNewlines(text) {
@@ -80,6 +95,28 @@ export async function buildTsRuntimeModuleText(definition, options = {}) {
     logLevel: 'silent',
   });
   const compiled = normalizeNewlines(result.outputFiles[0].text).trimEnd();
+
+  if (definition.globalExports?.length) {
+    const moduleName = definition.moduleName || `${definition.exportName || definition.id.replace(/[^A-Za-z0-9_$]/g, '_')}Module`;
+    return [
+      '// ============================================================================',
+      `// Generated from ${definition.source}; do not edit by hand.`,
+      '// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.',
+      '// ============================================================================',
+      '',
+      `const ${moduleName} = (() => {`,
+      '  const module = { exports: {} };',
+      '  const exports = module.exports;',
+      compiled.split('\n').map((line) => line ? `  ${line}` : '').join('\n'),
+      '  return module.exports.default || module.exports;',
+      '})();',
+      '',
+      ...definition.globalExports.flatMap((name) => [
+        `const ${name} = ${moduleName}.${name};`,
+      ]),
+      '',
+    ].join('\n');
+  }
 
   return [
     '// ============================================================================',

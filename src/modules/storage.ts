@@ -666,35 +666,9 @@ chrome.tabs.onRemoved.addListener((tabId: number) => {
   }
 });
 
-// Notification click/close listeners for GM_notification callbacks
-chrome.notifications.onClicked.addListener((notifId: string) => {
-  if (!self._notifCallbacks) return;
-  const info = self._notifCallbacks.get(notifId);
-  if (!info) return;
-  if (info.hasOnclick) {
-    chrome.tabs
-      .sendMessage(info.tabId, {
-        action: 'notificationEvent',
-        data: { notifId, scriptId: info.scriptId, type: 'click' },
-      })
-      .catch(() => {});
-  }
-});
-
-chrome.notifications.onClosed.addListener((notifId: string, _byUser: boolean) => {
-  if (!self._notifCallbacks) return;
-  const info = self._notifCallbacks.get(notifId);
-  if (!info) return;
-  if (info.hasOndone) {
-    chrome.tabs
-      .sendMessage(info.tabId, {
-        action: 'notificationEvent',
-        data: { notifId, scriptId: info.scriptId, type: 'done' },
-      })
-      .catch(() => {});
-  }
-  self._notifCallbacks.delete(notifId);
-});
+// Notification click/close listeners are registered in background.core.js
+// to avoid duplicate callback firing. Storage owns only tab-close cleanup for
+// callbacks tied to a closed origin tab.
 
 // ============================================================================
 // Folder Storage

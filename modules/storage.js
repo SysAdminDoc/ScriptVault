@@ -1,706 +1,1089 @@
 // ============================================================================
-// Settings Manager
+// Generated from src/modules/storage.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
 
-function cloneDefaultSettings() {
-  if (typeof structuredClone === 'function') {
-    return structuredClone(SCRIPTVAULT_SETTINGS_DEFAULTS);
+const StorageModule = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/modules/storage.ts
+  var storage_exports = {};
+  __export(storage_exports, {
+    FolderStorage: () => FolderStorage,
+    ScriptStorage: () => ScriptStorage,
+    ScriptValues: () => ScriptValues,
+    SettingsManager: () => SettingsManager,
+    TabStorage: () => TabStorage,
+    _openTabTrackers: () => _openTabTrackers,
+    debugLog: () => debugLog,
+    setScriptChangeListener: () => setScriptChangeListener
+  });
+  module.exports = __toCommonJS(storage_exports);
+
+  // src/shared/utils.ts
+  function generateId() {
+    return "script_" + crypto.randomUUID();
   }
-  return JSON.parse(JSON.stringify(SCRIPTVAULT_SETTINGS_DEFAULTS));
-}
 
-function cloneSettingsState(settings) {
-  if (typeof structuredClone === 'function') {
-    try {
-      return structuredClone(settings);
-    } catch (_) {
-      // Fall through to JSON/shallow clone for legacy or non-cloneable values.
-    }
-  }
-  try {
-    return JSON.parse(JSON.stringify(settings));
-  } catch (_) {
-    return { ...settings };
-  }
-}
+  // src/config/settings-defaults.json
+  var settings_defaults_default = {
+    enabled: true,
+    showBadge: true,
+    badgeColor: "#22c55e",
+    theme: "dark",
+    layout: "dark",
+    notifyOnInstall: true,
+    notifyOnUpdate: true,
+    notifyOnError: false,
+    editorTheme: "material-darker",
+    editorFontSize: 13,
+    editorTabSize: 2,
+    editorLineWrapping: false,
+    editorAutoComplete: true,
+    editorMatchBrackets: true,
+    editorAutoCloseBrackets: true,
+    editorHighlightActiveLine: true,
+    editorShowInvisibles: false,
+    editorKeyMap: "default",
+    autoUpdate: true,
+    updateInterval: 864e5,
+    lastUpdateCheck: 0,
+    syncEnabled: false,
+    syncProvider: "none",
+    syncInterval: 36e5,
+    lastSync: 0,
+    webdavUrl: "",
+    webdavUsername: "",
+    webdavPassword: "",
+    googleDriveConnected: false,
+    googleDriveToken: "",
+    googleDriveRefreshToken: "",
+    googleClientId: "",
+    googleDriveUser: null,
+    dropboxToken: "",
+    dropboxRefreshToken: "",
+    dropboxUser: null,
+    dropboxClientId: "",
+    onedriveToken: "",
+    onedriveRefreshToken: "",
+    onedriveClientId: "",
+    onedriveConnected: false,
+    onedriveUser: null,
+    s3Endpoint: "",
+    s3Region: "",
+    s3Bucket: "",
+    s3AccessKeyId: "",
+    s3SecretKey: "",
+    s3ObjectKey: "",
+    language: "auto",
+    debugMode: false,
+    experimentalESMUserscripts: false,
+    dashboardVirtualizationThreshold: 500,
+    injectIntoFrames: true,
+    xhrTimeout: 3e4,
+    blacklist: [],
+    badgeInfo: "running",
+    autoReload: false,
+    pageFilterMode: "blacklist",
+    blacklistedPages: "",
+    whitelistedPages: "",
+    deniedHosts: [],
+    trustedSigningKeys: {},
+    trashMode: "30"
+  };
 
-function cloneSettingsValue(value) {
-  return value && typeof value === 'object' ? cloneSettingsState(value) : value;
-}
-
-function cloneStoredValue(value) {
-  if (!value || typeof value !== 'object') return value;
-  if (typeof structuredClone === 'function') {
-    try {
-      return structuredClone(value);
-    } catch (_) {
-      // Fall through to JSON/shallow clone for legacy or non-cloneable values.
-    }
-  }
-  try {
-    return JSON.parse(JSON.stringify(value));
-  } catch (_) {
-    return Array.isArray(value) ? [...value] : { ...value };
-  }
-}
-
-const SettingsManager = {
-  defaults: cloneDefaultSettings(),
-
-  cache: null,
-  _initPromise: null,
-
-  // Serialize concurrent cold-start callers. Without the promise gate, two
-  // parallel get()/set() invocations both pass the `cache === null` check
-  // before either finishes loading; the second resolves later and clobbers
-  // mutations the first has already applied to the cache. Clearing the
-  // promise in `finally` lets callers retry after a test reset or persisted
-  // failure.
-  async init() {
-    if (this.cache !== null) return;
-    if (!this._initPromise) {
-      this._initPromise = (async () => {
-        const data = await chrome.storage.local.get('settings');
-        this.cache = { ...cloneDefaultSettings(), ...data.settings };
-        console.log('[ScriptVault] Settings loaded');
-      })();
-    }
-    try {
-      return await this._initPromise;
-    } finally {
-      this._initPromise = null;
-    }
-  },
-  
-  async get(key) {
-    await this.init();
-    return key !== undefined ? cloneSettingsValue(this.cache[key]) : cloneSettingsState(this.cache);
-  },
-  
-  async set(key, value) {
-    await this.init();
-    const previous = cloneSettingsState(this.cache);
-    let rawNext;
-    if (typeof key === 'object') {
-      rawNext = { ...this.cache, ...key };
-    } else {
-      rawNext = { ...this.cache, [key]: value };
-    }
-    const next = cloneSettingsState(rawNext);
-    try {
-      await chrome.storage.local.set({ settings: cloneSettingsState(next) });
-    } catch (e) {
-      this.cache = previous;
-      throw e;
-    }
-    this.cache = next;
-    return cloneSettingsState(this.cache);
-  },
-  
-  async reset() {
-    await this.init();
-    const previousDefaults = cloneSettingsState(this.defaults);
-    const previousCache = cloneSettingsState(this.cache);
-    const nextDefaults = cloneDefaultSettings();
-    const nextCache = cloneDefaultSettings();
-    try {
-      await chrome.storage.local.set({ settings: nextCache });
-    } catch (e) {
-      this.defaults = previousDefaults;
-      this.cache = previousCache;
-      throw e;
-    }
-    this.defaults = nextDefaults;
-    this.cache = nextCache;
-    return cloneSettingsState(this.cache);
-  }
-};
-
-// Debug logging helper defined in background.core.js (concatenated later)
-// Using a placeholder function that's overridden at runtime via hoisting in script mode.
-// (In module mode, see Firefox manifest note — background.js is kept as non-module.)
-
-// ============================================================================
-// Script Storage
-// ============================================================================
-
-const ScriptStorage = {
-  cache: null,
-  _initPromise: null,
-
-  async init() {
-    if (this.cache !== null) return;
-    if (!this._initPromise) {
-      this._initPromise = (async () => {
-        const data = await chrome.storage.local.get('userscripts');
-        this.cache = data.userscripts || {};
-        console.log('[ScriptVault] Loaded', Object.keys(this.cache).length, 'scripts');
-      })();
-    }
-    try {
-      return await this._initPromise;
-    } finally {
-      this._initPromise = null;
-    }
-  },
-  
-  async save() {
-    await chrome.storage.local.set({ userscripts: this.cache });
-  },
-  
-  async getAll() {
-    await this.init();
-    return Object.values(this.cache);
-  },
-  
-  async get(id) {
-    await this.init();
-    return this.cache[id] || null;
-  },
-  
-  async set(id, script) {
-    await this.init();
-    const prev = this.cache[id];
-    this.cache[id] = script;
-    try {
-      await this.save();
-    } catch (e) {
-      // Rollback cache on persist failure (e.g., quota exceeded)
-      if (prev !== undefined) this.cache[id] = prev;
-      else delete this.cache[id];
-      throw e; // Re-throw so callers know the save failed
-    }
-    if (typeof invalidateMatchSet === 'function') invalidateMatchSet();
-    return script;
-  },
-
-  async delete(id) {
-    await this.init();
-    const prev = this.cache[id];
-    if (prev === undefined) return;
-    delete this.cache[id];
-    let scriptRemovalPersisted = false;
-    try {
-      await this.save();
-      scriptRemovalPersisted = true;
-      // Delete associated values AFTER script removal persists. If cleanup fails,
-      // restore the script record so storage does not end up half-deleted.
-      await ScriptValues.deleteAll(id);
-    } catch (e) {
-      this.cache[id] = prev;
-      if (scriptRemovalPersisted) {
-        try {
-          await this.save();
-        } catch (rollbackError) {
-          console.warn('[ScriptVault] Failed to restore script after delete cleanup failure:', rollbackError);
-        }
-      }
-      throw e;
-    }
-    if (typeof invalidateMatchSet === 'function') invalidateMatchSet();
-  },
-
-  async clear() {
-    await this.init();
-    const prev = this.cache;
-    const previousIds = Object.keys(prev || {});
-    this.cache = {};
-    try {
-      await this.save();
-      for (const id of previousIds) {
-        await ScriptValues.deleteAll(id);
-      }
-    } catch (e) {
-      // Rollback so cache reflects what's actually persisted
-      this.cache = prev;
+  // src/storage/idb.ts
+  var DB_NAME = "scriptvault";
+  var DB_VERSION = 1;
+  var Stores = {
+    scripts: "scripts",
+    values: "values",
+    stats: "stats",
+    backups: "backups"
+  };
+  var _db = null;
+  var _opening = null;
+  var _dbFactory = null;
+  async function openDB(options = {}) {
+    if (_db && _dbFactory && typeof indexedDB !== "undefined" && _dbFactory !== indexedDB) {
       try {
-        await this.save();
-      } catch (rollbackError) {
-        console.warn('[ScriptVault] Failed to restore scripts after clear failure:', rollbackError);
+        _db.close();
+      } catch {
       }
-      throw e;
+      _db = null;
+      _dbFactory = null;
     }
-    if (typeof invalidateMatchSet === 'function') invalidateMatchSet();
-  },
-  
-  async search(query) {
-    await this.init();
-    const q = query.toLowerCase();
-    return Object.values(this.cache).filter(s =>
-      (s.meta?.name || '').toLowerCase().includes(q) ||
-      (s.meta?.description || '').toLowerCase().includes(q) ||
-      (s.meta?.author || '').toLowerCase().includes(q)
-    );
-  },
-  
-  async getByNamespace(namespace) {
-    await this.init();
-    return Object.values(this.cache).filter(s => s.meta?.namespace === namespace);
-  },
-  
-  async reorder(orderedIds) {
-    await this.init();
-    orderedIds.forEach((id, index) => {
-      if (this.cache[id]) {
-        this.cache[id].position = index;
+    if (_db) return _db;
+    if (_opening) return _opening;
+    const name = options.name ?? DB_NAME;
+    const version = options.version ?? DB_VERSION;
+    _opening = new Promise((resolve, reject) => {
+      if (typeof indexedDB === "undefined") {
+        reject(new Error("IndexedDB is not available in this context"));
+        return;
       }
-    });
-    await this.save();
-  },
-  
-  async duplicate(id) {
-    await this.init();
-    const original = this.cache[id];
-    if (!original) return null;
-    
-    const newId = generateId();
-    const newScript = {
-      ...JSON.parse(JSON.stringify(original)),
-      id: newId,
-      meta: {
-        ...original.meta,
-        name: (original.meta?.name || 'Unnamed') + ' (Copy)'
-      },
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    
-    await this.set(newId, newScript);
-    return newScript;
-  }
-};
-
-// ============================================================================
-// Script Values Storage (GM_getValue/setValue)
-// ============================================================================
-
-function makeValueBag(values = {}) {
-  const bag = Object.create(null);
-  for (const [key, value] of Object.entries(values || {})) {
-    setValueBagKey(bag, key, value);
-  }
-  return bag;
-}
-
-function setValueBagKey(bag, key, value) {
-  Object.defineProperty(bag, String(key), {
-    value: cloneStoredValue(value),
-    enumerable: true,
-    configurable: true,
-    writable: true
-  });
-}
-
-function setScriptValueBag(cache, scriptId, bag) {
-  Object.defineProperty(cache, String(scriptId), {
-    value: bag,
-    enumerable: true,
-    configurable: true,
-    writable: true
-  });
-}
-
-function exportValueBag(values = {}) {
-  return Object.fromEntries(Object.entries(values || {}).map(([key, value]) => [key, cloneStoredValue(value)]));
-}
-
-const ScriptValues = {
-  cache: Object.create(null),
-  listeners: new Map(),
-  pendingNotifications: new Map(), // Debounce notifications only (not saves!)
-  _initPromises: new Map(), // scriptId → in-flight init promise (cleared in finally)
-
-  async init(scriptId) {
-    if (Object.hasOwn(this.cache, scriptId)) return;
-    let p = this._initPromises.get(scriptId);
-    if (!p) {
-      p = (async () => {
-        const data = await chrome.storage.local.get(`values_${scriptId}`);
-        setScriptValueBag(this.cache, scriptId, makeValueBag(data[`values_${scriptId}`] || {}));
-      })();
-      this._initPromises.set(scriptId, p);
-    }
-    try {
-      return await p;
-    } finally {
-      this._initPromises.delete(scriptId);
-    }
-  },
-  
-  async get(scriptId, key, defaultValue) {
-    await this.init(scriptId);
-    const value = this.cache[scriptId][key];
-    return value !== undefined ? cloneStoredValue(value) : defaultValue;
-  },
-  
-  // FIXED: Save immediately to prevent data loss on service worker termination
-  // MV3 service workers can be killed at any time - setTimeout-based debouncing is unsafe
-  async set(scriptId, key, value, senderTabId = null) {
-    await this.init(scriptId);
-    const oldValue = this.cache[scriptId][key];
-    const hadKey = Object.hasOwn(this.cache[scriptId], key);
-
-    // Update cache immediately
-    const nextValue = cloneStoredValue(value);
-    setValueBagKey(this.cache[scriptId], key, nextValue);
-
-    // Save IMMEDIATELY - don't debounce persistence in MV3!
-    // Service workers can be terminated at any time, losing unsaved data.
-    // Roll back the cache mutation if persistence fails (quota exceeded,
-    // transient storage errors) so callers observe a consistent state and
-    // no change notification is emitted for a write that never landed.
-    try {
-      await chrome.storage.local.set({
-        [`values_${scriptId}`]: exportValueBag(this.cache[scriptId])
-      });
-    } catch (e) {
-      if (hadKey) setValueBagKey(this.cache[scriptId], key, oldValue);
-      else delete this.cache[scriptId][key];
-      throw e;
-    }
-
-    // Debounce notifications only (these are less critical)
-    this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), cloneStoredValue(nextValue), senderTabId);
-
-    return cloneStoredValue(nextValue);
-  },
-  
-  // Debounced notifications - batches rapid changes (notification loss is acceptable)
-  scheduleNotification(scriptId, key, oldValue, newValue, senderTabId = null) {
-    const notifKey = `${scriptId}_${key}`;
-    const existing = this.pendingNotifications.get(notifKey);
-    if (existing) {
-      clearTimeout(existing.timeout);
-      // Keep original oldValue for batched notification
-      oldValue = existing.oldValue;
-    }
-    
-    const timeout = setTimeout(() => {
-      this.pendingNotifications.delete(notifKey);
-      this.notifyChange(scriptId, key, oldValue, newValue, false, senderTabId);
-    }, 100);
-    
-    this.pendingNotifications.set(notifKey, { timeout, oldValue, senderTabId });
-  },
-  
-  async delete(scriptId, key, senderTabId = null) {
-    await this.init(scriptId);
-    if (!Object.hasOwn(this.cache[scriptId], key)) return;
-    const oldValue = this.cache[scriptId][key];
-    delete this.cache[scriptId][key];
-    // Save immediately with rollback on failure — otherwise the cache shows
-    // the key gone while storage still holds it, drifting on SW restart.
-    try {
-      await chrome.storage.local.set({
-        [`values_${scriptId}`]: exportValueBag(this.cache[scriptId])
-      });
-    } catch (e) {
-      setValueBagKey(this.cache[scriptId], key, oldValue);
-      throw e;
-    }
-    this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), undefined, senderTabId);
-  },
-  
-  async list(scriptId) {
-    await this.init(scriptId);
-    return Object.keys(this.cache[scriptId]);
-  },
-  
-  async getAll(scriptId) {
-    await this.init(scriptId);
-    return exportValueBag(this.cache[scriptId]);
-  },
-  
-  async setAll(scriptId, values, senderTabId = null) {
-    await this.init(scriptId);
-    // Snapshot prior state so we can roll back the cache on persist failure
-    // (quota exceeded, etc.) and only fire change notifications for writes
-    // that actually committed to storage.
-    const snapshot = makeValueBag(this.cache[scriptId]);
-    const changes = [];
-    for (const [key, value] of Object.entries(values)) {
-      const oldValue = this.cache[scriptId][key];
-      const nextValue = cloneStoredValue(value);
-      setValueBagKey(this.cache[scriptId], key, nextValue);
-      changes.push([key, cloneStoredValue(oldValue), cloneStoredValue(nextValue)]);
-    }
-    try {
-      await chrome.storage.local.set({
-        [`values_${scriptId}`]: exportValueBag(this.cache[scriptId])
-      });
-    } catch (e) {
-      setScriptValueBag(this.cache, scriptId, snapshot);
-      throw e;
-    }
-    for (const [key, oldValue, newValue] of changes) {
-      this.scheduleNotification(scriptId, key, oldValue, newValue, senderTabId);
-    }
-  },
-  
-  async deleteAll(scriptId) {
-    const hadCache = Object.hasOwn(this.cache, scriptId);
-    const prev = this.cache[scriptId];
-    if (hadCache) delete this.cache[scriptId];
-    try {
-      await chrome.storage.local.remove(`values_${scriptId}`);
-    } catch (e) {
-      if (hadCache) setScriptValueBag(this.cache, scriptId, prev);
-      throw e;
-    }
-  },
-  
-  // Delete multiple specific keys at once
-  async deleteMultiple(scriptId, keys, senderTabId = null) {
-    await this.init(scriptId);
-    const snapshot = makeValueBag(this.cache[scriptId]);
-    const changes = [];
-    for (const key of keys) {
-      if (!Object.hasOwn(this.cache[scriptId], key)) continue;
-      const oldValue = this.cache[scriptId][key];
-      delete this.cache[scriptId][key];
-      changes.push([key, cloneStoredValue(oldValue)]);
-    }
-    if (changes.length === 0) return;
-    try {
-      await chrome.storage.local.set({
-        [`values_${scriptId}`]: exportValueBag(this.cache[scriptId])
-      });
-    } catch (e) {
-      setScriptValueBag(this.cache, scriptId, snapshot);
-      throw e;
-    }
-    for (const [key, oldValue] of changes) {
-      this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), undefined, senderTabId);
-    }
-  },
-  
-  async getStorageSize(scriptId) {
-    await this.init(scriptId);
-    return JSON.stringify(exportValueBag(this.cache[scriptId])).length;
-  },
-  
-  addListener(scriptId, listenerId, callback) {
-    const key = `${scriptId}_${listenerId}`;
-    this.listeners.set(key, { scriptId, callback });
-    return key;
-  },
-  
-  removeListener(key) {
-    this.listeners.delete(key);
-  },
-  
-  notifyChange(scriptId, key, oldValue, newValue, remote, senderTabId = null) {
-    // Skip if value didn't actually change
-    if (oldValue === newValue) return;
-    
-    // Notify local listeners
-    this.listeners.forEach((listener) => {
-      if (listener.scriptId === scriptId) {
+      const req = indexedDB.open(name, version);
+      req.onupgradeneeded = (ev) => {
+        const db = req.result;
+        const tx = req.transaction;
+        if (!tx) return;
         try {
-          listener.callback(key, oldValue, newValue, remote);
+          options.upgrade?.(db, ev.oldVersion, ev.newVersion ?? version, tx);
         } catch (e) {
-          console.error('[ScriptVault] Value change listener error:', e);
+          try {
+            tx.abort();
+          } catch {
+          }
+          reject(e);
         }
-      }
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        db.onversionchange = () => {
+          try {
+            db.close();
+          } catch {
+          }
+          if (_db === db) _db = null;
+        };
+        db.onclose = () => {
+          if (_db === db) _db = null;
+        };
+        resolve(db);
+      };
+      req.onerror = () => reject(req.error ?? new Error("IndexedDB open failed"));
+      req.onblocked = () => reject(new Error("IndexedDB open blocked by another connection"));
     });
-    
-    // Broadcast value change to all loaded tabs.
-    // remote is true for every tab except the one that originated the change,
-    // matching the Tampermonkey GM_addValueChangeListener spec.
-    chrome.tabs.query({ status: 'complete' }).then(tabs => {
-      for (const tab of tabs) {
-        const isOriginTab = senderTabId !== null && tab.id === senderTabId;
-        const msg = { action: 'valueChanged', data: { scriptId, key, oldValue, newValue, remote: !isOriginTab } };
-        chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
-      }
-    }).catch(() => {});
+    try {
+      _db = await _opening;
+      _dbFactory = typeof indexedDB !== "undefined" ? indexedDB : null;
+      return _db;
+    } finally {
+      _opening = null;
+    }
   }
-};
-
-// ============================================================================
-// Tab Storage (GM_getTab/saveTab)
-// ============================================================================
-
-const TabStorage = {
-  data: new Map(),
-  
-  get(tabId) {
-    return this.data.get(tabId) || {};
-  },
-  
-  set(tabId, data) {
-    this.data.set(tabId, data);
-  },
-  
-  delete(tabId) {
-    this.data.delete(tabId);
-  },
-  
-  getAll() {
-    const result = {};
-    this.data.forEach((value, key) => {
-      result[key] = value;
+  function reqToPromise(req) {
+    return new Promise((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error ?? new Error("IDB request failed"));
     });
+  }
+  function txComplete(tx) {
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error("IDB transaction failed"));
+      tx.onabort = () => reject(tx.error ?? new Error("IDB transaction aborted"));
+    });
+  }
+  function forEachCursor(source, fn, range, direction) {
+    return new Promise((resolve, reject) => {
+      const req = source.openCursor(range, direction);
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (!cursor) {
+          resolve();
+          return;
+        }
+        try {
+          const r = fn(cursor.value, cursor.key, cursor.primaryKey);
+          if (r && typeof r.then === "function") {
+            r.then(() => cursor.continue(), reject);
+          } else {
+            cursor.continue();
+          }
+        } catch (e) {
+          reject(e);
+        }
+      };
+      req.onerror = () => reject(req.error ?? new Error("cursor failed"));
+    });
+  }
+
+  // src/storage/transaction.ts
+  async function withTransaction(stores, mode, fn) {
+    const db = await openDB();
+    const tx = db.transaction(stores, mode);
+    let result;
+    try {
+      result = await fn(tx);
+    } catch (e) {
+      try {
+        tx.abort();
+      } catch {
+      }
+      throw e;
+    }
+    await txComplete(tx);
     return result;
   }
-};
 
-// Global notification callback tracker (initialized once, used by GM_notification handler)
-if (!self._notifCallbacks) self._notifCallbacks = new Map();
-
-// Clean up tab data when tab closes
-chrome.tabs.onRemoved.addListener((tabId) => {
-  TabStorage.delete(tabId);
-  // Also abort any pending XHR requests for this tab
-  XhrManager.abortByTab(tabId);
-  // Clean up notification callbacks for this tab
-  for (const [notifId, info] of self._notifCallbacks) {
-    if (info.tabId === tabId) self._notifCallbacks.delete(notifId);
+  // src/storage/script-db.ts
+  function setRecordKey(record, key, value) {
+    Object.defineProperty(record, String(key), {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
   }
-});
+  function upgradeSchema(db, oldVersion, _newVersion, _tx) {
+    if (oldVersion < 1) {
+      const scripts = db.createObjectStore(Stores.scripts, { keyPath: "id" });
+      scripts.createIndex("by-enabled", "enabled", { unique: false });
+      scripts.createIndex("by-position", "position", { unique: false });
+      scripts.createIndex("by-namespace", "meta.namespace", { unique: false });
+      const values = db.createObjectStore(Stores.values, {
+        keyPath: ["scriptId", "key"]
+      });
+      values.createIndex("by-script", "scriptId", { unique: false });
+      db.createObjectStore(Stores.stats, { keyPath: "scriptId" });
+      const backups = db.createObjectStore(Stores.backups, { keyPath: "id" });
+      backups.createIndex("by-created", "createdAt", { unique: false });
+    }
+  }
+  async function openScriptDB() {
+    return openDB({ name: DB_NAME, version: DB_VERSION, upgrade: upgradeSchema });
+  }
+  var ScriptsDAO = {
+    async get(id) {
+      await openScriptDB();
+      return withTransaction(Stores.scripts, "readonly", async (tx) => {
+        const row = await reqToPromise(tx.objectStore(Stores.scripts).get(id));
+        return row ?? null;
+      });
+    },
+    async getAll() {
+      await openScriptDB();
+      return withTransaction(Stores.scripts, "readonly", async (tx) => {
+        const rows = await reqToPromise(tx.objectStore(Stores.scripts).getAll());
+        return rows ?? [];
+      });
+    },
+    async put(script) {
+      await openScriptDB();
+      await withTransaction(Stores.scripts, "readwrite", async (tx) => {
+        await reqToPromise(tx.objectStore(Stores.scripts).put(script));
+      });
+    },
+    async delete(id) {
+      await openScriptDB();
+      await withTransaction(
+        [Stores.scripts, Stores.values, Stores.stats],
+        "readwrite",
+        async (tx) => {
+          await reqToPromise(tx.objectStore(Stores.scripts).delete(id));
+          await reqToPromise(tx.objectStore(Stores.stats).delete(id));
+          const valuesIdx = tx.objectStore(Stores.values).index("by-script");
+          await forEachCursor(valuesIdx, (_v, _k, primaryKey) => {
+            tx.objectStore(Stores.values).delete(primaryKey);
+          }, IDBKeyRange.only(id));
+        }
+      );
+    },
+    async clear() {
+      await openScriptDB();
+      await withTransaction(
+        [Stores.scripts, Stores.values, Stores.stats],
+        "readwrite",
+        async (tx) => {
+          await reqToPromise(tx.objectStore(Stores.scripts).clear());
+          await reqToPromise(tx.objectStore(Stores.values).clear());
+          await reqToPromise(tx.objectStore(Stores.stats).clear());
+        }
+      );
+    },
+    async count() {
+      await openScriptDB();
+      return withTransaction(Stores.scripts, "readonly", async (tx) => {
+        return reqToPromise(tx.objectStore(Stores.scripts).count());
+      });
+    },
+    // Bulk insert used by the v2→v3 migration. Single transaction so a partial
+    // failure leaves the DB empty rather than half-imported.
+    async bulkPut(scripts) {
+      if (scripts.length === 0) return;
+      await openScriptDB();
+      await withTransaction(Stores.scripts, "readwrite", async (tx) => {
+        const store = tx.objectStore(Stores.scripts);
+        for (const s of scripts) {
+          await reqToPromise(store.put(s));
+        }
+      });
+    }
+  };
+  var ValuesDAO = {
+    async get(scriptId, key) {
+      await openScriptDB();
+      return withTransaction(Stores.values, "readonly", async (tx) => {
+        const row = await reqToPromise(
+          tx.objectStore(Stores.values).get([scriptId, key])
+        );
+        return row ? row.value : void 0;
+      });
+    },
+    async set(scriptId, key, value) {
+      await openScriptDB();
+      await withTransaction(Stores.values, "readwrite", async (tx) => {
+        const row = { scriptId, key, value };
+        await reqToPromise(tx.objectStore(Stores.values).put(row));
+      });
+    },
+    async delete(scriptId, key) {
+      await openScriptDB();
+      await withTransaction(Stores.values, "readwrite", async (tx) => {
+        await reqToPromise(tx.objectStore(Stores.values).delete([scriptId, key]));
+      });
+    },
+    async getAll(scriptId) {
+      await openScriptDB();
+      return withTransaction(Stores.values, "readonly", async (tx) => {
+        const out = {};
+        const idx = tx.objectStore(Stores.values).index("by-script");
+        await forEachCursor(idx, (row) => {
+          setRecordKey(out, row.key, row.value);
+        }, IDBKeyRange.only(scriptId));
+        return out;
+      });
+    },
+    async list(scriptId) {
+      const all = await this.getAll(scriptId);
+      return Object.keys(all);
+    },
+    async setAll(scriptId, values) {
+      await openScriptDB();
+      await withTransaction(Stores.values, "readwrite", async (tx) => {
+        const store = tx.objectStore(Stores.values);
+        for (const [key, value] of Object.entries(values)) {
+          await reqToPromise(store.put({ scriptId, key, value }));
+        }
+      });
+    },
+    async deleteMultiple(scriptId, keys) {
+      if (keys.length === 0) return;
+      await openScriptDB();
+      await withTransaction(Stores.values, "readwrite", async (tx) => {
+        const store = tx.objectStore(Stores.values);
+        for (const key of keys) {
+          await reqToPromise(store.delete([scriptId, key]));
+        }
+      });
+    },
+    async deleteAll(scriptId) {
+      await openScriptDB();
+      await withTransaction(Stores.values, "readwrite", async (tx) => {
+        const store = tx.objectStore(Stores.values);
+        const idx = store.index("by-script");
+        await forEachCursor(idx, (_row, _k, primaryKey) => {
+          store.delete(primaryKey);
+        }, IDBKeyRange.only(scriptId));
+      });
+    },
+    async byteSize(scriptId) {
+      const all = await this.getAll(scriptId);
+      return new TextEncoder().encode(JSON.stringify(all)).length;
+    }
+  };
 
-// Notification click/close listeners are registered in background.core.js
-// to avoid duplicate callback firing (previously both this file AND background.core.js
-// added listeners, causing GM_notification onclick/ondone callbacks to fire twice).
+  // src/storage/migration-v3.ts
+  var SCHEMA_KEY = "_storageSchema";
+  var SCHEMA_TARGET = 3;
+  var LEGACY_USERSCRIPTS_KEY = "userscripts";
+  var LEGACY_VALUE_PREFIX = "values_";
+  var LEGACY_TOMBSTONE_KEY = "_v2LegacyTombstone";
+  var LEGACY_TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1e3;
+  async function getSchemaVersion() {
+    const data = await chrome.storage.local.get(SCHEMA_KEY);
+    const v = data[SCHEMA_KEY];
+    return typeof v === "number" ? v : 0;
+  }
+  async function setSchemaVersion(version) {
+    await chrome.storage.local.set({ [SCHEMA_KEY]: version });
+  }
+  async function ensureV3Migration() {
+    const current = await getSchemaVersion();
+    if (current >= SCHEMA_TARGET) {
+      await openScriptDB();
+      return {
+        ranMigration: false,
+        scriptsMigrated: 0,
+        valuesMigrated: 0,
+        schemaVersion: current
+      };
+    }
+    await openScriptDB();
+    const counts = await migrateLegacyToIDB();
+    await chrome.storage.local.set({
+      [LEGACY_TOMBSTONE_KEY]: {
+        migratedAt: Date.now(),
+        fromSchema: current,
+        toSchema: SCHEMA_TARGET,
+        scriptsMigrated: counts.scripts,
+        valuesMigrated: counts.values
+      }
+    });
+    await setSchemaVersion(SCHEMA_TARGET);
+    return {
+      ranMigration: true,
+      scriptsMigrated: counts.scripts,
+      valuesMigrated: counts.values,
+      schemaVersion: SCHEMA_TARGET
+    };
+  }
+  async function migrateLegacyToIDB() {
+    let scripts = 0;
+    let values = 0;
+    const scriptsBlob = await chrome.storage.local.get(LEGACY_USERSCRIPTS_KEY);
+    const blob = scriptsBlob[LEGACY_USERSCRIPTS_KEY];
+    if (blob && typeof blob === "object") {
+      const list = Object.values(blob).filter(
+        (s) => !!(s && typeof s === "object" && s.id)
+      );
+      if (list.length > 0) {
+        const existing = await ScriptsDAO.getAll();
+        const existingIds = new Set(existing.map((s) => s.id));
+        const fresh = list.filter((s) => !existingIds.has(s.id));
+        if (fresh.length > 0) {
+          await ScriptsDAO.bulkPut(fresh);
+          scripts = fresh.length;
+        }
+      }
+    }
+    const all = await chrome.storage.local.get(void 0);
+    const valueKeys = Object.keys(all).filter((k) => k.startsWith(LEGACY_VALUE_PREFIX));
+    for (const storageKey of valueKeys) {
+      const scriptId = storageKey.slice(LEGACY_VALUE_PREFIX.length);
+      const bag = all[storageKey];
+      if (!bag || typeof bag !== "object") continue;
+      const entries = Object.entries(bag);
+      if (entries.length === 0) continue;
+      await ValuesDAO.setAll(scriptId, bag);
+      values += entries.length;
+    }
+    return { scripts, values };
+  }
 
-// ============================================================================
-// Folder Storage
-// ============================================================================
-
-const FolderStorage = {
-  cache: null,
-  _initPromise: null,
-
-  async init() {
-    if (this.cache !== null) return;
-    if (!this._initPromise) {
-      this._initPromise = (async () => {
-        const data = await chrome.storage.local.get('scriptFolders');
-        this.cache = data.scriptFolders || [];
+  // src/modules/storage.ts
+  function makeValueBag(values = {}) {
+    const bag = /* @__PURE__ */ Object.create(null);
+    for (const [key, value] of Object.entries(values || {})) {
+      setValueBagKey(bag, key, value);
+    }
+    return bag;
+  }
+  function setValueBagKey(bag, key, value) {
+    Object.defineProperty(bag, String(key), {
+      value: cloneStoredValue(value),
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
+  }
+  function setScriptValueBag(cache, scriptId, bag) {
+    Object.defineProperty(cache, String(scriptId), {
+      value: bag,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
+  }
+  function exportValueBag(values = {}) {
+    return Object.fromEntries(Object.entries(values || {}).map(([key, value]) => [key, cloneStoredValue(value)]));
+  }
+  var _scriptChangeListener = null;
+  function setScriptChangeListener(fn) {
+    _scriptChangeListener = fn;
+  }
+  function notifyScriptChange() {
+    try {
+      _scriptChangeListener?.();
+    } catch {
+    }
+  }
+  var _settingsInitPromise = null;
+  var _scriptsInitPromise = null;
+  var _foldersInitPromise = null;
+  function cloneDefaultSettings() {
+    if (typeof structuredClone === "function") {
+      return structuredClone(settings_defaults_default);
+    }
+    return JSON.parse(JSON.stringify(settings_defaults_default));
+  }
+  function cloneSettingsState(settings) {
+    if (typeof structuredClone === "function") {
+      try {
+        return structuredClone(settings);
+      } catch (_) {
+      }
+    }
+    try {
+      return JSON.parse(JSON.stringify(settings));
+    } catch (_) {
+      return { ...settings };
+    }
+  }
+  function cloneSettingsValue(value) {
+    return value && typeof value === "object" ? cloneSettingsState(value) : value;
+  }
+  function cloneStoredValue(value) {
+    if (!value || typeof value !== "object") return value;
+    if (typeof structuredClone === "function") {
+      try {
+        return structuredClone(value);
+      } catch (_) {
+      }
+    }
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+      return Array.isArray(value) ? [...value] : { ...value };
+    }
+  }
+  async function getSettingsValue(key) {
+    await SettingsManager.init();
+    const cachedSettings = SettingsManager.cache;
+    if (key !== void 0) {
+      return cloneSettingsValue(cachedSettings[key]);
+    }
+    return cloneSettingsState(cachedSettings);
+  }
+  var SettingsManager = {
+    defaults: cloneDefaultSettings(),
+    cache: null,
+    async init() {
+      if (this.cache !== null) return;
+      if (!_settingsInitPromise) {
+        _settingsInitPromise = (async () => {
+          const data = await chrome.storage.local.get("settings");
+          this.cache = { ...cloneDefaultSettings(), ...data["settings"] };
+          console.log("[ScriptVault] Settings loaded");
+        })();
+      }
+      try {
+        return await _settingsInitPromise;
+      } finally {
+        _settingsInitPromise = null;
+      }
+    },
+    get: getSettingsValue,
+    async set(key, value) {
+      await this.init();
+      const previous = cloneSettingsState(this.cache);
+      let rawNext;
+      if (typeof key === "object") {
+        rawNext = { ...this.cache, ...key };
+      } else {
+        rawNext = { ...this.cache, [key]: value };
+      }
+      const next = cloneSettingsState(rawNext);
+      try {
+        await chrome.storage.local.set({ settings: cloneSettingsState(next) });
+      } catch (e) {
+        this.cache = previous;
+        throw e;
+      }
+      this.cache = next;
+      return cloneSettingsState(this.cache);
+    },
+    async reset() {
+      await this.init();
+      const previousDefaults = cloneSettingsState(this.defaults);
+      const previousCache = cloneSettingsState(this.cache);
+      const nextDefaults = cloneDefaultSettings();
+      const nextCache = cloneDefaultSettings();
+      try {
+        await chrome.storage.local.set({ settings: nextCache });
+      } catch (e) {
+        this.defaults = previousDefaults;
+        this.cache = previousCache;
+        throw e;
+      }
+      this.defaults = nextDefaults;
+      this.cache = nextCache;
+      return cloneSettingsState(this.cache);
+    }
+  };
+  function debugLog(...args) {
+    if (SettingsManager.cache?.debugMode) {
+      console.log("[ScriptVault]", ...args);
+    }
+  }
+  var ScriptStorage = {
+    cache: null,
+    async init() {
+      if (this.cache !== null) return;
+      if (!_scriptsInitPromise) {
+        _scriptsInitPromise = (async () => {
+          try {
+            await ensureV3Migration();
+          } catch (e) {
+            console.warn("[ScriptVault] v3 migration failed:", e);
+          }
+          const list = await ScriptsDAO.getAll();
+          const next = {};
+          for (const s of list) next[s.id] = s;
+          this.cache = next;
+          console.log("[ScriptVault] Loaded", Object.keys(this.cache).length, "scripts");
+        })();
+      }
+      try {
+        return await _scriptsInitPromise;
+      } finally {
+        _scriptsInitPromise = null;
+      }
+    },
+    // Legacy hook retained as a no-op so callers that still invoke save()
+    // don't error; persistence happens inline on every write.
+    async save() {
+    },
+    async getAll() {
+      await this.init();
+      return Object.values(this.cache);
+    },
+    async get(id) {
+      await this.init();
+      return this.cache[id] ?? null;
+    },
+    async set(id, script) {
+      await this.init();
+      const prev = this.cache[id];
+      try {
+        await ScriptsDAO.put(script);
+      } catch (e) {
+        throw e;
+      }
+      this.cache[id] = script;
+      void prev;
+      notifyScriptChange();
+      return script;
+    },
+    async delete(id) {
+      await this.init();
+      const prev = this.cache[id];
+      if (prev === void 0) return;
+      try {
+        await ScriptsDAO.delete(id);
+      } catch (e) {
+        throw e;
+      }
+      delete this.cache[id];
+      delete ScriptValues.cache[id];
+      notifyScriptChange();
+    },
+    async clear() {
+      await this.init();
+      const prev = this.cache;
+      try {
+        await ScriptsDAO.clear();
+      } catch (e) {
+        throw e;
+      }
+      this.cache = {};
+      ScriptValues.cache = /* @__PURE__ */ Object.create(null);
+      void prev;
+      notifyScriptChange();
+    },
+    /**
+     * Drop the in-memory cache so the next read forces a fresh load from IDB.
+     * Call this after any out-of-band IDB write (rare; mostly used by tests
+     * and the import-export flow).
+     */
+    invalidateCache() {
+      this.cache = null;
+      _scriptsInitPromise = null;
+    },
+    async search(query) {
+      await this.init();
+      const q = query.toLowerCase();
+      return Object.values(this.cache).filter(
+        (s) => (s.meta?.name || "").toLowerCase().includes(q) || (s.meta?.description || "").toLowerCase().includes(q) || (s.meta?.author || "").toLowerCase().includes(q)
+      );
+    },
+    async getByNamespace(namespace) {
+      await this.init();
+      return Object.values(this.cache).filter((s) => s.meta?.namespace === namespace);
+    },
+    async reorder(orderedIds) {
+      await this.init();
+      const updates = [];
+      orderedIds.forEach((id, index) => {
+        const script = this.cache[id];
+        if (script) {
+          script.position = index;
+          updates.push(script);
+        }
+      });
+      for (const s of updates) {
+        await ScriptsDAO.put(s);
+      }
+    },
+    async duplicate(id) {
+      await this.init();
+      const original = this.cache[id];
+      if (!original) return null;
+      const newId = generateId();
+      const newScript = {
+        ...JSON.parse(JSON.stringify(original)),
+        id: newId,
+        meta: {
+          ...original.meta,
+          name: `${original.meta?.name || "Unnamed"} (Copy)`
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      await this.set(newId, newScript);
+      return newScript;
+    }
+  };
+  var ScriptValues = {
+    cache: /* @__PURE__ */ Object.create(null),
+    listeners: /* @__PURE__ */ new Map(),
+    pendingNotifications: /* @__PURE__ */ new Map(),
+    // Debounce notifications only (not saves!)
+    _initPromises: /* @__PURE__ */ new Map(),
+    async init(scriptId) {
+      if (Object.hasOwn(this.cache, scriptId)) return;
+      const existing = this._initPromises.get(scriptId);
+      if (existing) return existing;
+      const p = (async () => {
+        await ScriptStorage.init();
+        setScriptValueBag(this.cache, scriptId, makeValueBag(await ValuesDAO.getAll(scriptId)));
       })();
+      this._initPromises.set(scriptId, p);
+      try {
+        await p;
+      } finally {
+        this._initPromises.delete(scriptId);
+      }
+    },
+    async get(scriptId, key, defaultValue) {
+      await this.init(scriptId);
+      const value = this.cache[scriptId][key];
+      return value !== void 0 ? cloneStoredValue(value) : defaultValue;
+    },
+    // FIXED: Save immediately to prevent data loss on service worker termination.
+    // MV3 service workers can be killed at any time — setTimeout-based debouncing is unsafe.
+    async set(scriptId, key, value, senderTabId = null) {
+      await this.init(scriptId);
+      const oldValue = this.cache[scriptId][key];
+      const nextValue = cloneStoredValue(value);
+      try {
+        await ValuesDAO.set(scriptId, key, cloneStoredValue(nextValue));
+      } catch (e) {
+        throw e;
+      }
+      setValueBagKey(this.cache[scriptId], key, nextValue);
+      this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), cloneStoredValue(nextValue), senderTabId);
+      return cloneStoredValue(nextValue);
+    },
+    // Debounced notifications — batches rapid changes (notification loss is acceptable)
+    scheduleNotification(scriptId, key, oldValue, newValue, senderTabId = null) {
+      const notifKey = `${scriptId}_${key}`;
+      const existing = this.pendingNotifications.get(notifKey);
+      if (existing) {
+        clearTimeout(existing.timeout);
+        oldValue = existing.oldValue;
+      }
+      const timeout = setTimeout(() => {
+        this.pendingNotifications.delete(notifKey);
+        this.notifyChange(scriptId, key, oldValue, newValue, false, senderTabId);
+      }, 100);
+      this.pendingNotifications.set(notifKey, { timeout, oldValue, senderTabId });
+    },
+    async delete(scriptId, key, senderTabId = null) {
+      await this.init(scriptId);
+      if (!Object.hasOwn(this.cache[scriptId], key)) return;
+      const oldValue = this.cache[scriptId][key];
+      try {
+        await ValuesDAO.delete(scriptId, key);
+      } catch (e) {
+        throw e;
+      }
+      delete this.cache[scriptId][key];
+      this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), void 0, senderTabId);
+    },
+    async list(scriptId) {
+      await this.init(scriptId);
+      return Object.keys(this.cache[scriptId]);
+    },
+    async getAll(scriptId) {
+      await this.init(scriptId);
+      return exportValueBag(this.cache[scriptId]);
+    },
+    async setAll(scriptId, values, senderTabId = null) {
+      await this.init(scriptId);
+      const nextValues = exportValueBag(values);
+      const changes = [];
+      for (const [key, value] of Object.entries(nextValues)) {
+        changes.push([key, cloneStoredValue(this.cache[scriptId][key]), cloneStoredValue(value)]);
+      }
+      try {
+        await ValuesDAO.setAll(scriptId, cloneStoredValue(nextValues));
+      } catch (e) {
+        throw e;
+      }
+      for (const [key, _o, v] of changes) {
+        setValueBagKey(this.cache[scriptId], key, v);
+      }
+      for (const [key, oldValue, value] of changes) {
+        this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), cloneStoredValue(value), senderTabId);
+      }
+    },
+    async deleteAll(scriptId) {
+      const hadCache = Object.hasOwn(this.cache, scriptId);
+      const prev = hadCache ? this.cache[scriptId] : void 0;
+      try {
+        await ValuesDAO.deleteAll(scriptId);
+      } catch (e) {
+        if (hadCache) {
+          setScriptValueBag(this.cache, scriptId, prev);
+        }
+        throw e;
+      }
+      delete this.cache[scriptId];
+    },
+    // Delete multiple specific keys at once
+    async deleteMultiple(scriptId, keys, senderTabId = null) {
+      await this.init(scriptId);
+      const changes = [];
+      const present = [];
+      for (const key of keys) {
+        if (!Object.hasOwn(this.cache[scriptId], key)) continue;
+        changes.push([key, this.cache[scriptId][key]]);
+        present.push(key);
+      }
+      if (present.length === 0) return;
+      try {
+        await ValuesDAO.deleteMultiple(scriptId, present);
+      } catch (e) {
+        throw e;
+      }
+      for (const key of present) delete this.cache[scriptId][key];
+      for (const [key, oldValue] of changes) {
+        this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), void 0, senderTabId);
+      }
+    },
+    async getStorageSize(scriptId) {
+      await this.init(scriptId);
+      return new TextEncoder().encode(JSON.stringify(this.cache[scriptId] || {})).length;
+    },
+    addListener(scriptId, listenerId, callback) {
+      const key = `${scriptId}_${listenerId}`;
+      this.listeners.set(key, { scriptId, callback });
+      return key;
+    },
+    removeListener(key) {
+      this.listeners.delete(key);
+    },
+    notifyChange(scriptId, key, oldValue, newValue, remote, senderTabId = null) {
+      if (oldValue === newValue) return;
+      this.listeners.forEach((listener) => {
+        if (listener.scriptId === scriptId) {
+          try {
+            listener.callback(key, oldValue, newValue, remote);
+          } catch (e) {
+            console.error("[ScriptVault] Value change listener error:", e);
+          }
+        }
+      });
+      chrome.tabs.query({ status: "complete" }).then((tabs) => {
+        for (const tab of tabs) {
+          const isOriginTab = senderTabId !== null && tab.id === senderTabId;
+          const msg = {
+            action: "valueChanged",
+            data: { scriptId, key, oldValue, newValue, remote: !isOriginTab }
+          };
+          chrome.tabs.sendMessage(tab.id, msg).catch(() => {
+          });
+        }
+      }).catch(() => {
+      });
     }
-    try {
-      return await this._initPromise;
-    } finally {
-      this._initPromise = null;
+  };
+  var TabStorage = {
+    data: /* @__PURE__ */ new Map(),
+    get(tabId) {
+      return this.data.get(tabId) || {};
+    },
+    set(tabId, data) {
+      this.data.set(tabId, data);
+    },
+    delete(tabId) {
+      this.data.delete(tabId);
+    },
+    getAll() {
+      const result = {};
+      this.data.forEach((value, key) => {
+        result[key] = value;
+      });
+      return result;
     }
-  },
-
-  async save() {
-    await chrome.storage.local.set({ scriptFolders: this.cache });
-  },
-
-  async getAll() {
-    await this.init();
-    return this.cache;
-  },
-
-  async create(name, color = '#60a5fa') {
-    await this.init();
-    const folder = { id: generateId(), name, color, collapsed: false, scriptIds: [], createdAt: Date.now() };
-    this.cache.push(folder);
-    try {
-      await this.save();
-    } catch (e) {
-      this.cache = this.cache.filter(f => f.id !== folder.id);
-      throw e;
+  };
+  if (!self._notifCallbacks) self._notifCallbacks = /* @__PURE__ */ new Map();
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    TabStorage.delete(tabId);
+    globalThis.XhrManager?.abortByTab?.(tabId);
+    for (const [notifId, info] of self._notifCallbacks) {
+      if (info.tabId === tabId) self._notifCallbacks.delete(notifId);
     }
-    return folder;
-  },
-
-  async update(id, updates) {
-    await this.init();
-    const folder = this.cache.find(f => f.id === id);
-    if (!folder) return null;
-    // Snapshot only the fields being updated so rollback doesn't clobber
-    // concurrent writes to unrelated fields.
-    const prev = {};
-    for (const k of Object.keys(updates)) {
-      prev[k] = folder[k];
-    }
-    Object.assign(folder, updates);
-    try {
-      await this.save();
-    } catch (e) {
-      Object.assign(folder, prev);
-      throw e;
-    }
-    return folder;
-  },
-
-  async delete(id) {
-    await this.init();
-    const prev = this.cache;
-    this.cache = this.cache.filter(f => f.id !== id);
-    try {
-      await this.save();
-    } catch (e) {
-      this.cache = prev;
-      throw e;
-    }
-  },
-
-  async addScript(folderId, scriptId) {
-    await this.init();
-    const folder = this.cache.find(f => f.id === folderId);
-    if (folder && !folder.scriptIds.includes(scriptId)) {
-      folder.scriptIds.push(scriptId);
+  });
+  var FolderStorage = {
+    cache: null,
+    async init() {
+      if (this.cache !== null) return;
+      if (!_foldersInitPromise) {
+        _foldersInitPromise = (async () => {
+          const data = await chrome.storage.local.get("scriptFolders");
+          this.cache = data["scriptFolders"] || [];
+        })();
+      }
+      try {
+        return await _foldersInitPromise;
+      } finally {
+        _foldersInitPromise = null;
+      }
+    },
+    async save() {
+      await chrome.storage.local.set({ scriptFolders: this.cache });
+    },
+    async getAll() {
+      await this.init();
+      return this.cache;
+    },
+    async create(name, color = "#60a5fa") {
+      await this.init();
+      const folder = {
+        id: generateId(),
+        name,
+        color,
+        collapsed: false,
+        scriptIds: [],
+        createdAt: Date.now()
+      };
+      this.cache.push(folder);
       try {
         await this.save();
       } catch (e) {
-        folder.scriptIds.pop();
+        this.cache = this.cache.filter((f) => f.id !== folder.id);
         throw e;
       }
-    }
-  },
-
-  async removeScript(folderId, scriptId) {
-    await this.init();
-    const folder = this.cache.find(f => f.id === folderId);
-    if (folder) {
-      const prev = folder.scriptIds;
-      folder.scriptIds = prev.filter(id => id !== scriptId);
+      return folder;
+    },
+    async update(id, updates) {
+      await this.init();
+      const folder = this.cache.find((f) => f.id === id);
+      if (folder) {
+        const prev = {};
+        for (const key of Object.keys(updates)) {
+          prev[key] = folder[key];
+        }
+        Object.assign(folder, updates);
+        try {
+          await this.save();
+        } catch (e) {
+          Object.assign(folder, prev);
+          throw e;
+        }
+      }
+      return folder;
+    },
+    async delete(id) {
+      await this.init();
+      const prev = this.cache;
+      this.cache = this.cache.filter((f) => f.id !== id);
       try {
         await this.save();
       } catch (e) {
-        folder.scriptIds = prev;
+        this.cache = prev;
         throw e;
       }
+    },
+    async addScript(folderId, scriptId) {
+      await this.init();
+      const folder = this.cache.find((f) => f.id === folderId);
+      if (folder && !folder.scriptIds.includes(scriptId)) {
+        folder.scriptIds.push(scriptId);
+        try {
+          await this.save();
+        } catch (e) {
+          folder.scriptIds.pop();
+          throw e;
+        }
+      }
+    },
+    async removeScript(folderId, scriptId) {
+      await this.init();
+      const folder = this.cache.find((f) => f.id === folderId);
+      if (folder) {
+        const prev = folder.scriptIds;
+        folder.scriptIds = folder.scriptIds.filter((sid) => sid !== scriptId);
+        try {
+          await this.save();
+        } catch (e) {
+          folder.scriptIds = prev;
+          throw e;
+        }
+      }
+    },
+    async moveScript(scriptId, fromFolderId, toFolderId) {
+      await this.init();
+      const from = fromFolderId ? this.cache.find((f) => f.id === fromFolderId) : void 0;
+      const to = toFolderId ? this.cache.find((f) => f.id === toFolderId) : void 0;
+      const prevFrom = from ? [...from.scriptIds] : null;
+      const prevTo = to ? [...to.scriptIds] : null;
+      if (from) from.scriptIds = from.scriptIds.filter((sid) => sid !== scriptId);
+      if (to && !to.scriptIds.includes(scriptId)) to.scriptIds.push(scriptId);
+      try {
+        await this.save();
+      } catch (e) {
+        if (from && prevFrom) from.scriptIds = prevFrom;
+        if (to && prevTo) to.scriptIds = prevTo;
+        throw e;
+      }
+    },
+    getFolderForScript(scriptId) {
+      if (!this.cache) return null;
+      return this.cache.find((f) => f.scriptIds.includes(scriptId)) || null;
     }
-  },
-
-  async moveScript(scriptId, fromFolderId, toFolderId) {
-    await this.init();
-    const from = fromFolderId ? this.cache.find(f => f.id === fromFolderId) : null;
-    const to = toFolderId ? this.cache.find(f => f.id === toFolderId) : null;
-    const prevFrom = from ? [...from.scriptIds] : null;
-    const prevTo = to ? [...to.scriptIds] : null;
-    if (from) from.scriptIds = from.scriptIds.filter(id => id !== scriptId);
-    if (to && !to.scriptIds.includes(scriptId)) to.scriptIds.push(scriptId);
-    try {
-      await this.save();
-    } catch (e) {
-      if (from && prevFrom) from.scriptIds = prevFrom;
-      if (to && prevTo) to.scriptIds = prevTo;
-      throw e;
+  };
+  var _openTabTrackers = /* @__PURE__ */ new Map();
+  chrome.tabs.onRemoved.addListener((closedTabId) => {
+    const info = _openTabTrackers.get(closedTabId);
+    if (info) {
+      _openTabTrackers.delete(closedTabId);
+      chrome.tabs.sendMessage(info.callerTabId, {
+        action: "openedTabClosed",
+        data: { tabId: closedTabId, scriptId: info.scriptId }
+      }).catch(() => {
+      });
     }
-  },
+  });
+  return module.exports.default || module.exports;
+})();
 
-  getFolderForScript(scriptId) {
-    if (!this.cache) return null;
-    return this.cache.find(f => f.scriptIds.includes(scriptId)) || null;
-  }
-};
-
-// Shared tracker for GM_openInTab close notifications (avoids per-call listener leak)
-const _openTabTrackers = new Map(); // openedTabId -> { callerTabId, scriptId }
-chrome.tabs.onRemoved.addListener((closedTabId) => {
-  const info = _openTabTrackers.get(closedTabId);
-  if (info) {
-    _openTabTrackers.delete(closedTabId);
-    chrome.tabs.sendMessage(info.callerTabId, {
-      action: 'openedTabClosed',
-      data: { tabId: closedTabId, scriptId: info.scriptId }
-    }).catch(() => {});
-  }
-});
+const SettingsManager = StorageModule.SettingsManager;
+const ScriptStorage = StorageModule.ScriptStorage;
+const ScriptValues = StorageModule.ScriptValues;
+const TabStorage = StorageModule.TabStorage;
+const FolderStorage = StorageModule.FolderStorage;
+const _openTabTrackers = StorageModule._openTabTrackers;
+const setScriptChangeListener = StorageModule.setScriptChangeListener;
