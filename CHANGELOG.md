@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Quick Wins consolidation pass
+
+- Closed every roadmap "Quick Win" bullet by either implementing it,
+  pinning the existing implementation with a documented reference, or
+  ticking the work as part of the active session.
+- Added `docs/readme-feature-claim-checklist.md` mapping every README
+  feature claim to its code entry point and regression test, so a
+  maintainer can verify the README is current on each release.
+- Added `docs/dependency-audit-policy.md` codifying the existing
+  `npm audit --audit-level=high --omit=optional` blocking gate with an
+  explicit exception process and rejection of the "advisory-only"
+  alternative.
+
 ### 2026-05-24 — Userstyle compatibility baseline
 
 - Added `tests/userstyle-compat-fixtures.test.js` (18 cases) — seven
