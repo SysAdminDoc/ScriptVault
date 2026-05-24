@@ -4,6 +4,7 @@
 
 import type { Script, ScriptMeta } from '../types/script';
 import type { Settings } from '../types/settings';
+import { fetchTextBounded } from './fetch-bounded';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -91,15 +92,7 @@ export const UpdateSystem = {
         return { response, code: '' };
       }
 
-      const contentLength: number = parseInt(response.headers.get('content-length') || '0', 10);
-      if (contentLength > this._MAX_UPDATE_BYTES) {
-        throw new Error(`Update too large (${contentLength} bytes). Maximum is ${this._MAX_UPDATE_BYTES} bytes.`);
-      }
-
-      const code: string = await response.text();
-      if (code.length > this._MAX_UPDATE_BYTES) {
-        throw new Error(`Update too large (${code.length} bytes). Maximum is ${this._MAX_UPDATE_BYTES} bytes.`);
-      }
+      const code: string = await fetchTextBounded(response, this._MAX_UPDATE_BYTES, 'Update');
 
       return { response, code };
     } catch (e: unknown) {

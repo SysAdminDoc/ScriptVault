@@ -1385,58 +1385,84 @@ ${req.code}
   window.GM = GM;
 
   // ========== window.onurlchange (SPA navigation detection) ==========
-  // Tampermonkey-compatible: fires when URL changes via pushState/replaceState/popstate
+  // Tampermonkey-compatible: fires when URL changes via pushState/replaceState/popstate.
+  //
+  // Page-scoped monkey-patch + shared dispatcher. The history/navigation
+  // patch runs once per host page and fan-outs to per-wrapper listeners via a
+  // CustomEvent, preventing stacked pushState/replaceState proxy chains when a
+  // script is updated and re-registered while the tab stays open.
   if (hasGrant('window.onurlchange')) {
-    let _lastUrl = location.href;
     const _urlChangeHandlers = [];
 
-    function __checkUrlChange() {
-      const newUrl = location.href;
-      if (newUrl !== _lastUrl) {
-        const oldUrl = _lastUrl;
-        _lastUrl = newUrl;
-        const event = { url: newUrl, oldUrl };
-        _urlChangeHandlers.forEach(fn => { try { fn(event); } catch(e) {} });
-        if (typeof window.onurlchange === 'function') {
-          try { window.onurlchange(event); } catch(e) {}
-        }
+    function __dispatchUrlChangeToHandlers(detail) {
+      _urlChangeHandlers.forEach(fn => { try { fn(detail); } catch(e) {} });
+      if (typeof window.onurlchange === 'function') {
+        try { window.onurlchange(detail); } catch(e) {}
       }
     }
 
-    // Phase 38.6 — Prefer the Navigation API (Chrome 102+, our min-Chrome
-    // 130 so always present here; Firefox port falls through to the polling
-    // shim). Catches SPA navigations that don't route through pushState /
-    // replaceState (e.g. direct location.href assignment + render-frame
-    // routers).
-    const _nav = (typeof window !== 'undefined') ? window.navigation : undefined;
-    if (_nav && typeof _nav.addEventListener === 'function') {
+    // One-time page-level setup. The defineProperty guard survives wrapper
+    // closure swaps on re-injection.
+    if (!window.__svUrlChangeBound__) {
       try {
-        _nav.addEventListener('navigate', () => {
-          Promise.resolve().then(__checkUrlChange);
+        Object.defineProperty(window, '__svUrlChangeBound__', {
+          value: true, writable: false, configurable: false, enumerable: false
         });
-      } catch (_e) { /* fall through to polling shim */ }
+      } catch (_e) {
+        // Property already locked by an earlier ScriptVault wrapper; treat as bound.
+      }
+
+      let _lastUrl = location.href;
+      function __checkUrlChange() {
+        const newUrl = location.href;
+        if (newUrl !== _lastUrl) {
+          const oldUrl = _lastUrl;
+          _lastUrl = newUrl;
+          const detail = { url: newUrl, oldUrl };
+          window.dispatchEvent(new CustomEvent('__sv_urlchange__', { detail }));
+        }
+      }
+
+      // Phase 38.6 — Prefer the Navigation API (Chrome 102+, our min-Chrome
+      // 130 so always present here; Firefox port falls through to the polling
+      // shim). Catches SPA navigations that don't route through pushState /
+      // replaceState (e.g. direct location.href assignment + render-frame
+      // routers).
+      const _nav = (typeof window !== 'undefined') ? window.navigation : undefined;
+      if (_nav && typeof _nav.addEventListener === 'function') {
+        try {
+          _nav.addEventListener('navigate', () => {
+            Promise.resolve().then(__checkUrlChange);
+          });
+        } catch (_e) { /* fall through to polling shim */ }
+      }
+
+      // Intercept history API (kept as a backstop for non-Navigation-API
+      // browsers and for any SPA library that bypasses navigation.navigate).
+      const _origPushState = history.pushState;
+      const _origReplaceState = history.replaceState;
+      history.pushState = function() {
+        _origPushState.apply(this, arguments);
+        __checkUrlChange();
+      };
+      history.replaceState = function() {
+        _origReplaceState.apply(this, arguments);
+        __checkUrlChange();
+      };
+      window.addEventListener('popstate', __checkUrlChange);
+      window.addEventListener('hashchange', __checkUrlChange);
     }
 
-    // Intercept history API (kept as a backstop for non-Navigation-API
-    // browsers and for any SPA library that bypasses navigation.navigate).
-    const _origPushState = history.pushState;
-    const _origReplaceState = history.replaceState;
-    history.pushState = function() {
-      _origPushState.apply(this, arguments);
-      __checkUrlChange();
-    };
-    history.replaceState = function() {
-      _origReplaceState.apply(this, arguments);
-      __checkUrlChange();
-    };
-    window.addEventListener('popstate', __checkUrlChange);
-    window.addEventListener('hashchange', __checkUrlChange);
+    const __svUrlChangeListener = (event) => __dispatchUrlChangeToHandlers(event.detail);
+    window.addEventListener('__sv_urlchange__', __svUrlChangeListener);
 
     // Allow adding multiple handlers via addEventListener pattern
     window.addEventListener = new Proxy(window.addEventListener, {
       apply(target, thisArg, args) {
         if (args[0] === 'urlchange') {
-          _urlChangeHandlers.push(args[1]);
+          if (!_urlChangeHandlers.includes(args[1])) {
+            _urlChangeHandlers.push(args[1]);
+          }
           return;
         }
         return Reflect.apply(target, thisArg, args);
@@ -1452,7 +1478,7 @@ ${req.code}
         return Reflect.apply(target, thisArg, args);
       }
     });
-    window.onurlchange = null; // Initialize as settable
+    if (typeof window.onurlchange === 'undefined') window.onurlchange = null;
   }
 
   // ========== window.close / window.focus grants ==========

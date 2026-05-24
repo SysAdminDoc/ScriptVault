@@ -5,7 +5,7 @@
  * declarativeNetRequest dynamic rules.
  */
 
-import { debugLog } from '@modules/storage';
+import { debugLog, ScriptStorage } from '../modules/storage';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,6 +51,9 @@ export interface WebRequestRule {
 
 /** Maps scriptId -> array of DNR rule IDs applied via @webRequest / GM_webRequest */
 const _webRequestRuleMap = new Map<string, number[]>();
+const WEB_REQUEST_RULE_MAP_STORAGE_KEY = '_webRequestRuleMap';
+let _webRequestRuleMapHydrated = false;
+let _webRequestRuleMapHydratingPromise: Promise<void> | null = null;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -58,17 +61,66 @@ const _webRequestRuleMap = new Map<string, number[]>();
 
 /**
  * Stable numeric rule ID derived from a scriptId string and a rule index.
- * 21-bit hash (0..2097151) * 1024 + 10-bit index (0..1023) yields ids up to ~2.1B,
- * within Chrome's safe integer DNR rule id range. Adds (index + 1) so that a
- * zero-hash never collapses to 0 and to guarantee distinct ids for indices on
- * the same script.
+ * 21-bit hash (0..2097151) shifted by 10 bits plus a 10-bit index yields ids
+ * up to ~2.1B, within Chrome's safe integer DNR rule id range. Adds 1 so that
+ * a zero-hash never collapses to rule id 0.
  */
 export function _makeRuleId(scriptId: string, index: number): number {
   let h = 0;
   for (let i = 0; i < scriptId.length; i++) {
     h = (h * 31 + scriptId.charCodeAt(i)) & 0x7fffffff;
   }
-  return ((h & 0x1fffff) * 1024 + (index & 0x3ff)) + (index + 1);
+  return (((h & 0x1fffff) << 10) | (index & 0x3ff)) + 1;
+}
+
+function normalizeRuleIds(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0))];
+}
+
+async function hydrateWebRequestRuleMap(): Promise<void> {
+  if (_webRequestRuleMapHydrated) return;
+  if (_webRequestRuleMapHydratingPromise) return _webRequestRuleMapHydratingPromise;
+
+  _webRequestRuleMapHydratingPromise = (async () => {
+    try {
+      const result = await chrome.storage.local.get(WEB_REQUEST_RULE_MAP_STORAGE_KEY);
+      const stored = result?.[WEB_REQUEST_RULE_MAP_STORAGE_KEY];
+      if (stored && typeof stored === 'object' && !Array.isArray(stored)) {
+        for (const [scriptId, ruleIds] of Object.entries(stored)) {
+          const normalized = normalizeRuleIds(ruleIds);
+          if (normalized.length > 0) {
+            _webRequestRuleMap.set(scriptId, normalized);
+          }
+        }
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.warn('[ScriptVault] Failed to hydrate _webRequestRuleMap:', message);
+    } finally {
+      _webRequestRuleMapHydrated = true;
+      _webRequestRuleMapHydratingPromise = null;
+    }
+  })();
+
+  return _webRequestRuleMapHydratingPromise;
+}
+
+async function persistWebRequestRuleMap(): Promise<boolean> {
+  try {
+    const stored: Record<string, number[]> = {};
+    for (const [scriptId, ruleIds] of _webRequestRuleMap.entries()) {
+      stored[scriptId] = ruleIds;
+    }
+    await chrome.storage.local.set({ [WEB_REQUEST_RULE_MAP_STORAGE_KEY]: stored });
+    return true;
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn('[ScriptVault] Failed to persist _webRequestRuleMap:', message);
+    return false;
+  }
 }
 
 /**
@@ -167,6 +219,7 @@ export async function applyWebRequestRules(scriptId: string, rules: WebRequestRu
   if (!chrome.declarativeNetRequest || !Array.isArray(rules) || rules.length === 0) return;
 
   try {
+    await hydrateWebRequestRuleMap();
     // Remove any existing rules for this script first
     await removeWebRequestRules(scriptId);
 
@@ -193,6 +246,17 @@ export async function applyWebRequestRules(scriptId: string, rules: WebRequestRu
       }
       await chrome.declarativeNetRequest.updateDynamicRules({ addRules: dnrRules });
       _webRequestRuleMap.set(scriptId, ruleIds);
+      const persisted = await persistWebRequestRuleMap();
+      if (!persisted) {
+        _webRequestRuleMap.delete(scriptId);
+        try {
+          await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: ruleIds });
+        } catch (cleanupErr: unknown) {
+          const cleanupMessage = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
+          console.warn('[ScriptVault] GM_webRequest rule rollback failed after map persist failure:', cleanupMessage);
+        }
+        return;
+      }
       debugLog(`[GM_webRequest] Applied ${dnrRules.length} rules for script ${scriptId}`);
     }
   } catch (e: unknown) {
@@ -208,13 +272,106 @@ export async function applyWebRequestRules(scriptId: string, rules: WebRequestRu
 export async function removeWebRequestRules(scriptId: string): Promise<void> {
   if (!chrome.declarativeNetRequest) return;
 
+  await hydrateWebRequestRuleMap();
   const existing = _webRequestRuleMap.get(scriptId);
   if (existing && existing.length > 0) {
+    let removed = false;
     try {
       await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing });
+      removed = true;
     } catch (_e: unknown) {
-      // Silently ignore — rules may already have been removed
+      try {
+        const liveRules = await chrome.declarativeNetRequest.getDynamicRules();
+        const liveRuleIds = new Set(liveRules.map((rule) => rule.id));
+        removed = !existing.some((id) => liveRuleIds.has(id));
+      } catch (probeErr: unknown) {
+        const message = probeErr instanceof Error ? probeErr.message : String(probeErr);
+        console.warn('[ScriptVault] GM_webRequest rule removal failed and live-state probe failed:', message);
+      }
     }
+
+    if (!removed) {
+      console.warn(`[ScriptVault] GM_webRequest kept rule map for ${scriptId}; DNR removal did not complete.`);
+      return;
+    }
+
     _webRequestRuleMap.delete(scriptId);
+    await persistWebRequestRuleMap();
+  }
+}
+
+/**
+ * Reconcile the persisted DNR owner map against the current script store and
+ * Chrome's live dynamic rules. This runs on service-worker wake in the runtime
+ * JS and exists here to keep the TypeScript mirror ready for promotion.
+ */
+export async function reconcileWebRequestRuleMap(): Promise<void> {
+  if (!chrome.declarativeNetRequest) return;
+
+  await hydrateWebRequestRuleMap();
+
+  let scripts: Array<{ id?: string }> = [];
+  try {
+    scripts = await ScriptStorage.getAll();
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn('[ScriptVault] DNR reconcile: ScriptStorage.getAll failed:', message);
+    return;
+  }
+
+  let mutated = false;
+  const scriptIds = new Set(scripts.map((script) => script.id).filter((id): id is string => typeof id === 'string'));
+  const orphanScriptIds: string[] = [];
+  const toRemoveRuleIds: number[] = [];
+
+  for (const [scriptId, ruleIds] of _webRequestRuleMap.entries()) {
+    if (!scriptIds.has(scriptId)) {
+      orphanScriptIds.push(scriptId);
+      toRemoveRuleIds.push(...ruleIds);
+    }
+  }
+
+  let liveRuleIds: Set<number> | null = null;
+  try {
+    const liveRules = await chrome.declarativeNetRequest.getDynamicRules();
+    liveRuleIds = new Set(liveRules.map((rule) => rule.id));
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn('[ScriptVault] DNR reconcile: getDynamicRules failed:', message);
+  }
+
+  if (liveRuleIds) {
+    for (const [scriptId, ruleIds] of _webRequestRuleMap.entries()) {
+      if (orphanScriptIds.includes(scriptId)) continue;
+      const filtered = ruleIds.filter((id) => liveRuleIds.has(id));
+      if (filtered.length !== ruleIds.length) {
+        if (filtered.length === 0) _webRequestRuleMap.delete(scriptId);
+        else _webRequestRuleMap.set(scriptId, filtered);
+        mutated = true;
+      }
+    }
+  }
+
+  if (toRemoveRuleIds.length > 0) {
+    try {
+      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: toRemoveRuleIds });
+      for (const scriptId of orphanScriptIds) {
+        _webRequestRuleMap.delete(scriptId);
+      }
+      mutated = true;
+      debugLog(`[GM_webRequest] Reconcile removed ${toRemoveRuleIds.length} orphan DNR rule(s)`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.warn('[ScriptVault] DNR reconcile: updateDynamicRules removal failed:', message);
+    }
+  } else if (orphanScriptIds.length > 0) {
+    for (const scriptId of orphanScriptIds) {
+      _webRequestRuleMap.delete(scriptId);
+    }
+    mutated = true;
+  }
+
+  if (mutated) {
+    await persistWebRequestRuleMap();
   }
 }

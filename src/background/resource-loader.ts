@@ -3,6 +3,8 @@
 // Strict TypeScript migration from background.core.js (lines 4173-4436)
 // ============================================================================
 
+import { fetchTextBounded } from './fetch-bounded';
+
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
 // ---------------------------------------------------------------------------
@@ -14,6 +16,8 @@ declare function debugLog(...args: unknown[]): void;
 // ---------------------------------------------------------------------------
 
 export const requireCache: Map<string, string> = new Map();
+
+const MAX_REQUIRE_BYTES = 5 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
 // Common library fallback URLs
@@ -273,18 +277,7 @@ export async function fetchWithRetry(url: string, retries: number = 2): Promise<
         throw new Error(`HTTP ${response.status}`);
       }
 
-      // Reject excessively large @require scripts (>5MB) to prevent memory issues
-      const MAX_REQUIRE_BYTES = 5 * 1024 * 1024;
-      const contentLength = parseInt(response.headers.get('content-length') ?? '0', 10);
-      if (contentLength > MAX_REQUIRE_BYTES) {
-        throw new Error(`Response too large (${Math.round(contentLength / 1024)}KB, max 5MB)`);
-      }
-
-      const code = await response.text();
-
-      if (code.length > MAX_REQUIRE_BYTES) {
-        throw new Error(`Response too large (${Math.round(code.length / 1024)}KB, max 5MB)`);
-      }
+      const code = await fetchTextBounded(response, MAX_REQUIRE_BYTES, 'Response');
 
       // Basic validation - should look like JavaScript
       if (code && code.length > 0) {

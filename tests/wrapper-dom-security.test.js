@@ -243,6 +243,20 @@ window.__svTag  = GM_info.script.tag;
     expect(window.__svTag).toBeUndefined();
   });
 
+  it('window.onurlchange wrapper uses a page-scoped dispatcher instead of stacking history patches', () => {
+    const script = makeScript('');
+    script.meta.grant = ['window.onurlchange'];
+
+    const wrapped = buildWrappedScript(script);
+
+    expect(wrapped).toContain("Object.defineProperty(window, '__svUrlChangeBound__'");
+    expect(wrapped).toContain("window.dispatchEvent(new CustomEvent('__sv_urlchange__', { detail }))");
+    expect(wrapped).toContain("window.addEventListener('__sv_urlchange__', __svUrlChangeListener);");
+    expect(wrapped).toContain("if (!_urlChangeHandlers.includes(args[1]))");
+    expect(wrapped.match(/history\.pushState = function/g)).toHaveLength(1);
+    expect(wrapped.match(/history\.replaceState = function/g)).toHaveLength(1);
+  });
+
   // Hardening: the @unwrap banner used JSON.stringify(name).slice(1, -1)
   // and interpolated the result into a single-quoted JS string. A name
   // containing a literal single quote (e.g. "John's Script") leaked the
