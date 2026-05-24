@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Analyzer TypeScript promotion
+
+- Promoted `bg/analyzer.js` to a generated runtime artifact from
+  `src/bg/analyzer.ts`, continuing the background-helper tranche after
+  NetworkLog.
+- Reconciled analyzer fallback drift before promotion: the TS source now keeps
+  URL schemes intact while stripping comments and scans every long string for
+  high entropy instead of only the first one.
+- Added generated-runtime and source regressions for URL comment stripping and
+  multi-string entropy detection, then rebuilt `background.js` from the
+  generated analyzer artifact.
+
 ### 2026-05-24 — NetworkLog TypeScript promotion
 
 - Promoted `bg/netlog.js` to a generated runtime artifact from

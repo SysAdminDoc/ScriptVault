@@ -87,6 +87,12 @@ export const TS_RUNTIME_MODULES = [
     output: 'bg/netlog.js',
     exportName: 'NetworkLog',
   },
+  {
+    id: 'analyzer',
+    source: 'src/bg/analyzer.ts',
+    output: 'bg/analyzer.js',
+    exportName: 'ScriptAnalyzer',
+  },
 ];
 
 function normalizeNewlines(text) {

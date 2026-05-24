@@ -27,7 +27,8 @@ implementation while preserving the script-mode globals expected by
 `modules/migration.js`, generated from `src/modules/migration.ts` after
 aligning the migration version stamp with the current v2.3.0 runtime marker.
 The first background helper promotion has also shipped: `bg/netlog.js` now
-comes from `src/bg/netlog.ts`.
+comes from `src/bg/netlog.ts`. `bg/analyzer.js` followed after reconciling
+fallback drift in comment stripping and high-entropy string detection.
 
 ## 1. Problem statement
 
@@ -204,7 +205,7 @@ Pilot exit criteria:
    owns the full runtime implementation. Started 2026-05-24 with
    `modules/migration.js`.
 7. **Background helpers.** Promote `bg/*.js`. Started 2026-05-24 with
-   `bg/netlog.js`.
+   `bg/netlog.js` and `bg/analyzer.js`.
 8. **Main worker leaves.** Promote parser, matcher, registration,
    wrapper-builder, update/install/import, cloud sync, DNR, badge, tab
    reload, and context menu modules.
@@ -292,6 +293,6 @@ pilot should avoid that broader build-system change.
    source owns the full runtime implementation. Where sync/import modules
    still import storage directly, first teach the generator to externalize
    promoted runtime globals instead of bundling duplicate storage code.
-9. Continue the background-helper tranche after `bg/netlog.js` with the
-   smallest self-contained helper before touching helpers that import storage
-   or Web Crypto-heavy paths.
+9. Continue the background-helper tranche after `bg/netlog.js` and
+   `bg/analyzer.js` with the smallest self-contained helper before touching
+   helpers that import storage or Web Crypto-heavy paths.
