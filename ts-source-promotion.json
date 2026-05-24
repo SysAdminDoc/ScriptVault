@@ -112,7 +112,8 @@
     {
       "runtime": "bg/netlog.js",
       "sources": ["src/bg/netlog.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "bg/signing.js",

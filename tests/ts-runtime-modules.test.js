@@ -81,6 +81,12 @@ describe('TS runtime module generator', () => {
         output: 'modules/migration.js',
         exportName: 'Migration',
       }),
+      expect.objectContaining({
+        id: 'netlog',
+        source: 'src/bg/netlog.ts',
+        output: 'bg/netlog.js',
+        exportName: 'NetworkLog',
+      }),
     ]));
   });
 
