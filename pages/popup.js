@@ -62,20 +62,39 @@
 
     // Initialize
     async function init() {
-        // Show loading state immediately
-        if (elements.scriptList) {
-            elements.scriptList.style.opacity = '0.5';
-            elements.scriptList.style.transition = 'opacity 0.2s';
-        }
+        setPopupListLoading(true);
         await checkUserScriptsAvailability();
         await loadSettings();
         await getCurrentTab();
         await loadAllScripts();
         await loadPageScripts();
-        if (elements.scriptList) elements.scriptList.style.opacity = '1';
+        setPopupListLoading(false);
         setupEventListeners();
         updateEnabledState();
         updateEmptyStateHint();
+    }
+
+    function setPopupListLoading(isLoading) {
+        const list = elements.scriptList;
+        if (!list) return;
+        list.classList.toggle('loading', isLoading);
+        list.setAttribute('aria-busy', String(isLoading));
+        if (isLoading) {
+            list.hidden = false;
+            const loading = document.createElement('div');
+            loading.className = 'popup-loading';
+            loading.setAttribute('role', 'status');
+            loading.setAttribute('aria-live', 'polite');
+            loading.setAttribute('aria-label', 'Loading scripts for this page');
+            for (let i = 0; i < 3; i += 1) {
+                const row = document.createElement('div');
+                row.className = 'popup-loading-row';
+                row.setAttribute('aria-hidden', 'true');
+                loading.appendChild(row);
+            }
+            list.replaceChildren(loading);
+            elements.emptyState?.style.setProperty('display', 'none');
+        }
     }
 
     // Load all scripts for total count.
@@ -318,7 +337,7 @@
         }
     }
 
-    function showPopupEmptyState(title, description, iconText = '\uD83D\uDCDC') {
+    function showPopupEmptyState(title, description, iconText = 'SV') {
         const emptyState = elements.emptyState;
         if (!emptyState) return;
         emptyState.style.display = 'block';
@@ -427,7 +446,7 @@
             pageScripts = [];
             renderScriptList();
             updateEnabledState();
-            showPopupEmptyState('No page selected', 'Open a tab to see which scripts match it.', '\uD83D\uDCDC');
+            showPopupEmptyState('No page selected', 'Open a tab to see which scripts match it.', 'SV');
             return;
         }
 
@@ -435,7 +454,7 @@
             pageScripts = [];
             renderScriptList();
             updateEnabledState();
-            showPopupEmptyState('Scripts don’t run here', 'Browser pages, extension pages, and other internal surfaces block userscripts.', '\uD83D\uDEE1\uFE0F');
+            showPopupEmptyState('Scripts don’t run here', 'Browser pages, extension pages, and other internal surfaces block userscripts.', '!');
             return;
         }
 
@@ -460,7 +479,7 @@
                 isTimeout
                     ? 'The background service is still starting up. Try again in a moment.'
                     : 'Could not connect to the ScriptVault background service.',
-                '\u26A0'
+                '!'
             );
         }
     }
@@ -728,6 +747,8 @@
         const emptyState = document.getElementById('emptyState');
         if (displayScripts.length === 0) {
             if (elements.scriptList) elements.scriptList.hidden = true;
+            elements.scriptList.classList.remove('loading');
+            elements.scriptList.setAttribute('aria-busy', 'false');
             elements.scriptList.innerHTML = '';
             if (emptyState) emptyState.style.display = 'block';
             updateEmptyStateHint();
@@ -736,6 +757,8 @@
         }
         if (emptyState) emptyState.style.display = 'none';
         if (elements.scriptList) elements.scriptList.hidden = false;
+        elements.scriptList.classList.remove('loading');
+        elements.scriptList.setAttribute('aria-busy', 'false');
         updatePrimaryActionMenuVisibility();
 
         elements.scriptList.innerHTML = displayScripts.map((script, i) => {
@@ -1334,7 +1357,7 @@
             document.body.appendChild(toast);
         }
         toast.textContent = msg;
-        toast.style.background = type === 'error' ? 'var(--popup-danger)' : 'var(--popup-accent)';
+        toast.classList.toggle('error', type === 'error');
         toast.classList.remove('show');
         void toast.offsetWidth;
         toast.classList.add('show');

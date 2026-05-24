@@ -855,7 +855,7 @@ $CURSOR$`
     padding: 4px 12px;
     background: transparent;
     border: 1px solid var(--border-color, #404040);
-    border-radius: 14px;
+    border-radius: 8px;
     color: var(--text-secondary, #a0a0a0);
     cursor: pointer;
     font-size: 12px;

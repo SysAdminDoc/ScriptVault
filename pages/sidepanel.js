@@ -354,7 +354,7 @@
         list.innerHTML = '';
         const err = document.createElement('div');
         err.className = 'sp-empty';
-        err.textContent = 'Connection lost. Click refresh.';
+        err.textContent = 'Unable to reach the background service. Refresh the panel to reconnect.';
         list.appendChild(err);
       }
     } finally {
@@ -395,12 +395,13 @@
       empty.className = 'sp-empty';
       const icon = document.createElement('div');
       icon.className = 'sp-empty-icon';
-      icon.textContent = '🛡️';
+      icon.textContent = '!';
+      icon.setAttribute('aria-hidden', 'true');
       const msg = document.createElement('div');
       msg.textContent = 'Scripts don’t run on this page.';
       const detail = document.createElement('div');
       detail.style.marginTop = '4px';
-      detail.textContent = 'Open a regular website or local file to see matching userscripts.';
+      detail.textContent = 'Open a regular website or local file to review matching userscripts.';
       empty.append(icon, msg, detail);
       list.replaceChildren(empty);
       updatePageActions();
@@ -419,9 +420,10 @@
       empty.className = 'sp-empty';
       const icon = document.createElement('div');
       icon.className = 'sp-empty-icon';
-      icon.textContent = '📄';
+      icon.textContent = 'SV';
+      icon.setAttribute('aria-hidden', 'true');
       const msg = document.createElement('div');
-      msg.textContent = 'No scripts for this page.';
+      msg.textContent = 'No matching scripts on this page.';
       const link = document.createElement('div');
       link.style.marginTop = '4px';
       if (hostname) {
@@ -499,10 +501,17 @@
       empty.className = 'sp-empty';
       const icon = document.createElement('div');
       icon.className = 'sp-empty-icon';
-      icon.textContent = searchQuery ? '\u2315' : '\uD83D\uDCC2';
+      icon.textContent = searchQuery ? '\u2315' : 'SV';
+      icon.setAttribute('aria-hidden', 'true');
       const msg = document.createElement('div');
-      msg.textContent = searchQuery ? `No scripts match "${searchQuery}".` : 'No installed scripts yet.';
+      msg.textContent = searchQuery ? `No scripts match "${searchQuery}".` : 'Your vault is empty.';
       empty.append(icon, msg);
+      if (!searchQuery) {
+        const detail = document.createElement('div');
+        detail.style.marginTop = '4px';
+        detail.textContent = 'Install or create a userscript to populate this panel.';
+        empty.appendChild(detail);
+      }
       if (searchQuery) {
         const reset = document.createElement('button');
         reset.type = 'button';
@@ -809,13 +818,7 @@
           searchEl.blur();
         }
       });
-      // Ctrl+F focuses search
       document.addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-          e.preventDefault();
-          searchEl.focus();
-          searchEl.select?.();
-        }
         if (e.key === 'Escape' && document.activeElement === searchEl) {
           searchEl.value = '';
           searchQuery = '';

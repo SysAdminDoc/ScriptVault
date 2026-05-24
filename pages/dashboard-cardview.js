@@ -76,7 +76,7 @@ const CardView = (() => {
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
     var(--bg-row);
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-  border-radius: 22px;
+  border-radius: 8px;
   padding: 16px;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
   display: flex;
@@ -91,7 +91,7 @@ const CardView = (() => {
 }
 
 [data-density="compact"] .cv-card {
-  border-radius: 20px;
+  border-radius: 8px;
   padding: 14px;
   gap: 9px;
   min-height: 164px;
@@ -99,7 +99,7 @@ const CardView = (() => {
 }
 
 [data-density="spacious"] .cv-card {
-  border-radius: 24px;
+  border-radius: 8px;
   padding: 18px;
   gap: 12px;
   min-height: 188px;
@@ -259,7 +259,7 @@ const CardView = (() => {
   text-transform: uppercase;
   color: var(--text-secondary);
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: 8px;
   background: rgba(90, 140, 255, 0.12);
   border: 1px solid rgba(90, 140, 255, 0.18);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
@@ -282,7 +282,7 @@ const CardView = (() => {
   gap: 4px;
   max-width: 100%;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: 8px;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -363,7 +363,7 @@ const CardView = (() => {
   color: var(--text-secondary);
   font: inherit;
   font-size: 11px;
-  border-radius: 999px;
+  border-radius: 8px;
   padding: 4px 8px;
   cursor: pointer;
   transition: color 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
@@ -412,7 +412,7 @@ const CardView = (() => {
   font-size: 10px;
   font-weight: 700;
   padding: 3px 7px;
-  border-radius: 999px;
+  border-radius: 8px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -444,7 +444,7 @@ const CardView = (() => {
   justify-content: center;
   min-height: 30px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid rgba(127,127,127,0.14);
   background: rgba(255,255,255,0.05);
   color: var(--text-secondary);
@@ -509,7 +509,7 @@ const CardView = (() => {
   position: absolute;
   inset: 0;
   background: var(--toggle-off);
-  border-radius: 20px;
+  border-radius: 8px;
   transition: background 200ms;
 }
 .cv-toggle-slider::before {
@@ -562,13 +562,13 @@ const CardView = (() => {
     linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
     var(--bg-header);
   border: 1px solid var(--panel-border-strong, rgba(148,163,184,0.28));
-  border-radius: 14px;
+  border-radius: 8px;
   padding: 5px;
   min-width: 160px;
   z-index: 1000;
   box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 24px 40px rgba(0,0,0,.28);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .cv-menu.cv-hidden { display: none; }
 .cv-menu-item {
@@ -593,7 +593,7 @@ const CardView = (() => {
   min-height: 210px;
   padding: 32px 24px;
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-  border-radius: 22px;
+  border-radius: 8px;
   background:
     radial-gradient(circle at top, rgba(90, 140, 255, 0.16), transparent 58%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
@@ -622,7 +622,7 @@ const CardView = (() => {
     linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
     var(--bg-input);
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-  border-radius: 14px;
+  border-radius: 8px;
   padding: 7px 10px;
   color: var(--text-secondary);
   font-size: 12px;
@@ -656,7 +656,7 @@ const CardView = (() => {
   }
 
   .cv-card {
-    border-radius: 20px;
+    border-radius: 8px;
     padding: 14px;
   }
 }

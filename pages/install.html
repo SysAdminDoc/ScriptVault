@@ -35,8 +35,8 @@
       --warning-bg: rgba(245, 158, 11, 0.1);
       --border: #334155;
       --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-      --radius: 12px;
-      --radius-sm: 8px;
+      --radius: 8px;
+      --radius-sm: 6px;
       --radius-xs: 4px;
     }
     
@@ -107,8 +107,8 @@
     body {
       font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
       background:
-        radial-gradient(circle at top, rgba(34, 197, 94, 0.12), transparent 28rem),
-        radial-gradient(circle at 85% 0%, rgba(96, 165, 250, 0.12), transparent 24rem),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 18rem),
+        linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(96, 165, 250, 0.055) 42%, transparent 82%),
         var(--bg-primary);
       color: var(--text-primary);
       min-height: 100vh;
@@ -141,7 +141,7 @@
       background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 160px),
         var(--bg-secondary);
-      border-radius: 22px;
+      border-radius: var(--radius);
       box-shadow: var(--shadow);
       overflow: hidden;
       border: 1px solid rgba(127, 127, 127, 0.14);
@@ -196,7 +196,7 @@
       padding: 5px 10px;
       background: var(--blue-bg);
       color: var(--blue);
-      border-radius: 20px;
+      border-radius: var(--radius-sm);
       font-size: 12px;
       font-weight: 500;
       font-variant-numeric: tabular-nums;
@@ -209,7 +209,7 @@
       padding: 5px 10px;
       background: var(--warning-bg);
       color: var(--warning);
-      border-radius: 20px;
+      border-radius: var(--radius-sm);
       font-size: 12px;
       font-weight: 500;
       font-variant-numeric: tabular-nums;
@@ -252,12 +252,12 @@
       gap: 6px;
       padding: 8px;
       border: 1px solid rgba(127, 127, 127, 0.16);
-      border-radius: 16px;
+      border-radius: var(--radius);
       background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
         rgba(15, 23, 42, 0.34);
       box-shadow: 0 18px 36px rgba(0, 0, 0, 0.16);
-      backdrop-filter: blur(18px);
+      backdrop-filter: none;
     }
 
     .review-nav-meta {
@@ -282,7 +282,7 @@
       font: inherit;
       font-size: 11px;
       font-weight: 600;
-      border-radius: 999px;
+      border-radius: var(--radius-sm);
       padding: 7px 10px;
       cursor: pointer;
       transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
@@ -313,7 +313,7 @@
         linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
         var(--bg-tertiary);
       border: 1px solid rgba(127, 127, 127, 0.16);
-      border-radius: 16px;
+      border-radius: var(--radius);
       box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
       content-visibility: auto;
       contain-intrinsic-size: 200px;
@@ -571,7 +571,7 @@
       font: inherit;
       font-size: 12px;
       font-weight: 600;
-      border-radius: 999px;
+      border-radius: var(--radius-sm);
       padding: 6px 10px;
       cursor: pointer;
       transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
@@ -591,7 +591,7 @@
     }
 
     .install-alert {
-      border-radius: 14px;
+      border-radius: var(--radius);
       padding: 14px 16px;
       border: 1px solid rgba(127, 127, 127, 0.14);
       background: rgba(255, 255, 255, 0.03);
@@ -731,7 +731,7 @@
       bottom: 0;
       background-color: var(--bg-hover);
       transition: 0.2s;
-      border-radius: 24px;
+      border-radius: var(--radius);
     }
     
     .toggle-slider::before {
@@ -844,7 +844,7 @@
     .decision-hero {
       margin-top: 14px;
       padding: 14px;
-      border-radius: 16px;
+      border-radius: var(--radius);
       border: 1px solid rgba(127, 127, 127, 0.16);
       background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
@@ -884,7 +884,7 @@
       align-items: center;
       gap: 5px;
       padding: 5px 8px;
-      border-radius: 999px;
+      border-radius: var(--radius-sm);
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 0.08em;
@@ -1177,7 +1177,7 @@
       padding: 6px 12px;
       background: var(--danger-bg);
       color: var(--danger);
-      border-radius: 20px;
+      border-radius: var(--radius-sm);
       font-size: 12px;
       font-weight: 500;
     }
@@ -1246,7 +1246,7 @@
       }
 
       .container {
-        border-radius: 18px;
+        border-radius: var(--radius);
       }
 
       .meta-grid {

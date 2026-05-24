@@ -4,6 +4,21 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Premium UI polish pass
+
+- Normalized dashboard, popup, side panel, install review, DevTools, Script Store,
+  card view, collections, profiles, snippets, templates, and keyboard overlay
+  surface styling to use rectangular 4-8px radii instead of oversized pill/card
+  backdrops.
+- Replaced blur-heavy extension-page backdrops with solid/linear layered
+  surfaces, tightened focus rings and disabled states, and added calmer loading
+  skeletons to the popup and side panel.
+- Improved empty/error/status copy in popup, side panel, and DevTools so failed
+  background connection, unsupported pages, empty vaults, and empty request
+  tables explain the next useful action instead of feeling blank.
+- Added a GUI audit guard that fails when page UI CSS reintroduces oversized
+  rounded backdrops or blur-heavy chrome.
+
 ### 2026-05-24 — TS-mirror drift cleanup + repo hygiene
 
 - **Phase 39.11** TS-mirror parity. `@match-top` / `@exclude-top` (TM #2784)

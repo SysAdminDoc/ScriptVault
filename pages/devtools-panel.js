@@ -313,7 +313,7 @@
       const message = filterText
         ? `No requests match "${filterText}".`
         : 'No network requests yet. Open a page that runs userscripts to capture activity.';
-      tr.innerHTML = `<td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted)">${escapeHtml(message)}</td>`;
+      tr.innerHTML = `<td colspan="6" class="table-empty-cell">${escapeHtml(message)}</td>`;
       tbody.appendChild(tr);
       return;
     }
@@ -446,7 +446,7 @@
       const message = filterText && executionScripts.length
         ? `No scripts match "${filterText}".`
         : 'No execution data yet. Scripts will appear here after they run.';
-      tr.innerHTML = `<td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted)">${escapeHtml(message)}</td>`;
+      tr.innerHTML = `<td colspan="6" class="table-empty-cell">${escapeHtml(message)}</td>`;
       tbody.appendChild(tr);
       return;
     }

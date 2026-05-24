@@ -103,7 +103,7 @@ const CollectionManager = (() => {
     linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
     var(--bg-row, #2a2a2a);
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-  border-radius: 24px;
+  border-radius: 8px;
   padding: 18px;
   cursor: pointer;
   transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
@@ -160,7 +160,7 @@ const CollectionManager = (() => {
 .sv-coll-badge {
   font-size: 10px;
   padding: 5px 8px;
-  border-radius: 999px;
+  border-radius: 8px;
   background: rgba(52, 211, 153, 0.16);
   border: 1px solid rgba(52, 211, 153, 0.2);
   color: #d1fae5;
@@ -195,7 +195,7 @@ const CollectionManager = (() => {
   align-items: center;
   gap: 4px;
   padding: 6px 10px;
-  border-radius: 999px;
+  border-radius: 8px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(127,127,127,0.12);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
@@ -220,7 +220,7 @@ const CollectionManager = (() => {
   padding: 10px 12px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
   font-size: 12px;
-  border-radius: 14px;
+  border-radius: 8px;
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(127,127,127,0.1);
   margin-bottom: 8px;
@@ -296,7 +296,7 @@ const CollectionManager = (() => {
   min-height: 38px;
   padding: 0 12px;
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-  border-radius: 14px;
+  border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)),
     var(--bg-input, #333);
@@ -349,13 +349,13 @@ const CollectionManager = (() => {
   flex-wrap: wrap;
   padding: 14px 16px;
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-  border-radius: 22px;
+  border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
     var(--bg-section-header, #252525);
   box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .sv-coll-toolbar-title {
   font-size: 16px;
@@ -366,7 +366,7 @@ const CollectionManager = (() => {
 .sv-coll-search {
   padding: 10px 12px;
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-  border-radius: 14px;
+  border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
     var(--bg-input, #333);
@@ -392,8 +392,8 @@ const CollectionManager = (() => {
   align-items: center;
   justify-content: center;
   animation: sv-coll-fade 0.15s ease;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 @keyframes sv-coll-fade {
   from { opacity: 0; }
@@ -405,7 +405,7 @@ const CollectionManager = (() => {
     var(--bg-header, #252525);
   color: var(--text-primary, #e0e0e0);
   border: 1px solid var(--panel-border-strong, rgba(148, 163, 184, 0.28));
-  border-radius: 24px;
+  border-radius: 8px;
   width: 540px;
   max-width: 95vw;
   max-height: 85vh;
@@ -475,7 +475,7 @@ const CollectionManager = (() => {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-  border-radius: 14px;
+  border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
     var(--bg-input, #333);
@@ -503,7 +503,7 @@ const CollectionManager = (() => {
   max-height: 200px;
   overflow-y: auto;
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-  border-radius: 18px;
+  border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
     var(--bg-row, #2a2a2a);
@@ -547,7 +547,7 @@ const CollectionManager = (() => {
   padding: 56px 28px;
   color: var(--text-muted, #707070);
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-  border-radius: 24px;
+  border-radius: 8px;
   background:
     radial-gradient(circle at top center, rgba(52, 211, 153, 0.14), transparent 48%),
     linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
@@ -573,7 +573,7 @@ const CollectionManager = (() => {
     var(--bg-header, #252525);
   color: var(--text-primary, #e0e0e0);
   border: 1px solid rgba(52, 211, 153, 0.24);
-  border-radius: 16px;
+  border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
   z-index: 10001;
@@ -587,13 +587,13 @@ const CollectionManager = (() => {
   }
 
   .sv-coll-card {
-    border-radius: 20px;
+    border-radius: 8px;
     padding: 16px;
   }
 
   .sv-coll-toolbar {
     padding: 12px;
-    border-radius: 18px;
+    border-radius: 8px;
   }
 
   .sv-coll-search {
