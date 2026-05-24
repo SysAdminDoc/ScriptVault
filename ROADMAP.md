@@ -238,12 +238,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
 
 #### Now - v3.12.0 Trust and Release Stabilization
 
-- [ ] P0 - Reconcile public release artifacts to v3.11.0+
+- [x] P0 - Reconcile public release artifacts to v3.11.0+
   - Why: Users should not see v2.3.4 as the latest GitHub Release when manifests/tags are v3.11.0.
   - Evidence: L01, L08, L17, H001.
   - Touches: `CHANGELOG.md`, `README.md`, GitHub Release artifacts, `build.sh`, `manifest.json`, `manifest-firefox.json`.
   - Acceptance: GitHub Releases, tags, manifests, README, changelog, packaged ZIP/XPI names, and root artifacts all agree or clearly label unreleased builds.
   - Verify: `gh release list --limit 5`; `git tag --list 'v*'`; inspect generated package manifests.
+  - Status: Shipped 2026-05-24. GitHub Release `v3.11.0` now exists as latest with `ScriptVault-v3.11.0.zip`; the stale root Firefox v2.1.7 XPI was removed locally; `npm run release:check:public` verifies package/manifests/README/changelog/tag/root-artifact/latest-release/asset alignment.
 
 - [ ] P0 - Align release runbook, CWS API v2 tooling, and CI audit policy
   - Why: Release docs currently disagree with installed publishing tooling and CI audit behavior.
