@@ -30,16 +30,22 @@ describe('TS runtime module generator', () => {
         output: 'modules/npm-resolve.js',
         exportName: 'NpmResolver',
       }),
+      expect.objectContaining({
+        id: 'quota-manager',
+        source: 'src/modules/quota-manager.ts',
+        output: 'modules/quota-manager.js',
+        exportName: 'QuotaManager',
+      }),
     ]));
   });
 
   it('generates runtime-compatible artifacts from TypeScript', async () => {
-    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'npm-resolve');
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'quota-manager');
     const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
 
-    expect(text).toContain('Generated from src/modules/npm-resolve.ts');
-    expect(text).toContain('const NpmResolver = (() => {');
-    expect(text).toContain('return module.exports.default || module.exports.NpmResolver || module.exports;');
+    expect(text).toContain('Generated from src/modules/quota-manager.ts');
+    expect(text).toContain('const QuotaManager = (() => {');
+    expect(text).toContain('return module.exports.default || module.exports.QuotaManager || module.exports;');
     expect(text).not.toContain('export default');
   });
 
