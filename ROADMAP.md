@@ -466,9 +466,9 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
 - Collapse runtime JS and TypeScript mirror to one authoritative source.
 - Build a full release trust pipeline with signatures, SBOM, source ZIP, package diff, rollback rehearsal, and CWS/AMO status checks.
 - Replace the legacy XHR bridge with dedicated user-script messaging while keeping tested fallback behavior.
-- Add per-script trust receipts with provenance, dependency hashes, permission changes, and rollback.
-- Add sync cockpit and user-owned S3-compatible sync provider.
-- Add measured large-library virtualization and local health diagnostics.
+- Add per-script trust receipts with provenance, dependency hashes, permission changes, and rollback. (Partial: trust-receipt scaffolding shipped via `bg/signing.js` + `createScriptTrustReceipt`; receipts ledger via `BackupScheduler.recordReceipt` covers restore/import; dependency-hash + permission-change diff still open.)
+- ~~Add sync cockpit and user-owned S3-compatible sync provider.~~ — Sync cockpit shipped 2026-05-23 (sync safety cockpit); S3-compatible provider shipped 2026-05-24. **Done.**
+- Add measured large-library virtualization and local health diagnostics. (Partial: large-library perf harness + threshold gate shipped 2026-05-24 via `scripts/smoke-large-library.mjs` + `tests/large-library-perf.test.js`. Virtualization + health diagnostics still open.)
 
 ### Explicit Non-Goals
 
