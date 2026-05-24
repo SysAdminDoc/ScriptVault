@@ -1,7 +1,7 @@
 /**
  * ScriptVault GitHub Gist Integration Module
  * Import/export userscripts to GitHub Gists, sync changes, and browse user Gists.
- * Uses GitHub Personal Access Token stored encrypted in chrome.storage.local.
+ * Uses a GitHub Personal Access Token stored in chrome.storage.local.
  */
 const GistIntegration = (() => {
     'use strict';
@@ -1204,6 +1204,11 @@ const GistIntegration = (() => {
             };
             maskedRow.appendChild(verifyBtn);
             tokenSection.appendChild(maskedRow);
+
+            const disclosure = document.createElement('div');
+            disclosure.style.cssText = 'font-size:11px;color:var(--text-muted,#707070);line-height:1.5;margin-bottom:12px;';
+            disclosure.textContent = 'Token storage: gist_pat in chrome.storage.local. ScriptVault can clear the local copy here; revoke the token itself in GitHub settings if it should stop working everywhere.';
+            tokenSection.appendChild(disclosure);
         } else {
             const inputRow = document.createElement('div');
             inputRow.className = 'gi-input-group';

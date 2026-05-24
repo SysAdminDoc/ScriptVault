@@ -188,17 +188,25 @@ globalThis.__resetStorageMock = () => {
   globalThis.indexedDB = new IDBFactory();
 };
 
-// Mock crypto.randomUUID
-if (!globalThis.crypto?.randomUUID) {
-  const origCrypto = globalThis.crypto || {};
-  globalThis.crypto = {
-    ...origCrypto,
-    randomUUID: () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+// Mock crypto pieces that are absent in some Vitest worker pools.
+if (!globalThis.crypto) {
+  globalThis.crypto = {};
+}
+if (!globalThis.crypto.randomUUID) {
+  Object.defineProperty(globalThis.crypto, 'randomUUID', {
+    configurable: true,
+    value: () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
       const r = Math.random() * 16 | 0;
       return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
     }),
-    subtle: origCrypto.subtle || {
+  });
+}
+if (!globalThis.crypto.subtle?.digest) {
+  Object.defineProperty(globalThis.crypto, 'subtle', {
+    configurable: true,
+    value: {
+      ...(globalThis.crypto.subtle || {}),
       digest: vi.fn().mockResolvedValue(new ArrayBuffer(32)),
     },
-  };
+  });
 }

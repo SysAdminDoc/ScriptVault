@@ -933,6 +933,26 @@ if (typeof CloudSyncProviders !== 'undefined') {
     requiresAuth: false,
     requiresOAuth: false,
     isZeroConfig: true,
+    supportsManualSync: true,
+    supportsDryRun: false,
+
+    getStorageDisclosure(settings = {}) {
+      const fields = [
+        { key: 'easycloud_connected', label: 'EasyCloud connected flag', type: 'metadata', present: false },
+        { key: 'easycloud_deviceId', label: 'EasyCloud device ID', type: 'metadata', present: false },
+        { key: 'easycloud_userEmail', label: 'Connected Google account email', type: 'metadata', present: false },
+        { key: 'easycloud_userName', label: 'Connected Google account name', type: 'metadata', present: false },
+        { key: 'chrome.identity token cache', label: 'Google OAuth token cache managed by Chrome', type: 'token', present: false },
+      ];
+      return {
+        storage: 'chrome.storage.local + chrome.identity',
+        protection: 'Extension-scoped browser storage plus Chrome identity token cache; ScriptVault does not persist EasyCloud OAuth tokens directly.',
+        fields,
+        hasStoredSecrets: false,
+        revokeAction: 'Remove the Chrome identity cached token and clear EasyCloud local metadata.',
+        notes: 'EasyCloud uses chrome.identity for zero-config Google Drive app-data sync.'
+      };
+    },
 
     async connect() {
       return EasyCloudSync.connect();

@@ -5967,8 +5967,22 @@
                         <span id="lastSyncTime" style="color:var(--text-secondary)">Never</span>
                     </div>
                     <div class="setting-row">
+                        <span class="label-text">Health:</span>
+                        <span id="syncHealthStatus" class="utility-inline-status" role="status" aria-live="polite">Not checked</span>
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Token storage:</span>
+                        <span id="syncStorageDisclosure" class="utility-inline-status">Choose a provider to inspect stored sync credentials.</span>
+                    </div>
+                    <div class="setting-row">
                         <button type="button" class="btn" id="btnSyncNow">Sync Now</button>
+                        <button type="button" class="btn" id="btnSyncCheckHealth">Check Health</button>
+                        <button type="button" class="btn" id="btnSyncPreview">Preview Sync</button>
+                        <button type="button" class="btn btn-danger" id="btnSyncRevoke">Revoke / Clear Access</button>
                         <button type="button" class="btn" id="btnSyncReset">Clear Log</button>
+                    </div>
+                    <div class="setting-row">
+                        <pre id="syncPreviewSummary" class="utility-inline-status" aria-live="polite" style="display:none; white-space:pre-wrap; width:100%; margin:0; padding:10px; background:var(--bg-input); border-radius:4px;"></pre>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Recent Sync Log:</span>

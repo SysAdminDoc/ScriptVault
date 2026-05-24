@@ -26,6 +26,16 @@ export interface CloudSyncProvider {
   requiresAuth: boolean;
   requiresOAuth: boolean;
   isZeroConfig: boolean;
+  supportsManualSync?: boolean;
+  supportsDryRun?: boolean;
+  getStorageDisclosure?(settings: unknown): {
+    storage: string;
+    protection: string;
+    fields: Array<{ key: string; label: string; type: string; present: boolean }>;
+    hasStoredSecrets: boolean;
+    revokeAction: string;
+    notes: string;
+  };
   connect(): Promise<ConnectResult>;
   disconnect(): Promise<DisconnectResult>;
   upload(data: unknown, settings: unknown): Promise<{ success: boolean; timestamp: number }>;
@@ -1146,6 +1156,32 @@ if (typeof CloudSyncProviders !== 'undefined') {
     requiresAuth: false,
     requiresOAuth: false,
     isZeroConfig: true,
+    supportsManualSync: true,
+    supportsDryRun: false,
+
+    getStorageDisclosure(_settings: unknown): {
+      storage: string;
+      protection: string;
+      fields: Array<{ key: string; label: string; type: string; present: boolean }>;
+      hasStoredSecrets: boolean;
+      revokeAction: string;
+      notes: string;
+    } {
+      return {
+        storage: 'chrome.storage.local + chrome.identity',
+        protection: 'Extension-scoped browser storage plus Chrome identity token cache; ScriptVault does not persist EasyCloud OAuth tokens directly.',
+        fields: [
+          { key: 'easycloud_connected', label: 'EasyCloud connected flag', type: 'metadata', present: false },
+          { key: 'easycloud_deviceId', label: 'EasyCloud device ID', type: 'metadata', present: false },
+          { key: 'easycloud_userEmail', label: 'Connected Google account email', type: 'metadata', present: false },
+          { key: 'easycloud_userName', label: 'Connected Google account name', type: 'metadata', present: false },
+          { key: 'chrome.identity token cache', label: 'Google OAuth token cache managed by Chrome', type: 'token', present: false },
+        ],
+        hasStoredSecrets: false,
+        revokeAction: 'Remove the Chrome identity cached token and clear EasyCloud local metadata.',
+        notes: 'EasyCloud uses chrome.identity for zero-config Google Drive app-data sync.',
+      };
+    },
 
     async connect(): Promise<ConnectResult> {
       return EasyCloudSync.connect();
