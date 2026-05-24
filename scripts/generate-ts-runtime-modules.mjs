@@ -13,6 +13,19 @@ const DEFAULT_ROOT = resolve(SCRIPT_DIR, '..');
 
 export const TS_RUNTIME_MODULES = [
   {
+    id: 'shared-utils',
+    source: 'src/shared/utils.ts',
+    output: 'shared/utils.js',
+    moduleName: 'SharedUtils',
+    globalExports: [
+      'escapeHtml',
+      'generateId',
+      'sanitizeUrl',
+      'classifyInstallSource',
+      'formatBytes',
+    ],
+  },
+  {
     id: 'error-log',
     source: 'src/modules/error-log.ts',
     output: 'modules/error-log.js',

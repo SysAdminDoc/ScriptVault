@@ -13,6 +13,19 @@ describe('TS runtime module generator', () => {
   it('declares the promoted error-log module', () => {
     expect(TS_RUNTIME_MODULES).toEqual(expect.arrayContaining([
       expect.objectContaining({
+        id: 'shared-utils',
+        source: 'src/shared/utils.ts',
+        output: 'shared/utils.js',
+        moduleName: 'SharedUtils',
+        globalExports: expect.arrayContaining([
+          'escapeHtml',
+          'generateId',
+          'sanitizeUrl',
+          'classifyInstallSource',
+          'formatBytes',
+        ]),
+      }),
+      expect.objectContaining({
         id: 'error-log',
         source: 'src/modules/error-log.ts',
         output: 'modules/error-log.js',
@@ -122,6 +135,16 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const ScriptStorage = StorageModule.ScriptStorage;');
     expect(text).toContain('const setScriptChangeListener = StorageModule.setScriptChangeListener;');
     expect(text).not.toContain('const debugLog = StorageModule.debugLog;');
+  });
+
+  it('generates multi-global runtime artifacts for shared utilities', async () => {
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'shared-utils');
+    const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
+
+    expect(text).toContain('Generated from src/shared/utils.ts');
+    expect(text).toContain('const SharedUtils = (() => {');
+    expect(text).toContain('const escapeHtml = SharedUtils.escapeHtml;');
+    expect(text).toContain('const classifyInstallSource = SharedUtils.classifyInstallSource;');
   });
 
   it('keeps committed runtime artifacts in sync', async () => {

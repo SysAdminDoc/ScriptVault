@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
-import { escapeHtml, formatBytes, generateId, sanitizeUrl } from '../src/shared/utils.ts';
+import { classifyInstallSource, escapeHtml, formatBytes, generateId, sanitizeUrl } from '../src/shared/utils.ts';
 import { ScriptAnalyzer } from '../src/bg/analyzer.ts';
 import { ResourceCache } from '../src/modules/resources.ts';
 import { XhrManager } from '../src/modules/xhr.ts';
@@ -128,6 +128,8 @@ describe('source utils', () => {
     expect(sanitizeUrl('file:///C:/Users/example/secrets.txt')).toBeNull();
     expect(sanitizeUrl('https://example.com/app')).toBe('https://example.com/app');
     expect(sanitizeUrl('//cdn.example.com/lib.js')).toBe('//cdn.example.com/lib.js');
+    expect(classifyInstallSource('https://greasyfork.org/en/scripts/123/foo.user.js')).toMatchObject({ id: 'greasyfork', tone: 'good' });
+    expect(classifyInstallSource('not-a-url')).toMatchObject({ id: 'other', tone: 'warn' });
     expect(formatBytes(0)).toBe('0 B');
     expect(formatBytes(1024)).toBe('1 KB');
     expect(formatBytes(1024 ** 4)).toBe('1 TB');

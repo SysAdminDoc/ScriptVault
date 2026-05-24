@@ -11,7 +11,8 @@
     {
       "runtime": "shared/utils.js",
       "sources": ["src/shared/utils.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs with multi-global output."
     },
     {
       "runtime": "modules/sync-providers.js",
