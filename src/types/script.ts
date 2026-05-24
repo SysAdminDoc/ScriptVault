@@ -27,6 +27,16 @@ export interface ScriptMeta {
   include: string[];
   exclude: string[];
   excludeMatch: string[];
+  /**
+   * Phase 39.11 — TM #2784 top-level-origin gates. Match patterns tested
+   * against `window.top.location.href` instead of `window.location.href`.
+   * `matchTop`: script runs only when the top frame's URL matches at least
+   * one pattern (cross-origin top → bail conservatively).
+   * `excludeTop`: script bails when the top frame's URL matches any
+   * pattern (cross-origin top → bail conservatively).
+   */
+  matchTop: string[];
+  excludeTop: string[];
   'run-at': RunAt;
   'inject-into': string;
   noframes: boolean;

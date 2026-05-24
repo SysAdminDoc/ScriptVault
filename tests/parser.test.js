@@ -542,3 +542,4 @@ describe('parseUserscript', () => {
     expect(meta.tag).toEqual(['tools,utility']);
   });
 });
+

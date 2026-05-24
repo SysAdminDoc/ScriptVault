@@ -93,6 +93,50 @@ ${req.code}
 `;
   })();
 
+  // Phase 39.11 — @match-top / @exclude-top runtime gates (TM #2784).
+  // Patterns are tested against `window.top.location.href`. Cross-origin
+  // top frames throw on access, so we treat opaque top as:
+  //   - "no match" for @match-top (do not run — author asked for a specific
+  //     top origin we can't verify),
+  //   - "match" for @exclude-top (do not run — author asked to keep the
+  //     script away from frames whose top we can't audit).
+  // The matcher lives inside the wrapper so it doesn't depend on the
+  // background's `matchPattern` helper.
+  const topOriginGuard: string = ((): string => {
+    const matchTop: string[] = Array.isArray(meta.matchTop) ? meta.matchTop : [];
+    const excludeTop: string[] = Array.isArray(meta.excludeTop) ? meta.excludeTop : [];
+    if (matchTop.length === 0 && excludeTop.length === 0) return '';
+    const patternsToLiteral = (arr: readonly string[]): string =>
+      arr
+        .map((p) => {
+          const m = p.match(/^\/(.+)\/([gimsuy]*)$/);
+          if (m) return `{re: new RegExp(${JSON.stringify(m[1])}, ${JSON.stringify(m[2])})}`;
+          return `{glob: ${JSON.stringify(p)}}`;
+        })
+        .join(', ');
+    return `
+  // ============ @match-top / @exclude-top Guard (Phase 39.11) ============
+  {
+    let __topUrl;
+    try { __topUrl = window.top && window.top.location && window.top.location.href; } catch (_e) { __topUrl = null; }
+    const __testTop = (pattern) => {
+      if (pattern.re) return pattern.re.test(__topUrl);
+      const escaped = pattern.glob.replace(/[.+^$()|[\\]{}]/g, '\\\\$&').replace(/\\*/g, '.*').replace(/\\?/g, '.');
+      try { return new RegExp('^' + escaped + '$').test(__topUrl); } catch { return false; }
+    };
+    ${matchTop.length > 0 ? `
+    const __matchTopPatterns = [${patternsToLiteral(matchTop)}];
+    if (!__topUrl) return; // Cross-origin top → cannot verify match-top → bail.
+    if (!__matchTopPatterns.some(__testTop)) return;` : ''}
+    ${excludeTop.length > 0 ? `
+    const __excludeTopPatterns = [${patternsToLiteral(excludeTop)}];
+    if (!__topUrl) return; // Cross-origin top → conservatively bail.
+    if (__excludeTopPatterns.some(__testTop)) return;` : ''}
+  }
+  // ============ End @match-top / @exclude-top Guard ============
+`;
+  })();
+
   // Build the @run-in guard block
   const runInGuard: string =
     meta['run-in'] === 'incognito-tabs'
@@ -167,6 +211,7 @@ ${req.code}
 
   ${runInGuard}
   ${regexGuardBlock}
+  ${topOriginGuard}
   const scriptId = ${JSON.stringify(script.id)};
   const meta = ${JSON.stringify(meta)};
   const grants = ${JSON.stringify(grants)};
