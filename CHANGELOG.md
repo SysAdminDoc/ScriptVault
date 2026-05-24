@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Shared utilities TypeScript promotion
+
+- Promoted `shared/utils.js` to a generated runtime artifact from
+  `src/shared/utils.ts` using multi-global output for `escapeHtml`,
+  `generateId`, `sanitizeUrl`, `classifyInstallSource`, and `formatBytes`.
+- Ported `classifyInstallSource` into the TypeScript shared source so install
+  and update source-trust classification is no longer JS-only.
+- Added generated-runtime shared utility coverage for global bindings, URL
+  sanitization, install-source classification, ID generation, and byte
+  formatting.
+
 ### 2026-05-24 — I18n TypeScript promotion
 
 - Promoted `modules/i18n.js` to a generated runtime artifact from
