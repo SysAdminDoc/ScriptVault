@@ -14,6 +14,9 @@ reset drift in the TS source. `modules/npm-resolve.js` was then promoted
 after reconciling explicit `npm:pkg@latest` registry resolution. The
 `modules/quota-manager.js` runtime artifact now also comes from the TS
 source, with runtime tests covering the stronger TS cleanup semantics.
+`modules/userstyles.js` is now generated from `src/modules/userstyles.ts`,
+completing the current low-dependency tranche and carrying over the TS
+implementation's prior-CSS removal tracking plus scoped `@match` conversion.
 
 ## 1. Problem statement
 
@@ -179,7 +182,7 @@ Pilot exit criteria:
 3. **Pilot module.** Promote `modules/error-log.js`.
 4. **Low-dependency modules.** Promote `modules/notifications.js`,
    `modules/npm-resolve.js`, `modules/userstyles.js`, and
-   `modules/quota-manager.js`.
+   `modules/quota-manager.js`. Shipped 2026-05-24.
 5. **Storage/resource layer.** Promote `modules/storage.js`,
    `modules/xhr.js`, `modules/resources.js`, and the internal-host guard.
 6. **Sync/import modules.** Promote `sync-easycloud`, `backup-scheduler`,
@@ -259,4 +262,7 @@ pilot should avoid that broader build-system change.
    Shipped 2026-05-24.
 4. Mark `modules/error-log.js` as generated or compatibility-only. Shipped
    2026-05-24.
-5. Promote the next low-dependency module (`modules/userstyles.js`).
+5. Promote the next low-dependency module (`modules/userstyles.js`). Shipped
+   2026-05-24.
+6. Start the storage/resource-layer tranche with `modules/xhr.js` or
+   `modules/internal-host-guard.js`.

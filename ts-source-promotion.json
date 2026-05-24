@@ -75,7 +75,8 @@
     {
       "runtime": "modules/userstyles.js",
       "sources": ["src/modules/userstyles.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "modules/public-api.js",

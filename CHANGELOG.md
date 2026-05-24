@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — UserStyles TypeScript promotion
+
+- Promoted `modules/userstyles.js` to a TS-derived runtime artifact from
+  `src/modules/userstyles.ts`, completing the current low-dependency module
+  tranche in the TypeScript authoritative-source migration.
+- Added `tests/userstyles.test.js` to exercise the generated runtime artifact
+  for prior-CSS removal, scoped `@match` conversion, and full UserCSS metadata
+  edit handling.
+- Tightened `scripts/check-ts-source-drift.mjs` so first-time promotion commits
+  are allowed when the promotion map changes from mirrored to promoted, while
+  later promoted JS-only edits still fail the gate.
+
 ### 2026-05-24 — Quota manager TypeScript promotion
 
 - Promoted `modules/quota-manager.js` to a generated runtime artifact from

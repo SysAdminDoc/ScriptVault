@@ -36,6 +36,12 @@ describe('TS runtime module generator', () => {
         output: 'modules/quota-manager.js',
         exportName: 'QuotaManager',
       }),
+      expect.objectContaining({
+        id: 'userstyles',
+        source: 'src/modules/userstyles.ts',
+        output: 'modules/userstyles.js',
+        exportName: 'UserStylesEngine',
+      }),
     ]));
   });
 
