@@ -144,6 +144,9 @@ const STORAGE_KEY_ORIGINS = 'publicapi_trusted_origins';
 const MAX_AUDIT_ENTRIES = 500;
 const RATE_LIMIT_WINDOW = 1000; // ms
 const RATE_LIMIT_MAX = 10;      // requests per window
+const RATE_LIMIT_SENDER_CAP = 200;
+const MAX_TRUSTED_ORIGINS = 128;
+const MAX_TRUSTED_ORIGIN_LENGTH = 256;
 
 /* ------------------------------------------------------------------ */
 /*  State                                                              */
@@ -163,6 +166,7 @@ const MAX_CODE_SIZE = 5 * 1024 * 1024;
 const MAX_FETCH_SIZE = 5 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 15_000;
 const WEBHOOK_TIMEOUT_MS = 10_000;
+const SCRIPT_SIZE_ERROR = 'Script file exceeds maximum allowed size (5 MB)';
 
 function getRuntimeHooks(): RuntimeHooks {
   return globalThis as RuntimeHooks;
@@ -220,6 +224,142 @@ function isInternalHost(rawHost: string): boolean {
   }
 
   return false;
+}
+
+function normalizeTrustedOrigin(origin: unknown): string {
+  if (typeof origin !== 'string') throw new Error('Trusted origin must be a string');
+  const trimmed = origin.trim();
+  if (!trimmed) throw new Error('Trusted origin cannot be empty');
+  if (trimmed === '*') throw new Error('Wildcard trusted origins are not allowed');
+  if (trimmed.length > MAX_TRUSTED_ORIGIN_LENGTH) throw new Error('Trusted origin is too long');
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error('Trusted origin is malformed');
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Trusted origin must use https://');
+  }
+  if (!parsed.hostname || isInternalHost(parsed.hostname)) {
+    throw new Error('Trusted origin points at an internal/loopback host');
+  }
+  return parsed.origin;
+}
+
+function normalizeTrustedOrigins(origins: unknown): string[] {
+  if (!Array.isArray(origins)) return [];
+  if (origins.length > MAX_TRUSTED_ORIGINS) {
+    throw new Error(`Too many trusted origins; maximum is ${MAX_TRUSTED_ORIGINS}`);
+  }
+
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const origin of origins) {
+    const value = normalizeTrustedOrigin(origin);
+    if (!seen.has(value)) {
+      seen.add(value);
+      normalized.push(value);
+    }
+  }
+  return normalized;
+}
+
+function normalizeStoredTrustedOrigins(origins: unknown): string[] {
+  if (!Array.isArray(origins)) return [];
+
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const origin of origins.slice(0, MAX_TRUSTED_ORIGINS)) {
+    try {
+      const value = normalizeTrustedOrigin(origin);
+      if (!seen.has(value)) {
+        seen.add(value);
+        normalized.push(value);
+      }
+    } catch {
+      // Ignore legacy or corrupted origins on load; setTrustedOrigins surfaces
+      // validation errors for new writes.
+    }
+  }
+  return normalized;
+}
+
+function normalizeIncomingOrigin(origin: unknown): string | null {
+  try {
+    return normalizeTrustedOrigin(origin);
+  } catch {
+    return null;
+  }
+}
+
+function validateWebInstallUrl(url: string): string | null {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return 'Invalid URL';
+  }
+  if (parsedUrl.protocol !== 'https:') {
+    return 'Only https:// URLs are allowed for script installation';
+  }
+  if (isInternalHost(parsedUrl.hostname)) {
+    return 'Internal URLs are not allowed';
+  }
+  return null;
+}
+
+function measuredUtf8Length(text: string): number {
+  return new TextEncoder().encode(text).byteLength;
+}
+
+async function readResponseTextBounded(resp: Response, maxBytes: number): Promise<string> {
+  const contentLength = resp.headers?.get?.('content-length');
+  if (contentLength) {
+    const declaredBytes = Number.parseInt(contentLength, 10);
+    if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+      throw new Error(SCRIPT_SIZE_ERROR);
+    }
+  }
+
+  const body = resp.body;
+  if (body && typeof body.getReader === 'function') {
+    const reader = body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        const chunk = value instanceof Uint8Array ? value : new Uint8Array(value);
+        totalBytes += chunk.byteLength;
+        if (totalBytes > maxBytes) {
+          try { await reader.cancel(); } catch { /* ignore cancel errors */ }
+          throw new Error(SCRIPT_SIZE_ERROR);
+        }
+        chunks.push(chunk);
+      }
+    } finally {
+      try { reader.releaseLock(); } catch { /* ignore release errors */ }
+    }
+
+    const decoder = new TextDecoder();
+    let text = '';
+    for (let i = 0; i < chunks.length; i++) {
+      text += decoder.decode(chunks[i], { stream: i < chunks.length - 1 });
+    }
+    text += decoder.decode();
+    return text;
+  }
+
+  const text = await resp.text();
+  if (measuredUtf8Length(text) > maxBytes) {
+    throw new Error(SCRIPT_SIZE_ERROR);
+  }
+  return text;
 }
 
 const ARRAY_META_KEYS: Record<string, keyof ParsedMeta> = {
@@ -345,7 +485,7 @@ async function loadState(): Promise<void> {
     };
     _auditLog = (result[STORAGE_KEY_AUDIT] as AuditEntry[] | undefined) ?? [];
     _webhooks = (result[STORAGE_KEY_WEBHOOKS] as Record<string, WebhookConfig> | undefined) ?? {};
-    _trustedOrigins = (result[STORAGE_KEY_ORIGINS] as string[] | undefined) ?? [];
+    _trustedOrigins = normalizeStoredTrustedOrigins(result[STORAGE_KEY_ORIGINS]);
   } catch {
     _permissions = { ...DEFAULT_PERMISSIONS };
     _auditLog = [];
@@ -440,6 +580,15 @@ function checkRateLimit(senderId: string): boolean {
   }
 
   timestamps.push(now);
+
+  if (_rateLimitMap.size > RATE_LIMIT_SENDER_CAP) {
+    for (const [key, values] of _rateLimitMap) {
+      if (values.length === 0 || (values[values.length - 1] ?? 0) < cutoff) {
+        _rateLimitMap.delete(key);
+      }
+    }
+  }
+
   return true;
 }
 
@@ -1053,17 +1202,9 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
     }
 
     // Validate URL — only allow https: to prevent SSRF to local/internal resources
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      return { type: 'scriptvault:install:response', error: 'Invalid URL' };
-    }
-    if (parsedUrl.protocol !== 'https:') {
-      return { type: 'scriptvault:install:response', error: 'Only https:// URLs are allowed for script installation' };
-    }
-    if (isInternalHost(parsedUrl.hostname)) {
-      return { type: 'scriptvault:install:response', error: 'Internal URLs are not allowed' };
+    const urlError = validateWebInstallUrl(url);
+    if (urlError) {
+      return { type: 'scriptvault:install:response', error: urlError };
     }
 
     // Authorize before fetching to prevent SSRF
@@ -1081,15 +1222,11 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
         const resp: Response = await fetch(url, { signal: controller.signal });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
-        // Enforce size limit before reading the full body
-        const contentLength = resp.headers.get('content-length');
-        if (contentLength && parseInt(contentLength, 10) > MAX_FETCH_SIZE) {
-          throw new Error('Script file exceeds maximum allowed size (5 MB)');
+        if (resp.url) {
+          const finalUrlError = validateWebInstallUrl(resp.url);
+          if (finalUrlError) throw new Error(finalUrlError);
         }
-        code = await resp.text();
-        if (code.length > MAX_FETCH_SIZE) {
-          throw new Error('Script file exceeds maximum allowed size (5 MB)');
-        }
+        code = await readResponseTextBounded(resp, MAX_FETCH_SIZE);
       } finally {
         clearTimeout(timeoutId);
       }
@@ -1235,7 +1372,8 @@ async function dispatchExternal(message: ExternalMessage, sender: SenderLike): P
 
 function dispatchWebMessage(event: MessageEvent): void {
   // Validate origin — deny-by-default when no trusted origins are configured
-  if (_trustedOrigins.length === 0 || (!_trustedOrigins.includes(event.origin) && !_trustedOrigins.includes('*'))) {
+  const origin = normalizeIncomingOrigin(event.origin);
+  if (_trustedOrigins.length === 0 || !origin || !_trustedOrigins.includes(origin)) {
     return; // ignore untrusted origins
   }
 
@@ -1249,7 +1387,7 @@ function dispatchWebMessage(event: MessageEvent): void {
   if (typeof msg.type !== 'string') return;
   if (!msg.type.startsWith('scriptvault:')) return;
 
-  const senderId = `web:${event.origin}`;
+  const senderId = `web:${origin}`;
   if (!checkRateLimit(senderId)) {
     // Silently drop rate-limited web messages
     return;
@@ -1258,14 +1396,14 @@ function dispatchWebMessage(event: MessageEvent): void {
   const handler = WEB_HANDLERS[msg.type];
   if (!handler) return;
 
-  audit(msg.type, { origin: event.origin }, msg, 'processing');
+  audit(msg.type, { origin }, msg, 'processing');
 
-  handler(msg, event.origin).then(response => {
+  handler(msg, origin).then(response => {
     if (response && event.source) {
       try {
         (event.source as WindowProxy).postMessage(
           response,
-          event.origin === 'null' ? '*' : event.origin
+          origin
         );
       } catch { /* cross-origin post failed */ }
     }
@@ -1375,7 +1513,7 @@ const PublicAPI = {
    * Set trusted web page origins.
    */
   async setTrustedOrigins(origins: string[]): Promise<void> {
-    _trustedOrigins = Array.isArray(origins) ? origins.slice() : [];
+    _trustedOrigins = normalizeTrustedOrigins(origins);
     await saveTrustedOrigins();
   },
 

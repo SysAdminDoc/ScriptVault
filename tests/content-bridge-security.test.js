@@ -1,21 +1,54 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { JSDOM } from 'jsdom';
 
 const contentBridgeCode = readFileSync(resolve(process.cwd(), 'content.js'), 'utf8');
 const backgroundCoreCode = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 const wrapperBuilderCode = readFileSync(resolve(process.cwd(), 'src/background/wrapper-builder.ts'), 'utf8');
 
+function createBridgeWindow() {
+  const listeners = new Map();
+  const win = {
+    setTimeout,
+    clearTimeout,
+    addEventListener: vi.fn((type, listener) => {
+      const current = listeners.get(type) || [];
+      current.push(listener);
+      listeners.set(type, current);
+    }),
+    removeEventListener: vi.fn((type, listener) => {
+      const current = listeners.get(type) || [];
+      listeners.set(type, current.filter((item) => item !== listener));
+    }),
+    dispatchEvent: vi.fn((event) => {
+      for (const listener of listeners.get(event.type) || []) {
+        listener.call(win, event);
+      }
+      return true;
+    }),
+    postMessage: vi.fn((data) => {
+      queueMicrotask(() => {
+        win.dispatchEvent(new win.MessageEvent('message', { source: win, data }));
+      });
+    }),
+  };
+  win.MessageEvent = class MessageEvent {
+    constructor(type, init = {}) {
+      this.type = type;
+      this.source = init.source ?? null;
+      this.data = init.data;
+    }
+  };
+  return win;
+}
+
 function loadContentBridge() {
-  const dom = new JSDOM('<!doctype html><html><body></body></html>', {
-    url: 'https://example.com/page',
-    runScripts: 'outside-only',
-  });
+  const win = createBridgeWindow();
   const sendMessage = vi.fn().mockResolvedValue({ ok: true });
+  const extensionId = `test-extension-id-${Math.random().toString(36).slice(2)}`;
   const chromeMock = {
     runtime: {
-      id: 'test-extension-id',
+      id: extensionId,
       sendMessage,
       onMessage: {
         addListener: vi.fn(),
@@ -23,13 +56,13 @@ function loadContentBridge() {
     },
   };
 
-  const run = new dom.window.Function('chrome', contentBridgeCode);
-  run(chromeMock);
+  const run = new Function('window', 'chrome', contentBridgeCode);
+  run(win, chromeMock);
 
   return {
-    window: dom.window,
+    window: win,
     chromeMock,
-    channel: 'ScriptVault_test-extension-id',
+    channel: `ScriptVault_${extensionId}`,
   };
 }
 
