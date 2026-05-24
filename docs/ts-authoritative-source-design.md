@@ -8,7 +8,9 @@ Status update, 2026-05-24: the promotion map and first CI drift gate now
 ship as `ts-source-promotion.json` and
 `scripts/check-ts-source-drift.mjs`. The first pilot also shipped:
 `modules/error-log.js` is generated from `src/modules/error-log.ts` via
-`scripts/generate-ts-runtime-modules.mjs`.
+`scripts/generate-ts-runtime-modules.mjs`. `modules/notifications.js` was
+promoted next after reconciling notification cleanup-alarm and error-count
+reset drift in the TS source.
 
 ## 1. Problem statement
 
@@ -254,6 +256,5 @@ pilot should avoid that broader build-system change.
    Shipped 2026-05-24.
 4. Mark `modules/error-log.js` as generated or compatibility-only. Shipped
    2026-05-24.
-5. Promote the next low-dependency module (`modules/notifications.js`,
-   `modules/npm-resolve.js`, `modules/userstyles.js`, or
-   `modules/quota-manager.js`).
+5. Promote the next low-dependency module (`modules/npm-resolve.js`,
+   `modules/userstyles.js`, or `modules/quota-manager.js`).

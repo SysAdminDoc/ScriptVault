@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Notification TypeScript promotion
+
+- Promoted `modules/notifications.js` to the same TS-derived runtime artifact
+  path as ErrorLog, generated from `src/modules/notifications.ts` before
+  `background.js` is built.
+- Reconciled notification TS drift for fallback local click-context cleanup
+  alarms and post-threshold error-count reset behavior.
+- Extended TS runtime artifact checks and drift-gate expectations to cover two
+  promoted modules, and added runtime/source tests for local-context cleanup
+  plus error-count reset after notifications.
+
 ### 2026-05-24 — ErrorLog TypeScript promotion pilot
 
 - Promoted `modules/error-log.js` to a generated runtime artifact from

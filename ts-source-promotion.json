@@ -58,7 +58,8 @@
     {
       "runtime": "modules/notifications.js",
       "sources": ["src/modules/notifications.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "modules/sync-easycloud.js",
