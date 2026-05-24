@@ -4,6 +4,23 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Locale coverage CI gate
+
+- Added `scripts/check-locales.mjs` which audits `_locales/*/messages.json`,
+  `modules/i18n.js` runtime dict, and `pages/dashboard-i18n-v2.js`
+  dashboard dict for key-set parity, cross-source locale-set agreement,
+  and translation-coverage shortfalls.
+- Wired three npm scripts with documented severity tiers:
+  `npm run locale:check` (report only),
+  `npm run locale:check:gate` (fails on `_locales/` drift + cross-source
+  mismatches — the manifest-shipping surfaces), and
+  `npm run locale:check:strict` (also fails on inline-dict drift; opt-in
+  until the runtime-dict backfill lands).
+- Added `tests/check-locales-report.test.js` so the JSON contract + exit
+  codes are pinned in CI.
+- Documented the gate, surfaces, and follow-up backfill in
+  `docs/locale-coverage.md`.
+
 ### 2026-05-24 — Install-source trust badges + source-change warning
 
 - Added shared `classifyInstallSource(url)` helper in `shared/utils.js` that
