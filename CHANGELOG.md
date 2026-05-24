@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Public API web-install hardening
+
+- Hardened trusted web origins by normalizing entries to exact HTTPS origins,
+  deduplicating them, rejecting wildcard/insecure/internal origins, and
+  filtering legacy malformed entries on load.
+- Rechecked the final response URL after web-install redirects and bounded
+  chunked response reads without relying on `Content-Length`, preventing
+  internal redirect fetches and oversized streamed installs from being read.
+- Added Public API regressions for trusted-origin normalization, redirect
+  refusal, and chunked size enforcement, plus made the content-bridge security
+  suite independent from jsdom's static import path in Vitest workers.
+
 ### 2026-05-24 — Premium UX polish pass
 
 - Added a dashboard cohesion layer for search, table focus, empty states,

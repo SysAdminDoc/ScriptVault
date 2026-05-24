@@ -315,6 +315,74 @@ describe('PublicAPI', () => {
       origins.push('https://injected.com');
       expect(PublicAPI.getTrustedOrigins()).toHaveLength(1);
     });
+
+    it('normalizes origins to exact HTTPS origins and deduplicates them', async () => {
+      await PublicAPI.init();
+      await PublicAPI.setTrustedOrigins([
+        ' https://example.com/path?query=1#frag ',
+        'https://example.com/other',
+        'https://test.com:443/install',
+      ]);
+
+      expect(PublicAPI.getTrustedOrigins()).toEqual([
+        'https://example.com',
+        'https://test.com',
+      ]);
+      expect(chrome.storage.local.set).toHaveBeenLastCalledWith({
+        publicapi_trusted_origins: ['https://example.com', 'https://test.com'],
+      });
+    });
+
+    it('rejects wildcard, insecure, and internal trusted origins without changing the current list', async () => {
+      await PublicAPI.init();
+      await PublicAPI.setTrustedOrigins(['https://safe.example']);
+
+      await expect(PublicAPI.setTrustedOrigins(['*'])).rejects.toThrow(/wildcard/i);
+      await expect(PublicAPI.setTrustedOrigins(['http://safe.example'])).rejects.toThrow(/https/i);
+      await expect(PublicAPI.setTrustedOrigins(['https://localhost'])).rejects.toThrow(/internal|loopback/i);
+      expect(PublicAPI.getTrustedOrigins()).toEqual(['https://safe.example']);
+    });
+
+    it('drops legacy malformed trusted origins on load', async () => {
+      globalThis.__resetStorageMock();
+      await chrome.storage.local.set({
+        publicapi_trusted_origins: [
+          'https://legacy.example/path',
+          '*',
+          'http://insecure.example',
+          'https://localhost',
+        ],
+      });
+      PublicAPI = createFreshAPI();
+
+      await PublicAPI.init();
+
+      expect(PublicAPI.getTrustedOrigins()).toEqual(['https://legacy.example']);
+    });
+
+    it('uses normalized trusted origins when replying to web page messages', async () => {
+      const source = { postMessage: vi.fn() };
+
+      await PublicAPI.init();
+      await PublicAPI.setTrustedOrigins(['https://trusted.example/install']);
+      PublicAPI.handleWebMessage({
+        origin: 'https://trusted.example',
+        data: {
+          type: 'scriptvault:isInstalled',
+          name: 'Unknown Script',
+        },
+        source,
+      });
+      await flushPromises();
+
+      expect(source.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'scriptvault:isInstalled:response',
+          installed: false,
+        }),
+        'https://trusted.example',
+      );
+    });
   });
 
   describe('web install hardening', () => {
@@ -396,6 +464,93 @@ describe('PublicAPI', () => {
         error: 'Fetch failed',
         detail: 'Not a valid userscript (missing ==UserScript== header)',
       });
+    });
+
+    it('rejects redirects to internal install URLs before reading the response body', async () => {
+      const text = vi.fn().mockResolvedValue([
+        '// ==UserScript==',
+        '// @name Redirected',
+        '// ==/UserScript==',
+        'console.log("redirected");',
+      ].join('\n'));
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        url: 'https://127.0.0.1/redirected.user.js',
+        headers: { get: vi.fn(() => null) },
+        text,
+      });
+      PublicAPI = createFreshAPI({ fetchMock });
+      const source = { postMessage: vi.fn() };
+
+      await PublicAPI.init();
+      await PublicAPI.setPermissions({ installScript: 'allow' });
+      await PublicAPI.setTrustedOrigins(['https://trusted.example']);
+      PublicAPI.handleWebMessage({
+        origin: 'https://trusted.example',
+        data: {
+          type: 'scriptvault:install',
+          url: 'https://cdn.example/redirect.user.js',
+        },
+        source,
+      });
+      await flushPromises();
+
+      expect(text).not.toHaveBeenCalled();
+      expect(source.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'scriptvault:install:response',
+          error: 'Fetch failed',
+          detail: 'Internal URLs are not allowed',
+        }),
+        'https://trusted.example',
+      );
+    });
+
+    it('stops reading chunked installs that exceed the fetch cap without a content-length header', async () => {
+      const chunk = new Uint8Array(1024 * 1024);
+      let reads = 0;
+      const reader = {
+        read: vi.fn().mockImplementation(async () => {
+          reads += 1;
+          return reads <= 6 ? { done: false, value: chunk } : { done: true };
+        }),
+        cancel: vi.fn().mockResolvedValue(undefined),
+        releaseLock: vi.fn(),
+      };
+      const text = vi.fn();
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: vi.fn(() => null) },
+        body: { getReader: vi.fn(() => reader) },
+        text,
+      });
+      PublicAPI = createFreshAPI({ fetchMock });
+      const source = { postMessage: vi.fn() };
+
+      await PublicAPI.init();
+      await PublicAPI.setPermissions({ installScript: 'allow' });
+      await PublicAPI.setTrustedOrigins(['https://trusted.example']);
+      PublicAPI.handleWebMessage({
+        origin: 'https://trusted.example',
+        data: {
+          type: 'scriptvault:install',
+          url: 'https://cdn.example/chunked.user.js',
+        },
+        source,
+      });
+      await flushPromises();
+
+      expect(reader.cancel).toHaveBeenCalled();
+      expect(reader.releaseLock).toHaveBeenCalled();
+      expect(text).not.toHaveBeenCalled();
+      expect(source.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'scriptvault:install:response',
+          error: 'Fetch failed',
+          detail: 'Script file exceeds maximum allowed size (5 MB)',
+        }),
+        'https://trusted.example',
+      );
     });
   });
 
