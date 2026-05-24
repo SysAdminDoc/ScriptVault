@@ -127,6 +127,27 @@
       -webkit-tap-highlight-color: transparent;
     }
 
+    .install-skip-link {
+      position: absolute;
+      left: 18px;
+      top: 14px;
+      z-index: 1000;
+      transform: translateY(-160%);
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: transform 0.15s ease;
+    }
+
+    .install-skip-link:focus-visible {
+      transform: translateY(0);
+    }
+
     /* Focus styles for accessibility */
     :focus-visible {
       outline: 2px solid var(--accent);
@@ -1314,6 +1335,91 @@
       }
     }
 
+    @media (forced-colors: active) {
+      :root {
+        --bg-primary: Canvas;
+        --bg-secondary: Canvas;
+        --bg-tertiary: Canvas;
+        --bg-hover: Canvas;
+        --text-primary: CanvasText;
+        --text-secondary: CanvasText;
+        --text-muted: GrayText;
+        --accent: Highlight;
+        --accent-hover: Highlight;
+        --accent-bg: Canvas;
+        --blue: LinkText;
+        --blue-hover: LinkText;
+        --blue-bg: Canvas;
+        --danger: CanvasText;
+        --danger-bg: Canvas;
+        --warning: CanvasText;
+        --warning-bg: Canvas;
+        --border: CanvasText;
+        --shadow: none;
+      }
+
+      *, *::before, *::after {
+        box-shadow: none !important;
+        text-shadow: none !important;
+      }
+
+      body,
+      .container,
+      .header,
+      .content,
+      .install-skip-link,
+      .card,
+      .section,
+      .decision-hero,
+      .install-terminal,
+      .review-nav,
+      .code-container,
+      .CodeMirror {
+        background: Canvas !important;
+        color: CanvasText !important;
+        border-color: CanvasText !important;
+      }
+
+      button,
+      input,
+      select,
+      textarea,
+      .btn,
+      .review-nav button,
+      .match-list-toggle {
+        background: ButtonFace !important;
+        color: ButtonText !important;
+        border-color: ButtonText !important;
+      }
+
+      a,
+      .link,
+      .source-link {
+        color: LinkText !important;
+      }
+
+      :focus-visible,
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible,
+      .btn:focus-visible,
+      .match-list-toggle:focus-visible {
+        outline: 2px solid Highlight !important;
+        outline-offset: 2px;
+        box-shadow: none !important;
+      }
+
+      .status-good,
+      .status-warn,
+      .status-neutral,
+      .decision-hero-badge {
+        background: Highlight !important;
+        color: HighlightText !important;
+        border-color: Highlight !important;
+      }
+    }
+
     /* Responsive */
     @media (max-width: 900px) {
       .install-layout {
@@ -1370,6 +1476,7 @@
   </style>
 </head>
 <body>
+  <a class="install-skip-link" href="#content">Skip to install details</a>
   <div class="container">
     <div class="header">
       <div class="header-left">

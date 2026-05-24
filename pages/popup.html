@@ -123,6 +123,27 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        .popup-skip-link {
+            position: absolute;
+            left: 8px;
+            top: 6px;
+            z-index: 1000;
+            transform: translateY(-140%);
+            padding: 6px 9px;
+            border: 1px solid var(--popup-border);
+            border-radius: var(--popup-radius-control);
+            background: var(--popup-bg-raised);
+            color: var(--popup-text);
+            font-size: 12px;
+            font-weight: 700;
+            text-decoration: none;
+            transition: transform 0.15s ease;
+        }
+
+        .popup-skip-link:focus-visible {
+            transform: translateY(0);
+        }
+
         button, input, select, a {
             touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
@@ -365,8 +386,8 @@
 
         .script-toggle {
             position: relative;
-            width: 36px;
-            height: 20px;
+            width: 40px;
+            height: 24px;
             margin-right: 8px;
             flex-shrink: 0;
         }
@@ -389,8 +410,8 @@
         .script-toggle .slider::before {
             content: '';
             position: absolute;
-            height: 14px;
-            width: 14px;
+            height: 18px;
+            width: 18px;
             left: 3px;
             bottom: 3px;
             background: var(--popup-slider-knob);
@@ -970,6 +991,90 @@
             .header { border-width: 2px; border-color: var(--popup-accent); }
         }
 
+        @media (forced-colors: active) {
+            :root {
+                --popup-bg: Canvas;
+                --popup-bg-raised: Canvas;
+                --popup-bg-hover: Canvas;
+                --popup-border: CanvasText;
+                --popup-border-subtle: CanvasText;
+                --popup-text: CanvasText;
+                --popup-text-muted: GrayText;
+                --popup-text-dim: GrayText;
+                --popup-accent: Highlight;
+                --popup-slider-bg: ButtonFace;
+                --popup-slider-knob: ButtonText;
+                --popup-scrollbar: CanvasText;
+                --popup-scrollbar-hover: Highlight;
+                --popup-danger: CanvasText;
+                --popup-warning: CanvasText;
+                --popup-info: LinkText;
+                --popup-focus: none;
+            }
+
+            *, *::before, *::after {
+                box-shadow: none !important;
+                text-shadow: none !important;
+            }
+
+            body,
+            .header,
+            .script-item,
+            .context-menu-scripts-section,
+            .setup-warning,
+            .popup-toast,
+            .popup-skip-link,
+            #emptyState,
+            .submenu,
+            .script-dropdown,
+            .footer {
+                background: Canvas !important;
+                color: CanvasText !important;
+                border-color: CanvasText !important;
+            }
+
+            button,
+            input,
+            select,
+            .menu-item,
+            .script-dropdown-item,
+            .script-dropdown-cmd,
+            .setup-warning-link {
+                background: ButtonFace !important;
+                color: ButtonText !important;
+                border-color: ButtonText !important;
+            }
+
+            a,
+            .setup-warning-link,
+            .script-name-btn {
+                color: LinkText !important;
+            }
+
+            :focus-visible,
+            .header:focus-visible,
+            .menu-item:focus-visible,
+            .footer:focus-visible,
+            .script-toggle:focus-visible,
+            .script-name-btn:focus-visible,
+            .script-more:focus-visible,
+            .script-quick-edit:focus-visible,
+            .script-dropdown-item:focus-visible,
+            .script-dropdown-cmd:focus-visible {
+                outline: 2px solid Highlight !important;
+                outline-offset: 2px;
+                box-shadow: none !important;
+            }
+
+            .script-toggle input:checked + .slider {
+                background: Highlight !important;
+            }
+
+            .script-toggle .slider::before {
+                background: ButtonText !important;
+            }
+        }
+
         /* Reduced motion support */
         @media (prefers-reduced-motion: reduce) {
             .script-item { animation: none; }
@@ -1038,6 +1143,7 @@
     </style>
 </head>
 <body>
+    <a class="popup-skip-link" href="#menuSection">Skip to actions</a>
     <!-- Header with branding + toggle -->
     <button class="header" id="headerToggle" type="button" title="Toggle all scripts on/off">
         <svg class="header-check" id="headerCheckIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
