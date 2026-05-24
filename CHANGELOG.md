@@ -4,6 +4,25 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Install-source trust badges + source-change warning
+
+- Added shared `classifyInstallSource(url)` helper in `shared/utils.js` that
+  maps install/update URLs to known registries (Greasy Fork, Sleazy Fork
+  warn-tier, OpenUserJS, GitHub Gist / raw / repo / release with release
+  promoted to good-tier, GitLab, Codeberg, Bitbucket, Tampermonkey site,
+  and `other` for unknown hosts). Empty input returns the `local` shape.
+- `installFromCode` persists `script.installSource` on install; `applyUpdate`
+  reclassifies on update and sets `settings.sourceIdentityChanged = true`
+  plus `previousInstallSource` when the registry id changes.
+- Dashboard script rows render a tone-coded source badge near the name
+  (`script-health-badge .good`, `.neutral`, or `.alert`) and a "Source
+  changed" warning badge whenever `settings.sourceIdentityChanged` is true.
+- Install confirmation page's trust card surfaces a "Source registry
+  changed" review row when re-installing from a different registry than
+  the original install.
+- New `.script-health-badge.good` and `.neutral` CSS variants reuse the
+  existing 8px corner radius (never pill backdrops).
+
 ### 2026-05-24 — Dashboard search corpus widened + editor find history
 
 - Dashboard search now matches against a single flattened corpus per
