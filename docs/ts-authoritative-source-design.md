@@ -4,6 +4,11 @@ Last reviewed: 2026-05-24. Decision: **stage TypeScript as the
 authoritative source one runtime module at a time**. Do not replace the
 whole concatenated service-worker pipeline in one commit.
 
+Status update, 2026-05-24: the promotion map and first CI drift gate now
+ship as `ts-source-promotion.json` and
+`scripts/check-ts-source-drift.mjs`. The first pilot implementation remains
+`modules/error-log.js`.
+
 ## 1. Problem statement
 
 ScriptVault currently maintains two implementation surfaces:
@@ -240,9 +245,9 @@ pilot should avoid that broader build-system change.
 
 ## 10. Next steps
 
-1. Add the promotion map and a report-only drift script.
-2. Flip the script to fail only for promoted modules.
-3. Reconcile `src/modules/error-log.ts` with the runtime debounce/flush
+1. Add the promotion map and drift script. Shipped 2026-05-24 via
+   `ts-source-promotion.json` and `scripts/check-ts-source-drift.mjs`.
+2. Reconcile `src/modules/error-log.ts` with the runtime debounce/flush
    behavior.
-4. Teach `esbuild.config.mjs` to use the TS-derived error-log artifact.
-5. Mark `modules/error-log.js` as generated or compatibility-only.
+3. Teach `esbuild.config.mjs` to use the TS-derived error-log artifact.
+4. Mark `modules/error-log.js` as generated or compatibility-only.

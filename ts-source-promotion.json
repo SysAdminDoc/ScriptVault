@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "description": "Promotion map for collapsing ScriptVault runtime JavaScript into TypeScript-authoritative sources.",
+  "statuses": {
+    "mirrored": "Runtime JS is still authoritative, with a TS mirror that should be kept close by tests.",
+    "candidate": "Next promotion target; runtime JS is still authoritative until the build consumes TS output.",
+    "promoted": "TS source is authoritative. Runtime JS changes must be accompanied by TS source or generated artifact changes.",
+    "intentionally-divergent": "Runtime and TS surfaces are known to differ and need a dedicated migration before promotion."
+  },
+  "entries": [
+    {
+      "runtime": "shared/utils.js",
+      "sources": ["src/shared/utils.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/sync-providers.js",
+      "sources": ["src/modules/sync-providers.ts"],
+      "status": "intentionally-divergent",
+      "notes": "Runtime owns full provider implementations, including S3 SigV4; TS currently acts as typed facade/validator."
+    },
+    {
+      "runtime": "modules/i18n.js",
+      "sources": ["src/modules/i18n.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/storage.js",
+      "sources": ["src/modules/storage.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/xhr.js",
+      "sources": ["src/modules/xhr.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/internal-host-guard.js",
+      "sources": ["src/background/internal-host-guard.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/resources.js",
+      "sources": ["src/modules/resources.ts", "src/background/resource-loader.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/npm-resolve.js",
+      "sources": ["src/modules/npm-resolve.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/error-log.js",
+      "sources": ["src/modules/error-log.ts"],
+      "status": "candidate",
+      "notes": "First pilot target for TS-authoritative promotion."
+    },
+    {
+      "runtime": "modules/notifications.js",
+      "sources": ["src/modules/notifications.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/sync-easycloud.js",
+      "sources": ["src/modules/sync-easycloud.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/backup-scheduler.js",
+      "sources": ["src/modules/backup-scheduler.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/userstyles.js",
+      "sources": ["src/modules/userstyles.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/public-api.js",
+      "sources": ["src/modules/public-api.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/migration.js",
+      "sources": ["src/modules/migration.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "modules/quota-manager.js",
+      "sources": ["src/modules/quota-manager.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "bg/analyzer.js",
+      "sources": ["src/bg/analyzer.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "bg/esm-bundler.js",
+      "sources": ["src/bg/esm-bundler.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "bg/netlog.js",
+      "sources": ["src/bg/netlog.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "bg/signing.js",
+      "sources": ["src/bg/signing.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "bg/workspaces.js",
+      "sources": ["src/bg/workspaces.ts"],
+      "status": "mirrored"
+    },
+    {
+      "runtime": "background.core.js",
+      "sources": [
+        "src/background/badge.ts",
+        "src/background/cloud-sync.ts",
+        "src/background/context-menu.ts",
+        "src/background/dnr-rules.ts",
+        "src/background/import-export.ts",
+        "src/background/install-handler.ts",
+        "src/background/parser.ts",
+        "src/background/registration.ts",
+        "src/background/tab-reload.ts",
+        "src/background/trust-receipt.ts",
+        "src/background/update-checker.ts",
+        "src/background/url-matcher.ts",
+        "src/background/wrapper-builder.ts"
+      ],
+      "status": "intentionally-divergent",
+      "notes": "Main worker remains JS-owned until leaf modules and message orchestration are promoted."
+    }
+  ]
+}

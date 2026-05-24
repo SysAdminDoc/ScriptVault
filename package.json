@@ -20,6 +20,8 @@
     "smoke:large-library": "node scripts/smoke-large-library.mjs",
     "smoke:large-library:check": "node scripts/smoke-large-library.mjs --check",
     "cws:check": "node scripts/check-cws-publish-tooling.mjs",
+    "ts-source:check": "node scripts/check-ts-source-drift.mjs",
+    "ts-source:report": "node scripts/check-ts-source-drift.mjs --report",
     "store-copy:check": "node scripts/check-permission-copy.mjs",
     "support:matrix": "node scripts/generate-browser-support-matrix.mjs",
     "support:matrix:check": "node scripts/generate-browser-support-matrix.mjs --check",
