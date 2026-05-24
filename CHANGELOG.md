@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Release trust gate
+
+- Added `npm run release:trust` to inspect the built Chrome ZIP, generate
+  SHA-256 checksums, create a source ZIP from `git archive`, emit a
+  CycloneDX 1.6 SBOM from `package-lock.json`, write SLSA-shaped provenance,
+  and fail on missing/forbidden package entries.
+- Added `npm run release:trust:strict` for maintainer-key signing of the
+  checksum manifest with `RELEASE_SIGNING_PRIVATE_KEY_PEM` or
+  `RELEASE_SIGNING_PRIVATE_KEY_PATH`.
+- Wired the release trust gate into CI after `bash build.sh`, uploaded
+  `release-artifacts/*` with the Chrome package, and added GitHub artifact
+  attestations for the ZIP and SBOM on `main` pushes.
+
 ### 2026-05-24 — Release rollback storage drill
 
 - Added `npm run release:rollback-drill`, a focused Vitest command that seeds

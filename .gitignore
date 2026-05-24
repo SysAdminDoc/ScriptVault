@@ -4,6 +4,7 @@
 *.xpi
 build/
 dist/
+release-artifacts/
 background.js
 lib/monaco/
 
@@ -43,4 +44,3 @@ coverage/
 CLAUDE.md
 AGENTS.md
 .factory/
-

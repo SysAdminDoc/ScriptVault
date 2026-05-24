@@ -262,12 +262,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
   - Verify: `npm run release:rollback-drill`; `npx vitest run tests/storage.test.js tests/storage-roundtrip.test.js tests/storage-rollback-drill.test.js`.
   - Status: Shipped 2026-05-24. `npm run release:rollback-drill` now seeds the previous public `chrome.storage.local` shape, upgrades through current v3 storage migration, verifies current IDB reads, verifies rollback-readable legacy keys, and verifies the 30-day legacy wipe guard. CI and the release runbook now include the command; migration tombstones include script/value counts for status reporting.
 
-- [ ] P0 - Add signed artifact, SBOM, provenance, and package-diff release gate
+- [x] P0 - Add signed artifact, SBOM, provenance, and package-diff release gate
   - Why: Browser extension compromise and marketplace-vetting research make release-package verification part of user trust.
   - Evidence: S69-S76, H004, H005, H075, H090.
   - Touches: `.github/workflows/ci.yml`, `scripts/`, `docs/release-runbook.md`, GitHub Release artifacts.
   - Acceptance: Each release artifact has checksum, source ZIP, SBOM, signing/provenance material, and a diff report of manifest permissions and web-accessible resources.
-  - Verify: Release workflow dry run on a local package; inspect attached checksums/report.
+  - Verify: `bash build.sh`; `npm run release:trust`; inspect `release-artifacts/ScriptVault-v*.{sha256,sbom.cyclonedx.json,provenance.json,package-diff.json,signing.json}`.
+  - Status: Shipped 2026-05-24. `npm run release:trust` now emits checksums, source ZIP, CycloneDX SBOM, SLSA-shaped provenance, signing metadata, and package-diff/forbidden-entry reports for the built Chrome ZIP; `release:trust:strict` signs the checksum manifest when a maintainer key is provided; CI uploads `release-artifacts/*` and creates GitHub artifact attestations for the ZIP and SBOM on `main` pushes.
 
 - [x] P0 - Create runtime/TS mirror drift guard for recent hardening fixes
   - Why: Recent commits repeatedly closed drift, and current TS fetch paths still lag runtime bounded-fetch behavior.
