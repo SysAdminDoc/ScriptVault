@@ -304,6 +304,12 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 | `Ctrl+H` | Find and replace |
 | `Ctrl+G` | Go to line |
 
+### Omnibox Search
+
+Type `sv ` followed by a script name (or tag) in the browser's address bar
+to fuzzy-search your installed scripts. Press Enter on a suggestion to open
+that script in the dashboard editor.
+
 ---
 
 ## Supported Metadata
@@ -417,7 +423,6 @@ ScriptVault/
 ├── background.core.js         # Main service worker logic (~5500 lines)
 ├── content.js                 # Content script bridge (USER_SCRIPT <-> background)
 ├── offscreen.html/js          # Offscreen document (AST analysis, 3-way merge)
-├── build-background.sh        # Concatenates modules into background.js
 ├── build.sh                   # Packages CWS-ready ZIP
 ├── bg/
 │   ├── analyzer.js            # AST-based static analysis engine
