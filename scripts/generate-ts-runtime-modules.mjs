@@ -24,6 +24,12 @@ export const TS_RUNTIME_MODULES = [
     output: 'modules/notifications.js',
     exportName: 'NotificationSystem',
   },
+  {
+    id: 'npm-resolve',
+    source: 'src/modules/npm-resolve.ts',
+    output: 'modules/npm-resolve.js',
+    exportName: 'NpmResolver',
+  },
 ];
 
 function normalizeNewlines(text) {

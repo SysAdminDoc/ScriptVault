@@ -47,7 +47,8 @@
     {
       "runtime": "modules/npm-resolve.js",
       "sources": ["src/modules/npm-resolve.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "modules/error-log.js",
