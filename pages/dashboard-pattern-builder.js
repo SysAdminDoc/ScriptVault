@@ -66,7 +66,7 @@ const PatternBuilder = (() => {
     .pb-test-badge.no-match{background:var(--accent-red,#f87171)}
     .pb-test-url{font-size:12px;color:var(--text-secondary,#a0a0a0);word-break:break-all}
     .pb-presets{display:flex;flex-wrap:wrap;gap:6px}
-    .pb-preset-chip{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:14px;padding:4px 12px;font-size:11px;color:var(--text-secondary,#a0a0a0);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+    .pb-preset-chip{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius: 8px;padding:4px 12px;font-size:11px;color:var(--text-secondary,#a0a0a0);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
     .pb-preset-chip:hover{border-color:var(--accent-green,#4ade80);color:var(--text-primary,#e0e0e0)}
     .pb-actions{display:flex;gap:8px;justify-content:flex-end}
     .pb-path-segments{display:flex;flex-wrap:wrap;gap:4px;align-items:center}

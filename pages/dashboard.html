@@ -387,8 +387,8 @@
             top: 0;
             z-index: 100;
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.26);
-            -webkit-backdrop-filter: blur(18px);
-            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
         }
 
         .tm-header::after {
@@ -584,7 +584,7 @@
             margin: 0 auto;
             padding: 10px 12px;
             border: 1px solid var(--panel-border-soft);
-            border-radius: 26px;
+            border-radius: 8px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02)),
                 var(--bg-section-header);
@@ -601,7 +601,7 @@
             align-self: flex-end;
             padding: 4px;
             border: 1px solid rgba(127, 127, 127, 0.12);
-            border-radius: 18px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.03);
         }
 
@@ -621,7 +621,7 @@
             min-width: 0;
             padding: 4px;
             border: 1px solid rgba(127, 127, 127, 0.12);
-            border-radius: 18px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.03);
         }
 
@@ -633,7 +633,7 @@
             min-height: 42px;
             background: transparent;
             border: 1px solid transparent;
-            border-radius: 15px;
+            border-radius: 8px;
             color: var(--text-secondary);
             font-size: 11px;
             font-weight: 600;
@@ -765,7 +765,7 @@
             align-items: center;
             gap: 8px;
             padding: 5px 10px;
-            border-radius: 999px;
+            border-radius: 8px;
             border: 1px solid rgba(34, 197, 94, 0.2);
             background: rgba(34, 197, 94, 0.08);
             color: var(--accent-primary);
@@ -800,7 +800,7 @@
         .scripts-shell-stat {
             min-width: 122px;
             padding: 12px 14px;
-            border-radius: 16px;
+            border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.2);
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
@@ -835,7 +835,7 @@
                 linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
                 var(--bg-section-header);
             border: 1px solid rgba(127, 127, 127, 0.2);
-            border-radius: 20px;
+            border-radius: 8px;
             box-shadow: 0 18px 36px rgba(0, 0, 0, 0.18);
             gap: 12px;
             flex-wrap: wrap;
@@ -853,7 +853,7 @@
             flex-wrap: wrap;
             padding: 10px 12px;
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 16px;
+            border-radius: 8px;
             background: rgba(0, 0, 0, 0.08);
         }
 
@@ -877,7 +877,7 @@
             min-height: 36px;
             padding: 5px 8px;
             border: 1px solid rgba(127, 127, 127, 0.14);
-            border-radius: 999px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.04);
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
         }
@@ -888,7 +888,7 @@
             gap: 7px;
             min-height: 28px;
             padding: 0 4px 0 2px;
-            border-radius: 999px;
+            border-radius: 8px;
             color: var(--text-secondary);
             cursor: pointer;
             transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
@@ -932,7 +932,7 @@
             padding: 7px 11px;
             background: rgba(34, 197, 94, 0.1);
             border: 1px solid rgba(34, 197, 94, 0.16);
-            border-radius: 999px;
+            border-radius: 8px;
             white-space: nowrap;
             font-variant-numeric: tabular-nums;
         }
@@ -1004,7 +1004,7 @@
             width: 24px;
             height: 24px;
             border: 0;
-            border-radius: 999px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.06);
             color: var(--text-muted);
             font: inherit;
@@ -1032,7 +1032,7 @@
                 linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120px),
                 var(--bg-content);
             border: 1px solid rgba(127, 127, 127, 0.18);
-            border-radius: 18px;
+            border-radius: 8px;
             box-shadow: 0 22px 44px rgba(0, 0, 0, 0.18);
             /* `clip` clips rounded corners but does NOT create a containing block
                for `position: sticky`, unlike `hidden`. Without this, the sticky
@@ -1198,7 +1198,7 @@
             cursor: pointer;
             top: 0; left: 0; right: 0; bottom: 0;
             background-color: var(--text-muted);
-            border-radius: 18px;
+            border-radius: 8px;
             transition: 0.2s;
         }
 
@@ -1389,7 +1389,7 @@
             flex-wrap: wrap;
             padding: 22px 24px;
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 20px;
+            border-radius: 8px;
             background:
                 radial-gradient(circle at top right, rgba(34, 197, 94, 0.12), transparent 14rem),
                 linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
@@ -1431,7 +1431,7 @@
             min-width: 116px;
             padding: 12px 14px;
             border: 1px solid rgba(127, 127, 127, 0.14);
-            border-radius: 16px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.04);
         }
 
@@ -1469,7 +1469,7 @@
             min-width: 0;
             padding: 0 14px;
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 14px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.03);
         }
 
@@ -1509,7 +1509,7 @@
             border: 1px solid rgba(127, 127, 127, 0.16);
             background: rgba(255, 255, 255, 0.03);
             color: var(--text-secondary);
-            border-radius: 999px;
+            border-radius: 8px;
             padding: 8px 12px;
             font-size: 12px;
             font-weight: 600;
@@ -1656,7 +1656,7 @@
 
         #settingsPanel .settings-section {
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 18px;
+            border-radius: 8px;
             overflow: hidden;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
@@ -1699,7 +1699,7 @@
         #settingsPanel .settings-section[data-config-level="advanced"] .section-label::after {
             content: 'Advanced';
             padding: 4px 8px;
-            border-radius: 999px;
+            border-radius: 8px;
             border: 1px solid rgba(96, 165, 250, 0.24);
             background: rgba(96, 165, 250, 0.12);
             color: var(--accent-secondary);
@@ -1738,7 +1738,7 @@
             flex-wrap: wrap;
             padding: 22px 24px;
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 20px;
+            border-radius: 8px;
             background:
                 radial-gradient(circle at top right, rgba(96, 165, 250, 0.12), transparent 14rem),
                 linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
@@ -1780,7 +1780,7 @@
             min-width: 116px;
             padding: 12px 14px;
             border: 1px solid rgba(127, 127, 127, 0.14);
-            border-radius: 16px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.04);
         }
 
@@ -1818,7 +1818,7 @@
             min-width: 0;
             padding: 0 14px;
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 14px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.03);
         }
 
@@ -1849,7 +1849,7 @@
 
         #utilitiesPanel .settings-section {
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 18px;
+            border-radius: 8px;
             overflow: hidden;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
@@ -1907,7 +1907,7 @@
 
         .utility-surface {
             padding: 12px 14px;
-            border-radius: 14px;
+            border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.14);
             background: rgba(255, 255, 255, 0.03);
             content-visibility: auto;
@@ -1953,7 +1953,7 @@
             justify-content: space-between;
             gap: 14px;
             padding: 12px 14px;
-            border-radius: 14px;
+            border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.12);
             background: rgba(255, 255, 255, 0.02);
             content-visibility: auto;
@@ -1997,7 +1997,7 @@
 
         .restore-preview-card {
             padding: 12px 14px;
-            border-radius: 14px;
+            border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.12);
             background: rgba(255, 255, 255, 0.03);
             display: grid;
@@ -2029,7 +2029,7 @@
             flex-wrap: wrap;
             padding: 22px 24px;
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 20px;
+            border-radius: 8px;
             background:
                 radial-gradient(circle at top right, rgba(251, 191, 36, 0.14), transparent 16rem),
                 linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
@@ -2071,7 +2071,7 @@
             min-width: 116px;
             padding: 12px 14px;
             border: 1px solid rgba(127, 127, 127, 0.14);
-            border-radius: 16px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.04);
         }
 
@@ -2109,7 +2109,7 @@
             min-width: 0;
             padding: 0 14px;
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 14px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.03);
         }
 
@@ -2142,7 +2142,7 @@
 
         .trash-surface {
             padding: 8px;
-            border-radius: 18px;
+            border-radius: 8px;
         }
 
         .trash-list {
@@ -2193,7 +2193,7 @@
             display: inline-flex;
             align-items: center;
             padding: 5px 10px;
-            border-radius: 999px;
+            border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.16);
             background: rgba(255, 255, 255, 0.03);
             color: var(--text-secondary);
@@ -2217,7 +2217,7 @@
             display: inline-flex;
             align-items: center;
             padding: 6px 10px;
-            border-radius: 999px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.04);
             color: var(--text-muted);
             font-size: 11px;
@@ -2495,7 +2495,7 @@
             flex-wrap: wrap;
             padding: 22px 24px;
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 20px;
+            border-radius: 8px;
             background:
                 radial-gradient(circle at top right, rgba(52, 211, 153, 0.14), transparent 16rem),
                 linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
@@ -2537,7 +2537,7 @@
             min-width: 116px;
             padding: 12px 14px;
             border: 1px solid rgba(127, 127, 127, 0.14);
-            border-radius: 16px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.04);
         }
 
@@ -2575,7 +2575,7 @@
             min-width: 0;
             padding: 0 14px;
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 14px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.03);
         }
 
@@ -2606,7 +2606,7 @@
 
         .help-section {
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 18px;
+            border-radius: 8px;
             overflow: hidden;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
@@ -2680,7 +2680,7 @@
 
         .help-step {
             padding: 12px 14px;
-            border-radius: 14px;
+            border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.12);
             background: rgba(255, 255, 255, 0.03);
             font-size: 13px;
@@ -2705,7 +2705,7 @@
             align-items: flex-start;
             gap: 6px;
             padding: 14px 16px;
-            border-radius: 16px;
+            border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.14);
             background: rgba(255, 255, 255, 0.03);
             color: var(--text-primary);
@@ -2741,7 +2741,7 @@
 
         .help-note-item {
             padding: 12px 14px;
-            border-radius: 14px;
+            border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.12);
             background: rgba(255, 255, 255, 0.03);
             font-size: 13px;
@@ -2780,7 +2780,7 @@
             display: grid;
             gap: 8px;
             padding: 14px 16px;
-            border-radius: 16px;
+            border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.12);
             background: rgba(255, 255, 255, 0.03);
         }
@@ -2842,7 +2842,7 @@
         .about-brand img {
             width: 56px;
             height: 56px;
-            border-radius: 16px;
+            border-radius: 8px;
         }
 
         .about-brand h2 {
@@ -2875,7 +2875,7 @@
         .stat-item {
             min-width: 120px;
             padding: 12px 14px;
-            border-radius: 14px;
+            border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.12);
             background: rgba(255, 255, 255, 0.03);
             text-align: left;
@@ -2906,7 +2906,7 @@
         .quota-bar-track {
             position: relative;
             height: 10px;
-            border-radius: 999px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.06);
             overflow: hidden;
         }
@@ -2915,7 +2915,7 @@
             position: absolute;
             inset: 0 auto 0 0;
             width: 0;
-            border-radius: 999px;
+            border-radius: 8px;
             background: linear-gradient(90deg, #34d399, #10b981);
             transition: width 0.25s ease;
         }
@@ -2990,7 +2990,7 @@
             display: inline-flex;
             align-items: center;
             padding: 4px 9px;
-            border-radius: 999px;
+            border-radius: 8px;
             border: 1px solid rgba(34, 197, 94, 0.18);
             background: rgba(34, 197, 94, 0.08);
             color: var(--accent-primary);
@@ -3021,7 +3021,7 @@
             align-items: center;
             min-height: 28px;
             padding: 0 10px;
-            border-radius: 999px;
+            border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.22);
             background: rgba(255, 255, 255, 0.04);
             color: var(--text-secondary);
@@ -3078,7 +3078,7 @@
             align-items: center;
             min-height: 30px;
             padding: 0 10px;
-            border-radius: 999px;
+            border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.18);
             background: rgba(255, 255, 255, 0.03);
             color: var(--text-muted);
@@ -3257,7 +3257,7 @@
             gap: 6px;
             padding: 16px 18px;
             border: 1px dashed rgba(127, 127, 127, 0.24);
-            border-radius: 16px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.02);
             color: var(--text-muted);
             font-size: 12px;
@@ -3291,7 +3291,7 @@
         .info-item {
             padding: 14px 16px;
             border: 1px solid rgba(127, 127, 127, 0.16);
-            border-radius: 16px;
+            border-radius: 8px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
                 var(--bg-section-header);
@@ -3338,7 +3338,7 @@
             padding: 4px 10px;
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(127, 127, 127, 0.18);
-            border-radius: 999px;
+            border-radius: 8px;
             font-size: 11px;
             font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
         }
@@ -3469,7 +3469,7 @@
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
                 var(--bg-section-header);
-            border-radius: 14px;
+            border-radius: 8px;
             align-items: center;
             border: 1px solid rgba(127, 127, 127, 0.16);
             transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
@@ -3559,7 +3559,7 @@
         .script-settings-panel .settings-section {
             margin-bottom: 0;
             border: 1px solid rgba(127, 127, 127, 0.14);
-            border-radius: 18px;
+            border-radius: 8px;
             overflow: hidden;
             background: rgba(255, 255, 255, 0.02);
         }
@@ -3636,7 +3636,7 @@
             gap: 12px;
             padding: 12px 14px;
             border: 1px solid rgba(127, 127, 127, 0.14);
-            border-radius: 14px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.02);
             margin-top: 10px;
         }
@@ -3671,7 +3671,7 @@
             gap: 12px;
             padding: 12px 14px;
             border: 1px solid rgba(127, 127, 127, 0.14);
-            border-radius: 14px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.02);
         }
 
@@ -3879,8 +3879,8 @@
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0, 0, 0, 0.6);
-            -webkit-backdrop-filter: blur(4px);
-            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
             z-index: 300;
             align-items: center;
             justify-content: center;
@@ -3963,7 +3963,7 @@
         .toast-message { font-size: 13px; }
         .toast-action {
             border: 1px solid rgba(127, 127, 127, 0.28);
-            border-radius: 999px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.06);
             color: var(--text-primary);
             cursor: pointer;
@@ -4097,7 +4097,7 @@
             gap: 4px;
             max-width: 100%;
             padding: 3px 8px;
-            border-radius: 999px;
+            border-radius: 8px;
             font-size: 10px;
             font-weight: 700;
             letter-spacing: 0.03em;
@@ -4170,7 +4170,7 @@
             content: '';
             width: 6px;
             height: 6px;
-            border-radius: 999px;
+            border-radius: 8px;
             background: var(--text-muted);
         }
 
@@ -4215,8 +4215,8 @@
             z-index: 9999;
             align-items: center;
             justify-content: center;
-            -webkit-backdrop-filter: blur(2px);
-            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
             overscroll-behavior: contain;
         }
         .progress-overlay.active { display: flex; }
@@ -4334,8 +4334,8 @@
             .tm-tab { padding: 4px 10px; font-size: 11px; }
             #scriptsPanel { padding: 16px 10px 0; }
             .scripts-shell-copy h2 { font-size: 24px; }
-            .scripts-toolbar { padding: 10px; border-radius: 18px; }
-            .scripts-table-container { border-radius: 8px 8px 20px 20px; overflow-x: auto; overflow-y: hidden; }
+            .scripts-toolbar { padding: 10px; border-radius: 8px; }
+            .scripts-table-container { border-radius: 8px; overflow-x: auto; overflow-y: hidden; }
             .scripts-table .col-source,
             .scripts-table .col-runs { display: none; }
             .search-box { max-width: none; flex-basis: 100%; }
@@ -4434,7 +4434,7 @@
             background: var(--bg-input);
             color: var(--text-primary);
             border: 1px solid rgba(127, 127, 127, 0.24);
-            border-radius: 999px;
+            border-radius: 8px;
         }
         .view-settings-bar .density-btn {
             min-height: 30px;
@@ -4443,7 +4443,7 @@
             background: var(--bg-button);
             color: var(--text-secondary);
             border: 1px solid rgba(127, 127, 127, 0.22);
-            border-radius: 999px;
+            border-radius: 8px;
             cursor: pointer;
             transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
         }
@@ -4554,13 +4554,13 @@
         .trash-summary,
         .help-summary {
             border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 18px;
+            border-radius: 8px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)),
                 rgba(255, 255, 255, 0.02);
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 30px rgba(0, 0, 0, 0.16);
-            -webkit-backdrop-filter: blur(12px);
-            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
         }
 
         .scripts-toolbar,
@@ -4574,8 +4574,8 @@
                 linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
                 var(--bg-section-header);
             box-shadow: var(--panel-sheen), var(--panel-shadow);
-            -webkit-backdrop-filter: blur(16px);
-            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
         }
 
         .settings-toolbar,
@@ -4583,14 +4583,14 @@
         .trash-toolbar,
         .help-toolbar {
             padding: 14px 16px;
-            border-radius: 22px;
+            border-radius: 8px;
         }
 
         .view-settings-bar {
             gap: 12px;
             margin: 12px auto 0;
             padding: 12px 18px;
-            border-radius: 22px;
+            border-radius: 8px;
         }
 
         .view-settings-bar label {
@@ -4605,7 +4605,7 @@
             width: 1px;
             height: 18px;
             margin: 0 2px;
-            border-radius: 999px;
+            border-radius: 8px;
             background: rgba(127, 127, 127, 0.24);
         }
 
@@ -4619,7 +4619,7 @@
         .trash-filter-row,
         .help-filter-row {
             border: 1px solid rgba(127, 127, 127, 0.14);
-            border-radius: 18px;
+            border-radius: 8px;
             background: rgba(0, 0, 0, 0.12);
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
         }
@@ -4633,7 +4633,7 @@
 
         .toolbar-btn,
         .btn {
-            border-radius: 14px;
+            border-radius: 8px;
             border-color: var(--panel-border-soft);
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
@@ -4684,7 +4684,7 @@
         .textarea-field,
         .search-box input,
         .view-settings-bar select {
-            border-radius: 14px;
+            border-radius: 8px;
             border-color: var(--panel-border-soft);
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
@@ -4704,7 +4704,7 @@
         .view-settings-bar .density-btn {
             min-height: 36px;
             padding: 0 14px;
-            border-radius: 999px;
+            border-radius: 8px;
             border-color: var(--panel-border-soft);
             background: rgba(255, 255, 255, 0.03);
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -4722,7 +4722,7 @@
         .tm-tab {
             min-height: calc(42px * var(--ui-scale));
             padding: calc(var(--density-tab-padding-y) * var(--ui-scale)) calc(var(--density-tab-padding-x) * var(--ui-scale));
-            border-radius: calc(15px * var(--ui-scale));
+            border-radius: calc(8px * var(--ui-scale));
             font-size: max(11px, calc(11px * var(--ui-scale)));
         }
 
@@ -4769,7 +4769,7 @@
         .trash-summary,
         .help-summary {
             padding: calc(var(--density-summary-padding-y) * var(--ui-scale)) calc(var(--density-summary-padding-x) * var(--ui-scale));
-            border-radius: calc(18px * var(--ui-scale));
+            border-radius: calc(8px * var(--ui-scale));
         }
 
         .scripts-toolbar,
@@ -4779,7 +4779,7 @@
         .help-toolbar {
             gap: calc(12px * var(--ui-scale));
             padding: calc(var(--density-toolbar-padding-y) * var(--ui-scale)) calc(var(--density-toolbar-padding-x) * var(--ui-scale));
-            border-radius: calc(22px * var(--ui-scale));
+            border-radius: calc(8px * var(--ui-scale));
         }
 
         .scripts-toolbar-left,
@@ -4788,7 +4788,7 @@
         .trash-search,
         .help-search {
             gap: calc(var(--density-toolbar-cluster-gap) * var(--ui-scale));
-            border-radius: calc(18px * var(--ui-scale));
+            border-radius: calc(8px * var(--ui-scale));
         }
 
         .settings-filter-row,
@@ -4797,14 +4797,14 @@
         .help-filter-row {
             gap: calc(var(--density-filter-gap) * var(--ui-scale));
             padding: calc(4px * var(--ui-scale));
-            border-radius: calc(18px * var(--ui-scale));
+            border-radius: calc(8px * var(--ui-scale));
         }
 
         .toolbar-btn,
         .btn {
             min-height: calc(var(--density-control-height) * var(--ui-scale));
             padding: 0 calc(var(--density-control-padding-x) * var(--ui-scale));
-            border-radius: calc(14px * var(--ui-scale));
+            border-radius: calc(8px * var(--ui-scale));
             font-size: max(12px, calc(12px * var(--ui-scale)));
         }
 
@@ -4820,12 +4820,12 @@
         .view-settings-bar select {
             min-height: calc(var(--density-control-height) * var(--ui-scale));
             padding: 0 calc(var(--density-control-padding-x) * var(--ui-scale));
-            border-radius: calc(14px * var(--ui-scale));
+            border-radius: calc(8px * var(--ui-scale));
             font-size: max(12px, calc(12px * var(--ui-scale)));
         }
 
         .textarea-field {
-            border-radius: calc(14px * var(--ui-scale));
+            border-radius: calc(8px * var(--ui-scale));
             font-size: max(12px, calc(12px * var(--ui-scale)));
         }
 
@@ -4844,7 +4844,7 @@
 
         .scripts-table-container {
             border-color: var(--panel-border-soft);
-            border-radius: 10px 10px 28px 28px;
+            border-radius: 8px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 150px),
                 var(--bg-content);
@@ -4856,8 +4856,8 @@
                 linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
                 var(--bg-section-header);
             border-bottom-color: rgba(34, 197, 94, 0.5);
-            -webkit-backdrop-filter: blur(12px);
-            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
         }
 
         .scripts-table tbody tr:hover {
@@ -4906,7 +4906,7 @@
             min-height: 40px;
             padding: 0 16px;
             border: 1px solid transparent;
-            border-radius: 14px 14px 0 0;
+            border-radius: 8px 8px 0 0;
         }
 
         .editor-tab.active {
@@ -4918,13 +4918,13 @@
 
         .modal-overlay {
             background: rgba(2, 6, 23, 0.64);
-            -webkit-backdrop-filter: blur(10px);
-            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
         }
 
         .modal-content {
             border-color: var(--panel-border-strong);
-            border-radius: 22px;
+            border-radius: 8px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
                 var(--bg-content);
@@ -4937,7 +4937,7 @@
         }
 
         .find-script-card {
-            border-radius: 18px;
+            border-radius: 8px;
             border-color: var(--panel-border-soft);
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
@@ -4952,7 +4952,7 @@
 
         .find-script-preview {
             border-color: var(--panel-border-soft);
-            border-radius: 14px;
+            border-radius: 8px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
                 var(--bg-input);
@@ -4961,7 +4961,7 @@
         @media (max-width: 1024px) {
             .tm-tabs-bar {
                 padding: 10px;
-                border-radius: 22px;
+                border-radius: 8px;
             }
 
             .tm-tabs {
@@ -4988,7 +4988,7 @@
 
             .tm-tabs-bar {
                 gap: 10px;
-                border-radius: 20px;
+                border-radius: 8px;
             }
 
             .tm-tabs {
@@ -5007,7 +5007,7 @@
             .trash-hero,
             .help-hero {
                 padding: 20px;
-                border-radius: 24px;
+                border-radius: 8px;
             }
 
             .scripts-shell-stats,
@@ -5025,7 +5025,7 @@
             .help-toolbar,
             .view-settings-bar {
                 padding: 12px;
-                border-radius: 18px;
+                border-radius: 8px;
             }
         }
 
@@ -5036,7 +5036,7 @@
 
             .tm-tabs-bar {
                 padding: 8px;
-                border-radius: 18px;
+                border-radius: 8px;
             }
 
             .view-settings-bar {
@@ -5411,7 +5411,7 @@
     <!-- Setup Warning Banner (Chrome 138+ / Developer Mode) — Phase 39.10 -->
     <div class="setup-warning-banner" id="setupWarningBanner" style="display: none;">
         <div class="setup-warning-content">
-            <span class="setup-warning-icon">⚠️</span>
+            <span class="setup-warning-icon" aria-hidden="true">!</span>
             <div class="setup-warning-text" id="setupWarningText">
                 <strong>Setup Required:</strong> User scripts are not enabled.
                 For Chrome 138+, enable <strong>"Allow User Scripts"</strong> in extension settings.

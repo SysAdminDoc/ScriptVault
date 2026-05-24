@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 const installHtml = readFileSync(resolve(process.cwd(), "pages/install.html"), "utf8");
@@ -13,7 +13,29 @@ function parseHtml(source) {
   return new DOMParser().parseFromString(source, "text/html");
 }
 
+function pageUiFiles(dir = resolve(process.cwd(), "pages")) {
+  return readdirSync(dir).flatMap((entry) => {
+    const full = resolve(dir, entry);
+    if (statSync(full).isDirectory()) return pageUiFiles(full);
+    return /\.(html|css|js)$/.test(entry) ? [full] : [];
+  });
+}
+
 describe("cross-surface UX audit", () => {
+  test("UI surfaces avoid oversized rounded backdrops and blur-heavy chrome", () => {
+    const disallowedRadius = /border-radius:[^;]*(?:1[3-9]|2[0-9]|999)px/;
+    const blurBackdrop = /(?:-webkit-)?backdrop-filter:\s*blur\(/;
+    const offenders = [];
+
+    for (const file of pageUiFiles()) {
+      const source = readFileSync(file, "utf8");
+      if (disallowedRadius.test(source)) offenders.push(`${file}: oversized border radius`);
+      if (blurBackdrop.test(source)) offenders.push(`${file}: blur backdrop`);
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
   test("install flow keeps expandable rule disclosures and live review status", () => {
     expect(installHtml).toContain(".match-list-toggle");
     expect(installHtml).toContain(".review-nav");

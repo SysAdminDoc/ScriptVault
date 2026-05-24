@@ -72,7 +72,7 @@ const ProfileManager = (() => {
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  border-radius: 16px;
+  border-radius: 8px;
   border: 1px solid var(--border-color, #404040);
   background: var(--bg-row, #2a2a2a);
   color: var(--text-primary, #e0e0e0);

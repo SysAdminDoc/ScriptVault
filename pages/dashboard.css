@@ -38,7 +38,7 @@
   --r-sm: 6px;
   --r-md: 8px;
   --r-lg: 12px;
-  --r-pill: 999px;
+  --r-pill: 8px;
   --t-fast: 120ms;
   --t-base: 180ms;
   --t-slow: 280ms;
@@ -490,7 +490,7 @@ input[type="checkbox"] {
   cursor: pointer;
   inset: 0;
   background: var(--toggle-off);
-  border-radius: 22px;
+  border-radius: var(--r-md);
   box-shadow: inset 0 0 0 1px var(--hairline-strong);
   transition: background var(--t-base) var(--ease-out),
               box-shadow var(--t-base) var(--ease-out);
@@ -853,7 +853,7 @@ input[type="checkbox"] {
 }
 .toast-action {
   border: 1px solid var(--border-color);
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   background: var(--bg-input);
   color: var(--text-primary);
   cursor: pointer;
@@ -878,8 +878,8 @@ input[type="checkbox"] {
   position: fixed;
   inset: 0;
   background: var(--overlay-scrim);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1171,7 +1171,7 @@ input[type="checkbox"] {
 
 ::-webkit-scrollbar-thumb {
   background: var(--hairline-strong);
-  border-radius: 999px;
+  border-radius: var(--r-md);
   border: 2px solid transparent;
   background-clip: padding-box;
   transition: background var(--t-fast) var(--ease-out);
@@ -1339,7 +1339,7 @@ input[type="checkbox"] {
   inset: 0;
   z-index: 10000;
   background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
+  backdrop-filter: none;
   pointer-events: none;
 }
 
@@ -1353,7 +1353,7 @@ input[type="checkbox"] {
   text-align: center;
   padding: 60px;
   border: 3px dashed var(--accent-green);
-  border-radius: 20px;
+  border-radius: var(--r-md);
   background: rgba(34, 197, 94, 0.08);
 }
 
@@ -1782,7 +1782,7 @@ tr.row-over-budget {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(2px);
+  backdrop-filter: none;
 }
 
 .cmd-dialog {
@@ -1794,7 +1794,7 @@ tr.row-over-budget {
   max-width: 90vw;
   background: var(--bg-header);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   animation: cmdSlideIn 0.15s ease-out;

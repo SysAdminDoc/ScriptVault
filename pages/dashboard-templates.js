@@ -523,7 +523,7 @@ const TemplateManager = (() => {
     padding: 5px 12px;
     background: var(--bg-input, #333333);
     border: 1px solid transparent;
-    border-radius: 16px;
+    border-radius: 8px;
     color: var(--text-secondary, #a0a0a0);
     font-size: 11px;
     font-weight: 500;

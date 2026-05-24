@@ -434,7 +434,7 @@ const ScriptStore = (() => {
     flex-wrap: wrap;
     padding: 20px 22px;
     border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-    border-radius: 24px;
+    border-radius: 8px;
     background:
         radial-gradient(circle at top right, rgba(96, 165, 250, 0.2), transparent 16rem),
         linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02) 58%, transparent),
@@ -489,13 +489,13 @@ const ScriptStore = (() => {
     min-width: 118px;
     padding: 10px 12px;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
+    border-radius: 8px;
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)),
         rgba(255, 255, 255, 0.02);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 30px rgba(0, 0, 0, 0.16);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
 }
 .ss-summary-label {
     display: block;
@@ -521,13 +521,13 @@ const ScriptStore = (() => {
     flex-wrap: wrap;
     padding: 12px 14px;
     border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-    border-radius: 18px;
+    border-radius: 8px;
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
         var(--bg-section-header);
     box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
 }
 .ss-search-bar {
     flex: 1 1 320px;
@@ -536,7 +536,7 @@ const ScriptStore = (() => {
     padding: 0 12px;
     gap: 8px;
     border: 1px solid rgba(127, 127, 127, 0.14);
-    border-radius: 16px;
+    border-radius: 8px;
     background: rgba(0, 0, 0, 0.12);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
@@ -602,13 +602,13 @@ const ScriptStore = (() => {
 .ss-nav {
     padding: 12px 14px;
     border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-    border-radius: 18px;
+    border-radius: 8px;
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
         var(--bg-content);
     box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
 }
 .ss-nav-label {
     font-size: 10px;
@@ -618,7 +618,7 @@ const ScriptStore = (() => {
 }
 .ss-chip {
     padding: 7px 11px;
-    border-radius: 999px;
+    border-radius: 8px;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -652,7 +652,7 @@ const ScriptStore = (() => {
     align-items: center;
     gap: 6px;
     padding: 7px 10px;
-    border-radius: 999px;
+    border-radius: 8px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(127, 127, 127, 0.14);
 }
@@ -673,7 +673,7 @@ const ScriptStore = (() => {
 .ss-loading {
     padding: 26px 20px;
     border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
-    border-radius: 20px;
+    border-radius: 8px;
     background:
         radial-gradient(circle at top center, rgba(96, 165, 250, 0.12), transparent 48%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
@@ -708,7 +708,7 @@ const ScriptStore = (() => {
 }
 .ss-source-stat {
     padding: 6px 10px;
-    border-radius: 999px;
+    border-radius: 8px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(127, 127, 127, 0.14);
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
@@ -719,7 +719,7 @@ const ScriptStore = (() => {
     gap: 12px;
     padding: 14px;
     margin-bottom: 0;
-    border-radius: 20px;
+    border-radius: 8px;
     border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
     background:
         radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 35%),
@@ -766,7 +766,7 @@ const ScriptStore = (() => {
 .ss-installed-badge,
 .ss-source-badge {
     padding: 3px 8px;
-    border-radius: 999px;
+    border-radius: 8px;
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.04em;
@@ -797,7 +797,7 @@ const ScriptStore = (() => {
 }
 .ss-card-meta span {
     padding: 5px 8px;
-    border-radius: 999px;
+    border-radius: 8px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(127, 127, 127, 0.12);
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
@@ -814,7 +814,7 @@ const ScriptStore = (() => {
     max-height: 360px;
     margin-top: 10px;
     padding: 12px 14px;
-    border-radius: 16px;
+    border-radius: 8px;
     border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255,255,255,0.02)),
@@ -843,7 +843,7 @@ const ScriptStore = (() => {
     }
     .ss-hero {
         padding: 16px;
-        border-radius: 20px;
+        border-radius: 8px;
     }
     .ss-toolbar,
     .ss-status {
@@ -866,7 +866,7 @@ const ScriptStore = (() => {
 [data-density="compact"] .ss-hero {
     gap: 14px;
     padding: 16px 18px;
-    border-radius: 20px;
+    border-radius: 8px;
 }
 [data-density="compact"] .ss-summary,
 [data-density="compact"] .ss-status-summary {
@@ -875,12 +875,12 @@ const ScriptStore = (() => {
 [data-density="compact"] .ss-toolbar,
 [data-density="compact"] .ss-nav {
     padding: 10px 12px;
-    border-radius: 16px;
+    border-radius: 8px;
 }
 [data-density="compact"] .ss-search-bar {
     padding: 0 10px;
     gap: 7px;
-    border-radius: 14px;
+    border-radius: 8px;
 }
 [data-density="compact"] .ss-search-input {
     padding: 9px 0;
@@ -898,19 +898,19 @@ const ScriptStore = (() => {
 [data-density="compact"] .ss-card {
     gap: 10px;
     padding: 12px;
-    border-radius: 18px;
+    border-radius: 8px;
     contain-intrinsic-size: 164px;
 }
 [data-density="compact"] .ss-card-preview {
     margin-top: 8px;
     padding: 10px 12px;
-    border-radius: 14px;
+    border-radius: 8px;
 }
 [data-density="compact"] .ss-empty,
 [data-density="compact"] .ss-error,
 [data-density="compact"] .ss-loading {
     padding: 22px 18px;
-    border-radius: 18px;
+    border-radius: 8px;
 }
 @media (prefers-reduced-motion: reduce) {
     .ss-btn,

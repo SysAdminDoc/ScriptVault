@@ -57,7 +57,7 @@ tr.kn-focused td {
   align-items: center;
   justify-content: center;
   background: rgba(0,0,0,.6);
-  backdrop-filter: blur(4px);
+  backdrop-filter: none;
   animation: kn-fade-in 200ms ease;
 }
 @keyframes kn-fade-in { from { opacity: 0; } to { opacity: 1; } }
