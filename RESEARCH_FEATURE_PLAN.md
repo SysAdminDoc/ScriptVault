@@ -1,765 +1,1045 @@
 # Project Research and Feature Plan
 
+Status: refreshed on 2026-05-24 from the live `main` worktree at `C:\Users\--\repos\ScriptVault`.
+
+Scope: this is a research and planning artifact only. It does not implement feature code. It intentionally treats current tracked files, docs, tests, release artifacts, public listings, and the dirty worktree as separate evidence streams.
+
+Labels used below:
+
+- Verified: confirmed in local source, docs, tests, command output, git history, or public primary sources.
+- Likely: strongly suggested by evidence, but not fully exercised in a browser or store console.
+- Assumption: reasonable product or implementation assumption that still needs owner confirmation.
+- Needs live validation: requires credentials, browser-store dashboard access, a real extension profile, or platform review tooling not completed in this pass.
+
 ## Executive Summary
 
-ScriptVault is a Chrome Manifest V3 userscript manager at local version 3.11.0 with a broad, security-oriented feature set: `.user.js` install interception, a Monaco editor, dashboard and side panel management, cloud sync, update checks, static analysis, DevTools visibility, trash recovery, localization, and a TypeScript mirror that is not yet the canonical runtime source. The strongest current shape is a mature local-first power-user extension with unusually deep hardening notes and tests. The highest-value direction is to reduce trust and release risk before adding novelty: reconcile public release drift, close runtime JavaScript and TypeScript drift, finish consent-first update handling, harden remote fetch/install paths, make large libraries fast, and complete the first verified Firefox sideload path.
+ScriptVault is a public, Manifest V3 userscript manager for Chrome with a broad user-facing surface: dashboard management, install/update flows, Monaco editing, GM API compatibility, side panel and popup controls, cloud sync, import/export, diagnostics, static analysis, signing, DevTools surfaces, localization, and early Firefox packaging. Its strongest current shape is not raw feature count, but the combination of a modern MV3 runtime and unusually rich trust/recovery affordances for a code-execution tool. The highest-value direction is to make the trust story match the feature story: reconcile public release and store metadata with the local 3.11.0 codebase, harden update/install consent and network boundaries, eliminate runtime/source drift, and convert existing recovery, sync, cross-browser, and diagnostics pieces into verifiable workflows.
 
-Top opportunities, in priority order:
+Top opportunities in priority order:
 
-1. **P0 - Reconcile release state and publishing automation.** Verified local tags reach `v3.11.0`, `manifest.json` and `package.json` are 3.11.0, but the latest GitHub release is still `v2.3.4`.
-2. **P0 - Close TypeScript/runtime drift before making TS canonical.** Verified drift remains in `src/background/install-handler.ts`, and recent runtime stream-bounded fetch hardening has not been ported to the background TS mirror.
-3. **P0 - Finish stream-bounded remote script and update fetch parity.** Verified commit `053c1a5` closes the runtime DoS class with tests; remaining work is background TS mirror parity and release verification.
-4. **P0 - Add a global pending-update inbox and consent mode.** Per-script interactive updates exist, while `UpdateSystem.autoUpdate()` still auto-applies when `settings.autoUpdate` is true.
-5. **P0 - Move userscript messaging/XHR off the page `postMessage` bridge where Chrome supports `runtime.onUserScriptMessage`.** Chrome's official docs now describe dedicated user-script message handlers for less-trusted user-script contexts.
-6. **P1 - Virtualize dashboard, card, and side-panel script lists.** `pages/dashboard.js::renderScriptTable()` still renders the list directly and is repeatedly called after search, sort, restore, update, and settings actions.
-7. **P1 - Complete Firefox Phase 1 temporary sideload.** `FIREFOX-PORT.md` still has clean sideload unchecked despite `manifest-firefox.json` being version-synced.
-8. **P1 - Align trash storage with the product promise.** Runtime trash exists, but it is stored in `chrome.storage.local` rather than the IndexedDB-backed store described by roadmap history.
-9. **P1 - Refresh privacy, sync, and store disclosures.** `PRIVACY.md` says data never leaves the device unless exported, while README and code expose cloud sync providers.
-10. **P2 - Add provenance and supply-chain checks for `@require`.** The design exists in `docs/require-provenance-design.md`; implementation is still deferred.
+1. P0 - Reconcile public release and store trust: GitHub Releases are still at v2.3.4 while the repo is 3.11.0, the Chrome Web Store listing still presents v1.7.4-era copy, and a stale Firefox XPI sits in the root.
+2. P0 - Add a generated release/store/privacy parity gate: package, manifests, README, changelog, privacy policy, public store copy, artifacts, and release notes must agree before any publish.
+3. P0 - Finish the Chrome Web Store API v2 release path: the repo has a v4 publish script, but the release runbook still describes older migration state and CI has no release job.
+4. P0 - Stop runtime/source drift: `background.core.js` and `src/background/*` still diverge on bounded fetch and DNR/webRequest behavior; current dirty changes show this remains an active failure mode.
+5. P0 - Add an update inbox with consent and rollback receipts: per-script interactive updates exist, but bulk and auto-update still apply executable code without a review queue.
+6. P1 - Move sensitive user-script XHR callback plumbing off the page `postMessage` bridge where Chrome's user-script messaging API is available.
+7. P1 - Centralize remote fetch policy for installs, updates, `@require`, `@resource`, redirects, private IPs, and DNS-rebind checks.
+8. P1 - Turn Firefox from a manifest/build experiment into a validated AMO lane with `web-ext lint`, source-package notes, unsupported-feature gates, and no stale root artifact.
+9. P1 - Make sync and backups auditable: token health, revoke, manual sync, conflict dry-run, backup verification, restore receipts, and privacy disclosure alignment.
+10. P1 - Add large-library performance gates and virtualization for dashboard, side panel, and search-heavy workflows.
 
 ## Evidence Reviewed
 
 Local files and directories inspected:
 
-- `CLAUDE.md`, `README.md`, `ROADMAP.md`, `CHANGELOG.md`, `FIREFOX-PORT.md`, `PRIVACY.md`, `CWS_COOKIES_JUSTIFICATION.md`, `RESEARCH_FEATURE_PLAN.md`.
-- `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`, `esbuild.config.mjs`, `build.sh`, `publish.sh`, `.gitignore`.
-- `.github/workflows/ci.yml`, `.factory/state.yaml`, `.factory/large-repo-state.yaml`.
-- `background.core.js`, generated/runtime `background.js` policy from repo notes, `modules/*.js`, `shared/*.js`, `bg/*.js`, `pages/*.js`, `src/**/*.ts`, `tests/*.test.js`, `docs/*.md`.
-- No dirty files outside this report at verification time.
+- Root project instructions: `AGENTS.md`, `CLAUDE.md`.
+- User-facing docs: `README.md`, `CHANGELOG.md`, `ROADMAP.md`, `PRIVACY.md`, `FIREFOX-PORT.md`.
+- Release docs and scripts: `docs/release-runbook.md`, `docs/cross-browser-pipeline.md`, `build.sh`, `build-firefox.sh`, `publish.sh`, `.github/workflows/ci.yml`.
+- Manifests and package files: `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`.
+- Runtime and source mirrors: `background.core.js`, `background.js`, `src/background/*.ts`, `src/types/messages.ts`.
+- UI surfaces: `popup.html`, `popup.js`, `sidepanel.html`, `sidepanel.js`, `pages/dashboard.html`, `pages/dashboard.js`, `pages/dashboard.css`, `pages/dashboard-a11y.js`, `pages/dashboard-firefox-compat.js`, `pages/install.html`, `pages/install.js`, `pages/monaco-adapter.js`, `pages/editor-sandbox.html`.
+- Sync, public API, and trust modules: `modules/sync-providers.js`, `modules/sync-easycloud.js`, `modules/public-api.js`, `src/modules/public-api.ts`, `bg/analyzer.js`, `bg/signing.js`, `offscreen.js`.
+- Tests: `tests/*.test.js`, `tests/*.test.mjs`, especially dashboard, popup, side panel, public API, wrapper, bounded fetch, cookie, XHR, and release-surface tests.
+- Local project state: `.factory/large-repo-state.yaml`.
+- Root artifacts: `ScriptVault-firefox-v2.1.7.xpi`.
 
-Git, build, and release evidence:
+Git history reviewed:
 
-- Current branch: `main`, tracking `origin/main`, ahead by 1 commit before this report change.
-- Current recent HEAD before this report: `428b718 Hardening pass round 2: gist token promise hang fix + TS @grant none drift`.
-- `rtk git log -10` reviewed commits from `428b718` through recent Phase 39/40 and repo-hygiene work.
-- `gh issue list --limit 50 --state all`: no issues returned.
-- `git tag --sort=-v:refname`: latest local tag `v3.11.0`.
-- `gh release list --limit 10`: latest GitHub release `v2.3.4` from 2026-04-29.
-- `npm audit --audit-level=high --omit=optional`: 0 high-severity vulnerabilities found.
-- `npm outdated --json`: dev dependency drift in `@vitest/coverage-v8`, `chrome-types`, `esbuild`, `jsdom`, `monaco-editor`, `puppeteer-core`, `typescript`, and `vitest`.
-- `.github/workflows/ci.yml`: Node 20 CI runs audit, typecheck, tests, build, dashboard smoke, package artifact upload; audit is currently `continue-on-error: true`; there is no release publishing workflow.
+- `rtk git log -10 --oneline --decorate`
+- Range reviewed: `740785f` through `3b2a211` on `main`.
+- Recent direction: Round 14 roadmap research, release trust polish, dashboard workflow states, extension UI polish, update/install trust states, public API hardening, bounded fetch hardening, CSV injection handling, badge safety, and TS mirror drift cleanup.
+
+Build, test, docs, and release artifacts inspected:
+
+- `npm run check` passed: 49 test files, 807 tests. The run emitted jsdom navigation-not-implemented warnings but exited successfully.
+- `npm run smoke:dashboard` passed for ScriptVault 3.11.0.
+- `npm audit --audit-level=high --omit=optional` passed with 0 vulnerabilities.
+- `npm outdated --json` found update candidates for Vitest, coverage-v8, chrome-types, esbuild, jsdom, monaco-editor, puppeteer-core, and TypeScript.
+- Public GitHub release state inspected with `gh release list` and `gh release view`.
+- Public GitHub repository metadata inspected with `gh repo view`.
+- Public Chrome Web Store listing inspected in browser.
 
 External sources reviewed:
 
-- [Chrome userScripts API](https://developer.chrome.com/docs/extensions/reference/api/userScripts): availability, user-script toggle behavior, dedicated `runtime.onUserScriptMessage`, and update re-registration requirements.
-- [Chrome structured clone messaging](https://developer.chrome.com/blog/structured-clone-messaging): ecosystem direction for extension messaging payload fidelity.
-- [Chrome Web Store API v2](https://developer.chrome.com/blog/cws-api-v2): release automation and OAuth/OIDC direction.
-- [WXT browser targeting guide](https://wxt.dev/guide/essentials/target-different-browsers.html): cross-browser build targeting patterns.
-- [MDN Chrome incompatibilities](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Chrome_incompatibilities): Firefox incompatibilities relevant to Chrome MV3 APIs.
-- [MDN `browser_specific_settings`](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/browser_specific_settings): Firefox manifest expectations.
-- [Tampermonkey changelog](https://www.tampermonkey.net/changelog.php): current competitor behavior and update-policy direction.
-- [Violentmonkey v2.37.0 release](https://github.com/violentmonkey/violentmonkey/releases/tag/v2.37.0): current open-source competitor feature movement.
-- Project-local `docs/cross-browser-pipeline.md`, which already cites WXT, MDN, Edge Add-ons, Orion, and Safari extension-converter sources.
+- Chrome userScripts API: [developer.chrome.com docs](https://developer.chrome.com/docs/extensions/reference/api/userScripts)
+- Chrome Web Store API v2 announcement: [CWS API v2 blog](https://developer.chrome.com/blog/cws-api-v2)
+- Chrome Web Store API reference: [CWS API REST reference](https://developer.chrome.com/docs/webstore/api/reference/rest)
+- Chrome Web Store program policies: [program policies](https://developer.chrome.com/docs/webstore/program-policies/)
+- Chrome Web Store rollback docs: [rollback documentation](https://developer.chrome.com/docs/webstore/rollback)
+- Chrome Web Store update docs: [update documentation](https://developer.chrome.com/docs/webstore/update/)
+- Chrome permissions API: [permissions reference](https://developer.chrome.com/docs/extensions/reference/api/permissions)
+- Chrome Web Store listing: [ScriptVault listing](https://chromewebstore.google.com/detail/scriptvault/jlhdbkeijcbgnonpfkfkkkhfmbeejkgh)
+- MDN userScripts API: [MDN userScripts](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts)
+- MDN Chrome incompatibilities: [Chrome incompatibilities](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Chrome_incompatibilities)
+- MDN `browser_specific_settings` and Firefox `data_collection_permissions`: [manifest key docs](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/browser_specific_settings)
+- Firefox Extension Workshop source submission and linting: [source code submission](https://extensionworkshop.com/documentation/publish/source-code-submission/), [web-ext lint](https://extensionworkshop.com/documentation/develop/web-ext-command-reference/#web-ext-lint)
+- WXT browser-target and manifest docs: [target browsers](https://wxt.dev/guide/essentials/target-different-browsers.html), [manifest docs](https://wxt.dev/guide/essentials/manifest.html)
+- Microsoft Edge Add-ons publish docs: [Edge publish guide](https://learn.microsoft.com/en-us/microsoft-edge/extensions-chromium/publish/publish-extension)
+- Comparable userscript managers: [Tampermonkey](https://www.tampermonkey.net/?browser=chrome), [Violentmonkey](https://violentmonkey.github.io/), [Violentmonkey GM API](https://violentmonkey.github.io/api/gm/), [Violentmonkey source](https://github.com/violentmonkey/violentmonkey), [ScriptCat docs](https://docs.scriptcat.org/), [ScriptCat source](https://github.com/scriptscat/scriptcat), [Greasemonkey](https://www.greasespot.net/), [Greasemonkey source](https://github.com/greasemonkey/greasemonkey), [quoid/userscripts](https://github.com/quoid/userscripts)
+- Adjacent trust/release projects: [Stylus](https://github.com/openstyles/stylus), [uBlock Origin Lite FAQ](https://github.com/uBlockOrigin/uBOL-home/wiki/Frequently-asked-questions-%28FAQ%29), [Bitwarden browser client](https://github.com/bitwarden/clients/tree/main/apps/browser)
+- Supply-chain references: [npm provenance](https://docs.npmjs.com/generating-provenance-statements), [SLSA provenance](https://slsa.dev/spec/v1.0/provenance)
+- Accessibility references: [WCAG 2.2](https://www.w3.org/TR/WCAG22/), [WCAG 3.0 Working Draft](https://www.w3.org/TR/wcag-3.0/)
 
-Areas that could not be verified in this pass:
+Areas that could not be fully verified:
 
-- Live Chrome extension runtime behavior in an installed browser profile.
-- Live Firefox temporary sideload result.
-- Chrome Web Store dashboard state, publish queue, privacy disclosure form, and OAuth project ownership.
-- Real cloud sync credentials and provider-specific token refresh behavior.
-- Live installed-browser behavior for the newly committed hardening passes `053c1a5` and `428b718`.
+- Needs live validation: Chrome Web Store Developer Dashboard metadata, submit status, review status, screenshots, data-use declarations, and current package uploaded to Google.
+- Needs live validation: AMO validation and submission behavior, because no AMO dashboard or `web-ext lint` run against a generated package was completed in this pass.
+- Needs live validation: real-browser behavior for Chrome 138+ "Allow User Scripts" onboarding, Chrome 133+ host access request prompts, DNR dynamic rule cleanup, and user-script messaging migration.
+- Needs live validation: cloud providers requiring credentials: WebDAV, Google Drive, Dropbox, OneDrive, EasyCloud, and GitHub Gist token flows.
+- Assumption: the dirty DNR and `window.onurlchange` hardening changes are intended work in progress by another actor; they were not staged or treated as released.
 
 ## Current Product Map
 
 Core workflows:
 
-- Install scripts from `.user.js` navigation, URL entry, manual code, or import.
-- Review an install page, parse userscript metadata, and persist scripts.
-- Manage scripts in a dashboard: enable or disable, search, sort, tag or folder, edit, update, export, restore, delete, and open diagnostics.
-- Edit scripts in Monaco with linting, snippets, formatting, metadata helpers, and command palette actions.
-- Register scripts through `chrome.userScripts`, re-register after settings or extension lifecycle events, and expose GM/TM-compatible APIs through runtime modules.
-- Check upstream updates with ETag/Last-Modified support and optional auto-update.
-- Sync or back up scripts through Google Drive, Dropbox, OneDrive, WebDAV, Easy Cloud, Gist, and local export flows.
-- Analyze scripts for risky patterns, signing, trust, and permissions.
-- Inspect runtime behavior through DevTools, error logs, network logs, and dashboard diagnostics.
-- Use popup, side panel, context menus, omnibox keyword `sv`, and keyboard commands to reach common actions.
+- Install userscripts from `.user.js` URLs, manual URL input, raw code, file import, drag/drop, and likely web navigation interception.
+- Review script metadata, grants, match patterns, resources, requirements, trust signals, and install/update diffs.
+- Manage scripts in a rich dashboard with list/card views, tags, folders, workspaces, search, filters, sorting, pinning, bulk operations, notes, backups, trash, diagnostics, and activity surfaces.
+- Edit scripts in a Monaco-backed editor surface with sandboxing and script metadata support.
+- Execute scripts through Chrome MV3 `userScripts` plus wrapper code for GM APIs and compatibility helpers.
+- Use extension entry points: action popup, side panel, options/dashboard, context menus, omnibox keyword, install page, DevTools panel, offscreen document, and background service worker.
+- Sync, export, import, and back up scripts/settings through local storage, browser sync, cloud providers, EasyCloud/Google Drive, and GitHub Gist integrations.
+- Check updates manually, in bulk, or automatically; apply updates and maintain history/rollback data.
+- Analyze and sign scripts; inspect CSP issues, network logs, performance budgets, runtime errors, and support diagnostics.
 
-Project type, stack, and build:
+Project type, stack, runtime, package manager, build, and tests:
 
-- Browser extension: Chrome MV3 primary, Firefox WebExtension port in progress.
-- Runtime source: JavaScript modules and concatenated service worker; repo guidance says edit `background.core.js`, `bg/`, `modules/`, `shared/`, and page JS, not generated `background.js`.
-- Type system: TypeScript mirror under `src/`, used for typecheck and parity migration but not yet the runtime build source.
-- Package manager: npm with `package-lock.json`.
-- Build system: `npm run build`, `npm run build:bg`, `npm run build:prod`, `bash build.sh`, esbuild config, Chrome ZIP packaging.
-- Test system: Vitest, dashboard smoke tests, typecheck, and Chrome-headless smoke in CI.
-- Release process: local tags and packaging scripts exist; GitHub Releases lag local tags and no GitHub release workflow is present.
+- Verified project type: browser extension and userscript manager.
+- Verified runtime: Chrome Manifest V3 service worker, `chrome.userScripts`, DNR, offscreen documents, side panel, DevTools, sandboxed editor page, content scripts, and extension pages.
+- Verified browser target: Chrome minimum version 130 in `manifest.json`; Firefox MV3 experiment in `manifest-firefox.json` with `strict_min_version` 128.
+- Verified language stack: JavaScript runtime files plus TypeScript mirror/source modules under `src/`.
+- Verified package manager: npm with `package-lock.json`.
+- Verified build system: `esbuild.config.mjs`, `build.sh`, `build-firefox.sh`, `publish.sh`, `npm run build`, `npm run build:bg`, `npm run build:prod`, `npm run build:monaco`.
+- Verified test system: Vitest plus jsdom, Puppeteer-core smoke tests, a11y tests, release-surface tests, wrapper/runtime tests, and dashboard/popup tests.
+- Verified release process: manual Chrome zip build and publish script exist; GitHub Actions CI builds artifacts; no complete release publish workflow was found.
 
-Major modules and entry points:
+Supported platforms and distribution:
 
-- Service worker/runtime core: `background.core.js`, generated `background.js`, `src/background/*.ts`.
-- Userscript APIs: `modules/*.js`, `src/modules/*.ts`, especially XHR, storage, sync, grants, public API, error log.
-- Storage: `modules/storage.js`, `src/storage/*`, IndexedDB for scripts/settings and `chrome.storage.local` for smaller state.
-- UI surfaces: `pages/dashboard.html/js/css`, `pages/editor.html/js/css`, `pages/install.html/js/css`, `pages/sidepanel.html/js/css`, popup files, DevTools panel files.
-- Static analysis and trust: `bg/analyzer.js`, `bg/signing.js`, `docs/require-provenance-design.md`.
-- Config and defaults: `src/config/settings-defaults.json`, manifests, locale files under `_locales/`.
-- Release and CI: `.github/workflows/ci.yml`, `build.sh`, `publish.sh`, `docs/release-runbook.md`.
+- Verified: Chrome/Chromium MV3 is the primary target.
+- Likely: Edge/Brave/other Chromium derivatives should work for most functionality but are not release-gated.
+- Partial: Firefox MV3 manifest and build script exist, but `FIREFOX-PORT.md` Phase 1 remains unchecked.
+- Not current: Safari would require a native app packaging path and should be treated as a larger bet only.
+- Verified public distribution mismatch: local version is 3.11.0, GitHub Releases latest is v2.3.4, Chrome Web Store public listing still exposes stale v1.7.4-era copy, and a root `ScriptVault-firefox-v2.1.7.xpi` artifact remains.
 
-User personas:
+Core user personas:
 
-- Power users with dozens or hundreds of installed userscripts who need fast search, bulk management, and reliable updates.
-- Security-sensitive users who inspect permissions, signatures, remote code, and update diffs.
-- Script authors who need a capable editor, metadata validation, debugging, and test/install loops.
-- Cross-browser users who expect Firefox/Edge parity and portable backups.
-- Maintainers who need reproducible release artifacts, privacy/store disclosure consistency, and low-risk migration paths.
+- Power users migrating from Tampermonkey, Violentmonkey, ScriptCat, or Greasemonkey who expect GM API compatibility, import/export, script updates, match controls, and site-level enable/disable.
+- Developers writing and debugging scripts who need Monaco editing, metadata helpers, static analysis, network/CSP/error diagnostics, profiling, and reliable update/rollback history.
+- Privacy-conscious users running arbitrary third-party code who need explicit trust signals, update consent, permission clarity, audit trails, backups, and easy recovery.
+- Cross-browser users who want Chrome today and Firefox/Edge support without losing data or script compatibility.
 
-Platforms and distribution channels:
+Major modules, entry points, UI surfaces, services, storage, integrations, permissions, and config:
 
-- Verified primary: Chrome MV3, minimum Chrome 130 in `manifest.json`.
-- In progress: Firefox via `manifest-firefox.json`, minimum Firefox 128.
-- Planned or researched: Edge Add-ons, other Chromium browsers, WXT pipeline, Orion/Safari considerations in docs.
-- Public distribution state is inconsistent: Chrome Web Store link exists in README, local tags are 3.x, GitHub Releases stop at 2.3.4.
-
-Important permissions, integrations, and data flows:
-
-- Required permissions include `storage`, `tabs`, `notifications`, `contextMenus`, `scripting`, `userScripts`, `webNavigation`, `unlimitedStorage`, `alarms`, `downloads`, `declarativeNetRequest`, `declarativeNetRequestWithHostAccess`, `sidePanel`, and `offscreen`.
-- Optional permissions include `clipboardWrite`, `clipboardRead`, `identity`, and `cookies`.
-- Host permission is `<all_urls>`, expected for a userscript manager but high-trust.
-- Remote network flows include userscript install/update URLs, `@require` fetches, GM XHR/fetch, update checks, catalog/script-source access, and cloud sync provider APIs.
-- User data includes scripts, metadata, settings, folders, workspaces, trash, sync tokens/config, logs, cached requires, update metadata, and backups.
+- Background runtime: `background.core.js` is the canonical runtime today; `background.js` is generated output; `src/background/*.ts` mirrors many background subsystems but is not fully canonical.
+- Script execution and wrapper: `src/background/wrapper-builder.ts`, wrapper tests, `content.js`, `background.core.js`, `src/background/user-script-manager.ts`, and generated `background.js`.
+- Install/update/network: `background.core.js`, `src/background/install-handler.ts`, `src/background/update-checker.ts`, `src/background/resource-loader.ts`, `src/background/context-menu.ts`.
+- Dashboard: `pages/dashboard.html`, `pages/dashboard.js`, `pages/dashboard.css`, and many dashboard companion modules.
+- Editor: `pages/editor-sandbox.html`, `pages/monaco-adapter.js`, dashboard editor tabs and editor-related tests.
+- Popup and side panel: `popup.*`, `sidepanel.*`, `tests/popup-*`, `tests/sidepanel-*`.
+- Sync: `modules/sync-providers.js`, `modules/sync-easycloud.js`, `pages/dashboard-gist.js`, background sync handlers.
+- Public API: `modules/public-api.js`, `src/modules/public-api.ts`, `tests/public-api.test.js`.
+- Security/trust: `offscreen.js`, `bg/analyzer.js`, `bg/signing.js`, `docs/require-provenance-design.md`.
+- Release and packaging: `build.sh`, `build-firefox.sh`, `publish.sh`, `.github/workflows/ci.yml`, `docs/release-runbook.md`.
+- Storage: Chrome `storage.local`, `storage.sync`, IndexedDB surfaces, trash in `storage.local`, provider tokens and sync state, update/history data, settings, and diagnostic logs.
+- Permissions: broad host access through `<all_urls>`, `userScripts`, `scripting`, `webNavigation`, `declarativeNetRequest`, `declarativeNetRequestWithHostAccess`, `downloads`, `notifications`, `alarms`, `sidePanel`, `offscreen`, and optional identity/clipboard/cookies permissions.
 
 ## Feature Inventory
 
-### Script Install and Import
+### 1. Script Install and Import
 
-- **User value:** Quickly install scripts from `.user.js` URLs, pasted code, local import, or programmatic URL actions.
-- **Entry point:** `.user.js` navigation interception, dashboard install/import controls, `installFromUrl`, install page.
-- **Main code locations:** `background.core.js::_fetchPendingUserscript`, `background.core.js::installFromUrl`, `pages/install.*`, `src/background/install-handler.ts`, tests around install/update flows.
-- **Current maturity:** Partial. Core behavior exists, and commit `053c1a5` adds runtime bounded-fetch protection, but background TS mirror files still show the older buffered pattern.
-- **Tests/docs coverage:** Covered by install docs and tests, but stream-bounded fetch behavior needs explicit JS and TS tests.
-- **Improvement opportunities:** Finish `_fetchTextBounded` in both runtime and TS mirror; add fake `ReadableStream` tests; add storage quota failure tests for `pendingInstall`; add DNS rebinding post-fetch verification for remote install.
+- Name: Script install, URL/file/manual-code import, and web install capture.
+- User value: lets users add scripts from userscript sites, direct URLs, local files, pasted code, or backups.
+- Entry point: `.user.js` navigation capture, `pages/install.html`, dashboard import controls, drag/drop, batch URL install, context menus.
+- Main code locations: `background.core.js`, `src/background/install-handler.ts`, `pages/install.js`, `pages/dashboard.js`, `pages/dashboard.html`, `content.js`, tests around install, URL capture, and GUI workflows.
+- Current maturity: complete for Chrome core flow; partial for shared network safety because source mirrors still contain buffered `response.text()` paths.
+- Tests/docs coverage: README documents install/import; tests cover many install/update surfaces; CI exercises dashboard smoke.
+- Improvement opportunities: centralize bounded remote fetch policy; add internal-host/redirect/DNS-rebind checks; add install trust receipt; add source provenance display; align privacy/store copy with all install network behavior.
 
-### Script Dashboard Management
+### 2. Script Dashboard Management
 
-- **User value:** Manage installed scripts through search, sort, table/card views, folders, workspaces, enable/disable, delete, restore, and bulk operations.
-- **Entry point:** `pages/dashboard.html`, extension action, side panel/dashboard links.
-- **Main code locations:** `pages/dashboard.js`, `pages/dashboard.css`, `src/types/messages.ts`, background message handler cases.
-- **Current maturity:** Complete for normal-sized libraries, performance-risk for large libraries.
-- **Tests/docs coverage:** Dashboard accessibility/module tests exist; roadmap references large-library performance work.
-- **Improvement opportunities:** Add virtual list rendering; preserve selection/focus/scroll across filter and restore; add performance tests around 500 and 2,000 script fixtures.
+- Name: Dashboard script library management.
+- User value: gives users a primary control center for search, filters, sort, tags, folders, workspaces, enable/disable, bulk operations, notes, diff, backups, and diagnostics.
+- Entry point: options/dashboard page and extension UI links.
+- Main code locations: `pages/dashboard.html`, `pages/dashboard.js`, `pages/dashboard.css`, `pages/dashboard-a11y.js`, `dashboard-lazy-loader.js`, dashboard tests.
+- Current maturity: feature-rich but high complexity; large direct DOM-rendering files create maintainability and performance risk.
+- Tests/docs coverage: README feature list, GUI audit tests, dashboard smoke, dashboard secondary-surface tests, a11y tests.
+- Improvement opportunities: add large-library performance fixtures; virtualize script lists/cards; split dashboard state/actions into smaller testable modules; create consistent empty/error/loading contracts per panel.
 
-### Trash and Recovery
+### 3. Popup Quick Controls
 
-- **User value:** Recover accidentally deleted scripts and empty trash intentionally.
-- **Entry point:** Dashboard trash tab, delete/restore/empty actions.
-- **Main code locations:** `background.core.js` cases `getTrash`, `restoreFromTrash`, `emptyTrash`, `permanentlyDelete`; `pages/dashboard.js` trash UI; `src/types/messages.ts` trash message types; `src/config/settings-defaults.json`.
-- **Current maturity:** Complete UI/runtime behavior, but storage design is inconsistent with roadmap history.
-- **Tests/docs coverage:** Dashboard tests reference trash actions; roadmap says Phase 12.13 should use an IndexedDB `scripts_trash` store with retention semantics.
-- **Improvement opportunities:** Either migrate trash to IDB with retention indexes or update roadmap/docs to declare the `chrome.storage.local` array intentional; add quota and many-deleted-script tests; expose per-item expiry metadata in the UI.
+- Name: Action popup.
+- User value: gives fast enable/disable, script status, quick edit, diagnostics, and active-tab affordances.
+- Entry point: extension action popup.
+- Main code locations: `popup.html`, `popup.js`, `popup.css`, popup tests.
+- Current maturity: complete for core Chrome surface; recent commits polished UI states.
+- Tests/docs coverage: popup a11y and workflow tests; README mentions popup quick-edit.
+- Improvement opportunities: surface update inbox count, site-scoped controls, host permission status, userScripts toggle status, and a support snapshot link without overwhelming the compact surface.
 
-### Monaco Script Editor
+### 4. Side Panel
 
-- **User value:** Author and edit scripts with syntax highlighting, metadata support, snippets, and safer save behavior.
-- **Entry point:** `pages/editor.html`, dashboard edit buttons, install/edit flows.
-- **Main code locations:** `pages/editor.js`, `pages/editor.css`, Monaco assets, parser modules, tests around metadata/editor if present.
-- **Current maturity:** Complete and differentiated.
-- **Tests/docs coverage:** README and roadmap document editor capabilities.
-- **Improvement opportunities:** Add metadata grant advisor; add update-diff editor merge UX; add autosave conflict recovery for edits made while an upstream update is pending.
+- Name: Chrome side panel.
+- User value: keeps script controls near the active page for repeated use.
+- Entry point: Chrome side panel permission/API and dashboard/popup links.
+- Main code locations: `sidepanel.html`, `sidepanel.js`, `sidepanel.css`, side panel tests.
+- Current maturity: complete for Chrome; unavailable in Firefox manifest.
+- Tests/docs coverage: side panel tests and README comparison table.
+- Improvement opportunities: mirror site-scoped controls, active-page diagnostics, pending update count, and virtualized active script list; feature-gate in Firefox/Edge support matrix.
 
-### Update Checking and Applying
+### 5. Monaco Script Editor
 
-- **User value:** Keep scripts current while avoiding silent takeover or overwriting local edits.
-- **Entry point:** Auto-update alarm, dashboard update controls, per-row update icon, settings.
-- **Main code locations:** `background.core.js::UpdateSystem`, `pages/dashboard.js::interactiveCheckAndConfirmUpdate`, `src/background/update-checker.ts`, settings defaults.
-- **Current maturity:** Partial. Per-script interactive diff exists; global auto-update still installs when `settings.autoUpdate` is true.
-- **Tests/docs coverage:** Roadmap references Phase 17.3, 38.3, and 38.9; update tests exist.
-- **Improvement opportunities:** Split check scheduling from apply policy; add pending update inbox; add defaults that do not silently overwrite scripts; expose batch approve/reject; test local-edited and `@nodownload` cases.
+- Name: Monaco editor and sandboxed editing surface.
+- User value: lets developers edit scripts with a professional code editor.
+- Entry point: dashboard edit buttons, popup quick-edit, editor tabs.
+- Main code locations: `pages/editor-sandbox.html`, `pages/monaco-adapter.js`, dashboard editor tab code, build Monaco script.
+- Current maturity: complete for Chrome dashboard use; partial for cross-browser and offline/fallback clarity.
+- Tests/docs coverage: README and dashboard GUI tests mention editor; no full browser-level Monaco regression found in this pass.
+- Improvement opportunities: add generated GM API typings, grant inference warnings, editor search history, plaintext fallback, save-conflict handling, and Firefox strategy.
 
-### GM/TM API Compatibility and XHR
+### 6. Script Execution Runtime
 
-- **User value:** Run existing userscripts from Tampermonkey/Violentmonkey/Greasemonkey with minimal changes.
-- **Entry point:** Registered userscripts call GM APIs.
-- **Main code locations:** `modules/*.js`, `modules/xhr.js`, `src/modules/*.ts`, `background.core.js` message handling, `src/types/messages.ts`.
-- **Current maturity:** Broad but still advancing.
-- **Tests/docs coverage:** XHR tests, roadmap compatibility phases, extension-interop doc.
-- **Improvement opportunities:** Implement `GM_fetch`; support AbortSignal for `GM_xmlhttpRequest`; support cookie partition controls; migrate user-script messaging to `runtime.onUserScriptMessage` where available; keep structured-clone compatibility gated by Chrome version.
+- Name: MV3 userScripts execution and wrapper runtime.
+- User value: runs user scripts under MV3 while exposing compatibility APIs.
+- Entry point: background registration and Chrome `userScripts` runtime.
+- Main code locations: `background.core.js`, `background.js`, `src/background/user-script-manager.ts`, `src/background/wrapper-builder.ts`, `content.js`, wrapper tests.
+- Current maturity: advanced but drift-prone; dirty changes show ongoing work on DNR and `window.onurlchange` parity.
+- Tests/docs coverage: many wrapper/security/runtime tests; README GM API table.
+- Improvement opportunities: make generated runtime/source parity a CI contract; migrate callback transport to user-script messaging; expand grant contract tests against real browser behavior.
 
-### Cloud Sync and Backup
+### 7. GM API Compatibility
 
-- **User value:** Preserve scripts and settings across devices and recover from data loss.
-- **Entry point:** Dashboard/settings sync panels, backup/export/import actions.
-- **Main code locations:** `modules/sync-providers.js`, sync settings modules, backup scheduler, cloud provider auth flows.
-- **Current maturity:** Feature-rich but disclosure-sensitive.
-- **Tests/docs coverage:** README advertises providers; privacy policy is stale; release docs mention disclosure work.
-- **Improvement opportunities:** Update privacy text and store disclosures; add token refresh diagnostics; add encrypted export/import option; add provider capability matrix; add conflict previews before overwrite.
-- **Additional evidence:** Commit `428b718` replaces legacy callback-wrapped Gist token `chrome.storage.local` writes with Promise API calls so quota/disk failures do not hang the UI.
+- Name: GM/Tampermonkey-compatible APIs.
+- User value: lets users run existing scripts from the wider userscript ecosystem.
+- Entry point: metadata grants in installed scripts.
+- Main code locations: `background.core.js`, `src/background/wrapper-builder.ts`, `src/background/resource-loader.ts`, `src/background/context-menu.ts`, `modules/public-api.js`, tests for GM APIs, XHR, cookies, downloads, resources, menu, storage, and tabs.
+- Current maturity: broad but not fully parity-certified; README claims 35+ GM API functions.
+- Tests/docs coverage: README compatibility table and targeted tests.
+- Improvement opportunities: publish a generated compatibility matrix from tests; document unsupported semantics; add import warnings when scripts use unsupported grants; add real-browser parity fixtures for top Tampermonkey/Violentmonkey patterns.
 
-### Static Analyzer, Signing, and Trust
+### 8. Update Checking and Rollback
 
-- **User value:** Understand risky script capabilities before install or update.
-- **Entry point:** Install page, dashboard analyzer/trust panels, signing tools.
-- **Main code locations:** `bg/analyzer.js`, `bg/signing.js`, trust UI, `docs/require-provenance-design.md`.
-- **Current maturity:** Advanced for local analysis, incomplete for supply-chain provenance.
-- **Tests/docs coverage:** Roadmap and docs cover analyzer detectors and provenance design.
-- **Improvement opportunities:** Add `@require` provenance verification; show remote dependency diff on update; detect minified remote dependency changes; add trusted-source policy profiles.
+- Name: Manual, bulk, and automatic script updates with history/rollback.
+- User value: keeps scripts current and recoverable.
+- Entry point: dashboard update buttons, bulk actions, background auto-update alarms/settings.
+- Main code locations: `background.core.js` `checkForUpdates`, `applyUpdate`, `autoUpdate`; `src/background/update-checker.ts`; dashboard update UI.
+- Current maturity: partial for trust-sensitive operation. Interactive per-script confirmation exists, but auto-update and some bulk paths still auto-apply executable changes.
+- Tests/docs coverage: update tests and README update claims.
+- Improvement opportunities: pending update inbox, trust receipts, diff review for all non-manual updates, update-source reputation, rollback point before apply, and a no-surprise auto-update mode.
 
-### DevTools, Error Log, and Diagnostics
+### 9. Trash, Restore, and Recovery
 
-- **User value:** Debug script failures, inspect network/activity logs, and export diagnostic data.
-- **Entry point:** DevTools panel, dashboard logs, export buttons.
-- **Main code locations:** `pages/devtools-*`, `modules/error-log.js`, `modules/public-api.js`, TS mirrors, background log handlers.
-- **Current maturity:** Useful but fragmented.
-- **Tests/docs coverage:** Tests exist for modules; commit `053c1a5` adds CSV injection mitigation and public API error hardening.
-- **Improvement opportunities:** Add public API fuzz tests and a unified diagnostics bundle; include extension version, manifest version, Chrome version, permissions state, failed registrations, sync status, and recent errors.
+- Name: Trash and script recovery.
+- User value: prevents accidental destructive loss.
+- Entry point: dashboard delete/trash/restore controls.
+- Main code locations: `background.core.js` `deleteScript`, `getTrash`, `restoreFromTrash`; dashboard trash panel.
+- Current maturity: partial. Trash exists, but current runtime uses `chrome.storage.local` `trash`; roadmap language references IDB `scripts_trash`, which is not what the inspected runtime uses.
+- Tests/docs coverage: README mentions trash and rollback; dashboard tests cover related UI states.
+- Improvement opportunities: restore receipts, verified backup before permanent delete, storage migration if IDB trash remains desired, empty-trash confirmation with count/source/date, and recovery drill tests.
 
-### Public API and Web Page Bridge
+### 10. Cloud Sync, EasyCloud, Gist Sync, and Backups
 
-- **User value:** Let approved external pages or tooling interact with ScriptVault.
-- **Entry point:** `window.postMessage` bridge and public API handlers.
-- **Main code locations:** `modules/public-api.js`, `src/modules/public-api.ts`.
-- **Current maturity:** Partial and security-sensitive.
-- **Tests/docs coverage:** Commit `053c1a5` adds type guards and removes internal error detail from external responses; targeted public API fuzz tests are still recommended.
-- **Improvement opportunities:** Add origin allowlist UI/audit review; add fuzz tests for structured-clone payloads; commit generic-error behavior; document external API stability and versioning.
+- Name: Multi-provider sync and backups.
+- User value: moves scripts/settings across devices and gives recovery options.
+- Entry point: dashboard sync/settings panels, Gist panel, EasyCloud flows, export/import actions.
+- Main code locations: `modules/sync-providers.js`, `modules/sync-easycloud.js`, `pages/dashboard-gist.js`, background sync handlers, dashboard sync UI.
+- Current maturity: feature-rich but privacy/trust documentation is stale.
+- Tests/docs coverage: README lists WebDAV, Google Drive, Dropbox, OneDrive, Browser Sync, EasyCloud, and Gist; privacy policy does not reflect all cloud flows.
+- Improvement opportunities: token health, revoke flow, manual sync, dry-run conflict preview, sync receipt, provider-specific error guidance, backup verification, and privacy/data-use documentation alignment.
 
-### Side Panel, Popup, Context Menus, Omnibox
+### 11. Static Analysis, Signing, and Trust Review
 
-- **User value:** Quick access without opening the full dashboard.
-- **Entry point:** Chrome side panel, popup, context menus, omnibox keyword `sv`, commands.
-- **Main code locations:** `pages/sidepanel.*`, popup files, manifest `omnibox` and `commands`, background command/context menu handlers.
-- **Current maturity:** Complete for Chrome; Firefox compatibility not complete.
-- **Tests/docs coverage:** README now documents omnibox; smoke tests cover dashboard more than side panel.
-- **Improvement opportunities:** Add side-panel smoke tests; virtualize side-panel script lists; add command availability diagnostics when optional permissions are missing.
+- Name: Script analyzer, signing, install review, and provenance hints.
+- User value: helps users decide whether to trust executable scripts.
+- Entry point: install page, dashboard details, analyzer controls, signing surfaces.
+- Main code locations: `offscreen.js`, `bg/analyzer.js`, `bg/signing.js`, `docs/require-provenance-design.md`, dashboard/install UI.
+- Current maturity: partial to complete depending on flow. Analysis exists, but supply-chain provenance and `@require` trust are not yet release-grade.
+- Tests/docs coverage: README and security tests.
+- Improvement opportunities: `@require` provenance ledger, signed artifact trust, install/update trust receipt, source reputation display, and warnings for high-risk grants.
 
-### Localization, Themes, and Accessibility
+### 12. Diagnostics, Logs, DevTools, and Support Data
 
-- **User value:** Use the extension across languages, themes, and accessibility modes.
-- **Entry point:** Settings, UI surfaces, `_locales/`.
-- **Main code locations:** `_locales/*`, dashboard/editor/install CSS and JS, `docs/wcag3-gap-analysis.md`.
-- **Current maturity:** Strong baseline with known gaps.
-- **Tests/docs coverage:** Accessibility tests exist; WCAG 3 gap doc lists next work.
-- **Improvement opportunities:** Add skip-to-main links, APCA/forced-colors audit, combobox/grid APG checks, live-region review, and mixed-language `lang` annotations.
+- Name: Runtime diagnostics, logs, CSP reports, netlog, profiling, and support bundle.
+- User value: helps users and maintainers debug script and extension failures.
+- Entry point: dashboard diagnostics tabs, DevTools panel, support bundle UI, background logs.
+- Main code locations: dashboard diagnostics sections, `devtools.html`, `devtools.js`, `pages/devtools-panel.html`, `pages/devtools-panel.js`, background handlers.
+- Current maturity: broad but needs end-to-end support package verification.
+- Tests/docs coverage: README feature list and diagnostic tests.
+- Improvement opportunities: one-click redacted diagnostics bundle, explicit privacy preview before export, update/install failure receipts, and structured log schema tests.
 
-### Firefox Port
+### 13. Permissions and Host Access
 
-- **User value:** Use ScriptVault outside Chrome without switching products.
-- **Entry point:** `manifest-firefox.json`, Firefox build/sideload flow.
-- **Main code locations:** `FIREFOX-PORT.md`, `manifest-firefox.json`, build scripts, registration/offscreen/sidePanel/Monaco code paths.
-- **Current maturity:** Partial. Manifest version is synced, but clean temporary sideload is unchecked.
-- **Tests/docs coverage:** Port plan is detailed; runtime validation is not complete.
-- **Improvement opportunities:** Strip/guard unsupported Chrome-only APIs, validate Monaco loading, choose provider scope for first Firefox release, produce a clean XPI artifact only through build output.
+- Name: Permission management and host access.
+- User value: lets users understand why the extension needs broad access and recover when a permission is missing.
+- Entry point: install flow, settings, popup, Chrome extension permissions prompts.
+- Main code locations: `manifest.json`, background permission handlers, dashboard settings UI.
+- Current maturity: partial. Manifest has broad required host access; Chrome newer host access request API is not yet productized.
+- Tests/docs coverage: README and release docs mention permissions; no generated permission/store-copy gate found.
+- Improvement opportunities: generated permission justification table, Chrome `permissions.addHostAccessRequest` integration where supported, active-site permission status, and store data-use copy parity.
+
+### 14. Localization and Themes
+
+- Name: Localization, dark/light UI, and accessibility helpers.
+- User value: makes the product usable across languages and visual preferences.
+- Entry point: extension pages, dashboard settings, browser locale.
+- Main code locations: `_locales/*`, dashboard/popup/sidepanel CSS, `pages/dashboard-a11y.js`, tests.
+- Current maturity: partial. README claims 8 locales and theme support; coverage and stale-string checks need automation.
+- Tests/docs coverage: GUI/a11y tests and locale files.
+- Improvement opportunities: locale coverage report, missing-string gate, forced-colors tests, APCA contrast review, and live-region consistency.
+
+### 15. Cross-Browser and Firefox Build
+
+- Name: Firefox MV3 and cross-browser strategy.
+- User value: lets users carry ScriptVault to Firefox and eventually Edge/other browsers.
+- Entry point: `manifest-firefox.json`, `build-firefox.sh`, `FIREFOX-PORT.md`.
+- Main code locations: Firefox manifest, Firefox build script, `pages/dashboard-firefox-compat.js`, cross-browser docs.
+- Current maturity: partial/experimental. Phase 1 tasks are not complete, and a stale root XPI can confuse distribution.
+- Tests/docs coverage: `FIREFOX-PORT.md`, `docs/cross-browser-pipeline.md`.
+- Improvement opportunities: `web-ext lint`, unsupported-feature gates, AMO data collection metadata, source-package instructions, Edge Add-ons lane, WXT migration spike.
+
+### 16. Public API
+
+- Name: Public extension API.
+- User value: lets external tools or scripts integrate with ScriptVault predictably.
+- Entry point: extension messaging or documented public API surface.
+- Main code locations: `modules/public-api.js`, `src/modules/public-api.ts`, `tests/public-api.test.js`.
+- Current maturity: recently hardened; likely complete for current documented methods.
+- Tests/docs coverage: dedicated public API tests and recent hardening commit.
+- Improvement opportunities: generated API docs from tests, schema validation for each action, versioned compatibility policy, and external integration examples.
+
+### 17. Build, CI, and Release
+
+- Name: Build, test, package, publish, and artifact management.
+- User value: keeps published extension trustworthy and reproducible.
+- Entry point: npm scripts, shell scripts, CI workflow, GitHub Releases, Chrome Web Store.
+- Main code locations: `package.json`, `build.sh`, `build-firefox.sh`, `publish.sh`, `.github/workflows/ci.yml`, `docs/release-runbook.md`.
+- Current maturity: partial. CI checks builds and smokes, but publication, provenance, store metadata, rollback, and release-artifact parity are not gated.
+- Tests/docs coverage: CI and runbook exist; runbook is stale in important places.
+- Improvement opportunities: release job, artifact manifest, SBOM/provenance, package diff, store-copy checker, rollback drill, Node version alignment, and stale-artifact cleanup.
 
 ## Competitive and Ecosystem Research
 
 ### Tampermonkey
 
-- **Product/source:** [Tampermonkey changelog](https://www.tampermonkey.net/changelog.php).
-- **Notable capabilities:** Mature cross-browser distribution, stable update behavior, install/update UX expectations, policy-driven behavior for enterprise/browser stores.
-- **What ScriptVault should learn:** Update consent must be a first-class setting, not only a per-row dashboard interaction; store disclosure and release polish matter as much as feature breadth.
-- **What to avoid:** Avoid opaque proprietary-only behavior and avoid copying UI density that hides trust decisions.
+- Product/source: [Tampermonkey](https://www.tampermonkey.net/?browser=chrome) and public changelog pages.
+- Notable capabilities: mature cross-browser userscript management, import/export, script updates, update URLs, editor support, sync-oriented workflows, broad GM/TM compatibility, and store presence.
+- What ScriptVault should learn: update and install trust must feel boring and predictable; compatibility claims need visible contracts; store copy should stay aligned with actual release capabilities; power users expect clear import/migration paths.
+- What ScriptVault should avoid: imitating monetization or closed-source trust dynamics that do not fit ScriptVault's current open, security-forward identity.
 
 ### Violentmonkey
 
-- **Product/source:** [Violentmonkey releases](https://github.com/violentmonkey/violentmonkey/releases), especially v2.37.x.
-- **Notable capabilities:** Open-source userscript manager with active compatibility improvements, compact UX, and frequent release cadence.
-- **What ScriptVault should learn:** Public releases should track code tags closely; compatibility work should be shipped incrementally and visibly.
-- **What to avoid:** Do not sacrifice ScriptVault's trust/audit identity for a minimal manager clone.
+- Product/source: [Violentmonkey](https://violentmonkey.github.io/), [GM API docs](https://violentmonkey.github.io/api/gm/), [source](https://github.com/violentmonkey/violentmonkey).
+- Notable capabilities: open-source userscript manager, documented GM APIs, compact script list, sync concepts, and mature import/export.
+- What ScriptVault should learn: generate a compatibility matrix directly from tests and docs; keep advanced features discoverable without hiding core script management.
+- What ScriptVault should avoid: letting MV2-era behavior assumptions leak into MV3-specific implementation decisions.
 
 ### ScriptCat
 
-- **Product/source:** Ecosystem comparator from project roadmap and common userscript-manager landscape.
-- **Notable capabilities:** Script scheduling and advanced script organization patterns.
-- **What ScriptVault should learn:** Power users value automation, grouping, and durable script status history.
-- **What to avoid:** Avoid expanding into a general automation platform before core install/update/release trust is tight.
+- Product/source: [ScriptCat docs](https://docs.scriptcat.org/) and [source](https://github.com/scriptscat/scriptcat).
+- Notable capabilities: modern userscript manager with docs, script workflows, and cloud/storage ideas that appeal to power users.
+- What ScriptVault should learn: flexible sync and script workflow features can differentiate, but they need strong conflict previews and provider health.
+- What ScriptVault should avoid: expanding into hosted/service features before local trust, release parity, and privacy disclosures are stable.
 
-### Greasemonkey and Firefox WebExtensions
+### Greasemonkey
 
-- **Product/source:** [MDN WebExtensions docs](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Chrome_incompatibilities).
-- **Notable capabilities:** Firefox-native extension expectations differ from Chrome, especially around manifest keys, APIs, and review constraints.
-- **What ScriptVault should learn:** A Chrome-first MV3 codebase needs explicit feature gates, not scattered runtime `if` guards.
-- **What to avoid:** Avoid treating Firefox as a manifest copy; unsupported `sidePanel`, offscreen, sandbox, and `worldId` behavior need deliberate fallbacks.
+- Product/source: [Greasemonkey](https://www.greasespot.net/) and [source](https://github.com/greasemonkey/greasemonkey).
+- Notable capabilities: long-running Firefox userscript lineage with a simpler product shape.
+- What ScriptVault should learn: Firefox users value compatibility and predictable browser-specific behavior more than Chrome-only surface area.
+- What ScriptVault should avoid: treating Firefox as a copy of Chrome; unsupported APIs need explicit fallbacks and honest UI.
 
-### Chrome Extension Platform
+### quoid/userscripts
 
-- **Product/source:** [Chrome userScripts API](https://developer.chrome.com/docs/extensions/reference/api/userScripts) and [structured clone messaging](https://developer.chrome.com/blog/structured-clone-messaging).
-- **Notable capabilities:** Chrome 120+ `userScripts`, Chrome 138+ user-facing Allow User Scripts toggle, dedicated user-script message events, and structured clone direction.
-- **What ScriptVault should learn:** Onboarding must detect the current user-script toggle state; messaging should use dedicated user-script handlers where available; update re-registration after extension updates is required.
-- **What to avoid:** Avoid assuming `chrome.userScripts` presence means calls will keep succeeding if the user revokes the toggle mid-session.
+- Product/source: [quoid/userscripts](https://github.com/quoid/userscripts).
+- Notable capabilities: Safari/iOS-oriented userscript manager through a native-app distribution model.
+- What ScriptVault should learn: Safari is a different product and release path, not just another manifest target.
+- What ScriptVault should avoid: premature Safari commitments before Chrome/Firefox/Edge release foundations are solid.
 
-### WXT
+### Stylus
 
-- **Product/source:** [WXT browser targeting](https://wxt.dev/guide/essentials/target-different-browsers.html).
-- **Notable capabilities:** Browser-specific manifest generation, entry-point organization, and cross-browser build ergonomics.
-- **What ScriptVault should learn:** WXT or WXT-like staging can reduce duplicated manifest/build logic once TS is canonical.
-- **What to avoid:** Avoid starting a framework migration while runtime JS and TS still drift.
+- Product/source: [Stylus](https://github.com/openstyles/stylus).
+- Notable capabilities: high-volume style management with update, editor, import/export, and large-library UX expectations.
+- What ScriptVault should learn: large collections need virtualized lists, fast search, safe bulk operations, and clear update states.
+- What ScriptVault should avoid: style-manager-specific workflows that do not translate to executable code risk.
 
-### Chrome Web Store and Edge Add-ons
+### uBlock Origin Lite
 
-- **Product/source:** [Chrome Web Store API v2](https://developer.chrome.com/blog/cws-api-v2), project `docs/release-runbook.md`, and Edge Add-ons docs referenced by `docs/cross-browser-pipeline.md`.
-- **Notable capabilities:** API-driven upload/publish, store listing metadata, privacy disclosures, and artifact provenance.
-- **What ScriptVault should learn:** Release automation should publish artifacts and disclosures from source-controlled manifests/checklists.
-- **What to avoid:** Avoid manual-only releases when local tags and public releases can drift by major versions.
+- Product/source: [uBO Lite FAQ](https://github.com/uBlockOrigin/uBOL-home/wiki/Frequently-asked-questions-%28FAQ%29).
+- Notable capabilities: MV3 constraints explained clearly; DNR behavior is central to the product.
+- What ScriptVault should learn: DNR limitations, rule ownership, and browser limitations should be transparent to users and release-gated in tests.
+- What ScriptVault should avoid: hiding platform limits until a user's script silently fails.
 
-### Bitwarden and Other Trust-Critical Extensions
+### Bitwarden Browser Client
 
-- **Product/source:** Analogous extension category, not a direct userscript competitor.
-- **Notable capabilities:** Diagnostics exports, clear vault/sync status, explicit destructive action confirmations, and release provenance.
-- **What ScriptVault should learn:** Users need to see what is local, what is synced, what is pending, and what can be recovered.
-- **What to avoid:** Avoid telemetry or cloud account concepts that weaken ScriptVault's local-first identity.
+- Product/source: [Bitwarden browser client](https://github.com/bitwarden/clients/tree/main/apps/browser).
+- Notable capabilities: security-sensitive extension with release discipline, diagnostics, and user-trust expectations.
+- What ScriptVault should learn: code-execution tools need auditable release artifacts, careful permission copy, and privacy-first diagnostics.
+- What ScriptVault should avoid: one-off release scripts without reproducibility or provenance once the product is public.
+
+### Platform and Store Guidance
+
+- Product/source: Chrome Web Store policies, CWS API v2 docs, rollback docs, MDN Firefox extension docs, Extension Workshop source-submission docs, Edge Add-ons docs, WXT docs.
+- Notable capabilities: stores increasingly expect accurate data-use declarations, source review packages, API migrations, and explicit browser compatibility.
+- What ScriptVault should learn: release automation is now a product feature because inaccurate metadata and stale artifacts directly affect user trust.
+- What ScriptVault should avoid: relying on README claims when public store metadata, release assets, and privacy policy say something different.
 
 ## Highest-Value New Features
 
-### P0 - Pending Update Inbox and Consent Modes
+### 1. Release Trust Ledger
 
-- **User problem solved:** Users need update safety without disabling update checks entirely. Silent upstream script replacement is the highest-trust risk for a userscript manager.
-- **Evidence:** `pages/dashboard.js::interactiveCheckAndConfirmUpdate()` supports per-script review; `background.core.js::UpdateSystem.autoUpdate()` still applies updates when `settings.autoUpdate` is true; roadmap references Phase 17.3/38.3/38.9; Tampermonkey and Violentmonkey emphasize update policy and review flows.
-- **Proposed behavior:** Replace binary `autoUpdate` with `updateCheckEnabled` and `updateInstallMode`: `manual`, `checkOnly`, `review`, `autoInstallTrusted`. Store pending update records with script id, version, source URL, diff summary, risk delta, fetched timestamp, ETag/Last-Modified, and user decision.
-- **Implementation areas:** `background.core.js::UpdateSystem`, `src/background/update-checker.ts`, settings defaults, dashboard settings/update UI, `src/types/messages.ts`, storage migration, tests.
-- **Data model/API/UI implications:** Add `pending_updates` IDB store or equivalent; add dashboard tab/badge; add message actions for list/apply/reject updates; migrate old `autoUpdate` values.
-- **Risks and edge cases:** Update sources that disappear; local user edits; scripts with `@nodownload`; malicious version downgrades; bulk approve with failed registration; user confusion if checks happen but install does not.
-- **Verification plan:** Unit tests for each mode; integration test for local-edited skip; manual flow installing a fixture script, changing fixture version, checking, reviewing diff, applying, rejecting, and restoring previous version.
-- **Estimated complexity:** L.
-- **Priority:** P0.
+- Title: Release trust ledger for every packaged version.
+- User problem solved: users cannot currently reconcile local v3.11.0, GitHub Release v2.3.4, stale Chrome Web Store copy, and stale Firefox XPI artifacts.
+- Evidence: `package.json`, `manifest.json`, and README show 3.11.0; `gh release list` shows latest public release v2.3.4; CWS listing shows older v1.7.4/CodeMirror/24+ GM copy; root contains `ScriptVault-firefox-v2.1.7.xpi`.
+- Proposed behavior: generate `release-evidence.json` and a human-readable release checklist for each version showing package version, manifest versions, Git tag, GitHub release, CWS package/listing metadata, artifact hashes, permissions, privacy copy, changelog section, and rollback target.
+- Implementation areas: `scripts/release-evidence.*`, `.github/workflows/ci.yml`, `publish.sh`, `docs/release-runbook.md`, `CHANGELOG.md`, `README.md`.
+- Data model/API/UI implications: no runtime user-data impact; adds release metadata artifacts and CI gates.
+- Risks and edge cases: store dashboard data requires credentials; public scraping can be flaky; release artifacts must not leak secrets.
+- Verification plan: run evidence generator in CI, compare generated JSON against committed expectations, manually verify public CWS and GitHub release pages.
+- Estimated complexity: M.
+- Priority: P0.
 
-### P0 - Dedicated User-Script Messaging Path
+### 2. Pending Update Inbox
 
-- **User problem solved:** The current bridge surface is larger than necessary for less-trusted script contexts and external page messages.
-- **Evidence:** Chrome docs describe `runtime.onUserScriptMessage` and `runtime.onUserScriptConnect` as dedicated handlers that help identify less-trusted user-script messages; `background.core.js` already has an `onUserScriptMessage` listener; `.factory/large-repo-state.yaml` keeps `XHR-PRIVACY` as a remaining large task; commit `053c1a5` hardened arbitrary `postMessage` payload handling in the public API.
-- **Proposed behavior:** Route user-script GM API messages through `chrome.runtime.onUserScriptMessage` when available, with a compatibility fallback for older Chrome or disabled messaging. Keep web-page public API messages on a separate explicitly permissioned bridge.
-- **Implementation areas:** `background.core.js`, `modules/xhr.js`, GM API wrappers, registration `configureWorld({ messaging: true })`, `src/background/registration.ts`, `src/types/messages.ts`, tests.
-- **Data model/API/UI implications:** Add capability detection status and diagnostics; no user data format change expected.
-- **Risks and edge cases:** Chrome version gates; userScripts toggle revocation; Firefox incompatibility; scripts running in MAIN vs USER_SCRIPT worlds; structured-clone payload differences.
-- **Verification plan:** Chrome fixture userscript sends XHR/GM messages; fallback path test; fuzz arbitrary web `postMessage` payloads; regression test that external public API cannot reach GM internals.
-- **Estimated complexity:** L.
-- **Priority:** P0.
+- Title: Pending update inbox with diff, trust receipt, and rollback point.
+- User problem solved: a script update is executable code; current auto-update and some bulk flows can apply changes without giving users a durable review and recovery point.
+- Evidence: `background.core.js` contains `autoUpdate` and `applyUpdate`; dashboard has `interactiveCheckAndConfirmUpdate`; README advertises auto-update; code history emphasizes install/update trust polish.
+- Proposed behavior: all non-manual updates land in a pending inbox by default. Users see script name, old/new version, source URL, fetched hash, changed grants/matches/resources, diff summary, analyzer result, and one-click apply/skip/rollback. Auto-update can be configured as "notify only", "safe metadata-only", or "apply trusted sources".
+- Implementation areas: `background.core.js`, `src/background/update-checker.ts`, dashboard update UI, storage schema, analyzer/signing modules, tests.
+- Data model/API/UI implications: add pending update records keyed by script id and source URL; add update receipt/history entries; expose count in dashboard, popup, and side panel.
+- Risks and edge cases: large diffs, scripts without versions, source URL changes, failed fetches, deleted upstream scripts, backup storage pressure.
+- Verification plan: unit tests for pending states; jsdom dashboard inbox tests; browser smoke installing then updating a fixture script; rollback drill with corrupted update.
+- Estimated complexity: L.
+- Priority: P0.
 
-### P0 - Stream-Bounded Remote Fetch Guardrail
+### 3. Runtime and Source Parity Gate
 
-- **User problem solved:** A hostile update/install/require server can omit or lie about `Content-Length` and force the service worker to buffer an oversized response before rejection.
-- **Evidence:** Commit `053c1a5` adds `_fetchTextBounded()` to `background.core.js`, replaces `response.text()` in update, install, URL fetch, and `@require` code paths, and adds `tests/fetch-bounded.test.js`; `src/background/update-checker.ts` and `src/background/install-handler.ts` still use buffered `response.text()`.
-- **Proposed behavior:** Ship a shared bounded text fetch helper across runtime and TS source, with tests using a stream that exceeds the cap after multiple chunks.
-- **Implementation areas:** `background.core.js`, `src/background/update-checker.ts`, `src/background/install-handler.ts`, require loader code, tests.
-- **Data model/API/UI implications:** Error strings should stay user-readable and compatible with current install/update UI.
-- **Risks and edge cases:** Test mocks without `Response.body`; multibyte UTF-8 chunk boundaries; abort cleanup; inconsistent labels in error messages.
-- **Verification plan:** Vitest unit tests for honest oversized `Content-Length`, missing length with oversized stream, fallback non-stream response, aborted fetch, and multibyte text below cap.
-- **Estimated complexity:** M.
-- **Priority:** P0.
+- Title: Generated parity gate for background runtime and TypeScript mirrors.
+- User problem solved: core security fixes can land in `background.core.js` while TypeScript mirrors retain stale behavior, or vice versa.
+- Evidence: `background.core.js` has bounded fetch helpers; `src/background/install-handler.ts`, `src/background/update-checker.ts`, `src/background/resource-loader.ts`, and `src/background/context-menu.ts` still contain buffered `response.text()` paths. Current dirty DNR and wrapper changes also demonstrate active drift.
+- Proposed behavior: add a test/generator that enumerates critical runtime contracts and fails CI when canonical runtime and source mirrors diverge. Contracts should cover remote fetch policy, DNR ownership cleanup, wrapper dispatcher behavior, message action schemas, update apply semantics, and public API methods.
+- Implementation areas: `src/background/*`, `background.core.js`, `tests/source-*.test.js`, `tests/runtime-parity.test.js`, `esbuild.config.mjs`, CI.
+- Data model/API/UI implications: none directly; improves build reliability.
+- Risks and edge cases: if `background.core.js` remains canonical, parity tests can become brittle. Better long-term fix is to generate runtime from TypeScript.
+- Verification plan: add failing fixture for a known divergence, then make CI pass; run `npm run check`.
+- Estimated complexity: M to L.
+- Priority: P0.
 
-### P1 - Large Library Performance Mode
+### 4. Chrome UserScripts Onboarding and Recovery Center
 
-- **User problem solved:** Users with hundreds or thousands of scripts need instant search/sort/filter without dashboard jank.
-- **Evidence:** `pages/dashboard.js::renderScriptTable()` directly re-renders lists and is called from many actions; roadmap already identifies Phase 7.1 virtual scrolling; no virtualization package or implementation was found.
-- **Proposed behavior:** Add a shared virtual list renderer for dashboard table/card views and side panel, preserving keyboard focus, selection, scroll offset, and ARIA row semantics.
-- **Implementation areas:** `pages/dashboard.js`, `pages/dashboard.css`, `pages/sidepanel.js`, tests, optional `@tanstack/virtual-core` dependency.
-- **Data model/API/UI implications:** No storage migration; UI must keep existing views and filters.
-- **Risks and edge cases:** Screen reader row counts; keyboard navigation; row height changes from localization; restoring focus after updates/trash restore.
-- **Verification plan:** Fixture with 2,000 scripts; measure render time before/after; Playwright or smoke test for search, sort, delete, restore, and keyboard navigation.
-- **Estimated complexity:** L.
-- **Priority:** P1.
+- Title: Browser capability and userScripts recovery center.
+- User problem solved: Chrome's userScripts developer toggle and host permissions can block script execution in ways users may not understand.
+- Evidence: Chrome userScripts docs require users to enable user scripts for unpacked or developer-mode paths; manifest requires `userScripts`; README claims Chrome 138+ support; roadmap already flags this.
+- Proposed behavior: a status card in dashboard/popup detects userScripts availability, registration errors, host access gaps, DNR availability, side panel support, offscreen support, and browser version. It provides a repair checklist with exact browser steps and links, plus a copyable diagnostics bundle.
+- Implementation areas: `background.core.js`, `pages/dashboard.js`, `popup.js`, `sidepanel.js`, permissions handling, diagnostics tests.
+- Data model/API/UI implications: store last capability probe and last failure reason; no script data migration.
+- Risks and edge cases: Chrome channels and enterprise policies vary; the UI must not claim it can fix browser settings it cannot change.
+- Verification plan: unit tests for probe states; manual browser profiles with userScripts disabled/enabled; regression test for message copy and status rendering.
+- Estimated complexity: M.
+- Priority: P0.
 
-### P1 - Firefox Sideload Beta
+### 5. Cross-Provider Sync Health and Conflict Preview
 
-- **User problem solved:** Users need a credible non-Chrome path and maintainers need real compatibility evidence before public AMO decisions.
-- **Evidence:** `FIREFOX-PORT.md` Phase 1 clean temporary sideload is unchecked; `manifest-firefox.json` is version-synced to 3.11.0; MDN documents Chrome incompatibilities and Firefox manifest expectations.
-- **Proposed behavior:** Produce a temporary Firefox sideload build that loads cleanly, disables unsupported Chrome-only surfaces, and validates install/edit/run/update for a small fixture script.
-- **Implementation areas:** `manifest-firefox.json`, build scripts, sidePanel/offscreen/sandbox guards, `src/background/registration.ts`, Monaco asset loading, docs.
-- **Data model/API/UI implications:** Provider scope decision for Firefox sync; Firefox-specific settings compatibility notes.
-- **Risks and edge cases:** `worldId`, offscreen documents, side panel, sandbox pages, Monaco worker loading, sync providers needing `identity`, API namespace differences.
-- **Verification plan:** `npm run build`; Firefox temporary install; manual fixture script install/run/edit/update; capture errors; update `FIREFOX-PORT.md`.
-- **Estimated complexity:** L.
-- **Priority:** P1.
+- Title: Sync health dashboard and conflict dry-run.
+- User problem solved: users syncing executable scripts need to know what will change before overwriting local or remote state.
+- Evidence: `modules/sync-providers.js`, `modules/sync-easycloud.js`, and `pages/dashboard-gist.js` support multiple providers; `PRIVACY.md` does not fully disclose these flows; README advertises five providers and EasyCloud/Gist.
+- Proposed behavior: add provider health checks, token revoke, last sync receipt, manual sync, dry-run import/export diff, conflict resolution preview, provider-specific error messages, and a privacy preview before sending data to a provider.
+- Implementation areas: sync provider modules, dashboard sync UI, background sync handlers, storage schema, privacy docs.
+- Data model/API/UI implications: add sync receipts and conflict preview records; expose provider token state without exposing tokens.
+- Risks and edge cases: provider APIs differ; offline queue conflicts; storage quota; token revocation may fail; users may have old provider state.
+- Verification plan: provider adapter unit tests with mocked APIs; dry-run fixture tests; manual WebDAV/local mock; privacy copy parity test.
+- Estimated complexity: L.
+- Priority: P1.
 
-### P1 - IDB-Backed Trash and Recovery Timeline
+### 6. Large-Library Performance Mode
 
-- **User problem solved:** Users need reliable recovery without risking `chrome.storage.local` quota or losing restore metadata for large deleted scripts.
-- **Evidence:** Runtime trash actions exist in `background.core.js`; dashboard trash UI exists; roadmap history describes an IndexedDB `scripts_trash` store with retention, while current implementation uses `chrome.storage.local`.
-- **Proposed behavior:** Store deleted scripts in IDB with deleted timestamp, expiry timestamp, original folder/workspace, size, source, and restore state. Keep current UI but add expiry and size details.
-- **Implementation areas:** `modules/storage.js`, storage migrations, background trash handlers, dashboard trash UI, `src/types/messages.ts`, tests.
-- **Data model/API/UI implications:** Add IDB object store and migration from existing `chrome.storage.local.trash`; preserve existing settings values.
-- **Risks and edge cases:** Migration failures; restoring over existing script ids; old backups containing trash; empty trash performance.
-- **Verification plan:** Migration test from storage.local trash; restore/delete/empty tests; quota simulation; manual delete/restore flow.
-- **Estimated complexity:** M.
-- **Priority:** P1.
+- Title: Virtualized script library and performance harness.
+- User problem solved: power users with hundreds or thousands of scripts need dashboard/search/filter/update flows that remain responsive.
+- Evidence: `pages/dashboard.js` is large and `renderScriptTable` directly renders script rows; no virtualization package or large-library gate was found; README advertises advanced filters, full-text search, and bulk operations.
+- Proposed behavior: add seeded performance fixtures for 0, 10, 100, 1000, and 5000 scripts; virtualize table/card/list views; debounce and index search; measure dashboard first render, filter latency, bulk-selection latency, and memory.
+- Implementation areas: dashboard rendering, search/filter modules, side panel active script list, tests, smoke harness.
+- Data model/API/UI implications: no storage format change; may require derived search index cache.
+- Risks and edge cases: accessibility with virtualized rows; keyboard navigation; screen reader row counts; selection state across filters.
+- Verification plan: jsdom unit tests for state; browser smoke timing thresholds; a11y tests for virtualized table roles; manual 1000-script profile.
+- Estimated complexity: L.
+- Priority: P1.
 
-### P1 - Install Trust Center
+### 7. Firefox AMO Validation Lane
 
-- **User problem solved:** Before installing or updating, users need one consolidated view of what a script can do and what changed.
-- **Evidence:** Analyzer/signing/update diff pieces exist; install/update flows are separate; permissions and host access are broad by design.
-- **Proposed behavior:** Install/update screen shows metadata, requested grants, host matches, external dependencies, analyzer findings, source reputation, signature/provenance status, update diff, and recovery option.
-- **Implementation areas:** `pages/install.*`, analyzer modules, signing modules, update diff UI, dashboard update inbox.
-- **Data model/API/UI implications:** Store last trust summary and accepted risk state per script.
-- **Risks and edge cases:** False positives; too much text; localized microcopy; remote dependency fetch failures.
-- **Verification plan:** Fixture scripts for each detector class; install/update screenshots; accessibility tests for warnings and actions.
-- **Estimated complexity:** L.
-- **Priority:** P1.
+- Title: Firefox build and AMO readiness lane.
+- User problem solved: the repo advertises Firefox direction but current artifacts and docs are not release-ready.
+- Evidence: `manifest-firefox.json` exists at 3.11.0, `FIREFOX-PORT.md` Phase 1 is unchecked, `build-firefox.sh` packages Firefox, and root contains stale `ScriptVault-firefox-v2.1.7.xpi`.
+- Proposed behavior: add `npm run build:firefox`, `npm run lint:firefox`, generated Firefox support matrix, AMO data-collection metadata, source-package notes for minified code, and a release-blocking stale-artifact check.
+- Implementation areas: `manifest-firefox.json`, `build-firefox.sh`, `package.json`, CI, `FIREFOX-PORT.md`, `docs/cross-browser-pipeline.md`.
+- Data model/API/UI implications: feature-gated UI for unsupported Chrome-only APIs; no existing Chrome data migration.
+- Risks and edge cases: Firefox MV3 support differences, `userScripts` API differences, side panel/offscreen absence, Monaco bundling, AMO review requirements.
+- Verification plan: generated Firefox zip, `web-ext lint`, Firefox profile sideload smoke, unsupported feature tests.
+- Estimated complexity: L.
+- Priority: P1.
 
-### P2 - `@require` Provenance Verification
+### 8. Diagnostics Bundle with Redaction Preview
 
-- **User problem solved:** Remote dependencies are a high-risk supply-chain path that can change independently of the userscript itself.
-- **Evidence:** `docs/require-provenance-design.md` exists; `fetchWithRetry()` fetches remote require code; commit `053c1a5` adds bounded fetch but not provenance.
-- **Proposed behavior:** Support optional `@require-provenance` metadata with hashes/signatures, show provenance status, and block or warn on mismatch depending on policy.
-- **Implementation areas:** parser, require loader, install/update UI, analyzer, settings, docs.
-- **Data model/API/UI implications:** Store dependency hash/provenance metadata and policy decision.
-- **Risks and edge cases:** Ecosystem adoption; hash mismatches from legitimate CDN rebuilds; offline updates; UX complexity.
-- **Verification plan:** Fixtures with matching hash, mismatch, missing provenance, and changed dependency; tests for policy modes.
-- **Estimated complexity:** XL.
-- **Priority:** P2.
+- Title: Redacted support bundle and failure receipt system.
+- User problem solved: when installs, updates, sync, DNR, or script execution fail, users need actionable support data without leaking script secrets or tokens.
+- Evidence: dashboard includes diagnostics/support surfaces; sync and Gist can store tokens; runtime has many failure-prone browser APIs.
+- Proposed behavior: each critical failure writes a structured receipt with timestamp, browser/version, script id/name, action, source, error code, and recovery advice. Support bundle export shows a redaction preview and excludes tokens, script code by default, and sensitive URLs unless opted in.
+- Implementation areas: background error handling, dashboard diagnostics, support bundle UI, sync modules, install/update runtime, tests.
+- Data model/API/UI implications: add bounded diagnostic receipt storage with retention policy.
+- Risks and edge cases: accidental leakage; too many logs; storage quota; privacy policy alignment.
+- Verification plan: unit tests for redaction; simulated failure receipts; manual export review; privacy copy gate.
+- Estimated complexity: M.
+- Priority: P1.
 
-### P2 - Unified Diagnostics Bundle
+### 9. Site-Scoped Controls and Host Permission Requests
 
-- **User problem solved:** Users and maintainers need one exportable evidence package when scripts fail, sync breaks, or registration disappears.
-- **Evidence:** Error log, DevTools panel, netlog, settings, registration and sync diagnostics exist as separate surfaces; commit `053c1a5` hardens CSV export, dashboard stats CSV export, and public API errors.
-- **Proposed behavior:** Add a "Create diagnostics bundle" action that exports sanitized JSON plus optional CSV logs, including version, manifest, permissions, userScripts toggle result, registered script count, failed registrations, sync provider status, recent errors, and storage usage.
-- **Implementation areas:** dashboard diagnostics UI, error log module, registration diagnostics, sync providers, privacy redaction utilities.
-- **Data model/API/UI implications:** No persistent data required; add redaction rules.
-- **Risks and edge cases:** Token leakage; script code leakage; large logs; localized timestamps.
-- **Verification plan:** Snapshot tests for redaction; manual export with fake token/script; import into issue template or support doc.
-- **Estimated complexity:** M.
-- **Priority:** P2.
+- Title: Active-site control center with optional host access requests.
+- User problem solved: users need to understand which scripts affect the current site and recover when host access blocks execution.
+- Evidence: popup and side panel exist; Chrome permissions docs include host access request capabilities in newer Chrome; manifest uses broad host access and scripting/userScripts.
+- Proposed behavior: popup/side panel show active scripts for the current tab, blocked scripts, required host permissions, script-specific pause/resume, and a request-host-access action when supported.
+- Implementation areas: `popup.js`, `sidepanel.js`, background permission probes, dashboard settings.
+- Data model/API/UI implications: store per-site pause/allow overrides and last host permission probe.
+- Risks and edge cases: browser-version support, enterprise-managed permissions, confusing interaction with script match patterns.
+- Verification plan: browser profile with withheld host access; unit tests for active tab matching; manual prompt tests on supported Chrome.
+- Estimated complexity: M.
+- Priority: P1.
 
-### P2 - Metadata Grant Advisor
+### 10. Generated GM API Compatibility Matrix
 
-- **User problem solved:** Script authors often miss or over-grant metadata permissions.
-- **Evidence:** Monaco editor and analyzer exist; GM API modules are broad; install trust already parses grants.
-- **Proposed behavior:** In editor, detect GM API usage and suggest missing `@grant`, unused grants, and risky grants with quick fixes.
-- **Implementation areas:** `pages/editor.js`, parser/analyzer, snippets, metadata editor helpers, tests.
-- **Data model/API/UI implications:** No migration; per-script suggestions only.
-- **Risks and edge cases:** Dynamic property access; compatibility with `GM.*` and legacy `GM_` names; false positives for strings/comments.
-- **Verification plan:** Fixture scripts for each GM API; editor action tests; save and reparse metadata.
-- **Estimated complexity:** M.
-- **Priority:** P2.
+- Title: Test-backed GM API compatibility matrix and import warnings.
+- User problem solved: users migrating from other managers need to know whether their scripts will run correctly.
+- Evidence: README claims 35+ GM APIs; tests cover many APIs; competitors document GM APIs publicly.
+- Proposed behavior: generate a compatibility table from test metadata with status, limitations, browser support, and last test name. Import/install warns on unsupported or partial grants.
+- Implementation areas: tests metadata, README docs generation, install parser, dashboard script details.
+- Data model/API/UI implications: no storage migration; install warnings become part of trust receipt.
+- Risks and edge cases: APIs may have partial semantics that are hard to summarize; docs can become stale if not generated.
+- Verification plan: generator test; install fixture using unsupported grants; README diff in CI.
+- Estimated complexity: M.
+- Priority: P2.
+
+### 11. Edge Add-ons and Chromium Derivative Channel
+
+- Title: Edge/Chromium derivative release matrix.
+- User problem solved: users on Edge, Brave, and other Chromium browsers need a supported path and accurate limitations.
+- Evidence: extension is MV3 Chrome-focused; docs include WXT/cross-browser planning; Edge Add-ons publish docs are available.
+- Proposed behavior: add an Edge manifest/release package gate, browser support matrix, and manual smoke checklist for Chrome, Edge, Brave, and Chromium.
+- Implementation areas: build scripts, manifest generation, docs, CI smoke matrix.
+- Data model/API/UI implications: browser-specific feature flags; no storage change.
+- Risks and edge cases: store-specific metadata and review requirements; browser API differences.
+- Verification plan: Edge sideload smoke; Edge Add-ons package lint; generated support matrix.
+- Estimated complexity: M.
+- Priority: P2.
+
+### 12. Supply-Chain Provenance and SBOM
+
+- Title: Signed artifacts, SBOM, and package diff release gate.
+- User problem solved: a code-execution extension needs a reproducible release trail.
+- Evidence: release runbook discusses custody/OIDC ambitions; no signed artifact/SBOM/provenance gate found; npm/SLSA provenance guidance is available.
+- Proposed behavior: publish a release bundle with artifact hashes, SBOM, generated package file list, source commit, dependency snapshot, GitHub release notes, and optional provenance statement.
+- Implementation areas: CI release workflow, `build.sh`, `publish.sh`, docs, GitHub Releases.
+- Data model/API/UI implications: no runtime impact.
+- Risks and edge cases: secrets handling, reproducibility across OS zip tools, review of minified Monaco/source packages.
+- Verification plan: compare package diff to expected allowlist; verify hashes; dry-run release job.
+- Estimated complexity: M to L.
+- Priority: P2.
 
 ## Existing Feature Improvements
 
-### Release State and Public Artifact Drift
+### Release Metadata and Public Listing
 
-- **Current behavior:** Local source, manifests, package, and tags are at 3.11.0; GitHub Releases latest is 2.3.4; no release workflow exists.
-- **Problem or missed opportunity:** Users and maintainers cannot tell what the current public artifact is. This weakens trust and makes regression reports ambiguous.
-- **Recommended change:** Create a release reconciliation checklist and workflow that packages artifacts, verifies versions, creates or updates GitHub Releases, and links Chrome Web Store status.
-- **Code locations likely affected:** `.github/workflows/ci.yml`, `docs/release-runbook.md`, `publish.sh`, `build.sh`, `CHANGELOG.md`, `README.md`.
-- **Backward compatibility concerns:** Do not republish old version numbers with different artifacts; choose patch/minor version intentionally.
-- **Verification plan:** `gh release list --limit 5`, `git tag --sort=-v:refname`, `npm run check`, `npm run smoke:dashboard`, `bash build.sh`.
-- **Estimated complexity:** M.
-- **Priority:** P0.
+- Current behavior: local files advertise 3.11.0, but public GitHub Releases remain at v2.3.4 and the Chrome Web Store listing still shows stale v1.7.4-era messaging.
+- Problem or missed opportunity: the first public trust signal contradicts the product's current state.
+- Recommended change: create a release parity gate and update public store/release metadata as part of a controlled release.
+- Code locations likely affected: `README.md`, `CHANGELOG.md`, `docs/release-runbook.md`, `publish.sh`, `.github/workflows/ci.yml`, release scripts.
+- Backward compatibility concerns: none for user data; store submission must preserve extension id.
+- Verification plan: generated evidence file plus manual public page verification.
+- Estimated complexity: M.
+- Priority: P0.
 
-### TypeScript Mirror Drift
+### Privacy Policy and Data-Use Copy
 
-- **Current behavior:** Runtime JS remains canonical while TS mirror is typechecked. `src/background/install-handler.ts` still uses `Set<string>` duplicate handling and buffered `response.text()`, while recent runtime work and changelog indicate Map/promise caps and bounded fetch hardening.
-- **Problem or missed opportunity:** Typecheck can pass while future TS build would reintroduce fixed runtime bugs.
-- **Recommended change:** Add parity tests or source-generation guards before flipping to TS canonical; port current runtime hardening to TS mirror; stop accepting runtime-only fixes.
-- **Code locations likely affected:** `background.core.js`, `src/background/*.ts`, `src/modules/*.ts`, `esbuild.config.mjs`, tests.
-- **Backward compatibility concerns:** The generated `background.js` contract and Chrome MV3 service worker behavior must stay stable.
-- **Verification plan:** `npm run typecheck`; targeted parity tests; `npm run build`; compare registered behavior on fixture scripts.
-- **Estimated complexity:** L.
-- **Priority:** P0.
+- Current behavior: `PRIVACY.md` says data never leaves the device unless export is used, but sync, EasyCloud, provider integrations, Gist token flows, install/update fetches, `@require`, and `@resource` can all send or fetch data.
+- Problem or missed opportunity: privacy copy is stale and could conflict with store policy expectations.
+- Recommended change: update privacy policy and add a generated data-flow table from code/config for install/update/sync/provider/diagnostics behavior.
+- Code locations likely affected: `PRIVACY.md`, README, store copy checklist, sync modules, release evidence generator.
+- Backward compatibility concerns: no data migration; copy must be accurate and conservative.
+- Verification plan: docs test for provider names and data categories; manual store metadata review.
+- Estimated complexity: S to M.
+- Priority: P0.
 
-### Auto-Update Still Overloads Check and Install
+### Chrome Web Store API v2 Runbook
 
-- **Current behavior:** `settings.autoUpdate` controls scheduled update application; per-row update review exists separately.
-- **Problem or missed opportunity:** A user cannot safely keep update checks on while requiring review for install.
-- **Recommended change:** Split scheduler from installation policy and default new installs to review/check-only unless user explicitly chooses auto-install.
-- **Code locations likely affected:** `background.core.js::UpdateSystem`, settings defaults, dashboard settings, update UI, tests.
-- **Backward compatibility concerns:** Migrate existing `autoUpdate: true` users with a clear prompt or one-time default policy.
-- **Verification plan:** Simulate settings migration; scheduled alarm should create pending updates but not apply in review mode.
-- **Estimated complexity:** L.
-- **Priority:** P0.
+- Current behavior: `publish.sh` already uses v4-style `chrome-webstore-upload` arguments, but `docs/release-runbook.md` still describes older 3.5.0 migration state and OIDC as unimplemented.
+- Problem or missed opportunity: release instructions can mislead the next publisher.
+- Recommended change: update runbook to current script behavior, add a dry-run release job, confirm Node version requirements for the v4 CLI, and document rollback.
+- Code locations likely affected: `docs/release-runbook.md`, `publish.sh`, `.github/workflows/ci.yml`, `package.json`.
+- Backward compatibility concerns: avoid breaking manual publish path.
+- Verification plan: `npm run build:prod`, release dry run with fake credentials or mocked CLI, CI workflow lint.
+- Estimated complexity: M.
+- Priority: P0.
 
-### Privacy Policy Does Not Match Cloud Sync Feature Surface
+### CI Audit Policy
 
-- **Current behavior:** `PRIVACY.md` says data never leaves the device unless exported, while README and code expose cloud sync providers.
-- **Problem or missed opportunity:** Store review and user trust can fail because disclosures are incomplete.
-- **Recommended change:** Update privacy policy and store-disclosure checklist to describe each provider, OAuth/token storage, script data uploaded, optional nature, and revocation/deletion path.
-- **Code locations likely affected:** `PRIVACY.md`, `README.md`, `docs/release-runbook.md`, CWS disclosure docs.
-- **Backward compatibility concerns:** No behavior change; disclosure-only.
-- **Verification plan:** Compare README sync provider list to privacy table; review CWS privacy fields manually.
-- **Estimated complexity:** S.
-- **Priority:** P1.
+- Current behavior: CI runs `npm audit --audit-level=high --omit=optional` with `continue-on-error: true`.
+- Problem or missed opportunity: audit failures are visible but not blocking for a trust-sensitive extension.
+- Recommended change: make high/critical audit failures blocking, or produce an explicit checked-in exception file with expiry and owner.
+- Code locations likely affected: `.github/workflows/ci.yml`, security docs.
+- Backward compatibility concerns: dependency churn can block merges; exceptions need a process.
+- Verification plan: workflow run with mocked audit failure or temporary fixture; confirm failure/exception behavior.
+- Estimated complexity: S.
+- Priority: P0.
 
-### Release Runbook Is Stale About CWS Upload CLI
+### Bounded Fetch Parity
 
-- **Current behavior:** `docs/release-runbook.md` still discusses moving from `chrome-webstore-upload-cli` 3.5.0 to 4.0.0, but `package.json` already uses `^4.0.0` and `npm view` confirms 4.0.0 current.
-- **Problem or missed opportunity:** Maintainers may follow obsolete release instructions.
-- **Recommended change:** Update runbook to current package state, Node requirements, CWS API v2 decisions, and exact release commands.
-- **Code locations likely affected:** `docs/release-runbook.md`, `package.json`, `.github/workflows/ci.yml`.
-- **Backward compatibility concerns:** None.
-- **Verification plan:** `npm view chrome-webstore-upload-cli version`; dry-run package build; review docs.
-- **Estimated complexity:** S.
-- **Priority:** P1.
+- Current behavior: `background.core.js` has `_fetchTextBounded`, but TS mirrors still include direct `response.text()`.
+- Problem or missed opportunity: future builds or refactors can reintroduce unbounded remote reads.
+- Recommended change: move bounded fetch into a shared module and forbid raw `response.text()` on remote fetches except allowlisted local/test cases.
+- Code locations likely affected: `background.core.js`, `src/background/install-handler.ts`, `src/background/update-checker.ts`, `src/background/resource-loader.ts`, `src/background/context-menu.ts`, tests.
+- Backward compatibility concerns: scripts relying on very large resources may now receive explicit size errors.
+- Verification plan: size-limit fixture tests for install/update/require/resource/context menu paths; `npm run check`.
+- Estimated complexity: M.
+- Priority: P0.
 
-### CI Audit Is Non-Blocking
+### DNR `GM_webRequest` Ownership Cleanup
 
-- **Current behavior:** CI runs `npm audit --audit-level=high --omit=optional` with `continue-on-error: true`.
-- **Problem or missed opportunity:** The project can upload artifacts despite high-severity advisories.
-- **Recommended change:** Make audit blocking once current zero-vulnerability baseline is confirmed; if transient registry noise is a concern, isolate it to scheduled advisory review rather than PR packaging.
-- **Code locations likely affected:** `.github/workflows/ci.yml`.
-- **Backward compatibility concerns:** CI may fail on new advisories; that is intended for release safety.
-- **Verification plan:** `npm audit --audit-level=high --omit=optional`; CI PR run.
-- **Estimated complexity:** S.
-- **Priority:** P1.
+- Current behavior: dirty worktree changes improve DNR persistence rollback and cleanup retry semantics, but those changes are uncommitted and not verified as released.
+- Problem or missed opportunity: stale DNR rules can affect browsing after a script is removed or storage persistence fails.
+- Recommended change: complete, review, and release the DNR cleanup changes with source/runtime parity tests and recovery receipts.
+- Code locations likely affected: `background.core.js`, `src/background/dnr-rules.ts`, `src/background/index.ts`, `tests/source-dnr-rules.test.js`, wrapper/runtime tests.
+- Backward compatibility concerns: cleanup must not remove rules owned by other scripts or extensions.
+- Verification plan: source tests, runtime tests, manual dynamic rule inspection after install/delete/restart.
+- Estimated complexity: M.
+- Priority: P0.
 
-### Stale Root XPI Artifact
+### `window.onurlchange` Dispatcher
 
-- **Current behavior:** `ScriptVault-firefox-v2.1.7.xpi` exists in the repo root locally while manifests are 3.11.0 and `.gitignore` ignores XPI artifacts.
-- **Problem or missed opportunity:** Local artifact drift can confuse manual sideload and release work.
-- **Recommended change:** Move generated artifacts to a build output folder only, add a release-clean check that refuses stale root ZIP/XPI files, and document artifact naming.
-- **Code locations likely affected:** `.gitignore`, `build.sh`, release docs, optional cleanup script.
-- **Backward compatibility concerns:** Do not delete user-needed artifacts without confirmation if they are not tracked.
-- **Verification plan:** `git status --ignored --short`; build artifact path check.
-- **Estimated complexity:** S.
-- **Priority:** P1.
+- Current behavior: dirty worktree changes modify wrapper generation to use a page-scoped dispatcher and avoid stacked history patches.
+- Problem or missed opportunity: duplicate history patching can create confusing script behavior and hard-to-debug page interaction.
+- Recommended change: finish source/runtime parity and browser smoke tests for the dispatcher before release.
+- Code locations likely affected: `src/background/wrapper-builder.ts`, `background.core.js` or generator source, `tests/wrapper-dom-security.test.js`.
+- Backward compatibility concerns: existing scripts expecting Tampermonkey-like `window.onurlchange` behavior must still work.
+- Verification plan: fixture script that sets `window.onurlchange`, route changes via pushState/replaceState/popstate, ensure one event per navigation.
+- Estimated complexity: S to M.
+- Priority: P0.
 
-### Public API Error Detail and Message Type Guard
+### XHR Callback Transport
 
-- **Current behavior:** Commit `053c1a5` removes internal error detail from external API responses and guards `data.type` before calling `.startsWith()`.
-- **Problem or missed opportunity:** The behavior is improved, but a targeted public API fuzz test was not observed in the same way error-log CSV tests were.
-- **Recommended change:** Backfill tests for arbitrary structured-clone `postMessage` payloads and generic external exception responses.
-- **Code locations likely affected:** `modules/public-api.js`, `src/modules/public-api.ts`, tests.
-- **Backward compatibility concerns:** External callers lose the `detail` field on internal exceptions; this is a security-positive breaking change for undocumented internals.
-- **Verification plan:** Fuzz `postMessage` payloads with non-string `type`; handler exception fixture should return `{ error: "Internal error" }` only.
-- **Estimated complexity:** S.
-- **Priority:** P1.
+- Current behavior: `content.js` uses `window.postMessage` bridging for many wrapper callbacks; background also has a `chrome.runtime.onUserScriptMessage` listener.
+- Problem or missed opportunity: page-message bridges are harder to reason about and increase privacy/confusion risk for XHR-like APIs.
+- Recommended change: migrate sensitive GM XHR callback/event traffic to `runtime.onUserScriptMessage` where supported, keeping a capability-gated fallback.
+- Code locations likely affected: `content.js`, `background.core.js`, wrapper builder, message schema tests, `.factory/large-repo-state.yaml`.
+- Backward compatibility concerns: Chrome version minimum and fallback path must preserve existing scripts.
+- Verification plan: real Chrome fixture script using GM_xmlhttpRequest progress/load/error/abort; assert no page-visible sensitive payloads where new path is active.
+- Estimated complexity: L.
+- Priority: P1.
 
-### CSV Formula Injection in Error Export
+### Remote Fetch Policy
 
-- **Current behavior:** Commit `053c1a5` prefixes dangerous CSV cells in error log export, dashboard CSP export, and dashboard stats export.
-- **Problem or missed opportunity:** User-controlled error text, script names, URLs, tags, and match patterns can become spreadsheet formulas when exported and opened.
-- **Recommended change:** Keep the mitigation; add or confirm dashboard CSV export tests in addition to the committed error-log tests.
-- **Code locations likely affected:** `modules/error-log.js`, `src/modules/error-log.ts`, tests.
-- **Backward compatibility concerns:** CSV values starting with formula characters gain a visible apostrophe in spreadsheet tools.
-- **Verification plan:** Export errors beginning with `=`, `+`, `-`, `@`, tab, and carriage return; verify CSV opens as literal text.
-- **Estimated complexity:** S.
-- **Priority:** P1.
+- Current behavior: fetch safety exists in places, but `.factory/large-repo-state.yaml` still flags DNS rebinding and post-fetch IP verification as remaining.
+- Problem or missed opportunity: install/update/resource fetches can traverse redirects or private IP resolution unless all paths share one policy.
+- Recommended change: create one remote fetch policy module for script installs, updates, `@require`, `@resource`, catalog/source checks, and provider-safe exceptions.
+- Code locations likely affected: background install/update/resource/context-menu handlers, tests, docs.
+- Backward compatibility concerns: local development or self-hosted scripts on private networks need an explicit opt-in or clear error.
+- Verification plan: mocked DNS/redirect/private-IP fixtures; allowlist/denylist tests; manual local-network script install test.
+- Estimated complexity: L.
+- Priority: P1.
 
-### Gist Token Storage Failure Handling
+### Backup and Restore Verification
 
-- **Current behavior:** Commit `428b718` updates `pages/dashboard-gist.js` so token save/clear/autosync persistence uses the MV3 Promise API and no longer hangs if `chrome.storage.local.set()` or `.remove()` rejects.
-- **Problem or missed opportunity:** The failure mode is fixed in code, but no focused test was found for quota/disk-write rejection paths.
-- **Recommended change:** Add a dashboard-gist storage failure test that mocks rejected Promise API calls and verifies the UI reports or logs the failure without leaving buttons/spinners stuck.
-- **Code locations likely affected:** `pages/dashboard-gist.js`, `tests/gui-secondary-audit.test.js` or a new focused gist test.
-- **Backward compatibility concerns:** None expected; failed persistence should now surface rather than hanging silently.
-- **Verification plan:** Mock `chrome.storage.local.set` rejection for token save and autosync; confirm the Promise settles and UI state recovers.
-- **Estimated complexity:** S.
-- **Priority:** P1.
+- Current behavior: export/import and trash/rollback exist, but there is no clear end-to-end backup verification drill in current CI.
+- Problem or missed opportunity: recovery features are trust features only if users can prove a backup can be restored.
+- Recommended change: add backup verification that exports, validates schema/hash, imports into a clean profile, compares script/settings counts, and produces a receipt.
+- Code locations likely affected: dashboard import/export, background storage handlers, tests, release runbook.
+- Backward compatibility concerns: old backup formats must continue importing with migration warnings.
+- Verification plan: fixture backups for current and older formats; import/export round-trip tests.
+- Estimated complexity: M.
+- Priority: P1.
 
-### TS Wrapper `@grant none` Drift
+### Dashboard File Size and Module Boundaries
 
-- **Current behavior:** Commit `428b718` updates `src/background/wrapper-builder.ts` so empty grant arrays deny GM APIs like `@grant none` instead of granting all APIs.
-- **Problem or missed opportunity:** The parser usually defaults missing grants to `['none']`, so the bug was latent; a future caller bypassing the parser could still regress without a direct wrapper test.
-- **Recommended change:** Add a direct `buildWrappedScript()` test for `grant: []` and `grant: ['none']` that asserts GM APIs are unavailable except `GM_info`.
-- **Code locations likely affected:** `src/background/wrapper-builder.ts`, `tests/wrapper-gm-tabs-39-13.test.js` or a new wrapper grant test.
-- **Backward compatibility concerns:** Scripts relying on missing metadata granting all APIs were already outside the documented contract.
-- **Verification plan:** Vitest fixture builds wrappers with empty grants and asserts `GM_xmlhttpRequest`, `GM_setValue`, and other GM APIs are not exposed.
-- **Estimated complexity:** S.
-- **Priority:** P1.
+- Current behavior: `pages/dashboard.js` and `pages/dashboard.html` are very large, while many feature areas share state and DOM helpers.
+- Problem or missed opportunity: changes are risky, tests are broad, and performance regressions are hard to isolate.
+- Recommended change: extract update inbox, sync health, backup/trash, search/filter, and diagnostics panels into modules with explicit state contracts.
+- Code locations likely affected: dashboard JS/HTML/CSS and tests.
+- Backward compatibility concerns: preserve selectors relied on by tests and user workflows.
+- Verification plan: existing dashboard tests plus per-module unit tests and smoke test.
+- Estimated complexity: L.
+- Priority: P2.
 
-### Dependency Refresh Batch
+### Dependency Refresh
 
-- **Current behavior:** Several dev dependencies are behind wanted/latest versions; Monaco is pinned below latest major/minor.
-- **Problem or missed opportunity:** Tooling bugs and browser type gaps accumulate.
-- **Recommended change:** Batch-update low-risk test/build dependencies first; treat Monaco as a separate UI verification pass.
-- **Code locations likely affected:** `package.json`, `package-lock.json`, editor smoke tests, CI.
-- **Backward compatibility concerns:** Monaco upgrades can change worker loading, CSS, and editor APIs.
-- **Verification plan:** `npm outdated`, `npm update` targeted packages, `npm run check`, `npm run smoke:dashboard`, editor manual load.
-- **Estimated complexity:** M.
-- **Priority:** P3.
+- Current behavior: `npm outdated` reports newer versions for Vitest, coverage-v8, chrome-types, esbuild, jsdom, Monaco, Puppeteer-core, and TypeScript.
+- Problem or missed opportunity: stale dev tooling can hide browser API changes and make CI brittle.
+- Recommended change: refresh low-risk patch/minor dev dependencies first; isolate Monaco and Puppeteer major/minor behavior changes in separate PRs.
+- Code locations likely affected: `package.json`, `package-lock.json`, test snapshots if any.
+- Backward compatibility concerns: Monaco 0.55.x may alter bundle size/editor behavior; Puppeteer 25 may change browser handling.
+- Verification plan: `npm run check`, `npm run build`, dashboard smoke, package size diff.
+- Estimated complexity: S to M.
+- Priority: P3.
 
 ## Reliability, Security, Privacy, and Data Safety
 
-- Verified release drift is the largest trust issue: current public GitHub Releases do not represent the local 3.x product state.
-- Verified high-trust permissions are necessary for a userscript manager, but they increase the need for onboarding, disclosure, and diagnostics.
-- Verified remote fetch paths now have runtime bounded-fetch tests, but still need background TS mirror parity.
-- Verified Gist token persistence no longer uses callback-wrapped storage writes after `428b718`, but focused rejection-path tests are still missing.
-- Verified TS wrapper empty-grant behavior now denies GM APIs after `428b718`, but direct grant-empty wrapper tests are still missing.
-- Verified `XHR-PRIVACY` remains an open factory task; migrate user-script messages away from broad page bridge paths where possible.
-- Verified `DNS-REBIND` remains open; remote install/update trust should include post-fetch IP verification or equivalent host/IP consistency checks where APIs allow.
-- Verified cloud sync disclosures are stale relative to shipped providers.
-- Verified CI audit currently cannot fail the build despite a zero-vulnerability baseline today.
-- Verified public API hardening should be backed by focused fuzz tests because it prevents internal error detail leaks and message listener type crashes.
-- Verified CSV export hardening should be kept and expanded with dashboard export coverage because exported logs and dashboard stats exports include user-controlled strings.
-- Recovery needs: IDB-backed trash or an explicit storage.local quota policy, update rollback from pending-update records, backup conflict preview, and diagnostics bundles that redact tokens and script bodies by default.
+Bugs or risks found:
+
+- Verified: public release state is inconsistent. Local 3.11.0 does not match GitHub Releases latest v2.3.4 or CWS stale listing copy.
+- Verified: root stale artifact `ScriptVault-firefox-v2.1.7.xpi` conflicts with current 3.11.0 source and can confuse distribution.
+- Verified: privacy policy is stale relative to sync/cloud/Gist/provider flows.
+- Verified: CI audit is non-blocking for high vulnerabilities.
+- Verified: source/runtime mirror drift exists for bounded fetch and is visible in current dirty hardening work.
+- Verified: TypeScript mirror still contains raw `response.text()` in remote fetch paths.
+- Likely: auto-update and bulk-update flows still need a consent-first pending queue.
+- Likely: Firefox path is not AMO-ready because Phase 1 tasks are unchecked and no `web-ext lint` gate was found.
+- Needs live validation: actual CWS package and store dashboard data-use declarations.
+- Needs live validation: DNR cleanup behavior after browser restart and dynamic rule removal failures.
+
+Missing guardrails:
+
+- Release parity gate across package/manifests/README/changelog/store/privacy/artifacts.
+- Signed artifact/SBOM/provenance/package-diff gate.
+- Generated permission and data-use table.
+- Remote fetch shared policy for internal IP, redirect, DNS-rebind, and byte limits.
+- Update inbox and rollback receipt for every executable update.
+- Token redaction tests for diagnostics bundle and support export.
+- Firefox/Edge feature gating and package validation.
+
+Permission/network/file-system concerns:
+
+- `<all_urls>` and broad host access are intrinsic to a userscript manager, but the extension needs generated, user-facing justification and active-site status.
+- Sync providers and Gist can move script contents and tokens off-device; privacy copy and UI receipts must be explicit.
+- `@require` and `@resource` fetches expand the trust boundary beyond the top-level script source.
+- DNR dynamic rules can affect browsing beyond a single script lifecycle if cleanup/persistence fails.
+- Build scripts produce ZIP/XPI artifacts; stale root artifacts should be blocked outside a release directory.
+
+Recovery and rollback needs:
+
+- Pre-update rollback points for all update paths.
+- Restore receipt after trash recovery and backup import.
+- Backup verification drill in CI.
+- CWS rollback runbook and tested rollback target.
+- DNR cleanup retry and recovery receipt for stuck dynamic rules.
+
+Logging/diagnostics needs:
+
+- Structured failure receipts for install/update/sync/DNR/userScripts/permission failures.
+- Redacted support bundle with preview.
+- Browser capability snapshot including Chrome version, userScripts availability, DNR support, side panel support, offscreen support, storage quota, and permissions.
+- Retention bounds for logs and receipts.
 
 ## UX, Accessibility, and Trust
 
-- Onboarding should explicitly detect and explain Chrome's current userScripts toggle state. Chrome 138+ uses an extension-specific "Allow User Scripts" toggle, while earlier Chrome uses Developer Mode.
-- Empty states should distinguish "no scripts installed", "filtered to zero", "sync unavailable", "userScripts disabled", "permission missing", and "registration failed".
-- Loading states should be added around update checks, cloud sync provider auth, backup import, analyzer scans, and trash restore for large scripts.
-- Error states should preserve next actions: retry fetch, open source URL, copy diagnostics, disable script, restore previous version, or review permissions.
-- Destructive actions should consistently show what is recoverable through trash and what is permanent.
-- Settings need clearer separation among update checking, update installing, sync uploading, cloud provider authorization, and optional permissions.
-- Accessibility gaps from `docs/wcag3-gap-analysis.md` should become implementation items: skip-to-main, APCA/forced-colors checks, live-region audit, APG combobox/grid semantics, and mixed-language `lang`.
-- Trust signals should be visible at install and update time: source URL, update URL, diff, grants, host matches, external dependencies, analyzer results, signature/provenance, and recovery route.
+Onboarding gaps:
+
+- Chrome userScripts enablement and browser capability checks should be first-run status cards, not only documentation.
+- Users should see why broad permissions are needed and whether the current site is covered.
+- Migrators from Tampermonkey/Violentmonkey need compatibility import warnings before install.
+
+Empty/loading/error/disabled states:
+
+- Sync provider panels need provider-specific empty/error states and token-health repair actions.
+- Update flows need pending/failed/skipped/applied states with receipts.
+- Dashboard large-library loading should avoid full-table jank and preserve keyboard focus.
+- Firefox/unsupported browser surfaces should show feature-gated explanations.
+
+Destructive or irreversible actions:
+
+- Permanent trash empty, bulk delete, overwrite import, cloud overwrite, and update apply need count/source/date confirmation and recovery points.
+- Auto-update should default to notify/review for untrusted sources.
+
+Settings clarity:
+
+- Distinguish local storage, browser sync, EasyCloud, provider sync, and Gist sync.
+- Show where tokens are stored and how to revoke them.
+- Explain per-site pauses, global extension disable, script disable, and browser host permissions separately.
+
+Accessibility issues and opportunities:
+
+- Existing a11y helpers/tests are a strong base, but virtualized lists and dense dashboard panels need explicit keyboard and screen-reader contracts.
+- Add forced-colors/high-contrast manual tests and automated checks where possible.
+- Add live-region consistency for long-running sync/update/import/export operations.
+- Use WCAG 2.2 as the baseline and treat WCAG 3/APCA as advisory for future contrast review.
+- Monaco needs a fallback or clear warning for assistive technology limitations.
+
+Microcopy and trust-signal improvements:
+
+- Replace vague update/install success messages with source, version, hash, and rollback status.
+- Show "review required", "trusted source", "local backup created", and "provider sync dry-run" states.
+- Keep public store, README, privacy policy, and in-app copy synchronized through generated checks.
 
 ## Architecture and Maintainability
 
-- The runtime/TS split is now the central maintainability risk. A TS mirror that passes typecheck but is not build-canonical can silently reintroduce bugs when promoted.
-- Commit `428b718` fixes a latent TS mirror grant-check drift where an empty grants array could grant all APIs; this reinforces the need for runtime/TS parity tests.
-- `background.core.js` remains a large shared surface. The current roadmap already points toward service-worker module splitting; do it after parity tests, not before.
-- `pages/dashboard.js` is a large UI controller with repeated `renderScriptTable()` calls. Virtualization and state separation should happen before additional dashboard features.
-- Message action typing has improved, but runtime dispatch and `src/types/messages.ts::ResponseMap` need an automated coverage guard.
-- Storage responsibilities are split across IndexedDB and `chrome.storage.local`; trash, pending installs, pending updates, and backup metadata should have explicit storage ownership.
-- Release automation is incomplete. CI packages artifacts but does not publish releases, reconcile tags, or enforce store disclosure freshness.
-- Documentation is extensive but stale in places. `ROADMAP.md`, `docs/release-runbook.md`, `PRIVACY.md`, and this report should be updated as part of feature work, not after.
+Module or boundary improvements:
+
+- Make TypeScript the canonical source for background subsystems, or explicitly mark `background.core.js` as canonical and generate parity tests. The current mixed model is the root of repeated drift.
+- Extract shared remote fetch policy and forbid ad hoc remote `response.text()`.
+- Extract dashboard panels into testable modules with state contracts.
+- Define message/action schemas in one place and generate runtime validators/tests.
+- Isolate browser capability feature flags for Chrome, Firefox, Edge, Brave, and future targets.
+
+Refactor candidates:
+
+- `pages/dashboard.js`: split update, sync, backup/trash, diagnostics, search/filter, and editor state.
+- `pages/dashboard.html`: split repeated panel markup into generated or template-driven sections if build tooling supports it.
+- `background.core.js`: move install/update/resource/DNR/userScripts/message handling toward source modules with golden tests.
+- `content.js`: reduce page `postMessage` bridge surface and isolate fallback transport.
+- `build-firefox.sh`: align packaging with `web-ext` and avoid stale artifact placement.
+
+Test gaps:
+
+- Store/release metadata parity.
+- Real-browser Chrome userScripts toggle and host permission flows.
+- Full pending update queue and rollback drill.
+- Cloud sync dry-run and conflict resolution.
+- Large-library performance thresholds.
+- Firefox `web-ext lint` and sideload smoke.
+- Token redaction for diagnostics bundle.
+- Generated GM API compatibility matrix.
+
+Documentation gaps:
+
+- Privacy policy and data-use disclosure.
+- Release runbook current state for CWS API v2, rollback, artifact custody, and OIDC.
+- Firefox AMO readiness and unsupported feature matrix.
+- Edge/Chromium derivative support matrix.
+- Generated API and GM compatibility docs.
+
+Release/build/deployment gaps:
+
+- No complete release workflow found.
+- Public releases lag local version.
+- CWS listing copy lags product.
+- CI audit is non-blocking.
+- No SBOM/provenance/package-diff gate found.
+- Stale XPI artifact at repo root.
+- Firefox package validation not release-gated.
 
 ## Prioritized Roadmap
 
-- [ ] P0 - Reconcile release state and publish current 3.x artifacts
-  - Why: Users and maintainers need public artifacts that match source, tags, and docs.
-  - Evidence: Local tags reach `v3.11.0`; `package.json` and manifests are 3.11.0; `gh release list` latest is `v2.3.4`; `.github/workflows/ci.yml` has no release job.
-  - Touches: `.github/workflows/ci.yml`, `docs/release-runbook.md`, `publish.sh`, `build.sh`, `CHANGELOG.md`, `README.md`.
-  - Acceptance: A current GitHub release exists with matching versioned artifacts and documented CWS/Chrome status; old release drift is explained or closed.
-  - Verify: `gh release list --limit 5`; `npm run check`; `npm run smoke:dashboard`; `bash build.sh`.
+### Phase 0 - Do Not Lose Trust
 
-- [ ] P0 - Port current remote-fetch hardening to TS mirror and tests
-  - Why: Oversized remote bodies can DoS the service worker if size checks happen after buffering.
-  - Evidence: Commit `053c1a5` adds `_fetchTextBounded()` and `tests/fetch-bounded.test.js`; `src/background/update-checker.ts` and `src/background/install-handler.ts` still use `response.text()`.
-  - Touches: `background.core.js`, `src/background/update-checker.ts`, `src/background/install-handler.ts`, require loader code, tests.
-  - Acceptance: Install, update, direct URL fetch, and `@require` paths all use bounded stream reads in runtime and TS; oversized stream fixtures fail before full buffering.
-  - Verify: `npm run typecheck`; targeted Vitest bounded-fetch tests; `npm run build`.
+- [ ] P0 - Reconcile public release, store, and root artifact state
+  - Why: users and reviewers currently see conflicting versions and capability claims.
+  - Evidence: `package.json`/manifests/README show 3.11.0; GitHub Releases latest is v2.3.4; CWS listing shows stale v1.7.4-era copy; root has `ScriptVault-firefox-v2.1.7.xpi`.
+  - Touches: `README.md`, `CHANGELOG.md`, `docs/release-runbook.md`, GitHub Releases, CWS listing, root artifact policy.
+  - Acceptance: public GitHub release, CWS listing, repo docs, artifacts, and privacy/store copy all describe the same version and feature set; stale root XPI is removed or moved to a release archive with metadata.
+  - Verify: `gh release list --limit 5`; public CWS listing check; `git status --short`; generated release evidence report.
 
-- [ ] P0 - Add runtime/TS parity guard before canonical TS build
-  - Why: Future TS build promotion must not reintroduce fixed runtime behavior.
-  - Evidence: `src/background/install-handler.ts` still has `Set<string>` duplicate handling and buffered fetch; recent changelog records drift cleanup work.
-  - Touches: `src/background/*.ts`, `src/modules/*.ts`, `background.core.js`, `esbuild.config.mjs`, tests.
-  - Acceptance: CI fails when a runtime message/action/security helper changes without a matching TS mirror update or explicit waiver.
-  - Verify: `npm run typecheck`; parity test command added to `npm run check`; intentional mismatch fixture fails.
+- [ ] P0 - Add release/store/privacy parity checker
+  - Why: public metadata drift is recurring and directly harms trust.
+  - Evidence: README, manifests, CWS listing, `PRIVACY.md`, and release state disagree today.
+  - Touches: new `scripts/release-evidence.*`, `PRIVACY.md`, `README.md`, `manifest*.json`, `package.json`, `.github/workflows/ci.yml`.
+  - Acceptance: CI fails when package/manifests/README/changelog/privacy/release artifacts/store copy expectations diverge.
+  - Verify: run parity checker locally with current expected metadata; intentionally change one version string and confirm failure.
 
-- [ ] P0 - Split update check from update install
-  - Why: Users need safety from silent upstream code replacement while still getting update awareness.
-  - Evidence: `pages/dashboard.js::interactiveCheckAndConfirmUpdate()` exists for per-script review; `background.core.js::UpdateSystem.autoUpdate()` still installs automatically when enabled.
-  - Touches: `background.core.js::UpdateSystem`, `src/background/update-checker.ts`, settings defaults, dashboard settings/update UI, storage migration, tests.
-  - Acceptance: Users can choose manual, check-only, review-before-install, or trusted auto-install modes; scheduled checks do not install in review/check-only modes.
-  - Verify: Vitest settings migration tests; manual fixture update flow; dashboard pending update inbox smoke test.
+- [ ] P0 - Update CWS API v2 runbook and add publish dry-run path
+  - Why: `publish.sh` has moved ahead of `docs/release-runbook.md`, and CWS API v1 sunset is dated for 2026-10-15.
+  - Evidence: official CWS API v2 docs; `publish.sh`; stale runbook section describing older CLI pin/migration state.
+  - Touches: `docs/release-runbook.md`, `publish.sh`, `package.json`, `.github/workflows/ci.yml`.
+  - Acceptance: release docs match actual CLI/env vars, include rollback, and CI can perform a non-secret dry run.
+  - Verify: `npm run build:prod`; mocked publish dry run; docs link check.
 
-- [ ] P0 - Migrate GM/XHR messaging to dedicated user-script handlers
-  - Why: Chrome provides `runtime.onUserScriptMessage` for less-trusted user-script contexts, reducing reliance on page bridge patterns.
-  - Evidence: Chrome userScripts docs; `.factory/large-repo-state.yaml` `XHR-PRIVACY`; existing `background.core.js` listener; committed public API hardening.
-  - Touches: `background.core.js`, `modules/xhr.js`, GM API wrappers, `src/background/registration.ts`, `src/types/messages.ts`, tests.
-  - Acceptance: Supported Chrome versions route GM/XHR messages through dedicated user-script events; fallback remains tested; web public API cannot reach GM internals.
-  - Verify: Fixture userscript XHR test; fallback compatibility test; postMessage fuzz test.
+- [ ] P0 - Make high/critical audit failures blocking or exception-gated
+  - Why: trust-sensitive extension CI should not silently pass known high vulnerabilities.
+  - Evidence: `.github/workflows/ci.yml` uses `continue-on-error: true` for audit.
+  - Touches: `.github/workflows/ci.yml`, optional security exception file.
+  - Acceptance: high/critical audit failures block CI unless a reviewed expiring exception exists.
+  - Verify: workflow test or local audit fixture demonstrating fail/exception behavior.
 
-- [ ] P1 - Add DNS rebinding protection for remote install/update fetches
-  - Why: Remote install/update URLs are trust boundaries and should not be able to redirect or resolve into unexpected private/local targets after validation.
-  - Evidence: `.factory/large-repo-state.yaml` lists `DNS-REBIND` as remaining; remote install/update fetches are core workflows.
-  - Touches: install/update fetch helpers, URL validation, network policy docs, tests.
-  - Acceptance: Remote installs/updates reject local/private rebinding cases where detectable and log a clear diagnostic.
-  - Verify: Unit tests with mocked DNS/IP policy; manual install from allowed and blocked fixture URLs.
+- [ ] P0 - Add runtime/source parity gate for critical background behavior
+  - Why: security fixes are split between `background.core.js` and TypeScript mirrors.
+  - Evidence: bounded fetch exists in runtime but TS mirrors still call `response.text()`; dirty DNR/wrapper changes show active drift.
+  - Touches: `background.core.js`, `src/background/*.ts`, `tests/source-*.test.js`, CI.
+  - Acceptance: CI fails on drift for fetch policy, DNR cleanup, wrapper dispatcher, update apply, and message schemas.
+  - Verify: `npm run check`; targeted parity test with a known drift fixture.
 
-- [ ] P1 - Virtualize dashboard and side-panel script lists
-  - Why: Large libraries should remain responsive during search, sort, restore, and update workflows.
-  - Evidence: `pages/dashboard.js::renderScriptTable()` directly renders and is called repeatedly; no virtualization implementation found; roadmap Phase 7.1 remains relevant.
-  - Touches: `pages/dashboard.js`, `pages/dashboard.css`, `pages/sidepanel.js`, tests, optional virtual-core dependency.
-  - Acceptance: 2,000-script fixture remains responsive, keeps keyboard/focus behavior, and preserves existing table/card/side-panel UX.
-  - Verify: Performance fixture test; dashboard smoke; manual search/sort/delete/restore with 2,000 scripts.
+- [ ] P0 - Centralize bounded remote fetch policy
+  - Why: installs, updates, `@require`, resources, and context-menu flows should share size, redirect, timeout, and private-network rules.
+  - Evidence: runtime `_fetchTextBounded`; raw `response.text()` remains in TS install/update/resource/context-menu paths; `.factory/large-repo-state.yaml` flags DNS rebinding.
+  - Touches: `background.core.js`, `src/background/install-handler.ts`, `src/background/update-checker.ts`, `src/background/resource-loader.ts`, `src/background/context-menu.ts`.
+  - Acceptance: all remote script/resource fetches use one policy module; oversized, private-network, and redirected fixtures return explicit errors.
+  - Verify: targeted remote fetch tests plus `npm run check`.
 
-- [ ] P1 - Move trash to IDB-backed recovery or document storage.local as intentional
-  - Why: Deleted scripts can be large and recovery metadata should not depend on small-key storage assumptions.
-  - Evidence: Runtime trash actions exist; roadmap history expects an IDB `scripts_trash` store; current implementation uses `chrome.storage.local`.
-  - Touches: `modules/storage.js`, storage migrations, background trash handlers, dashboard trash UI, `src/types/messages.ts`, tests.
-  - Acceptance: Trash storage architecture is explicit, tested under large deleted scripts, and documented.
-  - Verify: Migration test; delete/restore/empty tests; manual trash flow.
+- [ ] P0 - Build pending update inbox with rollback receipt
+  - Why: executable updates need review and recovery, especially for auto/bulk paths.
+  - Evidence: `background.core.js` auto-update/apply paths; dashboard per-script confirmation exists but no universal pending queue.
+  - Touches: `background.core.js`, `src/background/update-checker.ts`, dashboard update UI, storage schema, analyzer/signing modules.
+  - Acceptance: auto/bulk updates create pending records with diff/trust/analyzer info and a rollback point before apply.
+  - Verify: fixture update flow: install old script, detect new script, review pending item, apply, rollback.
 
-- [ ] P1 - Complete Firefox Phase 1 temporary sideload
-  - Why: Cross-browser support is a major product promise and a release-risk reducer.
-  - Evidence: `FIREFOX-PORT.md` Phase 1 clean sideload unchecked; `manifest-firefox.json` is version-synced but unsupported APIs remain to validate.
-  - Touches: `manifest-firefox.json`, build scripts, registration guards, offscreen/sidePanel/sandbox fallbacks, Monaco loading, docs.
-  - Acceptance: Firefox temporary install loads with no startup errors and fixture install/edit/run/update works.
-  - Verify: `npm run build`; Firefox temporary install; documented manual fixture run.
+- [ ] P0 - Add Chrome userScripts and browser capability recovery center
+  - Why: browser toggles and permissions can prevent script execution with confusing symptoms.
+  - Evidence: Chrome userScripts docs; `manifest.json` requires `userScripts`; README targets modern Chrome.
+  - Touches: background capability probes, `pages/dashboard.js`, `popup.js`, `sidepanel.js`.
+  - Acceptance: dashboard/popup show userScripts, DNR, offscreen, side panel, browser version, and host permission status with repair guidance.
+  - Verify: manual Chrome profile with userScripts disabled/enabled; unit tests for status rendering.
 
-- [ ] P1 - Refresh privacy policy and store disclosure matrix
-  - Why: Cloud sync and broad host permissions require clear user and store-review disclosures.
-  - Evidence: `PRIVACY.md` says data never leaves device unless exported; README/code advertise cloud sync providers.
-  - Touches: `PRIVACY.md`, `README.md`, `docs/release-runbook.md`, CWS disclosure docs.
-  - Acceptance: Privacy text lists each provider, uploaded data, token storage, opt-in nature, revocation, and deletion.
-  - Verify: Provider list in README matches privacy table; manual CWS disclosure checklist review.
+### Phase 1 - Runtime Safety and Data Recovery
 
-- [ ] P1 - Make high-severity audit blocking in CI
-  - Why: Current zero-vulnerability baseline should be protected for release artifacts.
-  - Evidence: `npm audit --audit-level=high --omit=optional` returned 0; CI has `continue-on-error: true`.
-  - Touches: `.github/workflows/ci.yml`.
-  - Acceptance: CI fails on high+ advisories while preserving optional-dependency noise handling.
-  - Verify: `npm audit --audit-level=high --omit=optional`; CI run.
+- [ ] P1 - Migrate sensitive XHR callback transport to user-script messaging
+  - Why: page `postMessage` bridges are harder to audit for privacy-sensitive callback payloads.
+  - Evidence: `content.js` page bridge; `background.core.js` has `chrome.runtime.onUserScriptMessage`; `.factory/large-repo-state.yaml` flags XHR-PRIVACY.
+  - Touches: `content.js`, `background.core.js`, wrapper builder, message schema tests.
+  - Acceptance: supported Chrome versions use user-script messaging for GM XHR callbacks; fallback is capability-gated and tested.
+  - Verify: real-browser fixture with GM_xmlhttpRequest progress/load/error/abort and assertions about page-visible payloads.
 
-- [ ] P1 - Backfill public API and dashboard CSV hardening tests
-  - Why: Commit `053c1a5` fixes concrete external-input risks; remaining value is preventing regressions across every export and bridge path.
-  - Evidence: Commit `053c1a5` modifies `modules/public-api.js`, `src/modules/public-api.ts`, `modules/error-log.js`, `src/modules/error-log.ts`, `pages/dashboard.js`, `pages/dashboard-csp.js`, and `tests/error-log.test.js`.
-  - Touches: Those modules/pages and tests.
-  - Acceptance: External handler exceptions return no internal detail; non-string `postMessage.type` is ignored; CSV dangerous cells are defanged in error-log and dashboard stats exports, all with tests.
-  - Verify: Targeted Vitest tests for public API fuzz and CSV formula prefixes; manual dashboard stats CSV export.
+- [ ] P1 - Finish DNR ownership cleanup and retry semantics
+  - Why: stale DNR rules can affect browsing after script removal or failed persistence.
+  - Evidence: current dirty changes modify DNR rollback, cleanup retry, and reconcile behavior.
+  - Touches: `background.core.js`, `src/background/dnr-rules.ts`, `src/background/index.ts`, `tests/source-dnr-rules.test.js`.
+  - Acceptance: failed map persistence rolls back newly added rules; failed DNR removal preserves ownership until successful cleanup; reconcile is idempotent.
+  - Verify: source/runtime tests and manual dynamic rule inspection after restart.
 
-- [ ] P1 - Backfill tests for Gist storage failure and empty-grant wrapper behavior
-  - Why: Commit `428b718` closes two real hardening gaps, but the most direct rejection and empty-grant cases should be pinned before the next TS/runtime migration wave.
-  - Evidence: `pages/dashboard-gist.js` now uses Promise API writes for token/autosync persistence; `src/background/wrapper-builder.ts` now denies GM APIs when `grants.length === 0`.
-  - Touches: `pages/dashboard-gist.js`, `src/background/wrapper-builder.ts`, `tests/gui-secondary-audit.test.js` or new focused tests.
-  - Acceptance: Rejected Gist storage writes settle without hanging UI state; wrappers built with `grant: []` deny GM APIs except `GM_info`.
-  - Verify: Targeted Vitest tests for mocked `chrome.storage.local.set/remove` rejection and `buildWrappedScript(makeScript([]))`.
+- [ ] P1 - Finish page-scoped `window.onurlchange` dispatcher parity
+  - Why: stacked history patches can break page behavior and duplicate script events.
+  - Evidence: current dirty changes in `src/background/wrapper-builder.ts` and wrapper tests.
+  - Touches: wrapper builder, generated runtime, wrapper tests.
+  - Acceptance: one page-scoped dispatcher is installed per page and scripts receive expected URL-change events exactly once.
+  - Verify: fixture page using pushState, replaceState, and popstate under multiple scripts.
 
-- [ ] P2 - Add unified diagnostics bundle
-  - Why: Debugging registration, sync, and update failures currently requires several disconnected surfaces.
-  - Evidence: Error log, DevTools, netlog, sync, and registration diagnostics exist separately.
-  - Touches: dashboard diagnostics UI, error log, sync providers, registration diagnostics, redaction utilities.
-  - Acceptance: User can export a sanitized diagnostics JSON bundle without tokens or script bodies by default.
-  - Verify: Snapshot redaction tests; manual export with fake tokens and scripts.
+- [ ] P1 - Add backup verification and restore receipts
+  - Why: export/import/trash/rollback are only trustworthy if recovery is verifiable.
+  - Evidence: trash exists in `background.core.js`; README advertises backup/rollback/trash; no end-to-end drill found.
+  - Touches: background storage handlers, dashboard import/export/trash UI, tests.
+  - Acceptance: backup export validates schema/hash; import dry-run shows changes; restore writes a receipt.
+  - Verify: export/import round trip in a clean test profile and fixture import of an older backup.
 
-- [ ] P2 - Add `GM_fetch`, AbortSignal, and cookie partition controls
-  - Why: Compatibility with modern scripts and privacy controls is still advancing.
-  - Evidence: Roadmap references `GM_fetch`, AbortSignal, CHIPS/cookie partition work; `modules/xhr.js` supports several XHR options already.
-  - Touches: `modules/xhr.js`, `src/modules/xhr.ts`, background request handlers, tests, docs.
-  - Acceptance: `GM_fetch` behaves predictably, XHR aborts through AbortSignal, and cookie partition options are explicit and tested.
-  - Verify: XHR/GM_fetch fixture tests; manual cross-origin request script.
+- [ ] P1 - Align privacy policy and sync/token UX
+  - Why: current privacy copy under-describes cloud and token flows.
+  - Evidence: `PRIVACY.md`; `modules/sync-providers.js`; `modules/sync-easycloud.js`; `pages/dashboard-gist.js`.
+  - Touches: `PRIVACY.md`, dashboard sync UI, provider modules, release parity checker.
+  - Acceptance: users can see provider data flows, token storage, revoke controls, last sync status, and dry-run conflicts.
+  - Verify: provider mock tests, docs parity check, manual Gist/WebDAV mock flow.
 
-- [ ] P2 - Implement optional `@require` provenance policy
-  - Why: Remote dependencies are a high-value supply-chain attack path.
-  - Evidence: `docs/require-provenance-design.md`; require loader fetch path; analyzer/signing features already exist.
-  - Touches: parser, require loader, analyzer, install/update UI, settings, docs.
-  - Acceptance: Matching/mismatched/missing provenance is visible and policy-controlled.
-  - Verify: Fixture scripts with matching hash, mismatch, and missing provenance.
+- [ ] P1 - Add redacted diagnostics bundle
+  - Why: support data is needed for complex failures but must not leak tokens or script secrets by default.
+  - Evidence: diagnostics surfaces exist; provider tokens and script contents can be sensitive.
+  - Touches: dashboard diagnostics, background error receipts, sync/install/update handlers.
+  - Acceptance: export shows redaction preview and excludes tokens/code by default; failure receipts are structured and bounded.
+  - Verify: redaction unit tests with token/script fixtures; manual export review.
 
-- [ ] P2 - Complete accessibility trust pass from WCAG 3 gap analysis
-  - Why: The app has dense controls and trust warnings that must be navigable and perceivable.
-  - Evidence: `docs/wcag3-gap-analysis.md`; dashboard/editor/install UI surfaces.
-  - Touches: `pages/*.html`, `pages/*.css`, `pages/*.js`, tests.
-  - Acceptance: Skip links, forced-colors, live-region behavior, combobox/grid semantics, and mixed-language handling are covered.
-  - Verify: Accessibility tests; manual keyboard and screen-reader smoke.
+### Phase 2 - Workflow Reliability and Scale
 
-- [ ] P3 - Refresh dependency/tooling batch
-  - Why: Toolchain drift increases future upgrade cost.
-  - Evidence: `npm outdated --json` shows newer versions for Vitest, esbuild, jsdom, Puppeteer, TypeScript, chrome-types, and Monaco.
-  - Touches: `package.json`, `package-lock.json`, editor smoke, CI.
-  - Acceptance: Low-risk tooling updates land with green checks; Monaco upgrade is isolated with UI verification.
-  - Verify: `npm outdated`; `npm run check`; `npm run smoke:dashboard`; editor manual smoke.
+- [ ] P1 - Add large-library performance harness and virtualization
+  - Why: a power-user script manager must stay responsive with hundreds or thousands of scripts.
+  - Evidence: direct dashboard rendering in `renderScriptTable`; very large dashboard files; no virtualization gate found.
+  - Touches: dashboard rendering, search/filter modules, side panel active list, performance tests.
+  - Acceptance: 1000-script library renders, filters, selects, and bulk-updates within defined thresholds without focus loss.
+  - Verify: browser smoke with seeded 0/10/100/1000/5000 script fixtures.
 
-- [ ] P3 - Add stale artifact guard for root ZIP/XPI files
-  - Why: Local ignored artifacts can mislead manual testing and release work.
-  - Evidence: Local root `ScriptVault-firefox-v2.1.7.xpi` exists while project version is 3.11.0.
-  - Touches: release scripts, `.gitignore`, docs.
-  - Acceptance: Build outputs go only to the expected artifact folder and release checks warn about stale root packages.
-  - Verify: `git status --ignored --short`; build artifact path check.
+- [ ] P1 - Add site-scoped controls and host permission recovery
+  - Why: users need to know which scripts affect the active site and why a script is blocked.
+  - Evidence: popup/side panel exist; Chrome permissions API supports newer host access request patterns.
+  - Touches: `popup.js`, `sidepanel.js`, background permission probes, settings.
+  - Acceptance: active site shows running/blocked scripts, missing host access, pause/resume controls, and request action when supported.
+  - Verify: manual Chrome profile with withheld host access; unit tests for match/blocked states.
+
+- [ ] P2 - Generate GM API compatibility matrix
+  - Why: migration users need test-backed compatibility claims.
+  - Evidence: README claims 35+ APIs; competitors publish API docs; tests cover many API behaviors.
+  - Touches: tests, docs generator, README, install warnings.
+  - Acceptance: README/API docs table is generated from test metadata and install warns on unsupported grants.
+  - Verify: generator test; unsupported grant fixture.
+
+- [ ] P2 - Split dashboard modules around state contracts
+  - Why: dashboard scope makes future trust and sync changes risky.
+  - Evidence: `pages/dashboard.js` and `pages/dashboard.html` are large and multi-feature.
+  - Touches: dashboard JS/HTML/CSS, tests.
+  - Acceptance: update, sync, backup/trash, diagnostics, search/filter, and editor concerns have isolated modules and tests.
+  - Verify: existing dashboard tests, smoke test, no selector regressions.
+
+- [ ] P2 - Add locale and accessibility coverage gates
+  - Why: README advertises localization and polished UI, and dense panels need stronger accessibility contracts.
+  - Evidence: `_locales/*`, `pages/dashboard-a11y.js`, existing a11y tests.
+  - Touches: locale files, dashboard/popup/sidepanel UI, a11y tests.
+  - Acceptance: missing locale keys fail CI; forced-colors/high-contrast and live-region states are covered.
+  - Verify: locale coverage script; `npm run test:a11y`; manual forced-colors pass.
+
+### Phase 3 - Browser Channels and Release Scale
+
+- [ ] P1 - Make Firefox AMO validation release-gated
+  - Why: Firefox support is visible but not ready for users without validation.
+  - Evidence: `manifest-firefox.json`; `build-firefox.sh`; `FIREFOX-PORT.md` Phase 1 unchecked; stale root XPI.
+  - Touches: Firefox manifest/build script, CI, `FIREFOX-PORT.md`, `docs/cross-browser-pipeline.md`.
+  - Acceptance: Firefox package builds, passes `web-ext lint`, has source submission notes, and gates unsupported APIs.
+  - Verify: `npm run build:firefox`; `web-ext lint`; Firefox sideload smoke.
+
+- [ ] P2 - Add Edge/Chromium derivative support matrix
+  - Why: users on Edge/Brave/Chromium need clear support expectations.
+  - Evidence: Chrome MV3 code likely works in some derivatives, but no matrix/gate was found.
+  - Touches: docs, manifest generation, smoke checklist, optional Edge package.
+  - Acceptance: Chrome, Edge, Brave, Chromium rows list supported/unsupported APIs and manual smoke status.
+  - Verify: Edge sideload smoke and generated docs.
+
+- [ ] P2 - Add SBOM, provenance, artifact hash, and package diff release gate
+  - Why: release artifacts for a code-execution extension should be auditable.
+  - Evidence: runbook custody ambitions; no complete provenance/SBOM gate found.
+  - Touches: CI release workflow, `build.sh`, `publish.sh`, GitHub Releases, release docs.
+  - Acceptance: every release has package file list, hashes, dependency snapshot, SBOM/provenance metadata, and allowed diff.
+  - Verify: release dry run creates artifacts and verifies hashes.
+
+- [ ] P3 - Refresh dev dependencies in staged batches
+  - Why: stale test/build dependencies can mask browser API and build issues.
+  - Evidence: `npm outdated --json` results for Vitest, chrome-types, esbuild, jsdom, Monaco, Puppeteer-core, TypeScript.
+  - Touches: `package.json`, `package-lock.json`, tests.
+  - Acceptance: low-risk patch/minor updates land first; Monaco/Puppeteer behavior changes are isolated.
+  - Verify: `npm run check`; `npm run build`; dashboard smoke; package size diff.
+
+### Phase 4 - Larger Bets
+
+- [ ] P2 - Evaluate WXT migration spike
+  - Why: current manual cross-browser build complexity will grow with Firefox/Edge/Safari aspirations.
+  - Evidence: `docs/cross-browser-pipeline.md` selected WXT for staged exploration; WXT docs support browser-targeted manifests.
+  - Touches: build pipeline prototype branch, manifest generation, source layout.
+  - Acceptance: spike demonstrates Chrome and Firefox package parity or documents blockers with measured effort.
+  - Verify: prototype build artifacts and smoke checklist.
+
+- [ ] P3 - Add S3-compatible sync provider after sync health lands
+  - Why: advanced users may want self-hosted object storage, but existing providers need health/conflict foundations first.
+  - Evidence: sync provider architecture exists; ScriptCat and adjacent tools show appetite for flexible sync.
+  - Touches: `modules/sync-providers.js`, dashboard sync UI, provider docs.
+  - Acceptance: S3 provider supports endpoint/bucket/key config, dry-run conflict preview, token redaction, and revoke/disable.
+  - Verify: MinIO/local S3 integration test and dry-run import/export.
+
+- [ ] P3 - Publish script developer SDK examples
+  - Why: a public API and rich GM surface become more valuable with examples.
+  - Evidence: `modules/public-api.js`, `src/modules/public-api.ts`, README feature claims.
+  - Touches: docs, examples, public API tests.
+  - Acceptance: examples cover install, update query, diagnostics export, and script metadata operations.
+  - Verify: example tests run against public API fixtures.
 
 ## Quick Wins
 
-- Update `docs/release-runbook.md` to reflect actual `chrome-webstore-upload-cli` 4.0.0 state and current Node/CI requirements.
-- Update `PRIVACY.md` with cloud sync provider disclosures and token/data handling.
-- Make CI high-severity audit blocking now that the current audit is clean.
-- Add a release checklist command block that includes `gh release list --limit 5` and `git tag --sort=-v:refname`.
-- Add dashboard stats and CSP CSV export tests to complement the committed error-log CSV formula-defanging tests.
-- Add a test for `modules/public-api.js` non-string `postMessage.type` handling and generic external exception responses.
-- Add a focused Gist token storage rejection test for the `428b718` Promise API change.
-- Add a focused wrapper grant test for `grant: []` so the `428b718` TS mirror fix cannot regress.
-- Add a parity test that fails if `src/background/install-handler.ts` keeps `Set<string>` duplicate handling while runtime uses promise-based dedupe.
-- Add a docs note to `FIREFOX-PORT.md` that root `ScriptVault-firefox-v2.1.7.xpi` is stale local artifact, not current release output.
-- Add dashboard performance fixture generation for 500, 1,000, and 2,000 scripts before virtual list implementation.
+- Remove or archive `ScriptVault-firefox-v2.1.7.xpi` from the repo root and add a CI check blocking root ZIP/CRX/XPI artifacts outside release directories.
+- Update `PRIVACY.md` to accurately mention cloud sync providers, EasyCloud, GitHub Gist token storage, install/update fetches, `@require`, `@resource`, and diagnostics export.
+- Update `docs/release-runbook.md` to match current `publish.sh` v4 arguments and CWS API v2 timing.
+- Change CI audit from `continue-on-error: true` to blocking with a documented exception mechanism.
+- Add a simple `npm run release:check` script that verifies package/manifests/README/changelog version alignment.
+- Add a grep-style guard disallowing raw remote `response.text()` in background source files except explicit allowlisted cases.
+- Add a dashboard/popup status item for "pending updates" even before the full inbox is complete.
+- Add a token redaction unit test for Gist and provider sync diagnostics.
+- Add a stale Firefox artifact note to `FIREFOX-PORT.md` and a `web-ext lint` task placeholder.
+- Add a generated list of broad permissions and one-line justifications to the release checklist.
 
 ## Larger Bets
 
-- Promote TypeScript to canonical runtime build after parity gates and service-worker module boundaries are stable.
-- Move to WXT or a WXT-like cross-browser build after TS canonicalization and Firefox Phase 1 validation.
-- Implement a consent-first update system with pending-update inbox, trust summaries, rollback, and batch review.
-- Build a first-class Firefox/AMO release path with documented provider scope and store-review disclosures.
-- Add `@require` provenance and dependency diffing as ScriptVault's distinctive supply-chain trust feature.
-- Build a unified diagnostics/export system with redaction and support-ready evidence bundles.
+- Convert TypeScript source into the single background runtime source of truth and generate `background.core.js`/`background.js` from it.
+- Build the full pending update inbox with diff, analyzer, trust receipt, and rollback drill.
+- Implement shared remote fetch policy with DNS-rebind and private-network checks across every script/resource path.
+- Add real-browser capability testing for Chrome userScripts, host permissions, DNR dynamic rules, and Firefox MV3.
+- Virtualize dashboard/side-panel collections and create a large-library performance budget.
+- Build cross-browser packages through WXT or an equivalent generated-manifest pipeline.
+- Add signed artifacts, SBOM, provenance, and a reproducible package diff release workflow.
+- Redesign sync around provider health, conflict previews, data-flow receipts, and privacy-first diagnostics.
 
 ## Explicit Non-Goals
 
-- Do not add script-generation chat or cloud code suggestions. It would dilute the local-first trust identity and create new disclosure risks.
-- Do not make telemetry, popularity ranking, or community script hosting a core feature. ScriptVault should remain a manager, not a script marketplace.
-- Do not start Safari/Orion work before Firefox temporary sideload and build abstractions are stable.
-- Do not replace Monaco or redesign the entire dashboard before solving performance and trust workflows.
-- Do not publish a new root XPI/ZIP artifact manually without release automation and version checks.
-- Do not weaken `<all_urls>` or core userscript permissions in a way that breaks existing scripts; instead improve disclosure, diagnostics, and optional permission handling.
-- Do not migrate to WXT before TS/runtime parity is under control.
+- Do not add paid features or monetization just because Tampermonkey has a commercial model. It would dilute ScriptVault's current trust-forward open-source posture.
+- Do not pursue Safari before Chrome release parity, Firefox validation, and Edge/Chromium matrix work. Safari requires a native-app distribution model.
+- Do not add AI/script-generation features before install/update trust, privacy, and recovery are stable. Generated code would increase risk without addressing current root problems.
+- Do not broaden telemetry. Diagnostics should be local/exported with redaction preview unless the user explicitly opts in.
+- Do not replace all dashboard UI at once. The current product identity is feature-rich and recognizable; refactor around contracts and performance gates.
+- Do not remove broad host access without a replacement model. A userscript manager needs broad reach, but the permission story must be clear and auditable.
+- Do not treat Firefox as "Chrome with a different manifest." Browser-specific gaps need explicit feature gates and tests.
 
 ## Open Questions
 
-- Should the next public release be `v3.11.1` as a release-drift fix or `v3.12.0` now that commits `053c1a5` and `428b718` added security and reliability hardening after 3.11.0?
-- For the first Firefox beta, should cloud sync be WebDAV-only or should Google/Dropbox/OneDrive/Easy Cloud be carried forward immediately?
-- For trash, is the intended product contract IDB-backed recovery for large deleted scripts, or is the current `chrome.storage.local` implementation acceptable if documented and quota-tested?
-- For update consent, should existing users with `autoUpdate: true` be migrated to `review` by default, or preserved as `autoInstallTrusted` with an in-app notice?
-- Who owns the Chrome Web Store API v2/OIDC credentials and publisher account needed for release automation?
+- Needs live validation: what exact package and version are currently uploaded in the Chrome Web Store Developer Dashboard?
+- Needs live validation: what data-use declarations, screenshots, and descriptions are currently set in the Chrome Web Store listing console?
+- Needs live validation: does the current `chrome-webstore-upload-cli` v4 path require Node 22 in this repo's publish environment, or is CI Node 20 sufficient for install/build while release uses a separate runtime?
+- Needs live validation: which cloud sync providers are intended to be publicly supported in the next release versus experimental/hidden?
+- Needs live validation: should Firefox target AMO public listing, private/unlisted beta, or developer-only artifact first?
+- Product decision: should automatic updates default to "notify only" for all scripts, or "apply trusted sources only" with an explicit trusted-source model?
