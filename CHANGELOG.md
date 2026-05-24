@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — XHR TypeScript promotion
+
+- Promoted `modules/xhr.js` to a generated runtime artifact from
+  `src/modules/xhr.ts`, starting the storage/resource-layer tranche of the
+  TypeScript authoritative-source migration.
+- Extended TS runtime generator and drift-gate coverage to six promoted
+  modules, including `XhrManager`.
+- Added source-side coverage for `XhrManager.buildFetchOptions()` cache,
+  redirect, and anonymous credential translation.
+
 ### 2026-05-24 — UserStyles TypeScript promotion
 
 - Promoted `modules/userstyles.js` to a TS-derived runtime artifact from

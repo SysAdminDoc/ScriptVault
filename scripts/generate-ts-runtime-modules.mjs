@@ -42,6 +42,12 @@ export const TS_RUNTIME_MODULES = [
     output: 'modules/userstyles.js',
     exportName: 'UserStylesEngine',
   },
+  {
+    id: 'xhr',
+    source: 'src/modules/xhr.ts',
+    output: 'modules/xhr.js',
+    exportName: 'XhrManager',
+  },
 ];
 
 function normalizeNewlines(text) {

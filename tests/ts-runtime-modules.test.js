@@ -42,6 +42,12 @@ describe('TS runtime module generator', () => {
         output: 'modules/userstyles.js',
         exportName: 'UserStylesEngine',
       }),
+      expect.objectContaining({
+        id: 'xhr',
+        source: 'src/modules/xhr.ts',
+        output: 'modules/xhr.js',
+        exportName: 'XhrManager',
+      }),
     ]));
   });
 

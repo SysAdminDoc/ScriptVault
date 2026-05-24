@@ -32,7 +32,8 @@
     {
       "runtime": "modules/xhr.js",
       "sources": ["src/modules/xhr.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "modules/internal-host-guard.js",
