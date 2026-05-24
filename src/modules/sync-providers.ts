@@ -1130,10 +1130,105 @@ const onedrive = {
 // Export
 // ============================================================================
 
+// ============================================================================
+// S3-compatible Provider (AWS S3, Cloudflare R2, MinIO, Backblaze B2, …)
+// ============================================================================
+//
+// TS mirror is intentionally a thin pass-through over the runtime JS impl in
+// modules/sync-providers.js. The provider does its own settings validation
+// and SigV4 signing via Web Crypto; the structural contract surfaced to
+// CloudSync stays the same as every other provider here.
+
+interface S3SettingsValidation {
+  valid: boolean;
+  errors: Array<{ field: string; error: string }>;
+}
+
+const s3 = {
+  name: 'S3-compatible' as const,
+  icon: '🪣' as const,
+  requiresAuth: true as const,
+  supportsManualSync: true as const,
+  supportsDryRun: true as const,
+
+  getStorageDisclosure(settings: Partial<Settings> = {}): SyncStorageDisclosure {
+    return syncStorageDisclosure(settings, {
+      fields: [
+        { key: 's3Endpoint', label: 'S3 endpoint URL', type: 'metadata' },
+        { key: 's3Region', label: 'S3 region', type: 'metadata' },
+        { key: 's3Bucket', label: 'S3 bucket name', type: 'metadata' },
+        { key: 's3AccessKeyId', label: 'S3 access key ID', type: 'credential' },
+        { key: 's3SecretKey', label: 'S3 secret access key', type: 'credential' },
+        { key: 's3ObjectKey', label: 'Optional object key override', type: 'metadata' },
+      ],
+      revokeAction: 'Clear the saved S3 endpoint, region, bucket, access key, and secret from local extension storage.',
+      notes: 'Credentials are HMAC-SHA256 signed per AWS SigV4 and sent only to the configured endpoint during sync. No third party sees the secret.',
+    });
+  },
+
+  validate(settings: Partial<Settings> = {}): S3SettingsValidation {
+    const errors: Array<{ field: string; error: string }> = [];
+    const endpoint = (settings.s3Endpoint || '').trim();
+    if (!endpoint) errors.push({ field: 's3Endpoint', error: 'Endpoint URL is required.' });
+    const region = (settings.s3Region || '').trim();
+    if (!region) errors.push({ field: 's3Region', error: 'Region is required (use "auto" for Cloudflare R2).' });
+    const bucket = (settings.s3Bucket || '').trim();
+    if (!bucket) errors.push({ field: 's3Bucket', error: 'Bucket name is required.' });
+    if (!settings.s3AccessKeyId) errors.push({ field: 's3AccessKeyId', error: 'Access key ID is required.' });
+    if (!settings.s3SecretKey) errors.push({ field: 's3SecretKey', error: 'Secret access key is required.' });
+    return { valid: errors.length === 0, errors };
+  },
+
+  async upload(_data: unknown, _settings: Settings): Promise<SyncUploadResult> {
+    throw new Error('S3 upload routed through runtime modules/sync-providers.js');
+  },
+
+  async download(_settings: Settings): Promise<unknown | null> {
+    throw new Error('S3 download routed through runtime modules/sync-providers.js');
+  },
+
+  async test(_settings: Settings): Promise<SyncTestResult> {
+    return { success: false, error: 'S3 test routed through runtime modules/sync-providers.js' };
+  },
+
+  async getStatus(settings: Settings): Promise<SyncStatusResult> {
+    const check = this.validate(settings);
+    if (!check.valid) {
+      return {
+        connected: false,
+        status: 'missing_config',
+        error: check.errors.map(e => e.error).join(' '),
+      };
+    }
+    let endpointHost = '';
+    try { endpointHost = new URL(settings.s3Endpoint).host; } catch {}
+    return {
+      connected: false,
+      status: 'ok',
+      error: null,
+      user: { email: '', name: `${settings.s3Bucket}@${endpointHost}` },
+      endpointHost,
+    };
+  },
+
+  async disconnect(): Promise<SyncDisconnectResult> {
+    await SettingsManager.set({
+      s3Endpoint: '',
+      s3Region: '',
+      s3Bucket: '',
+      s3AccessKeyId: '',
+      s3SecretKey: '',
+      s3ObjectKey: '',
+    });
+    return { success: true };
+  },
+};
+
 export const CloudSyncProviders = {
   webdav,
   googledrive,
   google: googledrive,
   dropbox,
   onedrive,
+  s3,
 };

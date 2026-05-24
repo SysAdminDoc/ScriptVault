@@ -966,6 +966,308 @@ var CloudSyncProviders = {
         return { connected: false };
       }
     }
+  },
+
+  // ============================================================================
+  // S3-compatible Provider (AWS S3, Cloudflare R2, MinIO, Backblaze B2, etc.)
+  // ============================================================================
+  //
+  // Uses AWS Signature v4 to sign PUT / GET / HEAD on a single object key.
+  // No SDK — Web Crypto API only (HMAC-SHA256 + SHA-256). Works against
+  // path-style (MinIO, R2 default) and virtual-host-style endpoints.
+  //
+  // Required settings:
+  //   s3Endpoint:    https://<host>[:port] (no trailing slash, no bucket)
+  //   s3Region:      e.g. 'us-east-1' (Cloudflare R2 uses 'auto')
+  //   s3Bucket:      bucket name
+  //   s3AccessKeyId: access key id
+  //   s3SecretKey:   secret access key
+  // Optional:
+  //   s3ObjectKey:   defaults to 'scriptvault-backup.json'
+  //   s3PathStyle:   true to force path-style requests (default true for
+  //                  non-AWS hosts, auto-detected when endpoint contains
+  //                  'amazonaws.com').
+  s3: {
+    name: 'S3-compatible',
+    icon: '🪣',
+    requiresAuth: true,
+    supportsManualSync: true,
+    supportsDryRun: true,
+
+    getStorageDisclosure(settings = {}) {
+      return _syncStorageDisclosure(settings, {
+        fields: [
+          { key: 's3Endpoint', label: 'S3 endpoint URL', type: 'metadata' },
+          { key: 's3Region', label: 'S3 region', type: 'metadata' },
+          { key: 's3Bucket', label: 'S3 bucket name', type: 'metadata' },
+          { key: 's3AccessKeyId', label: 'S3 access key ID', type: 'credential' },
+          { key: 's3SecretKey', label: 'S3 secret access key', type: 'credential' },
+          { key: 's3ObjectKey', label: 'Optional object key override', type: 'metadata' }
+        ],
+        revokeAction: 'Clear the saved S3 endpoint, region, bucket, access key, and secret from local extension storage.',
+        notes: 'Credentials are HMAC-SHA256 signed per AWS SigV4 and sent only to the configured endpoint during sync. No third party sees the secret.'
+      });
+    },
+
+    /**
+     * Validate settings before any network request. Returns a structured
+     * `{ valid, errors[] }` so the UI can show a per-field problem list
+     * before the user clicks Test.
+     */
+    validate(settings = {}) {
+      const errors = [];
+      const endpoint = (settings.s3Endpoint || '').trim();
+      if (!endpoint) errors.push({ field: 's3Endpoint', error: 'Endpoint URL is required.' });
+      else {
+        try {
+          const u = new URL(endpoint);
+          if (u.protocol !== 'https:' && u.protocol !== 'http:') {
+            errors.push({ field: 's3Endpoint', error: 'Endpoint must be http(s)://.' });
+          }
+          if (u.pathname && u.pathname !== '/' && u.pathname !== '') {
+            errors.push({ field: 's3Endpoint', error: 'Endpoint URL must not include a path; bucket goes in its own field.' });
+          }
+        } catch (_) {
+          errors.push({ field: 's3Endpoint', error: 'Endpoint URL is malformed.' });
+        }
+      }
+      const region = (settings.s3Region || '').trim();
+      if (!region) errors.push({ field: 's3Region', error: 'Region is required (use "auto" for Cloudflare R2).' });
+      const bucket = (settings.s3Bucket || '').trim();
+      if (!bucket) errors.push({ field: 's3Bucket', error: 'Bucket name is required.' });
+      else if (!/^[a-z0-9][a-z0-9.\-]{1,61}[a-z0-9]$/i.test(bucket)) {
+        errors.push({ field: 's3Bucket', error: 'Bucket name must be 3-63 chars, alphanumeric/dash/dot only.' });
+      }
+      if (!settings.s3AccessKeyId) errors.push({ field: 's3AccessKeyId', error: 'Access key ID is required.' });
+      if (!settings.s3SecretKey) errors.push({ field: 's3SecretKey', error: 'Secret access key is required.' });
+      return { valid: errors.length === 0, errors };
+    },
+
+    /**
+     * Build the request URL for a given object key. Path-style is the
+     * default (works with R2, MinIO, B2). Virtual-host style is used
+     * automatically when the endpoint host ends with `.amazonaws.com`
+     * unless `s3PathStyle: true` is set.
+     */
+    _buildObjectUrl(settings, objectKey) {
+      const endpoint = new URL(settings.s3Endpoint);
+      const isAws = /(^|\.)amazonaws\.com$/i.test(endpoint.hostname);
+      const usePathStyle = settings.s3PathStyle === true
+        || settings.s3PathStyle === undefined && !isAws
+        || settings.s3PathStyle === false && false; // explicit-false honored only on AWS
+      if (usePathStyle) {
+        return `${endpoint.origin}/${encodeURIComponent(settings.s3Bucket)}/${objectKey.split('/').map(encodeURIComponent).join('/')}`;
+      }
+      const host = `${settings.s3Bucket}.${endpoint.hostname}`;
+      const port = endpoint.port ? `:${endpoint.port}` : '';
+      return `${endpoint.protocol}//${host}${port}/${objectKey.split('/').map(encodeURIComponent).join('/')}`;
+    },
+
+    _objectKey(settings) {
+      return (settings.s3ObjectKey || 'scriptvault-backup.json').replace(/^\/+/, '');
+    },
+
+    /**
+     * AWS Signature v4 signer. Pure Web Crypto, no SDK.
+     * Returns `{ headers, url }` ready to feed into fetch().
+     */
+    async _signRequest({ method, url, region, accessKeyId, secretKey, body, contentType }) {
+      const u = new URL(url);
+      const now = new Date();
+      // ISO basic format: YYYYMMDDTHHMMSSZ + YYYYMMDD
+      const pad = n => String(n).padStart(2, '0');
+      const dateStamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;
+      const amzDate = `${dateStamp}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+      const service = 's3';
+      const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+      const bodyBytes = body == null
+        ? new Uint8Array(0)
+        : (typeof body === 'string' ? new TextEncoder().encode(body) : body);
+      const payloadHash = await this._sha256Hex(bodyBytes);
+      const headers = {
+        host: u.host,
+        'x-amz-content-sha256': payloadHash,
+        'x-amz-date': amzDate
+      };
+      if (contentType) headers['content-type'] = contentType;
+      const sortedHeaderNames = Object.keys(headers).sort();
+      const canonicalHeaders = sortedHeaderNames.map(k => `${k}:${headers[k]}\n`).join('');
+      const signedHeaders = sortedHeaderNames.join(';');
+      const canonicalQuery = u.searchParams.toString().split('&').filter(Boolean).sort().join('&');
+      const canonicalRequest = [
+        method,
+        u.pathname || '/',
+        canonicalQuery,
+        canonicalHeaders,
+        signedHeaders,
+        payloadHash
+      ].join('\n');
+      const stringToSign = [
+        'AWS4-HMAC-SHA256',
+        amzDate,
+        credentialScope,
+        await this._sha256Hex(canonicalRequest)
+      ].join('\n');
+      const kDate = await this._hmac(new TextEncoder().encode('AWS4' + secretKey), dateStamp);
+      const kRegion = await this._hmac(kDate, region);
+      const kService = await this._hmac(kRegion, service);
+      const kSigning = await this._hmac(kService, 'aws4_request');
+      const signature = this._toHex(await this._hmac(kSigning, stringToSign));
+      return {
+        headers: {
+          ...Object.fromEntries(
+            sortedHeaderNames.filter(k => k !== 'host').map(k => [k, headers[k]])
+          ),
+          Authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
+        }
+      };
+    },
+
+    async _sha256Hex(input) {
+      const bytes = typeof input === 'string' ? new TextEncoder().encode(input) : input;
+      const buf = await crypto.subtle.digest('SHA-256', bytes);
+      return this._toHex(new Uint8Array(buf));
+    },
+
+    async _hmac(keyBytes, message) {
+      const key = await crypto.subtle.importKey(
+        'raw',
+        keyBytes,
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+      return new Uint8Array(sig);
+    },
+
+    _toHex(bytes) {
+      let s = '';
+      for (let i = 0; i < bytes.length; i++) {
+        const h = bytes[i].toString(16);
+        s += h.length === 1 ? '0' + h : h;
+      }
+      return s;
+    },
+
+    async upload(data, settings, opts = {}) {
+      const check = this.validate(settings);
+      if (!check.valid) {
+        throw new Error(`S3 settings invalid: ${check.errors.map(e => e.error).join(' ')}`);
+      }
+      const url = this._buildObjectUrl(settings, this._objectKey(settings));
+      const body = JSON.stringify(data);
+      const signed = await this._signRequest({
+        method: 'PUT',
+        url,
+        region: settings.s3Region,
+        accessKeyId: settings.s3AccessKeyId,
+        secretKey: settings.s3SecretKey,
+        body,
+        contentType: 'application/json'
+      });
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: signed.headers,
+        body,
+        signal: opts.signal
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`S3 upload failed: HTTP ${response.status}${text ? ` — ${text.slice(0, 200)}` : ''}`);
+      }
+      return { success: true, timestamp: Date.now() };
+    },
+
+    async download(settings, opts = {}) {
+      const check = this.validate(settings);
+      if (!check.valid) {
+        throw new Error(`S3 settings invalid: ${check.errors.map(e => e.error).join(' ')}`);
+      }
+      const url = this._buildObjectUrl(settings, this._objectKey(settings));
+      const signed = await this._signRequest({
+        method: 'GET',
+        url,
+        region: settings.s3Region,
+        accessKeyId: settings.s3AccessKeyId,
+        secretKey: settings.s3SecretKey
+      });
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: signed.headers,
+        signal: opts.signal
+      });
+      if (response.status === 404) return null;
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`S3 download failed: HTTP ${response.status}${text ? ` — ${text.slice(0, 200)}` : ''}`);
+      }
+      return await response.json();
+    },
+
+    /**
+     * Connectivity test via HEAD on the object key. 404 is treated as
+     * success because it means we reached the bucket and the credentials
+     * were accepted — there's just no backup yet.
+     */
+    async test(settings) {
+      const check = this.validate(settings);
+      if (!check.valid) {
+        return { success: false, error: check.errors.map(e => e.error).join(' ') };
+      }
+      try {
+        const url = this._buildObjectUrl(settings, this._objectKey(settings));
+        const signed = await this._signRequest({
+          method: 'HEAD',
+          url,
+          region: settings.s3Region,
+          accessKeyId: settings.s3AccessKeyId,
+          secretKey: settings.s3SecretKey
+        });
+        const response = await fetch(url, { method: 'HEAD', headers: signed.headers });
+        if (response.ok || response.status === 404) return { success: true };
+        return { success: false, error: `HTTP ${response.status}` };
+      } catch (e) {
+        return { success: false, error: e?.message || String(e) };
+      }
+    },
+
+    async getStatus(settings = {}) {
+      const check = this.validate(settings);
+      if (!check.valid) {
+        return {
+          connected: false,
+          status: 'missing_config',
+          error: check.errors.map(e => e.error).join(' '),
+          fieldErrors: check.errors
+        };
+      }
+      let endpointHost = '';
+      try { endpointHost = new URL(settings.s3Endpoint).host; } catch {}
+      const result = await this.test(settings);
+      return {
+        connected: result.success === true,
+        status: result.success === true ? 'ok' : 'error',
+        error: result.error || null,
+        user: {
+          email: '',
+          name: `${settings.s3Bucket}@${endpointHost}`
+        },
+        endpointHost
+      };
+    },
+
+    async disconnect() {
+      await SettingsManager.set({
+        s3Endpoint: '',
+        s3Region: '',
+        s3Bucket: '',
+        s3AccessKeyId: '',
+        s3SecretKey: '',
+        s3ObjectKey: ''
+      });
+      return { success: true };
+    }
   }
 };
 
