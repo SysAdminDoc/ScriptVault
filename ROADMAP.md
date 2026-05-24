@@ -3,8 +3,8 @@
 > From v2.0.1 (bash-concatenated JS prototype) to production-grade TypeScript extension.
 > Each phase is independently shippable. Later phases depend on earlier ones.
 >
-> **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, and `main` now has additional unreleased 2026-05-24 hardening/release commits including release artifact reconciliation, CWS runbook/audit-gate alignment, Chrome userScripts diagnostics, and Firefox AMO validation packaging. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
-> **2026-05-24 state:** 821 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; Firefox AMO package/source ZIP generation now passes `web-ext lint` with 0 errors and 0 notices; no GitHub issues or PRs are currently open.
+> **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, and `main` now has additional unreleased 2026-05-24 hardening/release commits including release artifact reconciliation, CWS runbook/audit-gate alignment, Chrome userScripts diagnostics, Firefox AMO validation packaging, and permission/store-copy drift checks. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
+> **2026-05-24 state:** 821 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; Firefox AMO package/source ZIP generation now passes `web-ext lint` with 0 errors and 0 notices; `npm run store-copy:check` covers 30 manifest permission/privacy/store surfaces; no GitHub issues or PRs are currently open.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
 ---
@@ -212,7 +212,7 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
 - Closed 2026-05-24: GitHub Release `v3.11.0` is now latest, `ScriptVault-v3.11.0.zip` is attached, and stale root release artifacts are guarded by `npm run release:check`.
 - Verified risk: production JS and TypeScript mirror remain separate. Recent history shows repeated parity fixes; current TS install/update paths still use `response.text()` where runtime has bounded stream reading.
 - Closed 2026-05-24: `.github/workflows/ci.yml` now treats high-level npm audit failures as blocking and runs `npm run cws:check` plus `npm run release:check`.
-- Verified risk: broad `<all_urls>`, userScripts, DNR, sidePanel, offscreen, downloads, clipboard, identity, and cookies permission surfaces require generated privacy/store justifications.
+- Closed 2026-05-24: broad `<all_urls>`, userScripts, DNR, sidePanel, offscreen, downloads, clipboard, identity, cookies, sandbox, web-accessible, and AMO data-collection surfaces now have generated-checkable privacy/store justifications via `npm run store-copy:check`.
 - Verified risk: existing `.factory/large-repo-state.yaml` still flags `XHR-PRIVACY` and `DNS-REBIND`.
 - Missing guardrails: artifact signing, SBOM, package diff, rollback rehearsal, AMO data-collection manifest declaration, source ZIP review artifact, unified internal-host policy, sync token revoke/status UI, and restore receipts.
 
@@ -231,7 +231,7 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
 - Build/release gap: `esbuild.config.mjs` is cross-platform, publishing scripts remain bash-oriented, and the CWS API v2 path is now covered by `npm run cws:check`; Windows-native publishing remains a future ergonomics item.
 - Cross-browser gap: manual `manifest.json` and `manifest-firefox.json` drift risk argues for generated per-target manifests after the immediate Firefox validation gate.
 - Test gaps: no current focused tests for recent Gist storage rejection fix, empty-grant deny behavior, all CSV exports, package diff, rollback rehearsal, AMO lint/signing, or Chrome 138 setup copy.
-- Docs gaps: README, changelog, privacy, release runbook, Firefox port, and store copy need generated checks or owner-facing checklists to prevent future drift.
+- Docs gaps: Firefox port, browser support matrix, and future store-channel copy still need owner-facing checklist work, but manifest permission/privacy/store-copy drift is now blocked by `npm run store-copy:check`.
 - Release automation gap: CI uploads a Chrome ZIP artifact but does not publish signed GitHub Releases for v3.11.0+ or verify source ZIP parity for AMO.
 
 ### Prioritized Roadmap
@@ -294,12 +294,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
   - Verify: `npm run firefox:package`; `npm run check`; `npm run smoke:dashboard`; `npm audit --audit-level=high --omit=optional`; `npm run cws:check`; `npm run release:check`; `git diff --check`. Manual Firefox sideload remains a separate Phase 1 smoke item in `FIREFOX-PORT.md`.
   - Status: Shipped 2026-05-24. Firefox manifest now declares AMO data collection permissions, moves `userScripts` to `optional_permissions`, omits invalid Firefox `identity`, and targets Firefox 140+ desktop / Android 142+. `build-firefox.sh` now uses `web-ext` for lint/package output, emits a Firefox package ZIP, AMO source-review ZIP, and lint JSON under `firefox-artifacts/`, and CI uploads the Firefox artifacts. Runtime JS and TypeScript registration now guard Chrome-only per-script `worldId` configuration so Firefox does not receive unsupported API options. `web-ext lint` exits with 0 errors and 0 notices; existing dynamic-HTML and compatibility warnings remain tracked in lint JSON for a later AMO hardening pass.
 
-- [ ] P0 - Add generated permissions/privacy/store-copy check
+- [x] P0 - Add generated permissions/privacy/store-copy check
   - Why: Broad extension permissions must be explained accurately to stores and users.
   - Evidence: L04, L05, S09-S11, H017, H067.
   - Touches: `manifest*.json`, `PRIVACY.md`, `README.md`, `docs/release-runbook.md`, `scripts/`.
   - Acceptance: A script compares manifest permissions/host permissions to privacy/store copy and fails on missing justifications.
-  - Verify: `node scripts/check-permission-copy.mjs` or equivalent.
+  - Verify: `npm run store-copy:check`; `npm run check`; `npm run smoke:dashboard`; `npm audit --audit-level=high --omit=optional`; `npm run cws:check`; `npm run firefox:package`; `npm run release:check`; `git diff --check`.
+  - Status: Shipped 2026-05-24. Added `docs/store-listing-copy.md` as the reviewer-facing Chrome Web Store/AMO permission-copy source, expanded `PRIVACY.md` with a checkable manifest surface inventory, added `scripts/check-permission-copy.mjs` plus `npm run store-copy:check`, wired the gate into CI and the release runbook, and linked the review flow from README. The gate currently covers 30 manifest surfaces across Chrome and Firefox manifests, including permissions, optional permissions, host permissions, content-script matches, web-accessible resources, Chrome sandbox pages, and AMO data-collection declarations.
 
 - [ ] P1 - Migrate XHR/user-script bridge to dedicated user-script messaging
   - Why: Platform APIs now provide dedicated handlers for less-trusted user-script contexts.

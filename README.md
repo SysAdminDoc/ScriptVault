@@ -280,6 +280,20 @@ Artifacts are written to `firefox-artifacts/`: the Firefox package ZIP, a source
 
 ---
 
+## Permission and Privacy Review
+
+ScriptVault has broad extension permissions because it is a userscript manager: users can install scripts for user-chosen sites, run them in the browser `USER_SCRIPT` world, sync backups through configured providers, and expose script APIs such as `GM_download`, `GM_xmlhttpRequest`, clipboard, and tab helpers. The reviewer-facing permission justifications live in [docs/store-listing-copy.md](docs/store-listing-copy.md) and the privacy policy keeps the same manifest inventory in [PRIVACY.md](PRIVACY.md).
+
+Before release, run:
+
+```bash
+npm run store-copy:check
+```
+
+The check compares `manifest.json` and `manifest-firefox.json` against the privacy policy, store copy, release runbook, package scripts, and CI so a new permission cannot ship without matching user-facing explanation.
+
+---
+
 ## Quick Start
 
 ### Installing Scripts

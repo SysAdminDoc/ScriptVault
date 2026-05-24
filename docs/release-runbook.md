@@ -16,12 +16,13 @@ Before any release branch is created:
 2. **Smoke test green:** `npm run smoke:dashboard` passes locally on Linux + Windows.
 3. **Dependency audit green:** `npm audit --audit-level=high --omit=optional` exits 0. High and critical advisories are blocking unless the release notes document a temporary false-positive exception.
 4. **CWS tooling green:** `npm run cws:check` confirms the installed `chrome-webstore-upload-cli` major, Node engine, removed flag usage, and credential names.
-5. **Locale lint green:** `tests/manifest-locales.test.js` passes - no locale's `extName` exceeds 75 chars, no `extDescription` exceeds 132 chars, all locales share the `en` key set.
-6. **Version sources synced:** `manifest.json`, `manifest-firefox.json`, `package.json`, and `package-lock.json` all point to the same target version.
-7. **Rollback drill green:** `npm run release:rollback-drill` proves the previous public `chrome.storage.local` snapshot survives the current storage migration safety window.
-8. **Firefox AMO gate green:** `npm run firefox:package` exits with `web-ext lint: 0 errors, 0 notices` and writes `firefox-artifacts/scriptvault-firefox-vX.Y.Z.zip`, `firefox-artifacts/scriptvault-firefox-source-vX.Y.Z.zip`, and `firefox-artifacts/web-ext-lint.json`.
-9. **Release artifact parity green:** `npm run release:check` passes locally; after the tag and GitHub Release are created, `npm run release:check:public` must pass.
-10. **CHANGELOG entry drafted:** one paragraph per shipped roadmap item, with `Phase X.Y` cross-references.
+5. **Store permission copy green:** `npm run store-copy:check` confirms `manifest.json` and `manifest-firefox.json` permissions, host matches, web-accessible resources, sandbox pages, and AMO data-collection declarations are covered by `PRIVACY.md` and `docs/store-listing-copy.md`.
+6. **Locale lint green:** `tests/manifest-locales.test.js` passes - no locale's `extName` exceeds 75 chars, no `extDescription` exceeds 132 chars, all locales share the `en` key set.
+7. **Version sources synced:** `manifest.json`, `manifest-firefox.json`, `package.json`, and `package-lock.json` all point to the same target version.
+8. **Rollback drill green:** `npm run release:rollback-drill` proves the previous public `chrome.storage.local` snapshot survives the current storage migration safety window.
+9. **Firefox AMO gate green:** `npm run firefox:package` exits with `web-ext lint: 0 errors, 0 notices` and writes `firefox-artifacts/scriptvault-firefox-vX.Y.Z.zip`, `firefox-artifacts/scriptvault-firefox-source-vX.Y.Z.zip`, and `firefox-artifacts/web-ext-lint.json`.
+10. **Release artifact parity green:** `npm run release:check` passes locally; after the tag and GitHub Release are created, `npm run release:check:public` must pass.
+11. **CHANGELOG entry drafted:** one paragraph per shipped roadmap item, with `Phase X.Y` cross-references.
 
 If any gate fails, stop. Do not patch the test to make it green.
 
@@ -84,7 +85,7 @@ References: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/frega
 1. **Cut release branch** off `main`: `git checkout -b release/vX.Y.Z`.
 2. **Bump versions** in `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`. Use semver - patch for fixes, minor for additive features, major only for breaking changes.
 3. **Finalize CHANGELOG.md** entry for vX.Y.Z. Match the prose style of recent entries.
-4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run cws:check`, `npm run firefox:package`, `npm run release:rollback-drill`, and `npm run release:check`.
+4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run cws:check`, `npm run store-copy:check`, `npm run firefox:package`, `npm run release:rollback-drill`, and `npm run release:check`.
 5. **Build:** `npm run build:prod` then `bash build.sh`. Verify the produced ZIP loads in a clean Chrome profile. For Firefox validation, inspect the Firefox package/source ZIP under `firefox-artifacts/`.
 6. **Release trust gate:** `npm run release:trust`. For a public release with the maintainer signing key available, run `npm run release:trust:strict` with `RELEASE_SIGNING_PRIVATE_KEY_PATH` or `RELEASE_SIGNING_PRIVATE_KEY_PEM`.
 7. **Tag:** `git tag -a vX.Y.Z -m "Release vX.Y.Z - <one-line summary>"`.

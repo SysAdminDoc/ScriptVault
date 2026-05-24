@@ -18,6 +18,7 @@
     "test:a11y": "vitest run tests/dashboard-a11y.test.js",
     "smoke:dashboard": "node scripts/smoke-dashboard.mjs",
     "cws:check": "node scripts/check-cws-publish-tooling.mjs",
+    "store-copy:check": "node scripts/check-permission-copy.mjs",
     "release:rollback-drill": "vitest run tests/storage-rollback-drill.test.js",
     "release:trust": "node scripts/release-trust-gate.mjs",
     "release:trust:strict": "node scripts/release-trust-gate.mjs --require-signature",
