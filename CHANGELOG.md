@@ -4,6 +4,20 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Large-library perf harness and threshold gate
+
+- Added `scripts/smoke-large-library.mjs`, a Node harness that generates 1k
+  and 10k synthetic scripts, exercises the authoritative `MatchSet` from
+  `src/background/url-matcher.ts`, and measures build / `getCandidates` /
+  `getMatching` p50 + p99 / substring search / `localeCompare` sort cost.
+- Added `scripts/ts-loader.mjs` so the smoke script can import the TS source
+  directly via esbuild (already a dev dep) without a separate build step.
+- Added `npm run smoke:large-library` (report only) and
+  `npm run smoke:large-library:check` (exit 1 on threshold violation).
+- Mirrored a CI-safe 1k pass in `tests/large-library-perf.test.js` so a
+  regression fails the standard test suite (5 cases).
+- Documented thresholds and harness shape in `docs/large-library-perf.md`.
+
 ### 2026-05-24 — Restore receipts, backup verification, and undoable imports
 
 - Added `BackupScheduler.verifyBackup(backupId, { parseUserscript })` which
