@@ -55,6 +55,7 @@
         btnImport: document.getElementById('btnImport'),
         btnCheckUpdates: document.getElementById('btnCheckUpdates'),
         btnBlacklistDomain: document.getElementById('btnBlacklistDomain'),
+        btnWhitelistDomain: document.getElementById('btnWhitelistDomain'),
         btnDashboard: document.getElementById('btnDashboard'),
         setupWarning: document.getElementById('setupWarning'),
         btnOpenExtSettings: document.getElementById('btnOpenExtSettings'),
@@ -1440,6 +1441,25 @@
         } catch (_) {}
     }
 
+    async function refreshWhitelistDomainLabel() {
+        if (!elements.btnWhitelistDomain || !currentUrl) return;
+        try {
+            const domain = new URL(currentUrl).hostname;
+            if (!domain) return;
+            const menuText = elements.btnWhitelistDomain.querySelector('.menu-item-text');
+            if (!menuText) return;
+            const res = await chrome.runtime.sendMessage({ action: 'getSettings' });
+            const settings = res?.settings || res || {};
+            const mode = settings.pageFilterMode || 'blacklist';
+            const whitelist = (settings.whitelistedPages || '').split('\n').map(s => s.trim()).filter(Boolean);
+            const wildcardPattern = `https://${domain}/*`;
+            const httpPattern = `http://${domain}/*`;
+            const alreadyAllowed = mode === 'whitelist'
+                && (whitelist.includes(wildcardPattern) || whitelist.includes(httpPattern));
+            menuText.textContent = alreadyAllowed ? `Clear "only this site" lock` : `Run only on ${domain}`;
+        } catch (_) {}
+    }
+
     // Setup event listeners
     function setupEventListeners() {
         // Header toggle (global enable/disable)
@@ -1457,7 +1477,10 @@
         elements.btnUtilities?.addEventListener('click', async () => {
             const isOpen = !elements.utilitiesSubmenu?.classList.contains('open');
             setUtilitiesSubmenuOpen(isOpen);
-            if (isOpen) await refreshBlacklistDomainLabel();
+            if (isOpen) {
+                await refreshBlacklistDomainLabel();
+                await refreshWhitelistDomainLabel();
+            }
         });
 
         // Utilities actions
@@ -1475,6 +1498,53 @@
             runBusyControl(elements.btnCheckUpdates, async () => {
                 showPopupToast('Checking for updates…');
                 await checkForUpdates();
+            });
+        });
+
+        // Whitelist domain (toggle): switches pageFilterMode to 'whitelist'
+        // and adds an https://<host>/* pattern to whitelistedPages. Toggling
+        // again clears the lock back to blacklist mode.
+        elements.btnWhitelistDomain?.addEventListener('click', async () => {
+            if (!currentUrl) return;
+            await runBusyControl(elements.btnWhitelistDomain, async () => {
+                try {
+                    const domain = new URL(currentUrl).hostname;
+                    const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
+                    const freshSettings = response?.settings || response || {};
+                    const mode = freshSettings.pageFilterMode || 'blacklist';
+                    const wildcardPattern = `https://${domain}/*`;
+                    const whitelist = (freshSettings.whitelistedPages || '')
+                        .split('\n').map(s => s.trim()).filter(Boolean);
+                    const alreadyLocked = mode === 'whitelist' && whitelist.includes(wildcardPattern);
+                    if (alreadyLocked) {
+                        const next = whitelist.filter(p => p !== wildcardPattern).join('\n');
+                        const result = await chrome.runtime.sendMessage({
+                            action: 'setSettings',
+                            settings: { pageFilterMode: 'blacklist', whitelistedPages: next }
+                        });
+                        const error = getRuntimeError(result, 'Failed to clear site lock');
+                        if (error) throw new Error(error);
+                        setUtilitiesSubmenuOpen(false);
+                        await loadPageScripts();
+                        showPopupToast(`Cleared "only on ${domain}" lock`);
+                        return;
+                    }
+                    const nextList = whitelist.includes(wildcardPattern)
+                        ? whitelist
+                        : [...whitelist, wildcardPattern];
+                    const result = await chrome.runtime.sendMessage({
+                        action: 'setSettings',
+                        settings: { pageFilterMode: 'whitelist', whitelistedPages: nextList.join('\n') }
+                    });
+                    const error = getRuntimeError(result, `Failed to lock to ${domain}`);
+                    if (error) throw new Error(error);
+                    setUtilitiesSubmenuOpen(false);
+                    await loadPageScripts();
+                    showPopupToast(`ScriptVault will only run on ${domain}`);
+                } catch (e) {
+                    console.error('Failed to whitelist:', e);
+                    showPopupToast(e.message || 'Failed to update site lock', 'error');
+                }
             });
         });
 

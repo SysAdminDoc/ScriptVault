@@ -4,6 +4,26 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Site-scoped controls, invert search, and per-script frame mode
+
+- Added a per-script `settings.frameMode` (`'top'` | `'all'` | `'default'`)
+  that overrides `@noframes` when computing `allFrames` for
+  `chrome.userScripts.register`. Honored in both runtime `background.core.js`
+  and the TS mirror `src/background/registration.ts`. Added to `EXEC_KEYS`
+  so a setting change re-registers the script.
+- Dashboard per-script Execution panel gains a Frame mode select with the
+  three documented options. Serialized in `saveScriptSettings` and
+  `resetScriptSettings`.
+- Dashboard search bar now recognizes `!term` and `not:term` prefixes as
+  inverted matches against name/description/author/code. Honored across
+  substring, `code:`, and regex (`re:` / `/.../flags`) shapes. An empty
+  payload after the prefix keeps all rows, and the literal `!=` is
+  preserved (not stripped as an invert).
+- Popup gains a `Run only on this domain` quick-action that flips
+  `pageFilterMode` to `whitelist` and adds `https://<host>/*` to
+  `whitelistedPages`. Toggles back to `blacklist` on a second click and
+  refreshes its label when the utilities menu opens.
+
 ### 2026-05-24 — Large-library perf harness and threshold gate
 
 - Added `scripts/smoke-large-library.mjs`, a Node harness that generates 1k
