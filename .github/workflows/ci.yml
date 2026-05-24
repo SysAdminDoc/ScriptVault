@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 jobs:
   build-and-test:
@@ -28,6 +30,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Read package version
+        id: package
+        run: echo "version=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
 
       # Phase 40.20 — Catch transitive CVEs at PR time, mirroring the
       # monaco-editor 2026-05-12..15 dependency-audit wave.
@@ -68,9 +74,27 @@ jobs:
       - name: Package Chrome extension
         run: bash build.sh
 
+      - name: Release trust gate
+        run: npm run release:trust
+
+      - name: Attest Chrome package
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/attest@v4
+        with:
+          subject-path: ScriptVault-v${{ steps.package.outputs.version }}.zip
+
+      - name: Attest SBOM
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/attest@v4
+        with:
+          subject-path: ScriptVault-v${{ steps.package.outputs.version }}.zip
+          sbom-path: release-artifacts/ScriptVault-v${{ steps.package.outputs.version }}.sbom.cyclonedx.json
+
       - name: Upload Chrome package
         uses: actions/upload-artifact@v4
         with:
           name: scriptvault-chrome-package
-          path: ScriptVault-v*.zip
+          path: |
+            ScriptVault-v*.zip
+            release-artifacts/*
           if-no-files-found: error

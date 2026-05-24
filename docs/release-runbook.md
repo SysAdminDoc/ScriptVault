@@ -85,14 +85,15 @@ References: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/frega
 3. **Finalize CHANGELOG.md** entry for vX.Y.Z. Match the prose style of recent entries.
 4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run cws:check`, `npm run release:rollback-drill`, and `npm run release:check`.
 5. **Build:** `npm run build:prod` then `bash build.sh`. Verify the produced ZIP loads in a clean Chrome profile.
-6. **Tag:** `git tag -a vX.Y.Z -m "Release vX.Y.Z - <one-line summary>"`.
-7. **Push commit and tag to GitHub.**
-8. **Verify local artifact parity:** rerun `npm run release:check`; the missing-tag warning must be gone.
-9. **Create or update GitHub Release:** attach `ScriptVault-vX.Y.Z.zip`; mark it as latest for normal production releases.
-10. **Verify public artifact parity:** `npm run release:check:public`.
-11. **CWS draft upload:** `bash publish.sh --draft`; review the draft in the CWS Developer Dashboard.
-12. **CWS publish:** `bash publish.sh` when ready to submit/publish through CWS review.
-13. **Verify CWS listing:** open the public listing after approval; confirm version, screenshots, and store description rendered.
+6. **Release trust gate:** `npm run release:trust`. For a public release with the maintainer signing key available, run `npm run release:trust:strict` with `RELEASE_SIGNING_PRIVATE_KEY_PATH` or `RELEASE_SIGNING_PRIVATE_KEY_PEM`.
+7. **Tag:** `git tag -a vX.Y.Z -m "Release vX.Y.Z - <one-line summary>"`.
+8. **Push commit and tag to GitHub.**
+9. **Verify local artifact parity:** rerun `npm run release:check`; the missing-tag warning must be gone.
+10. **Create or update GitHub Release:** attach `ScriptVault-vX.Y.Z.zip`, `release-artifacts/*`, and the GitHub Actions attestation links; mark it as latest for normal production releases.
+11. **Verify public artifact parity:** `npm run release:check:public`.
+12. **CWS draft upload:** `bash publish.sh --draft`; review the draft in the CWS Developer Dashboard.
+13. **CWS publish:** `bash publish.sh` when ready to submit/publish through CWS review.
+14. **Verify CWS listing:** open the public listing after approval; confirm version, screenshots, and store description rendered.
 
 ## 5. CWS review backlog buffer (Phase 39.49)
 
@@ -127,7 +128,32 @@ The drill seeds the previous public baseline storage shape (`userscripts`, `valu
 
 This command is credential-free and runs in CI. A failure means do not publish: a browser/platform rollback may leave users on an older extension version that cannot read their current data.
 
-## 8. Rollback procedure
+## 8. Release trust gate
+
+Run this after `bash build.sh` creates `ScriptVault-vX.Y.Z.zip`:
+
+```bash
+npm run release:trust
+```
+
+The gate writes ignored files under `release-artifacts/`:
+
+- `ScriptVault-vX.Y.Z.sha256` for the package, source ZIP, SBOM, provenance, and package-diff files.
+- `ScriptVault-source-vX.Y.Z.zip` from `git archive HEAD`.
+- `ScriptVault-vX.Y.Z.sbom.cyclonedx.json` generated from `package-lock.json`.
+- `ScriptVault-vX.Y.Z.provenance.json` with SLSA-shaped local/CI build metadata.
+- `ScriptVault-vX.Y.Z.package-diff.json` with packaged entries, manifest permissions, web-accessible resources, and forbidden-entry checks.
+- `ScriptVault-vX.Y.Z.signing.json` plus `ScriptVault-vX.Y.Z.sha256.sig` when a release signing key is provided.
+
+CI runs the non-strict gate for every build after packaging. On `main` pushes, `.github/workflows/ci.yml` also uses GitHub artifact attestations for the Chrome ZIP and the CycloneDX SBOM. For public releases, attach the `release-artifacts/*` files to GitHub Releases and use strict local signing when the maintainer key is available:
+
+```bash
+RELEASE_SIGNING_PRIVATE_KEY_PATH=scriptvault-release-ed25519.pem npm run release:trust:strict
+```
+
+References: [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations), [CycloneDX 1.6 JSON](https://cyclonedx.org/docs/1.6/json/), [SLSA provenance v1](https://slsa.dev/spec/v1.0/provenance).
+
+## 9. Rollback procedure
 
 If a critical regression surfaces post-release:
 
@@ -136,13 +162,13 @@ If a critical regression surfaces post-release:
 3. **Communicate** via the Codeberg mirror's README (mirrors to GitHub) and any active community channels.
 4. **Do not push a `-revert` tag.** Always roll forward.
 
-## 9. Open items (post-runbook)
+## 10. Open items (post-runbook)
 
 - [ ] GCP Secret Manager -> GitHub Actions OIDC bridge: implementation pending Phase 39.1. Current CWS publishing is local/manual.
 - [ ] Direct CWS API v2 status probe: wrap `publishers/PUBLISHER_ID/items/EXTENSION_ID:fetchStatus` once token custody is settled.
 - [ ] Codeberg mirror workflow: Phase 39.48; pending Codeberg account provision + deploy key.
 - [ ] Hardware-key MFA migration: requires acquiring a second YubiKey for the publisher account.
-- [ ] Signed artifacts, SBOM, package diff, and provenance gates: tracked by the release trust roadmap.
+- [ ] Durable public release signing key custody: `release:trust:strict` is wired, but the maintainer-owned Ed25519 key must remain outside the repo and be backed up separately.
 
 ---
 
