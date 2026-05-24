@@ -6,9 +6,8 @@
 // vast majority of cases, so this script:
 //   1. Runs the standard esbuild pipeline (background.js + Monaco).
 //   2. Stages the Chrome build into `build-edge/`.
-//   3. Applies a small, declarative set of Edge-specific manifest
-//      transformations (strip `minimum_chrome_version`, set an
-//      `update_url` placeholder to none, etc.) — see EDGE_TRANSFORMS below.
+//   3. Generates the Edge manifest from the shared declarative transform
+//      profile in `manifest-firefox.transformations.json`.
 //   4. Verifies every declared file is present.
 //   5. Produces `edge-artifacts/scriptvault-edge-vX.Y.Z.zip` plus a parity
 //      summary JSON.
@@ -26,6 +25,7 @@ import { execSync } from 'node:child_process';
 import { readFile, writeFile, mkdir, rm, readdir, stat } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
 import { existsSync, createWriteStream } from 'node:fs';
+import { generateManifestForProfile } from './generate-manifest-firefox.mjs';
 
 const ROOT = process.cwd();
 const BUILD_DIR = join(ROOT, 'build-edge');
@@ -51,24 +51,6 @@ const INCLUDE = [
   '_locales'
 ];
 
-// Edge-specific manifest tweaks. Keep this list small and declarative; the
-// goal is one place that documents what Edge wants different from Chrome.
-//
-// Empirically Edge accepts the Chrome MV3 manifest verbatim today. The
-// transforms below are defense-in-depth for future divergences:
-//   - update_url: Edge auto-injects its own update_url on publish, and a
-//     stray Chrome Web Store update_url would otherwise leak.
-//   - minimum_chrome_version: Edge maps this to its own minimum Chromium
-//     channel; leaving it in is technically valid but the field is
-//     Chrome-store flavored and submission reviewers sometimes flag it.
-const EDGE_TRANSFORMS = {
-  removeKeys: ['update_url'],
-  // Permissions that Edge silently no-ops (kept here for the docs gate;
-  // none today). Add a key here if Edge ever drops a permission Chrome ships.
-  removePermissions: [],
-  removeOptionalPermissions: []
-};
-
 function log(msg) {
   process.stdout.write(`[build-edge] ${msg}\n`);
 }
@@ -89,24 +71,16 @@ async function copyRecursive(src, dest) {
 
 async function applyManifestTransforms() {
   const chromeManifestPath = join(ROOT, 'manifest.json');
-  const manifest = JSON.parse(await readFile(chromeManifestPath, 'utf8'));
-  const before = JSON.stringify(manifest, null, 2);
-
-  for (const k of EDGE_TRANSFORMS.removeKeys) {
-    if (k in manifest) delete manifest[k];
-  }
-  if (Array.isArray(manifest.permissions) && EDGE_TRANSFORMS.removePermissions.length) {
-    manifest.permissions = manifest.permissions.filter(p => !EDGE_TRANSFORMS.removePermissions.includes(p));
-  }
-  if (Array.isArray(manifest.optional_permissions) && EDGE_TRANSFORMS.removeOptionalPermissions.length) {
-    manifest.optional_permissions = manifest.optional_permissions
-      .filter(p => !EDGE_TRANSFORMS.removeOptionalPermissions.includes(p));
-  }
-  const after = JSON.stringify(manifest, null, 2);
-  const changed = before !== after;
+  const chromeManifest = JSON.parse(await readFile(chromeManifestPath, 'utf8'));
+  const before = `${JSON.stringify(chromeManifest, null, 2)}\n`;
+  const result = await generateManifestForProfile({ profile: 'edge', rootDir: ROOT });
   const outPath = join(BUILD_DIR, 'manifest.json');
-  await writeFile(outPath, after + '\n');
-  return { changed, manifest };
+  await writeFile(outPath, result.text);
+  return {
+    changed: before !== result.text,
+    manifest: result.manifest,
+    transformsApplied: result.transformations
+  };
 }
 
 async function verifyTree(declaredFiles) {
@@ -181,7 +155,7 @@ async function main() {
     version,
     buildDir: BUILD_DIR,
     artifact: wantZip ? zipPath : null,
-    transformsApplied: EDGE_TRANSFORMS,
+    transformsApplied: transformResult.transformsApplied,
     manifestTransformed: transformResult.changed,
     missingFiles: missing
   };
