@@ -724,6 +724,12 @@
             background: var(--popup-bg-hover);
         }
 
+        .menu-item:active,
+        .footer:active,
+        .header:active {
+            transform: translateY(0);
+        }
+
         .menu-item-icon {
             width: 20px;
             height: 20px;
@@ -906,24 +912,68 @@
             bottom: 14px;
             left: 50%;
             transform: translateX(-50%) translateY(40px);
-            background: var(--popup-accent);
-            color: #fff;
+            display: flex;
+            align-items: stretch;
+            gap: 10px;
+            max-width: calc(100vw - 28px);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+                var(--popup-bg-raised);
+            color: var(--popup-text);
             font-size: 12px;
-            font-weight: 500;
-            padding: 7px 14px;
+            font-weight: 600;
+            line-height: 1.45;
+            padding: 8px 12px;
             border-radius: var(--popup-radius-panel);
-            border: 1px solid rgba(255, 255, 255, 0.16);
+            border: 1px solid var(--popup-border);
             box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28);
             opacity: 0;
             transition: opacity 0.2s, transform 0.2s;
             z-index: 2000;
             pointer-events: none;
-            white-space: nowrap;
+            white-space: normal;
             font-variant-numeric: tabular-nums;
         }
 
+        .popup-toast::before {
+            content: '';
+            width: 3px;
+            border-radius: 4px;
+            background: var(--popup-accent);
+            flex: 0 0 3px;
+        }
+
         .popup-toast.error {
+            border-color: rgba(239, 68, 68, 0.34);
+            background:
+                linear-gradient(180deg, rgba(239, 68, 68, 0.16), rgba(239, 68, 68, 0.07)),
+                var(--popup-bg-raised);
+        }
+
+        .popup-toast.error::before {
             background: var(--popup-danger);
+        }
+
+        .popup-toast.warning {
+            border-color: rgba(245, 158, 11, 0.34);
+            background:
+                linear-gradient(180deg, rgba(245, 158, 11, 0.16), rgba(245, 158, 11, 0.07)),
+                var(--popup-bg-raised);
+        }
+
+        .popup-toast.warning::before {
+            background: var(--popup-warning);
+        }
+
+        .popup-toast.info {
+            border-color: rgba(96, 165, 250, 0.34);
+            background:
+                linear-gradient(180deg, rgba(96, 165, 250, 0.14), rgba(96, 165, 250, 0.06)),
+                var(--popup-bg-raised);
+        }
+
+        .popup-toast.info::before {
+            background: var(--popup-info);
         }
 
         .popup-toast.show {
@@ -1183,8 +1233,8 @@
     <!-- Empty state (shown when no scripts match) -->
         <div id="emptyState" role="status" aria-live="polite" aria-atomic="true" style="display:none;">
             <div class="empty-state-icon" id="emptyStateIcon" aria-hidden="true">SV</div>
-            <div class="empty-state-title" id="emptyStateTitle">No scripts for this page</div>
-            <div class="empty-state-hint" id="emptyStateHint">Find scripts on GreasyFork or create your own</div>
+            <div class="empty-state-title" id="emptyStateTitle">No scripts run here</div>
+            <div class="empty-state-hint" id="emptyStateHint">Find trusted scripts or create one for this site.</div>
         </div>
 
     <!-- Menu items -->

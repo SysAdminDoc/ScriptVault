@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Premium UX polish pass
+
+- Added a dashboard cohesion layer for search, table focus, empty states,
+  toast tones, disabled controls, and scaled-radius clamping so dense
+  workspace views feel steadier across themes, density, and UI scale.
+- Refined popup, side panel, and install-review feedback states with calmer
+  microcopy, stronger focus/disabled affordances, better compact empty states,
+  semantic toast roles, and skeleton-style loading treatment.
+- Extended UX/a11y regression coverage for explicit dashboard search/empty
+  semantics, toast tone contracts, cross-surface polish markers, and runtime
+  radius guardrails.
+
 ### 2026-05-24 — Shared utilities TypeScript promotion
 
 - Promoted `shared/utils.js` to a generated runtime artifact from

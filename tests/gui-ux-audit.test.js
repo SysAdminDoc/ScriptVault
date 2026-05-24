@@ -24,12 +24,14 @@ function pageUiFiles(dir = resolve(process.cwd(), "pages")) {
 describe("cross-surface UX audit", () => {
   test("UI surfaces avoid oversized rounded backdrops and blur-heavy chrome", () => {
     const disallowedRadius = /border-radius:[^;]*(?:1[3-9]|2[0-9]|999)px/;
+    const disallowedScaledRadius = /border-radius:\s*calc\((?:9|1[0-9])px \* var\(--ui-scale\)\)/;
     const blurBackdrop = /(?:-webkit-)?backdrop-filter:\s*blur\(/;
     const offenders = [];
 
     for (const file of pageUiFiles()) {
       const source = readFileSync(file, "utf8");
       if (disallowedRadius.test(source)) offenders.push(`${file}: oversized border radius`);
+      if (disallowedScaledRadius.test(source)) offenders.push(`${file}: unclamped scaled border radius`);
       if (blurBackdrop.test(source)) offenders.push(`${file}: blur backdrop`);
     }
 

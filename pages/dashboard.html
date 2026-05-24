@@ -4871,7 +4871,7 @@
         .btn-sm {
             min-height: calc(30px * var(--ui-scale));
             padding: 0 calc(10px * var(--ui-scale));
-            border-radius: calc(10px * var(--ui-scale));
+            border-radius: min(12px, calc(10px * var(--ui-scale)));
         }
 
         .input-field,
@@ -5407,6 +5407,144 @@
         html[data-theme="light"] .toolbar-divider {
             background: rgba(15, 23, 42, 0.14);
         }
+
+        /* ============================================
+           Premium cohesion pass (v3.12)
+           Tightens shared states without changing the
+           existing workflow density or component model.
+           ============================================ */
+        :root {
+            --premium-state-transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+            --premium-state-inset: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+            --premium-row-ring: inset 3px 0 0 var(--accent-secondary), inset 0 -1px 0 rgba(127, 127, 127, 0.12);
+            --premium-muted-surface: rgba(255, 255, 255, 0.035);
+            --premium-muted-surface-strong: rgba(255, 255, 255, 0.065);
+        }
+
+        html[data-theme="light"] {
+            --premium-state-inset: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+            --premium-muted-surface: rgba(15, 23, 42, 0.035);
+            --premium-muted-surface-strong: rgba(15, 23, 42, 0.06);
+        }
+
+        .scripts-table-container {
+            overflow: hidden;
+        }
+
+        .search-box,
+        .bulk-action-cluster,
+        .scripts-toolbar-left,
+        .settings-search,
+        .utilities-search,
+        .trash-search,
+        .help-search {
+            transition: var(--premium-state-transition);
+        }
+
+        .search-box:focus-within,
+        .settings-search:focus-within,
+        .utilities-search:focus-within,
+        .trash-search:focus-within,
+        .help-search:focus-within {
+            border-color: rgba(96, 165, 250, 0.5);
+            background: var(--premium-muted-surface-strong);
+            box-shadow: var(--premium-state-inset), 0 0 0 3px rgba(96, 165, 250, 0.14);
+        }
+
+        .table-sort-button {
+            min-height: 30px;
+            padding: 0 4px;
+            border-radius: 6px;
+            transition: var(--premium-state-transition);
+        }
+
+        .table-sort-button:hover,
+        .table-sort-button:focus-visible {
+            color: var(--text-primary);
+            background: var(--premium-muted-surface-strong);
+        }
+
+        .scripts-table tbody tr {
+            transition: background-color 150ms ease, box-shadow 150ms ease, color 150ms ease;
+        }
+
+        .scripts-table tbody tr:focus-within {
+            background:
+                linear-gradient(90deg, rgba(96, 165, 250, 0.1), transparent 38%),
+                var(--bg-row-hover);
+            box-shadow: var(--premium-row-ring);
+        }
+
+        .script-name-button,
+        .updated-link {
+            text-underline-offset: 3px;
+        }
+
+        .script-health-badge,
+        .script-tag,
+        .exec-stat,
+        .exec-stat-errors,
+        .script-counter,
+        .utility-inline-status,
+        .panel-empty-inline {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .empty-state {
+            margin: 0;
+            border-top: 1px solid rgba(127, 127, 127, 0.14);
+            background:
+                radial-gradient(circle at top center, rgba(96, 165, 250, 0.08), transparent 34%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 60%),
+                transparent;
+        }
+
+        .empty-state svg {
+            padding: 10px;
+            border: 1px solid rgba(127, 127, 127, 0.16);
+            border-radius: 12px;
+            background: var(--premium-muted-surface);
+            box-shadow: var(--premium-state-inset);
+        }
+
+        .empty-state-actions .btn {
+            min-width: 132px;
+            justify-content: center;
+        }
+
+        .toast {
+            max-width: min(520px, calc(100vw - 32px));
+            border-radius: 8px;
+            box-shadow: var(--panel-sheen), 0 18px 44px rgba(0, 0, 0, 0.28);
+        }
+
+        .toast-message {
+            line-height: 1.45;
+        }
+
+        .toast-success {
+            background: linear-gradient(var(--tint-green-soft), var(--tint-green-soft)), var(--bg-content);
+        }
+
+        .toast-error {
+            background: linear-gradient(var(--tint-red-soft), var(--tint-red-soft)), var(--bg-content);
+        }
+
+        .toast-info {
+            background: linear-gradient(var(--tint-blue-soft), var(--tint-blue-soft)), var(--bg-content);
+        }
+
+        .toast-warning {
+            background: linear-gradient(var(--tint-yellow-soft), var(--tint-yellow-soft)), var(--bg-content);
+        }
+
+        .toolbar-btn:disabled,
+        .btn:disabled,
+        .action-icon:disabled,
+        .table-sort-button:disabled {
+            filter: grayscale(0.2);
+            box-shadow: none;
+        }
     </style>
 </head>
 <body>
@@ -5575,9 +5713,9 @@
                         <option value="scope:single">Single Site</option>
                     </select>
                     <span class="script-counter" id="scriptCounter">0 scripts</span>
-                    <div class="search-box">
+                    <div class="search-box" role="search" aria-label="Search installed scripts">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="text" id="scriptSearch" name="script_search" placeholder="Search scripts or code:fetch…" aria-label="Search scripts" autocomplete="off" spellcheck="false">
+                        <input type="text" id="scriptSearch" name="script_search" placeholder="Search name, domain, tag, or code:fetch" aria-label="Search scripts" aria-describedby="scriptCounter" autocomplete="off" spellcheck="false">
                         <button type="button" class="search-box-clear" id="btnClearScriptSearch" aria-label="Clear script search" hidden>×</button>
                     </div>
                     <button type="button" class="toolbar-btn compact" id="btnViewToggle" title="Toggle table/card view" aria-label="Toggle table or card view" aria-pressed="false">
@@ -5641,10 +5779,10 @@
                     </thead>
                     <tbody id="scriptTableBody"></tbody>
                 </table>
-                <div id="emptyState" class="empty-state" style="display:none">
+                <div id="emptyState" class="empty-state" role="status" aria-live="polite" aria-atomic="true" style="display:none">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-                    <h3 id="emptyStateTitle">No Userscripts Yet</h3>
-                    <p id="emptyStateDescription">Create a new script or import one to get started.</p>
+                    <h3 id="emptyStateTitle">Your vault is empty</h3>
+                    <p id="emptyStateDescription">Create a script or import an existing userscript. ScriptVault keeps scripts local unless you enable sync or backups.</p>
                     <div class="empty-state-actions">
                         <button class="btn btn-primary" id="emptyStatePrimaryAction" type="button">Create Script</button>
                         <button class="btn" id="emptyStateSecondaryAction" type="button">Import Script</button>
