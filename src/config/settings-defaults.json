@@ -49,6 +49,7 @@
   "s3ObjectKey": "",
   "language": "auto",
   "debugMode": false,
+  "experimentalESMUserscripts": false,
   "injectIntoFrames": true,
   "xhrTimeout": 30000,
   "blacklist": [],

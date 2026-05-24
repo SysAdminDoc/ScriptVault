@@ -9,6 +9,7 @@ import type { Settings } from '../types/settings';
 import { fetchTextBounded } from './fetch-bounded';
 import { assertExternalFetchUrl, classifyResponseUrl } from './internal-host-guard';
 import { createScriptTrustReceipt } from './trust-receipt';
+import { bundleIfNeeded } from '../bg/esm-bundler';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -176,11 +177,26 @@ export async function installFromCode(code: string, receiptOptions: InstallRecei
       throw new Error('Not a valid userscript');
     }
 
-    const parsed = parseUserscript(code);
+    let parsed = parseUserscript(code);
     if (parsed.error) {
       throw new Error(parsed.error);
     }
-    const meta: ScriptMeta = parsed.meta!;
+    let meta: ScriptMeta = parsed.meta!;
+    const installSettings = await SettingsManager.get();
+    const bundleResult = await bundleIfNeeded(code, meta, installSettings, {
+      sourceUrl: receiptOptions.sourceUrl || meta.downloadURL || meta.updateURL || '',
+    });
+    if (bundleResult.bundled) {
+      code = bundleResult.code;
+      parsed = parseUserscript(code);
+      if (parsed.error) throw new Error(parsed.error);
+      meta = parsed.meta!;
+      meta.esmBundle = {
+        entryUrl: bundleResult.entryUrl,
+        imports: bundleResult.imports,
+        bundledAt: Date.now(),
+      };
+    }
     const allScripts: Script[] = await ScriptStorage.getAll();
 
     const existing: Script | undefined = allScripts.find(

@@ -1,7 +1,7 @@
 # ESM userscript + local-dev mode research
 
 Last reviewed: 2026-05-24. **Decision: do not enable ESM userscripts by
-default. Ship a disabled-by-default proof-of-concept later as Phase X.**
+default. Phase R-1 shipped as a disabled-by-default install-time bundler.**
 
 ## 1. Problem statement
 
@@ -141,7 +141,7 @@ Phased, all gated behind off-by-default settings:
 
 | Phase | Deliverable                                                                                 | Risk |
 | ----- | ------------------------------------------------------------------------------------------- | ---- |
-| R-1   | Disabled-by-default install-time bundler (Shape A) with Acorn-based rewrite.                | Med  |
+| R-1   | **Shipped 2026-05-24.** Disabled-by-default install-time bundler (Shape A) with Acorn-based rewrite. | Med  |
 | R-2   | New `@module 1` parser directive + dashboard "ESM" badge.                                   | Low  |
 | R-3   | Receipts integration so an ESM bundle is rollback-able via the existing rollbackRestore path. | Low  |
 | R-4   | Dev-mode SSE listener — opt-in per host under a new "Developer mode" panel.                 | Med  |
@@ -165,26 +165,25 @@ bug.
 
 ## 8. Disabled proof-of-concept tests
 
-Two test files are intentionally **not** added in this slice — they're
-the verification gate for the phase-R-1 PR:
+Two test files were added with the phase-R-1 implementation:
 
-- `tests/esm-bundler.test.js` — assert that `import x from 'esm.sh/foo'`
+- `tests/esm-bundler.test.js` — asserts that `import x from 'esm.sh/foo'`
   is rewritten into a local `const x = __require(...)` wrapper and that
   the transitive set is bundled.
-- `tests/esm-csp.test.js` — assert that the bundler refuses dynamic
+- `tests/esm-csp.test.js` — asserts that the bundler refuses dynamic
   `import()` and emits a parse error so an author sees the gap at
   install time.
 
-Stub names are reserved so future PRs can land them without bikeshedding.
-
 ## 9. Decision
 
-- **ESM userscripts:** approved as a phased, off-by-default feature
-  starting from R-1. Reject the runtime injection shape (Shape B).
+- **ESM userscripts:** approved as a phased, off-by-default feature.
+  R-1 is implemented; reject the runtime injection shape (Shape B).
 - **Local-dev mode:** approved as the SSE + localhost host-permission
   shape, gated on a separate Developer Mode panel.
 - **Dynamic `import()`:** rejected permanently — pre-bundling is the
   only sustainable model under MV3 CSP.
 
-This is research only. Phase R-1 is the next planning checkpoint;
-nothing in this design enables runtime behavior today.
+R-1 still preserves the default runtime posture: ESM scripts are rejected
+unless `experimentalESMUserscripts` is explicitly enabled. The follow-up
+checkpoint is R-2 (dashboard "ESM" badge), then R-3 receipt/rollback
+detailing for bundled snapshots.

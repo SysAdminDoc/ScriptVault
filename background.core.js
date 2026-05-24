@@ -120,6 +120,7 @@ function parseUserscript(code) {
     antifeature: [],
     unwrap: false,
     'inject-into': 'auto',
+    module: '',
     sandbox: '',
     tag: [],
     'run-in': '',
@@ -162,6 +163,7 @@ function parseUserscript(code) {
       case 'supportURL':
       case 'run-at':
       case 'inject-into':
+      case 'module':
       case 'sandbox':
       case 'run-in':
       case 'license':
@@ -286,6 +288,7 @@ function parseUserscript(code) {
   if (meta.grant.length === 0) {
     meta.grant = ['none'];
   }
+  meta.esm = meta.module === '1' || meta['inject-into'] === 'module';
 
   return { meta, code, metaBlock: metaBlockMatch[0] };
 }
@@ -592,8 +595,20 @@ const UpdateSystem = {
     // Don't auto-update scripts the user has locally edited (unless force=true from forceUpdate)
     if (!force && script.settings?.userModified) return { skipped: true, reason: 'user-modified' };
 
-    const parsed = parseUserscript(newCode);
+    let parsed = parseUserscript(newCode);
     if (parsed.error) return parsed;
+    const updateSettings = await SettingsManager.get();
+    const bundleResult = await ESMUserscriptBundler.bundleIfNeeded(newCode, parsed.meta, updateSettings, { sourceUrl });
+    if (bundleResult.bundled) {
+      newCode = bundleResult.code;
+      parsed = parseUserscript(newCode);
+      if (parsed.error) return parsed;
+      parsed.meta.esmBundle = {
+        entryUrl: bundleResult.entryUrl,
+        imports: bundleResult.imports,
+        bundledAt: Date.now()
+      };
+    }
     const previousScript = {
       ...script,
       meta: { ...script.meta },
@@ -5841,11 +5856,28 @@ async function installFromCode(code, receiptOptions = {}) {
       throw new Error('Not a valid userscript');
     }
 
-    const parsed = parseUserscript(code);
+    let parsed = parseUserscript(code);
     if (parsed.error) {
       throw new Error(parsed.error);
     }
-    const meta = parsed.meta;
+    let meta = parsed.meta;
+    const installSettings = await SettingsManager.get();
+    const bundleResult = await ESMUserscriptBundler.bundleIfNeeded(code, meta, installSettings, {
+      sourceUrl: receiptOptions.sourceUrl || meta.downloadURL || meta.updateURL || ''
+    });
+    if (bundleResult.bundled) {
+      code = bundleResult.code;
+      parsed = parseUserscript(code);
+      if (parsed.error) {
+        throw new Error(parsed.error);
+      }
+      meta = parsed.meta;
+      meta.esmBundle = {
+        entryUrl: bundleResult.entryUrl,
+        imports: bundleResult.imports,
+        bundledAt: Date.now()
+      };
+    }
     const allScripts = await ScriptStorage.getAll();
 
     const existing = allScripts.find(s => s.meta.name === meta.name && s.meta.namespace === meta.namespace);

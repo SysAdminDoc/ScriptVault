@@ -36,6 +36,7 @@ type StringMetaKey =
   | 'supportURL'
   | 'run-at'
   | 'inject-into'
+  | 'module'
   | 'sandbox'
   | 'run-in'
   | 'license'
@@ -60,6 +61,7 @@ const STRING_KEYS: ReadonlySet<string> = new Set<StringMetaKey>([
   'supportURL',
   'run-at',
   'inject-into',
+  'module',
   'sandbox',
   'run-in',
   'license',
@@ -158,6 +160,7 @@ export function parseUserscript(code: string): ParseResult {
     antifeature: [],
     unwrap: false,
     'inject-into': 'auto',
+    module: '',
     sandbox: '',
     tag: [],
     'run-in': '',
@@ -295,6 +298,7 @@ export function parseUserscript(code: string): ParseResult {
   if (meta.grant.length === 0) {
     meta.grant = ['none'];
   }
+  meta.esm = meta.module === '1' || meta['inject-into'] === 'module';
 
   return { meta, code, metaBlock: metaBlockMatch[0]! };
 }
