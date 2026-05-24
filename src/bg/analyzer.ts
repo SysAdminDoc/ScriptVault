@@ -119,7 +119,11 @@ const patterns: AnalysisPattern[] = [
 function analyze(code: string): AnalysisResult {
   const findings: Finding[] = [];
   let totalRisk: number = 0;
-  const strippedCode: string = code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  // Keep URL schemes such as "https://example.com" intact while still
+  // stripping real line comments. This matches the production fallback.
+  const strippedCode: string = code
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
   for (const pattern of patterns) {
     pattern.regex.lastIndex = 0;
     const matches: RegExpMatchArray | null = strippedCode.match(pattern.regex);
@@ -132,14 +136,19 @@ function analyze(code: string): AnalysisResult {
   }
   const longStrings: RegExpMatchArray | null = strippedCode.match(/['"][^'"]{80,}['"]/g);
   if (longStrings && longStrings.length > 0) {
-    const firstString: string | undefined = longStrings[0];
-    if (firstString !== undefined) {
-      const entropy: number = calculateEntropy(firstString);
-      const threshold: number = firstString.length >= 200 ? 4.5 : 5.2;
-      if (entropy > threshold) {
-        findings.push({ id: 'high-entropy', label: 'High-entropy string detected', category: 'obfuscation', desc: `Found ${longStrings.length} long string(s) with high randomness (entropy: ${entropy.toFixed(1)})`, risk: 20, count: longStrings.length, adjustedRisk: 20 });
-        totalRisk += 20;
+    let maxEntropy = 0;
+    let maxStr: string = longStrings[0]!;
+    for (const s of longStrings) {
+      const entropy: number = calculateEntropy(s);
+      if (entropy > maxEntropy) {
+        maxEntropy = entropy;
+        maxStr = s;
       }
+    }
+    const threshold: number = maxStr.length >= 200 ? 4.5 : 5.2;
+    if (maxEntropy > threshold) {
+      findings.push({ id: 'high-entropy', label: 'High-entropy string detected', category: 'obfuscation', desc: `Found ${longStrings.length} long string(s) with high randomness (entropy: ${maxEntropy.toFixed(1)})`, risk: 20, count: longStrings.length, adjustedRisk: 20 });
+      totalRisk += 20;
     }
   }
   const riskLevel: string = totalRisk >= 80 ? 'high' : totalRisk >= 40 ? 'medium' : totalRisk >= 15 ? 'low' : 'minimal';

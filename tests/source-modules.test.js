@@ -154,6 +154,20 @@ describe('source analyzer', () => {
     expect(result.summary).toContain('dynamic code execution');
   });
 
+  it('keeps URLs intact when stripping comments in the regex fallback', () => {
+    const result = ScriptAnalyzer.analyze('const beacon = "https://tracker.example/collect"; fetch(beacon);');
+
+    expect(result.findings.some((finding) => finding.id === 'fetch-call')).toBe(true);
+  });
+
+  it('checks all long strings for high entropy in the regex fallback', () => {
+    const benign = 'a'.repeat(100);
+    const highEntropy = 'Aa1+/Z9qW8eR7tY6uI5oP4sD3fG2hJ1kL0mN9bV8cX7zQ6wE5rT4yU3iO2pA1sD0fG9hJ8kL7zX6cV5bN4mQ3wE2rT1yU0iO9p';
+    const result = ScriptAnalyzer.analyze(`const a = "${benign}"; const b = "${highEntropy}";`);
+
+    expect(result.findings.some((finding) => finding.id === 'high-entropy')).toBe(true);
+  });
+
   it('returns the offscreen result when AST analysis succeeds', async () => {
     chrome.offscreen.hasDocument.mockResolvedValue(false);
     chrome.runtime.sendMessage.mockResolvedValue({
