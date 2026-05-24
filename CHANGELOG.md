@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Resource cache streamed-body hardening
+
+- Replaced `@resource`/resource-cache `arrayBuffer()` reads with a bounded
+  stream reader so responses without `Content-Length` are cancelled once they
+  exceed the 5 MB cache cap.
+- Preserved the generated runtime/TypeScript source path for `ResourceCache`
+  and rebuilt `background.js` from the promoted source module.
+- Added a streamed oversized-resource regression that verifies the reader is
+  cancelled, `arrayBuffer()` is not called, and no oversized entry is cached.
+
 ### 2026-05-24 — Public API web-install hardening
 
 - Hardened trusted web origins by normalizing entries to exact HTTPS origins,

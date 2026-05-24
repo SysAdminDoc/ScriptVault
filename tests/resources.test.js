@@ -139,6 +139,38 @@ describe('ResourceCache', () => {
       expect(ResourceCache.cache['https://cdn.example.com/huge-body.js']).toBeUndefined();
     });
 
+    it('stops reading streamed resources that exceed the cap without content-length', async () => {
+      const chunk = new Uint8Array(1024 * 1024);
+      let reads = 0;
+      const reader = {
+        read: vi.fn().mockImplementation(async () => {
+          reads += 1;
+          return reads <= 6 ? { done: false, value: chunk } : { done: true };
+        }),
+        cancel: vi.fn().mockResolvedValue(undefined),
+        releaseLock: vi.fn(),
+      };
+      const arrayBuffer = vi.fn();
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: {
+          get: vi.fn((name) => (name === 'content-type' ? 'text/javascript' : null)),
+        },
+        body: { getReader: vi.fn(() => reader) },
+        arrayBuffer,
+      });
+      globalThis.fetch = fetchMock;
+      ResourceCache = createFresh();
+
+      await expect(ResourceCache.fetchResource('https://cdn.example.com/streamed-huge.js')).rejects.toThrow('maximum allowed size');
+
+      expect(reader.cancel).toHaveBeenCalled();
+      expect(reader.releaseLock).toHaveBeenCalled();
+      expect(arrayBuffer).not.toHaveBeenCalled();
+      expect(ResourceCache.cache['https://cdn.example.com/streamed-huge.js']).toBeUndefined();
+    });
+
     // LR-002 — concurrent fetch dedup
     it('deduplicates concurrent fetches of the same URL into a single network call', async () => {
       const body = new Uint8Array([0x76, 0x61, 0x72]); // "var"

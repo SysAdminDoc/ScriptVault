@@ -6162,6 +6162,53 @@ const ResourceCache = (() => {
   }
 
   // src/modules/resources.ts
+  var RESOURCE_SIZE_ERROR = "Resource exceeds maximum allowed size (5 MB)";
+  async function readResponseBytesBounded(response, maxBytes) {
+    const contentLength = Number.parseInt(response.headers.get("content-length") || "", 10);
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      throw new Error(RESOURCE_SIZE_ERROR);
+    }
+    const body = response.body;
+    if (body && typeof body.getReader === "function") {
+      const reader = body.getReader();
+      const chunks = [];
+      let totalBytes = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!value) continue;
+          totalBytes += value.byteLength;
+          if (totalBytes > maxBytes) {
+            try {
+              await reader.cancel();
+            } catch {
+            }
+            throw new Error(RESOURCE_SIZE_ERROR);
+          }
+          chunks.push(value);
+        }
+      } finally {
+        try {
+          reader.releaseLock();
+        } catch {
+        }
+      }
+      const bytes2 = new Uint8Array(totalBytes);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bytes2.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      return bytes2;
+    }
+    const buffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    if (bytes.length > maxBytes) {
+      throw new Error(RESOURCE_SIZE_ERROR);
+    }
+    return bytes;
+  }
   var ResourceCache = {
     cache: {},
     _pendingFetches: /* @__PURE__ */ new Map(),
@@ -6235,15 +6282,7 @@ const ResourceCache = (() => {
             throw new Error(`@resource URL redirected to ${postCheck.message}`);
           }
           const contentType = response.headers.get("content-type") || "text/plain";
-          const contentLength = Number.parseInt(response.headers.get("content-length") || "", 10);
-          if (Number.isFinite(contentLength) && contentLength > this.maxResourceBytes) {
-            throw new Error("Resource exceeds maximum allowed size (5 MB)");
-          }
-          const buffer = await response.arrayBuffer();
-          const bytes = new Uint8Array(buffer);
-          if (bytes.length > this.maxResourceBytes) {
-            throw new Error("Resource exceeds maximum allowed size (5 MB)");
-          }
+          const bytes = await readResponseBytesBounded(response, this.maxResourceBytes);
           let text;
           if (contentType.includes("text") || contentType.includes("json") || contentType.includes("xml") || contentType.includes("css") || contentType.includes("javascript")) {
             text = new TextDecoder().decode(bytes);
