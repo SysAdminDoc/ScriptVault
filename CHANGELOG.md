@@ -4,6 +4,21 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Microsoft Edge Add-ons package path
+
+- Added `scripts/build-edge.mjs` that runs the standard esbuild pipeline,
+  stages a Chrome-derived package under `build-edge/`, applies a small
+  declarative manifest transform set (today: strip `update_url`), runs a
+  missing-file audit, and produces
+  `edge-artifacts/scriptvault-edge-vX.Y.Z.zip` plus a sidecar build report.
+- npm scripts wired: `build:edge`, `build:edge:check`, `build:edge:stage`.
+- Submission checklist + manifest-difference table + unsupported-permissions
+  slot at `docs/edge-submission.md`.
+- `build-edge/` and `edge-artifacts/` added to `.gitignore`.
+- Added `tests/edge-build.test.js` (5 cases) verifying the staged build
+  contents, manifest transform, summary JSON shape, and --check exit
+  code.
+
 ### 2026-05-24 — Manifest generation design doc
 
 - Added `docs/manifest-generation-design.md`. Measured the current Chrome
