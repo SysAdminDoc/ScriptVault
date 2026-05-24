@@ -1413,7 +1413,13 @@
         elements.settingsWebdavUrl = document.getElementById('settingsWebdavUrl');
         elements.settingsWebdavUsername = document.getElementById('settingsWebdavUsername');
         elements.settingsWebdavPassword = document.getElementById('settingsWebdavPassword');
+        elements.syncHealthStatus = document.getElementById('syncHealthStatus');
+        elements.syncStorageDisclosure = document.getElementById('syncStorageDisclosure');
+        elements.syncPreviewSummary = document.getElementById('syncPreviewSummary');
         elements.btnSyncNow = document.getElementById('btnSyncNow');
+        elements.btnSyncCheckHealth = document.getElementById('btnSyncCheckHealth');
+        elements.btnSyncPreview = document.getElementById('btnSyncPreview');
+        elements.btnSyncRevoke = document.getElementById('btnSyncRevoke');
         elements.btnSyncReset = document.getElementById('btnSyncReset');
         elements.syncLog = document.getElementById('syncLog');
         elements.btnSaveSync = document.getElementById('btnSaveSync');
@@ -2395,6 +2401,77 @@
         if (elements.oauthUser) elements.oauthUser.textContent = accountLabel;
         if (elements.oauthUserRow) elements.oauthUserRow.style.display = accountLabel ? 'flex' : 'none';
     }
+
+    function summarizeSyncDisclosure(disclosure) {
+        if (!disclosure) return 'No provider storage disclosure is available.';
+        const fields = Array.isArray(disclosure.fields) ? disclosure.fields : [];
+        const stored = fields.filter(field => field.present);
+        const storedLabels = stored.map(field => field.label).join(', ');
+        const fieldSummary = stored.length
+            ? `Stored now: ${storedLabels}.`
+            : 'No token or credential values are currently stored.';
+        return `${fieldSummary} Storage: ${disclosure.storage}. ${disclosure.protection} ${disclosure.revokeAction || ''}`.trim();
+    }
+
+    function updateSyncCockpit(provider, health = {}) {
+        const configured = provider && provider !== 'none';
+        if (elements.syncHealthStatus) {
+            if (!configured) {
+                elements.syncHealthStatus.textContent = 'Choose a provider to check sync health.';
+                elements.syncHealthStatus.style.color = 'var(--text-muted)';
+            } else if (health?.connected) {
+                const account = health.user?.email || health.user?.name || health.endpointHost || '';
+                elements.syncHealthStatus.textContent = `${health.providerLabel || provider} connected${account ? ` (${account})` : ''}`;
+                elements.syncHealthStatus.style.color = 'var(--accent)';
+            } else {
+                elements.syncHealthStatus.textContent = health?.error
+                    ? `${health.providerLabel || provider}: ${health.error}`
+                    : `${health.providerLabel || provider} not connected`;
+                elements.syncHealthStatus.style.color = 'var(--danger)';
+            }
+        }
+        if (elements.syncStorageDisclosure) {
+            elements.syncStorageDisclosure.textContent = configured
+                ? summarizeSyncDisclosure(health?.storageDisclosure)
+                : 'Choose a provider to inspect stored sync credentials.';
+        }
+        if (elements.btnSyncNow) elements.btnSyncNow.disabled = !configured || health?.canManualSync === false;
+        if (elements.btnSyncCheckHealth) elements.btnSyncCheckHealth.disabled = !configured;
+        if (elements.btnSyncPreview) elements.btnSyncPreview.disabled = !configured || health?.canDryRun === false;
+        if (elements.btnSyncRevoke) {
+            elements.btnSyncRevoke.disabled = !configured || health?.canRevoke === false;
+            elements.btnSyncRevoke.style.display = configured ? '' : 'none';
+        }
+        if (elements.lastSyncTime) {
+            elements.lastSyncTime.textContent = formatSyncTimestamp(health?.lastSync || state.settings.lastSync);
+        }
+    }
+
+    function renderSyncPreview(preview) {
+        if (!elements.syncPreviewSummary) return;
+        if (!preview?.success) {
+            elements.syncPreviewSummary.style.display = '';
+            elements.syncPreviewSummary.textContent = preview?.error || 'Sync preview failed';
+            return;
+        }
+        const summary = preview.summary || {};
+        const lines = [
+            `Dry-run for ${preview.providerLabel || preview.provider || 'provider'} (no writes performed)`,
+            `Remote backup: ${preview.remoteFound ? 'found' : 'not found'}`,
+            `Scripts: ${summary.localScripts || 0} local, ${summary.remoteScripts || 0} remote`,
+            `Changes: ${summary.localOnly || 0} local-only, ${summary.remoteOnly || 0} remote-only, ${summary.localNewer || 0} local newer, ${summary.remoteNewer || 0} remote newer, ${summary.conflicts || 0} conflicts, ${summary.tombstoned || 0} tombstoned`,
+            `A real sync would ${summary.wouldDownload ? 'download remote changes' : 'not download remote changes'} and ${summary.wouldUpload ? 'upload a merged backup' : 'not upload a merged backup'}.`
+        ];
+        if (Array.isArray(preview.conflicts) && preview.conflicts.length) {
+            lines.push('');
+            lines.push('Potential conflicts:');
+            for (const conflict of preview.conflicts.slice(0, 5)) {
+                lines.push(`- ${conflict.name || conflict.id}: ${conflict.reason || 'conflict'}`);
+            }
+        }
+        elements.syncPreviewSummary.style.display = '';
+        elements.syncPreviewSummary.textContent = lines.join('\n');
+    }
     
     function capitalize(str) {
         return str.charAt(0).toUpperCase() + str.slice(1);
@@ -2403,20 +2480,19 @@
     // Load sync provider status for OAuth providers
     async function loadSyncProviderStatus() {
         const provider = elements.settingsSyncType?.value || normalizeSyncProvider(state.settings);
-        if (!OAUTH_SYNC_PROVIDERS.includes(provider)) {
+        if (!provider || provider === 'none') {
             updateSyncProviderUI(provider, { connected: false });
-        } else {
-            try {
-                const response = await chrome.runtime.sendMessage({ action: 'getSyncProviderStatus', provider });
-                updateSyncProviderUI(provider, response);
-            } catch (e) {
-                console.error(`Failed to get ${provider} status:`, e);
-                updateSyncProviderUI(provider, { connected: false });
-            }
+            updateSyncCockpit(provider, { connected: false, canRevoke: false, canManualSync: false, canDryRun: false });
+            return;
         }
-
-        if (elements.lastSyncTime) {
-            elements.lastSyncTime.textContent = formatSyncTimestamp(state.settings.lastSync);
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'syncProviderHealth', provider });
+            updateSyncProviderUI(provider, response);
+            updateSyncCockpit(provider, response);
+        } catch (e) {
+            console.error(`Failed to get ${provider} sync health:`, e);
+            updateSyncProviderUI(provider, { connected: false });
+            updateSyncCockpit(provider, { connected: false, providerLabel: provider, error: e.message });
         }
     }
 
@@ -8786,10 +8862,62 @@
                         }
                         await loadScripts();
                         updateStats();
+                        await loadSyncProviderStatus();
                     }
                     showToast(r?.success ? 'Sync completed' : (r?.error || 'Sync failed'), r?.success ? 'success' : 'error');
-                } catch (e) { showToast('Sync failed', 'error'); }
+                } catch (e) { showToast(`Sync failed: ${e.message}`, 'error'); }
             }, { busyLabel: 'Syncing…', errorMessage: 'Sync failed' });
+        });
+
+        elements.btnSyncCheckHealth?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                await loadSyncProviderStatus();
+                showToast('Sync health refreshed', 'success');
+            }, { busyLabel: 'Checking…', errorMessage: 'Failed to check sync health' });
+        });
+
+        elements.btnSyncPreview?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const provider = elements.settingsSyncType?.value || normalizeSyncProvider(state.settings);
+                if (!provider || provider === 'none') {
+                    showToast('Choose a sync provider first', 'info');
+                    return;
+                }
+                const preview = await chrome.runtime.sendMessage({ action: 'syncDryRunPreview', provider });
+                renderSyncPreview(preview);
+                if (elements.syncLog) {
+                    const summary = preview?.summary || {};
+                    elements.syncLog.value = (elements.syncLog.value || '') +
+                        `[${new Date().toLocaleTimeString()}] Preview ${provider}: ${preview?.success ? `${summary.conflicts || 0} conflicts, ${summary.remoteOnly || 0} remote-only, ${summary.localOnly || 0} local-only` : (preview?.error || 'failed')}\n`;
+                }
+                showToast(preview?.success ? 'Sync preview complete' : (preview?.error || 'Sync preview failed'), preview?.success ? 'success' : 'error');
+            }, { busyLabel: 'Previewing…', errorMessage: 'Sync preview failed' });
+        });
+
+        elements.btnSyncRevoke?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const provider = elements.settingsSyncType?.value || normalizeSyncProvider(state.settings);
+                if (!provider || provider === 'none') {
+                    showToast('Choose a sync provider first', 'info');
+                    return;
+                }
+                if (!await showConfirmModal('Revoke sync access?', `Revoke or clear saved access for ${capitalize(provider)} and disable userscript sync?`)) {
+                    return;
+                }
+                const response = await chrome.runtime.sendMessage({ action: 'revokeSyncProvider', provider });
+                if (response?.error || response?.success === false) {
+                    showToast(response.error || 'Revoke failed', 'error');
+                    return;
+                }
+                state.settings.syncProvider = 'none';
+                state.settings.syncEnabled = false;
+                if (elements.settingsEnableSync) elements.settingsEnableSync.checked = false;
+                syncSettingsProviderSelection('none');
+                syncCloudProviderSelection('none');
+                await loadSettings();
+                toggleSyncProviderSettings();
+                showToast('Sync access cleared', 'success');
+            }, { busyLabel: 'Revoking…', errorMessage: 'Failed to revoke sync access' });
         });
         
         elements.btnSyncReset?.addEventListener('click', async () => {

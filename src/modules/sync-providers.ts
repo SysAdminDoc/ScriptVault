@@ -39,6 +39,35 @@ interface SyncDisconnectResult {
 interface SyncStatusResult {
   connected: boolean;
   user?: { email: string; name: string };
+  status?: string;
+  error?: string | null;
+  endpointHost?: string;
+}
+
+interface SyncStorageDisclosureField {
+  key: string;
+  label: string;
+  type: 'token' | 'credential' | 'metadata';
+  present: boolean;
+}
+
+interface SyncStorageDisclosure {
+  storage: 'chrome.storage.local';
+  protection: string;
+  fields: SyncStorageDisclosureField[];
+  hasStoredSecrets: boolean;
+  revokeAction: string;
+  notes: string;
+}
+
+interface SyncStorageDisclosureConfig {
+  fields: Array<{
+    key: string;
+    label: string;
+    type?: SyncStorageDisclosureField['type'];
+  }>;
+  revokeAction: string;
+  notes?: string;
 }
 
 interface GoogleDriveFile {
@@ -72,6 +101,32 @@ function generateOAuthState(): string {
   ).join('');
 }
 
+function hasStoredSyncValue(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim().length > 0;
+  return value != null && value !== false;
+}
+
+function syncStorageDisclosure(
+  settings: Partial<Settings> | undefined,
+  config: SyncStorageDisclosureConfig,
+): SyncStorageDisclosure {
+  const settingsRecord = (settings ?? {}) as Record<string, unknown>;
+  const fields = config.fields.map((field): SyncStorageDisclosureField => ({
+    key: field.key,
+    label: field.label,
+    type: field.type ?? 'metadata',
+    present: hasStoredSyncValue(settingsRecord[field.key]),
+  }));
+  return {
+    storage: 'chrome.storage.local',
+    protection: 'Extension-scoped browser storage; ScriptVault does not add a second encryption layer.',
+    fields,
+    hasStoredSecrets: fields.some((field) => field.present && field.type !== 'metadata'),
+    revokeAction: config.revokeAction,
+    notes: config.notes ?? '',
+  };
+}
+
 /**
  * Wraps `fetch` with an AbortController timeout.
  * Prevents service worker hangs caused by slow or unresponsive cloud API endpoints.
@@ -101,6 +156,20 @@ const webdav = {
   name: 'WebDAV' as const,
   icon: '☁️' as const,
   requiresAuth: true as const,
+  supportsManualSync: true as const,
+  supportsDryRun: true as const,
+
+  getStorageDisclosure(settings: Partial<Settings> = {}): SyncStorageDisclosure {
+    return syncStorageDisclosure(settings, {
+      fields: [
+        { key: 'webdavUrl', label: 'WebDAV endpoint URL', type: 'metadata' },
+        { key: 'webdavUsername', label: 'WebDAV username', type: 'credential' },
+        { key: 'webdavPassword', label: 'WebDAV password', type: 'credential' },
+      ],
+      revokeAction: 'Clear the saved WebDAV endpoint, username, and password from local extension storage.',
+      notes: 'WebDAV Basic credentials are sent only to the configured server during sync.',
+    });
+  },
 
   async upload(data: unknown, settings: Settings): Promise<SyncUploadResult> {
     const url = `${getRequiredWebDavBaseUrl(settings)}/scriptvault-backup.json`;
@@ -150,6 +219,42 @@ const webdav = {
       return { success: false, error: message };
     }
   },
+
+  async getStatus(settings: Settings): Promise<SyncStatusResult> {
+    if (!settings.webdavUrl) {
+      return {
+        connected: false,
+        status: 'missing_config',
+        error: 'WebDAV URL is not configured',
+      };
+    }
+    const result = await this.test(settings);
+    let endpointHost = '';
+    try {
+      endpointHost = new URL(settings.webdavUrl).host;
+    } catch {
+      // Invalid URL details are surfaced through test().
+    }
+    return {
+      connected: result.success === true,
+      status: result.success === true ? 'ok' : 'error',
+      error: result.error ?? null,
+      user: {
+        email: '',
+        name: settings.webdavUsername || endpointHost || 'WebDAV',
+      },
+      endpointHost,
+    };
+  },
+
+  async disconnect(): Promise<SyncDisconnectResult> {
+    await SettingsManager.set({
+      webdavUrl: '',
+      webdavUsername: '',
+      webdavPassword: '',
+    });
+    return { success: true };
+  },
 };
 
 // ============================================================================
@@ -161,9 +266,24 @@ const googledrive = {
   icon: '📁' as const,
   requiresOAuth: true as const,
   fileName: 'scriptvault-backup.json' as const,
+  supportsManualSync: true as const,
+  supportsDryRun: true as const,
   // Google OAuth client ID (public, installed-app type)
   // Users can override via settings.googleClientId
   clientId: '287129963438-mcc1mod1m5jm8vjr3icb7ensdtcfq44l.apps.googleusercontent.com' as const,
+
+  getStorageDisclosure(settings: Partial<Settings> = {}): SyncStorageDisclosure {
+    return syncStorageDisclosure(settings, {
+      fields: [
+        { key: 'googleDriveToken', label: 'Google Drive access token', type: 'token' },
+        { key: 'googleDriveRefreshToken', label: 'Google Drive refresh token', type: 'token' },
+        { key: 'googleClientId', label: 'Optional Google OAuth client ID override', type: 'metadata' },
+        { key: 'googleDriveUser', label: 'Connected Google account label', type: 'metadata' },
+      ],
+      revokeAction: 'Ask Google to revoke the current access token when available, then clear Google tokens and account metadata.',
+      notes: 'Tokens are scoped to Drive file access and Google profile/email lookup for the configured backup file.',
+    });
+  },
 
   async getToken(): Promise<string | null> {
     const settings = await getSettings();
@@ -477,6 +597,21 @@ const dropbox = {
   icon: '📦' as const,
   requiresOAuth: true as const,
   fileName: '/scriptvault-backup.json' as const,
+  supportsManualSync: true as const,
+  supportsDryRun: true as const,
+
+  getStorageDisclosure(settings: Partial<Settings> = {}): SyncStorageDisclosure {
+    return syncStorageDisclosure(settings, {
+      fields: [
+        { key: 'dropboxToken', label: 'Dropbox access token', type: 'token' },
+        { key: 'dropboxRefreshToken', label: 'Dropbox refresh token', type: 'token' },
+        { key: 'dropboxClientId', label: 'Dropbox app key', type: 'metadata' },
+        { key: 'dropboxUser', label: 'Connected Dropbox account label', type: 'metadata' },
+      ],
+      revokeAction: 'Call Dropbox token revoke when an access token exists, then clear Dropbox tokens and account metadata.',
+      notes: 'Tokens are scoped by the Dropbox app key the user configured for ScriptVault backups.',
+    });
+  },
 
   async connect(settings: Settings): Promise<SyncConnectResult> {
     if (!settings.dropboxClientId) {
@@ -739,8 +874,23 @@ const onedrive = {
   icon: '📁' as const,
   requiresOAuth: true as const,
   fileName: 'scriptvault-backup.json' as const,
+  supportsManualSync: true as const,
+  supportsDryRun: true as const,
   // Microsoft OAuth - users must provide their own client ID from Azure AD
   // Create at: https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps
+
+  getStorageDisclosure(settings: Partial<Settings> = {}): SyncStorageDisclosure {
+    return syncStorageDisclosure(settings, {
+      fields: [
+        { key: 'onedriveToken', label: 'OneDrive access token', type: 'token' },
+        { key: 'onedriveRefreshToken', label: 'OneDrive refresh token', type: 'token' },
+        { key: 'onedriveClientId', label: 'OneDrive app client ID', type: 'metadata' },
+        { key: 'onedriveUser', label: 'Connected Microsoft account label', type: 'metadata' },
+      ],
+      revokeAction: 'Clear OneDrive tokens and account metadata from local extension storage.',
+      notes: 'Microsoft Graph tokens use app-folder file access and profile lookup scopes.',
+    });
+  },
 
   async connect(settings: Settings): Promise<SyncConnectResult> {
     const clientId = settings.onedriveClientId;

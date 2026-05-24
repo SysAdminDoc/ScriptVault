@@ -4,6 +4,26 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Sync safety cockpit
+
+- Added shared sync-provider health metadata for WebDAV, Google Drive,
+  Dropbox, OneDrive, and EasyCloud, including last-sync reporting,
+  manual-sync capability flags, dry-run support flags, and token/credential
+  storage disclosure without exposing stored secret values.
+- Added dashboard controls to check provider health, run a no-write dry-run
+  conflict preview, and revoke or clear saved provider access from the
+  Userscript Sync settings panel.
+- Added a no-write `CloudSync.preview()` path that compares local and remote
+  sync envelopes and reports local-only, remote-only, newer, tombstoned, and
+  potential 3-way conflict counts before a real sync mutates local or remote
+  data.
+- Hardened WebDAV parity with status and local credential clearing, and made
+  the Gist panel's token storage copy match the current `chrome.storage.local`
+  model.
+- Added provider, cloud-sync, and dashboard wiring coverage in
+  `tests/source-sync-providers.test.js`, `tests/source-cloud-sync.test.js`,
+  and `tests/sync-cockpit.test.js`.
+
 ### 2026-05-24 — Browser support matrix generator
 
 - Added `scripts/generate-browser-support-matrix.mjs` plus

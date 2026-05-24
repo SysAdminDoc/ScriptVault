@@ -47,6 +47,8 @@ declare const ScriptAnalyzer: {
 interface CloudSyncProvider {
   download(settings: Settings): Promise<SyncEnvelope | null>;
   upload(data: SyncEnvelope, settings: Settings): Promise<void>;
+  name?: string;
+  supportsDryRun?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -66,6 +68,8 @@ interface SyncScript {
   position: number;
   settings: ScriptSettings;
   updatedAt: number;
+  syncBaseCode?: string | null;
+  name?: string;
 }
 
 interface SyncEnvelope {
@@ -79,6 +83,39 @@ interface SyncResult {
   success?: boolean;
   skipped?: boolean;
   error?: string;
+}
+
+interface SyncPreviewSummary {
+  localScripts: number;
+  remoteScripts: number;
+  localOnly: number;
+  remoteOnly: number;
+  localNewer: number;
+  remoteNewer: number;
+  unchanged: number;
+  tombstoned: number;
+  conflicts: number;
+  wouldUpload: boolean;
+  wouldDownload: boolean;
+}
+
+interface SyncPreviewConflict {
+  id: string;
+  name: string;
+  localUpdatedAt: number | null;
+  remoteUpdatedAt: number | null;
+  reason: string;
+}
+
+interface SyncPreviewResult extends SyncResult {
+  dryRun?: boolean;
+  noWrites?: boolean;
+  provider?: string | null;
+  providerLabel?: string | null;
+  lastSync?: number | null;
+  remoteFound?: boolean;
+  summary?: SyncPreviewSummary;
+  conflicts?: SyncPreviewConflict[];
 }
 
 interface MergeResult {
@@ -172,6 +209,164 @@ export const CloudSync = {
       clearTimeout(_timeoutId);
       this._syncInProgress = false;
     }
+  },
+
+  async _buildLocalData(tombstones: Record<string, unknown> = {}): Promise<{
+    scripts: Script[];
+    localData: SyncEnvelope;
+  }> {
+    const scripts = await ScriptStorage.getAll();
+    return {
+      scripts,
+      localData: {
+        version: 1,
+        timestamp: Date.now(),
+        scripts: scripts.map((s): SyncScript => ({
+          id: s.id,
+          code: s.code,
+          enabled: s.enabled,
+          position: s.position,
+          settings: s.settings ?? {},
+          updatedAt: s.updatedAt,
+          syncBaseCode: s.syncBaseCode ?? null,
+          name: s.meta?.name || s.id,
+        })),
+        tombstones,
+      },
+    };
+  },
+
+  async preview(providerName?: SyncProvider | string): Promise<SyncPreviewResult> {
+    const settings = await SettingsManager.get();
+    const selectedProvider = providerName || settings.syncProvider;
+    if (!selectedProvider || selectedProvider === 'none') {
+      return { success: false, error: 'Choose a sync provider first' };
+    }
+
+    const provider: CloudSyncProvider | undefined = this.providers[selectedProvider];
+    if (!provider) return { success: false, error: `Unknown provider: ${selectedProvider}` };
+    if (provider.supportsDryRun === false || typeof provider.download !== 'function') {
+      return {
+        success: false,
+        error: `Dry-run preview is not available for ${provider.name || selectedProvider}`,
+      };
+    }
+
+    const tombstoneData = await chrome.storage.local.get('syncTombstones');
+    const tombstones: Record<string, unknown> =
+      (tombstoneData['syncTombstones'] as Record<string, unknown> | undefined) ?? {};
+    const { localData } = await this._buildLocalData(tombstones);
+
+    let remoteData: SyncEnvelope | null = null;
+    try {
+      remoteData = await provider.download(settings);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        success: false,
+        provider: selectedProvider,
+        providerLabel: provider.name || selectedProvider,
+        error: msg,
+      };
+    }
+
+    return {
+      success: true,
+      ...this.previewData(localData, remoteData, {
+        provider: selectedProvider,
+        providerLabel: provider.name || selectedProvider,
+        lastSync: settings.lastSync || null,
+      }),
+    };
+  },
+
+  previewData(
+    local: SyncEnvelope,
+    remote: SyncEnvelope | null,
+    options: { provider?: string; providerLabel?: string; lastSync?: number | null } = {},
+  ): SyncPreviewResult {
+    const localScripts = Array.isArray(local?.scripts) ? local.scripts : [];
+    const remoteScripts = Array.isArray(remote?.scripts) ? remote.scripts : [];
+    const tombstones: Record<string, unknown> = {
+      ...(local?.tombstones ?? {}),
+      ...(remote?.tombstones ?? {}),
+    };
+    const localById = new Map<string, SyncScript>(localScripts.map((script) => [script.id, script]));
+    const remoteById = new Map<string, SyncScript>(remoteScripts.map((script) => [script.id, script]));
+    const ids = new Set<string>([...localById.keys(), ...remoteById.keys()]);
+    const summary: SyncPreviewSummary = {
+      localScripts: localScripts.length,
+      remoteScripts: remoteScripts.length,
+      localOnly: 0,
+      remoteOnly: 0,
+      localNewer: 0,
+      remoteNewer: 0,
+      unchanged: 0,
+      tombstoned: 0,
+      conflicts: 0,
+      wouldUpload: false,
+      wouldDownload: false,
+    };
+    const conflicts: SyncPreviewConflict[] = [];
+
+    for (const id of ids) {
+      if (tombstones[id]) {
+        summary.tombstoned += 1;
+        continue;
+      }
+      const localScript = localById.get(id);
+      const remoteScript = remoteById.get(id);
+      if (!localScript && remoteScript) {
+        summary.remoteOnly += 1;
+        continue;
+      }
+      if (localScript && !remoteScript) {
+        summary.localOnly += 1;
+        continue;
+      }
+      if (!localScript || !remoteScript) continue;
+
+      const base = localScript.syncBaseCode;
+      const localChanged = base != null && localScript.code !== base;
+      const remoteChanged = base != null && remoteScript.code !== base;
+      if (base != null && localChanged && remoteChanged && localScript.code !== remoteScript.code) {
+        summary.conflicts += 1;
+        if (conflicts.length < 20) {
+          conflicts.push({
+            id,
+            name: localScript.name || remoteScript.name || id,
+            localUpdatedAt: localScript.updatedAt || null,
+            remoteUpdatedAt: remoteScript.updatedAt || null,
+            reason: 'Both local and remote changed since the last sync base',
+          });
+        }
+        continue;
+      }
+
+      if ((localScript.updatedAt || 0) > (remoteScript.updatedAt || 0)) {
+        summary.localNewer += 1;
+      } else if ((remoteScript.updatedAt || 0) > (localScript.updatedAt || 0)) {
+        summary.remoteNewer += 1;
+      } else {
+        summary.unchanged += 1;
+      }
+    }
+
+    summary.wouldUpload =
+      summary.localOnly > 0 || summary.localNewer > 0 || summary.conflicts > 0 || !remote;
+    summary.wouldDownload =
+      summary.remoteOnly > 0 || summary.remoteNewer > 0 || summary.conflicts > 0;
+
+    return {
+      dryRun: true,
+      noWrites: true,
+      provider: options.provider ?? null,
+      providerLabel: options.providerLabel ?? options.provider ?? null,
+      lastSync: options.lastSync ?? null,
+      remoteFound: !!remote,
+      summary,
+      conflicts,
+    };
   },
 
   async _performSync(): Promise<SyncResult> {

@@ -293,6 +293,21 @@ interface GetSyncProviderStatus {
   provider: string;
 }
 
+interface SyncProviderHealth {
+  action: 'syncProviderHealth';
+  provider?: string;
+}
+
+interface SyncDryRunPreview {
+  action: 'syncDryRunPreview';
+  provider?: string;
+}
+
+interface RevokeSyncProvider {
+  action: 'revokeSyncProvider';
+  provider: string;
+}
+
 interface CloudExport {
   action: 'cloudExport';
   provider: string;
@@ -997,7 +1012,8 @@ export type BackgroundMessage =
   | CheckUpdates | ForceUpdate | ApplyUpdate | GetVersionHistory | RollbackScript
   // Cloud sync
   | SyncNow | TestSync | ConnectSyncProvider | DisconnectSyncProvider
-  | GetSyncProviderStatus | CloudExport | CloudImport | CloudStatus
+  | GetSyncProviderStatus | SyncProviderHealth | SyncDryRunPreview | RevokeSyncProvider
+  | CloudExport | CloudImport | CloudStatus
   // Easy Cloud
   | EasyCloudConnect | EasyCloudDisconnect | EasyCloudSync | EasyCloudStatus
   // Import/export
@@ -1183,6 +1199,30 @@ export interface ResponseMap {
   cloudExport: SuccessOrError;
   cloudImport: SuccessOrError;
   cloudStatus: SuccessOrError<{ connected: boolean; provider?: string; lastSync?: number }>;
+  syncProviderHealth: SuccessOrError<{
+    provider: string;
+    providerLabel: string;
+    connected: boolean;
+    status: string;
+    error?: string | null;
+    user?: { email?: string; name?: string } | null;
+    lastSync?: number | null;
+    canRevoke: boolean;
+    canManualSync: boolean;
+    canDryRun: boolean;
+    storageDisclosure?: unknown;
+  }>;
+  syncDryRunPreview: SuccessOrError<{
+    dryRun: boolean;
+    noWrites: boolean;
+    provider?: string | null;
+    providerLabel?: string | null;
+    lastSync?: number | null;
+    remoteFound?: boolean;
+    summary?: Record<string, unknown>;
+    conflicts?: unknown[];
+  }>;
+  revokeSyncProvider: SuccessOrError;
   syncNow: SuccessOrError | { skipped: true };
   connectGoogleDrive: SuccessOrError<{ user?: { email?: string; name?: string } }>;
   disconnectGoogleDrive: SuccessResponse;

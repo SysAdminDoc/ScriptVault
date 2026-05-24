@@ -352,12 +352,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
   - Verify: run matrix-generation script after CI smoke.
   - Status: Shipped 2026-05-24. Added `scripts/generate-browser-support-matrix.mjs`, `npm run support:matrix`, and `npm run support:matrix:check`; generated matrix blocks now live in `README.md` and `docs/cross-browser-pipeline.md` with manifest-derived Chrome/Edge/Firefox targets, latest verification date, Firefox lint counts, and unsupported/deferred API notes. CI now runs the matrix check after Chrome smoke and Firefox package. Added `scripts/run-bash.mjs` so Firefox packaging works from Windows PowerShell when Git Bash is installed but not on PATH. Verification: support matrix check passed, Firefox package passed with web-ext lint 0 errors / 0 notices / 138 warnings, and the dashboard smoke harness passed against a local scratch extension copy because Chrome/Edge close during `Extensions.loadUnpacked` when loading directly from the VMware shared drive.
 
-- [ ] P1 - Add sync token health, revoke, manual sync, and dry-run conflict preview
+- [x] P1 - Add sync token health, revoke, manual sync, and dry-run conflict preview
   - Why: ScriptVault has many sync providers but fragmented trust and recovery states.
   - Evidence: L13, S18, S44, H028-H032.
   - Touches: `modules/sync-providers.js`, `modules/sync-easycloud.js`, `pages/dashboard-gist.js`, `src/modules/sync-*.ts`, tests.
   - Acceptance: Each provider exposes status, last sync, token storage disclosure, revoke, manual sync, and dry-run conflict preview where applicable.
   - Verify: provider mock tests and manual token-revocation flow.
+  - Status: Shipped 2026-05-24. Added provider health/storage-disclosure metadata for WebDAV, Google Drive, Dropbox, OneDrive, and EasyCloud; WebDAV now has status and clear-access parity, and OAuth providers expose token-storage field presence without returning token values. `CloudSync.preview()` now performs a no-write comparison of local and remote envelopes, reporting local-only, remote-only, local-newer, remote-newer, tombstoned, and potential 3-way conflict counts before a real sync mutates either side. The dashboard Userscript Sync panel now has Check Health, Preview Sync, and Revoke / Clear Access controls with live status and storage-disclosure copy; Gist settings now explicitly state the current `chrome.storage.local` token model. Verification: focused provider/cloud-sync/dashboard tests passed and `npm run typecheck` passed; full `npm run check` timed out on the VMware shared drive after the TypeScript phase and focused tests were already green.
 
 - [ ] P1 - Add script trash, version history, restore receipts, and backup verification
   - Why: Destructive changes need undo and proof of restore completeness.

@@ -778,6 +778,145 @@ const CloudSync = {
     }
   },
 
+  async _buildLocalData(tombstones = {}) {
+    const scripts = await ScriptStorage.getAll();
+    return {
+      scripts,
+      localData: {
+        version: 1,
+        timestamp: Date.now(),
+        scripts: scripts.map(s => ({
+          id: s.id,
+          code: s.code,
+          enabled: s.enabled,
+          position: s.position,
+          settings: s.settings || {},
+          updatedAt: s.updatedAt,
+          syncBaseCode: s.syncBaseCode ?? null,
+          name: s.meta?.name || s.metadata?.name || s.name || s.id
+        })),
+        tombstones
+      }
+    };
+  },
+
+  async preview(providerName) {
+    const settings = await SettingsManager.get();
+    const selectedProvider = providerName || settings.syncProvider;
+    if (!selectedProvider || selectedProvider === 'none') {
+      return { success: false, error: 'Choose a sync provider first' };
+    }
+    const provider = this.providers[selectedProvider];
+    if (!provider) return { success: false, error: `Unknown provider: ${selectedProvider}` };
+    if (provider.supportsDryRun === false || typeof provider.download !== 'function') {
+      return { success: false, error: `Dry-run preview is not available for ${provider.name || selectedProvider}` };
+    }
+
+    const tombstoneData = await chrome.storage.local.get('syncTombstones');
+    const tombstones = tombstoneData.syncTombstones || {};
+    const { localData } = await this._buildLocalData(tombstones);
+    let remoteData = null;
+    try {
+      remoteData = await provider.download(settings);
+    } catch (e) {
+      return {
+        success: false,
+        provider: selectedProvider,
+        providerLabel: provider.name || selectedProvider,
+        error: e?.message || String(e)
+      };
+    }
+
+    return {
+      success: true,
+      ...this.previewData(localData, remoteData, {
+        provider: selectedProvider,
+        providerLabel: provider.name || selectedProvider,
+        lastSync: settings.lastSync || null
+      })
+    };
+  },
+
+  previewData(local, remote, options = {}) {
+    const localScripts = Array.isArray(local?.scripts) ? local.scripts : [];
+    const remoteScripts = Array.isArray(remote?.scripts) ? remote.scripts : [];
+    const tombstones = { ...(local?.tombstones || {}), ...(remote?.tombstones || {}) };
+    const localById = new Map(localScripts.map(script => [script.id, script]));
+    const remoteById = new Map(remoteScripts.map(script => [script.id, script]));
+    const ids = new Set([...localById.keys(), ...remoteById.keys()]);
+    const summary = {
+      localScripts: localScripts.length,
+      remoteScripts: remoteScripts.length,
+      localOnly: 0,
+      remoteOnly: 0,
+      localNewer: 0,
+      remoteNewer: 0,
+      unchanged: 0,
+      tombstoned: 0,
+      conflicts: 0,
+      wouldUpload: false,
+      wouldDownload: false
+    };
+    const conflicts = [];
+
+    for (const id of ids) {
+      if (tombstones[id]) {
+        summary.tombstoned += 1;
+        continue;
+      }
+      const localScript = localById.get(id);
+      const remoteScript = remoteById.get(id);
+      if (!localScript && remoteScript) {
+        summary.remoteOnly += 1;
+        continue;
+      }
+      if (localScript && !remoteScript) {
+        summary.localOnly += 1;
+        continue;
+      }
+      if (!localScript || !remoteScript) continue;
+
+      const base = localScript.syncBaseCode;
+      const localChanged = base != null && localScript.code !== base;
+      const remoteChanged = base != null && remoteScript.code !== base;
+      if (base != null && localChanged && remoteChanged && localScript.code !== remoteScript.code) {
+        summary.conflicts += 1;
+        if (conflicts.length < 20) {
+          conflicts.push({
+            id,
+            name: localScript.name || remoteScript.name || id,
+            localUpdatedAt: localScript.updatedAt || null,
+            remoteUpdatedAt: remoteScript.updatedAt || null,
+            reason: 'Both local and remote changed since the last sync base'
+          });
+        }
+        continue;
+      }
+
+      if ((localScript.updatedAt || 0) > (remoteScript.updatedAt || 0)) {
+        summary.localNewer += 1;
+      } else if ((remoteScript.updatedAt || 0) > (localScript.updatedAt || 0)) {
+        summary.remoteNewer += 1;
+      } else {
+        summary.unchanged += 1;
+      }
+    }
+
+    summary.wouldUpload = summary.localOnly > 0 || summary.localNewer > 0 || summary.conflicts > 0 || !remote;
+    summary.wouldDownload = summary.remoteOnly > 0 || summary.remoteNewer > 0 || summary.conflicts > 0;
+
+    return {
+      dryRun: true,
+      noWrites: true,
+      provider: options.provider || null,
+      providerLabel: options.providerLabel || options.provider || null,
+      lastSync: options.lastSync || null,
+      remoteFound: !!remote,
+      summary,
+      conflicts
+    };
+  },
+
   async _performSync(opts = {}) {
     const { signal } = opts;
     const settings = await SettingsManager.get();
@@ -925,6 +1064,68 @@ const CloudSync = {
     };
   }
 };
+
+async function buildSyncProviderHealth(providerName) {
+  if (!providerName || providerName === 'none') {
+    return {
+      success: true,
+      provider: 'none',
+      providerLabel: 'Not configured',
+      connected: false,
+      status: 'not_configured',
+      lastSync: null,
+      canRevoke: false,
+      canManualSync: false,
+      canDryRun: false,
+      storageDisclosure: null
+    };
+  }
+
+  const provider = CloudSyncProviders[providerName];
+  if (!provider) return { success: false, connected: false, error: `Unknown provider: ${providerName}` };
+
+  const settings = await SettingsManager.get();
+  let status = {};
+  try {
+    if (typeof provider.getStatus === 'function') {
+      status = await provider.getStatus(settings);
+    } else if (typeof provider.test === 'function') {
+      const test = await provider.test(settings);
+      status = {
+        connected: test?.success === true || test?.ok === true,
+        error: test?.error || test?.message || null
+      };
+    }
+  } catch (e) {
+    status = { connected: false, error: e?.message || String(e) };
+  }
+
+  let storageDisclosure = null;
+  try {
+    storageDisclosure = typeof provider.getStorageDisclosure === 'function'
+      ? provider.getStorageDisclosure(settings)
+      : null;
+  } catch (_e) {
+    storageDisclosure = null;
+  }
+
+  const connected = status?.connected === true || status?.success === true || status?.ok === true;
+  return {
+    success: true,
+    provider: providerName,
+    providerLabel: provider.name || providerName,
+    connected,
+    status: status?.status || (connected ? 'ok' : 'not_connected'),
+    error: status?.error || null,
+    user: status?.user || null,
+    endpointHost: status?.endpointHost || null,
+    lastSync: status?.lastSync || settings.lastSync || null,
+    canRevoke: typeof provider.disconnect === 'function',
+    canManualSync: provider.supportsManualSync !== false && typeof provider.upload === 'function',
+    canDryRun: provider.supportsDryRun !== false && typeof provider.download === 'function',
+    storageDisclosure
+  };
+}
 
 // ============================================================================
 // Import/Export
@@ -2244,6 +2445,15 @@ async function handleMessage(message, sender) {
 
       case 'getLastSyncResult':
         return (await chrome.storage.local.get('lastSyncResult'))?.lastSyncResult || null;
+
+      case 'syncProviderHealth': {
+        const settings = await SettingsManager.get();
+        return await buildSyncProviderHealth(data?.provider || settings.syncProvider);
+      }
+
+      case 'syncDryRunPreview': {
+        return await CloudSync.preview(data?.provider);
+      }
       
       // Cloud Sync Provider Management
       case 'connectSyncProvider': {
@@ -2277,7 +2487,8 @@ async function handleMessage(message, sender) {
         }
       }
       
-      case 'disconnectSyncProvider': {
+      case 'disconnectSyncProvider':
+      case 'revokeSyncProvider': {
         const providerName = data.provider;
         const provider = CloudSyncProviders[providerName];
         if (!provider) return { success: false, error: 'Unknown provider' };
@@ -2299,7 +2510,12 @@ async function handleMessage(message, sender) {
             updates.onedriveRefreshToken = '';
             updates.onedriveConnected = false;
             updates.onedriveUser = null;
+          } else if (providerName === 'webdav') {
+            updates.webdavUrl = '';
+            updates.webdavUsername = '';
+            updates.webdavPassword = '';
           }
+          updates.syncEnabled = false;
           await SettingsManager.set(updates);
           return { success: true };
         } catch (e) {
@@ -2320,7 +2536,18 @@ async function handleMessage(message, sender) {
       }
       
       case 'syncNow': {
-        return await CloudSync.sync();
+        const result = await CloudSync.sync();
+        try {
+          await chrome.storage.local.set({
+            lastSyncResult: {
+              timestamp: Date.now(),
+              ok: !!(result?.success || result?.skipped),
+              skipped: !!result?.skipped,
+              error: result?.error || null
+            }
+          });
+        } catch (_e) { /* non-critical */ }
+        return result;
       }
 
       case 'cloudExport': {

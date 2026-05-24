@@ -45,6 +45,8 @@ async function loadFreshCloudSync(initialScripts, remoteData) {
   };
 
   const provider = {
+    name: 'Google Drive',
+    supportsDryRun: true,
     download: vi.fn(async () => structuredClone(remoteData)),
     upload: vi.fn(async () => {}),
   };
@@ -186,5 +188,131 @@ describe('source cloud sync module', () => {
         enabled: false,
       }),
     ]);
+  });
+
+  it('previews sync conflicts and direction without writing local or remote data', async () => {
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_conflict',
+          code: '// local edit',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Conflict Script' },
+          settings: {},
+          syncBaseCode: '// base',
+          createdAt: 1,
+          updatedAt: 20,
+        },
+        {
+          id: 'script_local_only',
+          code: '// local only',
+          enabled: true,
+          position: 1,
+          meta: { name: 'Local Only' },
+          settings: {},
+          createdAt: 1,
+          updatedAt: 5,
+        },
+        {
+          id: 'script_local_newer',
+          code: '// local newer',
+          enabled: true,
+          position: 2,
+          meta: { name: 'Local Newer' },
+          settings: {},
+          syncBaseCode: '// local newer',
+          createdAt: 1,
+          updatedAt: 30,
+        },
+        {
+          id: 'script_remote_newer',
+          code: '// local older',
+          enabled: true,
+          position: 3,
+          meta: { name: 'Remote Newer' },
+          settings: {},
+          syncBaseCode: '// local older',
+          createdAt: 1,
+          updatedAt: 10,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 40,
+        scripts: [
+          {
+            id: 'script_conflict',
+            code: '// remote edit',
+            enabled: true,
+            position: 0,
+            settings: {},
+            updatedAt: 25,
+          },
+          {
+            id: 'script_remote_only',
+            code: '// remote only',
+            enabled: true,
+            position: 1,
+            settings: {},
+            updatedAt: 15,
+          },
+          {
+            id: 'script_local_newer',
+            code: '// remote older',
+            enabled: true,
+            position: 2,
+            settings: {},
+            updatedAt: 10,
+          },
+          {
+            id: 'script_remote_newer',
+            code: '// remote newer',
+            enabled: true,
+            position: 3,
+            settings: {},
+            updatedAt: 35,
+          },
+        ],
+        tombstones: {},
+      },
+    );
+    const { CloudSync, ScriptStorage, SettingsManager, provider } = harness;
+
+    const preview = await CloudSync.preview('googledrive');
+
+    expect(preview).toEqual(
+      expect.objectContaining({
+        success: true,
+        dryRun: true,
+        noWrites: true,
+        provider: 'googledrive',
+        providerLabel: 'Google Drive',
+        remoteFound: true,
+        summary: expect.objectContaining({
+          localScripts: 4,
+          remoteScripts: 4,
+          localOnly: 1,
+          remoteOnly: 1,
+          localNewer: 1,
+          remoteNewer: 1,
+          conflicts: 1,
+          wouldUpload: true,
+          wouldDownload: true,
+        }),
+      }),
+    );
+    expect(preview.conflicts).toEqual([
+      expect.objectContaining({
+        id: 'script_conflict',
+        name: 'Conflict Script',
+        reason: 'Both local and remote changed since the last sync base',
+      }),
+    ]);
+    expect(provider.download).toHaveBeenCalledTimes(1);
+    expect(provider.upload).not.toHaveBeenCalled();
+    expect(ScriptStorage.set).not.toHaveBeenCalled();
+    expect(ScriptStorage.delete).not.toHaveBeenCalled();
+    expect(SettingsManager.set).not.toHaveBeenCalled();
   });
 });

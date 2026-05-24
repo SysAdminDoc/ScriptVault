@@ -130,11 +130,82 @@ describe('source sync providers module', () => {
     );
   });
 
+  it('exposes WebDAV health, storage disclosure, and local credential clearing', async () => {
+    const { CloudSyncProviders, settingsState, SettingsManager } = await loadFreshSyncProviders();
+    Object.assign(settingsState, {
+      webdavUrl: 'https://dav.example.com/backups',
+      webdavUsername: 'alice',
+      webdavPassword: 'secret',
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 207 }));
+    globalThis.fetch = fetchMock;
+
+    const status = await CloudSyncProviders.webdav.getStatus(settingsState);
+    const disclosure = CloudSyncProviders.webdav.getStorageDisclosure(settingsState);
+    const result = await CloudSyncProviders.webdav.disconnect();
+
+    expect(status).toEqual({
+      connected: true,
+      status: 'ok',
+      error: null,
+      user: { email: '', name: 'alice' },
+      endpointHost: 'dav.example.com',
+    });
+    expect(disclosure.storage).toBe('chrome.storage.local');
+    expect(disclosure.hasStoredSecrets).toBe(true);
+    expect(disclosure.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'webdavPassword', present: true, type: 'credential' }),
+      ]),
+    );
+    expect(result).toEqual({ success: true });
+    expect(SettingsManager.set).toHaveBeenCalledWith({
+      webdavUrl: '',
+      webdavUsername: '',
+      webdavPassword: '',
+    });
+  });
+
   it('exports Google Drive under both legacy and current provider keys', async () => {
     const { CloudSyncProviders } = await loadFreshSyncProviders();
 
     expect(CloudSyncProviders.google).toBe(CloudSyncProviders.googledrive);
     expect(CloudSyncProviders.google.name).toBe('Google Drive');
+  });
+
+  it('discloses OAuth token storage fields without exposing token values', async () => {
+    const { CloudSyncProviders, settingsState } = await loadFreshSyncProviders();
+    Object.assign(settingsState, {
+      googleDriveToken: 'super-secret-google-token',
+      googleDriveRefreshToken: 'super-secret-google-refresh',
+      dropboxToken: 'super-secret-dropbox-token',
+      onedriveRefreshToken: 'super-secret-onedrive-refresh',
+    });
+
+    const google = CloudSyncProviders.googledrive.getStorageDisclosure(settingsState);
+    const dropbox = CloudSyncProviders.dropbox.getStorageDisclosure(settingsState);
+    const onedrive = CloudSyncProviders.onedrive.getStorageDisclosure(settingsState);
+    const serialized = JSON.stringify({ google, dropbox, onedrive });
+
+    expect(google.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'googleDriveToken', type: 'token', present: true }),
+        expect.objectContaining({ key: 'googleDriveRefreshToken', type: 'token', present: true }),
+      ]),
+    );
+    expect(dropbox.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'dropboxToken', type: 'token', present: true }),
+      ]),
+    );
+    expect(onedrive.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'onedriveRefreshToken', type: 'token', present: true }),
+      ]),
+    );
+    expect(serialized).not.toContain('super-secret-google-token');
+    expect(serialized).not.toContain('super-secret-dropbox-token');
+    expect(serialized).not.toContain('super-secret-onedrive-refresh');
   });
 
   it('rejects Google Drive OAuth callbacks with a mismatched state parameter', async () => {
