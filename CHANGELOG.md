@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — TypeScript authoritative-source design
+
+- Added `docs/ts-authoritative-source-design.md`, choosing a staged
+  promotion path where individual runtime JS modules are replaced by
+  TS-derived runtime artifacts without changing the single-file service
+  worker contract.
+- Inventoried the current JS/TS split, documented known drift examples, and
+  selected `modules/error-log.js` as the first pilot because it is isolated,
+  already tested, and has concrete debounce/flush drift to reconcile.
+- Proposed a promotion map plus drift gate that blocks future JS-only edits
+  after a module is marked as TS-authoritative.
+
 ### 2026-05-24 — Per-script trust receipt diffs
 
 - `createScriptTrustReceipt` now records `@require` body hashes, byte counts,
