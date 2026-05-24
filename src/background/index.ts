@@ -38,6 +38,7 @@ export {
   isInternalHost,
 } from './internal-host-guard';
 export type { InternalHostCheckResult, InternalHostReason } from './internal-host-guard';
+export { createScriptTrustReceipt, sha256Hex } from './trust-receipt';
 
 export { CloudSync } from './cloud-sync';
 

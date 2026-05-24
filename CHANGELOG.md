@@ -4,6 +4,24 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Install/update trust receipts and rollback points
+
+- Added `src/background/trust-receipt.ts` and runtime receipt helpers that
+  record the latest install/update receipt on each script.
+- Trust receipts now include install/update source, SHA-256 hashes, grants,
+  host scope, `@require`/`@resource` dependency counts, line diff summary, and
+  a concrete `rollbackScript` restore target when a previous version exists.
+- Install-page saves pass the reviewed source URL and operation (`install`,
+  `update`, `reinstall`, or `downgrade`) into `saveScript`; direct
+  `installFromUrl`/`installFromCode` and auto/manual `applyUpdate` paths record
+  receipts too.
+- Update checks now carry `sourceUrl` through dashboard/popup apply-update
+  calls so receipts identify the fetched update channel.
+- Dashboard script info now shows the latest trust receipt summary beside the
+  existing provenance and version-history rollback controls.
+- Added `tests/trust-receipt.test.js` covering receipt hashes/source/scope/
+  dependencies/diff fields and the update rollback-point receipt contract.
+
 ### 2026-05-24 — Shared internal-host / SSRF / redirect fetch policy
 
 - Added `src/background/internal-host-guard.ts` and the runtime mirror

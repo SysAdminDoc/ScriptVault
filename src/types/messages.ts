@@ -11,7 +11,7 @@
  *   // res is typed as { scripts: Script[] }
  */
 
-import type { Script, ScriptStats, VersionHistoryEntry } from './script';
+import type { Script, ScriptStats, ScriptTrustReceipt, VersionHistoryEntry } from './script';
 import type { Settings } from './settings';
 
 // ─── Script Management ───────────────────────────────────────────────
@@ -35,6 +35,11 @@ interface SaveScript {
   code: string;
   enabled?: boolean;
   markModified?: boolean;
+  trust?: {
+    operation?: ScriptTrustReceipt['operation'];
+    sourceUrl?: string;
+    recordReceipt?: boolean;
+  };
 }
 interface SaveScriptResponse {
   success: true;
@@ -246,6 +251,7 @@ interface ApplyUpdate {
   action: 'applyUpdate';
   scriptId: string;
   code: string;
+  sourceUrl?: string;
 }
 
 interface GetVersionHistory {

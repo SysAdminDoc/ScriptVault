@@ -11548,6 +11548,122 @@ function parseUserscript(code) {
 // Update System
 // ============================================================================
 
+function _receiptArray(value) {
+  if (Array.isArray(value)) return value.filter(item => typeof item === 'string' && item.length > 0);
+  return typeof value === 'string' && value.length > 0 ? [value] : [];
+}
+
+function _receiptHost(url) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return '';
+  }
+}
+
+function _receiptLineCount(code) {
+  if (!code) return 0;
+  return code.split(/\r\n|\r|\n/).length;
+}
+
+function _receiptLineDiff(previousCode, nextCode) {
+  const previousLines = previousCode ? previousCode.split(/\r\n|\r|\n/) : [];
+  const nextLines = nextCode ? nextCode.split(/\r\n|\r|\n/) : [];
+  const previousCounts = new Map();
+  for (const line of previousLines) {
+    previousCounts.set(line, (previousCounts.get(line) || 0) + 1);
+  }
+  let unchangedLines = 0;
+  for (const line of nextLines) {
+    const count = previousCounts.get(line) || 0;
+    if (count > 0) {
+      unchangedLines++;
+      if (count === 1) previousCounts.delete(line);
+      else previousCounts.set(line, count - 1);
+    }
+  }
+  return {
+    previousLines: previousLines.length,
+    nextLines: nextLines.length,
+    addedLines: Math.max(0, nextLines.length - unchangedLines),
+    removedLines: Math.max(0, previousLines.length - unchangedLines)
+  };
+}
+
+async function _sha256Hex(text) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text || ''));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '', previousScript = null, rollbackIndex = -1 }) {
+  const installUrl = sourceUrl || meta.source || meta.downloadURL || meta.updateURL || '';
+  const previousCode = previousScript?.code || '';
+  const nextHash = await _sha256Hex(code);
+  const previousHash = previousScript ? await _sha256Hex(previousCode) : '';
+  const requireUrls = _receiptArray(meta.require);
+  const resources = meta.resource && typeof meta.resource === 'object'
+    ? Object.entries(meta.resource)
+        .filter(([, url]) => typeof url === 'string' && url.length > 0)
+        .map(([name, url]) => ({ name, url }))
+    : [];
+
+  return {
+    schemaVersion: 1,
+    operation,
+    createdAt: Date.now(),
+    source: {
+      installUrl,
+      installHost: installUrl ? _receiptHost(installUrl) : '',
+      updateUrl: meta.updateURL || '',
+      downloadUrl: meta.downloadURL || '',
+      homepageUrl: meta.homepage || meta.homepageURL || meta.website || ''
+    },
+    hashes: {
+      sha256: nextHash,
+      previousSha256: previousScript ? previousHash : undefined
+    },
+    grants: _receiptArray(meta.grant),
+    hostScope: {
+      match: _receiptArray(meta.match),
+      include: _receiptArray(meta.include),
+      exclude: _receiptArray(meta.exclude),
+      excludeMatch: _receiptArray(meta.excludeMatch),
+      connect: _receiptArray(meta.connect)
+    },
+    dependencies: {
+      require: requireUrls.map(url => ({ url })),
+      resource: resources,
+      requireCount: requireUrls.length,
+      resourceCount: resources.length
+    },
+    diff: {
+      previousVersion: previousScript?.meta?.version || '',
+      nextVersion: meta.version || '',
+      previousHash,
+      nextHash,
+      ..._receiptLineDiff(previousCode, code)
+    },
+    rollback: previousScript
+      ? {
+          available: true,
+          action: 'rollbackScript',
+          scriptId: previousScript.id,
+          version: previousScript.meta?.version || '',
+          updatedAt: previousScript.updatedAt || null,
+          historyIndex: Number.isInteger(rollbackIndex) && rollbackIndex >= 0 ? rollbackIndex : null
+        }
+      : {
+          available: false,
+          action: 'rollbackScript',
+          scriptId: '',
+          version: '',
+          updatedAt: null,
+          historyIndex: null
+        },
+    lineCount: _receiptLineCount(code)
+  };
+}
+
 const UpdateSystem = {
   // Phase 6.1 — exponential backoff bookkeeping. Per-script failure count
   // doubles the wait between retries (1m, 2m, 4m, …) up to a 24h cap so a
@@ -11682,7 +11798,8 @@ const UpdateSystem = {
             name: script.meta.name,
             currentVersion: script.meta.version,
             newVersion: parsed.meta.version,
-            code: newCode
+            code: newCode,
+            sourceUrl: updateUrl
           });
         }
       } catch (e) {
@@ -11719,7 +11836,7 @@ const UpdateSystem = {
     return 0;
   },
   
-  async applyUpdate(scriptId, newCode, { force = false } = {}) {
+  async applyUpdate(scriptId, newCode, { force = false, sourceUrl = '' } = {}) {
     const script = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
     // Don't auto-update scripts the user has locally edited (unless force=true from forceUpdate)
@@ -11727,22 +11844,45 @@ const UpdateSystem = {
 
     const parsed = parseUserscript(newCode);
     if (parsed.error) return parsed;
+    const previousScript = {
+      ...script,
+      meta: { ...script.meta },
+      code: script.code,
+      updatedAt: script.updatedAt || Date.now()
+    };
 
     // Store previous version for rollback (keep last 3)
     if (!script.versionHistory) script.versionHistory = [];
-    script.versionHistory.push({
+    const historyEntry = {
       version: script.meta.version,
       code: script.code,
       updatedAt: script.updatedAt || Date.now()
-    });
+    };
+    script.versionHistory.push(historyEntry);
     // Trim to last 5 versions
     if (script.versionHistory.length > 5) {
       script.versionHistory = script.versionHistory.slice(-5);
     }
+    const rollbackIndex = script.versionHistory.indexOf(historyEntry);
+    const trustReceipt = await createScriptTrustReceipt({
+      operation: force ? 'manual-update' : 'auto-update',
+      code: newCode,
+      meta: parsed.meta,
+      sourceUrl: sourceUrl || script.meta.downloadURL || script.meta.updateURL,
+      previousScript,
+      rollbackIndex
+    });
+    historyEntry.trustReceipt = previousScript.trustReceipt || await createScriptTrustReceipt({
+      operation: 'rollback-point',
+      code: previousScript.code,
+      meta: previousScript.meta,
+      sourceUrl: previousScript.trustReceipt?.source?.installUrl || previousScript.meta.downloadURL || previousScript.meta.updateURL
+    });
 
     script.code = newCode;
     script.meta = parsed.meta;
     script.updatedAt = Date.now();
+    script.trustReceipt = trustReceipt;
 
     // Re-register FIRST so we can verify the new code works before persisting
     try {
@@ -11781,7 +11921,7 @@ const UpdateSystem = {
 
     const updates = await this.checkForUpdates();
     // Apply all pending updates in parallel — each applyUpdate is independent
-    const results = await Promise.allSettled(updates.map(update => this.applyUpdate(update.id, update.code)));
+    const results = await Promise.allSettled(updates.map(update => this.applyUpdate(update.id, update.code, { sourceUrl: update.sourceUrl })));
     const failed = results.filter(r => r.status === 'rejected');
     if (failed.length > 0) {
       console.error('[ScriptVault] Auto-update failures:', failed.map(r => r.reason?.message || r.reason));
@@ -12757,6 +12897,49 @@ async function handleMessage(message, sender) {
         delete scriptSettings.mergeConflict;
         // Mark as locally modified when saved from editor — prevents sync from overwriting
         if (data.markModified) scriptSettings.userModified = true;
+        const receiptOptions = data.trust && typeof data.trust === 'object' ? data.trust : null;
+        const shouldRecordReceipt = !!receiptOptions?.recordReceipt || !!receiptOptions?.operation || !!receiptOptions?.sourceUrl;
+        const previousScript = existing && existing.code !== data.code
+          ? {
+              ...existing,
+              meta: { ...existing.meta },
+              code: existing.code,
+              updatedAt: existing.updatedAt || Date.now()
+            }
+          : null;
+        const versionHistory = Array.isArray(existing?.versionHistory) ? [...existing.versionHistory] : [];
+        let historyEntry = null;
+        let rollbackIndex = -1;
+        if (shouldRecordReceipt && previousScript) {
+          historyEntry = {
+            version: existing.meta.version,
+            code: existing.code,
+            updatedAt: existing.updatedAt || Date.now()
+          };
+          versionHistory.push(historyEntry);
+          if (versionHistory.length > 5) {
+            versionHistory.splice(0, versionHistory.length - 5);
+          }
+          rollbackIndex = versionHistory.indexOf(historyEntry);
+        }
+        const trustReceipt = shouldRecordReceipt
+          ? await createScriptTrustReceipt({
+              operation: receiptOptions?.operation || (existing ? 'update' : 'install'),
+              code: data.code,
+              meta: parsed.meta,
+              sourceUrl: receiptOptions?.sourceUrl || '',
+              previousScript,
+              rollbackIndex
+            })
+          : existing?.trustReceipt;
+        if (historyEntry && previousScript) {
+          historyEntry.trustReceipt = previousScript.trustReceipt || await createScriptTrustReceipt({
+            operation: 'rollback-point',
+            code: previousScript.code,
+            meta: previousScript.meta,
+            sourceUrl: previousScript.trustReceipt?.source?.installUrl || previousScript.meta.downloadURL || previousScript.meta.updateURL
+          });
+        }
 
         const script = {
           ...existing,
@@ -12767,8 +12950,10 @@ async function handleMessage(message, sender) {
           settings: scriptSettings,
           position: existing?.position ?? (await ScriptStorage.getAll()).length,
           createdAt: existing?.createdAt || Date.now(),
-          updatedAt: Date.now()
+          updatedAt: Date.now(),
+          trustReceipt
         };
+        if (versionHistory.length > 0) script.versionHistory = versionHistory;
         
         await ScriptStorage.set(id, script);
         await updateBadge();
@@ -13203,14 +13388,14 @@ async function handleMessage(message, sender) {
           const parsed = parseUserscript(newCode);
           if (parsed.error) return parsed;
           // Apply as update (force=true bypasses userModified guard)
-          return await UpdateSystem.applyUpdate(scriptId, newCode, { force: true });
+          return await UpdateSystem.applyUpdate(scriptId, newCode, { force: true, sourceUrl: downloadUrl });
         } catch (e) {
           return { error: e.message };
         }
       }
 
       case 'applyUpdate':
-        return await UpdateSystem.applyUpdate(data.scriptId, data.code);
+        return await UpdateSystem.applyUpdate(data.scriptId, data.code, { sourceUrl: data.sourceUrl || '' });
 
       case 'getVersionHistory': {
         const script = await ScriptStorage.get(data.scriptId);
@@ -14019,7 +14204,10 @@ async function handleMessage(message, sender) {
         return await installFromUrl(data.url);
 
       case 'installFromCode':
-        return await installFromCode(data.code);
+        return await installFromCode(data.code, {
+          sourceUrl: data.sourceUrl || '',
+          operation: data.operation || 'install'
+        });
         
       // Resources
       case 'fetchResource':
@@ -16456,7 +16644,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 });
 
 // Handle direct script installation from raw source code (file picker, drag/drop)
-async function installFromCode(code) {
+async function installFromCode(code, receiptOptions = {}) {
   try {
     if (typeof code !== 'string' || !code) {
       throw new Error('No script content provided');
@@ -16479,16 +16667,58 @@ async function installFromCode(code) {
 
     const existing = allScripts.find(s => s.meta.name === meta.name && s.meta.namespace === meta.namespace);
     const id = existing ? existing.id : generateId();
+    const previousScript = existing && existing.code !== code
+      ? {
+          ...existing,
+          meta: { ...existing.meta },
+          code: existing.code,
+          updatedAt: existing.updatedAt || Date.now()
+        }
+      : null;
+    const versionHistory = Array.isArray(existing?.versionHistory) ? [...existing.versionHistory] : [];
+    let historyEntry = null;
+    let rollbackIndex = -1;
+    if (previousScript) {
+      historyEntry = {
+        version: existing.meta.version,
+        code: existing.code,
+        updatedAt: existing.updatedAt || Date.now()
+      };
+      versionHistory.push(historyEntry);
+      if (versionHistory.length > 5) {
+        versionHistory.splice(0, versionHistory.length - 5);
+      }
+      rollbackIndex = versionHistory.indexOf(historyEntry);
+    }
+    const trustReceipt = await createScriptTrustReceipt({
+      operation: receiptOptions.operation || (existing ? 'update' : 'install'),
+      code,
+      meta,
+      sourceUrl: receiptOptions.sourceUrl || '',
+      previousScript,
+      rollbackIndex
+    });
+    if (historyEntry && previousScript) {
+      historyEntry.trustReceipt = previousScript.trustReceipt || await createScriptTrustReceipt({
+        operation: 'rollback-point',
+        code: previousScript.code,
+        meta: previousScript.meta,
+        sourceUrl: previousScript.trustReceipt?.source?.installUrl || previousScript.meta.downloadURL || previousScript.meta.updateURL
+      });
+    }
 
     const script = {
+      ...existing,
       id,
       code,
       meta,
       enabled: existing ? existing.enabled : true,
       position: existing ? existing.position : allScripts.length,
       createdAt: existing ? existing.createdAt : Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      trustReceipt
     };
+    if (versionHistory.length > 0) script.versionHistory = versionHistory;
 
     await ScriptStorage.set(id, script);
     await registerAllScripts(true);
@@ -16535,7 +16765,7 @@ async function installFromUrl(url) {
       clearTimeout(timeoutId);
     }
 
-    return await installFromCode(code);
+    return await installFromCode(code, { sourceUrl: url, operation: 'install' });
   } catch (error) {
     return { success: false, error: error?.message || String(error) };
   }

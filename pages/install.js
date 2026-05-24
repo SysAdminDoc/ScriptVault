@@ -1565,7 +1565,18 @@ async function handleInstall() {
         code: codeToSave,
         id: scriptId,
         enabled: enableOnInstall,
-        autoUpdate: autoUpdate
+        autoUpdate: autoUpdate,
+        trust: {
+          recordReceipt: true,
+          sourceUrl: installSourceUrl,
+          operation: presentation.isDowngrade
+            ? 'downgrade'
+            : presentation.isReinstall
+              ? 'reinstall'
+              : existingScript
+                ? 'update'
+                : 'install'
+        }
       }
     });
 

@@ -107,6 +107,57 @@ export interface VersionHistoryEntry {
   version: string;
   code: string;
   updatedAt: number;
+  trustReceipt?: ScriptTrustReceipt;
+}
+
+export interface ScriptTrustReceipt {
+  schemaVersion: 1;
+  operation: 'install' | 'update' | 'manual-update' | 'auto-update' | 'reinstall' | 'downgrade' | 'local-save' | 'rollback-point';
+  createdAt: number;
+  source: {
+    installUrl: string;
+    installHost: string;
+    updateUrl: string;
+    downloadUrl: string;
+    homepageUrl: string;
+  };
+  hashes: {
+    sha256: string;
+    previousSha256?: string;
+  };
+  grants: string[];
+  hostScope: {
+    match: string[];
+    include: string[];
+    exclude: string[];
+    excludeMatch: string[];
+    connect: string[];
+  };
+  dependencies: {
+    require: Array<{ url: string }>;
+    resource: Array<{ name: string; url: string }>;
+    requireCount: number;
+    resourceCount: number;
+  };
+  diff: {
+    previousVersion: string;
+    nextVersion: string;
+    previousHash: string;
+    nextHash: string;
+    previousLines: number;
+    nextLines: number;
+    addedLines: number;
+    removedLines: number;
+  };
+  rollback: {
+    available: boolean;
+    action: 'rollbackScript';
+    scriptId: string;
+    version: string;
+    updatedAt: number | null;
+    historyIndex: number | null;
+  };
+  lineCount: number;
 }
 
 /** The full script object stored in ScriptStorage */
@@ -119,6 +170,7 @@ export interface Script {
   settings?: ScriptSettings;
   stats?: ScriptStats;
   versionHistory?: VersionHistoryEntry[];
+  trustReceipt?: ScriptTrustReceipt;
 
   createdAt: number;
   updatedAt: number;
