@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — NetworkLog TypeScript promotion
+
+- Promoted `bg/netlog.js` to a generated runtime artifact from
+  `src/bg/netlog.ts`, starting the background-helper tranche of the
+  TypeScript authoritative-source migration.
+- Added `NetworkLog` to the TS runtime generator and promotion map so runtime
+  network-log edits are now gated by `npm run ts-runtime:check` and
+  `npm run ts-source:check`.
+- Rebuilt `background.js` from the generated artifact and verified the
+  existing runtime/source network-log behavior around newest-first reads,
+  filters, stats, max-entry trimming, and targeted clears.
+
 ### 2026-05-24 — Migration TypeScript promotion
 
 - Promoted `modules/migration.js` to a generated runtime artifact from

@@ -81,6 +81,12 @@ export const TS_RUNTIME_MODULES = [
     output: 'modules/migration.js',
     exportName: 'Migration',
   },
+  {
+    id: 'netlog',
+    source: 'src/bg/netlog.ts',
+    output: 'bg/netlog.js',
+    exportName: 'NetworkLog',
+  },
 ];
 
 function normalizeNewlines(text) {

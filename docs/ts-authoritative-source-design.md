@@ -26,6 +26,8 @@ implementation while preserving the script-mode globals expected by
 `background.core.js`. The sync/import tranche has also started with
 `modules/migration.js`, generated from `src/modules/migration.ts` after
 aligning the migration version stamp with the current v2.3.0 runtime marker.
+The first background helper promotion has also shipped: `bg/netlog.js` now
+comes from `src/bg/netlog.ts`.
 
 ## 1. Problem statement
 
@@ -201,7 +203,8 @@ Pilot exit criteria:
    `public-api`, `migration`, and then `sync-providers` after the TS source
    owns the full runtime implementation. Started 2026-05-24 with
    `modules/migration.js`.
-7. **Background helpers.** Promote `bg/*.js`.
+7. **Background helpers.** Promote `bg/*.js`. Started 2026-05-24 with
+   `bg/netlog.js`.
 8. **Main worker leaves.** Promote parser, matcher, registration,
    wrapper-builder, update/install/import, cloud sync, DNR, badge, tab
    reload, and context menu modules.
@@ -286,4 +289,9 @@ pilot should avoid that broader build-system change.
    followed by the sync/import tranche starting with `modules/migration.js`.
 8. Continue the sync/import tranche with `backup-scheduler`,
    `sync-easycloud`, or `public-api`, leaving `sync-providers` until the TS
-   source owns the full runtime implementation.
+   source owns the full runtime implementation. Where sync/import modules
+   still import storage directly, first teach the generator to externalize
+   promoted runtime globals instead of bundling duplicate storage code.
+9. Continue the background-helper tranche after `bg/netlog.js` with the
+   smallest self-contained helper before touching helpers that import storage
+   or Web Crypto-heavy paths.
