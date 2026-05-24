@@ -44,7 +44,8 @@
     {
       "runtime": "modules/resources.js",
       "sources": ["src/modules/resources.ts", "src/background/resource-loader.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from src/modules/resources.ts by scripts/generate-ts-runtime-modules.mjs; src/background/resource-loader.ts remains a separate TS mirror for @require fetching."
     },
     {
       "runtime": "modules/npm-resolve.js",

@@ -54,6 +54,12 @@ export const TS_RUNTIME_MODULES = [
     output: 'modules/internal-host-guard.js',
     exportName: 'InternalHostGuard',
   },
+  {
+    id: 'resources',
+    source: 'src/modules/resources.ts',
+    output: 'modules/resources.js',
+    exportName: 'ResourceCache',
+  },
 ];
 
 function normalizeNewlines(text) {

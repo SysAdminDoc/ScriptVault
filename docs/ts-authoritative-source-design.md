@@ -17,9 +17,9 @@ source, with runtime tests covering the stronger TS cleanup semantics.
 `modules/userstyles.js` is now generated from `src/modules/userstyles.ts`,
 completing the current low-dependency tranche and carrying over the TS
 implementation's prior-CSS removal tracking plus scoped `@match` conversion.
-The storage/resource-layer tranche has started with `modules/xhr.js` and
-`modules/internal-host-guard.js`, whose generated runtimes now come from
-TypeScript sources.
+The storage/resource-layer tranche has started with `modules/xhr.js`,
+`modules/internal-host-guard.js`, and `modules/resources.js`, whose generated
+runtimes now come from TypeScript sources.
 
 ## 1. Problem statement
 
@@ -188,8 +188,8 @@ Pilot exit criteria:
    `modules/quota-manager.js`. Shipped 2026-05-24.
 5. **Storage/resource layer.** Promote `modules/storage.js`,
    `modules/xhr.js`, `modules/resources.js`, and the internal-host guard.
-   Started 2026-05-24 with `modules/xhr.js` and
-   `modules/internal-host-guard.js`.
+   Started 2026-05-24 with `modules/xhr.js`,
+   `modules/internal-host-guard.js`, and `modules/resources.js`.
 6. **Sync/import modules.** Promote `sync-easycloud`, `backup-scheduler`,
    `public-api`, `migration`, and then `sync-providers` after the TS source
    owns the full runtime implementation.
@@ -271,5 +271,7 @@ pilot should avoid that broader build-system change.
    2026-05-24.
 6. Start the storage/resource-layer tranche with `modules/xhr.js` or
    `modules/internal-host-guard.js`. Started 2026-05-24 with
-   `modules/xhr.js` and `modules/internal-host-guard.js`.
-7. Promote the next storage/resource-layer module.
+   `modules/xhr.js`, `modules/internal-host-guard.js`, and
+   `modules/resources.js`.
+7. Promote `modules/storage.js` or move to the sync/import tranche if storage
+   needs a separate design pass.
