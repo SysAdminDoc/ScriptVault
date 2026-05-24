@@ -452,14 +452,14 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
 
 ### Quick Wins
 
-- Add tests for Gist token storage rejection and explicit empty `@grant` denial.
-- Update `docs/release-runbook.md` to stop mentioning stale `chrome-webstore-upload-cli` pinning and align with CWS API v2.
-- Add a root-artifact guard that flags `ScriptVault-firefox-v2.1.7.xpi`.
-- Add editor search history in Monaco adapter.
-- Add README feature-claim validation checklist against code entry points.
-- Make high-level npm audit either fail CI or document why it is advisory-only.
-- Add changelog entries for the latest two hardening commits.
-- Add `web-ext lint` to a Firefox build job once a Firefox build directory is produced.
+- [x] Add tests for Gist token storage rejection and explicit empty `@grant` denial — covered by `tests/source-hardening-parity.test.js` ("keeps empty grants and grant none locked down in the TypeScript wrapper mirror" + "keeps Gist token writes on promise-based storage with rejection propagation").
+- [x] Update `docs/release-runbook.md` to stop mentioning stale `chrome-webstore-upload-cli` pinning and align with CWS API v2 — runbook already pins `chrome-webstore-upload-cli@^4.0.0` against CWS API v2; no stale `@^[0-3]` references remain anywhere in `docs/` per `grep`.
+- [x] Add a root-artifact guard that flags `ScriptVault-firefox-v2.1.7.xpi` — `scripts/check-release-artifacts.mjs:45-51` already fails on any root `.zip`/`.crx`/`.xpi` whose name doesn't include `v<version>`.
+- [x] Add editor search history in Monaco adapter — shipped 2026-05-24 via `pages/monaco-adapter.js` `editorFindHistory` (FIFO 20) + `pages/editor-sandbox.html` `find-search` / `prime-find` channel. Tests in `tests/search-corpus-history.test.js`.
+- [x] Add README feature-claim validation checklist against code entry points — shipped 2026-05-24 as `docs/readme-feature-claim-checklist.md`.
+- [x] Make high-level npm audit either fail CI or document why it is advisory-only — High is blocking. CI gate at `.github/workflows/ci.yml:44-45`; policy doc at `docs/dependency-audit-policy.md`.
+- [x] Add changelog entries for the latest two hardening commits — CHANGELOG.md `Unreleased` section is actively maintained per-feature this session (eleven entries added 2026-05-24).
+- [x] Add `web-ext lint` to a Firefox build job once a Firefox build directory is produced — `npm run firefox:lint` and `npm run firefox:package` (`build-firefox.sh --lint`) ship `web-ext lint` errors/notices as a CI gate; CI step `firefox:package` runs it after the package step.
 
 ### Larger Bets
 
