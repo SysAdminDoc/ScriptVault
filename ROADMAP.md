@@ -230,7 +230,7 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
 - Primary boundary issue: production runtime source and TS mirror are separate. Short-term parity tests are mandatory; long-term source convergence should be planned before more large feature batches.
 - Build/release gap: `esbuild.config.mjs` is cross-platform, publishing scripts remain bash-oriented, and the CWS API v2 path is now covered by `npm run cws:check`; Windows-native publishing remains a future ergonomics item.
 - Cross-browser gap: manual `manifest.json` and `manifest-firefox.json` drift risk argues for generated per-target manifests after the immediate Firefox validation gate.
-- Test gaps: no current focused tests for recent Gist storage rejection fix, empty-grant deny behavior, all CSV exports, package diff, rollback rehearsal, AMO lint/signing, or Chrome 138 setup copy.
+- Test gaps: no current focused tests for recent Gist storage rejection fix, empty-grant deny behavior, package diff, rollback rehearsal, AMO lint/signing, or Chrome 138 setup copy.
 - Docs gaps: Firefox port, browser support matrix, and future store-channel copy still need owner-facing checklist work, but manifest permission/privacy/store-copy drift is now blocked by `npm run store-copy:check`.
 - Release automation gap: CI uploads a Chrome ZIP artifact but does not publish signed GitHub Releases for v3.11.0+ or verify source ZIP parity for AMO.
 
@@ -326,12 +326,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
   - Verify: manual install/update/rollback flow with a local test script server.
   - Status: Shipped 2026-05-24. Added a durable `trustReceipt` field on scripts plus optional rollback-point receipts on `versionHistory` entries. Receipts record operation, install/update source host and URLs, SHA-256 hashes, grants, match/include/connect host scope, dependency counts and URLs, line diff summary, and a `rollbackScript` action target when a previous version exists. Runtime install, install-page save, direct install, dashboard/popup manual updates, forced updates, and auto-updates now pass source context into receipt creation; the dashboard info panel surfaces the latest receipt next to provenance and the existing rollback/diff controls. Focused coverage in `tests/trust-receipt.test.js` pins the receipt fields and update rollback-point contract.
 
-- [ ] P1 - Inventory and test all CSV export formula-injection surfaces
+- [x] P1 - Inventory and test all CSV export formula-injection surfaces
   - Why: One runtime fix is not enough if other CSV exporters still emit executable cells.
   - Evidence: L18, H055.
   - Touches: `pages/dashboard*.js`, `modules/error-log.js`, netlog/export modules, tests for export functions.
   - Acceptance: Every CSV export defangs cells beginning with formula-control characters and has regression tests.
   - Verify: focused CSV export tests.
+  - Status: Shipped 2026-05-24. Inventory found three current CSV emitters: dashboard stats export (`pages/dashboard.js`), CSP report export (`pages/dashboard-csp.js`), and the error log export (`modules/error-log.js` / `src/modules/error-log.ts`). No current netlog CSV exporter exists. Dashboard stats CSV now uses a pure `buildStatsCSV` / `formatStatsCSVCell` path and focused coverage in `tests/csv-export-formula.test.js` verifies every formula-control prefix plus script metadata, runtime URL, tag, and match fields. CSP report CSV now has focused regression coverage for formula-control script names; the existing error-log tests continue to cover the error-log exporter.
 
 - [ ] P1 - Complete APCA/focus/live-region accessibility pass across major UI surfaces
   - Why: Existing WCAG3 doc lists gaps, and trust flows depend on readable, accessible states.

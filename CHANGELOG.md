@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — CSV export formula-injection coverage
+
+- Inventory confirmed the current CSV emitters are dashboard stats, CSP
+  reports, and error-log exports; there is no current netlog CSV exporter.
+- Refactored dashboard stats CSV generation through a small pure builder so the
+  production formatter is directly covered by tests.
+- Added `tests/csv-export-formula.test.js` covering dashboard stats and CSP
+  report formula-control defanging across leading `=`, `+`, `-`, `@`, tab, and
+  carriage-return payloads. Existing error-log tests continue covering the
+  error-log CSV exporter.
+
 ### 2026-05-24 — Install/update trust receipts and rollback points
 
 - Added `src/background/trust-receipt.ts` and runtime receipt helpers that
