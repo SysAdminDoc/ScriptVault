@@ -75,6 +75,12 @@ export const TS_RUNTIME_MODULES = [
       'setScriptChangeListener',
     ],
   },
+  {
+    id: 'migration',
+    source: 'src/modules/migration.ts',
+    output: 'modules/migration.js',
+    exportName: 'Migration',
+  },
 ];
 
 function normalizeNewlines(text) {

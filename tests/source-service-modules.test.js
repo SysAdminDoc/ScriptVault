@@ -235,6 +235,6 @@ describe('source migration module', () => {
     });
     expect(stored.notificationPrefs.quietStart).toBeUndefined();
     expect(stored.notificationPrefs.quietEnd).toBeUndefined();
-    expect(stored.sv_lastMigratedVersion).toBe('2.1.8');
+    expect(stored.sv_lastMigratedVersion).toBe('2.3.0');
   });
 });

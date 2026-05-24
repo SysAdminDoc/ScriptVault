@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Migration TypeScript promotion
+
+- Promoted `modules/migration.js` to a generated runtime artifact from
+  `src/modules/migration.ts`, starting the sync/import tranche of the
+  TypeScript authoritative-source migration.
+- Extended the TS runtime generator and drift gate inventory for the
+  migration module, plus added generated-runtime coverage for shape,
+  quiet-hours migration, stamp idempotency, and legacy script normalization.
+- Kept `Migration.CURRENT_VERSION` aligned with the current `2.3.0` runtime
+  stamp so generated migration code does not downgrade existing installs'
+  `sv_lastMigratedVersion` marker.
+
 ### 2026-05-24 — Storage TypeScript promotion
 
 - Promoted `modules/storage.js` to a generated runtime artifact from
