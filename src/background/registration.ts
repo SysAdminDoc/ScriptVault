@@ -75,6 +75,19 @@ interface UserScriptRegistration {
   messaging?: boolean;
 }
 
+function getChromeMajorVersion(): number {
+  const match = globalThis.navigator?.userAgent?.match(/(?:Chrome|Chromium)\/(\d+)/);
+  return match ? Number.parseInt(match[1] ?? '0', 10) : 0;
+}
+
+function isFirefoxRuntime(): boolean {
+  return /Firefox\//.test(globalThis.navigator?.userAgent || '');
+}
+
+function supportsUserScriptsWorldId(): boolean {
+  return !isFirefoxRuntime() && getChromeMajorVersion() >= 133;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -385,17 +398,19 @@ export async function registerScript(script: Script): Promise<void> {
     };
 
     // Chrome 133+: configure and use a per-script worldId for isolation.
-    // Each script gets its own USER_SCRIPT world so globals don't bleed across scripts.
+    // Firefox MV3 rejects Chrome's worldId extension, so guard before sending it.
     let worldConfigured = false;
-    try {
-      await chrome.userScripts.configureWorld({
-        worldId: script.id,
-        csp: "script-src 'self' 'unsafe-inline' 'unsafe-eval' *",
-        messaging: true
-      });
-      worldConfigured = true;
-    } catch (_e: unknown) {
-      // Chrome <133 doesn't support worldId on configureWorld — fall through to default world
+    if (supportsUserScriptsWorldId()) {
+      try {
+        await chrome.userScripts.configureWorld({
+          worldId: script.id,
+          csp: "script-src 'self' 'unsafe-inline' 'unsafe-eval' *",
+          messaging: true
+        });
+        worldConfigured = true;
+      } catch (_e: unknown) {
+        // Chrome <133 doesn't support worldId on configureWorld — fall through to default world
+      }
     }
 
     if (worldConfigured) {
@@ -449,11 +464,13 @@ export async function unregisterScript(scriptId: string): Promise<void> {
     if (!chrome.userScripts) return;
     await chrome.userScripts.unregister({ ids: [scriptId] });
     // Chrome 133+: reset the per-script world configuration to free resources
-    try {
-      // Chrome 133+ API — shape may differ from chrome-types declarations
-      await (chrome.userScripts.resetWorldConfiguration as (arg: unknown) => Promise<void>)({ worldId: scriptId });
-    } catch (_e: unknown) {
-      // Chrome <133 doesn't support resetWorldConfiguration — ignore
+    if (supportsUserScriptsWorldId()) {
+      try {
+        // Chrome 133+ API — shape may differ from chrome-types declarations
+        await (chrome.userScripts.resetWorldConfiguration as (arg: unknown) => Promise<void>)({ worldId: scriptId });
+      } catch (_e: unknown) {
+        // Chrome <133 doesn't support resetWorldConfiguration — ignore
+      }
     }
   } catch (_e: unknown) {
     // Script might not be registered

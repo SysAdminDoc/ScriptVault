@@ -3,7 +3,9 @@
 *.crx
 *.xpi
 build/
+build-firefox/
 dist/
+firefox-artifacts/
 release-artifacts/
 background.js
 lib/monaco/

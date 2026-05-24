@@ -3,8 +3,8 @@
 > From v2.0.1 (bash-concatenated JS prototype) to production-grade TypeScript extension.
 > Each phase is independently shippable. Later phases depend on earlier ones.
 >
-> **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, and `main` now has additional unreleased 2026-05-24 hardening/release commits including release artifact reconciliation and CWS runbook/audit-gate alignment. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
-> **2026-05-24 state:** 817 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; no GitHub issues or PRs are currently open.
+> **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, and `main` now has additional unreleased 2026-05-24 hardening/release commits including release artifact reconciliation, CWS runbook/audit-gate alignment, Chrome userScripts diagnostics, and Firefox AMO validation packaging. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
+> **2026-05-24 state:** 821 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; Firefox AMO package/source ZIP generation now passes `web-ext lint` with 0 errors and 0 notices; no GitHub issues or PRs are currently open.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
 ---
@@ -22,7 +22,7 @@ Local source and repo artifacts:
 - Repo tree: `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`, `esbuild.config.mjs`, `background.core.js`, `content.js`, `shared/`, `modules/`, `bg/`, `src/`, `pages/`, `scripts/`, `tests/`, `docs/`, `.github/workflows/ci.yml`, `.factory/state.yaml`, `.factory/large-repo-state.yaml`.
 - Top-level docs: `README.md`, `CHANGELOG.md`, `ROADMAP.md`, `FIREFOX-PORT.md`, `PRIVACY.md`, `AGENTS.md`, `CLAUDE.md`, `RESEARCH_FEATURE_PLAN.md`.
 - Design/research docs: `docs/cross-browser-pipeline.md`, `docs/release-runbook.md`, `docs/require-provenance-design.md`, `docs/wcag3-gap-analysis.md`, `docs/extension-interop.md`, `docs/mcp-2026-compliance.md`, `docs/research/iter-1-l1-claude-led.md`, `docs/research/iter-1-l3-claude-smoke.md`.
-- Tests: 52 test files under `tests/`, including source parity tests, security tests, accessibility tests, import/export tests, storage tests, and wrapper tests.
+- Tests: 53 test files under `tests/`, including source parity tests, security tests, accessibility tests, import/export tests, storage tests, packaging tests, and wrapper tests.
 - Git history: `git log -200 --oneline --decorate` reviewed through `f4c748c` back to initial public packaging work.
 - Release artifacts: `gh release list --limit 20` now shows `v3.11.0` as the latest GitHub Release with `ScriptVault-v3.11.0.zip`; the stale root `ScriptVault-firefox-v2.1.7.xpi` was removed locally.
 - Issue tracker: `gh issue list --state all --limit 100` and `gh pr list --state all --limit 100` returned no project issues or PRs.
@@ -31,7 +31,7 @@ Local source and repo artifacts:
 Verified constraints:
 
 - Runtime target: Manifest V3, Chrome minimum 130, `chrome.userScripts`, `sidePanel`, `offscreen`, `declarativeNetRequest`, `declarativeNetRequestWithHostAccess`, `<all_urls>`.
-- Firefox target: separate `manifest-firefox.json` at version 3.11.0, strict min 128, but `FIREFOX-PORT.md` still has Phase 1 unchecked.
+- Firefox target: separate `manifest-firefox.json` at version 3.11.0, Firefox 140+ desktop / Android 142+ validation target, with AMO package/source ZIP generation in place; manual Firefox sideload smoke remains open in `FIREFOX-PORT.md`.
 - Build: `npm run build` runs `node esbuild.config.mjs`; background output is concatenated JS, not emitted from `src/background/index.ts`.
 - Tests: `npm run check` is `tsc --noEmit && vitest run`; CI additionally runs Chrome dashboard smoke and builds a ZIP artifact.
 - Privacy philosophy: local-first storage, no external usage beacon in current docs/code; external telemetry ideas below stay rejected unless user-owned and local-only.
@@ -286,12 +286,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
   - Verify: Manual Chrome 138+ install flow; `npx vitest run tests/user-scripts-onboarding.test.js tests/popup-a11y.test.js`; `npm run typecheck`; `npm run check`.
   - Status: Shipped 2026-05-24. Background status now uses one live `chrome.userScripts.getScripts()` probe for popup, dashboard, support snapshot, and repair. It returns version-aware setup state/action/url fields for Chrome 138+ Allow User Scripts, Chrome 120-137 Developer Mode, and unsupported browsers; `repairRuntimeState` no longer trusts stale `_userScriptsAvailable` and only re-registers after a live available probe. Popup/dashboard banners and runtime diagnostics consume the canonical status, and README source-install instructions now split Chrome 138+ from Chrome 120-137.
 
-- [ ] P0 - Finish Firefox MV3/AMO validation gate
+- [x] P0 - Finish Firefox MV3/AMO validation gate
   - Why: Firefox manifest/version exists, but port tasks are unchecked and AMO now has explicit data-collection manifest requirements.
   - Evidence: L07, L11, S09-S11, S67-S68, H017-H018, H090.
   - Touches: `manifest-firefox.json`, `FIREFOX-PORT.md`, `build-firefox.sh`, `docs/cross-browser-pipeline.md`, `.github/workflows/ci.yml`.
   - Acceptance: `web-ext lint` is clean, source ZIP is produced, AMO data-collection fields are explicit, unsupported Chrome-only APIs are guarded.
-  - Verify: `web-ext lint --source-dir <firefox-build-dir>`; manual XPI load in Firefox profile.
+  - Verify: `npm run firefox:package`; `npm run check`; `npm run smoke:dashboard`; `npm audit --audit-level=high --omit=optional`; `npm run cws:check`; `npm run release:check`; `git diff --check`. Manual Firefox sideload remains a separate Phase 1 smoke item in `FIREFOX-PORT.md`.
+  - Status: Shipped 2026-05-24. Firefox manifest now declares AMO data collection permissions, moves `userScripts` to `optional_permissions`, omits invalid Firefox `identity`, and targets Firefox 140+ desktop / Android 142+. `build-firefox.sh` now uses `web-ext` for lint/package output, emits a Firefox package ZIP, AMO source-review ZIP, and lint JSON under `firefox-artifacts/`, and CI uploads the Firefox artifacts. Runtime JS and TypeScript registration now guard Chrome-only per-script `worldId` configuration so Firefox does not receive unsupported API options. `web-ext lint` exits with 0 errors and 0 notices; existing dynamic-HTML and compatibility warnings remain tracked in lint JSON for a later AMO hardening pass.
 
 - [ ] P0 - Add generated permissions/privacy/store-copy check
   - Why: Broad extension permissions must be explained accurately to stores and users.

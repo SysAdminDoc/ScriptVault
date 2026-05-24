@@ -8,6 +8,9 @@
     "build:bg": "node esbuild.config.mjs --bg-only",
     "build:prod": "node esbuild.config.mjs --prod",
     "build:monaco": "node esbuild.config.mjs --monaco-only",
+    "build:firefox": "bash build-firefox.sh",
+    "firefox:lint": "bash build-firefox.sh --lint --keep-build --no-source-zip --prepare-only",
+    "firefox:package": "bash build-firefox.sh --lint",
     "dev": "node esbuild.config.mjs --watch",
     "watch": "node esbuild.config.mjs --watch",
     "typecheck": "tsc --noEmit",
@@ -37,6 +40,7 @@
     "monaco-editor": "^0.52.0",
     "puppeteer-core": "^24.42.0",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.3"
+    "vitest": "^4.1.3",
+    "web-ext": "^10.2.0"
   }
 }

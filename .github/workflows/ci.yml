@@ -74,6 +74,9 @@ jobs:
       - name: Package Chrome extension
         run: bash build.sh
 
+      - name: Firefox lint and package
+        run: npm run firefox:package
+
       - name: Release trust gate
         run: npm run release:trust
 
@@ -97,4 +100,11 @@ jobs:
           path: |
             ScriptVault-v*.zip
             release-artifacts/*
+          if-no-files-found: error
+
+      - name: Upload Firefox package
+        uses: actions/upload-artifact@v4
+        with:
+          name: scriptvault-firefox-package
+          path: firefox-artifacts/*
           if-no-files-found: error

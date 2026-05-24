@@ -57,8 +57,16 @@ WXT also handles:
 
 ### Stage 2 — Firefox MV3 target
 
+**Current validation gate (2026-05-24):** before the WXT migration, the manual Firefox target now has a repeatable AMO gate:
+
+- `manifest-firefox.json` declares Firefox 140.0+ desktop, Firefox for Android 142.0+, `browser_specific_settings.gecko.data_collection_permissions`, and `userScripts` as a Firefox optional permission.
+- `npm run firefox:lint` builds `build-firefox/`, runs `web-ext lint`, and writes `firefox-artifacts/web-ext-lint.json`.
+- `npm run firefox:package` runs the lint gate, packages `firefox-artifacts/scriptvault-firefox-v<version>.zip`, and writes `firefox-artifacts/scriptvault-firefox-source-v<version>.zip` for AMO source review.
+- `lib/monaco/` is intentionally omitted from the Firefox package until the Monaco Firefox loading-path item is completed; the editor uses the existing textarea fallback in this validation build.
+- OAuth sync providers are deferred in the Firefox validation package because Firefox does not accept `identity` as an optional permission. Treat WebDAV as the only in-scope sync provider until a dedicated Firefox OAuth permission pass lands.
+
 1. Add `firefox` build target in `wxt.config.ts`.
-2. Add `browser_specific_settings.gecko` (id + strict_min_version 128).
+2. Add `browser_specific_settings.gecko` (id + strict_min_version 140 + data collection declaration).
 3. Bundle `webextension-polyfill` — wrap every `chrome.*` call in `browser.*` where Firefox semantics differ.
 4. Switch background to event-page format for Firefox (Firefox MV3 doesn't fully support service workers; it uses event pages with `persistent: false`).
 5. Handle Firefox's `userScripts` API as `optional_permissions` — implement first-run grant flow.
@@ -66,7 +74,7 @@ WXT also handles:
 7. Validate Xray Vision boundary: code touching `unsafeWindow` / page globals must use `wrappedJSObject` on Firefox.
 8. Skip features that don't apply (DNR rule limits are lower on Firefox; feature-detect before registering >5000 rules).
 
-**Exit:** `npm run build:firefox` produces an AMO-uploadable `.xpi` that passes `web-ext lint`.
+**Exit:** `npm run firefox:package` produces an AMO-uploadable ZIP plus source ZIP and `npm run firefox:lint` exits with zero linter errors/notices.
 
 ### Stage 3 — Edge target
 
@@ -122,7 +130,7 @@ Concrete `chrome.*` / `browser.*` divergences ScriptVault hits:
 | `chrome.alarms` | works | works | Polyfill handles |
 | `chrome.storage.session` | works | works (Firefox 115+) | Polyfill handles |
 | `chrome.sidePanel` | works | not supported | Feature-detect; hide side panel UI on Firefox |
-| `chrome.identity.launchWebAuthFlow` | works | works (Firefox 60+) | Polyfill handles; URL params differ slightly |
+| `chrome.identity.launchWebAuthFlow` | works | works with install-time `identity` permission | Firefox validation package omits `identity`; OAuth providers deferred, WebDAV remains in scope |
 | `chrome.cookies` | works (with `cookies` perm) | works | Polyfill handles |
 | `chrome.offscreen` | works | not supported | Fall back to in-SW work for AST analysis on Firefox |
 | `unsafeWindow` / page DOM access | content script's MAIN world | requires `wrappedJSObject` | Wrap with a `getPageWindow()` helper that branches per build |
