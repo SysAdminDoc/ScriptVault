@@ -7,6 +7,7 @@ import type { Settings } from '../types/settings';
 import { fetchTextBounded } from './fetch-bounded';
 import { classifyFetchUrl, classifyResponseUrl } from './internal-host-guard';
 import { createScriptTrustReceipt } from './trust-receipt';
+import { bundleIfNeeded } from '../bg/esm-bundler';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -220,8 +221,22 @@ export const UpdateSystem = {
     // Don't auto-update scripts the user has locally edited
     if (!options.force && script.settings?.userModified) return { skipped: true, reason: 'user-modified' };
 
-    const parsed = parseUserscript(newCode);
+    let parsed = parseUserscript(newCode);
     if (parsed.error !== undefined || !parsed.meta) return { error: parsed.error ?? 'Parse failed' };
+    const updateSettings = await SettingsManager.get();
+    const bundleResult = await bundleIfNeeded(newCode, parsed.meta, updateSettings, {
+      sourceUrl: options.sourceUrl || '',
+    });
+    if (bundleResult.bundled) {
+      newCode = bundleResult.code;
+      parsed = parseUserscript(newCode);
+      if (parsed.error !== undefined || !parsed.meta) return { error: parsed.error ?? 'Parse failed' };
+      parsed.meta.esmBundle = {
+        entryUrl: bundleResult.entryUrl,
+        imports: bundleResult.imports,
+        bundledAt: Date.now(),
+      };
+    }
 
     const parsedMeta: ScriptMeta = parsed.meta;
     const previousScript: Script = {

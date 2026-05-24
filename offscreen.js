@@ -20,6 +20,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     case 'offscreen_diff':
       sendResponse(handleDiff(msg.oldCode, msg.newCode));
       break;
+    case 'offscreen_esm_imports':
+      sendResponse(handleESMImports(msg.code));
+      break;
     case 'offscreen_ping':
       sendResponse({ ok: true });
       break;
@@ -362,6 +365,120 @@ function analyzeAST(code) {
     summary: generateSummary(riskLevel, findings),
     astAnalyzed: true
   };
+}
+
+function handleESMImports(code) {
+  try {
+    const ast = acorn.parse(code, { ecmaVersion: 2022, sourceType: 'module', allowHashBang: true, locations: true });
+    const imports = [];
+    const exports = [];
+    const dynamicImports = [];
+    const unsupportedExports = [];
+
+    walkAST(ast, node => {
+      if (node.type === 'ImportDeclaration') {
+        imports.push({
+          start: node.start,
+          end: node.end,
+          source: node.source?.value || '',
+          specifiers: (node.specifiers || []).map(spec => {
+            if (spec.type === 'ImportDefaultSpecifier') {
+              return { kind: 'default', local: spec.local.name };
+            }
+            if (spec.type === 'ImportNamespaceSpecifier') {
+              return { kind: 'namespace', local: spec.local.name };
+            }
+            return {
+              kind: 'named',
+              imported: spec.imported?.name || spec.imported?.value,
+              local: spec.local.name
+            };
+          })
+        });
+      } else if (node.type === 'ImportExpression'
+          || (node.type === 'CallExpression' && node.callee?.type === 'Import')) {
+        dynamicImports.push({
+          line: node.loc?.start?.line || null,
+          column: node.loc?.start?.column || null
+        });
+      } else if (node.type === 'ExportDefaultDeclaration') {
+        const decl = node.declaration;
+        exports.push({
+          kind: 'default',
+          start: node.start,
+          end: node.end,
+          declarationStart: decl.start,
+          declarationEnd: decl.end,
+          localName: decl.id?.name || null
+        });
+      } else if (node.type === 'ExportNamedDeclaration') {
+        if (node.source) {
+          unsupportedExports.push({ type: 're-export' });
+        } else if (node.declaration) {
+          exports.push({
+            kind: 'named-declaration',
+            start: node.start,
+            end: node.end,
+            declarationStart: node.declaration.start,
+            declarationEnd: node.declaration.end,
+            names: declaredExportNames(node.declaration)
+          });
+        } else {
+          exports.push({
+            kind: 'named-specifiers',
+            start: node.start,
+            end: node.end,
+            declarationStart: node.start,
+            declarationEnd: node.end,
+            specifiers: (node.specifiers || []).map(spec => ({
+              local: spec.local?.name || spec.local?.value,
+              exported: spec.exported?.name || spec.exported?.value
+            }))
+          });
+        }
+      } else if (node.type === 'ExportAllDeclaration') {
+        unsupportedExports.push({ type: 'export-all' });
+      }
+    });
+
+    return { imports, exports, dynamicImports, unsupportedExports };
+  } catch (e) {
+    return { error: 'ESM parse error: ' + (e?.message || String(e)) };
+  }
+}
+
+function declaredExportNames(declaration) {
+  if (!declaration) return [];
+  if ((declaration.type === 'FunctionDeclaration' || declaration.type === 'ClassDeclaration') && declaration.id?.name) {
+    return [declaration.id.name];
+  }
+  if (declaration.type === 'VariableDeclaration') {
+    const names = [];
+    for (const decl of declaration.declarations || []) {
+      collectPatternNames(decl.id, names);
+    }
+    return names;
+  }
+  return [];
+}
+
+function collectPatternNames(pattern, names) {
+  if (!pattern) return;
+  if (pattern.type === 'Identifier') {
+    names.push(pattern.name);
+  } else if (pattern.type === 'ObjectPattern') {
+    for (const prop of pattern.properties || []) {
+      collectPatternNames(prop.value || prop.argument, names);
+    }
+  } else if (pattern.type === 'ArrayPattern') {
+    for (const item of pattern.elements || []) {
+      collectPatternNames(item, names);
+    }
+  } else if (pattern.type === 'AssignmentPattern') {
+    collectPatternNames(pattern.left, names);
+  } else if (pattern.type === 'RestElement') {
+    collectPatternNames(pattern.argument, names);
+  }
 }
 
 function walkAST(node, visitor, parent = null) {

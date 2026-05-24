@@ -39,6 +39,13 @@ export interface ScriptMeta {
   excludeTop: string[];
   'run-at': RunAt;
   'inject-into': string;
+  module: string;
+  esm?: boolean;
+  esmBundle?: {
+    entryUrl: string;
+    imports: Array<{ url: string; bytes: number }>;
+    bundledAt: number;
+  };
   noframes: boolean;
   unwrap: boolean;
   sandbox: string;

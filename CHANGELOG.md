@@ -4,6 +4,23 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Disabled ESM userscript bundler R-1
+
+- Added the off-by-default `experimentalESMUserscripts` setting and parser
+  detection for `@module 1` plus Violentmonkey's `@inject-into module`.
+- Added `bg/esm-bundler.js` and `src/bg/esm-bundler.ts`. The bundler uses
+  the offscreen Acorn parser to discover static imports/exports, rewrites
+  imports to a local `__require(...)` module table, recursively fetches
+  dependencies through the existing `fetchRequireScript` path, and rejects
+  dynamic `import()` with an author-visible error.
+- Install and update paths now bundle ESM scripts only when the experimental
+  flag is enabled; with the default setting they reject ESM scripts without
+  changing the classic userscript path.
+- Added `tests/esm-bundler.test.js` and `tests/esm-csp.test.js` covering
+  metadata detection, default-off gating, static import rewrite, transitive
+  dependency expansion, dynamic-import rejection, and failed dependency/SRI
+  fetch rejection.
+
 ### 2026-05-24 — Manifest generator implementation
 
 - Added `scripts/generate-manifest-firefox.mjs` plus
