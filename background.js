@@ -14781,7 +14781,8 @@ async function handleMessage(message, sender) {
         // against `undefined` (from an unrelated partial update) triggers a needless
         // re-register cycle every time any other setting is changed.
         const EXEC_KEYS = ['runAt', 'injectInto', 'useOriginalMatches', 'useOriginalIncludes',
-                           'useOriginalExcludes', 'userMatches', 'userIncludes', 'userExcludes'];
+                           'useOriginalExcludes', 'userMatches', 'userIncludes', 'userExcludes',
+                           'frameMode'];
         const needsReregister = EXEC_KEYS.some(k =>
           k in data.settings &&
           JSON.stringify(oldSettings[k]) !== JSON.stringify(data.settings[k])
@@ -18704,6 +18705,15 @@ async function registerScript(script) {
     }
     const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
     
+    // Per-script frame-mode override (settings.frameMode): 'top' forces top
+    // frame only, 'all' forces all frames, and any other value (including
+    // 'default'/undefined) falls back to the `@noframes` metadata.
+    const frameMode = script.settings?.frameMode;
+    let allFrames;
+    if (frameMode === 'top') allFrames = false;
+    else if (frameMode === 'all') allFrames = true;
+    else allFrames = !meta.noframes;
+
     // Register the script
     const registration = {
       id: script.id,
@@ -18711,7 +18721,7 @@ async function registerScript(script) {
       excludeMatches: excludeMatches.length > 0 ? excludeMatches : undefined,
       js: [{ code: wrappedCode }],
       runAt: runAt,
-      allFrames: !meta.noframes,
+      allFrames: allFrames,
       world: world
     };
 

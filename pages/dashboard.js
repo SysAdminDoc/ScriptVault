@@ -1323,6 +1323,7 @@
         elements.scriptSyncLock = document.getElementById('scriptSyncLock');
         elements.scriptRunAt = document.getElementById('scriptRunAt');
         elements.scriptInjectInto = document.getElementById('scriptInjectInto');
+        elements.scriptFrameMode = document.getElementById('scriptFrameMode');
         elements.scriptNotifyErrors = document.getElementById('scriptNotifyErrors');
         elements.btnSaveScriptSettings = document.getElementById('btnSaveScriptSettings');
         elements.btnResetScriptSettings = document.getElementById('btnResetScriptSettings');
@@ -2596,6 +2597,7 @@
         if (syncLockStatus) syncLockStatus.style.display = settings.userModified ? '' : 'none';
         if (elements.scriptRunAt) elements.scriptRunAt.value = settings.runAt || 'default';
         if (elements.scriptInjectInto) elements.scriptInjectInto.value = settings.injectInto || 'auto';
+        if (elements.scriptFrameMode) elements.scriptFrameMode.value = settings.frameMode || 'default';
         if (elements.scriptNotifyErrors) elements.scriptNotifyErrors.checked = settings.notifyErrors || false;
 
         // Notes
@@ -2739,6 +2741,7 @@
             userModified: elements.scriptSyncLock?.checked ?? false,
             runAt: elements.scriptRunAt?.value || 'default',
             injectInto: elements.scriptInjectInto?.value || 'auto',
+            frameMode: elements.scriptFrameMode?.value || 'default',
             notifyErrors: elements.scriptNotifyErrors?.checked || false,
             notes: document.getElementById('scriptNotes')?.value || '',
             // URL Override settings
@@ -2772,6 +2775,7 @@
             notifyUpdates: true,
             runAt: 'default',
             injectInto: 'auto',
+            frameMode: 'default',
             notifyErrors: false,
             // URL Override defaults
             useOriginalIncludes: true,
@@ -4085,10 +4089,25 @@
         const rawSearch = (elements.scriptSearch?.value || '').trim();
         const statusFilter = elements.filterSelect?.value || 'all';
 
+        // Invert filter: a leading `!` or `not:` prefix negates the match.
+        // `!enabled-tag` / `not:fetch` / `not:re:foo` all flip the search
+        // result for the remaining query. `not:` wins over `!` (so
+        // `not:!example` would search for the literal `!example`).
+        let invert = false;
+        let trimmed = rawSearch;
+        const lower = trimmed.toLowerCase();
+        if (lower.startsWith('not:')) {
+            invert = true;
+            trimmed = trimmed.slice(4).trim();
+        } else if (trimmed.startsWith('!') && !trimmed.startsWith('!=')) {
+            invert = true;
+            trimmed = trimmed.slice(1).trim();
+        }
+
         // Strip an optional `code:` prefix BEFORE parsing the regex shape so
         // `code:re:fetch\(` and `code:/foo/i` both work end-to-end.
-        const isCodeSearch = rawSearch.toLowerCase().startsWith('code:');
-        const payload = isCodeSearch ? rawSearch.slice(5).trim() : rawSearch;
+        const isCodeSearch = trimmed.toLowerCase().startsWith('code:');
+        const payload = isCodeSearch ? trimmed.slice(5).trim() : trimmed;
 
         // Try a regex parse; fall back to substring search if absent or invalid.
         const regexSpec = parseDashboardSearchRegex(payload);
@@ -4116,6 +4135,7 @@
             const desc = s.metadata?.description || '';
             const author = s.metadata?.author || '';
             let matchesSearch;
+            const hasSearchQuery = !!regexFilter || !!effectiveSearch;
             if (regexFilter) {
                 if (isCodeSearch) {
                     matchesSearch = regexFilter.test(s.code || '');
@@ -4135,6 +4155,12 @@
                     author.toLowerCase().includes(effectiveSearch);
             } else {
                 matchesSearch = true;
+            }
+            // Apply invert AFTER computing the underlying match. With an
+            // empty query, invert still maps to "match all" (the user
+            // hasn't named anything to exclude).
+            if (invert && hasSearchQuery) {
+                matchesSearch = !matchesSearch;
             }
 
             // Status filter

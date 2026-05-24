@@ -7426,9 +7426,17 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                         <option value="content">Content script context</option>
                                     </select>
                                 </div>
+                                <div class="setting-row">
+                                    <span class="label-text">Frame mode:</span>
+                                    <select class="select-field" id="scriptFrameMode" aria-label="Frame mode override">
+                                        <option value="default">Default (@noframes metadata)</option>
+                                        <option value="top">Top frame only</option>
+                                        <option value="all">All frames (force)</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
-                        
+
                                 <div class="settings-section">
                             <div class="section-label">Notifications</div>
                             <div class="section-content">

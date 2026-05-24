@@ -386,6 +386,19 @@ export async function registerScript(script: Script): Promise<void> {
     }
     const wrappedCode: string = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
 
+    // Per-script frame-mode override (settings.frameMode): 'top' forces top
+    // frame only, 'all' forces all frames, and any other value (including
+    // 'default'/undefined) falls back to the `@noframes` metadata.
+    const frameMode = (script.settings as Record<string, unknown> | undefined)?.frameMode as
+      | 'top'
+      | 'all'
+      | 'default'
+      | undefined;
+    let allFrames: boolean;
+    if (frameMode === 'top') allFrames = false;
+    else if (frameMode === 'all') allFrames = true;
+    else allFrames = !meta.noframes;
+
     // Register the script
     const registration: UserScriptRegistration = {
       id: script.id,
@@ -393,7 +406,7 @@ export async function registerScript(script: Script): Promise<void> {
       excludeMatches: excludeMatches.length > 0 ? excludeMatches : undefined,
       js: [{ code: wrappedCode }],
       runAt: runAt,
-      allFrames: !meta.noframes,
+      allFrames: allFrames,
       world: world
     };
 
