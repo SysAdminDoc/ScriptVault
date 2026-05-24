@@ -98,31 +98,42 @@ const GistIntegration = (() => {
         _state.autoSync = !!data[STORAGE_KEY_AUTOSYNC];
     }
 
+    // chrome.storage.local.set / .remove use the Promise API in MV3; the
+    // legacy callback signature is deprecated and — critically — when the
+    // underlying write rejects (quota exhausted, disk full), the legacy
+    // callback never fires. The previous `new Promise(resolve => set(..,
+    // () => resolve()))` pattern would hang indefinitely on rejection,
+    // freezing the caller. Use the modern Promise API and propagate
+    // failures so the UI can surface them.
     async function saveToken(token) {
-        return new Promise(resolve => {
-            chrome.storage.local.set({ [STORAGE_KEY_TOKEN]: token }, () => {
-                _state.token = token;
-                _state.tokenVerified = true;
-                resolve();
-            });
-        });
+        try {
+            await chrome.storage.local.set({ [STORAGE_KEY_TOKEN]: token });
+            _state.token = token;
+            _state.tokenVerified = true;
+        } catch (e) {
+            console.error('[gist] saveToken failed:', e);
+            throw e;
+        }
     }
 
-    function clearToken() {
-        return new Promise(resolve => {
+    async function clearToken() {
+        try {
             // Remove both the new and the (defensively, in case migration
             // didn't fire yet) legacy entry.
-            chrome.storage.local.remove([STORAGE_KEY_TOKEN, STORAGE_KEY_TOKEN_LEGACY], () => {
-                _state.token = null;
-                _state.tokenVerified = false;
-                resolve();
-            });
-        });
+            await chrome.storage.local.remove([STORAGE_KEY_TOKEN, STORAGE_KEY_TOKEN_LEGACY]);
+        } catch (e) {
+            console.warn('[gist] clearToken failed:', e);
+            // Don't re-throw — caller treats clearToken as best-effort.
+        }
+        _state.token = null;
+        _state.tokenVerified = false;
     }
 
     function saveAutoSync(val) {
         _state.autoSync = val;
-        chrome.storage.local.set({ [STORAGE_KEY_AUTOSYNC]: val });
+        chrome.storage.local.set({ [STORAGE_KEY_AUTOSYNC]: val }).catch((e) => {
+            console.warn('[gist] saveAutoSync failed:', e);
+        });
     }
 
     // =========================================

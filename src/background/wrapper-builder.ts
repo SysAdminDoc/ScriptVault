@@ -223,11 +223,17 @@ ${req.code}
 
   // console.log('[ScriptVault] Script initializing:', meta.name, 'Channel:', CHANNEL_ID);
 
-  // Grant checking - @grant none means NO APIs except GM_info
+  // Grant checking. @grant none and an empty grant list BOTH mean
+  // no GM_* APIs except GM_info. The runtime JS was changed in v2.0.4
+  // (Empty @grant array now correctly denies all permissions - was
+  // granting ALL - critical) but this TS mirror lagged and returned
+  // true for empty grants. In practice the parser defaults empty
+  // meta.grant to single-element [none] so this latent drift never
+  // fired, but a future caller that bypasses the parser would
+  // silently grant everything. Aligned with runtime JS.
   const hasNone = grantSet.has('none');
   const hasGrant = (n) => {
-    if (hasNone) return false;
-    if (grants.length === 0) return true;
+    if (hasNone || grants.length === 0) return false;
     return grantSet.has(n) || grantSet.has('*');
   };
 
