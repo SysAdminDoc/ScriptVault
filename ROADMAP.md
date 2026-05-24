@@ -433,12 +433,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
   - Acceptance: Endpoint/bucket/region/credentials are validated; sync works against a mock S3-compatible server.
   - Verify: provider mock tests.
 
-- [ ] P3 - Research ESM userscript and local development modes
+- [x] P3 - Research ESM userscript and local development modes
   - Why: ESM support is an emerging compatibility question, but immediate implementation is high risk.
   - Evidence: S17,S19,S24,H040-H041,H083.
   - Touches: design docs, wrapper builder, install/update parser, dependency loader.
   - Acceptance: Research doc identifies compatibility model, CSP constraints, and migration strategy without enabling runtime behavior by default.
   - Verify: design review plus disabled proof-of-concept tests.
+  - Status: Shipped 2026-05-24 as `docs/esm-userscript-research.md`. Identifies two viable injection shapes (install-time pre-bundling vs page-injected `<script type="module">`) and rejects the second on isolation/security grounds. Maps the CSP gate (`connect-src`, page `script-src`, MV3 extension CSP) and demonstrates pre-bundling sidesteps both page and extension CSP because the bundle is stored as a plain JS string in chrome.storage. Calls out the transitive-import audit gates (SRI / host allowlist / bounded fetch) the bundler must reuse, and the static-only rewriting rule (Acorn AST already shipped in offscreen.js). Local-dev mode evaluation rejects filesystem watchers (no MV3 API) and chooses an SSE-from-localhost loop reusing the existing install/update plumbing under a new Developer Mode panel. Permanently rejects runtime `import()` under MV3 CSP. Migration strategy is phased R-1 → R-5 with every phase gated behind off-by-default settings; phase R-1 is the next planning checkpoint. Reserved stub test names `tests/esm-bundler.test.js` and `tests/esm-csp.test.js` as the verification gate when the bundler PR lands. No code changes in this slice — by design.
 
 - [ ] P3 - Expand userstyle support after Firefox/userstyle CSP tests
   - Why: ScriptVault supports userstyles, but Stylus is the deeper domain expert.

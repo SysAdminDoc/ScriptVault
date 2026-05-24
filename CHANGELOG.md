@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — ESM userscript + local-dev research
+
+- Added `docs/esm-userscript-research.md`. Identifies the install-time
+  pre-bundling shape as the only viable ESM path under MV3 (`<script
+  type="module">` page injection is rejected on isolation grounds),
+  documents the CSP envelope, requires reuse of existing SRI / host /
+  bounded-fetch audit gates, and rejects runtime `import()` permanently.
+- Local-dev mode chooses an SSE-from-localhost loop under a future
+  Developer Mode panel; filesystem watchers are not viable in MV3.
+- Phased migration R-1 → R-5, all gated off-by-default. Reserved
+  `tests/esm-bundler.test.js` + `tests/esm-csp.test.js` as the bundler
+  verification gate.
+
 ### 2026-05-24 — Microsoft Edge Add-ons package path
 
 - Added `scripts/build-edge.mjs` that runs the standard esbuild pipeline,
