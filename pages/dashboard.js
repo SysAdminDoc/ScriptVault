@@ -6932,7 +6932,16 @@
                 [...(m.match || []), ...(m.include || [])].join('; ')
             ]);
         }
-        const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+        // CSV formula-injection mitigation: `name`, `lastUrl`, `tag`, and
+        // `match` are user-controlled by the script author. A malicious
+        // author could name their script `=HYPERLINK("http://evil")` and
+        // weaponize anyone who exports the stats CSV. Prefix any cell
+        // beginning with a formula-trigger char per OWASP/CWE-1236.
+        const csv = rows.map(r => r.map(c => {
+            let s = String(c == null ? '' : c);
+            if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+            return '"' + s.replace(/"/g, '""') + '"';
+        }).join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const a = document.createElement('a');
         const url = URL.createObjectURL(blob);

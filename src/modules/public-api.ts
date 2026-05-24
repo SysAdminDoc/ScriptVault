@@ -1221,11 +1221,15 @@ async function dispatchExternal(message: ExternalMessage, sender: SenderLike): P
   // Execute
   try {
     const result = await handler(message, sender);
-    audit(action, sender, message, result['error'] ? 'error' : 'ok');
+    audit(action, sender, message, result?.['error'] ? 'error' : 'ok');
     return result;
   } catch (e: unknown) {
     audit(action, sender, message, 'exception');
-    return { error: 'Internal error', detail: (e as Error).message };
+    // Don't leak internal error details to external callers — log locally
+    // for the operator and return a generic message so an external page
+    // can't probe for stack frames / file paths / token hints via error text.
+    console.warn('[PublicAPI] external handler exception:', action, e);
+    return { error: 'Internal error' };
   }
 }
 
@@ -1238,6 +1242,11 @@ function dispatchWebMessage(event: MessageEvent): void {
   const data = event.data as unknown;
   if (!data || typeof data !== 'object' || !('type' in data)) return;
   const msg = data as WebPageMessage;
+  // Type guard: postMessage payloads can carry arbitrary structured-clone
+  // data. We must require `data.type` to be a string before calling
+  // `.startsWith`, otherwise a sender that passes `data.type = {}` triggers
+  // a TypeError surfaced as an unhandled error on chrome://extensions.
+  if (typeof msg.type !== 'string') return;
   if (!msg.type.startsWith('scriptvault:')) return;
 
   const senderId = `web:${event.origin}`;

@@ -327,15 +327,10 @@ const UpdateSystem = {
         return { response, code: '' };
       }
 
-      const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-      if (contentLength > this._MAX_UPDATE_BYTES) {
-        throw new Error(`Update too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(this._MAX_UPDATE_BYTES)}.`);
-      }
-
-      const code = await response.text();
-      if (code.length > this._MAX_UPDATE_BYTES) {
-        throw new Error(`Update too large (${formatBytes(code.length)}). Maximum is ${formatBytes(this._MAX_UPDATE_BYTES)}.`);
-      }
+      // Stream-bounded read: a hostile update server can omit/lie about
+      // Content-Length and serve an unbounded body; _fetchTextBounded
+      // cancels the stream the moment the running byte total exceeds the cap.
+      const code = await _fetchTextBounded(response, this._MAX_UPDATE_BYTES, 'Update');
 
       return { response, code };
     } catch (e) {
@@ -848,6 +843,76 @@ function _withTimeout(promise, ms, label) {
     Promise.resolve(promise).finally(() => clearTimeout(timer)),
     timeout
   ]);
+}
+
+// Stream-read a fetch Response body up to `maxBytes`, throwing if exceeded.
+//
+// The naive pattern `await response.text(); if (text.length > N) throw` buffers
+// the *full* body into memory before checking — a malicious server that omits
+// or lies about Content-Length can OOM the service worker (DoS) before the
+// size check ever fires. content-length is a hint, not a guarantee.
+//
+// This helper reads the body in chunks and aborts the moment the running
+// byte total exceeds the cap. The caller's AbortSignal (if any) is still
+// honored via the response's own underlying reader.
+//
+// Returns the decoded text on success; throws `Error("<label> too large …")`
+// if the body exceeds `maxBytes`. Falls back to a buffered `response.text()`
+// only when `response.body` is unreadable (e.g. some test mocks return a
+// Response without a stream).
+async function _fetchTextBounded(response, maxBytes, label) {
+  if (!response || typeof response.text !== 'function') {
+    throw new Error(`${label}: invalid response`);
+  }
+  // content-length check first — it's still useful as a cheap pre-flight when
+  // the server is honest.
+  const declaredLen = parseInt(response.headers?.get?.('content-length') || '0', 10);
+  if (Number.isFinite(declaredLen) && declaredLen > maxBytes) {
+    throw new Error(`${label} too large (${formatBytes(declaredLen)}). Maximum is ${formatBytes(maxBytes)}.`);
+  }
+
+  const body = response.body;
+  if (!body || typeof body.getReader !== 'function') {
+    // No stream available (test mock, opaque response). Fall through to the
+    // buffered path but still cap defensively.
+    const text = await response.text();
+    if (typeof text === 'string' && text.length > maxBytes) {
+      throw new Error(`${label} too large (${formatBytes(text.length)}). Maximum is ${formatBytes(maxBytes)}.`);
+    }
+    return text;
+  }
+
+  const reader = body.getReader();
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  const chunks = [];
+  let bytesRead = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      bytesRead += value.byteLength;
+      if (bytesRead > maxBytes) {
+        // Cancel the underlying stream so the server stops sending. Defensive
+        // try/catch — `cancel()` rejects on already-cancelled streams.
+        try { await reader.cancel(); } catch (_e) { /* ignore */ }
+        throw new Error(`${label} too large (${formatBytes(bytesRead)}+). Maximum is ${formatBytes(maxBytes)}.`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    try { reader.releaseLock(); } catch (_e) { /* already released */ }
+  }
+  // Decode in a single pass to handle multi-byte UTF-8 sequences that span
+  // chunk boundaries. `stream: false` flushes any pending state.
+  // Concatenate chunks into one Uint8Array for the final decode.
+  const total = new Uint8Array(bytesRead);
+  let offset = 0;
+  for (const c of chunks) {
+    total.set(c, offset);
+    offset += c.byteLength;
+  }
+  return decoder.decode(total);
 }
 
 // chrome.cookies.* only accepts http(s) URLs. Front-validate to give scripts a
@@ -2744,21 +2809,21 @@ async function handleMessage(message, sender) {
           try {
             const response = await fetch(data.url, { signal: controller.signal });
             if (!response.ok) return { error: `HTTP ${response.status}` };
-            const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-            if (contentLength > MAX_SCRIPT_SIZE) {
-              return { error: `Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
+            // Stream-bounded read so a remote script source can't OOM us
+            // by serving an unbounded body. See _fetchTextBounded for
+            // rationale.
+            try {
+              code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
+            } catch (sizeErr) {
+              return { error: sizeErr?.message || String(sizeErr) };
             }
-            code = await response.text();
           } finally {
             clearTimeout(timeoutId);
           }
           if (!code || code.length === 0) return { error: 'Empty response' };
-          if (code.length > MAX_SCRIPT_SIZE) {
-            return { error: `Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
-          }
           return { code };
         } catch (e) {
-          return { error: e.message || 'Fetch failed' };
+          return { error: e?.message || 'Fetch failed' };
         }
       }
 
@@ -3943,11 +4008,27 @@ async function autoReloadMatchingTabs(script) {
 // Badge Management
 // ============================================================================
 
+// chrome.action.* rejects if the target tab was closed between query and
+// update ("No tab with id N"). These rejections surface as unhandled
+// promises in the SW error log. All badge writes are fire-and-forget by
+// design (a vanished tab is a non-event, not an error), so wrap once
+// instead of sprinkling `.catch(() => {})` on every call.
+function _setBadgeText(opts) {
+  try {
+    chrome.action.setBadgeText(opts).catch(() => {});
+  } catch (_e) { /* synchronous throws (rare) — ignore */ }
+}
+function _setBadgeBackgroundColor(opts) {
+  try {
+    chrome.action.setBadgeBackgroundColor(opts).catch(() => {});
+  } catch (_e) { /* see above */ }
+}
+
 async function updateBadge(tabId = null) {
   const settings = await SettingsManager.get();
 
   if (!settings.showBadge || settings.enabled === false) {
-    chrome.action.setBadgeText({ text: '', tabId: tabId || undefined });
+    _setBadgeText({ text: '', tabId: tabId || undefined });
     return;
   }
 
@@ -3959,7 +4040,7 @@ async function updateBadge(tabId = null) {
         await updateBadgeForTab(tabId, tab.url, settings);
       }
     } catch (e) {
-      chrome.action.setBadgeText({ text: '', tabId });
+      _setBadgeText({ text: '', tabId });
     }
     return;
   }
@@ -3974,7 +4055,7 @@ async function updateBadge(tabId = null) {
       tabs.filter(t => t.id && t.url).map(t => updateBadgeForTab(t.id, t.url, settings, scripts))
     );
   } catch (e) {
-    chrome.action.setBadgeText({ text: '' });
+    _setBadgeText({ text: '' });
   }
 }
 
@@ -3985,19 +4066,19 @@ async function updateBadgeForTab(tabId, url, settings, scripts) {
   if (!settings) settings = await SettingsManager.get();
 
   if (!settings.showBadge || settings.enabled === false) {
-    chrome.action.setBadgeText({ text: '', tabId });
+    _setBadgeText({ text: '', tabId });
     return;
   }
 
   if (!url || url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url.startsWith('about:')) {
-    chrome.action.setBadgeText({ text: '', tabId });
+    _setBadgeText({ text: '', tabId });
     return;
   }
 
   try {
     // Check global page filter
     if (isUrlBlockedByGlobalSettings(url, settings)) {
-      chrome.action.setBadgeText({ text: '', tabId });
+      _setBadgeText({ text: '', tabId });
       return;
     }
 
@@ -4013,8 +4094,8 @@ async function updateBadgeForTab(tabId, url, settings, scripts) {
       badgeText = allEnabled > 0 ? String(allEnabled) : '';
     }
     // badgeInfo === 'none' leaves badgeText empty
-    chrome.action.setBadgeText({ text: badgeText, tabId });
-    chrome.action.setBadgeBackgroundColor({ color: settings.badgeColor || '#22c55e', tabId });
+    _setBadgeText({ text: badgeText, tabId });
+    _setBadgeBackgroundColor({ color: settings.badgeColor || '#22c55e', tabId });
   } catch (e) {
     console.error('[ScriptVault] Failed to update badge:', e);
   }
@@ -5006,26 +5087,35 @@ async function _fetchPendingUserscript(url) {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-    if (contentLength > MAX_SCRIPT_SIZE) {
-      throw new Error(`Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
-    }
-    const code = await response.text();
-    if (code.length > MAX_SCRIPT_SIZE) {
-      throw new Error(`Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
-    }
+    // Stream-bounded read so a hostile server can't OOM us by serving an
+    // unbounded body (the previous content-length check was advisory and
+    // ran AFTER `response.text()` already buffered everything).
+    const code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
     if (!code.includes('==UserScript==')) {
       return { action: 'pass-through' };
     }
-    await chrome.storage.local.set({
-      pendingInstall: { url, code, timestamp: Date.now() }
-    });
+    // Defensive: storage.set can reject (quota, disk full). Surface the
+    // failure so the caller can still navigate the tab somewhere sensible
+    // rather than dropping the user on a blank install page.
+    try {
+      await chrome.storage.local.set({
+        pendingInstall: { url, code, timestamp: Date.now() }
+      });
+    } catch (storageErr) {
+      console.error('[ScriptVault] Failed to persist pendingInstall:', storageErr);
+      throw storageErr;
+    }
     return { action: 'install' };
   } catch (error) {
     console.error('[ScriptVault] Failed to fetch script:', error);
-    await chrome.storage.local.set({
-      pendingInstall: { url, error: error.message, timestamp: Date.now() }
-    });
+    // Best-effort: try to record the error for install.html. If that also
+    // fails (quota exhausted, disk full), there's nothing more we can do
+    // from the SW — at least we logged the original fetch failure above.
+    try {
+      await chrome.storage.local.set({
+        pendingInstall: { url, error: error?.message || String(error), timestamp: Date.now() }
+      });
+    } catch (_e) { /* see above */ }
     return { action: 'install' };
   } finally {
     clearTimeout(timeoutId);
@@ -5057,13 +5147,19 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   try {
     const result = await pending;
     if (result.action === 'install') {
+      // The tab may have been closed between the fetch start and resolution;
+      // chrome.tabs.update on a vanished tab rejects with an unhandled error
+      // that bubbles out of this async listener. Swallow that specific case
+      // (the user closed the tab — there's nothing to redirect).
       chrome.tabs.update(details.tabId, {
         url: chrome.runtime.getURL('pages/install.html')
+      }).catch((updateErr) => {
+        debugLog('[ScriptVault] tab.update post-fetch failed (tab likely closed):', updateErr?.message || updateErr);
       });
     } else {
       // Not a userscript — let this tab's navigation continue and clear any
       // stale pendingInstall written by an earlier interception of the same URL.
-      await chrome.storage.local.remove('pendingInstall');
+      await chrome.storage.local.remove('pendingInstall').catch(() => {});
     }
   } catch (e) {
     // _fetchPendingUserscript catches its own errors; any throw here means the
@@ -5152,20 +5248,16 @@ async function installFromUrl(url) {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      // Size limit: 5MB (same as webNavigation handler)
-      const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-      if (contentLength > MAX_SCRIPT_SIZE) {
-        throw new Error(`Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
-      }
-
-      code = await response.text();
+      // Stream-bounded read (same protection as the webNavigation handler);
+      // see _fetchTextBounded for rationale.
+      code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
     } finally {
       clearTimeout(timeoutId);
     }
 
     return await installFromCode(code);
   } catch (error) {
-    return { success: false, error: error.message };
+    return { success: false, error: error?.message || String(error) };
   }
 }
 
@@ -6202,18 +6294,11 @@ async function fetchWithRetry(url, retries = 2) {
           throw new Error(`HTTP ${response.status}`);
         }
 
-        // Reject excessively large @require scripts (>5MB) to prevent memory issues
+        // Reject excessively large @require scripts (>5MB) to prevent memory
+        // issues. Use the stream-bounded helper so a hostile CDN serving an
+        // unbounded body can't OOM the SW before the size check fires.
         const MAX_REQUIRE_BYTES = 5 * 1024 * 1024;
-        const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-        if (contentLength > MAX_REQUIRE_BYTES) {
-          throw new Error(`Response too large (${Math.round(contentLength / 1024)}KB, max 5MB)`);
-        }
-
-        code = await response.text();
-
-        if (code.length > MAX_REQUIRE_BYTES) {
-          throw new Error(`Response too large (${Math.round(code.length / 1024)}KB, max 5MB)`);
-        }
+        code = await _fetchTextBounded(response, MAX_REQUIRE_BYTES, 'Response');
       } finally {
         clearTimeout(timeoutId);
       }

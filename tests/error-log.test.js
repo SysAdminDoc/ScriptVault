@@ -189,4 +189,54 @@ describe('ErrorLog', () => {
       vi.useRealTimers();
     });
   });
+
+  // CSV formula-injection mitigation (CWE-1236). Userscripts can throw
+  // Error instances with attacker-controlled `.message`; without defanging,
+  // payloads like `=HYPERLINK("http://evil")` are executed by spreadsheet
+  // apps when the victim opens the exported CSV.
+  describe('exportCSV — formula-injection defang', () => {
+    beforeEach(() => {
+      ErrorLog._cache = null;
+    });
+
+    it('prefixes cells starting with `=` with an apostrophe', async () => {
+      await ErrorLog.log({ scriptId: 's', scriptName: '=evil', error: 'normal' });
+      const csv = await ErrorLog.exportCSV();
+      // The defanged cell is double-quoted (because it contains the leading
+      // apostrophe? no — only quoted if it has `,`/`"`/newline). So check
+      // both forms: bare-prefixed or quote-wrapped.
+      expect(csv).toMatch(/(?:^|,)'?'=evil(?:,|$|")/m);
+    });
+
+    it('prefixes cells starting with `+`, `-`, `@`, tab, CR', async () => {
+      const triggers = ['+1+1', '-1', '@CMD', '\tcmd', '\rformula'];
+      for (const t of triggers) {
+        ErrorLog._cache = null;
+        await ErrorLog.log({ scriptId: 's', error: t });
+        const csv = await ErrorLog.exportCSV();
+        // Every dangerous cell must start with an apostrophe (possibly
+        // wrapped in quotes for fields that also contain comma/quote/etc).
+        const rows = csv.split('\n');
+        const dataRow = rows[1] || '';
+        expect(dataRow.includes("'" + t) || dataRow.includes('"\'' + t)).toBe(true);
+      }
+    });
+
+    it('does not prefix benign cells', async () => {
+      await ErrorLog.log({ scriptId: 's', scriptName: 'Script', error: 'plain error' });
+      const csv = await ErrorLog.exportCSV();
+      const dataRow = (csv.split('\n')[1] || '');
+      expect(dataRow).not.toMatch(/'Script/);
+      expect(dataRow).not.toMatch(/'plain/);
+    });
+
+    it('preserves the double-quote / comma / newline escaping invariants', async () => {
+      // A field with both a formula trigger AND a comma is double-quoted
+      // (per CSV) and the leading apostrophe sits inside the quotes.
+      ErrorLog._cache = null;
+      await ErrorLog.log({ scriptId: 's', error: '=A1,B1' });
+      const csv = await ErrorLog.exportCSV();
+      expect(csv).toContain('"\'=A1,B1"');
+    });
+  });
 });
