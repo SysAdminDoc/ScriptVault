@@ -1997,11 +1997,9 @@
     }
 
     // Phase 39.10 — runtime "Allow User Scripts" self-diagnosis.
-    // Probe chrome.userScripts to determine whether the API is missing (old
-    // Chrome / unsupported browser) or present-but-not-permitted (Chrome 138+
-    // with the per-extension toggle disabled). Tailor the banner text and
-    // CTA so users see the right next step instead of the legacy
-    // "Developer mode required" string. Source: TM #2607.
+    // Ask the background worker for the canonical live probe so popup,
+    // dashboard, support snapshots, and repair all agree on Chrome's current
+    // userScripts state.
     async function checkUserScriptsAvailability() {
         const banner = document.getElementById('setupWarningBanner');
         const text = document.getElementById('setupWarningText');
@@ -2011,43 +2009,61 @@
 
         if (!banner) return;
 
-        const chromeVersion = parseInt(navigator.userAgent.match(/Chrome\/(\d+)/)?.[1] || '0', 10);
+        const chromeVersion = parseInt(navigator.userAgent.match(/(?:Chrome|Chromium)\/(\d+)/)?.[1] || '0', 10);
+        let status = null;
 
-        // Three diagnostic outcomes:
-        //   'ok'           — API exists AND probe succeeds.
-        //   'api-missing'  — chrome.userScripts undefined (old Chrome, FF MV2).
-        //   'not-allowed'  — API exists but threw on probe (toggle off on Chrome 138+
-        //                    OR Developer mode off on Chrome <138).
-        let state = 'ok';
         try {
-            if (!chrome.userScripts) {
-                state = 'api-missing';
-            } else {
-                await chrome.userScripts.getScripts();
-            }
+            status = await chrome.runtime.sendMessage({ action: 'getExtensionStatus' });
         } catch (_error) {
-            state = 'not-allowed';
+            let localState = 'available';
+            try {
+                if (!chrome.userScripts) {
+                    localState = chromeVersion >= 138 ? 'allow-user-scripts-disabled' : 'unsupported-browser';
+                } else {
+                    await chrome.userScripts.getScripts();
+                }
+            } catch (_probeError) {
+                localState = chromeVersion >= 138 ? 'allow-user-scripts-disabled' : 'developer-mode-disabled';
+            }
+            status = {
+                userScriptsAvailable: localState === 'available',
+                setupRequired: localState !== 'available',
+                setupState: localState,
+                setupTitle: localState === 'allow-user-scripts-disabled' ? 'Allow User Scripts is off'
+                    : localState === 'developer-mode-disabled' ? 'Developer Mode required'
+                    : localState === 'unsupported-browser' ? 'Unsupported browser'
+                    : '',
+                setupMessage: localState === 'allow-user-scripts-disabled'
+                    ? 'Open Extension Details, enable "Allow User Scripts" for ScriptVault, then refresh status; reload the extension if this banner remains.'
+                    : localState === 'developer-mode-disabled'
+                        ? 'Open chrome://extensions and enable Developer Mode to run userscripts.'
+                        : localState === 'unsupported-browser'
+                            ? 'ScriptVault userscripts require Chrome 120 or newer.'
+                            : '',
+                setupAction: localState === 'developer-mode-disabled' ? 'Open Extensions Page' : 'Open Extension Details',
+                setupUrl: localState === 'developer-mode-disabled' ? 'chrome://extensions' : 'chrome://extensions/?id=' + chrome.runtime.id,
+                chromeVersion
+            };
         }
 
-        if (state === 'ok') {
+        if (status?.userScriptsAvailable) {
             banner.style.display = 'none';
             return;
         }
 
         // Tailor copy + visibility per state.
         if (text) {
-            if (state === 'not-allowed' && chromeVersion >= 138) {
+            if (status?.setupState === 'allow-user-scripts-disabled') {
                 text.innerHTML =
                     '<strong>Setup required:</strong> ScriptVault needs the ' +
                     '<strong>"Allow User Scripts"</strong> toggle for this extension. ' +
-                    'Open Extension Details and enable it.';
-            } else if (state === 'not-allowed') {
+                    'Open Extension Details, enable it, then refresh status; reload the extension if this banner remains.';
+            } else if (status?.setupState === 'developer-mode-disabled') {
                 text.innerHTML =
                     '<strong>Setup required:</strong> Enable ' +
                     '<strong>Developer Mode</strong> in <code>chrome://extensions</code> ' +
                     'so ScriptVault can inject userscripts.';
             } else {
-                // 'api-missing'
                 text.innerHTML =
                     '<strong>Browser unsupported:</strong> the <code>chrome.userScripts</code> ' +
                     'API is not available. ScriptVault needs Chrome 120+ (or a Chromium ' +
@@ -2055,30 +2071,32 @@
             }
         }
         banner.style.display = 'block';
+        banner.dataset.setupState = status?.setupState || 'unknown';
 
         // The deep-link button is most useful on Chrome 138+ (one click to the
         // toggle). On older Chrome it still helps — same Details page — but
         // the user needs to flip Developer Mode separately. Hide on api-missing
         // where the toggle doesn't exist.
         if (btnDirect) {
-            btnDirect.style.display = state === 'api-missing' ? 'none' : '';
+            btnDirect.style.display = status?.setupState === 'unsupported-browser' ? 'none' : '';
+            btnDirect.textContent = status?.setupAction || 'Open Extension Details';
         }
 
-        btnDirect?.addEventListener('click', () => {
+        if (btnDirect) btnDirect.onclick = () => {
             try {
-                chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id });
+                chrome.tabs.create({ url: status?.setupUrl || 'chrome://extensions/?id=' + chrome.runtime.id });
             } catch (_e) { /* extension context invalidated */ }
-        }, { once: true });
-        btnHelp?.addEventListener('click', () => {
+        };
+        if (btnHelp) btnHelp.onclick = () => {
             showSetupInstructions();
-        }, { once: true });
-        btnDismiss?.addEventListener('click', () => {
+        };
+        if (btnDismiss) btnDismiss.onclick = () => {
             banner.style.display = 'none';
-        }, { once: true });
+        };
     }
     
     function showSetupInstructions() {
-        const chromeVersion = parseInt(navigator.userAgent.match(/Chrome\/(\d+)/)?.[1] || 0);
+        const chromeVersion = parseInt(navigator.userAgent.match(/(?:Chrome|Chromium)\/(\d+)/)?.[1] || 0);
         
         let instructions = '';
         if (chromeVersion >= 138) {
@@ -3114,13 +3132,20 @@
             } else if (status) {
                 const detailLines = [
                     `Chrome ${status.chromeVersion || 'unknown'}`,
+                    `Status: ${status.setupState || (status.userScriptsAvailable ? 'available' : 'unavailable')}`,
                     status.userScriptsAvailable
                         ? 'userScripts API is available and ready for registrations.'
                         : 'userScripts API is unavailable in the current browser state.',
                     status.setupRequired
-                        ? status.setupMessage || 'Manual setup is still required before scripts can run.'
+                        ? `${status.setupTitle ? `${status.setupTitle}: ` : ''}${status.setupMessage || 'Manual setup is still required before scripts can run.'}`
                         : 'Runtime looks ready for script injection.'
                 ];
+                if (status.setupRequired && status.setupUrl) {
+                    detailLines.push(`Setup page: ${status.setupUrl}`);
+                }
+                if (status.apiProbeError) {
+                    detailLines.push(`API probe: ${status.apiProbeError}`);
+                }
                 if (state.trustCenter.lastRuntimeRepairAt) {
                     detailLines.push(`Last repair ran ${dateTimeFormatter.format(new Date(state.trustCenter.lastRuntimeRepairAt))}.`);
                 }
@@ -9017,7 +9042,7 @@
                     state.trustCenter.lastRuntimeRepairAt = Date.now();
                     state.trustCenter.runtimeStatus = result;
                     renderRuntimeStatus(result);
-                    showToast('Runtime repaired', 'success');
+                    showToast(result?.setupRequired ? 'Runtime still needs setup' : 'Runtime repaired', result?.setupRequired ? 'warning' : 'success');
                 } catch (error) {
                     showToast(error?.message || 'Runtime repair failed', 'error');
                 }

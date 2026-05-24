@@ -256,11 +256,13 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 
 2. Open Chrome and navigate to `chrome://extensions`
 
-3. Enable **Developer mode** (toggle in top right)
+3. Enable **Developer mode** (toggle in top right), then click **Load unpacked** and select the repository folder.
 
-4. Click **Load unpacked** and select the repository folder
+4. Enable userscript execution for your Chrome version:
+   - **Chrome 138+**: Click ScriptVault's **Details** button and enable **Allow User Scripts**.
+   - **Chrome 120-137**: Keep the global **Developer mode** toggle enabled.
 
-5. **Chrome 138+**: Click the extension's "Details" and enable **Allow User Scripts**
+If the toggle is off, the popup and dashboard show a setup banner. After enabling the required toggle, reopen the popup or click **Refresh** in dashboard runtime diagnostics; ScriptVault re-probes `chrome.userScripts` and configures the USER_SCRIPT world without requiring a browser restart. If Chrome keeps the API unavailable in the current extension context, use the **Reload** button on ScriptVault's `chrome://extensions` details page and refresh status again.
 
 ### Chrome Web Store
 

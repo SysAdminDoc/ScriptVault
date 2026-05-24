@@ -4,7 +4,7 @@
 > Each phase is independently shippable. Later phases depend on earlier ones.
 >
 > **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, and `main` now has additional unreleased 2026-05-24 hardening/release commits including release artifact reconciliation and CWS runbook/audit-gate alignment. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
-> **2026-05-24 state:** 812 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; no GitHub issues or PRs are currently open.
+> **2026-05-24 state:** 817 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; no GitHub issues or PRs are currently open.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
 ---
@@ -22,7 +22,7 @@ Local source and repo artifacts:
 - Repo tree: `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`, `esbuild.config.mjs`, `background.core.js`, `content.js`, `shared/`, `modules/`, `bg/`, `src/`, `pages/`, `scripts/`, `tests/`, `docs/`, `.github/workflows/ci.yml`, `.factory/state.yaml`, `.factory/large-repo-state.yaml`.
 - Top-level docs: `README.md`, `CHANGELOG.md`, `ROADMAP.md`, `FIREFOX-PORT.md`, `PRIVACY.md`, `AGENTS.md`, `CLAUDE.md`, `RESEARCH_FEATURE_PLAN.md`.
 - Design/research docs: `docs/cross-browser-pipeline.md`, `docs/release-runbook.md`, `docs/require-provenance-design.md`, `docs/wcag3-gap-analysis.md`, `docs/extension-interop.md`, `docs/mcp-2026-compliance.md`, `docs/research/iter-1-l1-claude-led.md`, `docs/research/iter-1-l3-claude-smoke.md`.
-- Tests: 51 test files under `tests/`, including source parity tests, security tests, accessibility tests, import/export tests, storage tests, and wrapper tests.
+- Tests: 52 test files under `tests/`, including source parity tests, security tests, accessibility tests, import/export tests, storage tests, and wrapper tests.
 - Git history: `git log -200 --oneline --decorate` reviewed through `f4c748c` back to initial public packaging work.
 - Release artifacts: `gh release list --limit 20` now shows `v3.11.0` as the latest GitHub Release with `ScriptVault-v3.11.0.zip`; the stale root `ScriptVault-firefox-v2.1.7.xpi` was removed locally.
 - Issue tracker: `gh issue list --state all --limit 100` and `gh pr list --state all --limit 100` returned no project issues or PRs.
@@ -278,12 +278,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
   - Verify: `npm run typecheck`; `npx vitest run tests/source-*.test.js tests/fetch-bounded.test.js tests/gui-secondary-audit.test.js tests/wrapper-gm-tabs-39-13.test.js`.
   - Status: Shipped 2026-05-24. `src/background/fetch-bounded.ts` now mirrors the runtime bounded reader; TS install/update/resource/context-menu paths use it; `tests/source-hardening-parity.test.js`, `tests/source-dnr-rules.test.js`, and wrapper tests pin bounded fetches, empty-grant denial, Gist rejection propagation, DNR owner-map rollback/retry, and page-scoped `window.onurlchange` dispatch.
 
-- [ ] P0 - Refresh Chrome 138+ userScripts onboarding and status diagnostics
+- [x] P0 - Refresh Chrome 138+ userScripts onboarding and status diagnostics
   - Why: Chrome now distinguishes Developer Mode from per-extension Allow User Scripts, and disabled API behavior differs by version.
   - Evidence: S01, S02, L04, H011, H013.
   - Touches: `background.core.js`, `pages/popup.js`, `pages/dashboard*.js`, `README.md`, `tests/popup-a11y.test.js`.
   - Acceptance: Users get correct setup instructions for Chrome <138 and >=138, and status checks recover after enabling the toggle.
-  - Verify: Manual Chrome 138+ install flow; focused status tests.
+  - Verify: Manual Chrome 138+ install flow; `npx vitest run tests/user-scripts-onboarding.test.js tests/popup-a11y.test.js`; `npm run typecheck`; `npm run check`.
+  - Status: Shipped 2026-05-24. Background status now uses one live `chrome.userScripts.getScripts()` probe for popup, dashboard, support snapshot, and repair. It returns version-aware setup state/action/url fields for Chrome 138+ Allow User Scripts, Chrome 120-137 Developer Mode, and unsupported browsers; `repairRuntimeState` no longer trusts stale `_userScriptsAvailable` and only re-registers after a live available probe. Popup/dashboard banners and runtime diagnostics consume the canonical status, and README source-install instructions now split Chrome 138+ from Chrome 120-137.
 
 - [ ] P0 - Finish Firefox MV3/AMO validation gate
   - Why: Firefox manifest/version exists, but port tasks are unchecked and AMO now has explicit data-collection manifest requirements.

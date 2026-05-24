@@ -79,6 +79,23 @@ describe("popup UX markup", () => {
     expect(scriptList?.getAttribute("role")).toBe("list");
     expect(scriptList?.getAttribute("aria-label")).toBe("Scripts for this page");
   });
+
+  test("setup warning is version-specific and live-announced", () => {
+    const doc = parsePopup();
+    const warning = doc.getElementById("setupWarning");
+    const title = warning?.querySelector(".setup-warning-title-text");
+    const action = doc.getElementById("btnOpenExtSettings");
+
+    expect(warning).not.toBeNull();
+    expect(warning?.getAttribute("role")).toBe("status");
+    expect(warning?.getAttribute("aria-live")).toBe("polite");
+    expect(warning?.getAttribute("aria-atomic")).toBe("true");
+    expect(warning?.getAttribute("data-setup-state")).toBe("unknown");
+    expect(title?.textContent).toMatch(/Setup Required/);
+    expect(warning?.textContent).toContain("Chrome 138+");
+    expect(warning?.textContent).toContain("Chrome 120-137");
+    expect(action?.textContent).toBe("Open Extension Details");
+  });
 });
 
 describe("popup UX controller", () => {
