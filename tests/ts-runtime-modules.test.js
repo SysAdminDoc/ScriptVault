@@ -24,16 +24,22 @@ describe('TS runtime module generator', () => {
         output: 'modules/notifications.js',
         exportName: 'NotificationSystem',
       }),
+      expect.objectContaining({
+        id: 'npm-resolve',
+        source: 'src/modules/npm-resolve.ts',
+        output: 'modules/npm-resolve.js',
+        exportName: 'NpmResolver',
+      }),
     ]));
   });
 
   it('generates runtime-compatible artifacts from TypeScript', async () => {
-    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'notifications');
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'npm-resolve');
     const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
 
-    expect(text).toContain('Generated from src/modules/notifications.ts');
-    expect(text).toContain('const NotificationSystem = (() => {');
-    expect(text).toContain('return module.exports.default || module.exports.NotificationSystem || module.exports;');
+    expect(text).toContain('Generated from src/modules/npm-resolve.ts');
+    expect(text).toContain('const NpmResolver = (() => {');
+    expect(text).toContain('return module.exports.default || module.exports.NpmResolver || module.exports;');
     expect(text).not.toContain('export default');
   });
 

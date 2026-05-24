@@ -99,6 +99,23 @@ describe('NpmResolver', () => {
     it('rejects non-npm specs', async () => {
       await expect(NpmResolver.resolve('https://cdn.com/lib.js')).rejects.toThrow('Not an npm');
     });
+
+    it('resolves explicit latest tags through the registry before building CDN URLs', async () => {
+      NpmResolver._resolveLatestVersion = vi.fn().mockResolvedValue('4.17.21');
+      NpmResolver._buildCdnUrls = vi.fn().mockReturnValue(['https://cdn.example/lodash.js']);
+      NpmResolver._fetchWithTimeout = vi.fn().mockResolvedValue('console.log("ok");');
+      NpmResolver._computeSriHash = vi.fn().mockResolvedValue('sha256-test');
+
+      const result = await NpmResolver.resolve('npm:lodash@latest');
+
+      expect(NpmResolver._resolveLatestVersion).toHaveBeenCalledWith('lodash');
+      expect(NpmResolver._buildCdnUrls).toHaveBeenCalledWith('lodash', '4.17.21');
+      expect(result).toEqual({
+        url: 'https://cdn.example/lodash.js',
+        integrity: 'sha256-test',
+        version: '4.17.21',
+      });
+    });
   });
 
   describe('POPULAR_PACKAGES', () => {

@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — NPM resolver TypeScript promotion
+
+- Promoted `modules/npm-resolve.js` to a TS-derived runtime artifact from
+  `src/modules/npm-resolve.ts`, making the TS source authoritative for npm
+  package resolution.
+- Reconciled explicit `npm:pkg@latest` handling so the TS source resolves the
+  current registry version before building CDN URLs, matching the runtime
+  behavior.
+- Extended runtime/source/generator/drift tests for three promoted modules and
+  added regression coverage for explicit `@latest` resolution.
+
 ### 2026-05-24 — Notification TypeScript promotion
 
 - Promoted `modules/notifications.js` to the same TS-derived runtime artifact
