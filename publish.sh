@@ -8,7 +8,8 @@
 #
 # Usage:
 #   bash publish.sh           # Upload + publish
-#   bash publish.sh --draft   # Upload only (no auto-publish)
+#   bash publish.sh --draft   # Upload only (review before publish)
+#   npm run cws:check         # Validate local CWS API v2 tooling without credentials
 
 set -e
 

@@ -58,7 +58,12 @@ try {
   });
   hasTag = true;
 } catch (_e) {
-  fail(`git tag ${tag} is missing`);
+  const message = `git tag ${tag} is missing`;
+  if (checkPublic) {
+    fail(message);
+  } else {
+    warnings.push(`${message}; create it before running release:check:public`);
+  }
 }
 
 if (checkPublic) {

@@ -4,6 +4,21 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Release runbook and CWS audit gate
+
+- Updated `docs/release-runbook.md` so the documented release path matches the
+  current manual `publish.sh` + Chrome Web Store API v2 flow instead of the
+  still-pending OIDC release workflow.
+- Added `npm run cws:check` to validate the installed CWS upload CLI, Node
+  engine, v4-only credential model, removed flag usage, `publish.sh`,
+  `cws-setup.sh`, and CI release-gate wiring without requiring store
+  credentials.
+- Made the CI high-severity npm audit blocking, added CWS tooling and release
+  artifact parity checks to CI, and fetched tags in checkout so
+  `npm run release:check` can validate the current release tag.
+- Locked shell scripts to LF line endings with `.gitattributes` and corrected
+  CWS setup/publish copy to avoid stale "auto-publish" wording.
+
 ### 2026-05-24 — Release artifact reconciliation
 
 - Published the missing GitHub Release for `v3.11.0` and attached
