@@ -68,6 +68,9 @@ describe("accessibility surface pass", () => {
   test("status, toast, and async surfaces have live-region contracts", () => {
     expect(getAttr(findTagById(dashboardHtml, "a11yAnnouncer"), "role")).toBe("status");
     expect(getAttr(findTagById(dashboardHtml, "a11yAnnouncer"), "aria-live")).toBe("polite");
+    expect(getAttr(findTagById(dashboardHtml, "emptyState"), "role")).toBe("status");
+    expect(getAttr(findTagById(dashboardHtml, "emptyState"), "aria-live")).toBe("polite");
+    expect(getAttr(findTagById(dashboardHtml, "scriptSearch"), "aria-describedby")).toBe("scriptCounter");
     expect(getAttr(findTagById(dashboardHtml, "progressStatus"), "aria-live")).toBe("polite");
     expect(getAttr(findTagById(dashboardHtml, "editorSaveState"), "aria-atomic")).toBe("true");
     expect(dashboardJs).toContain("toast.setAttribute('role', type === 'error' ? 'alert' : 'status')");
@@ -86,6 +89,24 @@ describe("accessibility surface pass", () => {
     expect(installJs).toContain('id="decisionHeroCopy" role="status" aria-live="polite" aria-atomic="true"');
     expect(installJs).toContain('role="alert" aria-live="assertive"');
     expect(installJs).toContain('role="status" aria-live="polite" aria-atomic="true"');
+  });
+
+  test("premium polish layer keeps state feedback explicit across surfaces", () => {
+    expect(dashboardHtml).toContain("Premium cohesion pass (v3.12)");
+    expect(dashboardHtml).toContain("--premium-state-transition");
+    expect(dashboardHtml).toContain("Your vault is empty");
+    expect(dashboardJs).toContain("No scripts match this view");
+    expect(dashboardCss).toContain(".toast.toast-info");
+
+    expect(popupHtml).toContain(".popup-toast.warning");
+    expect(popupHtml).toContain("No scripts run here");
+    expect(popupJs).toContain("toast.setAttribute('role', toastType === 'error' ? 'alert' : 'status')");
+    expect(popupJs).toContain("toast.setAttribute('aria-live', toastType === 'error' ? 'assertive' : 'polite')");
+
+    expect(sidepanelHtml).toContain("Premium compact polish");
+    expect(sidepanelJs).toContain("No scripts in your vault yet.");
+    expect(installHtml).toContain("Premium review polish");
+    expect(installHtml).toContain("@keyframes installLoadingSweep");
   });
 
   test("compact popup and side-panel toggles meet 24px touch-target height", () => {

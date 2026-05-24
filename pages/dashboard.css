@@ -840,10 +840,25 @@ input[type="checkbox"] {
   background: linear-gradient(var(--tint-green-soft), var(--tint-green-soft)), var(--bg-header);
   box-shadow: var(--shadow-md), inset 3px 0 0 var(--accent-green);
 }
+.toast.toast-success {
+  border-color: var(--tint-green-edge);
+  background: linear-gradient(var(--tint-green-soft), var(--tint-green-soft)), var(--bg-header);
+  box-shadow: var(--shadow-md), inset 3px 0 0 var(--accent-green);
+}
 .toast.error {
   border-color: var(--tint-red-edge);
   background: linear-gradient(var(--tint-red-soft), var(--tint-red-soft)), var(--bg-header);
   box-shadow: var(--shadow-md), inset 3px 0 0 var(--accent-red);
+}
+.toast.toast-error {
+  border-color: var(--tint-red-edge);
+  background: linear-gradient(var(--tint-red-soft), var(--tint-red-soft)), var(--bg-header);
+  box-shadow: var(--shadow-md), inset 3px 0 0 var(--accent-red);
+}
+.toast.toast-info {
+  border-color: var(--tint-blue-edge);
+  background: linear-gradient(var(--tint-blue-soft), var(--tint-blue-soft)), var(--bg-header);
+  box-shadow: var(--shadow-md), inset 3px 0 0 var(--accent-blue);
 }
 .toast.warning,
 .toast.toast-warning {

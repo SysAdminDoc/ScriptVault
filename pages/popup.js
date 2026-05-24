@@ -294,7 +294,7 @@
     function updateEmptyStateHint() {
         const el = elements.emptyStateHint;
         if (!el) return;
-        el.textContent = 'Find scripts on GreasyFork or create your own.';
+        el.textContent = 'Find trusted scripts or create one for this site.';
         updatePrimaryActionMenuVisibility();
         if (!canMatchScriptsForUrl(currentUrl)) {
             el.textContent = 'Switch to a regular website or local file to search for matching scripts.';
@@ -303,7 +303,7 @@
         try {
             const hostname = new URL(currentUrl).hostname.replace(/^www\./, '');
             if (hostname) {
-                el.textContent = `Search GreasyFork for ${hostname} or start a new script for this site.`;
+                el.textContent = `Search GreasyFork for ${hostname} or create a focused script for this site.`;
             }
         } catch {}
     }
@@ -1408,7 +1408,11 @@
             document.body.appendChild(toast);
         }
         toast.textContent = msg;
-        toast.classList.toggle('error', type === 'error');
+        const toastType = ['success', 'error', 'warning', 'info'].includes(type) ? type : 'success';
+        toast.classList.remove('success', 'error', 'warning', 'info');
+        toast.classList.add(toastType);
+        toast.setAttribute('role', toastType === 'error' ? 'alert' : 'status');
+        toast.setAttribute('aria-live', toastType === 'error' ? 'assertive' : 'polite');
         toast.classList.remove('show');
         void toast.offsetWidth;
         toast.classList.add('show');

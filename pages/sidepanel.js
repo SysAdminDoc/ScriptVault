@@ -191,7 +191,7 @@
     const total = allScripts.length;
     const normalizedQuery = searchQuery.replace(/\s+/g, ' ').trim();
     if (!total) {
-      status.textContent = 'No installed scripts yet.';
+      status.textContent = 'No scripts installed yet.';
       return;
     }
     if (normalizedQuery) {
@@ -504,12 +504,12 @@
       icon.textContent = searchQuery ? '\u2315' : 'SV';
       icon.setAttribute('aria-hidden', 'true');
       const msg = document.createElement('div');
-      msg.textContent = searchQuery ? `No scripts match "${searchQuery}".` : 'Your vault is empty.';
+      msg.textContent = searchQuery ? `No scripts match "${searchQuery}".` : 'No scripts in your vault yet.';
       empty.append(icon, msg);
       if (!searchQuery) {
         const detail = document.createElement('div');
         detail.style.marginTop = '4px';
-        detail.textContent = 'Install or create a userscript to populate this panel.';
+        detail.textContent = 'Open Dashboard to create or import a userscript.';
         empty.appendChild(detail);
       }
       if (searchQuery) {

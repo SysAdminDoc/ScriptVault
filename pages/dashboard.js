@@ -4710,9 +4710,9 @@
         const hasFilter = filterValue !== 'all';
 
         if (!hasScripts) {
-            if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = 'No Userscripts Yet';
+            if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = 'Your vault is empty';
             if (elements.emptyStateDescription) {
-                elements.emptyStateDescription.textContent = 'Create a new script or import one to build out the workspace.';
+                elements.emptyStateDescription.textContent = 'Create a script or import an existing userscript. ScriptVault keeps scripts local unless you enable sync or backups.';
             }
             if (elements.emptyStatePrimaryAction) {
                 elements.emptyStatePrimaryAction.hidden = false;
@@ -4728,11 +4728,11 @@
         }
 
         if (filteredCount === 0 && (hasSearch || hasFilter)) {
-            if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = 'No Matching Scripts';
+            if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = 'No scripts match this view';
             if (elements.emptyStateDescription) {
                 const searchDetail = hasSearch ? ` for "${searchQuery}"` : '';
                 const filterDetail = hasFilter ? ` under the "${filterValue}" filter` : '';
-                elements.emptyStateDescription.textContent = `No scripts matched${searchDetail}${filterDetail}. Clear the current search or filter to see the full workspace.`;
+                elements.emptyStateDescription.textContent = `No scripts matched${searchDetail}${filterDetail}. Adjust the search or filters to return to the full workspace.`;
             }
             if (elements.emptyStatePrimaryAction) {
                 elements.emptyStatePrimaryAction.hidden = false;
@@ -4750,9 +4750,9 @@
             return;
         }
 
-        if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = 'Nothing To Show';
+        if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = 'This view is empty';
         if (elements.emptyStateDescription) {
-            elements.emptyStateDescription.textContent = 'This view is empty right now. Try a different filter or refresh the workspace.';
+            elements.emptyStateDescription.textContent = 'Try another filter, refresh the workspace, or show all scripts.';
         }
         if (elements.emptyStatePrimaryAction) {
             elements.emptyStatePrimaryAction.hidden = false;
