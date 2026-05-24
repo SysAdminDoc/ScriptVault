@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Bounded fetch UTF-8 fallback
+
+- Tightened the shared bounded text reader so its non-stream fallback measures
+  UTF-8 bytes instead of JavaScript string length before accepting a response.
+- Updated the runtime `background.core.js` helper, TypeScript mirror, and
+  rebuilt `background.js` from the corrected guard.
+- Added regressions for multibyte fallback bodies in both the extracted
+  runtime helper and TypeScript parity suite.
+
 ### 2026-05-24 — NPM resolver response-size hardening
 
 - Added bounded streamed response reads to the `npm:` package resolver so CDN

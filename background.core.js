@@ -1346,8 +1346,9 @@ async function _fetchTextBounded(response, maxBytes, label) {
     // No stream available (test mock, opaque response). Fall through to the
     // buffered path but still cap defensively.
     const text = await response.text();
-    if (typeof text === 'string' && text.length > maxBytes) {
-      throw new Error(`${label} too large (${formatBytes(text.length)}). Maximum is ${formatBytes(maxBytes)}.`);
+    const bytes = typeof text === 'string' ? new TextEncoder().encode(text).byteLength : 0;
+    if (bytes > maxBytes) {
+      throw new Error(`${label} too large (${formatBytes(bytes)}). Maximum is ${formatBytes(maxBytes)}.`);
     }
     return text;
   }

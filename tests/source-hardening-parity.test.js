@@ -55,6 +55,8 @@ describe('source hardening parity guards', () => {
     expect(small).toBe('ok');
     await expect(fetchTextBounded(responseFromText('x'.repeat(20), { declaredLength: 5 }), 10, 'Script'))
       .rejects.toThrow(/Script too large/);
+    await expect(fetchTextBounded(responseFromText('é', { stream: false }), 1, 'Script'))
+      .rejects.toThrow(/Script too large/);
   });
 
   it('keeps empty grants and grant none locked down in the TypeScript wrapper mirror', () => {

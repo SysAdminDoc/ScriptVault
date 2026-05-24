@@ -96,6 +96,11 @@ describe('_fetchTextBounded — stream-bounded fetch helper', () => {
     await expect(_fetchTextBounded(r, 100, 'Test')).rejects.toThrow(/Test too large/);
   });
 
+  it('measures buffered fallback bodies by UTF-8 bytes, not string length', async () => {
+    const r = makeResponse('é', { useStream: false });
+    await expect(_fetchTextBounded(r, 1, 'Test')).rejects.toThrow(/Test too large/);
+  });
+
   it('handles multi-byte UTF-8 across chunk boundaries', async () => {
     // "あ" is 0xE3 0x81 0x82 in UTF-8. Split across two chunks.
     const part1 = new Uint8Array([0xE3, 0x81]);
