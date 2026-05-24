@@ -6988,9 +6988,15 @@
         }
     }
 
-    function exportStatsCSV() {
+    function formatStatsCSVCell(value) {
+        let s = String(value == null ? '' : value);
+        if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+        return '"' + s.replace(/"/g, '""') + '"';
+    }
+
+    function buildStatsCSV(scripts) {
         const rows = [['Name', 'Version', 'Enabled', 'Runs', 'Avg Time (ms)', 'Total Time (ms)', 'Errors', 'Last Run', 'Last URL', 'Size (bytes)', 'Lines', 'Tags', 'Matches']];
-        for (const s of state.scripts) {
+        for (const s of scripts || []) {
             const m = s.metadata || {};
             const st = s.stats || {};
             rows.push([
@@ -7014,11 +7020,11 @@
         // author could name their script `=HYPERLINK("http://evil")` and
         // weaponize anyone who exports the stats CSV. Prefix any cell
         // beginning with a formula-trigger char per OWASP/CWE-1236.
-        const csv = rows.map(r => r.map(c => {
-            let s = String(c == null ? '' : c);
-            if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-            return '"' + s.replace(/"/g, '""') + '"';
-        }).join(',')).join('\n');
+        return rows.map(r => r.map(formatStatsCSVCell).join(',')).join('\n');
+    }
+
+    function exportStatsCSV() {
+        const csv = buildStatsCSV(state.scripts);
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const a = document.createElement('a');
         const url = URL.createObjectURL(blob);
