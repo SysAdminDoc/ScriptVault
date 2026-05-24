@@ -36,6 +36,12 @@ export const TS_RUNTIME_MODULES = [
     output: 'modules/quota-manager.js',
     exportName: 'QuotaManager',
   },
+  {
+    id: 'userstyles',
+    source: 'src/modules/userstyles.ts',
+    output: 'modules/userstyles.js',
+    exportName: 'UserStylesEngine',
+  },
 ];
 
 function normalizeNewlines(text) {

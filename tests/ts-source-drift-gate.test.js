@@ -42,6 +42,7 @@ describe('TS source drift gate', () => {
     expect(map.entries.some((entry) => entry.runtime === 'modules/notifications.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/npm-resolve.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/quota-manager.js' && entry.status === 'promoted')).toBe(true);
+    expect(map.entries.some((entry) => entry.runtime === 'modules/userstyles.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'background.core.js' && entry.status === 'intentionally-divergent')).toBe(true);
   });
 
@@ -50,7 +51,7 @@ describe('TS source drift gate', () => {
     const report = analyzeSourceDrift(map, []);
     const text = formatTextReport(report, { reportMode: true });
 
-    expect(report.totals.promoted).toBe(4);
+    expect(report.totals.promoted).toBe(5);
     expect(report.totals.candidate).toBe(0);
     expect(report.totals['intentionally-divergent']).toBeGreaterThanOrEqual(2);
     expect(text).toContain('modules/error-log.js -> src/modules/error-log.ts');
@@ -77,6 +78,41 @@ describe('TS source drift gate', () => {
 
     expect(withSource.violations).toEqual([]);
     expect(withGenerated.violations).toEqual([]);
+  });
+
+  it('allows the first promotion commit when the map changes from mirrored to promoted', () => {
+    const previousMap = normalizePromotionMap({
+      schemaVersion: 1,
+      entries: [
+        {
+          runtime: 'modules/userstyles.js',
+          sources: ['src/modules/userstyles.ts'],
+          status: 'mirrored',
+        },
+      ],
+    }, { rootDir: ROOT });
+    const currentMap = normalizePromotionMap({
+      schemaVersion: 1,
+      entries: [
+        {
+          runtime: 'modules/userstyles.js',
+          sources: ['src/modules/userstyles.ts'],
+          status: 'promoted',
+        },
+      ],
+    }, { rootDir: ROOT });
+
+    const report = analyzeSourceDrift(currentMap, [
+      'modules/userstyles.js',
+      'ts-source-promotion.json',
+    ], { previousMap });
+
+    expect(report.ok).toBe(true);
+    expect(report.violations).toEqual([]);
+    expect(report.touched[0]).toMatchObject({
+      runtime: 'modules/userstyles.js',
+      newlyPromoted: true,
+    });
   });
 
   it('does not gate candidate or intentionally divergent runtime files yet', () => {

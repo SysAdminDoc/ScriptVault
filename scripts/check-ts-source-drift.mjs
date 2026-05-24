@@ -109,9 +109,15 @@ function groupEntriesByStatus(entries) {
   return grouped;
 }
 
-export function analyzeSourceDrift(map, changedFiles = []) {
+function getPreviousEntryByRuntime(previousMap) {
+  const entries = previousMap?.entries || [];
+  return new Map(entries.map((entry) => [entry.runtime, entry]));
+}
+
+export function analyzeSourceDrift(map, changedFiles = [], options = {}) {
   const changed = new Set(changedFiles.map((path) => normalizeRepoPath(path)).filter(Boolean));
   const groupedByStatus = groupEntriesByStatus(map.entries || []);
+  const previousByRuntime = getPreviousEntryByRuntime(options.previousMap);
   const violations = [];
   const touched = [];
 
@@ -119,6 +125,12 @@ export function analyzeSourceDrift(map, changedFiles = []) {
     const runtimeTouched = changed.has(entry.runtime);
     const sourceTouched = entry.sources.some((source) => changed.has(source));
     const generatedTouched = entry.generatedArtifacts.some((artifact) => changed.has(artifact));
+    const previousEntry = previousByRuntime.get(entry.runtime);
+    const newlyPromoted =
+      entry.status === 'promoted' &&
+      previousEntry &&
+      previousEntry.status !== 'promoted' &&
+      changed.has(DEFAULT_MAP);
     if (runtimeTouched || sourceTouched || generatedTouched) {
       touched.push({
         runtime: entry.runtime,
@@ -126,9 +138,10 @@ export function analyzeSourceDrift(map, changedFiles = []) {
         runtimeTouched,
         sourceTouched,
         generatedTouched,
+        newlyPromoted,
       });
     }
-    if (entry.status === 'promoted' && runtimeTouched && !sourceTouched && !generatedTouched) {
+    if (entry.status === 'promoted' && runtimeTouched && !sourceTouched && !generatedTouched && !newlyPromoted) {
       violations.push({
         runtime: entry.runtime,
         sources: entry.sources,
@@ -193,6 +206,21 @@ export function getChangedFilesFromGit(options = {}) {
   if (base === head) return [];
   const output = runGit(['diff', '--name-only', '--diff-filter=ACMRT', base, head], rootDir);
   return output ? output.split(/\r?\n/).filter(Boolean) : [];
+}
+
+function loadPreviousPromotionMap(options = {}) {
+  const rootDir = options.rootDir || DEFAULT_ROOT;
+  const base = options.base || inferGitBase(rootDir);
+  const mapPath = options.mapPath || join(rootDir, DEFAULT_MAP);
+  const repoMapPath = normalizeRepoPath(mapPath, rootDir);
+  if (!base || base === 'HEAD') return null;
+
+  try {
+    const text = runGit(['show', `${base}:${repoMapPath}`], rootDir);
+    return normalizePromotionMap(JSON.parse(text), { rootDir });
+  } catch {
+    return null;
+  }
 }
 
 function formatEntryList(entries) {
@@ -307,7 +335,12 @@ export async function runCli(argv = process.argv.slice(2)) {
     });
   }
 
-  const report = analyzeSourceDrift(map, changedFiles);
+  const previousMap = loadPreviousPromotionMap({
+    rootDir: options.rootDir,
+    base: options.base,
+    mapPath: options.mapPath,
+  });
+  const report = analyzeSourceDrift(map, changedFiles, { previousMap });
   if (options.json) {
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } else {
