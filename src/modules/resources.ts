@@ -12,6 +12,7 @@ interface CacheEntry {
 
 interface ResourceCache {
   cache: Record<string, CacheEntry>;
+  _pendingFetches: Map<string, Promise<string>>;
   maxAge: number;
   maxEntries: number;
   maxResourceBytes: number;
@@ -27,6 +28,7 @@ interface ResourceCache {
 
 const ResourceCache: ResourceCache = {
   cache: {},
+  _pendingFetches: new Map(),
   maxAge: 86400000, // 24 hours
   maxEntries: 200,
   maxResourceBytes: 5 * 1024 * 1024,
@@ -91,7 +93,10 @@ const ResourceCache: ResourceCache = {
       throw new Error(`@resource URL rejected: ${preCheck.message}`);
     }
 
-    try {
+    const pending = this._pendingFetches.get(url);
+    if (pending) return await pending;
+
+    const fetchPromise = (async (): Promise<string> => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.fetchTimeoutMs);
       try {
@@ -133,9 +138,16 @@ const ResourceCache: ResourceCache = {
       } finally {
         clearTimeout(timeoutId);
       }
-    } catch (e: unknown) {
+    })().catch((e: unknown) => {
       console.error('[ScriptVault] Failed to fetch resource:', url, e);
       throw e;
+    });
+
+    this._pendingFetches.set(url, fetchPromise);
+    try {
+      return await fetchPromise;
+    } finally {
+      this._pendingFetches.delete(url);
     }
   },
 
@@ -162,7 +174,8 @@ const ResourceCache: ResourceCache = {
     this.cache = {};
     // Also clear persistent resource cache entries
     try {
-      const all = await chrome.storage.local.get(undefined);
+      // Chrome accepts null to enumerate all keys; chrome-types omits it.
+      const all = await chrome.storage.local.get(null as unknown as undefined);
       const keys = Object.keys(all).filter((k: string) => k.startsWith(this.STORAGE_PREFIX));
       if (keys.length > 0) await chrome.storage.local.remove(keys);
     } catch (_e) { /* ignore */ }

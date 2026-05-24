@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Resource cache TypeScript promotion
+
+- Promoted `modules/resources.js` to a generated runtime artifact from
+  `src/modules/resources.ts`, continuing the storage/resource-layer
+  TypeScript authoritative-source tranche.
+- Reconciled ResourceCache TS drift before promotion: restored LR-002
+  in-flight fetch deduplication and `chrome.storage.local.get(null)` cache-key
+  enumeration behavior.
+- Added source coverage for concurrent resource fetch deduplication and
+  extended generator/drift coverage to eight promoted modules.
+
 ### 2026-05-24 — Internal host guard TypeScript promotion
 
 - Promoted `modules/internal-host-guard.js` to a generated runtime artifact

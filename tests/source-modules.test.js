@@ -75,6 +75,7 @@ function makeScript(overrides = {}) {
 beforeEach(() => {
   globalThis.__resetStorageMock();
   ResourceCache.cache = {};
+  ResourceCache._pendingFetches?.clear?.();
   XhrManager.requests.clear();
   XhrManager.nextId = 1;
   SettingsManager.cache = null;
@@ -476,6 +477,27 @@ describe('source resource cache module', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(ResourceCache.cache['https://example.com/huge.js']).toBeUndefined();
+  });
+
+  it('deduplicates concurrent source resource fetches for the same URL', async () => {
+    const fetchMock = vi.fn(() => new Promise((resolve) => {
+      queueMicrotask(() => resolve(new Response('window.shared = true;', {
+        status: 200,
+        headers: { 'content-type': 'text/javascript' },
+      })));
+    }));
+    globalThis.fetch = fetchMock;
+
+    const url = 'https://cdn.example.com/shared.js';
+    const [first, second] = await Promise.all([
+      ResourceCache.fetchResource(url),
+      ResourceCache.fetchResource(url),
+    ]);
+
+    expect(first).toBe('window.shared = true;');
+    expect(second).toBe('window.shared = true;');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(ResourceCache._pendingFetches.has(url)).toBe(false);
   });
 
   it('rejects internal-host and redirected resource URLs without caching them', async () => {
