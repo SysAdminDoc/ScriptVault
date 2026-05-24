@@ -4,6 +4,23 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — User-script messaging gate
+
+- Added `USER_SCRIPT_MESSAGING_AVAILABLE` feature detection for
+  `chrome.runtime.onUserScriptMessage` (Chrome 131+); the dedicated listener
+  remains the primary route for user-script-origin GM_* and telemetry calls.
+- Hardened the shared `chrome.runtime.onMessage` listener: tab-origin senders
+  (anything that does not originate from a `chrome-extension://<id>/` URL on
+  this extension) are now restricted to the same user-script allowlist
+  (`GM_*`, `GM.*`, `netlog_record`, `reportExecError`, `reportExecTime`). This
+  closes the Chrome 130 / Firefox-without-onUserScriptMessage fallback path
+  where a user script using `chrome.runtime.sendMessage` could otherwise reach
+  privileged dashboard actions.
+- Added six new contract tests in `tests/content-bridge-security.test.js`
+  covering allow/deny for tab vs extension-surface senders, spoofed
+  `chrome-extension://` origins, and listener registration on supporting and
+  non-supporting runtimes.
+
 ### 2026-05-24 — Permission and store-copy drift gate
 
 - Added `docs/store-listing-copy.md` as the reviewer-facing permission and

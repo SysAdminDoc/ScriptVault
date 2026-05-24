@@ -302,12 +302,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
   - Verify: `npm run store-copy:check`; `npm run check`; `npm run smoke:dashboard`; `npm audit --audit-level=high --omit=optional`; `npm run cws:check`; `npm run firefox:package`; `npm run release:check`; `git diff --check`.
   - Status: Shipped 2026-05-24. Added `docs/store-listing-copy.md` as the reviewer-facing Chrome Web Store/AMO permission-copy source, expanded `PRIVACY.md` with a checkable manifest surface inventory, added `scripts/check-permission-copy.mjs` plus `npm run store-copy:check`, wired the gate into CI and the release runbook, and linked the review flow from README. The gate currently covers 30 manifest surfaces across Chrome and Firefox manifests, including permissions, optional permissions, host permissions, content-script matches, web-accessible resources, Chrome sandbox pages, and AMO data-collection declarations.
 
-- [ ] P1 - Migrate XHR/user-script bridge to dedicated user-script messaging
+- [x] P1 - Migrate XHR/user-script bridge to dedicated user-script messaging
   - Why: Platform APIs now provide dedicated handlers for less-trusted user-script contexts.
   - Evidence: L22, S01, S02, H012.
   - Touches: `content.js`, `background.core.js`, `modules/xhr.js`, `src/modules/xhr.ts`, `tests/content-bridge-security.test.js`, `tests/xhr.test.js`.
   - Acceptance: Chrome 131+ path uses `runtime.onUserScriptMessage`; older/browser fallback is explicit and tested.
   - Verify: `npx vitest run tests/content-bridge-security.test.js tests/xhr.test.js`.
+  - Status: Shipped 2026-05-24. Background now feature-detects `chrome.runtime.onUserScriptMessage` via a `USER_SCRIPT_MESSAGING_AVAILABLE` flag; the dedicated listener remains the Chrome 131+ path for user-script-origin GM_* and telemetry calls. The shared `chrome.runtime.onMessage` listener now gates tab-origin senders through the same `isUserScriptAllowedAction` allowlist (anything that does not originate from a `chrome-extension://<id>/` URL on this extension is restricted to GM_* / GM. / `netlog_record` / `reportExecError` / `reportExecTime`), closing the Chrome <131 / Firefox-without-onUserScriptMessage fallback path. Six new contract tests in `tests/content-bridge-security.test.js` cover the allow/deny matrix for tab vs extension surfaces, spoofed `chrome-extension://` origins, and dedicated-listener registration on supporting and non-supporting runtimes.
 
 - [ ] P1 - Add shared internal-host, redirect, and DNS-rebind fetch policy
   - Why: Prior webhook hardening should apply to all remote code/dependency fetches.

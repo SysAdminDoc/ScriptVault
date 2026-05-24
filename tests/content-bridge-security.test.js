@@ -62,6 +62,77 @@ function loadConnectPolicyHelpers() {
   return new Function(`${helperCode}; return { evaluateConnectPolicy, normalizeConnectHost };`)();
 }
 
+// Pull the user-script messaging gate (constants + helpers + onMessage/onUserScriptMessage
+// listeners) out of background.core.js so we can drive both senders without booting the
+// full SW. The slice runs end-to-end so the listener registrations execute against the
+// supplied chrome mock and we can capture them.
+function loadUserScriptMessagingGate({ hasUserScriptMessage = true } = {}) {
+  // Background source is checked in with CRLF line endings on Windows; normalize so
+  // the slice search and the eval'd code both use LF.
+  const source = backgroundCoreCode.replace(/\r\n/g, '\n');
+  const start = source.indexOf('// USER_SCRIPT world message listener');
+  const debugMarker = "debugLog('User script message listener registered');";
+  const debugIdx = source.indexOf(debugMarker, start);
+  if (start === -1 || debugIdx === -1) {
+    throw new Error('Unable to locate user-script messaging gate in background.core.js');
+  }
+  // Capture up to the closing `}` that ends the `if (chrome.runtime.onUserScriptMessage)` block.
+  const closingBraceIdx = source.indexOf('}', debugIdx + debugMarker.length);
+  if (closingBraceIdx === -1) {
+    throw new Error('Unable to locate closing brace of onUserScriptMessage block');
+  }
+  const sliceCode = source.slice(start, closingBraceIdx + 1);
+
+  const onMessageListeners = [];
+  const onUserScriptListeners = [];
+  const chromeMock = {
+    runtime: {
+      id: 'gate-extension-id',
+      onMessage: {
+        addListener: (fn) => onMessageListeners.push(fn),
+      },
+    },
+  };
+  if (hasUserScriptMessage) {
+    chromeMock.runtime.onUserScriptMessage = {
+      addListener: (fn) => onUserScriptListeners.push(fn),
+    };
+  }
+
+  // Stub the handleMessage and debugLog symbols the slice references — we
+  // only care that the gate decides what reaches handleMessage, not what
+  // handleMessage itself does.
+  const handleMessageCalls = [];
+  const handleMessage = async (message, sender) => {
+    handleMessageCalls.push({ message, sender });
+    return { handled: true, action: message?.action };
+  };
+  const debugLog = () => {};
+
+  const factory = new Function(
+    'chrome', 'handleMessage', 'debugLog',
+    `${sliceCode}\nreturn { isExtensionSurfaceSender, isUserScriptAllowedAction, USER_SCRIPT_MESSAGING_AVAILABLE };`
+  );
+  const exports = factory(chromeMock, handleMessage, debugLog);
+
+  return {
+    chromeMock,
+    onMessageListeners,
+    onUserScriptListeners,
+    handleMessageCalls,
+    helpers: exports,
+  };
+}
+
+function invokeListener(listener, message, sender) {
+  return new Promise((resolvePromise) => {
+    const ret = listener(message, sender, (response) => resolvePromise(response));
+    if (ret === false) {
+      // Synchronous reject path already invoked sendResponse before returning.
+    }
+  });
+}
+
 describe('content script bridge security boundary', () => {
   it('does not expose privileged GM APIs through page-visible postMessage', async () => {
     const { window: win, chromeMock, channel } = loadContentBridge();
@@ -141,5 +212,97 @@ describe('content script bridge security boundary', () => {
       allowed: false,
       error: 'Invalid URL',
     });
+  });
+});
+
+describe('runtime.onMessage user-script gate (Chrome <131 / Firefox fallback)', () => {
+  it('rejects tab-origin actions that are not in the user-script allowlist', async () => {
+    const { onMessageListeners, handleMessageCalls } = loadUserScriptMessagingGate({ hasUserScriptMessage: false });
+    expect(onMessageListeners).toHaveLength(1);
+
+    const tabSender = {
+      id: 'gate-extension-id',
+      url: 'https://victim.example/page',
+      tab: { id: 99 },
+    };
+    const response = await invokeListener(onMessageListeners[0], { action: 'factoryReset' }, tabSender);
+    expect(response).toEqual({ error: 'Action not permitted from non-extension context' });
+    expect(handleMessageCalls).toHaveLength(0);
+  });
+
+  it('allows GM_* actions from tab-origin senders (user-script fallback path)', async () => {
+    const { onMessageListeners, handleMessageCalls } = loadUserScriptMessagingGate({ hasUserScriptMessage: false });
+    const tabSender = {
+      id: 'gate-extension-id',
+      url: 'https://example.com/page',
+      tab: { id: 7 },
+    };
+    const response = await invokeListener(
+      onMessageListeners[0],
+      { action: 'GM_setValue', data: { scriptId: 's', key: 'k', value: 1 } },
+      tabSender
+    );
+    expect(response).toEqual({ handled: true, action: 'GM_setValue' });
+    expect(handleMessageCalls).toHaveLength(1);
+  });
+
+  it('allows extension-surface senders to call any handleMessage action', async () => {
+    const { onMessageListeners, handleMessageCalls } = loadUserScriptMessagingGate({ hasUserScriptMessage: true });
+    const dashboardSender = {
+      id: 'gate-extension-id',
+      url: 'chrome-extension://gate-extension-id/pages/dashboard.html',
+      tab: { id: 12 },
+    };
+    const response = await invokeListener(
+      onMessageListeners[0],
+      { action: 'factoryReset' },
+      dashboardSender
+    );
+    expect(response).toEqual({ handled: true, action: 'factoryReset' });
+    expect(handleMessageCalls).toHaveLength(1);
+  });
+
+  it('rejects spoofed sender.url that does not match this extension origin', async () => {
+    const { onMessageListeners, handleMessageCalls } = loadUserScriptMessagingGate({ hasUserScriptMessage: true });
+    const spoofed = {
+      id: 'gate-extension-id',
+      url: 'chrome-extension://OTHER-EXTENSION-ID/pages/dashboard.html',
+      tab: { id: 12 },
+    };
+    const response = await invokeListener(
+      onMessageListeners[0],
+      { action: 'factoryReset' },
+      spoofed
+    );
+    expect(response).toEqual({ error: 'Action not permitted from non-extension context' });
+    expect(handleMessageCalls).toHaveLength(0);
+  });
+
+  it('registers the dedicated onUserScriptMessage listener when the API exists', async () => {
+    const { onUserScriptListeners, handleMessageCalls, helpers } = loadUserScriptMessagingGate({ hasUserScriptMessage: true });
+    expect(helpers.USER_SCRIPT_MESSAGING_AVAILABLE).toBe(true);
+    expect(onUserScriptListeners).toHaveLength(1);
+
+    const userScriptSender = { id: 'gate-extension-id', url: 'https://example.com/page' };
+    const blocked = await invokeListener(
+      onUserScriptListeners[0],
+      { action: 'factoryReset' },
+      userScriptSender
+    );
+    expect(blocked).toEqual({ error: 'Action not permitted from user script' });
+
+    const allowed = await invokeListener(
+      onUserScriptListeners[0],
+      { action: 'GM_xmlhttpRequest', data: { url: 'https://example.com/' } },
+      userScriptSender
+    );
+    expect(allowed).toEqual({ handled: true, action: 'GM_xmlhttpRequest' });
+    expect(handleMessageCalls).toHaveLength(1);
+  });
+
+  it('does not register the dedicated listener and reports unavailable on older runtimes', () => {
+    const { onUserScriptListeners, helpers } = loadUserScriptMessagingGate({ hasUserScriptMessage: false });
+    expect(helpers.USER_SCRIPT_MESSAGING_AVAILABLE).toBe(false);
+    expect(onUserScriptListeners).toHaveLength(0);
   });
 });
