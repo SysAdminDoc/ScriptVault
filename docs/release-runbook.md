@@ -19,8 +19,9 @@ Before any release branch is created:
 5. **Locale lint green:** `tests/manifest-locales.test.js` passes - no locale's `extName` exceeds 75 chars, no `extDescription` exceeds 132 chars, all locales share the `en` key set.
 6. **Version sources synced:** `manifest.json`, `manifest-firefox.json`, `package.json`, and `package-lock.json` all point to the same target version.
 7. **Rollback drill green:** `npm run release:rollback-drill` proves the previous public `chrome.storage.local` snapshot survives the current storage migration safety window.
-8. **Release artifact parity green:** `npm run release:check` passes locally; after the tag and GitHub Release are created, `npm run release:check:public` must pass.
-9. **CHANGELOG entry drafted:** one paragraph per shipped roadmap item, with `Phase X.Y` cross-references.
+8. **Firefox AMO gate green:** `npm run firefox:package` exits with `web-ext lint: 0 errors, 0 notices` and writes `firefox-artifacts/scriptvault-firefox-vX.Y.Z.zip`, `firefox-artifacts/scriptvault-firefox-source-vX.Y.Z.zip`, and `firefox-artifacts/web-ext-lint.json`.
+9. **Release artifact parity green:** `npm run release:check` passes locally; after the tag and GitHub Release are created, `npm run release:check:public` must pass.
+10. **CHANGELOG entry drafted:** one paragraph per shipped roadmap item, with `Phase X.Y` cross-references.
 
 If any gate fails, stop. Do not patch the test to make it green.
 
@@ -83,13 +84,13 @@ References: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/frega
 1. **Cut release branch** off `main`: `git checkout -b release/vX.Y.Z`.
 2. **Bump versions** in `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`. Use semver - patch for fixes, minor for additive features, major only for breaking changes.
 3. **Finalize CHANGELOG.md** entry for vX.Y.Z. Match the prose style of recent entries.
-4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run cws:check`, `npm run release:rollback-drill`, and `npm run release:check`.
-5. **Build:** `npm run build:prod` then `bash build.sh`. Verify the produced ZIP loads in a clean Chrome profile.
+4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run cws:check`, `npm run firefox:package`, `npm run release:rollback-drill`, and `npm run release:check`.
+5. **Build:** `npm run build:prod` then `bash build.sh`. Verify the produced ZIP loads in a clean Chrome profile. For Firefox validation, inspect the Firefox package/source ZIP under `firefox-artifacts/`.
 6. **Release trust gate:** `npm run release:trust`. For a public release with the maintainer signing key available, run `npm run release:trust:strict` with `RELEASE_SIGNING_PRIVATE_KEY_PATH` or `RELEASE_SIGNING_PRIVATE_KEY_PEM`.
 7. **Tag:** `git tag -a vX.Y.Z -m "Release vX.Y.Z - <one-line summary>"`.
 8. **Push commit and tag to GitHub.**
 9. **Verify local artifact parity:** rerun `npm run release:check`; the missing-tag warning must be gone.
-10. **Create or update GitHub Release:** attach `ScriptVault-vX.Y.Z.zip`, `release-artifacts/*`, and the GitHub Actions attestation links; mark it as latest for normal production releases.
+10. **Create or update GitHub Release:** attach `ScriptVault-vX.Y.Z.zip`, `firefox-artifacts/*`, `release-artifacts/*`, and the GitHub Actions attestation links; mark it as latest for normal production releases.
 11. **Verify public artifact parity:** `npm run release:check:public`.
 12. **CWS draft upload:** `bash publish.sh --draft`; review the draft in the CWS Developer Dashboard.
 13. **CWS publish:** `bash publish.sh` when ready to submit/publish through CWS review.

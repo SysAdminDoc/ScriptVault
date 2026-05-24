@@ -17,6 +17,22 @@ All notable changes to ScriptVault will be documented in this file.
 - Refreshed popup/dashboard setup banners, README source-install instructions,
   and focused status tests for the Chrome 138+ transition.
 
+### 2026-05-24 — Firefox AMO validation gate
+
+- Added explicit AMO `browser_specific_settings.gecko.data_collection_permissions`
+  and moved Firefox `userScripts` to `optional_permissions`, with Firefox
+  desktop/Android minimums raised to versions that support those manifest keys.
+- Added `web-ext@^10.2.0`, `npm run firefox:lint`, and
+  `npm run firefox:package`; the package command emits a Firefox ZIP, AMO
+  source-review ZIP, and `web-ext-lint.json` under `firefox-artifacts/`.
+- Wired Firefox lint/package validation into CI and uploaded Firefox artifacts
+  alongside the existing Chrome package artifacts.
+- Guarded Chrome-only per-script `worldId` in both runtime JS and the
+  TypeScript registration mirror so Firefox never receives the unsupported
+  field.
+- Omitted `lib/monaco/` from the Firefox validation package until the dedicated
+  Monaco loading-path pass; the existing textarea adapter remains the fallback.
+
 ### 2026-05-24 — Release trust gate
 
 - Added `npm run release:trust` to inspect the built Chrome ZIP, generate

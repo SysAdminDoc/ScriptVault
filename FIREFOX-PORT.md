@@ -4,7 +4,8 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 
 ## Target
 
-- **Firefox 128+ (ESR 128+)** — matches the `strict_min_version` already declared in `manifest-firefox.json`
+- **Firefox 140+ desktop** — matches the `strict_min_version` declared in `manifest-firefox.json`; this is the first supported baseline for the current AMO data-collection declaration plus Firefox MV3 `userScripts` optional-permission model.
+- **Firefox for Android 142+** — declared only as a manifest compatibility floor. Android UI/runtime smoke is not yet part of the release gate.
 - **Manifest V3** — Firefox's MV3 is persistent background scripts, not service workers
 - **Distribution**: eventual AMO listing, interim self-signed XPI via `about:debugging` for dev
 
@@ -27,19 +28,21 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 
 **Goal:** installs without manifest errors, opens the dashboard, basic userscripts register and run.
 
-- [ ] **Strip `manifest.sandbox` from `manifest-firefox.json`.** Firefox MV3 doesn't support sandboxed manifest pages. Verify the build script doesn't copy the Chrome `content_security_policy` block either.
+- [x] **Strip `manifest.sandbox` from `manifest-firefox.json`.** Firefox MV3 doesn't support sandboxed manifest pages. Verify the build script doesn't copy the Chrome `content_security_policy` block either.
 - [ ] **Feature-flag `chrome.offscreen`.** `bg/analyzer.js` and `background.core.js` call `chrome.offscreen.createDocument(...)`. On Firefox this throws. Under Firefox's persistent background script you can run Acorn inline. Plan:
   - Guard all `chrome.offscreen.*` call sites with `if (typeof chrome.offscreen !== 'undefined')`
   - Provide a `loadAcornInline()` fallback that imports `lib/acorn.min.js` via `importScripts` (bg script) or a dynamic `<script>` inject (Firefox bg is a full document, not a worker)
   - Same treatment for `lib/diff.min.js` 3-way merge
 - [ ] **Feature-flag `chrome.sidePanel`.** Dashboard has side-panel hooks. Firefox has no equivalent. Hide the toggle in `pages/dashboard.js` when `typeof chrome.sidePanel === 'undefined'`.
-- [ ] **Strip `worldId` on Firefox.** `src/background/registration.ts` / `bg/*` may set `worldId` on `chrome.userScripts.register()`. Chrome 133+ only. Firefox rejects unknown fields. Guard with `if (USERSCRIPT_API_SUPPORTS_WORLD_ID)` after a runtime probe.
+- [x] **Strip `worldId` on Firefox.** `src/background/registration.ts` / `bg/*` may set `worldId` on `chrome.userScripts.register()`. Chrome 133+ only. Firefox rejects unknown fields. Guard with `if (USERSCRIPT_API_SUPPORTS_WORLD_ID)` after a runtime probe.
 - [ ] **Monaco editor loading path.** Firefox MV3 `extension_pages` CSP allows `'unsafe-eval'` by default, so Monaco can load directly in the dashboard extension origin with *no* sandboxed iframe at all. Two options:
   - **A (minimal):** keep the iframe, drop the manifest `sandbox` declaration, switch CSP to allow eval. `monaco-adapter.js` already posts with `'*'` targetOrigin.
   - **B (cleaner):** inline the Monaco container directly in the dashboard, delete the iframe on Firefox. More invasive.
   - **Decision needed:** start with A to prove loading; revisit B in Phase 4 polish.
+  - **Current gate:** `build-firefox.sh` intentionally omits `lib/monaco/` because AMO's linter rejects the bundled TypeScript worker as too large to parse. The dashboard can fall back to the textarea adapter until this dedicated Monaco port item is completed.
 - [ ] **Build + temporary install test.**
-  - `python build/pack-firefox.py` (to be created, mirrors `pack-release.py`)
+  - `npm run firefox:lint` (builds a lintable `build-firefox/`, runs `web-ext lint`, and writes `firefox-artifacts/web-ext-lint.json`)
+  - `npm run firefox:package` (builds, lints, writes `firefox-artifacts/scriptvault-firefox-v<version>.zip`, and writes `firefox-artifacts/scriptvault-firefox-source-v<version>.zip`)
   - Load in Firefox Nightly: `about:debugging#/runtime/this-firefox → Load Temporary Add-on → select .xpi`
   - Record the error console output. Each error becomes a Phase 1 checkbox.
 
@@ -65,7 +68,7 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
   - OneDrive PKCE — same
   - WebDAV — should work as-is (no OAuth)
   - Easy Cloud (`chrome.identity` + `chrome.storage.managed`) — may not work on Firefox depending on identity flow support
-  - **Decision needed:** ship WebDAV only on Firefox v1? Defer OAuth providers to Phase 5?
+  - **Current gate:** Firefox does not accept `identity` in `optional_permissions`; the validation manifest omits it. Treat Firefox v1 as WebDAV-only until OAuth providers get a dedicated permission/UI pass or `identity` becomes an install-time Firefox permission.
 - [ ] **DeclarativeNetRequest rule management** (`src/background/dnr-rules.ts`) — Firefox MV3 DNR is supported but the dynamic rule API may differ. Test rule registration + teardown.
 - [ ] **`@require` SRI verification** (`src/background/resource-loader.ts`) — works the same on both (pure crypto).
 - [ ] **Ed25519 signing** (`bg/signing.js`) — Web Crypto API, identical.
@@ -83,10 +86,11 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 ### Phase 5 — AMO submission
 
 - [ ] **AMO developer account** set up under SysAdminDoc.
-- [ ] **Lint pass.** Run `web-ext lint` against the XPI; fix every warning Mozilla flags before submission.
-- [ ] **`web-ext build`** to produce a canonical source-plus-artifact pair.
-- [ ] **Source submission bundle.** AMO requires source code if the extension uses minified libraries (Monaco definitely qualifies). Prepare a zip of the source tree + exact build instructions. `build/pack-firefox.py` + `esbuild.config.mjs` source paths must be documented.
+- [x] **Lint pass.** Run `web-ext lint` against the XPI; fix every warning Mozilla flags before submission.
+- [x] **`web-ext build`** to produce a canonical source-plus-artifact pair.
+- [x] **Source submission bundle.** AMO requires source code if the extension uses minified libraries. `npm run firefox:package` now writes a source ZIP alongside the Firefox package.
 - [ ] **Privacy policy + permissions rationale** — reuse the Chrome listing as a starting point, adapt for AMO format.
+  - **Current gate:** AMO manifest data-collection declarations are explicit; full AMO listing/privacy copy remains for the generated permissions/privacy/store-copy roadmap item.
 - [ ] **Initial AMO listing** as *unlisted* for internal smoke testing before going public.
 - [ ] **Review feedback loop.** Mozilla reviews typically flag `unsafe-eval`, broad `host_permissions`, and undocumented use of `userScripts`. Be ready to justify each.
 - [ ] **Publish as listed** once all feedback resolved.
@@ -102,16 +106,16 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 | # | Issue | File(s) | Blocker level |
 |---|-------|---------|----|
 | 1 | `chrome.offscreen` not in Firefox | `background.core.js`, `bg/analyzer.js`, `offscreen.html` / `.js` | **Hard** — AST analysis breaks |
-| 2 | `manifest.sandbox.pages` not in Firefox | `manifest-firefox.json`, `pages/editor-sandbox.html` | **Hard** — Monaco won't load |
+| 2 | `manifest.sandbox.pages` not in Firefox | `manifest-firefox.json`, `pages/editor-sandbox.html` | **Mitigated** — Firefox manifest has no sandbox key; Monaco still needs a dedicated loading path |
 | 3 | `chrome.sidePanel` not in Firefox | `pages/dashboard.js`, `pages/sidepanel.html` | Medium — UI-only |
-| 4 | Per-script `worldId` is Chrome 133+ only | `src/background/registration.ts` | Medium — registration fails if set |
-| 5 | Google / Dropbox / OneDrive PKCE redirect URI | `modules/sync-providers.js`, `modules/sync-easycloud.js` | Medium — can defer |
+| 4 | Per-script `worldId` is Chrome 133+ only | `background.core.js`, `src/background/registration.ts` | **Mitigated** — guarded behind Chromium 133+ detection |
+| 5 | Google / Dropbox / OneDrive PKCE redirect URI plus `identity` permission | `modules/sync-providers.js`, `modules/sync-easycloud.js`, `manifest-firefox.json` | Medium — deferred; WebDAV-only for validation gate |
 | 6 | Chrome CRX3 format irrelevant on Firefox | `build/pack-release.py` | Low — separate build path needed anyway |
 | 7 | `navigator.userAgent` / `runtime.getBrowserInfo` detection | shared modules | Low — wrapper helper |
 
 ## Open decisions for the user
 
-1. **Cloud sync scope for v1 Firefox build** — ship WebDAV only (fast path) or all providers (slower, needs per-provider redirect URI registration)?
+1. **Cloud sync scope for v1 Firefox build** — current validation package is WebDAV-only because Firefox doesn't support `identity` as optional. Decide whether to add install-time `identity` later or keep OAuth providers Chrome-only.
 2. **Editor approach** — keep the sandboxed iframe architecture on Firefox (simpler code, small perf overhead) or inline Monaco directly in the dashboard (cleaner, more work)?
 3. **Source tree strategy** — stay with runtime feature detects in shared files, or split Firefox-specific code into a `firefox/` overlay directory?
 4. **AMO listing visibility** — go public on day one, or start unlisted with a private signing for personal testing?
@@ -125,6 +129,14 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - Built a current `ScriptVault-firefox-v2.1.7.xpi` via Python packer (not yet tested in actual Firefox).
 - Catalogued the 7 known porting issues above.
 - This roadmap file created. Next session starts at **Phase 1** checkbox 1.
+
+### 2026-05-24 — AMO validation gate
+
+- Added AMO `browser_specific_settings.gecko.data_collection_permissions` with required `none` and optional data types for opt-in cloud/sync/export flows.
+- Moved Firefox `userScripts` to `optional_permissions` and raised the Firefox baseline to 140.0 desktop / 142.0 Android to match current AMO and `userScripts` manifest-key support.
+- Reworked `build-firefox.sh` around `web-ext lint` and `web-ext build`; `npm run firefox:lint` leaves a lintable build directory, and `npm run firefox:package` emits both a Firefox package and AMO source-review ZIP under `firefox-artifacts/`.
+- Guarded Chrome-only per-script `worldId` in both runtime JS and the TypeScript mirror so Firefox never receives the unsupported field.
+- `web-ext lint` now exits with 0 errors and 0 notices. It still reports existing dynamic-HTML warnings; those are recorded in `firefox-artifacts/web-ext-lint.json` and should be handled in a separate AMO hardening pass.
 
 ---
 

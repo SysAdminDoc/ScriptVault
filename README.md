@@ -268,6 +268,16 @@ If the toggle is off, the popup and dashboard show a setup banner. After enablin
 
 **[Install ScriptVault from the Chrome Web Store](https://chromewebstore.google.com/detail/scriptvault/jlhdbkeijcbgnonpfkfkkkhfmbeejkgh)**
 
+### Firefox / AMO Validation Build
+
+Firefox is still a validation target, not a published AMO listing. The current package targets Firefox 140+ desktop and produces AMO-ready artifacts:
+
+```bash
+npm run firefox:package
+```
+
+Artifacts are written to `firefox-artifacts/`: the Firefox package ZIP, a source-review ZIP, and `web-ext-lint.json`. The gate currently passes with 0 linter errors and 0 notices. Monaco is omitted from the Firefox package until the dedicated editor-loading pass lands, so the editor falls back to the textarea adapter; OAuth cloud providers are deferred because Firefox does not support `identity` as an optional permission.
+
 ---
 
 ## Quick Start

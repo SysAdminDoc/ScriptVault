@@ -16663,6 +16663,19 @@ function _getChromeVersion() {
   }
 }
 
+function _isFirefoxRuntime() {
+  try {
+    return /Firefox\//.test(self.navigator?.userAgent || '') ||
+      (typeof browser !== 'undefined' && !!browser.runtime?.id);
+  } catch (e) {
+    return false;
+  }
+}
+
+function _supportsUserScriptsWorldId() {
+  return !_isFirefoxRuntime() && _getChromeVersion() >= 133;
+}
+
 function getExtensionDetailsUrl() {
   try {
     if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
@@ -17160,17 +17173,20 @@ async function registerScript(script) {
     };
 
     // Chrome 133+: configure and use a per-script worldId for isolation.
-    // Each script gets its own USER_SCRIPT world so globals don't bleed across scripts.
+    // Firefox MV3 exposes userScripts differently and rejects Chrome's
+    // worldId extension, so never send that field outside supported Chromium.
     let worldConfigured = false;
-    try {
-      await chrome.userScripts.configureWorld({
-        worldId: script.id,
-        csp: "script-src 'self' 'unsafe-inline' 'unsafe-eval' *",
-        messaging: true
-      });
-      worldConfigured = true;
-    } catch (e) {
-      // Chrome <133 doesn't support worldId on configureWorld — fall through to default world
+    if (_supportsUserScriptsWorldId()) {
+      try {
+        await chrome.userScripts.configureWorld({
+          worldId: script.id,
+          csp: "script-src 'self' 'unsafe-inline' 'unsafe-eval' *",
+          messaging: true
+        });
+        worldConfigured = true;
+      } catch (e) {
+        // Chrome <133 doesn't support worldId on configureWorld — fall through to default world
+      }
     }
 
     if (worldConfigured) {
@@ -17762,10 +17778,12 @@ async function unregisterScript(scriptId) {
     if (!chrome.userScripts) return;
     await chrome.userScripts.unregister({ ids: [scriptId] });
     // Chrome 133+: reset the per-script world configuration to free resources
-    try {
-      await chrome.userScripts.resetWorldConfiguration({ worldId: scriptId });
-    } catch (e) {
-      // Chrome <133 doesn't support resetWorldConfiguration — ignore
+    if (_supportsUserScriptsWorldId()) {
+      try {
+        await chrome.userScripts.resetWorldConfiguration({ worldId: scriptId });
+      } catch (e) {
+        // Chrome <133 doesn't support resetWorldConfiguration — ignore
+      }
     }
   } catch (e) {
     // Script might not be registered
@@ -17916,7 +17934,7 @@ ${req.code}
     const __testTop = (pattern) => {
       if (pattern.re) return pattern.re.test(__topUrl);
       // Glob: convert @match-style to RegExp on-demand. Handles * / scheme / host / path
-      // wildcards conservatively — anchored ^...$ with `.*` substituted for `*`.
+      // wildcards conservatively -- anchored ^...$ with .* substituted for *.
       const escaped = pattern.glob.replace(/[.+^$()|[\\]{}]/g, '\\\\$&').replace(/\\*/g, '.*').replace(/\\?/g, '.');
       try { return new RegExp('^' + escaped + '$').test(__topUrl); } catch { return false; }
     };
@@ -17981,7 +17999,7 @@ ${req.code}
       // Phase 11.7 — Userscripts (Safari) injection priority.
       weight: meta.weight || 0,
       priority: meta.priority || 0,
-      // Phase 38.12 — VM v2.37.0 renamed `tag` → `tags`. Older scripts written
+      // Phase 38.12 -- VM v2.37.0 renamed tag to tags. Older scripts written
       // against pre-2026 Violentmonkey read the singular form; expose a getter
       // that returns the first tag for back-compat. Non-enumerable so it does
       // not pollute structured clones / JSON serialization of GM_info.script.
@@ -18509,7 +18527,7 @@ ${req.code}
         context: details.context,
         anonymous: details.anonymous,
         // VM #2168 / TM noCache: bypass intermediate caches.
-        // Accept both `noCache` (VM camelCase) and `nocache` (TM lowercase).
+        // Accept both noCache (VM camelCase) and nocache (TM lowercase).
         noCache: details.noCache === true || details.nocache === true,
         // VM #2359: expose RequestInit.redirect so scripts can detect/block redirects.
         redirect: details.redirect,

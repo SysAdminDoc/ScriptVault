@@ -1,13 +1,46 @@
 #!/bin/bash
 # ScriptVault - Firefox Add-on Build Script
-# Packages the extension into an .xpi/.zip ready for AMO upload or sideloading
+# Produces a lintable Firefox build directory, an AMO-uploadable ZIP, and an
+# AMO source-review ZIP from the same source tree.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build-firefox"
-VERSION=$(grep -o '"version": "[^"]*"' "$SCRIPT_DIR/manifest-firefox.json" | cut -d'"' -f4)
-ZIP_NAME="ScriptVault-firefox-v${VERSION}.zip"
+ARTIFACT_DIR="$SCRIPT_DIR/firefox-artifacts"
+VERSION=$(node -e "console.log(require('./manifest-firefox.json').version)" 2>/dev/null || grep -o '"version": "[^"]*"' "$SCRIPT_DIR/manifest-firefox.json" | cut -d'"' -f4)
+ZIP_NAME="scriptvault-firefox-v${VERSION}.zip"
+SOURCE_ZIP_NAME="scriptvault-firefox-source-v${VERSION}.zip"
+RUN_LINT=0
+KEEP_BUILD=0
+PACKAGE=1
+SOURCE_ZIP=1
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --lint)
+      RUN_LINT=1
+      ;;
+    --keep-build)
+      KEEP_BUILD=1
+      ;;
+    --prepare-only)
+      PACKAGE=0
+      KEEP_BUILD=1
+      ;;
+    --no-source-zip)
+      SOURCE_ZIP=0
+      ;;
+    --source-zip)
+      SOURCE_ZIP=1
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
 
 echo "Building ScriptVault for Firefox v$VERSION..."
 
@@ -22,9 +55,8 @@ else
   exit 1
 fi
 
-# Clean previous build
 rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"
+mkdir -p "$BUILD_DIR" "$ARTIFACT_DIR"
 
 # Files/folders to include
 INCLUDE=(
@@ -36,7 +68,6 @@ INCLUDE=(
   images/icon32.png
   images/icon48.png
   images/icon128.png
-  lib
   _locales
 )
 
@@ -58,21 +89,61 @@ for item in "${INCLUDE[@]}"; do
   fi
 done
 
-# Build the zip/xpi
-cd "$BUILD_DIR"
-rm -f "$SCRIPT_DIR/$ZIP_NAME"
+if [ "$RUN_LINT" -eq 1 ]; then
+  echo "Linting Firefox build with web-ext..."
+  LINT_REPORT="$ARTIFACT_DIR/web-ext-lint.json"
+  npx web-ext lint \
+    --source-dir "$BUILD_DIR" \
+    --artifacts-dir "$ARTIFACT_DIR" \
+    --no-input \
+    --no-config-discovery \
+    --output json > "$LINT_REPORT"
+  node - "$LINT_REPORT" <<'NODE'
+const { readFileSync } = require('node:fs');
+const reportPath = process.argv[2];
+const report = JSON.parse(readFileSync(reportPath, 'utf8'));
+const summary = report.summary || {};
+console.log(`web-ext lint: ${summary.errors || 0} errors, ${summary.notices || 0} notices, ${summary.warnings || 0} warnings`);
+if ((summary.errors || 0) > 0) {
+  for (const item of report.errors || []) {
+    console.error(`- ${item.code || 'ERROR'} ${item.file || ''}:${item.line || ''} ${item.message || item.description || ''}`.trim());
+  }
+  process.exit(1);
+}
+NODE
+fi
 
-if command -v zip &> /dev/null; then
-  zip -r "$SCRIPT_DIR/$ZIP_NAME" . -x "*.DS_Store" "*Thumbs.db"
-else
-  powershell.exe -NoProfile -Command "Compress-Archive -Path '$BUILD_DIR\*' -DestinationPath '$SCRIPT_DIR\\$ZIP_NAME' -Force"
+if [ "$PACKAGE" -eq 1 ]; then
+  echo "Packaging Firefox artifact with web-ext..."
+  npx web-ext build \
+    --source-dir "$BUILD_DIR" \
+    --artifacts-dir "$ARTIFACT_DIR" \
+    --filename "$ZIP_NAME" \
+    --overwrite-dest \
+    --no-input \
+    --no-config-discovery
+fi
+
+if [ "$SOURCE_ZIP" -eq 1 ]; then
+  echo "Writing AMO source-review archive..."
+  git -C "$SCRIPT_DIR" archive --format=zip --output "$ARTIFACT_DIR/$SOURCE_ZIP_NAME" HEAD
 fi
 
 echo ""
-echo "Build complete: $ZIP_NAME"
-echo "Size: $(du -h "$SCRIPT_DIR/$ZIP_NAME" | cut -f1)"
+if [ "$KEEP_BUILD" -eq 1 ]; then
+  echo "Firefox build directory: build-firefox/"
+else
+  echo "Firefox build directory: cleaned (rerun with --keep-build to inspect)"
+fi
+if [ "$PACKAGE" -eq 1 ]; then
+  echo "Firefox package: firefox-artifacts/$ZIP_NAME"
+fi
+if [ "$SOURCE_ZIP" -eq 1 ]; then
+  echo "Source package: firefox-artifacts/$SOURCE_ZIP_NAME"
+fi
 echo ""
-echo "Ready for Firefox Add-ons (AMO) upload or sideloading."
+echo "Ready for web-ext lint, AMO upload, or temporary sideloading."
 
-# Cleanup
-rm -rf "$BUILD_DIR"
+if [ "$KEEP_BUILD" -ne 1 ]; then
+  rm -rf "$BUILD_DIR"
+fi
