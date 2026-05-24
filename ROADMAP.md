@@ -3,8 +3,8 @@
 > From v2.0.1 (bash-concatenated JS prototype) to production-grade TypeScript extension.
 > Each phase is independently shippable. Later phases depend on earlier ones.
 >
-> **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, but local `main` has additional unreleased 2026-05-24 research and hardening commits through `f4c748c`. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
-> **2026-05-24 state:** 663 local Vitest cases were last recorded green in `CHANGELOG.md`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Releases are stale at v2.3.4 while local tags and manifests are at v3.11.0; no GitHub issues or PRs are currently open.
+> **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, and `main` now has additional unreleased 2026-05-24 hardening/release commits including release artifact reconciliation and CWS runbook/audit-gate alignment. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
+> **2026-05-24 state:** 810 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; no GitHub issues or PRs are currently open.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
 ---
@@ -24,7 +24,7 @@ Local source and repo artifacts:
 - Design/research docs: `docs/cross-browser-pipeline.md`, `docs/release-runbook.md`, `docs/require-provenance-design.md`, `docs/wcag3-gap-analysis.md`, `docs/extension-interop.md`, `docs/mcp-2026-compliance.md`, `docs/research/iter-1-l1-claude-led.md`, `docs/research/iter-1-l3-claude-smoke.md`.
 - Tests: 51 test files under `tests/`, including source parity tests, security tests, accessibility tests, import/export tests, storage tests, and wrapper tests.
 - Git history: `git log -200 --oneline --decorate` reviewed through `f4c748c` back to initial public packaging work.
-- Release artifacts: `gh release list --limit 20` shows latest GitHub Release still `v2.3.4` from 2026-04-29, despite local v3.11.0 tag and manifests. Root also still contains stale `ScriptVault-firefox-v2.1.7.xpi`.
+- Release artifacts: `gh release list --limit 20` now shows `v3.11.0` as the latest GitHub Release with `ScriptVault-v3.11.0.zip`; the stale root `ScriptVault-firefox-v2.1.7.xpi` was removed locally.
 - Issue tracker: `gh issue list --state all --limit 100` and `gh pr list --state all --limit 100` returned no project issues or PRs.
 - Dependency/security checks: `npm audit --audit-level=high --omit=optional` found 0 vulnerabilities. `npm outdated --json` reports newer versions for Vitest, coverage-v8, chrome-types, esbuild, jsdom, Monaco, puppeteer-core, and TypeScript.
 
@@ -51,7 +51,7 @@ Main code locations:
 - Runtime background source: `background.core.js`, `modules/*.js`, `bg/*.js`, `shared/utils.js`, `content.js`.
 - Typed mirror: `src/background/*.ts`, `src/modules/*.ts`, `src/bg/*.ts`, `src/storage/*.ts`, `src/types/*.ts`, `src/shared/utils.ts`.
 - UI surfaces: `pages/popup.*`, `pages/dashboard.*`, `pages/dashboard-*.js`, `pages/sidepanel.*`, `pages/devtools*`, `pages/install.*`, `pages/editor-sandbox.html`, `pages/monaco-adapter.js`.
-- Build/release: `esbuild.config.mjs`, `build.sh`, `publish.sh`, `cws-setup.sh`, `.github/workflows/ci.yml`, `scripts/*`.
+- Build/release: `esbuild.config.mjs`, `build.sh`, `publish.sh`, `cws-setup.sh`, `.github/workflows/ci.yml`, `.gitattributes`, `scripts/*`.
 - Current state files: `.factory/state.yaml` and `.factory/large-repo-state.yaml` list `XHR-PRIVACY` and `DNS-REBIND` as remaining hardening work.
 
 User personas:
@@ -209,9 +209,9 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
 ### Reliability, Security, Privacy, and Data Safety
 
 - Verified: npm high-severity audit is currently clean.
-- Verified risk: GitHub Releases lag v3.11.0 by many releases, and the repo root has stale Firefox XPI naming from v2.1.7. Treat public artifact drift as P0 because a userscript manager is a code-execution trust product.
+- Closed 2026-05-24: GitHub Release `v3.11.0` is now latest, `ScriptVault-v3.11.0.zip` is attached, and stale root release artifacts are guarded by `npm run release:check`.
 - Verified risk: production JS and TypeScript mirror remain separate. Recent history shows repeated parity fixes; current TS install/update paths still use `response.text()` where runtime has bounded stream reading.
-- Verified risk: `.github/workflows/ci.yml` uses `continue-on-error: true` for high-level npm audit, while docs describe hard release checks. Decide whether audit is hard or soft, then align code and docs.
+- Closed 2026-05-24: `.github/workflows/ci.yml` now treats high-level npm audit failures as blocking and runs `npm run cws:check` plus `npm run release:check`.
 - Verified risk: broad `<all_urls>`, userScripts, DNR, sidePanel, offscreen, downloads, clipboard, identity, and cookies permission surfaces require generated privacy/store justifications.
 - Verified risk: existing `.factory/large-repo-state.yaml` still flags `XHR-PRIVACY` and `DNS-REBIND`.
 - Missing guardrails: artifact signing, SBOM, package diff, rollback rehearsal, AMO data-collection manifest declaration, source ZIP review artifact, unified internal-host policy, sync token revoke/status UI, and restore receipts.
@@ -228,7 +228,7 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
 ### Architecture and Maintainability
 
 - Primary boundary issue: production runtime source and TS mirror are separate. Short-term parity tests are mandatory; long-term source convergence should be planned before more large feature batches.
-- Build/release gap: `esbuild.config.mjs` is cross-platform, but publishing scripts remain bash-oriented and docs lag `chrome-webstore-upload-cli` v4.
+- Build/release gap: `esbuild.config.mjs` is cross-platform, publishing scripts remain bash-oriented, and the CWS API v2 path is now covered by `npm run cws:check`; Windows-native publishing remains a future ergonomics item.
 - Cross-browser gap: manual `manifest.json` and `manifest-firefox.json` drift risk argues for generated per-target manifests after the immediate Firefox validation gate.
 - Test gaps: no current focused tests for recent Gist storage rejection fix, empty-grant deny behavior, all CSV exports, package diff, rollback rehearsal, AMO lint/signing, or Chrome 138 setup copy.
 - Docs gaps: README, changelog, privacy, release runbook, Firefox port, and store copy need generated checks or owner-facing checklists to prevent future drift.
@@ -246,12 +246,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
   - Verify: `gh release list --limit 5`; `git tag --list 'v*'`; inspect generated package manifests.
   - Status: Shipped 2026-05-24. GitHub Release `v3.11.0` now exists as latest with `ScriptVault-v3.11.0.zip`; the stale root Firefox v2.1.7 XPI was removed locally; `npm run release:check:public` verifies package/manifests/README/changelog/tag/root-artifact/latest-release/asset alignment.
 
-- [ ] P0 - Align release runbook, CWS API v2 tooling, and CI audit policy
+- [x] P0 - Align release runbook, CWS API v2 tooling, and CI audit policy
   - Why: Release docs currently disagree with installed publishing tooling and CI audit behavior.
   - Evidence: L12, S03, S04, H002, H006.
   - Touches: `docs/release-runbook.md`, `.github/workflows/ci.yml`, `package.json`, `publish.sh`, `cws-setup.sh`.
   - Acceptance: Runbook names the actual CWS v2 path, audit policy is either blocking or explicitly soft with rationale, and CI output matches the docs.
-  - Verify: `npm audit --audit-level=high --omit=optional`; dry-run publish/status command where credentials are unavailable.
+  - Verify: `npm run cws:check`; `npm audit --audit-level=high --omit=optional`; `npm run release:check:public`; `npm run check`.
+  - Status: Shipped 2026-05-24. The runbook now documents the actual manual CWS API v2 flow and pending OIDC custody work; CI blocks on high+ npm audit failures; `npm run cws:check` validates CWS v4 tooling without credentials; CI runs both CWS tooling and release artifact parity checks with tags fetched.
 
 - [ ] P0 - Add release rollback and storage backward-compatibility drill
   - Why: Chrome rollback can protect users only if prior versions can read current stored data.
