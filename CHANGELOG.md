@@ -4,6 +4,20 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Manifest generator implementation
+
+- Added `scripts/generate-manifest-firefox.mjs` plus
+  `manifest-firefox.transformations.json`. The Firefox profile now
+  regenerates the committed `manifest-firefox.json` byte-for-byte from
+  `manifest.json`, and the Edge profile produces the staged
+  `build-edge/manifest.json`.
+- `build-firefox.sh` now fails early on generated-manifest drift before
+  packaging, while `scripts/build-edge.mjs` uses the same generator instead
+  of an inline `EDGE_TRANSFORMS` object.
+- Added `tests/manifest-generator.test.js` for round-trip parity,
+  idempotent transformations, parseability, and Firefox/Edge schema shape.
+  Refreshed the Firefox package gate to assert the generator check.
+
 ### 2026-05-24 — Quick Wins consolidation pass
 
 - Closed every roadmap "Quick Win" bullet by either implementing it,

@@ -36,8 +36,9 @@ describe('Firefox AMO validation gate', () => {
 
   it('builds, lints, packages, and sources Firefox artifacts through web-ext', () => {
     expect(packageJson.devDependencies['web-ext']).toMatch(/10\.2/);
-    expect(packageJson.scripts['firefox:lint']).toBe('bash build-firefox.sh --lint --keep-build --no-source-zip --prepare-only');
-    expect(packageJson.scripts['firefox:package']).toBe('bash build-firefox.sh --lint');
+    expect(packageJson.scripts['firefox:lint']).toBe('node scripts/run-bash.mjs build-firefox.sh --lint --keep-build --no-source-zip --prepare-only');
+    expect(packageJson.scripts['firefox:package']).toBe('node scripts/run-bash.mjs build-firefox.sh --lint');
+    expect(buildFirefox).toContain('generate-manifest-firefox.mjs" --profile firefox --check');
     expect(buildFirefox).toContain('npx web-ext lint');
     expect(buildFirefox).toContain('npx web-ext build');
     expect(buildFirefox).toContain('scriptvault-firefox-source-v${VERSION}.zip');

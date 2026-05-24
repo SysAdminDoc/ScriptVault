@@ -145,15 +145,15 @@ No new tooling. Keep updating both manifests by hand.
 
 Adopt option B. Concrete next steps (separate roadmap items):
 
-1. Write `scripts/generate-manifest-firefox.mjs` that produces the
+1. Shipped 2026-05-24: write `scripts/generate-manifest-firefox.mjs` that produces the
    current Firefox manifest byte-for-byte from `manifest.json` plus a
    declarative `manifest-firefox.transformations.json` file.
-2. Wire `build-firefox.sh` to run the generator and assert the produced
+2. Shipped 2026-05-24: wire `build-firefox.sh` to run the generator and assert the produced
    file matches `manifest-firefox.json`. Initially fail loudly on drift;
    later move to "generate fresh each build."
-3. Repeat for Edge (next P2 roadmap item) — same generator, fewer
+3. Shipped 2026-05-24: repeat for Edge — same generator, fewer
    transformations.
-4. Once both targets ship from generated manifests, gitignore
+4. Needs maintainer sign-off: once both targets ship from generated manifests, gitignore
    `manifest-firefox.json` and `manifest-edge.json` and revoke direct
    edits.
 
