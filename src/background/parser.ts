@@ -74,6 +74,8 @@ type ArrayMetaKey =
   | 'include'
   | 'exclude'
   | 'excludeMatch'
+  | 'matchTop'
+  | 'excludeTop'
   | 'grant'
   | 'require'
   | 'connect'
@@ -82,12 +84,24 @@ type ArrayMetaKey =
   | 'compatible'
   | 'incompatible';
 
-const ARRAY_KEYS: ReadonlySet<string> = new Set<ArrayMetaKey | 'exclude-match'>([
+// Aliases: hyphenated forms in the user-visible directive syntax → canonical
+// camelCase keys on `ScriptMeta`. Phase 39.11 adds `match-top` / `exclude-top`.
+const ARRAY_ALIASES: Readonly<Record<string, ArrayMetaKey>> = {
+  'exclude-match': 'excludeMatch',
+  'match-top': 'matchTop',
+  'exclude-top': 'excludeTop',
+};
+
+const ARRAY_KEYS: ReadonlySet<string> = new Set<string>([
   'match',
   'include',
   'exclude',
   'exclude-match',
   'excludeMatch',
+  'match-top',
+  'matchTop',
+  'exclude-top',
+  'excludeTop',
   'grant',
   'require',
   'connect',
@@ -124,6 +138,8 @@ export function parseUserscript(code: string): ParseResult {
     include: [],
     exclude: [],
     excludeMatch: [],
+    matchTop: [],
+    excludeTop: [],
     grant: [],
     require: [],
     resource: {},
@@ -171,7 +187,7 @@ export function parseUserscript(code: string): ParseResult {
       // known to be string‐valued properties of ScriptMeta.
       (meta as unknown as Record<string, unknown>)[key] = key === 'run-at' ? (value as RunAt) : value;
     } else if (ARRAY_KEYS.has(key)) {
-      const arrayKey: ArrayMetaKey = (key === 'exclude-match' ? 'excludeMatch' : key) as ArrayMetaKey;
+      const arrayKey: ArrayMetaKey = (ARRAY_ALIASES[key] ?? key) as ArrayMetaKey;
       if (value) {
         // Phase 36.6 — comma-separated convenience syntax for match/include
         // patterns (VM #2403). Authors who target many sibling sites can write
@@ -185,6 +201,8 @@ export function parseUserscript(code: string): ParseResult {
           arrayKey === 'include' ||
           arrayKey === 'exclude' ||
           arrayKey === 'excludeMatch' ||
+          arrayKey === 'matchTop' ||
+          arrayKey === 'excludeTop' ||
           arrayKey === 'connect';
         if (splittable && value.includes(',')) {
           for (const part of value.split(',')) {
