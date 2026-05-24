@@ -961,6 +961,11 @@
 
         try {
             return await task();
+        } catch (error) {
+            if (options.errorMessage !== false) {
+                showToast(options.errorMessage || error?.message || 'Action failed', 'error');
+            }
+            return null;
         } finally {
             if (!isButton) return;
             button.disabled = previousDisabled;
@@ -2274,7 +2279,7 @@
         updateSupportSnapshotSummary();
     }
 
-    async function saveSetting(key, value) {
+    async function saveSetting(key, value, options = {}) {
         try {
             state.settings[key] = value;
             await chrome.runtime.sendMessage({ action: 'setSettings', settings: { [key]: value } });
@@ -2301,10 +2306,18 @@
             if (key === 'syncEnabled' || key === 'syncProvider') {
                 loadSyncProviderStatus();
             }
-            showToast('Setting saved', 'success');
+            if (!options.quiet) showToast('Setting saved', 'success');
+            return true;
         } catch (e) {
-            showToast('Failed to save', 'error');
+            if (!options.quiet) showToast('Failed to save', 'error');
+            return false;
         }
+    }
+
+    async function saveSettingOrThrow(key, value) {
+        const saved = await saveSetting(key, value, { quiet: true });
+        if (!saved) throw new Error(`Failed to save ${key}`);
+        return true;
     }
 
     function toggleSyncProviderSettings() {
@@ -6783,7 +6796,7 @@
                 );
                 if (!confirmed) return;
             }
-            showProgress(`Importing ${files.length} file${files.length > 1 ? 's' : ''}...`);
+            showProgress(`Importing ${files.length} file${files.length > 1 ? 's' : ''}…`);
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 updateProgress(i + 1, files.length, `${file.name} (${i + 1}/${files.length})`);
@@ -6956,7 +6969,7 @@
         const url = elements.importUrlInput?.value?.trim();
         if (!url) return showToast('Enter URL', 'error');
         try {
-            showToast('Fetching...', 'info');
+            showToast('Fetching…', 'info');
             const res = await chrome.runtime.sendMessage({ action: 'installFromUrl', url });
             if (res?.success) {
                 await loadScripts();
@@ -7179,18 +7192,66 @@
         findScriptsLastFocusedElement = null;
     }
 
+    function getFindScriptsSourceLabel(source = findScriptsState.source || elements.findScriptsSource?.value || 'greasyfork') {
+        return {
+            greasyfork: 'GreasyFork',
+            openuserjs: 'OpenUserJS',
+            github: 'GitHub'
+        }[source] || source;
+    }
+
+    function setFindScriptsBusy(isBusy) {
+        findScriptsState.loading = isBusy;
+        elements.findScriptsResults?.setAttribute('aria-busy', String(isBusy));
+        if (elements.btnFindScriptsSearch instanceof HTMLButtonElement) {
+            elements.btnFindScriptsSearch.disabled = isBusy;
+            elements.btnFindScriptsSearch.setAttribute('aria-busy', String(isBusy));
+            elements.btnFindScriptsSearch.textContent = isBusy ? 'Searching…' : 'Search';
+        }
+    }
+
+    function renderFindScriptsState(kind, title, detail, options = {}) {
+        if (!elements.findScriptsResults) return;
+        const isError = kind === 'error';
+        const safeTitle = escapeHtml(title);
+        const safeDetail = escapeHtml(detail);
+        const actionHtml = options.actionLabel
+            ? `<button type="button" class="toolbar-btn" data-find-scripts-state-action>${escapeHtml(options.actionLabel)}</button>`
+            : '';
+        elements.findScriptsResults.setAttribute('role', isError ? 'alert' : 'status');
+        elements.findScriptsResults.setAttribute('aria-live', isError ? 'assertive' : 'polite');
+        elements.findScriptsResults.innerHTML = `
+            <div class="find-scripts-empty${isError ? ' is-error' : ''}">
+                <strong>${safeTitle}</strong>
+                <span>${safeDetail}</span>
+                ${actionHtml}
+            </div>
+        `;
+        elements.findScriptsResults.querySelector('[data-find-scripts-state-action]')?.addEventListener('click', () => {
+            if (typeof options.action === 'function') options.action();
+        });
+    }
+
     async function searchScripts(page = 1) {
         const query = elements.findScriptsInput?.value?.trim();
         const source = elements.findScriptsSource?.value || 'greasyfork';
-        if (!query) return showToast('Enter a search term', 'error');
+        if (!query) {
+            renderFindScriptsState('empty', 'Enter a search term', 'Search by a site domain like youtube.com or a workflow keyword like dark mode.');
+            elements.findScriptsInput?.focus();
+            return showToast('Enter a search term', 'error');
+        }
         if (findScriptsState.loading) return;
 
         findScriptsState.query = query;
         findScriptsState.source = source;
         findScriptsState.page = page;
-        findScriptsState.loading = true;
+        setFindScriptsBusy(true);
 
-        if (elements.findScriptsResults) elements.findScriptsResults.innerHTML = '<div class="find-scripts-loading">Searching</div>';
+        if (elements.findScriptsResults) {
+            elements.findScriptsResults.setAttribute('role', 'status');
+            elements.findScriptsResults.setAttribute('aria-live', 'polite');
+            elements.findScriptsResults.innerHTML = `<div class="find-scripts-loading" role="status" aria-live="polite">Searching ${escapeHtml(getFindScriptsSourceLabel(source))} for "${escapeHtml(query)}"…</div>`;
+        }
 
         try {
             if (source === 'greasyfork') {
@@ -7201,13 +7262,19 @@
                 searchExternal(`https://github.com/search?q=${encodeURIComponent(query + ' userscript')}&type=code`);
             }
         } catch (e) {
-            if (elements.findScriptsResults) elements.findScriptsResults.innerHTML = `<div class="find-scripts-empty">Search failed: ${escapeHtml(e.message)}</div>`;
+            renderFindScriptsState(
+                'error',
+                'Search failed',
+                `${getFindScriptsSourceLabel(source)} did not return results. ${e?.message || 'Try again or switch sources.'}`,
+                { actionLabel: 'Try Again', action: () => searchScripts(page) }
+            );
         } finally {
-            findScriptsState.loading = false;
+            setFindScriptsBusy(false);
         }
     }
 
     function searchExternal(url) {
+        showToast('Opening GitHub search in a new tab', 'info');
         chrome.tabs.create({ url });
         closeFindScripts();
     }
@@ -7227,7 +7294,7 @@
         const scripts = await resp.json();
 
         if (!scripts || scripts.length === 0) {
-            if (elements.findScriptsResults) elements.findScriptsResults.innerHTML = '<div class="find-scripts-empty">No scripts found. Try a different search term.</div>';
+            renderFindScriptsState('empty', 'No scripts found', `GreasyFork has no results for "${query}". Try a broader keyword or switch sources.`);
             return;
         }
 
@@ -7247,7 +7314,7 @@
             const data = await resp.json();
             const scripts = data?.scripts || data || [];
             if (!Array.isArray(scripts) || scripts.length === 0) {
-                if (elements.findScriptsResults) elements.findScriptsResults.innerHTML = '<div class="find-scripts-empty">No scripts found on OpenUserJS. Try a different term.</div>';
+                renderFindScriptsState('empty', 'No scripts found', `OpenUserJS has no results for "${query}". Try a broader keyword or switch sources.`);
                 return;
             }
             // Normalize to same format as GreasyFork results
@@ -7274,25 +7341,29 @@
         // Build installed script lookup for duplicate detection
         const installedNames = new Set(state.scripts.map(s => (s.metadata?.name || '').toLowerCase()));
 
-        const html = scripts.map(s => {
+        const html = scripts.map((s, index) => {
+            const scriptName = s.name || 'Unnamed script';
             const installs = s.total_installs >= 1000 ? Math.round(s.total_installs / 1000) + 'k' : (s.total_installs || 0);
             const daily = s.daily_installs || 0;
-            const rating = s.fan_score ? parseFloat(s.fan_score).toFixed(0) + '%' : '--';
+            const rating = s.fan_score ? Number.parseFloat(s.fan_score).toFixed(0) + '%' : '--';
             const updated = s.code_updated_at ? formatTime(s.code_updated_at) : '--';
             const author = s.users && s.users[0] ? s.users[0].name : 'Unknown';
-            const isInstalled = installedNames.has((s.name || '').toLowerCase());
+            const isInstalled = installedNames.has(scriptName.toLowerCase());
             const installedBadge = isInstalled ? '<span class="find-installed-badge">Installed</span>' : '';
+            const installLabel = isInstalled ? 'Reinstall' : 'Install';
+            const previewId = `find-script-preview-${page}-${index}`;
 
             // Greasy Fork API responses are trusted but not authenticated end-
             // to-end — pass each URL through sanitizeUrl so a poisoned listing
             // can't render a javascript: / data: href that bypasses escapeHtml.
             const safeS_url = sanitizeUrl(s.url || '') || '';
+            const safeCodeUrl = sanitizeUrl(s.code_url || '') || '';
             return `<div class="find-script-card${isInstalled ? ' already-installed' : ''}">
                 <div class="find-script-info">
                     <div class="find-script-name">
                         ${safeS_url
-                            ? `<a href="${escapeHtml(safeS_url)}" target="_blank" rel="noopener">${escapeHtml(s.name)}</a>`
-                            : `<span>${escapeHtml(s.name)}</span>`}
+                            ? `<a href="${escapeHtml(safeS_url)}" target="_blank" rel="noopener">${escapeHtml(scriptName)}</a>`
+                            : `<span>${escapeHtml(scriptName)}</span>`}
                         ${s.version ? `<span class="find-script-version">v${escapeHtml(s.version)}</span>` : ''}
                         ${installedBadge}
                     </div>
@@ -7306,49 +7377,68 @@
                     </div>
                 </div>
                 <div class="find-script-actions">
-                    <button class="toolbar-btn primary" data-install-url="${escapeHtml(s.code_url || '')}">${isInstalled ? 'Reinstall' : 'Install'}</button>
-                    <button class="toolbar-btn" data-preview-url="${escapeHtml(s.code_url || '')}">Preview</button>
-                    <button class="toolbar-btn" data-view-url="${escapeHtml(s.url || '')}">View</button>
+                    <button class="toolbar-btn primary" data-install-url="${escapeHtml(safeCodeUrl)}" data-original-label="${installLabel}" aria-label="${installLabel} ${escapeHtml(scriptName)}">${installLabel}</button>
+                    <button class="toolbar-btn" data-preview-url="${escapeHtml(safeCodeUrl)}" aria-controls="${previewId}" aria-expanded="false">Preview</button>
+                    <button class="toolbar-btn" data-view-url="${escapeHtml(safeS_url)}">View</button>
                 </div>
-                <div class="find-script-preview"></div>
+                <div class="find-script-preview" id="${previewId}" role="region" aria-label="Source preview for ${escapeHtml(scriptName)}"></div>
             </div>`;
         }).join('');
 
+        const sourceLabel = getFindScriptsSourceLabel();
         const countText = domain
-            ? `<div class="find-scripts-count">Scripts for <strong>${escapeHtml(domain)}</strong> - Page ${page}</div>`
-            : `<div class="find-scripts-count">Page ${page} - ${scripts.length} results</div>`;
+            ? `<div class="find-scripts-count"><span><strong>${escapeHtml(sourceLabel)}</strong> results for ${escapeHtml(domain)}</span><span>Page ${page}</span></div>`
+            : `<div class="find-scripts-count"><span><strong>${escapeHtml(sourceLabel)}</strong> results for "${escapeHtml(findScriptsState.query)}"</span><span>Page ${page} · ${numberFormatter.format(scripts.length)} result${scripts.length === 1 ? '' : 's'}</span></div>`;
 
         const pagination = `<div class="find-scripts-pagination">
             ${page > 1 ? `<button class="toolbar-btn" data-find-page="${page - 1}">Previous</button>` : ''}
             ${scripts.length >= 50 ? `<button class="toolbar-btn" data-find-page="${page + 1}">Next</button>` : ''}
         </div>`;
 
-        if (elements.findScriptsResults) elements.findScriptsResults.innerHTML = countText + html + pagination;
+        if (elements.findScriptsResults) {
+            elements.findScriptsResults.setAttribute('role', 'status');
+            elements.findScriptsResults.setAttribute('aria-live', 'polite');
+            elements.findScriptsResults.innerHTML = countText + html + pagination;
+        }
 
         // Bind install buttons
         if (elements.findScriptsResults) elements.findScriptsResults.querySelectorAll('[data-install-url]').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const url = btn.dataset.installUrl;
-                if (!url) return;
-                btn.textContent = 'Installing...';
+                const originalLabel = btn.dataset.originalLabel || btn.textContent || 'Install';
+                if (!url) {
+                    showToast('Install URL unavailable for this result', 'error');
+                    return;
+                }
+                btn.textContent = 'Installing…';
                 btn.disabled = true;
+                btn.setAttribute('aria-busy', 'true');
                 try {
                     const res = await chrome.runtime.sendMessage({ action: 'installFromUrl', url });
                     if (res?.success) {
                         btn.textContent = 'Installed';
                         btn.classList.remove('primary');
+                        btn.removeAttribute('aria-busy');
                         await loadScripts();
                         updateStats();
                         showToast('Script installed', 'success');
                     } else {
                         btn.textContent = 'Failed';
                         showToast(res?.error || 'Install failed', 'error');
-                        setTimeout(() => { btn.textContent = 'Install'; btn.disabled = false; }, 2000);
+                        setTimeout(() => {
+                            btn.textContent = originalLabel;
+                            btn.disabled = false;
+                            btn.removeAttribute('aria-busy');
+                        }, 2000);
                     }
                 } catch (e) {
-                    btn.textContent = 'Error';
+                    btn.textContent = 'Failed';
                     showToast('Install failed', 'error');
-                    setTimeout(() => { btn.textContent = 'Install'; btn.disabled = false; }, 2000);
+                    setTimeout(() => {
+                        btn.textContent = originalLabel;
+                        btn.disabled = false;
+                        btn.removeAttribute('aria-busy');
+                    }, 2000);
                 }
             });
         });
@@ -7365,29 +7455,41 @@
         if (elements.findScriptsResults) elements.findScriptsResults.querySelectorAll('[data-preview-url]').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const url = btn.dataset.previewUrl;
-                if (!url) return;
+                if (!url) {
+                    showToast('Preview URL unavailable for this result', 'error');
+                    return;
+                }
                 const card = btn.closest('.find-script-card');
                 const preview = card?.querySelector('.find-script-preview');
                 if (!preview) return;
                 if (preview.classList.contains('open')) {
                     preview.classList.remove('open');
+                    preview.classList.remove('is-error');
+                    btn.setAttribute('aria-expanded', 'false');
                     btn.textContent = 'Preview';
                     return;
                 }
-                btn.textContent = 'Loading...';
+                preview.textContent = 'Loading source preview…';
+                preview.classList.remove('is-error');
+                preview.classList.add('open');
+                btn.setAttribute('aria-expanded', 'true');
+                btn.textContent = 'Loading…';
                 btn.disabled = true;
+                btn.setAttribute('aria-busy', 'true');
                 try {
                     const resp = await fetch(url);
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                     const code = await resp.text();
                     preview.textContent = code;
-                    preview.classList.add('open');
                     btn.textContent = 'Hide';
                 } catch (e) {
-                    preview.textContent = 'Failed to load code';
-                    preview.classList.add('open');
+                    preview.textContent = 'Preview unavailable. Open the source page to inspect this script.';
+                    preview.classList.add('is-error');
                     btn.textContent = 'Preview';
+                    btn.setAttribute('aria-expanded', 'true');
                 }
                 btn.disabled = false;
+                btn.removeAttribute('aria-busy');
             });
         });
 
@@ -7892,8 +7994,8 @@
         document.getElementById('btnNewFolder')?.addEventListener('click', createFolder);
         elements.btnImportScript?.addEventListener('click', importScript);
         elements.btnCheckUpdates?.addEventListener('click', async () => {
-            showProgress('Checking for updates...');
-            updateProgress(0, 1, 'Scanning all scripts...');
+            showProgress('Checking for updates…');
+            updateProgress(0, 1, 'Scanning all scripts…');
             try {
                 const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates' });
                 if (updates && updates.length > 0) {
@@ -8031,7 +8133,7 @@
             const resources = Array.isArray(m.resource) ? m.resource : [];
             const urls = [...requires.map(r => typeof r === 'string' ? r : r.url), ...resources.map(r => typeof r === 'string' ? r.split(/\s+/)[1] || r : r.url)].filter(Boolean);
             if (urls.length === 0) { showToast('No external resources to refresh', 'info'); return; }
-            showToast(`Refreshing ${urls.length} resource(s)...`, 'info');
+            showToast(`Refreshing ${urls.length} resource(s)…`, 'info');
             try {
                 await chrome.runtime.sendMessage({ action: 'prefetchResources', resources: Object.fromEntries(urls.map((u, i) => [i, u])) });
                 showToast('Resources refreshed', 'success');
@@ -8049,7 +8151,7 @@
             const query = libSearchInput?.value?.trim();
             if (!query) return;
             if (libSearchResults) {
-                libSearchResults.innerHTML = '<div class="panel-empty"><strong>Searching libraries...</strong><span>Fetching matching packages from cdnjs.</span></div>';
+                libSearchResults.innerHTML = '<div class="panel-empty"><strong>Searching libraries…</strong><span>Fetching matching packages from cdnjs.</span></div>';
             }
             try {
                 const resp = await fetch(`https://api.cdnjs.com/libraries?search=${encodeURIComponent(query)}&fields=description,version,filename&limit=10`);
@@ -8533,74 +8635,91 @@
         elements.settingsLinterConfig?.addEventListener('blur', e => saveSetting('linterConfig', e.target.value));
 
         // Section Save buttons
-        elements.btnSaveAppearance?.addEventListener('click', async () => {
-            await saveSetting('customCss', elements.settingsCustomCss?.value || '');
+        elements.btnSaveAppearance?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                await saveSettingOrThrow('customCss', elements.settingsCustomCss?.value || '');
+                showToast('Appearance settings saved', 'success');
+            }, { busyLabel: 'Saving…', errorMessage: 'Failed to save appearance settings' });
         });
         
-        elements.btnSaveActionMenu?.addEventListener('click', async () => {
-            await saveSetting('badgeColor', elements.settingsBadgeColor?.value || '#ee3131');
-            showToast('Action Menu saved', 'success');
+        elements.btnSaveActionMenu?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                await saveSettingOrThrow('badgeColor', elements.settingsBadgeColor?.value || '#ee3131');
+                showToast('Action menu settings saved', 'success');
+            }, { busyLabel: 'Saving…', errorMessage: 'Failed to save action menu settings' });
         });
         
-        elements.btnSaveSync?.addEventListener('click', async () => {
-            const provider = elements.settingsSyncType?.value || 'none';
-            await saveSetting('syncEnabled', !!elements.settingsEnableSync?.checked);
-            await saveSetting('syncProvider', provider);
-            if (provider === 'webdav') {
-                await saveSetting('webdavUrl', elements.settingsWebdavUrl?.value.trim() || '');
-                await saveSetting('webdavUsername', elements.settingsWebdavUsername?.value.trim() || '');
-                await saveSetting('webdavPassword', elements.settingsWebdavPassword?.value || '');
-            }
-            showToast(
-                provider === 'none'
-                    ? 'Sync is disabled until you choose a provider'
-                    : `Saved sync settings for ${provider}`,
-                'success'
-            );
+        elements.btnSaveSync?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const provider = elements.settingsSyncType?.value || 'none';
+                await saveSettingOrThrow('syncEnabled', !!elements.settingsEnableSync?.checked);
+                await saveSettingOrThrow('syncProvider', provider);
+                if (provider === 'webdav') {
+                    await saveSettingOrThrow('webdavUrl', elements.settingsWebdavUrl?.value.trim() || '');
+                    await saveSettingOrThrow('webdavUsername', elements.settingsWebdavUsername?.value.trim() || '');
+                    await saveSettingOrThrow('webdavPassword', elements.settingsWebdavPassword?.value || '');
+                }
+                showToast(
+                    provider === 'none'
+                        ? 'Sync is disabled until you choose a provider'
+                        : `Saved sync settings for ${provider}`,
+                    'success'
+                );
+            }, { busyLabel: 'Saving…', errorMessage: 'Failed to save sync settings' });
         });
         
-        elements.btnSaveEditor?.addEventListener('click', async () => {
-            await saveSetting('linterConfig', elements.settingsLinterConfig?.value || '');
-            showToast('Editor settings saved', 'success');
+        elements.btnSaveEditor?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                await saveSettingOrThrow('linterConfig', elements.settingsLinterConfig?.value || '');
+                showToast('Editor settings saved', 'success');
+            }, { busyLabel: 'Saving…', errorMessage: 'Failed to save editor settings' });
         });
         
-        elements.btnSaveSecurity?.addEventListener('click', async () => {
-            await saveSetting('whitelistedPages', elements.settingsWhitelistedPages?.value || '');
-            await saveSetting('blacklistedPages', elements.settingsBlacklistedPages?.value || '');
-            const hostsText = elements.settingsDeniedHosts?.value || '';
-            await saveSetting('deniedHosts', hostsText.split('\n').map(s => s.trim()).filter(Boolean));
-            showToast('Security settings saved', 'success');
+        elements.btnSaveSecurity?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                await saveSettingOrThrow('whitelistedPages', elements.settingsWhitelistedPages?.value || '');
+                await saveSettingOrThrow('blacklistedPages', elements.settingsBlacklistedPages?.value || '');
+                const hostsText = elements.settingsDeniedHosts?.value || '';
+                await saveSettingOrThrow('deniedHosts', hostsText.split('\n').map(s => s.trim()).filter(Boolean));
+                showToast('Security settings saved', 'success');
+            }, { busyLabel: 'Saving…', errorMessage: 'Failed to save security settings' });
         });
         
-        elements.btnSaveBlackCheck?.addEventListener('click', async () => {
-            await saveSetting('manualBlacklist', elements.settingsManualBlacklist?.value || '');
-            showToast('BlackCheck settings saved', 'success');
+        elements.btnSaveBlackCheck?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                await saveSettingOrThrow('manualBlacklist', elements.settingsManualBlacklist?.value || '');
+                showToast('BlackCheck settings saved', 'success');
+            }, { busyLabel: 'Saving…', errorMessage: 'Failed to save BlackCheck settings' });
         });
         
-        elements.btnSaveDownloads?.addEventListener('click', async () => {
-            await saveSetting('downloadWhitelist', elements.settingsDownloadWhitelist?.value || '');
-            showToast('Download settings saved', 'success');
+        elements.btnSaveDownloads?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                await saveSettingOrThrow('downloadWhitelist', elements.settingsDownloadWhitelist?.value || '');
+                showToast('Download settings saved', 'success');
+            }, { busyLabel: 'Saving…', errorMessage: 'Failed to save download settings' });
         });
 
         // Sync buttons
-        elements.btnSyncNow?.addEventListener('click', async () => {
-            showToast('Syncing...', 'info');
-            try {
-                const r = await chrome.runtime.sendMessage({ action: 'syncNow' });
-                if (elements.syncLog) {
-                    elements.syncLog.value = (elements.syncLog.value || '') + 
-                        `[${new Date().toLocaleTimeString()}] ${r?.success ? 'Sync completed' : (r?.error || 'Failed')}\n`;
-                }
-                if (r?.success) {
-                    state.settings.lastSync = Date.now();
-                    if (elements.lastSyncTime) {
-                        elements.lastSyncTime.textContent = formatSyncTimestamp(state.settings.lastSync);
+        elements.btnSyncNow?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                showToast('Syncing…', 'info');
+                try {
+                    const r = await chrome.runtime.sendMessage({ action: 'syncNow' });
+                    if (elements.syncLog) {
+                        elements.syncLog.value = (elements.syncLog.value || '') +
+                            `[${new Date().toLocaleTimeString()}] ${r?.success ? 'Sync completed' : (r?.error || 'Failed')}\n`;
                     }
-                    await loadScripts();
-                    updateStats();
-                }
-                showToast(r?.success ? 'Sync completed' : (r?.error || 'Sync failed'), r?.success ? 'success' : 'error');
-            } catch (e) { showToast('Sync failed', 'error'); }
+                    if (r?.success) {
+                        state.settings.lastSync = Date.now();
+                        if (elements.lastSyncTime) {
+                            elements.lastSyncTime.textContent = formatSyncTimestamp(state.settings.lastSync);
+                        }
+                        await loadScripts();
+                        updateStats();
+                    }
+                    showToast(r?.success ? 'Sync completed' : (r?.error || 'Sync failed'), r?.success ? 'success' : 'error');
+                } catch (e) { showToast('Sync failed', 'error'); }
+            }, { busyLabel: 'Syncing…', errorMessage: 'Sync failed' });
         });
         
         elements.btnSyncReset?.addEventListener('click', async () => {
@@ -8679,18 +8798,22 @@
         });
 
         // Reset buttons
-        elements.btnRestartExtension?.addEventListener('click', async () => {
-            if (!await showConfirmModal('Restart', 'Restart ScriptVault?')) return;
-            await chrome.runtime.sendMessage({ action: 'restart' });
-            showToast('Restarting...', 'info');
+        elements.btnRestartExtension?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                if (!await showConfirmModal('Restart', 'Restart ScriptVault?')) return;
+                await chrome.runtime.sendMessage({ action: 'restart' });
+                showToast('Restarting…', 'info');
+            }, { busyLabel: 'Restarting…', errorMessage: 'Restart failed' });
         });
         
-        elements.btnFactoryReset?.addEventListener('click', async () => {
-            if (!await showConfirmModal('Factory Reset', 'This will delete all scripts and reset all settings. This cannot be undone. Continue?')) return;
-            await chrome.runtime.sendMessage({ action: 'factoryReset' });
-            await loadSettings();
-            await loadScripts();
-            showToast('Factory reset complete', 'success');
+        elements.btnFactoryReset?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                if (!await showConfirmModal('Factory Reset', 'This will delete all scripts and reset all settings. This cannot be undone. Continue?')) return;
+                await chrome.runtime.sendMessage({ action: 'factoryReset' });
+                await loadSettings();
+                await loadScripts();
+                showToast('Factory reset complete', 'success');
+            }, { busyLabel: 'Resetting…', errorMessage: 'Factory reset failed' });
         });
 
         // Utilities
@@ -8738,8 +8861,8 @@
         elements.backupArchiveInput?.addEventListener('change', async event => {
             const file = event.target.files?.[0];
             if (!file) return;
-            showProgress(`Importing ${file.name}...`);
-            updateProgress(0, 1, 'Reading archive...');
+            showProgress(`Importing ${file.name}…`);
+            updateProgress(0, 1, 'Reading archive…');
             try {
                 const buf = await file.arrayBuffer();
                 const bytes = new Uint8Array(buf);
@@ -8747,7 +8870,7 @@
                 for (let i = 0; i < bytes.length; i += 8192) {
                     binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
                 }
-                updateProgress(1, 2, 'Saving backup...');
+                updateProgress(1, 2, 'Saving backup…');
                 const response = await chrome.runtime.sendMessage({ action: 'importBackup', zipData: btoa(binary) });
                 hideProgress();
                 if (response?.error || response?.success === false || !response?.backupId) {
@@ -8854,8 +8977,8 @@
                     showToast('Not a valid Tampermonkey backup file', 'error');
                     return;
                 }
-                showProgress('Importing Tampermonkey backup...');
-                updateProgress(0, 1, 'Parsing scripts...');
+                showProgress('Importing Tampermonkey backup…');
+                updateProgress(0, 1, 'Parsing scripts…');
                 try {
                     const res = await chrome.runtime.sendMessage({ action: 'importTampermonkeyBackup', text, overwrite: true });
                     if (res?.error) {
@@ -8878,115 +9001,140 @@
             if (logEl) logEl.innerHTML = '<div style="color:var(--text-muted)">No activity yet</div>';
         });
 
-        elements.btnRefreshRuntimeStatus?.addEventListener('click', () => loadRuntimeStatus({ announce: true }));
+        elements.btnRefreshRuntimeStatus?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, () => loadRuntimeStatus({ announce: true }), { busyLabel: 'Refreshing…', errorMessage: 'Failed to refresh runtime status' });
+        });
         elements.btnShowSetupGuide?.addEventListener('click', showSetupInstructions);
-        elements.btnRepairRuntime?.addEventListener('click', async () => {
-            if (!await showConfirmModal('Repair runtime?', 'Rebuild registrations, context menus, alarms, and badge state now.')) return;
-            try {
-                const result = await chrome.runtime.sendMessage({ action: 'repairRuntimeState' });
-                if (result?.error || result?.success === false) {
-                    showToast(result?.error || 'Runtime repair failed', 'error');
+        elements.btnRepairRuntime?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                if (!await showConfirmModal('Repair runtime?', 'Rebuild registrations, context menus, alarms, and badge state now.')) return;
+                try {
+                    const result = await chrome.runtime.sendMessage({ action: 'repairRuntimeState' });
+                    if (result?.error || result?.success === false) {
+                        showToast(result?.error || 'Runtime repair failed', 'error');
+                        return;
+                    }
+                    state.trustCenter.lastRuntimeRepairAt = Date.now();
+                    state.trustCenter.runtimeStatus = result;
+                    renderRuntimeStatus(result);
+                    showToast('Runtime repaired', 'success');
+                } catch (error) {
+                    showToast(error?.message || 'Runtime repair failed', 'error');
+                }
+            }, { busyLabel: 'Repairing…', errorMessage: 'Runtime repair failed' });
+        });
+        elements.btnExportSupportSnapshot?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, exportSupportSnapshot, { busyLabel: 'Exporting…', errorMessage: 'Failed to export support snapshot' });
+        });
+        elements.btnRefreshPublicApiTrust?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, () => loadPublicApiTrustState({ announce: true }), { busyLabel: 'Refreshing…', errorMessage: 'Failed to refresh API trust state' });
+        });
+        elements.btnSavePublicApiOrigins?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const { origins, invalid } = normalizeTrustedOriginInput(elements.publicApiTrustedOrigins?.value || '');
+                if (invalid.length) {
+                    showToast(`Invalid origin: ${invalid[0]}`, 'error');
                     return;
                 }
-                state.trustCenter.lastRuntimeRepairAt = Date.now();
-                state.trustCenter.runtimeStatus = result;
-                renderRuntimeStatus(result);
-                showToast('Runtime repaired', 'success');
-            } catch (error) {
-                showToast(error?.message || 'Runtime repair failed', 'error');
-            }
-        });
-        elements.btnExportSupportSnapshot?.addEventListener('click', exportSupportSnapshot);
-        elements.btnRefreshPublicApiTrust?.addEventListener('click', () => loadPublicApiTrustState({ announce: true }));
-        elements.btnSavePublicApiOrigins?.addEventListener('click', async () => {
-            const { origins, invalid } = normalizeTrustedOriginInput(elements.publicApiTrustedOrigins?.value || '');
-            if (invalid.length) {
-                showToast(`Invalid origin: ${invalid[0]}`, 'error');
-                return;
-            }
-            try {
-                const response = await chrome.runtime.sendMessage({ action: 'publicApi_setTrustedOrigins', data: { origins } });
-                if (response?.error) {
-                    showToast(response.error, 'error');
-                    return;
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'publicApi_setTrustedOrigins', data: { origins } });
+                    if (response?.error) {
+                        showToast(response.error, 'error');
+                        return;
+                    }
+                    await loadPublicApiTrustState();
+                    showToast(`Saved ${origins.length} trusted origin${origins.length === 1 ? '' : 's'}`, 'success');
+                } catch (error) {
+                    showToast(error?.message || 'Failed to save trusted origins', 'error');
                 }
-                await loadPublicApiTrustState();
-                showToast(`Saved ${origins.length} trusted origin${origins.length === 1 ? '' : 's'}`, 'success');
-            } catch (error) {
-                showToast(error?.message || 'Failed to save trusted origins', 'error');
-            }
+            }, { busyLabel: 'Saving…', errorMessage: 'Failed to save trusted origins' });
         });
-        elements.btnClearPublicApiAudit?.addEventListener('click', async () => {
-            if (!await showConfirmModal('Clear audit log?', 'Remove recent Public API audit entries from the local log.')) return;
-            try {
-                const response = await chrome.runtime.sendMessage({ action: 'publicApi_clearAuditLog' });
-                if (response?.error) {
-                    showToast(response.error, 'error');
-                    return;
+        elements.btnClearPublicApiAudit?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                if (!await showConfirmModal('Clear audit log?', 'Remove recent Public API audit entries from the local log.')) return;
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'publicApi_clearAuditLog' });
+                    if (response?.error) {
+                        showToast(response.error, 'error');
+                        return;
+                    }
+                    await loadPublicApiTrustState();
+                    showToast('Public API audit log cleared', 'success');
+                } catch (error) {
+                    showToast(error?.message || 'Failed to clear audit log', 'error');
                 }
-                await loadPublicApiTrustState();
-                showToast('Public API audit log cleared', 'success');
-            } catch (error) {
-                showToast(error?.message || 'Failed to clear audit log', 'error');
-            }
+            }, { busyLabel: 'Clearing…', errorMessage: 'Failed to clear audit log' });
         });
-        elements.btnRefreshSigningTrust?.addEventListener('click', () => loadSigningTrustState({ announce: true }));
+        elements.btnRefreshSigningTrust?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, () => loadSigningTrustState({ announce: true }), { busyLabel: 'Refreshing…', errorMessage: 'Failed to refresh signing trust' });
+        });
 
         // Workspaces
-        document.getElementById('btnCreateWorkspace')?.addEventListener('click', async () => {
-            const name = await showInputModal({
-                title: 'Save Workspace',
-                label: 'Workspace name',
-                placeholder: 'Work setup',
-                confirmLabel: 'Save',
-                validate: value => value ? '' : 'Enter a workspace name.'
-            });
-            if (!name) return;
-            const res = await chrome.runtime.sendMessage({ action: 'createWorkspace', name });
-            if (res?.workspace) { showToast('Workspace saved', 'success'); loadWorkspaces(); }
+        document.getElementById('btnCreateWorkspace')?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const name = await showInputModal({
+                    title: 'Save Workspace',
+                    label: 'Workspace name',
+                    placeholder: 'Work setup',
+                    confirmLabel: 'Save',
+                    validate: value => value ? '' : 'Enter a workspace name.'
+                });
+                if (!name) return;
+                const res = await chrome.runtime.sendMessage({ action: 'createWorkspace', name });
+                if (res?.workspace) { showToast('Workspace saved', 'success'); loadWorkspaces(); }
+                else showToast(res?.error || 'Failed to save workspace', 'error');
+            }, { busyLabel: 'Saving…', errorMessage: 'Failed to save workspace' });
         });
 
         // Network Log
-        document.getElementById('btnRefreshNetLog')?.addEventListener('click', loadNetworkLog);
-        document.getElementById('btnClearNetLog')?.addEventListener('click', async () => {
-            await chrome.runtime.sendMessage({ action: 'clearNetworkLog' });
-            loadNetworkLog();
-            showToast('Network log cleared', 'success');
+        document.getElementById('btnRefreshNetLog')?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, loadNetworkLog, { busyLabel: 'Refreshing…', errorMessage: 'Failed to refresh network log' });
         });
-        document.getElementById('btnExportNetLog')?.addEventListener('click', async () => {
-            const res = await chrome.runtime.sendMessage({ action: 'getNetworkLog' });
-            const logEntries = Array.isArray(res) ? res : (Array.isArray(res?.log) ? res.log : []);
-            if (!logEntries.length) { showToast('No requests to export', 'info'); return; }
-            const har = {
-                log: {
-                    version: '1.2',
-                    creator: { name: 'ScriptVault', version: chrome.runtime.getManifest().version },
-                    entries: logEntries.map(e => ({
-                        startedDateTime: new Date(e.timestamp).toISOString(),
-                        time: e.duration || 0,
-                        request: { method: e.method, url: e.url, httpVersion: 'HTTP/1.1', headers: [], queryString: [], bodySize: e.requestSize || 0 },
-                        response: { status: e.status || 0, statusText: e.statusText || '', httpVersion: 'HTTP/1.1', headers: [], content: { size: e.responseSize || 0, mimeType: 'text/plain' }, bodySize: e.responseSize || 0 },
-                        comment: e.scriptName || ''
-                    }))
-                }
-            };
-            const blob = new Blob([JSON.stringify(har, null, 2)], { type: 'application/json' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `scriptvault-netlog-${new Date().toISOString().split('T')[0]}.har`;
-            a.click();
-            setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-            showToast('Exported as HAR', 'success');
+        document.getElementById('btnClearNetLog')?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                await chrome.runtime.sendMessage({ action: 'clearNetworkLog' });
+                loadNetworkLog();
+                showToast('Network log cleared', 'success');
+            }, { busyLabel: 'Clearing…', errorMessage: 'Failed to clear network log' });
+        });
+        document.getElementById('btnExportNetLog')?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const res = await chrome.runtime.sendMessage({ action: 'getNetworkLog' });
+                const logEntries = Array.isArray(res) ? res : (Array.isArray(res?.log) ? res.log : []);
+                if (!logEntries.length) { showToast('No requests to export', 'info'); return; }
+                const har = {
+                    log: {
+                        version: '1.2',
+                        creator: { name: 'ScriptVault', version: chrome.runtime.getManifest().version },
+                        entries: logEntries.map(e => ({
+                            startedDateTime: new Date(e.timestamp).toISOString(),
+                            time: e.duration || 0,
+                            request: { method: e.method, url: e.url, httpVersion: 'HTTP/1.1', headers: [], queryString: [], bodySize: e.requestSize || 0 },
+                            response: { status: e.status || 0, statusText: e.statusText || '', httpVersion: 'HTTP/1.1', headers: [], content: { size: e.responseSize || 0, mimeType: 'text/plain' }, bodySize: e.responseSize || 0 },
+                            comment: e.scriptName || ''
+                        }))
+                    }
+                };
+                const blob = new Blob([JSON.stringify(har, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `scriptvault-netlog-${new Date().toISOString().split('T')[0]}.har`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+                showToast('Exported as HAR', 'success');
+            }, { busyLabel: 'Exporting…', errorMessage: 'Failed to export HAR' });
         });
 
         // Performance Budget
-        document.getElementById('btnSavePerfBudget')?.addEventListener('click', async () => {
-            const budget = parseInt(document.getElementById('perfBudgetDefault')?.value || '200');
-            if (isNaN(budget) || budget < 10) { showToast('Invalid budget', 'error'); return; }
-            await chrome.runtime.sendMessage({ action: 'setSettings', settings: { perfBudget: budget } });
-            state.settings.perfBudget = budget;
-            showToast(`Budget set to ${budget}ms`, 'success');
-            renderScriptTable();
+        document.getElementById('btnSavePerfBudget')?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const budget = parseInt(document.getElementById('perfBudgetDefault')?.value || '200');
+                if (isNaN(budget) || budget < 10) { showToast('Enter a performance budget of at least 10ms', 'error'); return; }
+                await chrome.runtime.sendMessage({ action: 'setSettings', settings: { perfBudget: budget } });
+                state.settings.perfBudget = budget;
+                showToast(`Budget set to ${budget}ms`, 'success');
+                renderScriptTable();
+            }, { busyLabel: 'Saving…', errorMessage: 'Failed to save performance budget' });
         });
 
         elements.btnChooseFile?.addEventListener('click', () => elements.importFileInput?.click());
@@ -9038,111 +9186,119 @@
         });
         updateCloudUI();
 
-        elements.btnCloudConnect?.addEventListener('click', async () => {
-            const provider = elements.cloudProvider?.value || 'none';
-            if (provider === 'none') {
-                showToast('Choose a sync provider first', 'info');
-                return;
-            }
-            // Request identity permission if needed for OAuth providers
-            if (['googledrive', 'dropbox'].includes(provider)) {
-                try {
-                    const granted = await chrome.permissions.request({ permissions: ['identity'] });
-                    if (!granted) {
-                        showToast('Permission denied - identity access required', 'error');
-                        return;
-                    }
-                } catch (e) {
-                    showToast('Permission request failed: ' + e.message, 'error');
+        elements.btnCloudConnect?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const provider = elements.cloudProvider?.value || 'none';
+                if (provider === 'none') {
+                    showToast('Choose a sync provider first', 'info');
                     return;
                 }
-            }
-            showToast('Connecting...', 'info');
-            try {
-                const r = await chrome.runtime.sendMessage({ action: 'connectSyncProvider', provider });
-                if (r?.success) {
-                    showToast('Connected to ' + provider, 'success');
+                // Request identity permission if needed for OAuth providers
+                if (['googledrive', 'dropbox'].includes(provider)) {
+                    try {
+                        const granted = await chrome.permissions.request({ permissions: ['identity'] });
+                        if (!granted) {
+                            showToast('Permission denied - identity access required', 'error');
+                            return;
+                        }
+                    } catch (e) {
+                        showToast('Permission request failed: ' + e.message, 'error');
+                        return;
+                    }
+                }
+                showToast('Connecting…', 'info');
+                try {
+                    const r = await chrome.runtime.sendMessage({ action: 'connectSyncProvider', provider });
+                    if (r?.success) {
+                        showToast('Connected to ' + provider, 'success');
+                        await updateCloudUI();
+                    } else {
+                        showToast(r?.error || 'Connection failed', 'error');
+                    }
+                } catch (e) { showToast('Failed: ' + e.message, 'error'); }
+            }, { busyLabel: 'Connecting…', errorMessage: 'Cloud connection failed' });
+        });
+
+        elements.btnCloudDisconnect?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const provider = elements.cloudProvider?.value || 'none';
+                if (provider === 'none') {
+                    showToast('Choose a sync provider first', 'info');
+                    return;
+                }
+                try {
+                    await chrome.runtime.sendMessage({ action: 'disconnectSyncProvider', provider });
+                    showToast('Disconnected', 'success');
                     await updateCloudUI();
-                } else {
-                    showToast(r?.error || 'Connection failed', 'error');
-                }
-            } catch (e) { showToast('Failed: ' + e.message, 'error'); }
+                } catch (e) { showToast('Failed: ' + e.message, 'error'); }
+            }, { busyLabel: 'Disconnecting…', errorMessage: 'Cloud disconnect failed' });
         });
 
-        elements.btnCloudDisconnect?.addEventListener('click', async () => {
-            const provider = elements.cloudProvider?.value || 'none';
-            if (provider === 'none') {
-                showToast('Choose a sync provider first', 'info');
-                return;
-            }
-            try {
-                await chrome.runtime.sendMessage({ action: 'disconnectSyncProvider', provider });
-                showToast('Disconnected', 'success');
-                await updateCloudUI();
-            } catch (e) { showToast('Failed: ' + e.message, 'error'); }
+        elements.btnCloudExport?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const provider = elements.cloudProvider?.value || 'none';
+                if (provider === 'none') {
+                    showToast('Choose a sync provider first', 'info');
+                    return;
+                }
+                const transfer = getTransferPreferences();
+                showToast('Backing up to ' + provider + '…', 'info');
+                try {
+                    const r = await chrome.runtime.sendMessage({
+                        action: 'cloudExport',
+                        provider,
+                        includeSettings: transfer.includeSettings,
+                        includeStorage: transfer.includeStorage
+                    });
+                    if (r?.success) {
+                        const parts = [`${numberFormatter.format(r.exported || 0)} scripts backed up`];
+                        parts.push(r.storageIncluded ? 'stored values included' : 'stored values excluded');
+                        parts.push(r.settingsIncluded ? 'app settings included' : 'app settings excluded');
+                        showToast(`Cloud backup ready: ${parts.join(', ')}`, 'success');
+                    } else {
+                        showToast(r?.error || 'Export failed', 'error');
+                    }
+                } catch (e) { showToast('Export failed: ' + e.message, 'error'); }
+            }, { busyLabel: 'Backing up…', errorMessage: 'Cloud backup failed' });
         });
 
-        elements.btnCloudExport?.addEventListener('click', async () => {
-            const provider = elements.cloudProvider?.value || 'none';
-            if (provider === 'none') {
-                showToast('Choose a sync provider first', 'info');
-                return;
-            }
-            const transfer = getTransferPreferences();
-            showToast('Backing up to ' + provider + '...', 'info');
-            try {
-                const r = await chrome.runtime.sendMessage({
-                    action: 'cloudExport',
-                    provider,
-                    includeSettings: transfer.includeSettings,
-                    includeStorage: transfer.includeStorage
-                });
-                if (r?.success) {
-                    const parts = [`${numberFormatter.format(r.exported || 0)} scripts backed up`];
-                    parts.push(r.storageIncluded ? 'stored values included' : 'stored values excluded');
-                    parts.push(r.settingsIncluded ? 'app settings included' : 'app settings excluded');
-                    showToast(`Cloud backup ready: ${parts.join(', ')}`, 'success');
-                } else {
-                    showToast(r?.error || 'Export failed', 'error');
+        elements.btnCloudImport?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const provider = elements.cloudProvider?.value || 'none';
+                if (provider === 'none') {
+                    showToast('Choose a sync provider first', 'info');
+                    return;
                 }
-            } catch (e) { showToast('Export failed: ' + e.message, 'error'); }
-        });
-
-        elements.btnCloudImport?.addEventListener('click', async () => {
-            const provider = elements.cloudProvider?.value || 'none';
-            if (provider === 'none') {
-                showToast('Choose a sync provider first', 'info');
-                return;
-            }
-            const transfer = getTransferPreferences();
-            const confirmed = await showConfirmModal(
-                'Restore From Cloud',
-                buildImportConfirmationMessage(provider, {
-                    supportsSettings: true,
-                    supportsStorage: true,
-                    importSettings: transfer.includeSettings,
-                    importStorage: transfer.includeStorage,
-                    overwriteTarget: 'matching scripts in this vault'
-                })
-            );
-            if (!confirmed) return;
-            showToast('Restoring from ' + provider + '...', 'info');
-            try {
-                const r = await chrome.runtime.sendMessage({
-                    action: 'cloudImport',
-                    provider,
-                    importSettings: transfer.includeSettings,
-                    importStorage: transfer.includeStorage
-                });
-                if (r?.success) {
-                    await loadScripts();
-                    await loadSettings();
-                    updateStats();
-                    showToast(`Cloud restore: ${formatImportSummary(r)}`, getImportResultTone(r));
-                } else {
-                    showToast(r?.error || 'Import failed', 'error');
-                }
-            } catch (e) { showToast('Import failed: ' + e.message, 'error'); }
+                const transfer = getTransferPreferences();
+                const confirmed = await showConfirmModal(
+                    'Restore From Cloud',
+                    buildImportConfirmationMessage(provider, {
+                        supportsSettings: true,
+                        supportsStorage: true,
+                        importSettings: transfer.includeSettings,
+                        importStorage: transfer.includeStorage,
+                        overwriteTarget: 'matching scripts in this vault'
+                    })
+                );
+                if (!confirmed) return;
+                showToast('Restoring from ' + provider + '…', 'info');
+                try {
+                    const r = await chrome.runtime.sendMessage({
+                        action: 'cloudImport',
+                        provider,
+                        importSettings: transfer.includeSettings,
+                        importStorage: transfer.includeStorage
+                    });
+                    if (r?.success) {
+                        await loadScripts();
+                        await loadSettings();
+                        updateStats();
+                        showToast(`Cloud restore: ${formatImportSummary(r)}`, getImportResultTone(r));
+                    } else {
+                        showToast(r?.error || 'Import failed', 'error');
+                    }
+                } catch (e) { showToast('Import failed: ' + e.message, 'error'); }
+            }, { busyLabel: 'Restoring…', errorMessage: 'Cloud restore failed' });
         });
         elements.importFileInput?.addEventListener('change', async e => {
             const input = e.target;
@@ -9173,8 +9329,8 @@
                             importStorage: transfer.includeStorage
                         });
                 if (!await showConfirmModal(isScriptFile ? 'Install Script' : 'Restore File', confirmMessage)) return;
-                showProgress(`Importing ${file.name}...`);
-                updateProgress(0, 1, 'Reading file...');
+                showProgress(`Importing ${file.name}…`);
+                updateProgress(0, 1, 'Reading file…');
                 try {
                     if (isZip) {
                         const buf = await file.arrayBuffer();
@@ -9183,7 +9339,7 @@
                         for (let i = 0; i < bytes.length; i += 8192) {
                             binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
                         }
-                        updateProgress(1, 2, 'Processing zip...');
+                        updateProgress(1, 2, 'Processing zip…');
                         const b64 = btoa(binary);
                         const r = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: b64, options: { overwrite: true } });
                         showToast(
@@ -9192,7 +9348,7 @@
                         );
                     } else if (lowerName.endsWith('.user.js') || lowerName.endsWith('.js')) {
                         const code = await file.text();
-                        updateProgress(1, 2, 'Installing script...');
+                        updateProgress(1, 2, 'Installing script…');
                         const r = await chrome.runtime.sendMessage({ action: 'saveScript', code });
                         if (r?.success) {
                             showToast('Script installed', 'success');
@@ -9201,7 +9357,7 @@
                         }
                     } else {
                         const data = JSON.parse(await file.text());
-                        updateProgress(1, 2, 'Importing scripts...');
+                        updateProgress(1, 2, 'Importing scripts…');
                         const r = await chrome.runtime.sendMessage({
                             action: 'importAll',
                             data: {
@@ -9322,7 +9478,7 @@
                 const urls = (textarea?.value || '').split('\n').map(u => u.trim()).filter(u => u && u.startsWith('http'));
                 if (urls.length === 0) return showToast('No valid URLs found', 'error');
                 if (!await showConfirmModal('Batch Install', `Install ${urls.length} script${urls.length > 1 ? 's' : ''} from URLs?`)) return;
-                showProgress(`Installing ${urls.length} scripts...`);
+                showProgress(`Installing ${urls.length} scripts…`);
                 let installed = 0, failed = 0;
                 try {
                     for (let i = 0; i < urls.length; i++) {
@@ -9375,8 +9531,8 @@
                         importSettings: transfer.includeSettings,
                         importStorage: transfer.includeStorage
                     }))) return;
-                    showProgress(`Importing ${data.scripts?.length || 0} scripts...`);
-                    updateProgress(0, 1, 'Processing...');
+                    showProgress(`Importing ${data.scripts?.length || 0} scripts…`);
+                    updateProgress(0, 1, 'Processing…');
                     try {
                         const result = await chrome.runtime.sendMessage({
                             action: 'importAll',
@@ -9541,7 +9697,7 @@
             if (files.length === 0) return;
 
             let installed = 0, errors = 0;
-            showProgress('Installing dropped files...');
+            showProgress('Installing dropped files…');
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -10399,7 +10555,7 @@
             const stats = res?.stats || {};
 
             if (log.length === 0) {
-                container.innerHTML = '<div style="color:var(--text-muted)">No network requests logged yet</div>';
+            container.innerHTML = '<div class="panel-empty-inline">No network requests logged yet</div>';
                 return;
             }
 

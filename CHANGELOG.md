@@ -16,6 +16,17 @@ All notable changes to ScriptVault will be documented in this file.
 - Improved empty/error/status copy in popup, side panel, and DevTools so failed
   background connection, unsupported pages, empty vaults, and empty request
   tables explain the next useful action instead of feeling blank.
+- Refined the dashboard Find Userscripts flow with a calmer directory-search
+  header, structured empty/error/loading states, source-aware result counts,
+  preview-region semantics, install/reinstall label recovery, and explicit
+  unavailable-preview/install feedback.
+- Guarded more dashboard settings and utility actions with pending button
+  states, single section-level save confirmations, and consistent failure
+  feedback so repeated clicks do not create duplicate saves or ambiguous
+  long-running operations.
+- Replaced remaining dashboard utility "Loading..." placeholders and inline
+  network-log empties with consistent ellipsis/status language and shared
+  empty-state styling.
 - Added a GUI audit guard that fails when page UI CSS reintroduces oversized
   rounded backdrops or blur-heavy chrome.
 
