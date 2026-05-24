@@ -26,6 +26,9 @@ implementation while preserving the script-mode globals expected by
 `background.core.js`. The sync/import tranche has also started with
 `modules/migration.js`, generated from `src/modules/migration.ts` after
 aligning the migration version stamp with the current v2.3.0 runtime marker.
+`modules/i18n.js` is now generated from `src/modules/i18n.ts`; the locale
+coverage extractor accepts both handwritten `const translations` dictionaries
+and generated `var translations` wrappers.
 The first background helper promotion has also shipped: `bg/netlog.js` now
 comes from `src/bg/netlog.ts`. `bg/analyzer.js` followed after reconciling
 fallback drift in comment stripping and high-entropy string detection.
@@ -192,8 +195,8 @@ Pilot exit criteria:
 2. **Promotion gate.** Add a small script that reads a promotion map and
    fails on JS-only edits for promoted modules.
 3. **Pilot module.** Promote `modules/error-log.js`.
-4. **Low-dependency modules.** Promote `modules/notifications.js`,
-   `modules/npm-resolve.js`, `modules/userstyles.js`, and
+4. **Low-dependency/early modules.** Promote `modules/notifications.js`,
+   `modules/npm-resolve.js`, `modules/i18n.js`, `modules/userstyles.js`, and
    `modules/quota-manager.js`. Shipped 2026-05-24.
 5. **Storage/resource layer.** Promote `modules/storage.js`,
    `modules/xhr.js`, `modules/resources.js`, and the internal-host guard.

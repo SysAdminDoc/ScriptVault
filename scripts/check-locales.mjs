@@ -69,13 +69,14 @@ async function loadLocalesDir() {
 }
 
 // --- Inline-translations extractor -----------------------------------------
-// Both modules/i18n.js and pages/dashboard-i18n-v2.js declare
-//   const translations = { en: {...}, de: {...}, ... };
+// Both modules/i18n.js and pages/dashboard-i18n-v2.js declare a
+// translations object (`const` in handwritten sources, `var` in generated
+// CommonJS wrappers).
 // We evaluate just that const in an isolated VM context so we can read the
 // resulting object without booting the full extension.
 async function extractInlineTranslations(filePath, varName = 'translations') {
   const source = await readFile(filePath, 'utf8');
-  const startMatch = source.match(/const\s+translations\s*=\s*\{/);
+  const startMatch = source.match(new RegExp(`(?:const|let|var)\\s+${varName}\\s*=\\s*\\{`));
   if (!startMatch) {
     throw new Error(`No translations declaration found in ${filePath}`);
   }

@@ -22,7 +22,8 @@
     {
       "runtime": "modules/i18n.js",
       "sources": ["src/modules/i18n.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "modules/storage.js",

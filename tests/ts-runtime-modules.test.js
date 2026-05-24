@@ -76,6 +76,12 @@ describe('TS runtime module generator', () => {
         ]),
       }),
       expect.objectContaining({
+        id: 'i18n',
+        source: 'src/modules/i18n.ts',
+        output: 'modules/i18n.js',
+        exportName: 'I18n',
+      }),
+      expect.objectContaining({
         id: 'migration',
         source: 'src/modules/migration.ts',
         output: 'modules/migration.js',
