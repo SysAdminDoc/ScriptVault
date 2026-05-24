@@ -3,11 +3,588 @@
 > From v2.0.1 (bash-concatenated JS prototype) to production-grade TypeScript extension.
 > Each phase is independently shippable. Later phases depend on earlier ones.
 >
-> **Roadmap version:** Round 13 — last research sweep 2026-05-18. Shipped baseline: **v3.11.0 (2026-05-19, tag pushed)** rolls up the v3.10.1 → HEAD storage-hardening sweep PLUS nine Phase 38 sub-items closed in the 2026-05-19 autonomous session (38.1, 38.2, 38.4, 38.6, 38.8, 38.9, 38.11 audited, 38.12, 38.13). Pending: v3.12.0+ (Phase 39, Round 12 catch-up — remaining deferred items 39.1, 39.5, 39.15, 39.32, 39.40) ➜ Phase 40 already shipped (Round 13 audit productionization).
-> **2026-05-19 autonomous sweep:** Phase 38 parity wave landed and tagged as v3.11.0. 24 new vitest cases across three commits; 712 total tests green; tsc strict clean.
-> **Source floor:** >294 distinct URLs across Rounds 1–13 (272 carried from Round 12 + 22 net-new for Round 13, indexed 273–294). Every Now/Next item is traceable to at least one source.
+> **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, but local `main` has additional unreleased 2026-05-24 research and hardening commits through `f4c748c`. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
+> **2026-05-24 state:** 663 local Vitest cases were last recorded green in `CHANGELOG.md`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Releases are stale at v2.3.4 while local tags and manifests are at v3.11.0; no GitHub issues or PRs are currently open.
+> **Source floor:** >294 URLs from Rounds 1-13 plus 72 Round 14 sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
 ---
+
+## Round 14 - 2026-05-24 OSINT Roadmap Refresh
+
+### Phase 0 State of the Repo Memo
+
+ScriptVault is a Chrome MV3 userscript manager with a large feature surface: popup, dashboard, side panel, DevTools panel, install page, Monaco sandbox, content bridge, background service worker, cloud sync providers, import/export, signing/provenance primitives, userstyles, update checks, network logging, and a TypeScript mirror of much of the runtime. The production bundle is still built by ordered concatenation of `shared/`, `modules/`, `bg/`, and `background.core.js` in `esbuild.config.mjs`, while `src/**` is type-checked as a mirror. That split is the dominant technical constraint: recent commits repeatedly fixed runtime/TS drift, and current code still shows bounded-fetch hardening in `background.core.js` that is not fully mirrored in `src/background/install-handler.ts` / `src/background/update-checker.ts`. The highest-value direction is therefore not new breadth first; it is release trust, source-of-truth convergence, cross-browser packaging, consent-first update/install safety, and measurable accessibility/performance hardening.
+
+### Evidence Reviewed
+
+Local source and repo artifacts:
+
+- Repo tree: `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`, `esbuild.config.mjs`, `background.core.js`, `content.js`, `shared/`, `modules/`, `bg/`, `src/`, `pages/`, `scripts/`, `tests/`, `docs/`, `.github/workflows/ci.yml`, `.factory/state.yaml`, `.factory/large-repo-state.yaml`.
+- Top-level docs: `README.md`, `CHANGELOG.md`, `ROADMAP.md`, `FIREFOX-PORT.md`, `PRIVACY.md`, `AGENTS.md`, `CLAUDE.md`, `RESEARCH_FEATURE_PLAN.md`.
+- Design/research docs: `docs/cross-browser-pipeline.md`, `docs/release-runbook.md`, `docs/require-provenance-design.md`, `docs/wcag3-gap-analysis.md`, `docs/extension-interop.md`, `docs/mcp-2026-compliance.md`, `docs/research/iter-1-l1-claude-led.md`, `docs/research/iter-1-l3-claude-smoke.md`.
+- Tests: 51 test files under `tests/`, including source parity tests, security tests, accessibility tests, import/export tests, storage tests, and wrapper tests.
+- Git history: `git log -200 --oneline --decorate` reviewed through `f4c748c` back to initial public packaging work.
+- Release artifacts: `gh release list --limit 20` shows latest GitHub Release still `v2.3.4` from 2026-04-29, despite local v3.11.0 tag and manifests. Root also still contains stale `ScriptVault-firefox-v2.1.7.xpi`.
+- Issue tracker: `gh issue list --state all --limit 100` and `gh pr list --state all --limit 100` returned no project issues or PRs.
+- Dependency/security checks: `npm audit --audit-level=high --omit=optional` found 0 vulnerabilities. `npm outdated --json` reports newer versions for Vitest, coverage-v8, chrome-types, esbuild, jsdom, Monaco, puppeteer-core, and TypeScript.
+
+Verified constraints:
+
+- Runtime target: Manifest V3, Chrome minimum 130, `chrome.userScripts`, `sidePanel`, `offscreen`, `declarativeNetRequest`, `declarativeNetRequestWithHostAccess`, `<all_urls>`.
+- Firefox target: separate `manifest-firefox.json` at version 3.11.0, strict min 128, but `FIREFOX-PORT.md` still has Phase 1 unchecked.
+- Build: `npm run build` runs `node esbuild.config.mjs`; background output is concatenated JS, not emitted from `src/background/index.ts`.
+- Tests: `npm run check` is `tsc --noEmit && vitest run`; CI additionally runs Chrome dashboard smoke and builds a ZIP artifact.
+- Privacy philosophy: local-first storage, no external usage beacon in current docs/code; external telemetry ideas below stay rejected unless user-owned and local-only.
+
+### Current Product Map
+
+Core workflows:
+
+- Install scripts from URL, pasted code, dropped files, ZIP/JSON backups, store/discovery pages, and selected import formats.
+- Run scripts through `chrome.userScripts`, wrapper-built Greasemonkey/Tampermonkey APIs, `@match`/`@include`/regex support, metadata directives, update checks, and popup/context-menu one-shot execution.
+- Manage scripts in dashboard and popup: search, cards/table modules, collections, snippets, profiles, templates, scheduler, theme editor, dependency graph, heatmap, CSP/DNR helper, linter, debugger, Gist surface, and side panel.
+- Sync/backup via WebDAV, Google Drive, Dropbox, OneDrive, EasyCloud, browser sync, Gist import/export, scheduled backups, and manual import/export.
+- Inspect safety and behavior through analyzer, signing/trust primitives, netlog/HAR export, error log, DevTools panel, and privacy/security docs.
+
+Main code locations:
+
+- Runtime background source: `background.core.js`, `modules/*.js`, `bg/*.js`, `shared/utils.js`, `content.js`.
+- Typed mirror: `src/background/*.ts`, `src/modules/*.ts`, `src/bg/*.ts`, `src/storage/*.ts`, `src/types/*.ts`, `src/shared/utils.ts`.
+- UI surfaces: `pages/popup.*`, `pages/dashboard.*`, `pages/dashboard-*.js`, `pages/sidepanel.*`, `pages/devtools*`, `pages/install.*`, `pages/editor-sandbox.html`, `pages/monaco-adapter.js`.
+- Build/release: `esbuild.config.mjs`, `build.sh`, `publish.sh`, `cws-setup.sh`, `.github/workflows/ci.yml`, `scripts/*`.
+- Current state files: `.factory/state.yaml` and `.factory/large-repo-state.yaml` list `XHR-PRIVACY` and `DNS-REBIND` as remaining hardening work.
+
+User personas:
+
+- Power users migrating from Tampermonkey/Violentmonkey who need compatible script execution and trustable updates.
+- Script authors who need an editor, local debugging, dependency visibility, import/export, and fast test/run loops.
+- Privacy/security-sensitive users who want local-first control over arbitrary code, network permissions, sync tokens, backups, and update provenance.
+- Extension maintainers who need Chrome Web Store, Firefox/AMO, Edge, and self-distribution packages to match the same product state.
+
+Platforms and distribution:
+
+- Chrome/Chromium primary through MV3 and Chrome Web Store.
+- Firefox MV3 work in progress through `manifest-firefox.json` and `FIREFOX-PORT.md`.
+- Edge and other Chromium stores are technically plausible but not yet a release artifact path.
+- Safari/iOS and Android userscript ecosystems are useful research inputs, but a native rewrite is not a near-term fit.
+
+### Direct Competitor Snapshot
+
+| Project | Stars / activity checked 2026-05-24 | Signals for ScriptVault | Source |
+|---|---:|---|---|
+| Violentmonkey | 8,261 stars, pushed 2026-05-22, release v2.37.0 | Mature compatibility baseline, recent S3 sync PR, open ESM loader and search issues | S16-S23 |
+| Tampermonkey | 5,463 stars, pushed 2025-03-30, commercial site says 10M+ users | Table-stakes sync, update checks, configurable settings levels, profiles/tags/user friction | S24-S31 |
+| Greasemonkey | 2,561 stars, pushed 2026-05-23 | Firefox-first privacy behavior and First Party Isolation compatibility | S32-S33 |
+| quoid/userscripts | 4,525 stars, pushed 2026-05-10, release v4.8.6 | Safari/iOS direction, SRI, GitHub private repo sync, color scheme/private profile gaps | S34-S40 |
+| ScriptCat | 4,459 stars, pushed 2026-05-24, release v0.16.15 | Background/timed script APIs, subscribe flows, recycle bin, mobile editing, sandbox tests | S41-S47 |
+| Stay | 1,287 stars, Safari/iOS, pushed 2024-06-23 | Mobile/local Safari model is useful only as a longer-term research lane | S48 |
+| Android WebMonkey | 152 stars, pushed 2026-02-19 | Android userscript support shows mobile demand, but not a fit for current Chrome MV3 scope | S49 |
+| OpenUserJS / GreasyFork | 981 / 1,980 stars, active script registries | Registry integration, install-source trust, publishing workflows | S50-S51 |
+| Smaller userscript managers | 5-34 stars, active in 2026 | Gist, built-in IDE, self-auditable/security-first positioning | S52-S56 |
+| Stylus | 6,641 stars, pushed 2026-05-23 | Userstyle editor/search/color-management lessons for ScriptVault userstyles | S57-S61 |
+| WXT / Plasmo / web-ext | 9,849 / 13,043 / 3,076 stars | Packaging, target-browser builds, web-ext validation/signing, release modernization | S62-S68 |
+
+### Phase 2 Harvest and Phase 3 Gap Analysis
+
+Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog. Tier is the roadmap disposition.
+
+| ID | Feature or improvement | Sources | Category | Prevalence | Fit | Impact | Effort | Risk | Novelty | Tier | Placement reason |
+|---|---|---|---|---|---|---:|---:|---|---|---|---|
+| H001 | Reconcile GitHub Releases, tags, manifests, CWS README, and root artifacts | L01,L08,L17 | distribution | table-stakes | Y | 5 | 2 | users install stale builds | P | Now | Public artifacts are currently behind v3.11.0 and undermine trust. |
+| H002 | Modernize Chrome Web Store API v2 publishing and status checks | L12,S03,S04 | distribution | table-stakes | Y | 5 | 3 | release automation | P | Now | `package.json` has v4 CLI but docs still describe older pinning/API assumptions. |
+| H003 | Add rollback drill and backward-compatible storage migration tests | S05,S06,L20 | reliability | common | Y | 5 | 3 | data loss | P | Now | Chrome rollback exists but can break stored data without local rehearsal. |
+| H004 | Sign ZIP/XPI artifacts and publish provenance/SBOM | L14,S69-S72 | security | emerging | Y | 5 | 4 | key/process complexity | L | Now | Extension compromise campaigns make verifiable artifacts high-value. |
+| H005 | Add extension package diff and suspicious-permission release gate | S73-S76,L12 | security | emerging | Y | 5 | 3 | false positives | L | Now | Research shows marketplace vetting gaps and malicious update risk. |
+| H006 | Make CI audit failures blocking or document why not | L12,L20 | security | table-stakes | Y | 4 | 1 | noisy advisories | P | Now | CI currently continues on high audit failures, while release docs imply a hard gate. |
+| H007 | Collapse runtime JS and TS mirror toward one source of truth | L10,L18,L19 | architecture | project-specific | Y | 5 | 5 | regression blast radius | L | Now | Current split repeatedly creates parity bugs. |
+| H008 | Add mirror drift tests for bounded fetch install/update paths | L18,L19 | testing | project-specific | Y | 4 | 2 | false confidence | P | Now | Runtime has stream-bounded fetch; TS install/update mirror still reads whole bodies. |
+| H009 | Add regression tests for Gist token write rejection path | L18,L21 | testing | project-specific | Y | 4 | 1 | token state loss | P | Now | Recent Promise API fix needs focused coverage against storage rejection. |
+| H010 | Add regression tests for explicit empty `@grant` arrays | L18,L21 | testing | project-specific | Y | 4 | 1 | privilege escalation | P | Now | Recent TS grant-deny fix should be pinned to prevent GM APIs under `@grant none`. |
+| H011 | Refresh Chrome 138+ Allow User Scripts onboarding and diagnostics | L04,S01,S02 | onboarding | table-stakes | Y | 5 | 2 | user setup friction | P | Now | Chrome changed the userScripts enablement UI and failure behavior. |
+| H012 | Move userscript-origin messages to `runtime.onUserScriptMessage` | L22,S01,S02 | security | emerging | Y | 5 | 4 | browser-version gating | L | Now | Dedicated handlers exist to identify less-trusted user-script messages. |
+| H013 | Add user-script world CSP/messaging configuration checks | L04,S01,S02 | security | common | Y | 4 | 2 | broken APIs if omitted | P | Now | `configureWorld({ messaging: true })` is required before direct messaging. |
+| H014 | Post-fetch DNS/IP verification for URL installs and `@require` loads | L22,L20,S73 | security | rare | Y | 5 | 4 | platform DNS gaps | L | Now | Repo state already flags DNS rebinding as remaining P2 hardening. |
+| H015 | Require provenance/SRI metadata for high-risk `@require` dependencies | L14,S38,S39,S69 | security | common | Y | 5 | 4 | ecosystem compatibility | L | Now | quoid and existing design docs both point at SRI/provenance as trust signals. |
+| H016 | Add per-script update consent diff with network/permission changes | L15,S05,S06,S24 | trust | common | Y | 5 | 4 | UI complexity | L | Now | Userscript updates can silently change remote code and scopes. |
+| H017 | AMO data collection manifest declaration and privacy statement refresh | L05,L07,S09,S11 | distribution | table-stakes | Y | 5 | 2 | store rejection | P | Now | Firefox submissions now require data-collection declarations. |
+| H018 | Finish Firefox MV3 validation/signing pipeline with `web-ext` | L07,L11,S10,S67,S68 | distribution | table-stakes | Y | 5 | 4 | browser API drift | P | Now | Firefox manifest exists, but `FIREFOX-PORT.md` Phase 1 is still unchecked. |
+| H019 | Generate per-browser manifest/build matrix from one config | L11,S62-S65 | architecture | common | Y | 4 | 5 | migration churn | P | Next | Useful after Firefox gates are stable; WXT-like generation should not precede release trust. |
+| H020 | Edge Add-ons package/publish path | S66,L11 | distribution | common | Y | 3 | 3 | support load | P | Next | Low technical distance once Chrome/Firefox artifacts are reliable. |
+| H021 | Browser support matrix generated from manifests and smoke results | L06,L11,S10,S11 | docs | common | Y | 4 | 2 | stale docs | P | Now | README claims broad support while Firefox port is unfinished. |
+| H022 | Remove stale README claims and validate feature inventory against code | L05,L15,L16 | docs | project-specific | Y | 5 | 2 | user trust | P | Now | README advertises removed/stale features and old compatibility statements. |
+| H023 | Changelog sync for unreleased hardening commits | L08,L18 | docs | table-stakes | Y | 3 | 1 | release notes drift | P | Now | Latest two hardening commits are not clearly represented in `CHANGELOG.md`. |
+| H024 | Scheduled dependency-maintenance lane | L20,S77-S84 | maintenance | table-stakes | Y | 4 | 2 | upgrade regressions | P | Now | Several core dev dependencies are behind current wanted/latest versions. |
+| H025 | Monaco 0.55 upgrade trial with sandbox smoke | L04,L20,S77 | maintenance | common | Y | 3 | 3 | editor regression | P | Next | Monaco is intentionally pinned behind latest; upgrade needs visual/smoke proof. |
+| H026 | Vitest/coverage upgrade to latest patch | L20,S79 | maintenance | table-stakes | Y | 3 | 1 | test flake | P | Now | Patch upgrade is low risk and security/CI hygiene. |
+| H027 | Puppeteer 25 compatibility trial | L20,S82 | maintenance | common | M | 2 | 3 | smoke harness breakage | P | Later | Major bump can wait until release pipeline gaps close. |
+| H028 | S3-compatible sync provider | S18,S23,L13 | integrations | emerging | Y | 4 | 3 | credential/storage handling | P | Next | Violentmonkey just added it; fits local/user-owned sync. |
+| H029 | GitHub private repository sync | S36,S52 | integrations | rare | M | 3 | 4 | token scope confusion | P | Later | Useful for authors, but Gist path and privacy docs need stronger trust first. |
+| H030 | Manual sync button plus import/export provider config | S44,L13 | UX | common | Y | 4 | 2 | conflict handling | P | Next | ScriptCat users request explicit sync control; ScriptVault has many providers. |
+| H031 | Sync token health, revoke, and storage disclosure panel | L05,L13,S73 | privacy | common | Y | 5 | 3 | accidental token exposure | L | Now | Prior Gist token storage work improved honesty but needs unified UI. |
+| H032 | 3-way sync dry-run and conflict preview in provider flows | L05,L13,S24 | data | common | Y | 4 | 4 | merge edge cases | P | Next | Existing README claims 3-way merge; verify and make it observable. |
+| H033 | Profiles/workspaces as user-facing execution contexts | L05,S31,S27 | UX | common | Y | 4 | 3 | mental model | P | Next | Tampermonkey users ask for profiles and ScriptVault already has workspace code. |
+| H034 | Preserve tags/untagged filters during reinstall/update | S30,L15 | UX | common | Y | 3 | 2 | metadata migration | P | Next | Direct competitor issue maps to ScriptVault import/update flows. |
+| H035 | Invert/not filters and bulk operation scopes | S26,L05 | UX | common | Y | 3 | 2 | accidental bulk actions | P | Next | Better filtering reduces destructive workflow risk. |
+| H036 | Current-site quick enable/disable and scope expansion | S20,S21,L05 | UX | table-stakes | Y | 4 | 3 | host permission prompts | P | Next | Competitors expose site-scoped control; ScriptVault has context-menu/popup surfaces. |
+| H037 | Iframe/frame execution controls per script | S45,L04,S01 | compatibility | common | Y | 4 | 3 | injection semantics | P | Next | ScriptCat issue and `userScripts` all-frame behavior make this valuable. |
+| H038 | Improve script search by name, URL, tag, grant, source, and last-run | S17,L05 | UX | table-stakes | Y | 4 | 3 | index freshness | P | Next | Violentmonkey issue shows search remains a power-user pain point. |
+| H039 | Editor search history dropdown | S58,L05 | UX | common | Y | 2 | 1 | low | P | Quick win | Stylus issue is directly applicable to Monaco editing. |
+| H040 | Local file or local `@require` development mode | S19,S24,L05 | dev-experience | common | M | 3 | 4 | local-file permission/security | P | Later | Useful for authors but needs explicit trust gates. |
+| H041 | ESM userscript loader research spike | S17,S34,L14 | dev-experience | emerging | M | 3 | 5 | interoperability | L | Under consideration | Important trend, but immediate support could fragment compatibility. |
+| H042 | `GM.fetch` compatibility API | S37,L05 | compatibility | rare | Y | 3 | 3 | API design | P | Later | Fits GM compatibility after trust/release work. |
+| H043 | Full VM/TM/GM compatibility matrix generated by tests | L05,S16,S24,S32 | testing | table-stakes | Y | 5 | 4 | maintenance load | P | Now | Current parity work is manual and drift-prone. |
+| H044 | Userstyles import parity with Stylus | L05,S57 | integrations | common | Y | 3 | 3 | CSS parser issues | P | Later | Existing userstyle support can learn from Stylus without taking over its domain. |
+| H045 | OKLAB/OKLCH color-variable support for userstyles | S60,L05 | UX | emerging | M | 2 | 3 | browser support | P | Later | Useful only after userstyle core flows are audited. |
+| H046 | Userstyle Firefox CSP compatibility tests | S59,S10,L11 | compatibility | common | Y | 3 | 3 | Firefox-only bugs | P | Next | Helps Firefox port and userstyle claims. |
+| H047 | GreasyFork/OpenUserJS install-source trust badges | L05,S50,S51 | trust | common | Y | 4 | 3 | spoofed source metadata | P | Next | Registry links should inform trust without becoming a marketplace clone. |
+| H048 | One-click publish to registries | S18,S50,S51 | integrations | rare | N | 2 | 4 | account/security burden | P | Rejected | Publishing other users' code from the extension expands risk beyond core management. |
+| H049 | Built-in marketplace browser | S50,S51,S87 | discovery | common | M | 3 | 5 | moderation/privacy | P | Later | A minimal trusted install flow fits; a full marketplace does not. |
+| H050 | Example script/template gallery | S35,S53,L05 | docs | common | Y | 3 | 2 | stale examples | P | Next | Helps onboarding without expanding permissions. |
+| H051 | Subscribe-list import and one-click subscription generation | S43,S44,L05 | integrations | common | M | 3 | 4 | update trust | P | Later | Fits after consent diff/provenance exists. |
+| H052 | Trash/recycle bin with undoable destructive actions | S45,L05 | data-safety | table-stakes | Y | 4 | 3 | storage growth | P | Next | ScriptCat plans this; ScriptVault has destructive bulk flows. |
+| H053 | Version history diff and rollback per script | L05,S24,S05 | data-safety | common | Y | 5 | 4 | storage growth | L | Now | Users need recovery from bad script updates before platform rollback matters. |
+| H054 | Backup restore verification receipt | L13,L20,S05 | data-safety | common | Y | 4 | 2 | false confidence | P | Next | Restore should prove script/settings counts and failures. |
+| H055 | CSV export formula-injection coverage across all exports | L18,L05 | security | common | Y | 4 | 2 | incomplete coverage | P | Now | Recent runtime fix needs inventory and tests for every CSV path. |
+| H056 | Large-library virtualization and indexed search | L05,S40,S73 | performance | common | Y | 4 | 4 | UI regressions | P | Next | README claims broad management; large script sets need measured UI scaling. |
+| H057 | Memory/callback leak diagnostics surfaced in UI | L08,L18,S40 | observability | rare | Y | 4 | 3 | noisy warnings | L | Next | Callback caps now log; UI can turn this into actionable repair hints. |
+| H058 | Service-worker cold-start diagnostics and recovery prompts | L08,S01,L12 | reliability | common | Y | 4 | 3 | MV3 timing flake | P | Next | History shows repeated cold-start/setup warning repairs. |
+| H059 | Error log filters by script/source/severity and saved views | L05,S57 | observability | common | Y | 3 | 2 | UI clutter | P | Later | Existing error log exists; higher priorities are data safety and release trust. |
+| H060 | Local-only health dashboard, no external usage beacons | L05,L15,S73 | observability | common | Y | 3 | 2 | privacy wording | L | Next | Fits local-first philosophy while improving diagnostics. |
+| H061 | APCA/WCAG contrast audit for all dashboard modules | L15,S85-S87 | accessibility | emerging | Y | 4 | 3 | design churn | P | Now | Existing WCAG3 doc names this gap; many dashboard modules exist. |
+| H062 | Skip links, help consistency, and modal focus audit | L15,S85 | accessibility | table-stakes | Y | 4 | 2 | regressions | P | Now | Existing a11y tests cover pieces, not all UI states. |
+| H063 | Live-region/screen-reader pass for async sync/install/update states | L15,S85 | accessibility | table-stakes | Y | 4 | 3 | noisy announcements | P | Next | Trust flows need accessible feedback. |
+| H064 | High-contrast theme and forced-colors tests | L15,S85-S87 | accessibility | common | Y | 3 | 3 | visual complexity | P | Next | Useful after APCA baseline. |
+| H065 | Locale coverage report and generated manifest locale checks | L05,L12,S11 | i18n | common | Y | 3 | 2 | stale translations | P | Next | `_locales` exists and CI has manifest-locale tests; extend into coverage reporting. |
+| H066 | Mixed-language `lang` attributes in script metadata/UI | L15,S85 | i18n | rare | M | 2 | 3 | metadata ambiguity | P | Later | Existing WCAG3 doc lists it, but lower impact than trust gates. |
+| H067 | Store/privacy copy generated from manifest permissions | L05,L12,S09,S11 | docs | common | Y | 4 | 2 | store rejection | L | Now | Manifest permissions are broad; copy must be accurate and current. |
+| H068 | Root stale artifact guard | L01,L17 | release | project-specific | Y | 3 | 1 | accidental install | P | Now | Stale Firefox XPI remains at repo root. |
+| H069 | CODEOWNERS/security policy/issue templates for trust work | L12,S73-S76 | process | common | Y | 3 | 2 | maintainer overhead | P | Next | No issues exist; templates can steer future reports. |
+| H070 | Web-accessible resource minimization audit | L04,S73,L12 | security | table-stakes | Y | 4 | 2 | broken install page | P | Next | Manifest exposes install page to all URLs; verify necessity and harden. |
+| H071 | Host permission minimization and optional-host migration design | L04,S10,S11 | privacy | common | M | 5 | 5 | permission prompt churn | L | Under consideration | High trust value but deep compatibility risk for a userscript manager. |
+| H072 | `@connect` consent prompts and per-script firewall rules | L05,S24,S73 | privacy | common | Y | 5 | 5 | compatibility | L | Later | Aligns with user trust but depends on XHR bridge rewrite. |
+| H073 | Internal host blocklist for all outbound extension fetch paths | L18,L20,S73 | security | table-stakes | Y | 5 | 3 | false blocks | P | Now | Webhooks were hardened; URL installs/resources/sync should share policy. |
+| H074 | Enterprise policy provisioning docs and import validation | L18,S06 | enterprise | niche | M | 2 | 3 | support burden | P | Later | Existing history mentions OS-policy provisioning; not a priority for consumer release. |
+| H075 | Chrome rollback and incident-response user notice template | S05,S73-S76,L12 | reliability | common | Y | 4 | 2 | panic messaging | P | Now | Extension compromise sources make response readiness concrete. |
+| H076 | Mobile browser support notes for Edge/Android/Kiwi-like users | S49,S88 | mobile | niche | M | 2 | 2 | unsupported promises | P | Under consideration | Useful docs, but not a tested target. |
+| H077 | Native mobile app rewrite | S48,S49 | mobile | rare | N | 1 | 5 | product split | P | Rejected | Contradicts current MV3 extension focus. |
+| H078 | Multi-user collaboration backend | L05 | multi-user | rare | N | 1 | 5 | privacy/backend burden | L | Rejected | Local-first product does not need account-backed collaboration. |
+| H079 | External usage analytics telemetry | L05,S73 | telemetry | common | N | 1 | 3 | privacy trust loss | P | Rejected | Local diagnostics are acceptable; outbound telemetry conflicts with product trust. |
+| H080 | Paid tiers or monetized script marketplace | S24,S50,S51 | licensing | common | N | 1 | 5 | identity/business burden | P | Rejected | Would dilute ScriptVault from user-controlled tooling into marketplace operation. |
+| H081 | Remote configuration kill-switch | S73-S76 | security | common | N | 2 | 4 | remote control risk | P | Rejected | Local rollback/update notices are safer than remote control infrastructure. |
+| H082 | Extension interop API for external IDE/companion tools | L16,S62-S65 | dev-experience | emerging | M | 3 | 4 | API stability | L | Under consideration | Existing doc gates it; no current user signal in issues. |
+| H083 | Local package manager for script dependencies | S17,S38,S39,L14 | dev-experience | rare | M | 3 | 5 | supply-chain risk | L | Under consideration | Could leapfrog but should follow provenance work. |
+| H084 | WASM/static analyzer expansion | S73-S76,L05 | security | emerging | M | 3 | 4 | bundle size | L | Later | Analyzer exists; expand after package-diff/provenance gates. |
+| H085 | DNR matched-rule debug surface | L05,S12,S10 | observability | common | Y | 3 | 3 | permission sensitivity | P | Later | Valuable for CSP/DNR helper after cross-browser DNR checks. |
+| H086 | Private publish / enterprise channel documentation | S04,S06 | distribution | niche | M | 2 | 2 | support expectations | P | Later | Chrome supports private external org publishing; not a current core channel. |
+| H087 | GreasePanda-style beginner marketplace/onboarding | S87 | UX | emerging | N | 2 | 4 | product dilution | P | Rejected | ScriptVault should stay power-user/local-first, not a no-code marketplace. |
+| H088 | BareScript-style minimal self-auditable mode | S56,L05 | trust | rare | M | 2 | 3 | dual UX | L | Under consideration | Interesting, but the current product identity is full-featured. |
+| H089 | Per-script trust receipt after install/update | L14,S05,S73 | trust | rare | Y | 5 | 4 | metadata quality | L | Next | Combines provenance, source, grants, hosts, and diffs into one explainable artifact. |
+| H090 | Source-map/source bundle for review stores | L12,S10,S67 | distribution | common | Y | 3 | 2 | artifact size | P | Now | Firefox/WXT docs point to source ZIP needs; reviewers need reproducible sources. |
+
+### Highest-Value New Features
+
+1. **Release Trust Center and signed artifact pipeline** - combine v3.11.0 release reconciliation, CWS API v2 status checks, rollback drill, artifact signing, SBOM/provenance, and package diff gates. Sources: H001-H006, H075, H090.
+2. **Unified script trust receipt** - on install/update, show source URL, registry, hashes, `@require` provenance, grants, host scopes, update diff, and rollback point. Sources: H015-H016, H047, H053, H089.
+3. **Dedicated user-script messaging bridge** - move XHR/user-script calls from page-visible bridge assumptions to `runtime.onUserScriptMessage` with version gates and configureWorld checks. Sources: H012-H013.
+4. **Cross-browser release gate** - Firefox MV3/AMO manifest checks, data-collection declarations, web-ext validation/signing, generated support matrix, and eventually Edge package path. Sources: H017-H021, H046, H065.
+5. **Runtime/TS source convergence** - make either JS or TS authoritative, then add parity gates until the migration lands. Sources: H007-H010, H043.
+6. **Network egress hardening layer** - shared internal-host, redirect, DNS-rebind, and `@connect` policy across URL installs, resources, webhook, sync, and GM XHR. Sources: H014, H073, H072.
+7. **Local-first sync safety cockpit** - token health/revocation, manual sync, dry-run conflict preview, restore receipts, and optional S3-compatible provider. Sources: H028-H032, H054.
+8. **Large-library performance and diagnostics** - virtualized library rendering, indexed search, service-worker diagnostics, callback leak surfacing, and local-only health dashboard. Sources: H056-H060.
+9. **A11y/i18n hardening pass** - APCA contrast, skip links, focus/live-region audits, forced-colors coverage, locale coverage. Sources: H061-H066.
+
+### Existing Feature Improvements
+
+| Area | Current behavior | Recommended change | Likely files | Verify |
+|---|---|---|---|---|
+| Release/docs | `README.md` and `docs/release-runbook.md` contain stale feature/version/tooling claims; GitHub Releases stop at v2.3.4 | Add a release reconciliation task before any new public release | `README.md`, `CHANGELOG.md`, `docs/release-runbook.md`, `.github/workflows/ci.yml`, `package.json`, `manifest*.json` | `gh release list --limit 5`; `npm run build`; manual artifact version inspection |
+| Runtime/TS parity | Production bundle is JS concatenation; `src/**` mirrors behavior but can drift | Add drift tests now, then stage a single-source migration | `esbuild.config.mjs`, `background.core.js`, `modules/*.js`, `src/background/*.ts`, `src/modules/*.ts`, `tests/source-*.test.js` | `npm run typecheck`; focused parity Vitest suite |
+| UserScripts setup | Existing docs/status fixed one Chrome toggle bug, but Chrome 138+ has per-extension Allow User Scripts behavior | Update onboarding/status copy and probes for both Chrome <138 and >=138 | `background.core.js`, `pages/popup.js`, `pages/dashboard*.js`, `README.md` | Manual Chrome 138+ setup-required flow |
+| Firefox port | Manifest exists; roadmap Phase 1 still unchecked; AMO data-collection rules now apply | Finish validation/signing and store copy before broad Firefox claims | `manifest-firefox.json`, `FIREFOX-PORT.md`, `build-firefox.sh`, `docs/cross-browser-pipeline.md` | `web-ext lint`; `web-ext sign --channel=unlisted` when credentials exist |
+| Sync providers | Many providers and Gist paths exist; token trust and failure states are fragmented | Add unified token/status/revoke panel and manual sync/dry-run flows | `modules/sync-providers.js`, `modules/sync-easycloud.js`, `pages/dashboard-gist.js`, `src/modules/sync-*.ts` | Provider mock tests plus manual disabled-token flows |
+| Import/update safety | Install/update can fetch remote code and dependencies | Add trust receipt, provenance/SRI validation, internal-host policy, and rollback point | `background.core.js`, `modules/resources.js`, `src/background/install-handler.ts`, `src/background/resource-loader.ts`, `pages/install.js` | Malicious URL/redirect/DNS test fixtures |
+| A11y | Targeted a11y tests exist, but WCAG3 gap doc names open module-wide risks | Add module-wide APCA/focus/live-region audit and forced-colors tests | `pages/*.html`, `pages/*.js`, `pages/dashboard.css`, `tests/*a11y*.test.js` | `npm run test:a11y`; browser forced-colors manual pass |
+| Performance | Error-log and callback caps landed; large-library rendering still needs measured guardrails | Add large dataset fixtures and dashboard virtualized/indexed views where needed | `pages/dashboard*.js`, `modules/storage.js`, `src/storage/*`, `tests/gui-*.test.js` | 1k/10k script synthetic dataset smoke |
+
+### Reliability, Security, Privacy, and Data Safety
+
+- Verified: npm high-severity audit is currently clean.
+- Verified risk: GitHub Releases lag v3.11.0 by many releases, and the repo root has stale Firefox XPI naming from v2.1.7. Treat public artifact drift as P0 because a userscript manager is a code-execution trust product.
+- Verified risk: production JS and TypeScript mirror remain separate. Recent history shows repeated parity fixes; current TS install/update paths still use `response.text()` where runtime has bounded stream reading.
+- Verified risk: `.github/workflows/ci.yml` uses `continue-on-error: true` for high-level npm audit, while docs describe hard release checks. Decide whether audit is hard or soft, then align code and docs.
+- Verified risk: broad `<all_urls>`, userScripts, DNR, sidePanel, offscreen, downloads, clipboard, identity, and cookies permission surfaces require generated privacy/store justifications.
+- Verified risk: existing `.factory/large-repo-state.yaml` still flags `XHR-PRIVACY` and `DNS-REBIND`.
+- Missing guardrails: artifact signing, SBOM, package diff, rollback rehearsal, AMO data-collection manifest declaration, source ZIP review artifact, unified internal-host policy, sync token revoke/status UI, and restore receipts.
+
+### UX, Accessibility, and Trust
+
+- Onboarding: Chrome 138+ requires per-extension Allow User Scripts copy and live diagnostics.
+- Empty/loading/error states: sync, Gist, install/update, rollback, and long-running background registration flows need consistent disabled/loading states and accessible live-region feedback.
+- Destructive actions: bulk delete/update/import should have trash/undo, restore receipts, and dry-run previews where data loss is plausible.
+- Settings clarity: provider tokens, optional permissions, host scopes, userScripts toggle, DNR/CSP helper, and cookies/clipboard/identity should show why access is needed and how to revoke it.
+- Accessibility: complete the documented APCA/WCAG3 pass across dashboard modules, modals, popup, side panel, install page, forced-colors, and screen-reader announcement paths.
+- Trust signals: every install/update should produce a durable local receipt with source, hashes, grants, host scope, dependency provenance, and rollback point.
+
+### Architecture and Maintainability
+
+- Primary boundary issue: production runtime source and TS mirror are separate. Short-term parity tests are mandatory; long-term source convergence should be planned before more large feature batches.
+- Build/release gap: `esbuild.config.mjs` is cross-platform, but publishing scripts remain bash-oriented and docs lag `chrome-webstore-upload-cli` v4.
+- Cross-browser gap: manual `manifest.json` and `manifest-firefox.json` drift risk argues for generated per-target manifests after the immediate Firefox validation gate.
+- Test gaps: no current focused tests for recent Gist storage rejection fix, empty-grant deny behavior, all CSV exports, package diff, rollback rehearsal, AMO lint/signing, or Chrome 138 setup copy.
+- Docs gaps: README, changelog, privacy, release runbook, Firefox port, and store copy need generated checks or owner-facing checklists to prevent future drift.
+- Release automation gap: CI uploads a Chrome ZIP artifact but does not publish signed GitHub Releases for v3.11.0+ or verify source ZIP parity for AMO.
+
+### Prioritized Roadmap
+
+#### Now - v3.12.0 Trust and Release Stabilization
+
+- [ ] P0 - Reconcile public release artifacts to v3.11.0+
+  - Why: Users should not see v2.3.4 as the latest GitHub Release when manifests/tags are v3.11.0.
+  - Evidence: L01, L08, L17, H001.
+  - Touches: `CHANGELOG.md`, `README.md`, GitHub Release artifacts, `build.sh`, `manifest.json`, `manifest-firefox.json`.
+  - Acceptance: GitHub Releases, tags, manifests, README, changelog, packaged ZIP/XPI names, and root artifacts all agree or clearly label unreleased builds.
+  - Verify: `gh release list --limit 5`; `git tag --list 'v*'`; inspect generated package manifests.
+
+- [ ] P0 - Align release runbook, CWS API v2 tooling, and CI audit policy
+  - Why: Release docs currently disagree with installed publishing tooling and CI audit behavior.
+  - Evidence: L12, S03, S04, H002, H006.
+  - Touches: `docs/release-runbook.md`, `.github/workflows/ci.yml`, `package.json`, `publish.sh`, `cws-setup.sh`.
+  - Acceptance: Runbook names the actual CWS v2 path, audit policy is either blocking or explicitly soft with rationale, and CI output matches the docs.
+  - Verify: `npm audit --audit-level=high --omit=optional`; dry-run publish/status command where credentials are unavailable.
+
+- [ ] P0 - Add release rollback and storage backward-compatibility drill
+  - Why: Chrome rollback can protect users only if prior versions can read current stored data.
+  - Evidence: S05, S06, L20, H003.
+  - Touches: `scripts/`, `tests/storage*.test.js`, `src/storage/*`, `modules/storage.js`, `docs/release-runbook.md`.
+  - Acceptance: A documented command tests upgrade and rollback across at least the previous public baseline and current manifest version.
+  - Verify: `npm run test -- tests/storage*.test.js` plus rollback-drill script.
+
+- [ ] P0 - Add signed artifact, SBOM, provenance, and package-diff release gate
+  - Why: Browser extension compromise and marketplace-vetting research make release-package verification part of user trust.
+  - Evidence: S69-S76, H004, H005, H075, H090.
+  - Touches: `.github/workflows/ci.yml`, `scripts/`, `docs/release-runbook.md`, GitHub Release artifacts.
+  - Acceptance: Each release artifact has checksum, source ZIP, SBOM, signing/provenance material, and a diff report of manifest permissions and web-accessible resources.
+  - Verify: Release workflow dry run on a local package; inspect attached checksums/report.
+
+- [ ] P0 - Create runtime/TS mirror drift guard for recent hardening fixes
+  - Why: Recent commits repeatedly closed drift, and current TS fetch paths still lag runtime bounded-fetch behavior.
+  - Evidence: L10, L18, L19, H007-H010.
+  - Touches: `tests/source-*.test.js`, `src/background/install-handler.ts`, `src/background/update-checker.ts`, `background.core.js`, `modules/*.js`.
+  - Acceptance: Focused tests fail if runtime has bounded fetch, empty-grant denial, or Gist rejection behavior that the TS mirror lacks.
+  - Verify: `npm run typecheck`; `npx vitest run tests/source-*.test.js tests/fetch-bounded.test.js tests/gui-secondary-audit.test.js tests/wrapper-gm-tabs-39-13.test.js`.
+
+- [ ] P0 - Refresh Chrome 138+ userScripts onboarding and status diagnostics
+  - Why: Chrome now distinguishes Developer Mode from per-extension Allow User Scripts, and disabled API behavior differs by version.
+  - Evidence: S01, S02, L04, H011, H013.
+  - Touches: `background.core.js`, `pages/popup.js`, `pages/dashboard*.js`, `README.md`, `tests/popup-a11y.test.js`.
+  - Acceptance: Users get correct setup instructions for Chrome <138 and >=138, and status checks recover after enabling the toggle.
+  - Verify: Manual Chrome 138+ install flow; focused status tests.
+
+- [ ] P0 - Finish Firefox MV3/AMO validation gate
+  - Why: Firefox manifest/version exists, but port tasks are unchecked and AMO now has explicit data-collection manifest requirements.
+  - Evidence: L07, L11, S09-S11, S67-S68, H017-H018, H090.
+  - Touches: `manifest-firefox.json`, `FIREFOX-PORT.md`, `build-firefox.sh`, `docs/cross-browser-pipeline.md`, `.github/workflows/ci.yml`.
+  - Acceptance: `web-ext lint` is clean, source ZIP is produced, AMO data-collection fields are explicit, unsupported Chrome-only APIs are guarded.
+  - Verify: `web-ext lint --source-dir <firefox-build-dir>`; manual XPI load in Firefox profile.
+
+- [ ] P0 - Add generated permissions/privacy/store-copy check
+  - Why: Broad extension permissions must be explained accurately to stores and users.
+  - Evidence: L04, L05, S09-S11, H017, H067.
+  - Touches: `manifest*.json`, `PRIVACY.md`, `README.md`, `docs/release-runbook.md`, `scripts/`.
+  - Acceptance: A script compares manifest permissions/host permissions to privacy/store copy and fails on missing justifications.
+  - Verify: `node scripts/check-permission-copy.mjs` or equivalent.
+
+- [ ] P1 - Migrate XHR/user-script bridge to dedicated user-script messaging
+  - Why: Platform APIs now provide dedicated handlers for less-trusted user-script contexts.
+  - Evidence: L22, S01, S02, H012.
+  - Touches: `content.js`, `background.core.js`, `modules/xhr.js`, `src/modules/xhr.ts`, `tests/content-bridge-security.test.js`, `tests/xhr.test.js`.
+  - Acceptance: Chrome 131+ path uses `runtime.onUserScriptMessage`; older/browser fallback is explicit and tested.
+  - Verify: `npx vitest run tests/content-bridge-security.test.js tests/xhr.test.js`.
+
+- [ ] P1 - Add shared internal-host, redirect, and DNS-rebind fetch policy
+  - Why: Prior webhook hardening should apply to all remote code/dependency fetches.
+  - Evidence: L22, S73, H014, H073.
+  - Touches: `background.core.js`, `modules/resources.js`, `src/background/install-handler.ts`, `src/background/resource-loader.ts`, `modules/public-api.js`, tests for URL install/resource/webhook paths.
+  - Acceptance: Redirects and post-fetch IP changes to private/link-local/loopback/internal ranges are rejected consistently where platform APIs allow detection.
+  - Verify: mock DNS/redirect fixtures plus `npm run test -- tests/*resources* tests/*runtime-import-export*`.
+
+- [ ] P1 - Add install/update trust receipt with script rollback point
+  - Why: A userscript manager needs local recovery and explainability for arbitrary code changes.
+  - Evidence: L14, S05, S24, S50-S51, H015-H016, H047, H053, H089.
+  - Touches: `background.core.js`, `modules/resources.js`, `modules/storage.js`, `pages/install.js`, `pages/dashboard-diff.js`, `src/types/script.ts`.
+  - Acceptance: Install/update records source, hashes, grants, host scope, dependency summary, diff, and previous-version restore action.
+  - Verify: manual install/update/rollback flow with a local test script server.
+
+- [ ] P1 - Inventory and test all CSV export formula-injection surfaces
+  - Why: One runtime fix is not enough if other CSV exporters still emit executable cells.
+  - Evidence: L18, H055.
+  - Touches: `pages/dashboard*.js`, `modules/error-log.js`, netlog/export modules, tests for export functions.
+  - Acceptance: Every CSV export defangs cells beginning with formula-control characters and has regression tests.
+  - Verify: focused CSV export tests.
+
+- [ ] P1 - Complete APCA/focus/live-region accessibility pass across major UI surfaces
+  - Why: Existing WCAG3 doc lists gaps, and trust flows depend on readable, accessible states.
+  - Evidence: L15, S85-S87, H061-H064.
+  - Touches: `pages/*.html`, `pages/*.js`, `pages/dashboard.css`, `tests/dashboard-a11y.test.js`, `tests/popup-a11y.test.js`.
+  - Acceptance: Popup, dashboard, side panel, install page, modals, toasts, sync/update states, and forced-colors checks pass documented criteria.
+  - Verify: `npm run test:a11y`; manual forced-colors and keyboard-only pass.
+
+#### Next - v3.13.x Cross-Browser and Workflow Completion
+
+- [ ] P1 - Generate browser support matrix from build/lint/smoke results
+  - Why: README support claims should track real Chrome/Firefox/Edge validation.
+  - Evidence: L06, L11, H021.
+  - Touches: `docs/cross-browser-pipeline.md`, `README.md`, `.github/workflows/ci.yml`, `scripts/`.
+  - Acceptance: Support matrix names tested versions, unsupported APIs, and last successful verification date.
+  - Verify: run matrix-generation script after CI smoke.
+
+- [ ] P1 - Add sync token health, revoke, manual sync, and dry-run conflict preview
+  - Why: ScriptVault has many sync providers but fragmented trust and recovery states.
+  - Evidence: L13, S18, S44, H028-H032.
+  - Touches: `modules/sync-providers.js`, `modules/sync-easycloud.js`, `pages/dashboard-gist.js`, `src/modules/sync-*.ts`, tests.
+  - Acceptance: Each provider exposes status, last sync, token storage disclosure, revoke, manual sync, and dry-run conflict preview where applicable.
+  - Verify: provider mock tests and manual token-revocation flow.
+
+- [ ] P1 - Add script trash, version history, restore receipts, and backup verification
+  - Why: Destructive changes need undo and proof of restore completeness.
+  - Evidence: S45, S05, L13, H052-H054.
+  - Touches: `modules/storage.js`, `src/storage/*`, `pages/dashboard*.js`, import/export modules, tests.
+  - Acceptance: Delete/update/import creates recoverable local state; restore shows counts, failures, and rollback result.
+  - Verify: storage/import-export regression tests and manual delete/restore flow.
+
+- [ ] P1 - Add large-library dataset perf harness and virtualized/indexed dashboard paths
+  - Why: The product claims broad script management; large libraries must remain responsive.
+  - Evidence: L05, S40, H056-H060.
+  - Touches: `pages/dashboard*.js`, `modules/storage.js`, `src/storage/*`, `tests/gui-*.test.js`, smoke scripts.
+  - Acceptance: 1k and 10k synthetic script libraries load/search/sort within documented local thresholds.
+  - Verify: `node scripts/smoke-large-library.mjs` or equivalent.
+
+- [ ] P2 - Add site-scoped controls, invert filters, and frame controls
+  - Why: Competitor issues show repeated demand for precise current-site and bulk-scope control.
+  - Evidence: S20,S21,S26,S45,H035-H037.
+  - Touches: `pages/popup.js`, `pages/dashboard*.js`, `background.core.js`, `src/background/registration.ts`, tests.
+  - Acceptance: Users can quickly add current site include/exclude, filter with not/invert logic, and configure top/all-frame behavior.
+  - Verify: UI tests plus manual current-site flow.
+
+- [ ] P2 - Add search/index improvements and editor search history
+  - Why: Name/search friction is visible in mature competitors and directly affects large libraries.
+  - Evidence: S17,S58,H038-H039.
+  - Touches: `pages/dashboard.js`, `pages/dashboard-search*.js`, `pages/monaco-adapter.js`, storage index code.
+  - Acceptance: Search covers name, URL, tags, grants, source, and last-run; editor search terms persist locally.
+  - Verify: search regression tests and manual editor search session.
+
+- [ ] P2 - Add install-source trust badges without full marketplace scope
+  - Why: Registry source is a useful trust signal, but a full marketplace adds moderation risk.
+  - Evidence: S50,S51,H047,H049.
+  - Touches: `pages/install.js`, `pages/dashboard-store.js`, parser/source metadata, tests.
+  - Acceptance: Scripts installed from known registries show durable source metadata and warnings when source identity changes.
+  - Verify: local fixture URLs for GreasyFork/OpenUserJS/GitHub/raw.
+
+- [ ] P2 - Add locale coverage and forced language checks
+  - Why: `_locales` exists, but coverage should be reported and not silently regress.
+  - Evidence: L05,L12,L15,H065-H066.
+  - Touches: `_locales/`, `modules/i18n.js`, `src/modules/i18n.ts`, `tests/manifest-locales.test.js`, docs.
+  - Acceptance: CI reports missing keys and unsupported language assumptions.
+  - Verify: locale coverage test.
+
+#### Later - Staged Enhancements After Trust Gates
+
+- [ ] P2 - Evaluate generated multi-target manifest/build system
+  - Why: WXT-like manifest generation could reduce Chrome/Firefox/Edge drift after current release gates stabilize.
+  - Evidence: S62-S65,H019.
+  - Touches: build config, manifest files, docs, CI.
+  - Acceptance: Design document chooses WXT, custom generator, or status quo with measured migration cost.
+  - Verify: proof-of-concept build for Chrome and Firefox from one config.
+
+- [ ] P2 - Add Edge Add-ons package path
+  - Why: Edge is a natural Chromium distribution once release provenance is reliable.
+  - Evidence: S66,H020.
+  - Touches: `docs/cross-browser-pipeline.md`, build scripts, CI artifacts.
+  - Acceptance: Edge ZIP and submission checklist exist; unsupported permissions are documented.
+  - Verify: local Edge load and manifest validation.
+
+- [ ] P2 - Add S3-compatible sync provider
+  - Why: User-owned S3-compatible storage is a good fit for local-first sync.
+  - Evidence: S18,S23,H028.
+  - Touches: `modules/sync-providers.js`, `src/modules/sync-providers.ts`, sync settings UI, tests.
+  - Acceptance: Endpoint/bucket/region/credentials are validated; sync works against a mock S3-compatible server.
+  - Verify: provider mock tests.
+
+- [ ] P3 - Research ESM userscript and local development modes
+  - Why: ESM support is an emerging compatibility question, but immediate implementation is high risk.
+  - Evidence: S17,S19,S24,H040-H041,H083.
+  - Touches: design docs, wrapper builder, install/update parser, dependency loader.
+  - Acceptance: Research doc identifies compatibility model, CSP constraints, and migration strategy without enabling runtime behavior by default.
+  - Verify: design review plus disabled proof-of-concept tests.
+
+- [ ] P3 - Expand userstyle support after Firefox/userstyle CSP tests
+  - Why: ScriptVault supports userstyles, but Stylus is the deeper domain expert.
+  - Evidence: S57-S61,H044-H046.
+  - Touches: userstyle modules, parser, editor UI, Firefox tests.
+  - Acceptance: Import/render compatibility is verified before adding advanced color variables.
+  - Verify: userstyle regression fixtures across Chrome/Firefox.
+
+### Quick Wins
+
+- Add tests for Gist token storage rejection and explicit empty `@grant` denial.
+- Update `docs/release-runbook.md` to stop mentioning stale `chrome-webstore-upload-cli` pinning and align with CWS API v2.
+- Add a root-artifact guard that flags `ScriptVault-firefox-v2.1.7.xpi`.
+- Add editor search history in Monaco adapter.
+- Add README feature-claim validation checklist against code entry points.
+- Make high-level npm audit either fail CI or document why it is advisory-only.
+- Add changelog entries for the latest two hardening commits.
+- Add `web-ext lint` to a Firefox build job once a Firefox build directory is produced.
+
+### Larger Bets
+
+- Collapse runtime JS and TypeScript mirror to one authoritative source.
+- Build a full release trust pipeline with signatures, SBOM, source ZIP, package diff, rollback rehearsal, and CWS/AMO status checks.
+- Replace the legacy XHR bridge with dedicated user-script messaging while keeping tested fallback behavior.
+- Add per-script trust receipts with provenance, dependency hashes, permission changes, and rollback.
+- Add sync cockpit and user-owned S3-compatible sync provider.
+- Add measured large-library virtualization and local health diagnostics.
+
+### Explicit Non-Goals
+
+- Full native mobile app rewrite - rejected because the current product is a browser-extension userscript manager.
+- Account-backed multi-user collaboration - rejected because it conflicts with local-first trust and adds backend custody risk.
+- External usage analytics - rejected; local diagnostics are acceptable, outbound telemetry is not.
+- One-click registry publishing from the extension - rejected for now because it expands account/token risk and moderation scope.
+- Paid tiers or monetized script marketplace - rejected because it dilutes product identity and adds business/process burden.
+- Remote configuration kill-switch - rejected because it introduces remote control over a code-execution tool.
+- Beginner no-code marketplace positioning - rejected because ScriptVault's strongest fit is power-user trust, compatibility, and local control.
+
+### Open Questions
+
+- Do Chrome Web Store credentials and AMO credentials exist in the operator environment, or should release automation stop at signed local artifacts plus manual upload instructions?
+- Should the long-term source of truth be TypeScript-first runtime emission, or should the current JS runtime remain canonical with TS used only for contracts until a staged migration lands?
+- What is the intended support promise for Firefox: experimental self-loaded XPI, AMO unlisted, or AMO listed?
+
+### Phase 5 Self-Audit
+
+- Traceability: each Now/Next roadmap item includes local or external source IDs; source URLs are listed in the appendix.
+- Tier justification: every harvested row has a one-sentence placement reason.
+- Category coverage: security, accessibility, i18n/l10n, observability, testing, docs, distribution/packaging, plugin/extension ecosystem, mobile, offline/resilience, multi-user/collab, migration paths, and upgrade strategy are covered or explicitly rejected.
+- Duplicate check: feature rows remain raw enough for traceability; roadmap items merge only where implementation naturally belongs together.
+- Adversarial check: the plan prioritizes trust and release correctness before novelty because ScriptVault executes arbitrary user code and currently has artifact/source drift.
+
+### Round 14 Source Appendix
+
+Local sources:
+
+- L01 `git status --branch --short` - clean `main...origin/main` before roadmap edit.
+- L02 `rtk git log -10 --oneline --decorate` - recent commits through `f4c748c`.
+- L03 `git log -200 --oneline --decorate` - history reviewed back to first public packaging work.
+- L04 `manifest.json` - Chrome MV3, v3.11.0, min Chrome 130, permissions, host permissions, surfaces.
+- L05 `README.md` - current user-facing claims, feature list, install docs, stale claims.
+- L06 `package.json` - scripts and dependency fingerprints.
+- L07 `manifest-firefox.json` and `FIREFOX-PORT.md` - Firefox MV3 target and unchecked port tasks.
+- L08 `CHANGELOG.md` - unreleased notes, test counts, hardening history.
+- L09 `.github/workflows/ci.yml` - Node 20 CI, audit advisory behavior, tests/build/smoke/artifacts.
+- L10 `esbuild.config.mjs` - ordered JS concatenation build and TypeScript check separation.
+- L11 `docs/cross-browser-pipeline.md` - WXT/cross-browser packaging plan.
+- L12 `docs/release-runbook.md` - release automation, CWS API, provenance gaps.
+- L13 `docs/research/iter-1-l1-claude-led.md` and `docs/research/iter-1-l3-claude-smoke.md` - prior prioritized hardening candidates.
+- L14 `docs/require-provenance-design.md` - provenance/SRI/Sigstore design.
+- L15 `docs/wcag3-gap-analysis.md` - APCA, help consistency, live-region, language gaps.
+- L16 `docs/extension-interop.md` and `docs/mcp-2026-compliance.md` - external interop gates and non-default stance.
+- L17 `gh release list --limit 20` - latest GitHub Release is `v2.3.4`.
+- L18 Recent commits `053c1a5`, `428b718`, `f4c748c` - hardening and research-plan drift context.
+- L19 `src/background/install-handler.ts`, `src/background/update-checker.ts`, `background.core.js` - bounded-fetch drift evidence.
+- L20 `npm audit --audit-level=high --omit=optional` and `npm outdated --json` - security and dependency state.
+- L21 `tests/gui-secondary-audit.test.js`, `tests/wrapper-gm-tabs-39-13.test.js`, `tests/fetch-bounded.test.js` - current coverage boundaries.
+- L22 `.factory/state.yaml`, `.factory/large-repo-state.yaml` - remaining `XHR-PRIVACY` and `DNS-REBIND` tasks.
+
+External sources:
+
+- S01 Chrome `userScripts` API - https://developer.chrome.com/docs/extensions/reference/api/userScripts
+- S02 MDN `userScripts` API - https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts
+- S03 Chrome Web Store API v2 reference - https://developer.chrome.com/docs/webstore/api/reference/rest
+- S04 Chrome Extensions "What's new" - https://developer.chrome.com/docs/extensions/whats-new
+- S05 Chrome Web Store rollback docs - https://developer.chrome.com/docs/webstore/rollback
+- S06 Chrome Web Store update docs - https://developer.chrome.com/docs/webstore/update/
+- S07 Chrome Web Store program policies - https://developer.chrome.com/docs/webstore/program-policies/
+- S08 Chrome extension update testing tool announcement - https://developer.chrome.com/docs/extensions/whats-new
+- S09 MDN `browser_specific_settings` / AMO data collection - https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/browser_specific_settings
+- S10 MDN Chrome incompatibilities - https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Chrome_incompatibilities
+- S11 MDN `declarativeNetRequest` - https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/declarativeNetRequest
+- S12 Chrome DNR API - https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest
+- S13 Chrome sidePanel API - https://developer.chrome.com/docs/extensions/reference/api/sidePanel
+- S14 Chrome offscreen API - https://developer.chrome.com/docs/extensions/reference/api/offscreen
+- S15 Awesome Userscripts - https://github.com/awesome-scripts/awesome-userscripts
+- S16 Violentmonkey repo - https://github.com/violentmonkey/violentmonkey
+- S17 Violentmonkey issue 2528 ESM loader - https://github.com/violentmonkey/violentmonkey/issues/2528
+- S18 Violentmonkey PR 2521 S3-compatible sync - https://github.com/violentmonkey/violentmonkey/pull/2521
+- S19 Violentmonkey issue 2419 local require - https://github.com/violentmonkey/violentmonkey/issues/2419
+- S20 Violentmonkey issue 2410 only-for-site option - https://github.com/violentmonkey/violentmonkey/issues/2410
+- S21 Violentmonkey issue 2403 add domain easily - https://github.com/violentmonkey/violentmonkey/issues/2403
+- S22 Violentmonkey issue 2365 policy deployment - https://github.com/violentmonkey/violentmonkey/issues/2365
+- S23 Violentmonkey release v2.37.0 - https://github.com/violentmonkey/violentmonkey/releases/tag/v2.37.0
+- S24 Tampermonkey home/features - https://old.tampermonkey.net/
+- S25 Tampermonkey repo - https://github.com/Tampermonkey/tampermonkey
+- S26 Tampermonkey issue 2702 invert/not filters - https://github.com/Tampermonkey/tampermonkey/issues/2702
+- S27 Tampermonkey issue 2579 profiles - https://github.com/Tampermonkey/tampermonkey/issues/2579
+- S28 Tampermonkey issue 2675 install if site unavailable - https://github.com/Tampermonkey/tampermonkey/issues/2675
+- S29 Tampermonkey issue 2595 Firefox permission friction - https://github.com/Tampermonkey/tampermonkey/issues/2595
+- S30 Tampermonkey issue 2624 reinstall tags - https://github.com/Tampermonkey/tampermonkey/issues/2624
+- S31 Tampermonkey issue 2616 data collection permissions - https://github.com/Tampermonkey/tampermonkey/issues/2616
+- S32 Greasemonkey repo - https://github.com/greasemonkey/greasemonkey
+- S33 Greasemonkey PR 3220 First Party Isolation XHR - https://github.com/greasemonkey/greasemonkey/pull/3220
+- S34 quoid/userscripts repo - https://github.com/quoid/userscripts
+- S35 quoid/userscripts issue 431 examples - https://github.com/quoid/userscripts/issues/431
+- S36 quoid/userscripts issue 521 GitHub private repo sync - https://github.com/quoid/userscripts/issues/521
+- S37 quoid/userscripts issue 467 GM.fetch - https://github.com/quoid/userscripts/issues/467
+- S38 quoid/userscripts issue 584 SRI - https://github.com/quoid/userscripts/issues/584
+- S39 quoid/userscripts issue 520 third-party sync storage - https://github.com/quoid/userscripts/issues/520
+- S40 quoid/userscripts PR 900 memory usage - https://github.com/quoid/userscripts/pull/900
+- S41 ScriptCat repo - https://github.com/scriptscat/scriptcat
+- S42 ScriptCat issue 1034 background/timed APIs - https://github.com/scriptscat/scriptcat/issues/1034
+- S43 ScriptCat issue 797 one-click subscribe generation - https://github.com/scriptscat/scriptcat/issues/797
+- S44 ScriptCat issue 684 manual sync/import-export config - https://github.com/scriptscat/scriptcat/issues/684
+- S45 ScriptCat issue 668 recycle bin - https://github.com/scriptscat/scriptcat/issues/668
+- S46 ScriptCat issue 633 mobile text editing - https://github.com/scriptscat/scriptcat/issues/633
+- S47 ScriptCat PR 1463 sandbox prototype inheritance fix - https://github.com/scriptscat/scriptcat/pull/1463
+- S48 Stay repo - https://github.com/shenruisi/Stay
+- S49 Android WebMonkey repo - https://github.com/warren-bank/Android-WebMonkey
+- S50 OpenUserJS repo - https://github.com/OpenUserJS/OpenUserJS.org
+- S51 GreasyFork repo - https://github.com/greasyfork-org/greasyfork
+- S52 Gist userscript manager repo - https://github.com/ste-xx/gist-userscript-manager
+- S53 ScriptFlow repo - https://github.com/kusoidev/ScriptFlow
+- S54 Shieldmonkey repo - https://github.com/Shieldmonkey/Shieldmonkey
+- S55 ScriptRunner repo - https://github.com/anilkumarum/ScriptRunner
+- S56 BareScript - https://www.barescript.org/
+- S57 Stylus repo - https://github.com/openstyles/stylus
+- S58 Stylus issue 2086 editor search history - https://github.com/openstyles/stylus/issues/2086
+- S59 Stylus issue 2070 Firefox CSP style resources - https://github.com/openstyles/stylus/issues/2070
+- S60 Stylus issue 2065 OKHSL/OKLAB variables - https://github.com/openstyles/stylus/issues/2065
+- S61 Stylus issue 2053 containers - https://github.com/openstyles/stylus/issues/2053
+- S62 WXT target browsers - https://wxt.dev/guide/essentials/target-different-browsers.html
+- S63 WXT manifest config - https://wxt.dev/guide/essentials/config/manifest.html
+- S64 WXT publishing - https://wxt.dev/guide/essentials/publishing
+- S65 Plasmo repo - https://github.com/PlasmoHQ/plasmo
+- S66 Microsoft Edge extension publishing - https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension
+- S67 Mozilla web-ext release 10.2.0 - https://github.com/mozilla/web-ext/releases/tag/10.2.0
+- S68 Mozilla webextension-polyfill - https://github.com/mozilla/webextension-polyfill
+- S69 Sigstore docs - https://docs.sigstore.dev/
+- S70 npm provenance docs - https://docs.npmjs.com/generating-provenance-statements/
+- S71 SLSA spec v1.1 - https://slsa.dev/spec/v1.1/
+- S72 Cosign repo - https://github.com/sigstore/cosign
+- S73 Singapore CSA alert on compromised Chrome extensions - https://www.csa.gov.sg/alerts-and-advisories/alerts/al-2024-147/
+- S74 What is in the Chrome Web Store? - https://arxiv.org/abs/2406.12710
+- S75 Did I Vet You Before? - https://arxiv.org/abs/2406.00374
+- S76 Secure Annex Cyberhaven extension compromise - https://secureannex.com/blog/cyberhaven-extension-compromise/
+- S77 Monaco Editor releases - https://github.com/microsoft/monaco-editor/releases
+- S78 esbuild releases - https://github.com/evanw/esbuild/releases
+- S79 Vitest releases - https://github.com/vitest-dev/vitest/releases
+- S80 TypeScript releases - https://github.com/microsoft/TypeScript/releases
+- S81 jsdom releases - https://github.com/jsdom/jsdom/releases
+- S82 Puppeteer releases - https://github.com/puppeteer/puppeteer/releases
+- S83 chrome-webstore-upload-cli releases - https://github.com/fregante/chrome-webstore-upload-cli/releases
+- S84 WXT releases - https://github.com/wxt-dev/wxt/releases
+- S85 WCAG 2.2 - https://www.w3.org/TR/WCAG22/
+- S86 W3C WCAG 3 draft - https://www.w3.org/TR/wcag-3.0/
+- S87 APCA / WCAG contrast method - https://www.w3.org/WAI/GL/task-forces/silver/wiki/Visual_Contrast_of_Text_Subgroup
+- S88 Reddit Chrome extension update/rollback community signal - https://www.reddit.com/r/chrome_extensions/
 
 ## Phase 0 — Foundation (Prerequisite for Everything)
 
@@ -4578,4 +5155,3 @@ Phase 40 added **25 sub-items**:
 Round 13's value split: ~60% internal-quality work uncovered by adversarial code review of the v3.10.1 codebase (40.1–40.14); ~40% external-signal catch-up against the week-of-2026-05-18 platform / dependency / community surface (40.15–40.25). External delta from Round 12's 2026-05-17 sweep was bounded by the 24-hour window but real items shipped — ScriptCat in particular landed three commits worth tracking, and `chrome-webstore-upload-cli` v6 forces an unplanned config migration.
 
 No Round 13 item duplicates a Now/Next item from Rounds 1–12. Explicit promotions (Phase 21 S3, Phase 39.35 → 40.18, Phase 1 exit criteria) are cross-references, not duplicates. The Round 12 lesson on Greasemonkey-not-dead is reinforced: arantius shipped five more commits 2026-05-12 → 2026-05-15 (one of which — `sourceURL` removal — directly informs ScriptVault's audit posture at 40.24).
-
