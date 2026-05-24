@@ -48,6 +48,12 @@ describe('TS runtime module generator', () => {
         output: 'modules/xhr.js',
         exportName: 'XhrManager',
       }),
+      expect.objectContaining({
+        id: 'internal-host-guard',
+        source: 'src/background/internal-host-guard.ts',
+        output: 'modules/internal-host-guard.js',
+        exportName: 'InternalHostGuard',
+      }),
     ]));
   });
 

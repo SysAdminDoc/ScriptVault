@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Internal host guard TypeScript promotion
+
+- Promoted `modules/internal-host-guard.js` to a generated runtime artifact
+  from `src/background/internal-host-guard.ts`, keeping the SSRF pre-flight
+  and post-flight classifiers TypeScript-authoritative.
+- Extended the TS runtime generator and drift-gate coverage to seven promoted
+  modules, including the generated namespace-wrapper shape used by
+  `InternalHostGuard`.
+- Rebuilt `background.js` so resource, install, update, and local-script
+  fetch paths consume the generated guard artifact.
+
 ### 2026-05-24 — XHR TypeScript promotion
 
 - Promoted `modules/xhr.js` to a generated runtime artifact from

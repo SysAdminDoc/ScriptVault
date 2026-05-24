@@ -38,7 +38,8 @@
     {
       "runtime": "modules/internal-host-guard.js",
       "sources": ["src/background/internal-host-guard.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "modules/resources.js",
