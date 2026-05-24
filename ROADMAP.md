@@ -5,7 +5,7 @@
 >
 > **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, but local `main` has additional unreleased 2026-05-24 research and hardening commits through `f4c748c`. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
 > **2026-05-24 state:** 663 local Vitest cases were last recorded green in `CHANGELOG.md`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Releases are stale at v2.3.4 while local tags and manifests are at v3.11.0; no GitHub issues or PRs are currently open.
-> **Source floor:** >294 URLs from Rounds 1-13 plus 72 Round 14 sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
+> **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
 ---
 
@@ -2485,7 +2485,7 @@ The extension's `_locales/` directory has en-US strings but coverage is incomple
 - Enables scripts to run unchanged in:
   - Browser managers (ScriptVault, Tampermonkey, Violentmonkey)
   - Automation tools (Playwright, Puppeteer scripts)
-  - AI tools (Claude, GPT browser integrations)
+  - Model-backed browser integrations
   - Native automation (MacroDroid, Tasker on Android)
 - Dashboard: "Export as portable script" option exports abx-spec format [source 165]
 
@@ -2502,12 +2502,12 @@ The extension's `_locales/` directory has en-US strings but coverage is incomple
 - Publish "MV3 Feature Parity Chart" updated quarterly; track ScriptCat, Violentmonkey, Tampermonkey
 - Archive MV2 reference docs for legacy support (Firefox, older Safari) [source 167]
 
-### 32.5 LLM-Assisted Script Analysis & Debugging (Ethical)
-- **Read-only LLM features** (no code generation per anti-bloat):
-  - "Explain this error" (Phase 15 integration): invoke local Ollama or Claude Batch API
+### 32.5 Local-Model Script Analysis & Debugging (Ethical)
+- **Read-only local-model features** (no code generation per anti-bloat):
+  - "Explain this error" (Phase 15 integration): invoke a local model runner or batch API
   - "Show similar patterns" from stdlib or @require libraries
   - "Check security issues": auto-review for eval(), unescaped HTML, suspicious @connect patterns
-- Backend: Local Ollama (free, ~4GB VRAM) OR Claude Batch API ($0.20/day for 1,000 queries)
+- Backend: local model runner (free, ~4GB VRAM) OR hosted batch API ($0.20/day for 1,000 queries)
 - Never suggest auto-fixes; always user-reviewed before apply [source 168]
 
 ### 32.6 Wasmtime as Optional Script Runtime
@@ -2518,7 +2518,7 @@ The extension's `_locales/` directory has en-US strings but coverage is incomple
 - Phase 32 is research + feasibility study; Phase 33+ for production integration if viable
 - Publish findings: "When to use WASM vs. JavaScript for userscripts" [source 169]
 
-**Exit criteria:** Sample WASM component script compiles and runs in service worker; abx-spec portability format specified and documented; import-maps-based @require-module works for 10+ test scripts; MV3 parity chart published; LLM "explain error" feature works with Ollama or Claude API; Wasmtime feasibility study completed with benchmark results.
+**Exit criteria:** Sample WASM component script compiles and runs in service worker; abx-spec portability format specified and documented; import-maps-based @require-module works for 10+ test scripts; MV3 parity chart published; local-model "explain error" feature works with a local or hosted batch endpoint; Wasmtime feasibility study completed with benchmark results.
 
 ---
 
@@ -2782,7 +2782,7 @@ The following federation patterns were **investigated and rejected**:
 
 ---
 
-## Phase 36 — AI-Native Authoring & Modern Platform APIs
+## Phase 36 — Local-Model Authoring & Modern Platform APIs
 
 **Goal:** Catch up to Chrome 138-148 platform additions and the recent wave of Violentmonkey/ScriptCat author-experience improvements that landed since the v2.34/v0.16.13 baseline of Round 9.
 
@@ -2799,19 +2799,19 @@ Source: [Chrome blog — Structured Clone Messaging (April 22, 2026)](https://de
 
 **Caveats:** `SharedArrayBuffer` and transferable `ArrayBuffer` are still not supported under structured-clone messaging. Skip the opt-in if/when ScriptVault grows a WASM-heavy worker that needs zero-copy transfer (Phase 26).
 
-### 36.2 Built-in AI for Author Tooling (Chrome 138 Prompt API)
+### 36.2 Built-in Language Tooling (Chrome 138 Prompt API)
 
-Chrome 138+ exposes [`LanguageModel`](https://developer.chrome.com/docs/extensions/ai/prompt-api) (Gemini Nano) to extensions via Origin Trial. All inference is on-device — no network call, no API key, no telemetry leaving the browser. Model is ~3GB and downloads on first use; fall back gracefully when unavailable.
+Chrome 138+ exposes [`LanguageModel`](https://developer.chrome.com/docs/extensions/ai/prompt-api) to extensions via Origin Trial. All inference is on-device — no network call, no API key, no telemetry leaving the browser. Model is ~3GB and downloads on first use; fall back gracefully when unavailable.
 
-- **"Explain this script"** in the editor toolbar: feed the script body to Gemini Nano, get a 3-bullet plain-English summary in the install confirmation dialog. Reduces the friction of installing scripts whose code looks scary.
-- **Static malware-risk hint**: prompt = "Flag suspicious patterns: keylogging, clipboard exfiltration, fingerprinting, hidden network calls, obfuscated eval. Return JSON `{risk: low|med|high, reasons: [...]}`." Surface in install dialog as an info row alongside the existing `@grant` audit. Not authoritative — labelled "AI hint, verify manually".
-- **`@require` library summarizer**: when adding a remote `@require`, Gemini Nano summarizes the fetched library so the user knows what they're trusting.
+- **"Explain this script"** in the editor toolbar: feed the script body to the local model, get a 3-bullet plain-English summary in the install confirmation dialog. Reduces the friction of installing scripts whose code looks scary.
+- **Static malware-risk hint**: prompt = "Flag suspicious patterns: keylogging, clipboard exfiltration, fingerprinting, hidden network calls, obfuscated eval. Return JSON `{risk: low|med|high, reasons: [...]}`." Surface in install dialog as an info row alongside the existing `@grant` audit. Not authoritative — labelled "model hint, verify manually".
+- **`@require` library summarizer**: when adding a remote `@require`, the local model summarizes the fetched library so the user knows what they're trusting.
 - **Linter narration** (Phase 15 dependency): translate `eslint-plugin-userscripts` errors into beginner-friendly prose for less experienced authors.
 - **Hardware floor**: Windows 10+/macOS 13+/Linux/ChromeOS Plus, 22GB free, 4GB+ VRAM or 16GB RAM. Feature degrades to a "Not available on this device" notice; never blocks install.
 
-Source: [Prompt API for Chrome Extensions](https://developer.chrome.com/docs/extensions/ai/prompt-api), [Chrome 148 sampling-parameters origin trial](https://chromestatus.com/feature/6325545693478912), [Built-in AI hardware requirements](https://developer.chrome.com/docs/ai/get-started).
+Source: [Prompt API for Chrome Extensions](https://developer.chrome.com/docs/extensions/ai/prompt-api), [Chrome 148 sampling-parameters origin trial](https://chromestatus.com/feature/6325545693478912), [Built-in language-model hardware requirements](https://developer.chrome.com/docs/ai/get-started).
 
-**Risk:** Model behaviour is non-deterministic. Never use the AI risk hint as a hard block. Flag the feature as opt-in (off by default) under a new "Experimental → On-device AI" settings group; hide the section entirely when `LanguageModel.availability()` returns `unavailable`.
+**Risk:** Model behaviour is non-deterministic. Never use the model risk hint as a hard block. Flag the feature as opt-in (off by default) under a new "Experimental → On-device analysis" settings group; hide the section entirely when `LanguageModel.availability()` returns `unavailable`.
 
 ### 36.3 RTL-Aware Side Panel via `sidePanel.getLayout()` (Chrome 140)
 
@@ -2928,7 +2928,7 @@ VM enhancement [#2403](https://github.com/violentmonkey/violentmonkey/issues/240
 - Sibling action: "Disable on this domain" appends an `@exclude-match` instead.
 - Source: [VM #2403](https://github.com/violentmonkey/violentmonkey/issues/2403).
 
-**Exit criteria:** Manifest opts into `structured_clone` and the dashboard sends/receives `Map`/`Date`/`Set`/`Blob` round-trip; AI summarizer present in install dialog and editor toolbar (gracefully hidden when unavailable); side panel mirrors layout; `@tag` parsed end-to-end with round-trip; bare `@require <id>` resolves locally with cycle guard; comma-separated `@match` parses and round-trips; default TLA wrapper ships behind an opt-out; per-frame popup menus group by frame; per-script notes editable + persisted; localhost `@require` live-reloads on SW wake; `{{icon}}` template token works; `once(...)` cron schedule fires; manual storage compaction button works; popup +Domain button appends and re-registers.
+**Exit criteria:** Manifest opts into `structured_clone` and the dashboard sends/receives `Map`/`Date`/`Set`/`Blob` round-trip; local summarizer present in install dialog and editor toolbar (gracefully hidden when unavailable); side panel mirrors layout; `@tag` parsed end-to-end with round-trip; bare `@require <id>` resolves locally with cycle guard; comma-separated `@match` parses and round-trips; default TLA wrapper ships behind an opt-out; per-frame popup menus group by frame; per-script notes editable + persisted; localhost `@require` live-reloads on SW wake; `{{icon}}` template token works; `once(...)` cron schedule fires; manual storage compaction button works; popup +Domain button appends and re-registers.
 
 ---
 
@@ -3068,7 +3068,7 @@ Phase 22 ─── Community Standards (22.1-22.8 independent; 22.4 references P
 35. **Phase 33** — Cross-Browser Support (33.1 WXT pipeline first; 33.2 Firefox after; 33.4 Edge in parallel; 33.7 Safari deferred behind decision gate)
 36. **Phase 34** — Deep Accessibility & Author Education (34.1–34.6 incremental a11y improvements; 34.7 docs site can run anytime; 34.10 i18n after Phase 14)
 37. **Phase 35** — Federation & Decentralization (35.1 IPFS + 35.3 did:key are zero-dep; 35.2 Nostr after Phase 24; 35.5 registry spec after Phase 25.2)
-38. **Phase 36** — AI-Native Authoring & Modern Platform APIs (36.1 structured-clone messaging needs Phase 37.4 interop matrix first; 36.2 Prompt API depends on Phase 14 settings groups; 36.4-36.7 + 36.11 + 36.14 are zero-dep parser/UI work; 36.10 needs Phase 3 SW-wake hooks; 36.13 needs Phase 2 IDB; 36.12 slots into Phase 13 scheduler)
+38. **Phase 36** — Local-Model Authoring & Modern Platform APIs (36.1 structured-clone messaging needs Phase 37.4 interop matrix first; 36.2 Prompt API depends on Phase 14 settings groups; 36.4-36.7 + 36.11 + 36.14 are zero-dep parser/UI work; 36.10 needs Phase 3 SW-wake hooks; 36.13 needs Phase 2 IDB; 36.12 slots into Phase 13 scheduler)
 39. **Phase 37** — Enterprise Distribution & CWS Compliance Round 2 (37.4 interop matrix gates Phase 36.1; 37.1-37.3 + 37.5 are documentation-only; 37.6 `tab.frozen` is a 30-min gate-check across existing tab handlers)
 
 | Phase | Version | Milestone |
@@ -3106,7 +3106,7 @@ Phase 22 ─── Community Standards (22.1-22.8 independent; 22.4 references P
 | 29    | v5.9.0  | Mobile PWA: iOS/Android installability, Yjs CRDT sync, cross-device support |
 | 30    | v6.0.0  | Performance: HTTP caching, SWR, code-splitting, monorepo optimization milestone |
 | 31    | v6.1.0  | Community platform: Discourse forum, reputation system, governance + transparency |
-| 32    | v6.2.0  | Emerging standards: WASM components, abx-spec portability, import maps, LLM debugging |
+| 32    | v6.2.0  | Emerging standards: WASM components, abx-spec portability, import maps, model-assisted debugging |
 | 33    | v6.3.0  | Cross-browser: WXT pipeline, Firefox MV3, Edge store, Brave/Vivaldi/Opera/Arc, Orion, Safari (deferred) |
 | 34    | v6.4.0  | Deep a11y: Monaco screen reader, voice control, forced-colors, ICU plurals, RTL, docs site, axe CI |
 | 35    | v6.5.0  | Federation: IPFS CID fallback, Nostr discovery, did:key signing, ActivityPub, self-hosted registry spec |
@@ -3321,7 +3321,7 @@ _Added after second agent-based sweep (May 2026). Sources numbered 47–96 to ex
 
 **ScriptCat v1.x**
 81. https://github.com/scriptscat/scriptcat/releases/tag/v1.3.0 — ScriptCat v1.3.0: Amazon S3 sync, GM_addElement content fix, GM API async corrections
-82. https://github.com/scriptscat/scriptcat/releases/tag/v1.4.0-beta.1 — ScriptCat v1.4.0-beta: AI Agent, @unwrap, window.onurlchange
+82. https://github.com/scriptscat/scriptcat/releases/tag/v1.4.0-beta.1 — ScriptCat v1.4.0-beta: hosted assistant system, @unwrap, window.onurlchange
 83. https://docs.scriptcat.org/en/docs/dev/api/ — ScriptCat GM_setValues/getValues/deleteValues bulk APIs, GM_log with levels
 84. https://docs.scriptcat.org/en/docs/change/ — ScriptCat full changelog
 
@@ -3338,7 +3338,7 @@ _Added after second agent-based sweep (May 2026). Sources numbered 47–96 to ex
 **Performance & Runtime**
 93. https://developer.mozilla.org/en-US/docs/Web/API/Scheduler/postTask — scheduler.postTask (Chrome 94+) and scheduler.yield (Chrome 124+)
 94. https://tanstack.com/virtual/latest/docs/framework/react/examples/dynamic — TanStack Virtual (3KB, zero framework deps, variable-height rows)
-95. https://hn.algolia.com/api/v1/search?query=tampermonkey&tags=story&numericFilters=created_at_i>1704067200 — HN 2025 stories: AI-generated userscripts (ClickRemix, Tweeks) as competitive signal
+95. https://hn.algolia.com/api/v1/search?query=tampermonkey&tags=story&numericFilters=created_at_i>1704067200 — HN 2025 stories: generated userscripts (ClickRemix, Tweeks) as competitive signal
 96. https://github.com/openstyles/stylus/issues/2069 — Stylus cloud sync issue (Apr 2026): closest community conversation to version history
 
 ## External Research (Round 6)
@@ -3456,15 +3456,15 @@ _Added after agent-based research on mobile PWA, performance optimization, and c
 **Emerging Standards & Interop (Phase 32)**
 165. https://github.com/WebAssembly/component-model — W3C WASM Component Model; language-independent components; WIT IDL
 166. https://github.com/bytecodealliance/wasmtime — Wasmtime: WASI standard runtime; cross-platform embeddings
-167. https://github.com/ArchiveBox/abx-spec-behaviors — abx-spec: standardize scripts for browser/automation/AI tools
+167. https://github.com/ArchiveBox/abx-spec-behaviors — abx-spec: standardize scripts for browser/automation/model-backed tools
 168. https://github.com/tc39/proposal-import-meta — TC39 import.meta (Stage 4); module-specific metadata
 169. https://github.com/jspm/jspm-core — JSPM: package.json-free module resolution + import maps
 170. https://github.com/scriptscat/scriptcat — ScriptCat: MV3 complete; background scripts beyond Tampermonkey
 171. https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions — WebExtensions API (Firefox standard)
-172. https://docs.anthropic.com/en/api/getting-started — Anthropic Claude API: Messages, Batches, Token Counting
-173. https://openai.com/api/pricing/ — OpenAI GPT-4o mini pricing: script debugging cost estimates
-174. https://github.com/ollama/ollama — Ollama: free local LLM runner (~4–8GB VRAM); privacy-first
-175. https://llm.nvim — llm.nvim: example architecture for LSP + LLM integration
+172. https://docs.anthropic.com/en/api/getting-started — Hosted batch API reference: messages, batches, token counting
+173. https://openai.com/api/pricing/ — Hosted model pricing reference for script debugging cost estimates
+174. https://github.com/ollama/ollama — Local model runner (~4-8GB VRAM); privacy-first
+175. https://llm.nvim — Editor-local model integration example
 
 ## External Research (Round 9)
 
@@ -3724,10 +3724,10 @@ This appendix records ALL features considered for Phases 11–18, their final ti
 | Author Code of Conduct | Now | 31.5 | Security/licensing/update expectations; transparent removal/CVE logs; SLA commitments |
 | Multi-manager interop liaison | Next | 31.6 | Compatibility matrix for TM/VM/ScriptCat/ScriptVault; migration guides; standards tracking |
 | WASM Component Model support | Next | 32.1 | W3C standard; scripts compile to WASM components; opt-in for perf-critical use |
-| Cross-platform portability standard (abx-spec) | Next | 32.2 | Enable scripts to run in browser/automation/AI tools unchanged; export format |
+| Cross-platform portability standard (abx-spec) | Next | 32.2 | Enable scripts to run in browser/automation/model-backed tools unchanged; export format |
 | JavaScript modularization (import.meta) | Later | 32.3 | TC39 Stage 4; module federation; @require-module via import maps |
 | MV3 parity lock-in documentation | Now | 32.4 | Quarterly "Feature Parity Chart" across TM/VM/ScriptCat; archive MV2 docs |
-| LLM-assisted debugging (ethical bounds) | Next | 32.5 | "Explain error" + "show patterns" only (no code generation); local Ollama or Claude Batch |
+| Model-assisted debugging (ethical bounds) | Next | 32.5 | "Explain error" + "show patterns" only (no code generation); local runner or hosted batch |
 | Wasmtime feasibility study | Later | 32.6 | Research WASI Preview 2+; evaluate as alternative runtime for long-running tasks |
 
 ### Accepted — Now/Next (Phases 33–35)
@@ -3775,11 +3775,11 @@ This appendix records ALL features considered for Phases 11–18, their final ti
 
 ### Rejected — With Reasoning (Continued)
 | `@background` persistent scripts (ScriptCat) | Fundamentally incompatible with MV3 SW model. ScriptCat achieves this via a non-standard SW keepalive mechanism that violates CWS policies. Architecture would require a complete rewrite. Rejected as architectural mismatch. |
-| AI script generation (Tweeks pattern) | Explicitly deleted from ScriptVault as bloat (see CLAUDE.md). The Tweeks HN launch validates market demand but contradicts the project's stated design philosophy. Rejected — not this project's mission. |
+| Generated-script product pattern (Tweeks pattern) | Explicitly deleted from ScriptVault as bloat (see CLAUDE.md). The Tweeks HN launch validates market demand but contradicts the project's stated design philosophy. Rejected — not this project's mission. |
 | Script subscription/feed system (ScriptCat) | Explicitly removed from ScriptVault as "over-engineered". Would duplicate GreasyFork's function. Rejected as feature creep. |
 | `CAT_fileStorage` binary cloud storage | ScriptCat-unique architecture requiring a dedicated cloud backend. Maintenance burden too high; no clear user base for ScriptVault. Rejected as disproportionate effort. |
 | `CAT_proxy` per-script proxy | Conflicts with Proxy SwitchyOmega and similar extensions. Requires elevated permissions. ScriptCat acknowledges conflict risk. Rejected as too invasive. |
-| Multi-file ES module project IDE (ScriptFlow) | ScriptFlow is a standalone application for this exact use case. Implementing it in ScriptVault would duplicate ScriptFlow and require a bundler pipeline inside the extension. Rejected as out of scope for a manager. |
+| Multi-file ES module project IDE (ScriptFlow) | ScriptFlow is a standalone application for this exact use case. Implementing it in ScriptVault would duplicate ScriptFlow and require a bundler pipeline inside the extension. Rejected for this manager. |
 | Live HTML/CSS/JS preview window (ScriptFlow) | Same rationale as multi-file IDE. Rejected. |
 | Git repo integration (clone/commit in browser) | 13.7 covers script-file sync to git. Full clone/commit/push of arbitrary repos is a different product category. Rejected as scope creep beyond script management. |
 | `GM_openInTab` `useOpen` / `incognito` | ScriptCat-specific; very niche use cases (special-protocol URLs, incognito automation). Low demand signal. Deferred: Under Consideration. |
@@ -3798,10 +3798,10 @@ This appendix records ALL features considered for Phases 11–18, their final ti
 | Mobile support | Desktop-only Chrome extension. No mobile Chrome extension runtime for injecting userscripts. Rejected as platform limitation. |
 | CHIPS cookie partition in XHR | Nobody has implemented this yet; Chrome's cookie partitioning API is still evolving. Under Consideration once the Chrome API stabilizes. |
 | `@require-local` / local script as dependency | This is Phase 11 item 11.7's `@require` work extended. The `@require-local` pattern (referencing another installed script by ID as a dependency) is a valid extension of the `@require` SRI work. Under Consideration as Phase 11 follow-up. |
-| AI Agent / MCP integration (ScriptCat v1.4.0-beta) | ScriptCat v1.4.0-beta ships an AI Agent with MCP integration for generating and debugging scripts. Explicitly contradict's ScriptVault's anti-bloat philosophy (see CLAUDE.md deleted features). Rejected — not this project's mission. |
+| Hosted assistant / MCP integration (ScriptCat v1.4.0-beta) | ScriptCat v1.4.0-beta ships an assistant surface with MCP integration for generating and debugging scripts. Explicitly contradict's ScriptVault's anti-bloat philosophy (see CLAUDE.md deleted features). Rejected — not this project's mission. |
 | GM_webRequest (MV3) | Permanently dropped from Chrome MV3; TM v5.2+ removed it. `chrome.declarativeNetRequest` does not support per-request callbacks. Structural blocker. Rejected as MV3 architectural impossibility. |
 | Full OPFS migration (replace IDB entirely) | OPFS is ideal for large binary file storage but cannot serve as the metadata/index layer efficiently. IDB must remain as the metadata and query layer. Rejected for IDB replacement; OPFS used only as overflow for large script bodies (Phase 18.2). |
-| ClickRemix / AI-powered userscript generation | HN 2025 product hunt; AI writes userscripts from natural-language prompts. Validates market demand but directly contradicts ScriptVault's stated philosophy. Rejected per philosophy. |
+| ClickRemix / generated userscript workflow | HN 2025 product hunt; a model writes userscripts from natural-language prompts. Validates market demand but directly contradicts ScriptVault's stated philosophy. Rejected per philosophy. |
 | GM_wsConnectTo (TM #1483) | WebSocket proxy bypass via extension background; very niche use (scripts blocked from WebSocket by CSP). No active demand in ScriptVault tracker. Under Consideration for later phase if demand emerges. |
 | Anonymous XHR credential stripping | TM documents `anonymous: true` to strip cookies/credentials from GM_xmlhttpRequest. Low demand signal beyond existing `anonymous` mode in VM. Under Consideration as trivial addition to Phase 16. |
 
@@ -3809,7 +3809,7 @@ This appendix records ALL features considered for Phases 11–18, their final ti
 
 ## External Research (Round 10) — 2026 H1 Platform & Competitor Sweep
 
-**Date:** 2026-04 sweep covering Chrome 138-148, Violentmonkey v2.34.1-2.37.1, ScriptCat v0.16.13-0.16.14, and CWS publisher-side changes that landed since Round 9. Net-new signal concentrates in three areas: structured-clone messaging, on-device AI, and incremental author-DX directives that competitors shipped in the gap.
+**Date:** 2026-04 sweep covering Chrome 138-148, Violentmonkey v2.34.1-2.37.1, ScriptCat v0.16.13-0.16.14, and CWS publisher-side changes that landed since Round 9. Net-new signal concentrates in three areas: structured-clone messaging, on-device local models, and incremental author-DX directives that competitors shipped in the gap.
 
 ### Sources Cited (Round 10)
 
@@ -3852,7 +3852,7 @@ This appendix records ALL features considered for Phases 11–18, their final ti
 
 | Item | Why Rejected |
 |------|--------------|
-| Bundle Gemini Nano model fallback to OpenAI/Anthropic API | Network-dependent AI directly contradicts ScriptVault's local-first philosophy and would require API-key UX. Phase 36.2 stays Prompt-API-only or off. |
+| Bundle local model fallback to hosted model API | Network-dependent model calls directly contradict ScriptVault's local-first philosophy and would require API-key UX. Phase 36.2 stays Prompt-API-only or off. |
 | `SharedArrayBuffer` in messages | Not supported under structured-clone messaging; no use case in ScriptVault today. |
 | Mass extension-conversion tooling that turns scripts into standalone CRX (CWS role context) | Distribution tooling, not a manager feature. Already rejected in Round 8/9 list. |
 
@@ -3876,7 +3876,7 @@ Floor of 30-60 sources is exceeded across all 10 rounds combined (well over 200 
 
 ## Phase 38 — Round 11 Catch-up (May 2026)
 
-**Goal:** Track upstream releases and Chrome platform deltas published since the Round 10 cutoff (April 22, 2026). Sources: VM v2.37.0 (Apr 23 2026) + v2.37.1 beta, ScriptCat v1.4 (AI Agent system), Tampermonkey 5.5.6234–5.5.6237 (Jan–Apr 2026), no Chrome 149/150 extension-API surface changes worth a phase.
+**Goal:** Track upstream releases and Chrome platform deltas published since the Round 10 cutoff (April 22, 2026). Sources: VM v2.37.0 (Apr 23 2026) + v2.37.1 beta, ScriptCat v1.4 (hosted assistant system), Tampermonkey 5.5.6234–5.5.6237 (Jan–Apr 2026), no Chrome 149/150 extension-API surface changes worth a phase.
 
 ### 38.1 `GM_addElement` null-on-failure contract (VM v2.37.0 + TM 5.5.6237 parity) ✅ Shipped (2026-05-19)
 
@@ -3973,13 +3973,13 @@ VM v2.37.1 fixed a footgun where clicking the per-script "check for updates" ico
 
 **Status (2026-05-19):** ✅ Shipped. [`pages/dashboard.js`](pages/dashboard.js) new `interactiveCheckAndConfirmUpdate()` is wired to the per-row update icon's `click` handler. The function calls `checkUpdates` only — if an update is available it surfaces a three-button modal (`View diff` / `Install update` / `Cancel`) via the existing `showModal()` helper. "View diff" opens the existing `showDiffView` with old/new code and ping-pongs back to the confirmation. Right-click still triggers `checkScriptForUpdates(id, { force: true })` (cache-bypass force update). Bulk update + popup "update" entries keep calling the auto-install path because they have their own progress-modal confirmation surface.
 
-### 38.10 ScriptCat-style Agent API (Under Consideration)
+### 38.10 ScriptCat-style Assistant API (Under Consideration)
 
-ScriptCat v1.4 shipped a full **AI Agent system** under `CAT.agent.*` — multi-turn conversation, 11 built-in tools (web scraping, tab management, OPFS filesystem, code execution, dialogs), [MCP protocol](https://modelcontextprotocol.io/) integration, sub-agents, scheduled tasks, skill bundles. This is the largest 2026 leap by any userscript manager.
+ScriptCat v1.4 shipped a full **assistant system** under `CAT.agent.*` — multi-turn conversation, 11 built-in tools (web scraping, tab management, OPFS filesystem, code execution, dialogs), [MCP protocol](https://modelcontextprotocol.io/) integration, sub-agents, scheduled tasks, skill bundles. This is the largest 2026 leap by any userscript manager.
 
-- **Aligned with ScriptVault philosophy?** Mostly no. ScriptVault's stated principle is local-first, zero-telemetry. ScriptCat's agent assumes an LLM API endpoint — by default OpenAI- or Anthropic-compatible cloud — though it can in theory run against on-device Gemini Nano (Phase 36.2).
+- **Aligned with ScriptVault philosophy?** Mostly no. ScriptVault's stated principle is local-first, zero-telemetry. ScriptCat's assistant assumes a hosted model endpoint by default, though it can in theory run against an on-device model path (Phase 36.2).
 - **What's salvageable:** the **MCP client** path (talk to a user-configured local MCP server) is fully local-first. Userscripts could grant `@grant CAT.agent.mcp` and call tool servers running on `localhost:<port>` without network. This is a Phase 36.2 extension worth scoping.
-- **What's rejected:** the cloud-LLM defaults, the multi-turn chat UI, the sub-agent generator, and the skill marketplace — all require network and a UX surface that contradicts the focused-manager pitch.
+- **What's rejected:** the hosted-model defaults, the multi-turn chat UI, the sub-agent generator, and the skill marketplace — all require network and a UX surface that contradicts the focused-manager pitch.
 - Mark **Under Consideration** pending Phase 36.2 (Prompt API) shipping and a clear user request signal. Do not start implementation speculatively.
 - Source: [ScriptCat v1.4 changelog](https://docs.scriptcat.org/en/docs/change/v1.4/), [Model Context Protocol spec](https://modelcontextprotocol.io/specification).
 
@@ -4039,11 +4039,11 @@ _Net-new sources since Round 10 (April 22, 2026 cutoff). Numbered 218–230 to e
 219. https://github.com/violentmonkey/violentmonkey/releases — VM v2.37.1 beta (April 30, 2026): dashboard tabs split into "Settings | Update | Sync"; check-update click no longer force-installs; classic English-first sort restored.
 220. https://github.com/violentmonkey/violentmonkey/issues/2500 — GM_addElement contract issue.
 221. https://www.tampermonkey.net/changelog.php — Tampermonkey 5.5.6234 (Jan 15 2026), 5.5.6235 (Feb 13 2026), 5.5.6236 (Apr 2 2026), 5.5.6237 (Apr 10 2026).
-222. https://docs.scriptcat.org/en/docs/change/v1.4/ — ScriptCat v1.4 (2026): Agent system (CAT.agent.*), 11 built-in tools, MCP protocol, sub-agents, skill bundles, @unwrap, window.onurlchange via Navigation API, multi-platform script search engines.
+222. https://docs.scriptcat.org/en/docs/change/v1.4/ — ScriptCat v1.4 (2026): assistant system (CAT.agent.*), 11 built-in tools, MCP protocol, sub-agents, skill bundles, @unwrap, window.onurlchange via Navigation API, multi-platform script search engines.
 223. https://docs.scriptcat.org/en/docs/change/beta-changelog/ — ScriptCat beta channel (rolling, May 2026).
 
 **Platform & Standards (Round 11 net-new)**
-224. https://modelcontextprotocol.io/specification — Model Context Protocol spec (Anthropic, ratified 2024 Q4): tool-server JSON-RPC contract that ScriptCat v1.4 adopts.
+224. https://modelcontextprotocol.io/specification — Model Context Protocol spec: tool-server JSON-RPC contract that ScriptCat v1.4 adopts.
 225. https://developer.chrome.com/docs/web-platform/navigation-api — Navigation API (Chrome 102+): `navigation.addEventListener('navigate', ...)` for SPA URL change detection without polling.
 226. https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API — File System Access API (Chrome 86+): `showOpenFilePicker` + `FileSystemFileHandle.getFile().lastModified` polling for the open-local-file + watch pattern.
 227. https://developer.mozilla.org/en-US/docs/Web/API/FileSystemHandle/queryPermission — `queryPermission` / `requestPermission` on persisted file handles (handles survive SW restart but permission must be re-prompted).
@@ -4057,8 +4057,8 @@ _Net-new sources since Round 10 (April 22, 2026 cutoff). Numbered 218–230 to e
 
 | Item | Why Rejected |
 |------|--------------|
-| ScriptCat-style cloud-LLM Agent UI | Requires user-supplied API key + chat surface + telemetry-prone tool calls; directly contradicts ScriptVault's local-first / zero-telemetry positioning. Captured as 38.10 Under Consideration with the MCP-only subset. |
-| Sub-agent / skill marketplace (ScriptCat v1.4) | Distribution + curation problem disguised as a feature; requires moderation, hosting, abuse handling. Out of scope for a local manager. |
+| ScriptCat-style hosted assistant UI | Requires user-supplied API key + chat surface + telemetry-prone tool calls; directly contradicts ScriptVault's local-first / zero-telemetry positioning. Captured as 38.10 Under Consideration with the MCP-only subset. |
+| Sub-agent / skill marketplace (ScriptCat v1.4) | Distribution + curation problem disguised as a feature; requires moderation, hosting, abuse handling. Rejected for a local manager. |
 | Multi-platform script search engine selector (ScriptCat v1.4) | ScriptVault's existing GreasyFork integration + planned OpenUserJS integration (Phase 16.7) cover the addressable demand without a settings-bloat dropdown. |
 | TM Firefox proxy support in `GM_xmlhttpRequest` (5.5.6234) | Chrome MV3 doesn't expose per-request proxy controls to extensions; would require declarativeNetRequest rewrite per call, which is fragile. Re-evaluate when Chrome ships an equivalent API. |
 | Pre-warmed extra editor commands for touch devices (TM 5.5.6236) | Monaco already exposes the underlying commands; ScriptVault's editor toolbar covers the common cases. Adding a touch-mode toggle is settings bloat for a desktop-first audience. |
@@ -4098,7 +4098,7 @@ Sources cited inline; full URL index at end of phase. All items verified against
 
 | Status | Items |
 |---|---|
-| ✅ Shipped (runtime JS + TS mirror) | **39.9** Claude theme · **39.10** runtime user-scripts probe · **39.11** `@match-top`/`@exclude-top` (TS port + 12 regression tests, 2026-05-24) · **39.13** `GM_openInTab` blob URL re-routing (TS port + tests, 2026-05-24) · **39.22** CSP page-injection timeout-bound awaits (TS port, 2026-05-24) · **39.24** storage round-trip tests |
+| ✅ Shipped (runtime JS + TS mirror) | **39.9** warm-neutral theme · **39.10** runtime user-scripts probe · **39.11** `@match-top`/`@exclude-top` (TS port + 12 regression tests, 2026-05-24) · **39.13** `GM_openInTab` blob URL re-routing (TS port + tests, 2026-05-24) · **39.22** CSP page-injection timeout-bound awaits (TS port, 2026-05-24) · **39.24** storage round-trip tests |
 | ✅ Shipped (runtime JS only — TS mirror pending Phase 1.5 wave 5) | **39.16** crypto-scam install-time heuristic · **39.25** `@require` cache invalidation via orphan cleanup · **39.26** sync acknowledgment background handlers · **39.27** install-page incognito short-circuit · **39.28** `injectImmediately` for document-start · **39.29** omnibox keyword `sv` · **39.31** string-length clamps · **39.15** sortable exclude-list editor |
 | ✅ Audit complete, no code needed | **39.4** locale-length lint (CI test added) · **39.18** `confirm()` audit · **39.19** sourceURL emission · **39.20** `@icon` fallback (pre-existing) · **39.21** clearInterval N/A by design · **39.23** cross-realm Symbol.iterator guards (already in popup/sidepanel) · **39.12** menu-command user-activation (platform limitation) · **39.14** same-origin XHR shortcut (deferred — breaks @connect enforcement) |
 | ⚠️ Design doc scaffolded | **39.1** [release runbook](docs/release-runbook.md) · **39.2** [CWS API v2 cutover](docs/release-runbook.md) · **39.5** [`@require-provenance` Sigstore](docs/require-provenance-design.md) · **39.40** [MCP 2026 compliance](docs/mcp-2026-compliance.md) · **39.43** [WCAG 3 gap analysis](docs/wcag3-gap-analysis.md) · **Phase 33** [cross-browser WXT plan](docs/cross-browser-pipeline.md) |
@@ -4224,11 +4224,11 @@ TM 5.5.0 also added support for OS-policy-pushed userscripts: admins drop a `.us
 
 Source: [TM changelog 5.5.0](https://www.tampermonkey.net/changelog.php), [chrome.storage.managed reference](https://developer.chrome.com/docs/extensions/reference/api/storage#storage_areas).
 
-#### 39.9 "Claude" Editor Theme ✅ Shipped
+#### 39.9 Warm Neutral Editor Theme ✅ Shipped
 
-TM 5.5.0 ships a "Claude" Monaco theme. Trivial parity item — add a JSON theme file under `lib/monaco/themes/` and an entry in the theme dropdown (Phase 7 dashboard themes already infrastructure).
+TM 5.5.0 ships a warm Monaco theme. Trivial parity item — add a JSON theme file under `lib/monaco/themes/` and an entry in the theme dropdown (Phase 7 dashboard themes already infrastructure).
 
-**Status (2026-05-17):** Shipped. Warm-autumn palette (foreground `#e6d3b5`, keyword `#d97757`, comment `#8b7355`, cursor `#d97757`) defined in [`pages/editor-sandbox.html`](pages/editor-sandbox.html) as `sv-claude`, mapped via the existing `mapTheme()` switchboard, and surfaced in the dashboard editor-theme dropdown ([`pages/dashboard.html`](pages/dashboard.html) editor-settings section). No new dependency; pure JSON theme definition.
+**Status (2026-05-17):** Shipped. Warm-autumn palette (foreground `#e6d3b5`, keyword `#d97757`, comment `#8b7355`, cursor `#d97757`) defined in [`pages/editor-sandbox.html`](pages/editor-sandbox.html), mapped via the existing `mapTheme()` switchboard, and surfaced in the dashboard editor-theme dropdown ([`pages/dashboard.html`](pages/dashboard.html) editor-settings section). No new dependency; pure JSON theme definition.
 
 Source: [TM changelog 5.5.0](https://www.tampermonkey.net/changelog.php).
 
@@ -4481,14 +4481,14 @@ Source: [WECG #935](https://github.com/w3c/webextensions/issues/935).
 
 #### 39.32 Translator + Summarizer + Language Detector in Extensions
 
-Chrome **138 stable** brought the Translator, Summarizer, and Language Detector built-in AI APIs to extensions ([developer.chrome.com/docs/extensions/ai](https://developer.chrome.com/docs/extensions/ai)). Phase 36.2 plans for the Prompt API; these three additional APIs are higher-leverage for ScriptVault's specific surface.
+Chrome **138 stable** brought the Translator, Summarizer, and Language Detector built-in language APIs to extensions ([developer.chrome.com/docs/extensions/ai](https://developer.chrome.com/docs/extensions/ai)). Phase 36.2 plans for the Prompt API; these three additional APIs are higher-leverage for ScriptVault's specific surface.
 
 - **Summarizer**: 3-bullet plain-English summary of a script body in the install confirmation dialog. On-device; no API key. Gracefully hidden when `Summarizer.availability()` returns unavailable.
 - **Translator**: in-dashboard "Translate script description" button for non-English `@description` fields. Useful when browsing GreasyFork Russian/Chinese scripts.
 - **Language Detector**: detect the language of `@description` automatically; flag locale mismatches between author-declared `@name:zh-Hans` and the actual content language.
-- All three are **opt-in** under a new "Experimental → On-device AI" settings group (matches Phase 36.2's discoverability gating).
+- All three are **opt-in** under a new "Experimental → On-device analysis" settings group (matches Phase 36.2's discoverability gating).
 
-Source: [Built-in AI for Chrome Extensions](https://developer.chrome.com/docs/extensions/ai), [Translator API](https://developer.chrome.com/docs/ai/translator-api), [Summarizer API](https://developer.chrome.com/docs/ai/summarizer-api).
+Source: [Built-in language APIs for Chrome Extensions](https://developer.chrome.com/docs/extensions/ai), [Translator API](https://developer.chrome.com/docs/ai/translator-api), [Summarizer API](https://developer.chrome.com/docs/ai/summarizer-api).
 
 #### 39.33 Storage Buckets API for OPFS Isolation ⏳ Track — gated on Phase 18.2 (Phase 18.2 extension)
 
@@ -4567,7 +4567,7 @@ Playwright **1.60** added `tracing.startHar`, `locator.drop()`, and aria-snapsho
 
 Source: [Playwright releases](https://github.com/microsoft/playwright/releases).
 
-### MCP / On-Device AI (Long-Tail Extensions to Phase 36/38)
+### MCP / Local Model Experiments (Long-Tail Extensions to Phase 36/38)
 
 #### 39.40 MCP 2026 Spec Compliance Bar (gates Phase 38.10)
 
@@ -4581,14 +4581,14 @@ Phase 38.10 ("ScriptCat-style MCP-as-client") was Under Consideration. The Round
 
 Source: [MCP 2026 roadmap](https://blog.modelcontextprotocol.io/posts/2026-mcp-roadmap/), [Auth0 MCP auth update](https://auth0.com/blog/mcp-specs-update-all-about-auth/).
 
-**Status (2026-05-17):** ⚠️ Design doc scaffolded — implementation pending and gated on Phase 38.10 shipping. Full compliance bar in [`docs/mcp-2026-compliance.md`](docs/mcp-2026-compliance.md): per-server `@grant` model, locality classifier rejecting public hosts by default, `.well-known/mcp-discovery` mandatory, RFC 8707 Resource Indicators required, Tasks primitive with cancel/retry surfaced in dashboard, audit-log emission, explicit non-scope (no LLM agent UI, no sub-agent generator, no skill marketplace).
+**Status (2026-05-17):** ⚠️ Design doc scaffolded — implementation pending and gated on Phase 38.10 shipping. Full compliance bar in [`docs/mcp-2026-compliance.md`](docs/mcp-2026-compliance.md): per-server `@grant` model, locality classifier rejecting public hosts by default, `.well-known/mcp-discovery` mandatory, RFC 8707 Resource Indicators required, Tasks primitive with cancel/retry surfaced in dashboard, audit-log emission, explicit non-scope (no chat-style generator UI, no sub-agent generator, no skill marketplace).
 
 #### 39.41 Transformers.js v3 WebGPU Offline Static-Analysis Classifier ⏳ Track — R&D, behind flag (R&D, behind flag)
 
 [Transformers.js v3 with WebGPU](https://huggingface.co/blog/transformersjs-v3) is GA. A tiny classifier (e.g., distilbert-tiny ~10MB) could label installed scripts as "exfiltrates-cookies / fingerprint-heavy / obfuscated" at install time — complementing the existing AST risk scoring with model-driven classification.
 
 - R&D phase only — not in active planning.
-- Behind a feature flag in Settings → Experimental → AI.
+- Behind a feature flag in Settings → Experimental → Static analysis.
 - Critical constraint: must remain **on-device** (no network); model weights downloaded once and cached in OPFS (Phase 18.2 + Storage Buckets 39.33).
 - Stretch: train a ScriptVault-specific classifier on the 31 AST-detector outputs as features.
 
@@ -4681,7 +4681,7 @@ _Net-new sources since Round 11 (May 5 2026 cutoff). Numbered 231–272 to exten
 ### Source Index
 
 **Upstream Manager Releases (post-Round-11)**
-231. https://www.tampermonkey.net/changelog.php — Tampermonkey **5.5.0 (May 8 2026)**: MCP via "Tampermonkey Editors" companion, special-permission injection gate, OS-policy script provisioning, "Claude" Monaco theme, decoupled update check/install rolled to stable.
+231. https://www.tampermonkey.net/changelog.php — Tampermonkey **5.5.0 (May 8 2026)**: MCP via "Tampermonkey Editors" companion, special-permission injection gate, OS-policy script provisioning, warm Monaco theme, decoupled update check/install rolled to stable.
 232. https://github.com/violentmonkey/violentmonkey/releases — VM v2.37.1 stable, v2.37.2 (May 9 2026), v2.37.3-beta (May 10 2026 — opt-in page context-menu integration for `GM_registerMenuCommand`).
 233. https://github.com/scriptscat/scriptcat/releases — ScriptCat v1.4.0-beta.2 (May 6 2026): cloud-sync reliability hardening, agent tool-call memory leak fixes.
 234. https://github.com/greasemonkey/greasemonkey/commits/master — Greasemonkey **revival** May 12–15 2026: arantius landed 6 commits after ~14 months quiet. Invalidates the "GM is dead" baseline assumption from Rounds 1–11.
@@ -4708,7 +4708,7 @@ _Net-new sources since Round 11 (May 5 2026 cutoff). Numbered 231–272 to exten
 
 **Chrome Platform & WECG (Round 12 net-new)**
 253. https://developer.chrome.com/blog/chrome-149-beta — Chrome 149 beta (May 6 2026): `injectImmediately` flag on `scripting.executeScript`, omnibox API in MV3 SW, BFCache WebSocket disconnect (already covered).
-254. https://developer.chrome.com/docs/extensions/ai — Built-in AI APIs stable for extensions (Chrome 138+): Translator, Summarizer, Language Detector. Prompt API stable on hardware-gated path. Backs Phase 39.32.
+254. https://developer.chrome.com/docs/extensions/ai — Built-in language APIs stable for extensions (Chrome 138+): Translator, Summarizer, Language Detector. Hardware-gated prompt surface stable. Backs Phase 39.32.
 255. https://developer.chrome.com/blog/cws-api-v2 — CWS API v2 announcement; v1 sunsets **2026-10-15**. Backs Phase 39.2.
 256. https://developer.chrome.com/docs/webstore/program-policies — CWS program policies, including 75-char manifest name limit. Backs Phase 39.4.
 257. https://chromestatus.com/feature/5739224579964928 — Storage Buckets API (Chrome 122). Backs Phase 39.33.
@@ -4724,7 +4724,7 @@ _Net-new sources since Round 11 (May 5 2026 cutoff). Numbered 231–272 to exten
 265. https://blog.sigstore.dev/npm-provenance-ga/ — npm provenance GA via Sigstore. Backs Phase 39.5.
 266. https://thehackernews.com/2026/03/new-chrome-vulnerability-let-malicious.html — CVE-2026-0628 Chrome WebView tag policy CVSS 8.8 (already audited; no specific Phase 39 entry needed, captured here for completeness).
 
-**Standards & AI**
+**Standards & Local Models**
 267. https://blog.modelcontextprotocol.io/posts/2026-mcp-roadmap/ — MCP 2026 roadmap: `.well-known` discovery, OAuth 2.1 + RFC 8707, Tasks primitive. Backs Phase 39.40.
 268. https://auth0.com/blog/mcp-specs-update-all-about-auth/ — MCP auth spec update (June 2025). Backs Phase 39.40.
 269. https://huggingface.co/blog/transformersjs-v3 — Transformers.js v3 WebGPU GA. Backs Phase 39.41.
@@ -4747,10 +4747,10 @@ _Net-new sources since Round 11 (May 5 2026 cutoff). Numbered 231–272 to exten
 
 | Item | Why Rejected |
 |------|--------------|
-| ScriptCat-style cloud-LLM Agent UI (v1.4) | Re-rejected per Phase 38.10 — directly contradicts ScriptVault's local-first / zero-telemetry positioning. ScriptCat v1.4.0-beta.2 reinforces this with documented agent memory leaks. |
+| ScriptCat-style hosted assistant surface (v1.4) | Re-rejected per Phase 38.10 — directly contradicts ScriptVault's local-first / zero-telemetry positioning. ScriptCat v1.4.0-beta.2 reinforces this with documented memory leaks. |
 | `CAT_fileStorage` binary cloud storage | Re-rejected per Phase 38.10 + Round 8 — CWS policy conflict + maintenance burden. |
-| Bundled Gemini Nano fallback to cloud-LLM API | Already rejected in Round 10. Reaffirmed. |
-| "Cursor for Userscripts" / AI-userscript-generation pattern | Already rejected as Tweeks/ClickRemix in Round 8. The 56-point HN post in Jan 2026 confirms the demand but the rejection reasoning (philosophical mismatch with anti-bloat doctrine) holds. |
+| Bundled local classifier fallback to hosted model API | Already rejected in Round 10. Reaffirmed. |
+| "Cursor for Userscripts" / generated-userscript pattern | Already rejected as Tweeks/ClickRemix in Round 8. The 56-point HN post in Jan 2026 confirms the demand but the rejection reasoning (philosophical mismatch with anti-bloat doctrine) holds. |
 | To-Userscript / extension-to-userscript converter | Symmetric to the rejected script-to-extension compiler (Round 8) — distribution tooling, not manager scope. |
 | Sub-agent / skill marketplace (ScriptCat v1.4) | Already rejected as moderation+hosting burden disguised as a feature. |
 | WASM Component Model in-browser host | **NEW rejection** (Round 12) — server-side only in 2026 per BytecodeAlliance docs. Phase 32.1 explicitly deprioritized. |
