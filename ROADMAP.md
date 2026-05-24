@@ -4,7 +4,7 @@
 > Each phase is independently shippable. Later phases depend on earlier ones.
 >
 > **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, and `main` now has additional unreleased 2026-05-24 hardening/release commits including release artifact reconciliation and CWS runbook/audit-gate alignment. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
-> **2026-05-24 state:** 810 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; no GitHub issues or PRs are currently open.
+> **2026-05-24 state:** 812 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; no GitHub issues or PRs are currently open.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
 ---
@@ -254,12 +254,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
   - Verify: `npm run cws:check`; `npm audit --audit-level=high --omit=optional`; `npm run release:check:public`; `npm run check`.
   - Status: Shipped 2026-05-24. The runbook now documents the actual manual CWS API v2 flow and pending OIDC custody work; CI blocks on high+ npm audit failures; `npm run cws:check` validates CWS v4 tooling without credentials; CI runs both CWS tooling and release artifact parity checks with tags fetched.
 
-- [ ] P0 - Add release rollback and storage backward-compatibility drill
+- [x] P0 - Add release rollback and storage backward-compatibility drill
   - Why: Chrome rollback can protect users only if prior versions can read current stored data.
   - Evidence: S05, S06, L20, H003.
   - Touches: `scripts/`, `tests/storage*.test.js`, `src/storage/*`, `modules/storage.js`, `docs/release-runbook.md`.
   - Acceptance: A documented command tests upgrade and rollback across at least the previous public baseline and current manifest version.
-  - Verify: `npm run test -- tests/storage*.test.js` plus rollback-drill script.
+  - Verify: `npm run release:rollback-drill`; `npx vitest run tests/storage.test.js tests/storage-roundtrip.test.js tests/storage-rollback-drill.test.js`.
+  - Status: Shipped 2026-05-24. `npm run release:rollback-drill` now seeds the previous public `chrome.storage.local` shape, upgrades through current v3 storage migration, verifies current IDB reads, verifies rollback-readable legacy keys, and verifies the 30-day legacy wipe guard. CI and the release runbook now include the command; migration tombstones include script/value counts for status reporting.
 
 - [ ] P0 - Add signed artifact, SBOM, provenance, and package-diff release gate
   - Why: Browser extension compromise and marketplace-vetting research make release-package verification part of user trust.

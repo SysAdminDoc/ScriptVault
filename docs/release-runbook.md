@@ -18,8 +18,9 @@ Before any release branch is created:
 4. **CWS tooling green:** `npm run cws:check` confirms the installed `chrome-webstore-upload-cli` major, Node engine, removed flag usage, and credential names.
 5. **Locale lint green:** `tests/manifest-locales.test.js` passes - no locale's `extName` exceeds 75 chars, no `extDescription` exceeds 132 chars, all locales share the `en` key set.
 6. **Version sources synced:** `manifest.json`, `manifest-firefox.json`, `package.json`, and `package-lock.json` all point to the same target version.
-7. **Release artifact parity green:** `npm run release:check` passes locally; after the tag and GitHub Release are created, `npm run release:check:public` must pass.
-8. **CHANGELOG entry drafted:** one paragraph per shipped roadmap item, with `Phase X.Y` cross-references.
+7. **Rollback drill green:** `npm run release:rollback-drill` proves the previous public `chrome.storage.local` snapshot survives the current storage migration safety window.
+8. **Release artifact parity green:** `npm run release:check` passes locally; after the tag and GitHub Release are created, `npm run release:check:public` must pass.
+9. **CHANGELOG entry drafted:** one paragraph per shipped roadmap item, with `Phase X.Y` cross-references.
 
 If any gate fails, stop. Do not patch the test to make it green.
 
@@ -82,7 +83,7 @@ References: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/frega
 1. **Cut release branch** off `main`: `git checkout -b release/vX.Y.Z`.
 2. **Bump versions** in `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`. Use semver - patch for fixes, minor for additive features, major only for breaking changes.
 3. **Finalize CHANGELOG.md** entry for vX.Y.Z. Match the prose style of recent entries.
-4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run cws:check`, and `npm run release:check`.
+4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run cws:check`, `npm run release:rollback-drill`, and `npm run release:check`.
 5. **Build:** `npm run build:prod` then `bash build.sh`. Verify the produced ZIP loads in a clean Chrome profile.
 6. **Tag:** `git tag -a vX.Y.Z -m "Release vX.Y.Z - <one-line summary>"`.
 7. **Push commit and tag to GitHub.**
@@ -114,7 +115,19 @@ Within 24 hours of CWS listing update:
 4. Update [ROADMAP.md](../ROADMAP.md): mark shipped phase items with `Status: Shipped in vX.Y.Z`.
 5. Close any GitHub issues that this release resolves; cross-link the tag.
 
-## 7. Rollback procedure
+## 7. Storage rollback drill
+
+Run this before every release and after any storage or migration change:
+
+```bash
+npm run release:rollback-drill
+```
+
+The drill seeds the previous public baseline storage shape (`userscripts`, `values_*`, settings, and folders), upgrades through the current v3 migration path, verifies current IndexedDB reads, verifies a simulated rollback reader can still recover the legacy snapshot, and verifies the 30-day legacy-key wipe only runs after the safety window.
+
+This command is credential-free and runs in CI. A failure means do not publish: a browser/platform rollback may leave users on an older extension version that cannot read their current data.
+
+## 8. Rollback procedure
 
 If a critical regression surfaces post-release:
 
@@ -123,7 +136,7 @@ If a critical regression surfaces post-release:
 3. **Communicate** via the Codeberg mirror's README (mirrors to GitHub) and any active community channels.
 4. **Do not push a `-revert` tag.** Always roll forward.
 
-## 8. Open items (post-runbook)
+## 9. Open items (post-runbook)
 
 - [ ] GCP Secret Manager -> GitHub Actions OIDC bridge: implementation pending Phase 39.1. Current CWS publishing is local/manual.
 - [ ] Direct CWS API v2 status probe: wrap `publishers/PUBLISHER_ID/items/EXTENSION_ID:fetchStatus` once token custody is settled.

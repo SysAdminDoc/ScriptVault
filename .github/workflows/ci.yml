@@ -44,6 +44,9 @@ jobs:
       - name: Release artifact parity
         run: npm run release:check
 
+      - name: Release rollback storage drill
+        run: npm run release:rollback-drill
+
       - name: Typecheck
         run: npm run typecheck
 
