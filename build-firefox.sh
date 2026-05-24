@@ -11,13 +11,15 @@ ZIP_NAME="ScriptVault-firefox-v${VERSION}.zip"
 
 echo "Building ScriptVault for Firefox v$VERSION..."
 
-# Build background.js using the same esbuild pipeline as Chrome
+# Build background.js using the same esbuild pipeline as Chrome.
+# The legacy `build-background.sh` bash builder was removed once
+# esbuild.config.mjs reached parity (CLAUDE.md Round 10 history note).
 if [ -f "$SCRIPT_DIR/esbuild.config.mjs" ]; then
   echo "Building background.js via esbuild..."
   node "$SCRIPT_DIR/esbuild.config.mjs" --bg-only
-elif [ -f "$SCRIPT_DIR/build-background.sh" ]; then
-  echo "Building background.js from source modules..."
-  bash "$SCRIPT_DIR/build-background.sh"
+else
+  echo "Error: esbuild.config.mjs missing — cannot build background.js." >&2
+  exit 1
 fi
 
 # Clean previous build

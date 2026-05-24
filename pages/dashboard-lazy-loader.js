@@ -38,7 +38,11 @@ const LazyLoader = (() => {
     'dashboard-snippets.js',
   ];
 
-  // Modules loaded on demand (user action triggers)
+  // Modules loaded on demand (user action triggers).
+  // Note: the DevTools panel does NOT live here — it loads via its own
+  // dedicated `pages/devtools-panel.html` page (registered via the manifest
+  // `devtools_page`). The previous `devtools: 'devtools-panel-v2.js'` entry
+  // was orphaned (no caller, file removed in the repo-hygiene cleanup).
   const ON_DEMAND_MODULES = {
     whatsnew: 'dashboard-whatsnew.js',
     sharing: 'dashboard-sharing.js',
@@ -49,7 +53,6 @@ const LazyLoader = (() => {
     chains: 'dashboard-chains.js',
     gamification: 'dashboard-gamification.js',
     csp: 'dashboard-csp.js',
-    devtools: 'devtools-panel-v2.js',
   };
 
   /**
