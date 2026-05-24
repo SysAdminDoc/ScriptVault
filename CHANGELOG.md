@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Chrome 138+ userScripts onboarding
+
+- Centralized the runtime `chrome.userScripts.getScripts()` availability probe
+  behind `getExtensionStatus`, so popup, dashboard diagnostics, support
+  snapshots, repair, and registration share the same live setup state.
+- Added version-aware setup state/action/url fields for Chrome 138+ **Allow
+  User Scripts**, Chrome 120-137 **Developer Mode**, and unsupported browsers.
+- Updated runtime repair to stop trusting stale `_userScriptsAvailable`; it
+  now re-probes after the user enables the toggle and only re-registers scripts
+  when the API is actually available.
+- Refreshed popup/dashboard setup banners, README source-install instructions,
+  and focused status tests for the Chrome 138+ transition.
+
 ### 2026-05-24 — Release trust gate
 
 - Added `npm run release:trust` to inspect the built Chrome ZIP, generate

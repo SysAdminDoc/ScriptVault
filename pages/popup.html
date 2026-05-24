@@ -1048,15 +1048,15 @@
     </button>
 
     <!-- Setup Warning Banner (Chrome 138+) -->
-    <div class="setup-warning" id="setupWarning" role="status" aria-live="polite" aria-atomic="true">
+    <div class="setup-warning" id="setupWarning" role="status" aria-live="polite" aria-atomic="true" data-setup-state="unknown">
         <div class="setup-warning-title">
             <span aria-hidden="true">!</span>
-            <span>Setup Required</span>
+            <span class="setup-warning-title-text">Setup Required</span>
         </div>
         <div class="setup-warning-text">
-            User scripts are not enabled. Enable <strong>"Allow User Scripts"</strong> in extension settings or enable <strong>Developer Mode</strong>.
+            User scripts are not enabled. Chrome 138+ requires the per-extension "Allow User Scripts" toggle; Chrome 120-137 requires Developer Mode.
         </div>
-        <button class="setup-warning-link" id="btnOpenExtSettings" type="button">Open Extension Settings</button>
+        <button class="setup-warning-link" id="btnOpenExtSettings" type="button">Open Extension Details</button>
     </div>
 
     <!-- Phase 38.4 — @run-at context-menu scripts for the current tab.

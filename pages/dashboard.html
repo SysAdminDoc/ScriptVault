@@ -5450,13 +5450,13 @@
     <!-- View Settings moved to header -->
 
     <!-- Setup Warning Banner (Chrome 138+ / Developer Mode) — Phase 39.10 -->
-    <div class="setup-warning-banner" id="setupWarningBanner" style="display: none;">
+    <div class="setup-warning-banner" id="setupWarningBanner" style="display: none;" data-setup-state="unknown">
         <div class="setup-warning-content">
             <span class="setup-warning-icon" aria-hidden="true">!</span>
             <div class="setup-warning-text" id="setupWarningText">
                 <strong>Setup Required:</strong> User scripts are not enabled.
-                For Chrome 138+, enable <strong>"Allow User Scripts"</strong> in extension settings.
-                For older Chrome versions, enable <strong>Developer Mode</strong> in chrome://extensions.
+                Chrome 138+ requires the per-extension <strong>"Allow User Scripts"</strong> toggle.
+                Chrome 120-137 requires <strong>Developer Mode</strong> in chrome://extensions.
             </div>
             <button type="button" class="btn btn-warning" id="btnOpenExtensionDetails">Open Extension Details</button>
             <button type="button" class="btn btn-warning" id="btnSetupHelp">How to Enable</button>

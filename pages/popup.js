@@ -27,6 +27,7 @@
     let allScripts = [];
     let settings = {};
     let userScriptsAvailable = true;
+    let setupStatus = null;
     let popupToastTimer = null;
     const MATCHABLE_PROTOCOLS = new Set(['http:', 'https:', 'file:', 'ftp:']);
     const busyControls = new WeakSet();
@@ -370,6 +371,43 @@
         return `<span class="${classes.join(' ')}"${style}>${mode === 'none' ? '' : escapeHtml(label)}</span>`;
     }
     
+    function getPopupChromeVersion() {
+        const match = navigator.userAgent.match(/(?:Chrome|Chromium)\/(\d+)/);
+        return match ? Number.parseInt(match[1], 10) : 0;
+    }
+
+    function buildPopupSetupFallback(message = '') {
+        const chromeVersion = getPopupChromeVersion();
+        if (chromeVersion >= 138) {
+            return {
+                setupState: 'allow-user-scripts-disabled',
+                setupTitle: 'Allow User Scripts is off',
+                setupMessage: message || 'Open Extension Details, enable "Allow User Scripts" for ScriptVault, then reopen the popup; reload the extension if this banner remains.',
+                setupAction: 'Open Extension Details',
+                setupUrl: `chrome://extensions/?id=${chrome.runtime.id}`,
+                chromeVersion
+            };
+        }
+        if (chromeVersion >= 120) {
+            return {
+                setupState: 'developer-mode-disabled',
+                setupTitle: 'Developer Mode required',
+                setupMessage: message || 'Open chrome://extensions and enable Developer Mode to run userscripts.',
+                setupAction: 'Open Extensions Page',
+                setupUrl: 'chrome://extensions',
+                chromeVersion
+            };
+        }
+        return {
+            setupState: 'unsupported-browser',
+            setupTitle: 'Unsupported browser',
+            setupMessage: message || 'ScriptVault userscripts require Chrome 120 or newer.',
+            setupAction: 'Open Extensions Page',
+            setupUrl: 'chrome://extensions',
+            chromeVersion
+        };
+    }
+
     // Check if userScripts API is available and enabled
     async function checkUserScriptsAvailability() {
         try {
@@ -378,7 +416,7 @@
             userScriptsAvailable = status?.userScriptsAvailable !== false;
 
             if (!userScriptsAvailable) {
-                showSetupWarning(status?.setupMessage);
+                showSetupWarning(status);
             } else {
                 hideSetupWarning();
             }
@@ -386,7 +424,7 @@
             // Fallback: check directly
             if (!chrome.userScripts) {
                 userScriptsAvailable = false;
-                showSetupWarning();
+                showSetupWarning(buildPopupSetupFallback());
             } else {
                 try {
                     await chrome.userScripts.getScripts();
@@ -394,24 +432,36 @@
                     hideSetupWarning();
                 } catch (e) {
                     userScriptsAvailable = false;
-                    showSetupWarning();
+                    showSetupWarning(buildPopupSetupFallback(e?.message));
                 }
             }
         }
     }
 
-    function showSetupWarning(message) {
+    function showSetupWarning(statusOrMessage) {
         if (elements.setupWarning) {
+            const status = typeof statusOrMessage === 'string'
+                ? buildPopupSetupFallback(statusOrMessage)
+                : (statusOrMessage || buildPopupSetupFallback());
+            setupStatus = status;
             elements.setupWarning.classList.add('visible');
+            elements.setupWarning.dataset.setupState = status.setupState || 'unknown';
+            const titleEl = elements.setupWarning.querySelector('.setup-warning-title-text');
+            if (titleEl && status.setupTitle) titleEl.textContent = status.setupTitle;
             // Keep the warning title/icon intact and update only the explanatory text.
             const msgEl = elements.setupWarning.querySelector('.setup-warning-text');
-            if (msgEl && message) msgEl.textContent = message;
+            if (msgEl && status.setupMessage) msgEl.textContent = status.setupMessage;
+            if (elements.btnOpenExtSettings && status.setupAction) {
+                elements.btnOpenExtSettings.textContent = status.setupAction;
+            }
         }
     }
 
     function hideSetupWarning() {
+        setupStatus = null;
         if (elements.setupWarning) {
             elements.setupWarning.classList.remove('visible');
+            delete elements.setupWarning.dataset.setupState;
         }
     }
 
@@ -1467,8 +1517,8 @@
         
         // Setup warning - Open extension settings
         elements.btnOpenExtSettings?.addEventListener('click', () => {
-            const extensionId = chrome.runtime.id;
-            chrome.tabs.create({ url: `chrome://extensions/?id=${extensionId}` });
+            const targetUrl = setupStatus?.setupUrl || `chrome://extensions/?id=${chrome.runtime.id}`;
+            chrome.tabs.create({ url: targetUrl });
             window.close();
         });
 

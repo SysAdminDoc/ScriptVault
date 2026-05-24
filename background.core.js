@@ -1808,66 +1808,26 @@ async function handleMessage(message, sender) {
       }
 
       case 'getExtensionStatus': {
-        const ver = _getChromeVersion();
-        // Live probe — the cached flag in settings can drift after the user
-        // toggles "Allow User Scripts" in chrome://extensions because Chrome
-        // doesn't always cycle the SW. Trust the runtime check, then refresh
-        // the cache so other paths agree.
-        let userScriptsAvailable = !!chrome.userScripts;
-        if (userScriptsAvailable) {
-          try {
-            await chrome.userScripts.getScripts();
-          } catch (e) {
-            userScriptsAvailable = false;
-          }
+        let status = await probeUserScriptsAvailability();
+        // The toggle may have flipped on while the SW was already running.
+        // Configure the world now so script registration works on next save.
+        if (status.userScriptsAvailable) {
+          status = await configureUserScriptsWorld(status);
         }
-        if (userScriptsAvailable) {
-          await SettingsManager.set({ _userScriptsAvailable: true, _chromeVersion: ver });
-          // The toggle may have flipped on while the SW was already running —
-          // configure the world now so script registration works on next save.
-          try { await configureUserScriptsWorld(); } catch (e) {}
-        } else {
-          await SettingsManager.set({ _userScriptsAvailable: false, _chromeVersion: ver });
-        }
-        let setupRequired = false;
-        let setupMessage = '';
-        if (!userScriptsAvailable) {
-          setupRequired = true;
-          if (ver >= 138) {
-            setupMessage = 'Enable "Allow User Scripts" for ScriptVault in chrome://extensions';
-          } else if (ver >= 120) {
-            setupMessage = 'Enable Developer Mode in chrome://extensions to run userscripts';
-          } else {
-            setupMessage = 'Chrome 120 or newer is required';
-          }
-        }
-        return { userScriptsAvailable, setupRequired, setupMessage, chromeVersion: ver };
+        return status;
       }
 
       case 'repairRuntimeState': {
         try {
-          await configureUserScriptsWorld();
+          const status = await configureUserScriptsWorld();
           await setupContextMenus();
-          await registerAllScripts(true);
+          if (status.userScriptsAvailable) {
+            await registerAllScripts(true);
+          }
           await updateBadge();
           await setupAlarms();
 
-          const settings = await SettingsManager.get();
-          const ver = settings._chromeVersion || _getChromeVersion();
-          const userScriptsAvailable = settings._userScriptsAvailable !== false && !!chrome.userScripts;
-          let setupRequired = false;
-          let setupMessage = '';
-          if (!userScriptsAvailable) {
-            setupRequired = true;
-            if (ver >= 138) {
-              setupMessage = 'Enable "Allow User Scripts" for ScriptVault in chrome://extensions';
-            } else if (ver >= 120) {
-              setupMessage = 'Enable Developer Mode in chrome://extensions to run userscripts';
-            } else {
-              setupMessage = 'Chrome 120 or newer is required';
-            }
-          }
-          return { success: true, userScriptsAvailable, setupRequired, setupMessage, chromeVersion: ver };
+          return { success: true, ...status };
         } catch (error) {
           return { success: false, error: error?.message || 'Runtime repair failed' };
         }
@@ -5585,51 +5545,141 @@ async function cleanupStaleCaches() {
 // Detect Chrome major version from user agent (available in service worker via self.navigator)
 function _getChromeVersion() {
   try {
-    const m = (self.navigator?.userAgent || '').match(/Chrome\/(\d+)/);
+    const m = (self.navigator?.userAgent || '').match(/(?:Chrome|Chromium)\/(\d+)/);
     return m ? parseInt(m[1], 10) : 0;
   } catch (e) {
     return 0;
   }
 }
 
-// Configure the userScripts execution world
-async function configureUserScriptsWorld() {
+function getExtensionDetailsUrl() {
   try {
-    // Check if userScripts API is available
-    if (!chrome.userScripts) {
-      // Determine why: Chrome 120+ requires either Developer Mode (pre-138)
-      // or the "Allow User Scripts" toggle (138+)
-      const ver = _getChromeVersion();
-      if (ver >= 138) {
-        console.warn('[ScriptVault] userScripts API not available — enable the "Allow User Scripts" toggle in chrome://extensions for ScriptVault');
-      } else if (ver >= 120) {
-        console.warn('[ScriptVault] userScripts API not available — enable Developer Mode in chrome://extensions');
-      } else {
-        console.warn('[ScriptVault] userScripts API not available — Chrome 120+ required');
-      }
-      await SettingsManager.set({ _userScriptsAvailable: false, _chromeVersion: ver });
-      return;
+    if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
+      return `chrome://extensions/?id=${chrome.runtime.id}`;
     }
+  } catch (e) {
+    // Fall through to the generic extensions page.
+  }
+  return 'chrome://extensions';
+}
 
-    await SettingsManager.set({ _userScriptsAvailable: true, _chromeVersion: _getChromeVersion() });
+function buildUserScriptsStatus({ userScriptsAvailable, chromeVersion = _getChromeVersion(), probeError = '' }) {
+  let setupState = 'available';
+  let setupTitle = '';
+  let setupMessage = '';
+  let setupAction = '';
+  let setupUrl = '';
 
+  if (!userScriptsAvailable) {
+    if (chromeVersion >= 138) {
+      setupState = 'allow-user-scripts-disabled';
+      setupTitle = 'Allow User Scripts is off';
+      setupMessage = 'Open Extension Details, enable "Allow User Scripts" for ScriptVault, then refresh status; reload the extension if this banner remains.';
+      setupAction = 'Open Extension Details';
+      setupUrl = getExtensionDetailsUrl();
+    } else if (chromeVersion >= 120) {
+      setupState = 'developer-mode-disabled';
+      setupTitle = 'Developer Mode required';
+      setupMessage = 'Open chrome://extensions and enable Developer Mode to run userscripts.';
+      setupAction = 'Open Extensions Page';
+      setupUrl = 'chrome://extensions';
+    } else {
+      setupState = 'unsupported-browser';
+      setupTitle = 'Unsupported browser';
+      setupMessage = 'ScriptVault userscripts require Chrome 120 or newer.';
+      setupAction = 'Open Extensions Page';
+      setupUrl = 'chrome://extensions';
+    }
+  }
+
+  const status = {
+    userScriptsAvailable,
+    setupRequired: !userScriptsAvailable,
+    setupMessage,
+    chromeVersion,
+    setupState,
+    setupTitle,
+    setupAction,
+    setupUrl
+  };
+  if (probeError) {
+    status.apiProbeError = String(probeError);
+  }
+  return status;
+}
+
+async function persistUserScriptsStatus(status) {
+  try {
+    await SettingsManager.set({
+      _userScriptsAvailable: status.userScriptsAvailable,
+      _chromeVersion: status.chromeVersion
+    });
+  } catch (e) {
+    console.warn('[ScriptVault] Failed to persist userScripts status:', e);
+  }
+}
+
+async function probeUserScriptsAvailability() {
+  const chromeVersion = _getChromeVersion();
+  let userScriptsAvailable = false;
+  let probeError = '';
+
+  try {
+    if (!chrome.userScripts || typeof chrome.userScripts.getScripts !== 'function') {
+      probeError = 'chrome.userScripts is unavailable';
+    } else {
+      await chrome.userScripts.getScripts();
+      userScriptsAvailable = true;
+    }
+  } catch (e) {
+    probeError = e?.message || String(e || 'chrome.userScripts probe failed');
+  }
+
+  const status = buildUserScriptsStatus({ userScriptsAvailable, chromeVersion, probeError });
+  await persistUserScriptsStatus(status);
+  return status;
+}
+
+function logUserScriptsSetupWarning(status) {
+  const message = status?.setupMessage || 'userScripts API not available';
+  console.warn(`[ScriptVault] ${message}`);
+}
+
+// Configure the userScripts execution world
+async function configureUserScriptsWorld(status = null) {
+  const availability = status || await probeUserScriptsAvailability();
+  if (!availability.userScriptsAvailable) {
+    logUserScriptsSetupWarning(availability);
+    return availability;
+  }
+
+  try {
     // Configure the default USER_SCRIPT world
     await chrome.userScripts.configureWorld({
       csp: "script-src 'self' 'unsafe-inline' 'unsafe-eval' *",
       messaging: true
     });
 
-    debugLog('userScripts world configured (Chrome', _getChromeVersion(), ')');
+    debugLog('userScripts world configured (Chrome', availability.chromeVersion, ')');
+    return availability;
   } catch (e) {
     console.error('[ScriptVault] Failed to configure userScripts world:', e);
+    const failedStatus = buildUserScriptsStatus({
+      userScriptsAvailable: false,
+      chromeVersion: availability.chromeVersion,
+      probeError: e?.message || String(e || 'chrome.userScripts.configureWorld failed')
+    });
+    await persistUserScriptsStatus(failedStatus);
+    return failedStatus;
   }
 }
 
 // Register all enabled scripts with the userScripts API
 async function registerAllScripts(forceReregister = false) {
   try {
-    if (!chrome.userScripts) {
-      console.warn('[ScriptVault] userScripts API not available');
+    const availability = await probeUserScriptsAvailability();
+    if (!availability.userScriptsAvailable) {
+      logUserScriptsSetupWarning(availability);
       return;
     }
 

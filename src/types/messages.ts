@@ -199,11 +199,22 @@ interface ResetSettings {
 interface GetExtensionStatus {
   action: 'getExtensionStatus';
 }
+type UserScriptsSetupState =
+  | 'available'
+  | 'allow-user-scripts-disabled'
+  | 'developer-mode-disabled'
+  | 'unsupported-browser';
+
 interface ExtensionStatusResponse {
   userScriptsAvailable: boolean;
   setupRequired: boolean;
   setupMessage: string;
   chromeVersion: number;
+  setupState: UserScriptsSetupState;
+  setupTitle: string;
+  setupAction: string;
+  setupUrl: string;
+  apiProbeError?: string;
 }
 
 // ─── Per-Script Settings ─────────────────────────────────────────────
@@ -912,6 +923,10 @@ interface GetExtensionInfo {
   action: 'getExtensionInfo';
 }
 
+interface RepairRuntimeState {
+  action: 'repairRuntimeState';
+}
+
 interface PrefetchResources {
   action: 'prefetchResources';
   resources: string[];
@@ -1035,7 +1050,7 @@ export type BackgroundMessage =
   // Tabs
   | GetScriptsForUrl | UpdateBadgeForTab | GMFocusTab | GMCloseTab
   // Extension info
-  | GetExtensionInfo | PrefetchResources | Restart
+  | GetExtensionInfo | RepairRuntimeState | PrefetchResources | Restart
   // Script value editor
   | GetAllScriptsValues | SetScriptValue | DeleteScriptValue
   | ClearScriptStorageMsg | RenameScriptValue;
@@ -1116,6 +1131,7 @@ export interface ResponseMap {
   setScriptSettings: SuccessOrError;
   resetSettings: unknown;
   getExtensionStatus: ExtensionStatusResponse;
+  repairRuntimeState: SuccessOrError<ExtensionStatusResponse>;
 
   // ── Version history ────────────────────────────────────────────────
   getVersionHistory: VersionHistoryResponse;
