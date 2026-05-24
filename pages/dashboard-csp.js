@@ -309,12 +309,17 @@ const CSPReporter = (() => {
   overflow: hidden;
 }
 .sv-csp-bypass-header {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
+  border: 0;
   background: var(--bg-header, #252525);
+  color: inherit;
   cursor: pointer;
+  font: inherit;
+  text-align: left;
   user-select: none;
 }
 .sv-csp-bypass-header h4 {
@@ -331,6 +336,9 @@ const CSPReporter = (() => {
   display: block;
 }
 .sv-csp-bypass-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   background: rgba(251, 191, 36, 0.1);
   border: 1px solid var(--accent-yellow, #fbbf24);
   border-radius: 6px;
@@ -339,6 +347,19 @@ const CSPReporter = (() => {
   font-size: 12px;
   color: var(--accent-yellow, #fbbf24);
   line-height: 1.4;
+}
+.sv-csp-warning-mark {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(251, 191, 36, 0.48);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
 }
 .sv-csp-bypass-row {
   display: flex;
@@ -361,11 +382,17 @@ const CSPReporter = (() => {
   position: relative;
   width: 36px;
   height: 20px;
+  border: 0;
   border-radius: 10px;
   background: var(--toggle-off, #555);
   cursor: pointer;
   transition: background 0.2s;
   flex-shrink: 0;
+  padding: 0;
+}
+.sv-csp-bypass-toggle:focus-visible {
+  outline: 2px solid var(--accent-green, #4ade80);
+  outline-offset: 2px;
 }
 .sv-csp-bypass-toggle.on {
   background: var(--toggle-on, #22c55e);
@@ -383,6 +410,12 @@ const CSPReporter = (() => {
 }
 .sv-csp-bypass-toggle.on::after {
   transform: translateX(16px);
+}
+.sv-csp-empty-inline {
+  color: var(--text-muted, #707070);
+  font-size: 12px;
+  text-align: center;
+  padding: 16px;
 }
 
 /* Empty state */
@@ -669,7 +702,7 @@ const CSPReporter = (() => {
     if (filtered.length === 0) {
       wrap.innerHTML = `
         <div class="sv-csp-empty">
-          <div class="sv-csp-empty-icon">\u{1F6E1}</div>
+          <div class="sv-csp-empty-icon" aria-hidden="true">CSP</div>
           <div class="sv-csp-empty-text">${_filter ? 'No issues match your filter.' : 'No CSP issues recorded yet.'}</div>
         </div>
       `;
@@ -703,7 +736,7 @@ const CSPReporter = (() => {
           <td>${escapeHtml(row.scriptNames)}</td>
           <td>${row.count}</td>
           <td>${formatDate(row.lastSeen)}</td>
-          <td><button class="sv-csp-btn" data-show-fix="${escapeHtml(row.directive)}" data-row="${escapeHtml(row.key)}" style="padding:3px 8px;font-size:10px">\u{1F527} Fix</button></td>
+          <td><button class="sv-csp-btn" data-show-fix="${escapeHtml(row.directive)}" data-row="${escapeHtml(row.key)}" style="padding:3px 8px;font-size:10px">View Fix</button></td>
         </tr>
         <tr class="sv-csp-suggestion-row" data-suggestion-for="${escapeHtml(row.key)}">
           <td colspan="7">${renderSuggestions(row.directive)}</td>
@@ -793,27 +826,30 @@ const CSPReporter = (() => {
     const panel = document.createElement('div');
     panel.className = 'sv-csp-bypass-panel';
 
-    const headerEl = document.createElement('div');
+    const headerEl = document.createElement('button');
     headerEl.className = 'sv-csp-bypass-header';
+    headerEl.type = 'button';
+    headerEl.setAttribute('aria-expanded', 'false');
+    headerEl.setAttribute('aria-controls', 'svCspBypassBody');
     headerEl.innerHTML = `
-      <h4>\u{1F6E1} CSP Bypass Settings</h4>
-      <span style="color:var(--text-muted);font-size:11px">\u25BC</span>
+      <h4>CSP Bypass Settings</h4>
+      <span class="sv-csp-bypass-caret" style="color:var(--text-muted);font-size:11px" aria-hidden="true">\u25BC</span>
     `;
     panel.appendChild(headerEl);
 
     const body = document.createElement('div');
+    body.id = 'svCspBypassBody';
     body.className = 'sv-csp-bypass-body';
 
     body.innerHTML = `
-      <div class="sv-csp-bypass-warning">
-        \u26A0\uFE0F <strong>Security Warning:</strong> Stripping CSP headers removes important security
-        protections. Only enable bypass for sites where you trust the scripts you are running.
-        This uses declarativeNetRequest to remove Content-Security-Policy headers.
+      <div class="sv-csp-bypass-warning" role="alert">
+        <span class="sv-csp-warning-mark" aria-hidden="true">!</span>
+        <span><strong>Security warning.</strong> Stripping CSP headers removes important browser protections. Only enable bypass for sites where you trust the scripts you are running. ScriptVault uses declarativeNetRequest to remove Content-Security-Policy headers for the selected host.</span>
       </div>
     `;
 
     if (hostnames.length === 0) {
-      body.innerHTML += '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:16px">No sites with CSP issues recorded.</div>';
+      body.innerHTML += '<div class="sv-csp-empty-inline">No sites with CSP issues recorded.</div>';
     } else {
       for (const host of hostnames) {
         const isEnabled = _bypassSettings[host] && _bypassSettings[host].enabled;
@@ -821,8 +857,8 @@ const CSPReporter = (() => {
         row.className = 'sv-csp-bypass-row';
         row.innerHTML = `
           <span class="sv-csp-bypass-host">${escapeHtml(host)}</span>
-          <span style="font-size:11px;color:var(--text-muted)">${isEnabled ? 'Bypass ON' : 'Bypass OFF'}</span>
-          <div class="sv-csp-bypass-toggle ${isEnabled ? 'on' : ''}" data-bypass-host="${host}"></div>
+          <span class="sv-csp-bypass-state" style="font-size:11px;color:var(--text-muted)">${isEnabled ? 'Bypass ON' : 'Bypass OFF'}</span>
+          <button type="button" class="sv-csp-bypass-toggle ${isEnabled ? 'on' : ''}" data-bypass-host="${escapeHtml(host)}" role="switch" aria-checked="${isEnabled ? 'true' : 'false'}" aria-label="${isEnabled ? 'Disable' : 'Enable'} CSP bypass for ${escapeHtml(host)}"></button>
         `;
         body.appendChild(row);
 
@@ -830,7 +866,9 @@ const CSPReporter = (() => {
           const tog = row.querySelector('.sv-csp-bypass-toggle');
           const nowOn = !tog.classList.contains('on');
           tog.classList.toggle('on', nowOn);
-          row.querySelector('span:nth-child(2)').textContent = nowOn ? 'Bypass ON' : 'Bypass OFF';
+          tog.setAttribute('aria-checked', String(nowOn));
+          tog.setAttribute('aria-label', `${nowOn ? 'Disable' : 'Enable'} CSP bypass for ${host}`);
+          row.querySelector('.sv-csp-bypass-state').textContent = nowOn ? 'Bypass ON' : 'Bypass OFF';
 
           if (!_bypassSettings[host]) _bypassSettings[host] = { enabled: false, directives: [] };
           _bypassSettings[host].enabled = nowOn;
@@ -852,7 +890,10 @@ const CSPReporter = (() => {
 
     headerEl.addEventListener('click', () => {
       body.classList.toggle('visible');
-      headerEl.querySelector('span').textContent = body.classList.contains('visible') ? '\u25B2' : '\u25BC';
+      const isVisible = body.classList.contains('visible');
+      headerEl.setAttribute('aria-expanded', String(isVisible));
+      const caret = headerEl.querySelector('.sv-csp-bypass-caret');
+      if (caret) caret.textContent = isVisible ? '\u25B2' : '\u25BC';
     });
   }
 

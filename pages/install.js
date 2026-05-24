@@ -301,11 +301,13 @@ async function init() {
         const extId = (typeof chrome?.runtime?.id === 'string') ? chrome.runtime.id : '';
         const detailsHref = extId ? `chrome://extensions/?id=${encodeURIComponent(extId)}` : 'chrome://extensions/';
         content.innerHTML = `
-          <div class="install-error" style="margin:24px;padding:16px;border:1px solid rgba(249,115,22,0.4);border-radius:8px;background:rgba(249,115,22,0.08)">
-            <h2 style="margin:0 0 8px;font-size:18px">ScriptVault is not allowed in private windows</h2>
-            <p style="margin:0 0 12px">This script can't be installed from an incognito window because ScriptVault doesn't have permission to run there.</p>
-            <p style="margin:0 0 12px">Open the extension details page and toggle <strong>"Allow in Incognito"</strong>, then re-open the script URL in a private window — or install it from a regular window.</p>
-            <p style="margin:0"><a href="${escapeHtml(detailsHref)}" target="_blank" rel="noopener">Open extension details ↗</a></p>
+          <div class="install-terminal error" role="alert" aria-live="assertive" aria-atomic="true" aria-labelledby="installTerminalTitle" aria-describedby="installTerminalMessage">
+            <div class="install-state-mark is-warning error-icon" aria-hidden="true">!</div>
+            <div class="error-title" id="installTerminalTitle">ScriptVault is not allowed in private windows</div>
+            <div class="error-message" id="installTerminalMessage">This script cannot be installed from an incognito window until ScriptVault is allowed to use extension storage there. Enable <strong>Allow in Incognito</strong>, then re-open the script URL, or install from a regular window.</div>
+            <div class="error-actions actions">
+              <a class="btn btn-secondary" href="${escapeHtml(detailsHref)}" target="_blank" rel="noopener">Open Extension Details</a>
+            </div>
           </div>
         `;
       }
@@ -1605,7 +1607,13 @@ function showInstallError(message) {
   errorEl.setAttribute('aria-live', 'assertive');
   errorEl.setAttribute('aria-atomic', 'true');
   errorEl.tabIndex = -1;
-  errorEl.innerHTML = `<span>\u26A0\uFE0F</span> ${escapeHtml(message)}`;
+  errorEl.innerHTML = `
+    <span class="install-inline-mark" aria-hidden="true">!</span>
+    <span class="install-error-message">
+      <span>${escapeHtml(message)}</span>
+      <span class="install-error-helper">No script was saved. Review the install details, then try again.</span>
+    </span>
+  `;
   errorEl.style.display = 'flex';
   errorEl.focus({ preventScroll: true });
 }
@@ -1620,13 +1628,14 @@ function clearInstallError() {
 function showError(title, message) {
   setReviewExitGuard(false);
   const content = document.getElementById('content');
+  if (!content) return;
   content.innerHTML = `
-    <div class="error" role="alert" aria-live="assertive">
-      <div class="error-icon">\u274C</div>
-      <div class="error-title">${escapeHtml(title)}</div>
-      <div class="error-message">${escapeHtml(message)}</div>
-      <div class="actions" style="justify-content: center;">
-        <button class="btn btn-secondary" id="btnCloseError" type="button" style="flex:none;min-width:120px">Close</button>
+    <div class="error install-terminal" role="alert" aria-live="assertive" aria-atomic="true" aria-labelledby="installTerminalTitle" aria-describedby="installTerminalMessage">
+      <div class="install-state-mark is-error error-icon" aria-hidden="true">!</div>
+      <div class="error-title" id="installTerminalTitle">${escapeHtml(title)}</div>
+      <div class="error-message" id="installTerminalMessage">${escapeHtml(message)}</div>
+      <div class="error-actions actions">
+        <button class="btn btn-secondary" id="btnCloseError" type="button">Close Review</button>
       </div>
     </div>
   `;
@@ -1641,20 +1650,30 @@ function showError(title, message) {
 function showSuccess(name, action, scriptId) {
   setReviewExitGuard(false);
   const content = document.getElementById('content');
+  if (!content) return;
   const titleMap = {
     installed: 'Script Installed',
     updated: 'Script Updated',
     downgraded: 'Script Downgraded',
     reinstalled: 'Script Reinstalled'
   };
+  const statusCopy = enableOnInstall
+    ? `${name} is active now. You can inspect settings, storage, and update history from the dashboard.`
+    : `${name} was saved disabled. Enable it from the dashboard when you are ready to let it run.`;
+  const nextStepCopy = action === 'downgraded'
+    ? 'Version changes are applied immediately, but the script keeps your existing per-script settings.'
+    : action === 'updated'
+      ? 'Existing script settings and stored values were preserved during the update.'
+      : 'ScriptVault saved the script locally before leaving the install review.';
   content.innerHTML = `
-    <div class="success" role="status" aria-live="polite" aria-atomic="true">
-      <div class="success-icon">\u2705</div>
-      <div class="success-title">${escapeHtml(titleMap[action] || 'Script Installed')}!</div>
-      <div class="success-message">${escapeHtml(name)} is now ${enableOnInstall ? 'active' : 'installed but disabled'}.</div>
+    <div class="success install-terminal" role="status" aria-live="polite" aria-atomic="true" aria-labelledby="installTerminalTitle" aria-describedby="installTerminalMessage">
+      <div class="install-state-mark is-success success-icon" aria-hidden="true">OK</div>
+      <div class="success-title" id="installTerminalTitle">${escapeHtml(titleMap[action] || 'Script Installed')}</div>
+      <div class="success-message" id="installTerminalMessage">${escapeHtml(statusCopy)}</div>
+      <div class="success-next-step">${escapeHtml(nextStepCopy)}</div>
       <div class="success-actions">
-        <button class="btn btn-secondary" id="btnSuccessClose" type="button" style="flex:none">Close</button>
-        <button class="btn btn-primary" id="btnOpenDashboard" type="button" style="flex:none">Open in Dashboard</button>
+        <button class="btn btn-primary" id="btnOpenDashboard" type="button">Open Dashboard</button>
+        <button class="btn btn-secondary" id="btnSuccessClose" type="button">Close Review</button>
       </div>
     </div>
   `;
