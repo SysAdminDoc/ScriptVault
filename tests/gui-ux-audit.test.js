@@ -41,6 +41,10 @@ describe("cross-surface UX audit", () => {
     expect(installHtml).toContain(".review-nav");
     expect(installHtml).toContain(".review-nav-status");
     expect(installHtml).toContain(".decision-hero");
+    expect(installHtml).toContain(".install-terminal");
+    expect(installHtml).toContain(".install-state-mark");
+    expect(installHtml).toContain(".install-inline-mark");
+    expect(installHtml).toContain(".success-next-step");
     expect(installJs).toContain("function renderExpandablePatternSection");
     expect(installJs).toContain("function setupExpandablePatternSections");
     expect(installJs).toContain("function setupReviewNav");
@@ -69,6 +73,13 @@ describe("cross-surface UX audit", () => {
     expect(installJs).toContain('rel="noopener noreferrer"');
     expect(installJs).toContain('role="alert" aria-live="assertive"');
     expect(installJs).toContain('role="status" aria-live="polite" aria-atomic="true"');
+    expect(installJs).toContain('aria-labelledby="installTerminalTitle" aria-describedby="installTerminalMessage"');
+    expect(installJs).toContain("No script was saved. Review the install details, then try again.");
+    expect(installJs).toContain("ScriptVault saved the script locally before leaving the install review.");
+    expect(installJs).toContain("Open Dashboard");
+    expect(installJs).not.toContain("\\u26A0\\uFE0F");
+    expect(installJs).not.toContain("\\u274C");
+    expect(installJs).not.toContain("\\u2705");
     expect(installJs).toContain("if (codeContainer?.classList.contains('expanded')) {");
     expect(installJs).toContain("setCodePreviewExpanded(false, { restoreFocus: true });");
   });

@@ -27,6 +27,11 @@ All notable changes to ScriptVault will be documented in this file.
 - Replaced remaining dashboard utility "Loading..." placeholders and inline
   network-log empties with consistent ellipsis/status language and shared
   empty-state styling.
+- Refined install-review terminal states with semantic success/error panels,
+  clearer "no script was saved" failure recovery, private-window guidance, and
+  a primary dashboard handoff after successful installs.
+- Converted the CSP bypass panel to real disclosure/switch controls with
+  explicit security-warning copy and keyboard-visible focus treatment.
 - Added a GUI audit guard that fails when page UI CSS reintroduces oversized
   rounded backdrops or blur-heavy chrome.
 

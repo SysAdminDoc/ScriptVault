@@ -592,4 +592,43 @@ describe('dashboard surface modules', () => {
 
     CSPReporter.destroy();
   });
+
+  it('csp bypass controls expose disclosure and switch semantics', async () => {
+    const CSPReporter = createCSPReporter();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+
+    await chrome.storage.local.set({ sv_csp_reports: [] });
+    await CSPReporter.init(host);
+    await CSPReporter.recordFailure('https://example.com', 'script-1', "script-src 'unsafe-inline'", {
+      scriptName: 'Alpha Script',
+    });
+
+    const disclosure = host.querySelector('.sv-csp-bypass-header');
+    const warning = host.querySelector('.sv-csp-bypass-warning');
+    const toggle = host.querySelector('.sv-csp-bypass-toggle');
+
+    expect(disclosure?.tagName).toBe('BUTTON');
+    expect(disclosure?.getAttribute('aria-expanded')).toBe('false');
+    expect(disclosure?.getAttribute('aria-controls')).toBe('svCspBypassBody');
+    expect(warning?.getAttribute('role')).toBe('alert');
+    expect(toggle?.tagName).toBe('BUTTON');
+    expect(toggle?.getAttribute('role')).toBe('switch');
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('aria-label')).toBe('Enable CSP bypass for example.com');
+    expect(cspCode).not.toContain('\\u26A0\\uFE0F <strong>Security Warning:</strong>');
+    expect(cspCode).toContain('View Fix');
+
+    disclosure?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(disclosure?.getAttribute('aria-expanded')).toBe('true');
+
+    toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    expect(toggle?.getAttribute('aria-checked')).toBe('true');
+    expect(toggle?.getAttribute('aria-label')).toBe('Disable CSP bypass for example.com');
+    expect(host.querySelector('.sv-csp-bypass-state')?.textContent).toBe('Bypass ON');
+
+    CSPReporter.destroy();
+  });
 });
