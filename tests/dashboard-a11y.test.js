@@ -43,6 +43,11 @@ describe("dashboard accessibility markup", () => {
     const trigger = doc.getElementById("btnFindScripts");
     const overlay = doc.getElementById("findScriptsOverlay");
     const titleId = overlay?.getAttribute("aria-labelledby");
+    const descriptionId = overlay?.getAttribute("aria-describedby");
+    const search = doc.querySelector('.find-scripts-search[role="search"]');
+    const input = doc.getElementById("findScriptsInput");
+    const searchButton = doc.getElementById("btnFindScriptsSearch");
+    const results = doc.getElementById("findScriptsResults");
 
     expect(trigger).not.toBeNull();
     expect(trigger?.getAttribute("type")).toBe("button");
@@ -59,6 +64,15 @@ describe("dashboard accessibility markup", () => {
 
     expect(titleId).toBeTruthy();
     expect(doc.getElementById(titleId)).not.toBeNull();
+    expect(descriptionId).toBe("findScriptsIntro");
+    expect(doc.getElementById(descriptionId)).not.toBeNull();
+    expect(search).not.toBeNull();
+    expect(input?.getAttribute("aria-describedby")).toBe("findScriptsIntro");
+    expect(searchButton?.getAttribute("aria-controls")).toBe("findScriptsResults");
+    expect(results?.getAttribute("role")).toBe("status");
+    expect(results?.getAttribute("aria-live")).toBe("polite");
+    expect(results?.getAttribute("aria-busy")).toBe("false");
+    expect(results?.getAttribute("tabindex")).toBe("-1");
   });
 
   test("dashboard filter clusters expose labeled group semantics", () => {
@@ -375,17 +389,39 @@ describe("dashboard accessibility markup", () => {
   test("utility actions use pending button guards and reset file-import state", () => {
     expect(dashboardJs).toMatch(/async function runButtonTask/);
     expect(dashboardJs).toMatch(/button\.setAttribute\('aria-busy', 'true'\)/);
+    expect(dashboardJs).toMatch(/options\.errorMessage \|\| error\?\.message \|\| 'Action failed'/);
+    expect(dashboardJs).toMatch(/async function saveSettingOrThrow/);
+    expect(dashboardJs).toMatch(/elements\.btnSaveAppearance\?\.\s*addEventListener\('click', async event =>/);
+    expect(dashboardJs).toMatch(/elements\.btnSaveSync\?\.\s*addEventListener\('click', async event =>/);
+    expect(dashboardJs).toMatch(/elements\.btnSaveSecurity\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnCreateBackup\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnRefreshBackups\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnSaveBackupSettings\?\.\s*addEventListener\('click', async event =>/);
+    expect(dashboardJs).toMatch(/elements\.btnRepairRuntime\?\.\s*addEventListener\('click', async event =>/);
+    expect(dashboardJs).toMatch(/elements\.btnSavePublicApiOrigins\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnInstallFromUrl\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/document\.getElementById\('btnBatchInstall'\)\?\.\s*addEventListener\('click', async event =>/);
+    expect(dashboardJs).toMatch(/document\.getElementById\('btnExportNetLog'\)\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnTextareaExport\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnTextareaImport\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/input\.value = '';/);
     expect(dashboardJs).toMatch(/elements\.importFileName\)\s*elements\.importFileName\.textContent = 'No file chosen'/);
     expect(dashboardJs).toMatch(/elements\.btnExportZip\?\.click\(\)/);
     expect(dashboardJs).toMatch(/elements\.btnExportFile\?\.click\(\)/);
+  });
+
+  test("find userscripts controller exposes polished loading, empty, and preview states", () => {
+    expect(dashboardHtml).toContain("Search script directories");
+    expect(dashboardHtml).not.toContain("Search for userscripts by entering a domain or keyword above");
+    expect(dashboardJs).toMatch(/function setFindScriptsBusy/);
+    expect(dashboardJs).toMatch(/function renderFindScriptsState/);
+    expect(dashboardJs).toMatch(/elements\.findScriptsResults\?\.setAttribute\('aria-busy', String\(isBusy\)\)/);
+    expect(dashboardJs).toMatch(/elements\.btnFindScriptsSearch\.textContent = isBusy \? 'Searching…' : 'Search'/);
+    expect(dashboardJs).toMatch(/data-original-label="\$\{installLabel\}"/);
+    expect(dashboardJs).toMatch(/aria-controls="\$\{previewId\}" aria-expanded="false"/);
+    expect(dashboardJs).toMatch(/Preview unavailable\. Open the source page to inspect this script\./);
+    expect(dashboardJs).toMatch(/btn\.setAttribute\('aria-expanded', 'true'\)/);
+    expect(dashboardJs).toMatch(/Install URL unavailable for this result/);
   });
 
   test("backup review flow preserves selection on canceled restore confirmation and guards async actions", () => {
