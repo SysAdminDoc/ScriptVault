@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Userstyle compatibility baseline
+
+- Added `tests/userstyle-compat-fixtures.test.js` (18 cases) — seven
+  representative UserCSS fixtures covering every `@var` type, both
+  variable substitution shapes, `@-moz-document` blocks, multi-section
+  bodies, and Japanese labels/defaults.
+- Documented Chrome/Firefox parity, deferred items ("advanced color
+  variables"), and a manual Firefox verification checklist in
+  `docs/userstyle-compat.md`.
+
 ### 2026-05-24 — S3-compatible sync provider
 
 - Added an `s3` provider to `CloudSyncProviders` with a full AWS Signature
