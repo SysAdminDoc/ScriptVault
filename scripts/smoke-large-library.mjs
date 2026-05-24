@@ -22,6 +22,9 @@
 import { performance } from 'node:perf_hooks';
 import { register } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import { JSDOM } from 'jsdom';
 
 // Register a TS loader so we can `await import('../src/background/url-matcher.ts')`.
 // Vitest provides this normally; for raw Node we need esbuild-register or
@@ -54,10 +57,24 @@ const THRESHOLDS = {
   search1k: 25,
   search10k: 250,
   sort1k: 20,
-  sort10k: 200
+  sort10k: 200,
+  dashboardRender1k_p99: 50,
+  dashboardRender10k_p99: 100
 };
 
 const { MatchSet } = await import('../src/background/url-matcher.ts');
+const virtualRowsCode = readFileSync(new URL('../pages/dashboard-virtual-rows.js', import.meta.url), 'utf8');
+
+function loadVirtualRows(window) {
+  const sandbox = {
+    window,
+    document: window.document,
+    globalThis: window,
+    module: { exports: {} }
+  };
+  vm.runInNewContext(virtualRowsCode, sandbox);
+  return sandbox.module.exports;
+}
 
 function generateScripts(count, { seed = 1 } = {}) {
   // Deterministic hostname pool — 90% site-scoped, 5% wildcard, 5% regex include.
@@ -182,6 +199,43 @@ function measureSort(scripts) {
   return { ms: t1 - t0 };
 }
 
+function measureDashboardRender(scripts) {
+  const dom = new JSDOM('<!doctype html><table><tbody id="scriptTableBody"></tbody></table>');
+  const api = loadVirtualRows(dom.window);
+  const tbody = dom.window.document.getElementById('scriptTableBody');
+  const samples = [];
+  const totalHeight = scripts.length * 72;
+  const scrollSamples = 120;
+  const createRow = (script) => {
+    const tr = dom.window.document.createElement('tr');
+    tr.dataset.scriptId = script.id;
+    const td = dom.window.document.createElement('td');
+    td.textContent = script.meta?.name || script.id;
+    tr.appendChild(td);
+    return tr;
+  };
+  for (let i = 0; i < scrollSamples; i += 1) {
+    const scrollTop = (totalHeight / scrollSamples) * i;
+    const windowState = api.computeWindow({
+      total: scripts.length,
+      rowHeight: 72,
+      viewportHeight: 900,
+      scrollTop,
+      overscan: 12,
+      maxRows: 60
+    });
+    const t0 = performance.now();
+    api.renderWindow({ tbody, scripts, createRow, windowState, columnCount: 13 });
+    const t1 = performance.now();
+    samples.push(t1 - t0);
+  }
+  return {
+    median: percentile(samples, 50),
+    p99: percentile(samples, 99),
+    samples: samples.length
+  };
+}
+
 async function runFor(count) {
   const scripts = generateScripts(count);
   const build = measureBuild(scripts);
@@ -189,7 +243,8 @@ async function runFor(count) {
   const matching = measureLookups(build.matchSet, 'matching');
   const search = measureSearch(scripts, 'Perf Script 09999');
   const sort = measureSort(scripts);
-  return { count, build: build.ms, candidates, matching, search: search.ms, sort: sort.ms };
+  const dashboardRender = measureDashboardRender(scripts);
+  return { count, build: build.ms, candidates, matching, search: search.ms, sort: sort.ms, dashboardRender };
 }
 
 const datasets = [];
@@ -221,6 +276,8 @@ check('substring search 1k',           datasets[0].search,            get('searc
 check('substring search 10k',          datasets[1].search,            get('search10k'));
 check('localeCompare sort 1k',         datasets[0].sort,              get('sort1k'));
 check('localeCompare sort 10k',        datasets[1].sort,              get('sort10k'));
+check('dashboard render p99 1k',       datasets[0].dashboardRender.p99, get('dashboardRender1k_p99'));
+check('dashboard render p99 10k',      datasets[1].dashboardRender.p99, get('dashboardRender10k_p99'));
 
 report.checks = checks;
 
@@ -238,6 +295,7 @@ if (wantJson) {
     console.log(`    getMatching   p50/p99  ${fmt(ds.matching.median)} / ${fmt(ds.matching.p99)}`);
     console.log(`    substring search       ${fmt(ds.search)}`);
     console.log(`    localeCompare sort     ${fmt(ds.sort)}`);
+    console.log(`    dashboard render p50/p99 ${fmt(ds.dashboardRender.median)} / ${fmt(ds.dashboardRender.p99)}`);
     console.log('');
   }
   console.log('  Threshold checks');

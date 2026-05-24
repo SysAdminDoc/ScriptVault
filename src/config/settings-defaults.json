@@ -50,6 +50,7 @@
   "language": "auto",
   "debugMode": false,
   "experimentalESMUserscripts": false,
+  "dashboardVirtualizationThreshold": 500,
   "injectIntoFrames": true,
   "xhrTimeout": 30000,
   "blacklist": [],

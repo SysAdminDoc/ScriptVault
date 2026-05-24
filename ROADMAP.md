@@ -470,7 +470,7 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
 - Replace the legacy XHR bridge with dedicated user-script messaging while keeping tested fallback behavior.
 - Add per-script trust receipts with provenance, dependency hashes, permission changes, and rollback. (Partial: trust-receipt scaffolding shipped via `bg/signing.js` + `createScriptTrustReceipt`; receipts ledger via `BackupScheduler.recordReceipt` covers restore/import; dependency-hash + permission-change diff still open.)
 - ~~Add sync cockpit and user-owned S3-compatible sync provider.~~ — Sync cockpit shipped 2026-05-23 (sync safety cockpit); S3-compatible provider shipped 2026-05-24. **Done.**
-- Add measured large-library virtualization and local health diagnostics. (Partial: large-library perf harness + threshold gate shipped 2026-05-24 via `scripts/smoke-large-library.mjs` + `tests/large-library-perf.test.js`. Virtualization + health diagnostics still open.)
+- Add measured large-library virtualization and local health diagnostics. (Partial: large-library perf harness + threshold gate shipped 2026-05-24 via `scripts/smoke-large-library.mjs` + `tests/large-library-perf.test.js`; dashboard table virtualization shipped 2026-05-24 via `pages/dashboard-virtual-rows.js`, `dashboardVirtualizationThreshold`, and 1k/10k render p99 gates. Local health diagnostics still open.)
 
 ### Explicit Non-Goals
 
