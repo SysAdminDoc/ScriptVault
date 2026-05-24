@@ -19,7 +19,11 @@ completing the current low-dependency tranche and carrying over the TS
 implementation's prior-CSS removal tracking plus scoped `@match` conversion.
 The storage/resource-layer tranche has started with `modules/xhr.js`,
 `modules/internal-host-guard.js`, and `modules/resources.js`, whose generated
-runtimes now come from TypeScript sources.
+runtimes now come from TypeScript sources. `modules/storage.js` was promoted
+next using the same generator with multi-global output, so the production
+runtime now consumes the v3 IndexedDB-backed `src/modules/storage.ts`
+implementation while preserving the script-mode globals expected by
+`background.core.js`.
 
 ## 1. Problem statement
 
@@ -189,7 +193,8 @@ Pilot exit criteria:
 5. **Storage/resource layer.** Promote `modules/storage.js`,
    `modules/xhr.js`, `modules/resources.js`, and the internal-host guard.
    Started 2026-05-24 with `modules/xhr.js`,
-   `modules/internal-host-guard.js`, and `modules/resources.js`.
+   `modules/internal-host-guard.js`, and `modules/resources.js`; completed
+   the storage module promotion later the same day.
 6. **Sync/import modules.** Promote `sync-easycloud`, `backup-scheduler`,
    `public-api`, `migration`, and then `sync-providers` after the TS source
    owns the full runtime implementation.

@@ -4,6 +4,20 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Storage TypeScript promotion
+
+- Promoted `modules/storage.js` to a generated runtime artifact from
+  `src/modules/storage.ts`, making the v3 IndexedDB-backed storage engine
+  production-authoritative for scripts and GM value bags.
+- Extended the TS runtime generator with multi-global exports so generated
+  modules can expose `SettingsManager`, `ScriptStorage`, `ScriptValues`,
+  `FolderStorage`, `TabStorage`, and the script-change hook expected by the
+  concatenated service worker.
+- Rewired MatchSet invalidation through `setScriptChangeListener`, removed
+  duplicate notification click/close listener registration from the TS storage
+  source, and refreshed runtime storage tests around migration, IDB deletes,
+  value isolation, folder rollback, and generated-artifact shape.
+
 ### 2026-05-24 — Resource cache TypeScript promotion
 
 - Promoted `modules/resources.js` to a generated runtime artifact from

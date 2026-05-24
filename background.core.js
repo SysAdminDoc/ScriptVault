@@ -5168,6 +5168,10 @@ function invalidateMatchSet() {
   _matchSetCacheVersion++;
 }
 
+if (typeof setScriptChangeListener === 'function') {
+  setScriptChangeListener(invalidateMatchSet);
+}
+
 async function getMatchSet() {
   if (_matchSetCache) return _matchSetCache;
   const scripts = await ScriptStorage.getAll();
