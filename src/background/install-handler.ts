@@ -6,6 +6,7 @@
 
 import type { Script, ScriptMeta } from '../types/script';
 import type { Settings } from '../types/settings';
+import { fetchTextBounded } from './fetch-bounded';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -80,24 +81,7 @@ export function registerWebNavigationListener(): void {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
-        // Check content length before reading body
-        const contentLength: number = parseInt(
-          response.headers.get('content-length') || '0',
-          10,
-        );
-        if (contentLength > MAX_SCRIPT_SIZE) {
-          throw new Error(
-            `Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`,
-          );
-        }
-
-        const code: string = await response.text();
-
-        if (code.length > MAX_SCRIPT_SIZE) {
-          throw new Error(
-            `Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`,
-          );
-        }
+        const code: string = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
 
         // Verify it looks like a userscript
         if (!code.includes('==UserScript==')) {
@@ -224,18 +208,7 @@ export async function installFromUrl(url: string): Promise<InstallResult> {
       throw new Error(`HTTP ${response.status}`);
     }
 
-    // Size limit: 5MB (same as webNavigation handler)
-    const contentLength: number = parseInt(
-      response.headers.get('content-length') || '0',
-      10,
-    );
-    if (contentLength > MAX_SCRIPT_SIZE) {
-      throw new Error(
-        `Script too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`,
-      );
-    }
-
-    const code: string = await response.text();
+    const code: string = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
 
     return await installFromCode(code);
   } catch (error: unknown) {

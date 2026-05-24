@@ -55,6 +55,7 @@ export {
 export {
   applyWebRequestRules,
   removeWebRequestRules,
+  reconcileWebRequestRuleMap,
 } from './dnr-rules';
 
 export { buildWrappedScript } from './wrapper-builder';

@@ -4,6 +4,28 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Engineering hardening pass
+
+- Hardened GM_webRequest declarativeNetRequest cleanup so failed DNR removals
+  keep their persisted owner map for retry instead of stranding live rules.
+- Rolled back newly added DNR rules when `_webRequestRuleMap` persistence fails,
+  avoiding ownerless rules after service-worker restarts.
+- Brought the TypeScript DNR mirror up to parity with runtime persistence,
+  hydration, removal, and reconciliation behavior, with regression tests for
+  restart hydration, persistence rollback, removal retry, and orphan reconcile.
+- Brought the TypeScript wrapper mirror up to parity with the runtime
+  page-scoped `window.onurlchange` dispatcher so future wrapper builds do not
+  restack history patches on script re-injection.
+- Added a shared TypeScript `fetchTextBounded` helper and moved the TS install,
+  update, @require/resource, and context-menu install paths off raw
+  `response.text()` reads so the mirror now matches runtime bounded-fetch
+  hardening.
+- Added `tests/source-hardening-parity.test.js` to guard bounded TS fetches,
+  empty-grant denial in the wrapper mirror, and promise-based Gist token
+  storage rejection propagation.
+- Updated repo working notes to remove the now-fixed DNR orphaning and
+  `window.onurlchange` stacking items from the remaining-issues list.
+
 ### 2026-05-24 — Premium UI polish pass
 
 - Normalized dashboard, popup, side panel, install review, DevTools, Script Store,

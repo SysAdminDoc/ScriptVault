@@ -266,12 +266,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
   - Acceptance: Each release artifact has checksum, source ZIP, SBOM, signing/provenance material, and a diff report of manifest permissions and web-accessible resources.
   - Verify: Release workflow dry run on a local package; inspect attached checksums/report.
 
-- [ ] P0 - Create runtime/TS mirror drift guard for recent hardening fixes
+- [x] P0 - Create runtime/TS mirror drift guard for recent hardening fixes
   - Why: Recent commits repeatedly closed drift, and current TS fetch paths still lag runtime bounded-fetch behavior.
   - Evidence: L10, L18, L19, H007-H010.
   - Touches: `tests/source-*.test.js`, `src/background/install-handler.ts`, `src/background/update-checker.ts`, `background.core.js`, `modules/*.js`.
   - Acceptance: Focused tests fail if runtime has bounded fetch, empty-grant denial, or Gist rejection behavior that the TS mirror lacks.
   - Verify: `npm run typecheck`; `npx vitest run tests/source-*.test.js tests/fetch-bounded.test.js tests/gui-secondary-audit.test.js tests/wrapper-gm-tabs-39-13.test.js`.
+  - Status: Shipped 2026-05-24. `src/background/fetch-bounded.ts` now mirrors the runtime bounded reader; TS install/update/resource/context-menu paths use it; `tests/source-hardening-parity.test.js`, `tests/source-dnr-rules.test.js`, and wrapper tests pin bounded fetches, empty-grant denial, Gist rejection propagation, DNR owner-map rollback/retry, and page-scoped `window.onurlchange` dispatch.
 
 - [ ] P0 - Refresh Chrome 138+ userScripts onboarding and status diagnostics
   - Why: Chrome now distinguishes Developer Mode from per-extension Allow User Scripts, and disabled API behavior differs by version.

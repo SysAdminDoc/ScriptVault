@@ -5,6 +5,7 @@
 
 import type { Script } from '../types/script';
 import type { Settings } from '../types/settings';
+import { fetchTextBounded } from './fetch-bounded';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -47,6 +48,8 @@ declare function buildWrappedScript(
   regexExcludes: string[],
 ): string;
 declare function debugLog(...args: unknown[]): void;
+
+const LINK_INSTALL_MAX_BYTES = 5 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
 // Context Menu Setup
@@ -189,7 +192,7 @@ export function registerContextMenuClickListener(): void {
                 clearTimeout(timeoutId);
               }
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
-              const code: string = await response.text();
+              const code: string = await fetchTextBounded(response, LINK_INSTALL_MAX_BYTES, 'Script');
               if (code.includes('==UserScript==')) {
                 await chrome.storage.local.set({
                   pendingInstall: { code, url: linkUrl, timestamp: Date.now() },
