@@ -1995,16 +1995,22 @@
 
             const banner = document.createElement('div');
             banner.className = 'recent-updates-banner';
+            const hasReviewableChanges = updates.some(hasRecentUpdateTrustChanges);
             banner.innerHTML = `
                 <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(96,165,250,0.12));border:1px solid rgba(34,197,94,0.25);border-radius:8px;margin:8px 12px;font-size:13px">
                     <div style="flex:1;min-width:0;color:var(--text-primary)">
                         <strong>${updates.length === 1 ? 'Script updated' : `${updates.length} scripts updated`}:</strong>
                         ${list}
                     </div>
+                    ${hasReviewableChanges ? '<button id="btnRecentUpdatesReview" type="button" class="toolbar-btn">Review changes</button>' : ''}
                     <button id="btnRecentUpdatesDismiss" type="button" aria-label="Dismiss" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px;line-height:1">&times;</button>
                 </div>
             `;
             panel.insertBefore(banner, panel.firstChild);
+
+            document.getElementById('btnRecentUpdatesReview')?.addEventListener('click', () => {
+                showRecentUpdateChangesModal(updates);
+            });
 
             document.getElementById('btnRecentUpdatesDismiss')?.addEventListener('click', async () => {
                 banner.remove();
@@ -2013,6 +2019,83 @@
         } catch (_e) {
             // Background message failure isn't fatal — banner just won't show.
         }
+    }
+
+    function hasRecentUpdateTrustChanges(update) {
+        const deps = update?.dependencyChanges?.require || [];
+        const perms = update?.permissionChanges || {};
+        return deps.some(change => change.change && change.change !== 'unchanged')
+            || ['grant', 'connect', 'match'].some(key => {
+                const set = perms[key] || {};
+                return (set.added || []).length > 0 || (set.removed || []).length > 0;
+            });
+    }
+
+    function renderPermissionChangeGroup(label, changes = {}) {
+        const added = changes.added || [];
+        const removed = changes.removed || [];
+        if (!added.length && !removed.length) return '';
+        const rows = [];
+        if (added.length) {
+            rows.push(`<div><strong>${escapeHtml(label)} added:</strong> ${added.map(value => `<span class="info-tag success">${escapeHtml(value)}</span>`).join(' ')}</div>`);
+        }
+        if (removed.length) {
+            rows.push(`<div><strong>${escapeHtml(label)} removed:</strong> ${removed.map(value => `<span class="info-tag error">${escapeHtml(value)}</span>`).join(' ')}</div>`);
+        }
+        return rows.join('');
+    }
+
+    function renderDependencyChangeRows(changes = []) {
+        const reviewable = changes.filter(change => change.change && change.change !== 'unchanged');
+        if (!reviewable.length) return '';
+        return `
+            <div><strong>@require dependency changes:</strong></div>
+            <div class="conflict-list" style="margin-top:6px">
+                ${reviewable.map(change => {
+                    const before = change.previousSha256 ? change.previousSha256.slice(0, 12) : (change.previousError || 'none');
+                    const after = change.nextSha256 ? change.nextSha256.slice(0, 12) : (change.nextError || 'none');
+                    return `
+                        <div class="conflict-list-item">
+                            <span style="min-width:0">
+                                <strong>${escapeHtml(change.change)}</strong>
+                                <div class="panel-empty-inline" style="margin-top:4px;word-break:break-all">${escapeHtml(change.url || '')}</div>
+                            </span>
+                            <span class="info-tag">${escapeHtml(before)} -> ${escapeHtml(after)}</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    function renderRecentUpdateTrustChanges(update) {
+        const permissionChanges = update?.permissionChanges || {};
+        const dependencyChanges = update?.dependencyChanges?.require || [];
+        const permissionHtml = [
+            renderPermissionChangeGroup('@grant', permissionChanges.grant),
+            renderPermissionChangeGroup('@connect', permissionChanges.connect),
+            renderPermissionChangeGroup('@match', permissionChanges.match),
+        ].filter(Boolean).join('');
+        const dependencyHtml = renderDependencyChangeRows(dependencyChanges);
+        const body = [permissionHtml, dependencyHtml].filter(Boolean).join('<div style="height:8px"></div>');
+        return `
+            <div class="conflict-list-item" style="align-items:flex-start">
+                <span style="width:100%">
+                    <strong>${escapeHtml(update?.name || update?.id || 'Unnamed script')}</strong>
+                    <div class="panel-empty-inline" style="margin-top:4px">v${escapeHtml(update?.previousVersion || '?')} -> v${escapeHtml(update?.newVersion || '?')}</div>
+                    <div style="margin-top:8px">${body || '<span class="panel-empty-inline">No dependency or permission changes recorded.</span>'}</div>
+                </span>
+            </div>
+        `;
+    }
+
+    function showRecentUpdateChangesModal(updates) {
+        const reviewable = (updates || []).filter(hasRecentUpdateTrustChanges);
+        showModal(
+            'Review Update Changes',
+            `<div class="conflict-list">${(reviewable.length ? reviewable : updates || []).map(renderRecentUpdateTrustChanges).join('')}</div>`,
+            [{ label: 'Close', class: 'btn-primary', callback: hideModal }]
+        );
     }
 
     // Phase 39.10 — runtime "Allow User Scripts" self-diagnosis.

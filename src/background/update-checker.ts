@@ -8,6 +8,7 @@ import { fetchTextBounded } from './fetch-bounded';
 import { classifyFetchUrl, classifyResponseUrl } from './internal-host-guard';
 import { createScriptTrustReceipt } from './trust-receipt';
 import { bundleIfNeeded } from '../bg/esm-bundler';
+import { fetchRequireScript } from './resource-loader';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -214,7 +215,7 @@ export const UpdateSystem = {
   async applyUpdate(
     scriptId: string,
     newCode: string,
-    options: { force?: boolean; sourceUrl?: string } = {},
+    options: { force?: boolean; sourceUrl?: string; fetchDependencyBody?: (url: string) => Promise<string | null | undefined> } = {},
   ): Promise<ApplyUpdateResult> {
     const script: Script | null = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
@@ -266,6 +267,7 @@ export const UpdateSystem = {
       sourceUrl: options.sourceUrl || script.meta.downloadURL || script.meta.updateURL,
       previousScript,
       rollbackIndex,
+      fetchDependencyBody: options.fetchDependencyBody || fetchRequireScript,
     });
     const previousReceipt = previousScript.trustReceipt;
     const previousSourceUrl = previousReceipt

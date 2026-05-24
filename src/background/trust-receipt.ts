@@ -1,4 +1,11 @@
-import type { Script, ScriptMeta, ScriptTrustReceipt } from '../types/script';
+import type {
+  Script,
+  ScriptMeta,
+  ScriptTrustReceipt,
+  ScriptTrustReceiptDependency,
+  ScriptTrustReceiptDependencyChange,
+  ScriptTrustReceiptPermissionChangeSet,
+} from '../types/script';
 
 function asArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string' && item.length > 0);
@@ -42,6 +49,92 @@ function summarizeLineDiff(previousCode: string, nextCode: string) {
   };
 }
 
+function diffStringList(previous: string[], next: string[]): ScriptTrustReceiptPermissionChangeSet {
+  const previousSet = new Set(previous);
+  const nextSet = new Set(next);
+  return {
+    added: next.filter((value) => !previousSet.has(value)),
+    removed: previous.filter((value) => !nextSet.has(value)),
+    unchanged: next.filter((value) => previousSet.has(value)),
+  };
+}
+
+function getKnownDependencySnapshots(previousScript: Script | null): Map<string, ScriptTrustReceiptDependency> {
+  const map = new Map<string, ScriptTrustReceiptDependency>();
+  const deps = previousScript?.trustReceipt?.dependencies?.require ?? [];
+  for (const dep of deps) {
+    if (dep.url) map.set(dep.url, dep);
+  }
+  return map;
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return typeof error === 'string' ? error : 'Dependency body unavailable';
+}
+
+async function snapshotDependency(
+  url: string,
+  fetchDependencyBody?: (url: string) => Promise<string | null | undefined>,
+  known?: ScriptTrustReceiptDependency,
+): Promise<ScriptTrustReceiptDependency> {
+  if (known?.sha256) return known;
+  if (!fetchDependencyBody) return known || { url };
+
+  try {
+    const body = await fetchDependencyBody(url);
+    if (typeof body !== 'string') return { url, error: 'Dependency body unavailable' };
+    return {
+      url,
+      sha256: await sha256Hex(body),
+      bytes: new TextEncoder().encode(body).length,
+    };
+  } catch (error) {
+    return { url, error: errorMessage(error) };
+  }
+}
+
+async function snapshotDependencies(
+  urls: string[],
+  fetchDependencyBody: ((url: string) => Promise<string | null | undefined>) | undefined,
+  known: Map<string, ScriptTrustReceiptDependency>,
+): Promise<ScriptTrustReceiptDependency[]> {
+  const snapshots: ScriptTrustReceiptDependency[] = [];
+  for (const url of urls) {
+    snapshots.push(await snapshotDependency(url, fetchDependencyBody, known.get(url)));
+  }
+  return snapshots;
+}
+
+function buildDependencyChanges(
+  previous: ScriptTrustReceiptDependency[],
+  next: ScriptTrustReceiptDependency[],
+): ScriptTrustReceiptDependencyChange[] {
+  const previousMap = new Map(previous.map((dep) => [dep.url, dep]));
+  const nextMap = new Map(next.map((dep) => [dep.url, dep]));
+  const urls = [...previous.map((dep) => dep.url), ...next.map((dep) => dep.url).filter((url) => !previousMap.has(url))];
+
+  return urls.map((url) => {
+    const before = previousMap.get(url);
+    const after = nextMap.get(url);
+    let change: ScriptTrustReceiptDependencyChange['change'] = 'unverified';
+    if (!before && after) change = 'added';
+    else if (before && !after) change = 'removed';
+    else if (before?.sha256 && after?.sha256) change = before.sha256 === after.sha256 ? 'unchanged' : 'changed';
+
+    return {
+      url,
+      change,
+      previousSha256: before?.sha256,
+      nextSha256: after?.sha256,
+      previousBytes: before?.bytes,
+      nextBytes: after?.bytes,
+      previousError: before?.error,
+      nextError: after?.error,
+    };
+  });
+}
+
 export async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -54,12 +147,21 @@ export async function createScriptTrustReceipt(options: {
   sourceUrl?: string;
   previousScript?: Script | null;
   rollbackIndex?: number;
+  fetchDependencyBody?: (url: string) => Promise<string | null | undefined>;
 }): Promise<ScriptTrustReceipt> {
   const { operation, code, meta, previousScript = null } = options;
   const sourceUrl = options.sourceUrl || meta.source || meta.downloadURL || meta.updateURL || '';
   const previousCode = previousScript?.code || '';
   const createdAt = Date.now();
   const requires = asArray(meta.require);
+  const previousRequires = asArray(previousScript?.meta?.require);
+  const knownDependencySnapshots = getKnownDependencySnapshots(previousScript);
+  const previousRequireSnapshots = await snapshotDependencies(
+    previousRequires,
+    options.fetchDependencyBody,
+    knownDependencySnapshots,
+  );
+  const requireSnapshots = await snapshotDependencies(requires, options.fetchDependencyBody, new Map());
   const resources = meta.resource && typeof meta.resource === 'object'
     ? Object.entries(meta.resource)
         .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0)
@@ -90,10 +192,18 @@ export async function createScriptTrustReceipt(options: {
       connect: asArray(meta.connect),
     },
     dependencies: {
-      require: requires.map((url) => ({ url })),
+      require: requireSnapshots,
       resource: resources,
       requireCount: requires.length,
       resourceCount: resources.length,
+    },
+    dependencyChanges: {
+      require: buildDependencyChanges(previousRequireSnapshots, requireSnapshots),
+    },
+    permissionChanges: {
+      grant: diffStringList(asArray(previousScript?.meta?.grant), asArray(meta.grant)),
+      connect: diffStringList(asArray(previousScript?.meta?.connect), asArray(meta.connect)),
+      match: diffStringList(asArray(previousScript?.meta?.match), asArray(meta.match)),
     },
     diff: {
       previousVersion: previousScript?.meta?.version || '',

@@ -117,6 +117,30 @@ export interface VersionHistoryEntry {
   trustReceipt?: ScriptTrustReceipt;
 }
 
+export interface ScriptTrustReceiptDependency {
+  url: string;
+  sha256?: string;
+  bytes?: number;
+  error?: string;
+}
+
+export interface ScriptTrustReceiptDependencyChange {
+  url: string;
+  change: 'added' | 'removed' | 'changed' | 'unchanged' | 'unverified';
+  previousSha256?: string;
+  nextSha256?: string;
+  previousBytes?: number;
+  nextBytes?: number;
+  previousError?: string;
+  nextError?: string;
+}
+
+export interface ScriptTrustReceiptPermissionChangeSet {
+  added: string[];
+  removed: string[];
+  unchanged: string[];
+}
+
 export interface ScriptTrustReceipt {
   schemaVersion: 1;
   operation: 'install' | 'update' | 'manual-update' | 'auto-update' | 'reinstall' | 'downgrade' | 'local-save' | 'rollback-point';
@@ -141,10 +165,18 @@ export interface ScriptTrustReceipt {
     connect: string[];
   };
   dependencies: {
-    require: Array<{ url: string }>;
+    require: ScriptTrustReceiptDependency[];
     resource: Array<{ name: string; url: string }>;
     requireCount: number;
     resourceCount: number;
+  };
+  dependencyChanges?: {
+    require: ScriptTrustReceiptDependencyChange[];
+  };
+  permissionChanges?: {
+    grant: ScriptTrustReceiptPermissionChangeSet;
+    connect: ScriptTrustReceiptPermissionChangeSet;
+    match: ScriptTrustReceiptPermissionChangeSet;
   };
   diff: {
     previousVersion: string;

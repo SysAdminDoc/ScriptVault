@@ -343,17 +343,91 @@ function _receiptLineDiff(previousCode, nextCode) {
   };
 }
 
+function _receiptDiffList(previous, next) {
+  const previousSet = new Set(previous);
+  const nextSet = new Set(next);
+  return {
+    added: next.filter(value => !previousSet.has(value)),
+    removed: previous.filter(value => !nextSet.has(value)),
+    unchanged: next.filter(value => previousSet.has(value))
+  };
+}
+
+function _knownDependencySnapshots(previousScript) {
+  const map = new Map();
+  const deps = previousScript?.trustReceipt?.dependencies?.require || [];
+  for (const dep of deps) {
+    if (dep?.url) map.set(dep.url, dep);
+  }
+  return map;
+}
+
+function _receiptErrorMessage(error) {
+  return error?.message || (typeof error === 'string' ? error : 'Dependency body unavailable');
+}
+
+async function _snapshotDependency(url, fetchDependencyBody, known) {
+  if (known?.sha256) return known;
+  if (typeof fetchDependencyBody !== 'function') return known || { url };
+  try {
+    const body = await fetchDependencyBody(url);
+    if (typeof body !== 'string') return { url, error: 'Dependency body unavailable' };
+    return {
+      url,
+      sha256: await _sha256Hex(body),
+      bytes: new TextEncoder().encode(body).length
+    };
+  } catch (error) {
+    return { url, error: _receiptErrorMessage(error) };
+  }
+}
+
+async function _snapshotDependencies(urls, fetchDependencyBody, known) {
+  const snapshots = [];
+  for (const url of urls) {
+    snapshots.push(await _snapshotDependency(url, fetchDependencyBody, known.get(url)));
+  }
+  return snapshots;
+}
+
+function _receiptDependencyChanges(previous, next) {
+  const previousMap = new Map(previous.map(dep => [dep.url, dep]));
+  const nextMap = new Map(next.map(dep => [dep.url, dep]));
+  const urls = [...previous.map(dep => dep.url), ...next.map(dep => dep.url).filter(url => !previousMap.has(url))];
+  return urls.map(url => {
+    const before = previousMap.get(url);
+    const after = nextMap.get(url);
+    let change = 'unverified';
+    if (!before && after) change = 'added';
+    else if (before && !after) change = 'removed';
+    else if (before?.sha256 && after?.sha256) change = before.sha256 === after.sha256 ? 'unchanged' : 'changed';
+    return {
+      url,
+      change,
+      previousSha256: before?.sha256,
+      nextSha256: after?.sha256,
+      previousBytes: before?.bytes,
+      nextBytes: after?.bytes,
+      previousError: before?.error,
+      nextError: after?.error
+    };
+  });
+}
+
 async function _sha256Hex(text) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text || ''));
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '', previousScript = null, rollbackIndex = -1 }) {
+async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '', previousScript = null, rollbackIndex = -1, fetchDependencyBody = null }) {
   const installUrl = sourceUrl || meta.source || meta.downloadURL || meta.updateURL || '';
   const previousCode = previousScript?.code || '';
   const nextHash = await _sha256Hex(code);
   const previousHash = previousScript ? await _sha256Hex(previousCode) : '';
   const requireUrls = _receiptArray(meta.require);
+  const previousRequireUrls = _receiptArray(previousScript?.meta?.require);
+  const previousRequireSnapshots = await _snapshotDependencies(previousRequireUrls, fetchDependencyBody, _knownDependencySnapshots(previousScript));
+  const requireSnapshots = await _snapshotDependencies(requireUrls, fetchDependencyBody, new Map());
   const resources = meta.resource && typeof meta.resource === 'object'
     ? Object.entries(meta.resource)
         .filter(([, url]) => typeof url === 'string' && url.length > 0)
@@ -384,10 +458,18 @@ async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '',
       connect: _receiptArray(meta.connect)
     },
     dependencies: {
-      require: requireUrls.map(url => ({ url })),
+      require: requireSnapshots,
       resource: resources,
       requireCount: requireUrls.length,
       resourceCount: resources.length
+    },
+    dependencyChanges: {
+      require: _receiptDependencyChanges(previousRequireSnapshots, requireSnapshots)
+    },
+    permissionChanges: {
+      grant: _receiptDiffList(_receiptArray(previousScript?.meta?.grant), _receiptArray(meta.grant)),
+      connect: _receiptDiffList(_receiptArray(previousScript?.meta?.connect), _receiptArray(meta.connect)),
+      match: _receiptDiffList(_receiptArray(previousScript?.meta?.match), _receiptArray(meta.match))
     },
     diff: {
       previousVersion: previousScript?.meta?.version || '',
@@ -589,7 +671,7 @@ const UpdateSystem = {
     return 0;
   },
   
-  async applyUpdate(scriptId, newCode, { force = false, sourceUrl = '' } = {}) {
+  async applyUpdate(scriptId, newCode, { force = false, sourceUrl = '', fetchDependencyBody = null } = {}) {
     const script = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
     // Don't auto-update scripts the user has locally edited (unless force=true from forceUpdate)
@@ -635,7 +717,8 @@ const UpdateSystem = {
       meta: parsed.meta,
       sourceUrl: sourceUrl || script.meta.downloadURL || script.meta.updateURL,
       previousScript,
-      rollbackIndex
+      rollbackIndex,
+      fetchDependencyBody: fetchDependencyBody || fetchRequireScript
     });
     historyEntry.trustReceipt = previousScript.trustReceipt || await createScriptTrustReceipt({
       operation: 'rollback-point',
@@ -715,6 +798,8 @@ const UpdateSystem = {
           name: updates[idx].name,
           previousVersion: updates[idx].currentVersion,
           newVersion: updates[idx].newVersion,
+          dependencyChanges: r.value.script?.trustReceipt?.dependencyChanges || { require: [] },
+          permissionChanges: r.value.script?.trustReceipt?.permissionChanges || null,
           appliedAt: Date.now()
         });
       }
