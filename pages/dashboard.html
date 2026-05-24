@@ -5939,9 +5939,41 @@
                             <option value="googledrive">Google Drive</option>
                             <option value="dropbox">Dropbox</option>
                             <option value="onedrive">OneDrive</option>
+                            <option value="s3">S3-compatible (AWS / R2 / MinIO / B2)</option>
                         </select>
                     </div>
-                    
+
+                    <!-- S3-compatible Settings (hidden by default) -->
+                    <div id="syncS3Settings" class="sync-provider-settings" style="display:none; margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 4px;">
+                        <div class="setting-row">
+                            <span class="label-text">Endpoint:</span>
+                            <input type="url" id="settingsS3Endpoint" placeholder="https://s3.us-east-1.amazonaws.com" class="input-field" aria-label="S3 endpoint URL">
+                        </div>
+                        <div class="setting-row">
+                            <span class="label-text">Region:</span>
+                            <input type="text" id="settingsS3Region" placeholder="us-east-1 (use 'auto' for Cloudflare R2)" class="input-field" aria-label="S3 region">
+                        </div>
+                        <div class="setting-row">
+                            <span class="label-text">Bucket:</span>
+                            <input type="text" id="settingsS3Bucket" placeholder="scriptvault-backups" class="input-field" aria-label="S3 bucket name">
+                        </div>
+                        <div class="setting-row">
+                            <span class="label-text">Access Key ID:</span>
+                            <input type="text" id="settingsS3AccessKeyId" autocomplete="off" class="input-field" aria-label="S3 access key ID">
+                        </div>
+                        <div class="setting-row">
+                            <span class="label-text">Secret Key:</span>
+                            <input type="password" id="settingsS3SecretKey" autocomplete="new-password" class="input-field" aria-label="S3 secret access key">
+                        </div>
+                        <div class="setting-row">
+                            <span class="label-text">Object Key (optional):</span>
+                            <input type="text" id="settingsS3ObjectKey" placeholder="scriptvault-backup.json" class="input-field" aria-label="S3 object key override">
+                        </div>
+                        <div class="setting-row" style="font-size:11px;color:var(--text-muted);line-height:1.4">
+                            Credentials are AWS SigV4-signed and sent only to the configured endpoint. Cloudflare R2 uses region "auto"; MinIO and Backblaze B2 use path-style addressing (default for non-AWS endpoints).
+                        </div>
+                    </div>
+
                     <!-- WebDAV Settings (hidden by default) -->
                     <div id="syncWebdavSettings" class="sync-provider-settings" style="display:none; margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 4px;">
                         <div class="setting-row">

@@ -62,6 +62,15 @@ export interface Settings {
   onedriveConnected: boolean;
   onedriveUser: { email: string; name: string } | null;
 
+  // S3-compatible
+  s3Endpoint: string;
+  s3Region: string;
+  s3Bucket: string;
+  s3AccessKeyId: string;
+  s3SecretKey: string;
+  s3ObjectKey: string;
+  s3PathStyle?: boolean;
+
   // Language
   language: string;
 
@@ -100,4 +109,5 @@ export type SyncProvider =
   | 'googledrive'
   | 'dropbox'
   | 'onedrive'
-  | 'easycloud';
+  | 'easycloud'
+  | 's3';

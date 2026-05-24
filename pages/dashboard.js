@@ -1416,6 +1416,13 @@
         elements.settingsWebdavUrl = document.getElementById('settingsWebdavUrl');
         elements.settingsWebdavUsername = document.getElementById('settingsWebdavUsername');
         elements.settingsWebdavPassword = document.getElementById('settingsWebdavPassword');
+        elements.syncS3Settings = document.getElementById('syncS3Settings');
+        elements.settingsS3Endpoint = document.getElementById('settingsS3Endpoint');
+        elements.settingsS3Region = document.getElementById('settingsS3Region');
+        elements.settingsS3Bucket = document.getElementById('settingsS3Bucket');
+        elements.settingsS3AccessKeyId = document.getElementById('settingsS3AccessKeyId');
+        elements.settingsS3SecretKey = document.getElementById('settingsS3SecretKey');
+        elements.settingsS3ObjectKey = document.getElementById('settingsS3ObjectKey');
         elements.syncHealthStatus = document.getElementById('syncHealthStatus');
         elements.syncStorageDisclosure = document.getElementById('syncStorageDisclosure');
         elements.syncPreviewSummary = document.getElementById('syncPreviewSummary');
@@ -2228,6 +2235,12 @@
         if (elements.settingsWebdavUrl) elements.settingsWebdavUrl.value = s.webdavUrl || '';
         if (elements.settingsWebdavUsername) elements.settingsWebdavUsername.value = s.webdavUsername || '';
         if (elements.settingsWebdavPassword) elements.settingsWebdavPassword.value = s.webdavPassword || '';
+        if (elements.settingsS3Endpoint) elements.settingsS3Endpoint.value = s.s3Endpoint || '';
+        if (elements.settingsS3Region) elements.settingsS3Region.value = s.s3Region || '';
+        if (elements.settingsS3Bucket) elements.settingsS3Bucket.value = s.s3Bucket || '';
+        if (elements.settingsS3AccessKeyId) elements.settingsS3AccessKeyId.value = s.s3AccessKeyId || '';
+        if (elements.settingsS3SecretKey) elements.settingsS3SecretKey.value = s.s3SecretKey || '';
+        if (elements.settingsS3ObjectKey) elements.settingsS3ObjectKey.value = s.s3ObjectKey || '';
         if (elements.syncLog) elements.syncLog.value = s.syncLog || '';
         syncCloudProviderSelection(normalizeSyncProvider(s), { triggerChange: false });
         
@@ -2350,14 +2363,17 @@
 
     function toggleSyncProviderSettings() {
         const syncType = elements.settingsSyncType?.value || normalizeSyncProvider(state.settings);
-        
+
         // Hide all provider settings first
         if (elements.syncWebdavSettings) elements.syncWebdavSettings.style.display = 'none';
         if (elements.syncOAuthSettings) elements.syncOAuthSettings.style.display = 'none';
-        
+        if (elements.syncS3Settings) elements.syncS3Settings.style.display = 'none';
+
         // Show selected provider settings
         if (syncType === 'webdav' && elements.syncWebdavSettings) {
             elements.syncWebdavSettings.style.display = 'block';
+        } else if (syncType === 's3' && elements.syncS3Settings) {
+            elements.syncS3Settings.style.display = 'block';
         } else if (OAUTH_SYNC_PROVIDERS.includes(syncType) && elements.syncOAuthSettings) {
             elements.syncOAuthSettings.style.display = 'block';
         }
@@ -8918,6 +8934,13 @@
                     await saveSettingOrThrow('webdavUrl', elements.settingsWebdavUrl?.value.trim() || '');
                     await saveSettingOrThrow('webdavUsername', elements.settingsWebdavUsername?.value.trim() || '');
                     await saveSettingOrThrow('webdavPassword', elements.settingsWebdavPassword?.value || '');
+                } else if (provider === 's3') {
+                    await saveSettingOrThrow('s3Endpoint', elements.settingsS3Endpoint?.value.trim() || '');
+                    await saveSettingOrThrow('s3Region', elements.settingsS3Region?.value.trim() || '');
+                    await saveSettingOrThrow('s3Bucket', elements.settingsS3Bucket?.value.trim() || '');
+                    await saveSettingOrThrow('s3AccessKeyId', elements.settingsS3AccessKeyId?.value.trim() || '');
+                    await saveSettingOrThrow('s3SecretKey', elements.settingsS3SecretKey?.value || '');
+                    await saveSettingOrThrow('s3ObjectKey', elements.settingsS3ObjectKey?.value.trim() || '');
                 }
                 showToast(
                     provider === 'none'

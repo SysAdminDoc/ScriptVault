@@ -4,6 +4,28 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — S3-compatible sync provider
+
+- Added an `s3` provider to `CloudSyncProviders` with a full AWS Signature
+  v4 implementation using Web Crypto SubtleCrypto (HMAC-SHA256 + SHA-256;
+  no SDK). Works against AWS S3, Cloudflare R2, MinIO, Backblaze B2, and
+  any other S3-compatible endpoint.
+- URL construction automatically handles virtual-host style for AWS hosts
+  and path-style for everything else. `s3PathStyle: true` forces
+  path-style on AWS endpoints.
+- Structured `validate()` returns `{ valid, errors[] }` for per-field UI
+  feedback covering endpoint URL scheme/path, region, bucket name, and
+  credential presence.
+- Settings UI: new "S3-compatible (AWS / R2 / MinIO / B2)" option in the
+  Userscript Sync provider picker, with a six-field settings block
+  (endpoint, region, bucket, access key ID, secret key, object key
+  override). Saved and loaded alongside other providers.
+- Added `s3*` fields to the `Settings` type, the `SyncProvider` union,
+  and `src/config/settings-defaults.json`.
+- Added `tests/s3-sync-provider.test.js` (21 cases — validation, URL
+  construction, SigV4 signing, upload/download/test round-trip against a
+  mock server, disclosure + status + disconnect).
+
 ### 2026-05-24 — ESM userscript + local-dev research
 
 - Added `docs/esm-userscript-research.md`. Identifies the install-time
