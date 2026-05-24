@@ -15,7 +15,7 @@
     "watch": "node esbuild.config.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:a11y": "vitest run tests/dashboard-a11y.test.js",
+    "test:a11y": "vitest run tests/dashboard-a11y.test.js tests/popup-a11y.test.js tests/gui-ux-audit.test.js tests/accessibility-surface-pass.test.js",
     "smoke:dashboard": "node scripts/smoke-dashboard.mjs",
     "cws:check": "node scripts/check-cws-publish-tooling.mjs",
     "store-copy:check": "node scripts/check-permission-copy.mjs",

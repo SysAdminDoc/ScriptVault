@@ -334,12 +334,13 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
   - Verify: focused CSV export tests.
   - Status: Shipped 2026-05-24. Inventory found three current CSV emitters: dashboard stats export (`pages/dashboard.js`), CSP report export (`pages/dashboard-csp.js`), and the error log export (`modules/error-log.js` / `src/modules/error-log.ts`). No current netlog CSV exporter exists. Dashboard stats CSV now uses a pure `buildStatsCSV` / `formatStatsCSVCell` path and focused coverage in `tests/csv-export-formula.test.js` verifies every formula-control prefix plus script metadata, runtime URL, tag, and match fields. CSP report CSV now has focused regression coverage for formula-control script names; the existing error-log tests continue to cover the error-log exporter.
 
-- [ ] P1 - Complete APCA/focus/live-region accessibility pass across major UI surfaces
+- [x] P1 - Complete APCA/focus/live-region accessibility pass across major UI surfaces
   - Why: Existing WCAG3 doc lists gaps, and trust flows depend on readable, accessible states.
   - Evidence: L15, S85-S87, H061-H064.
   - Touches: `pages/*.html`, `pages/*.js`, `pages/dashboard.css`, `tests/dashboard-a11y.test.js`, `tests/popup-a11y.test.js`.
   - Acceptance: Popup, dashboard, side panel, install page, modals, toasts, sync/update states, and forced-colors checks pass documented criteria.
   - Verify: `npm run test:a11y`; manual forced-colors and keyboard-only pass.
+  - Status: Shipped 2026-05-24. Added forced-colors system-color fallbacks for dashboard, popup, side panel, and install surfaces; popup, side-panel, and install pages now expose skip links to their primary work areas, and compact popup/side-panel script toggles meet the 24px touch-target floor. Expanded `npm run test:a11y` to include dashboard, popup, cross-surface UX, and the new `tests/accessibility-surface-pass.test.js` audit, which pins forced-colors tokens, bypass links, live-region/toast contracts, and compact toggle sizing. Focus/live-region coverage includes modals, dashboard toasts/progress/editor-save states, popup setup/empty/toast states, side-panel search/status states, and install decision/error/status regions.
 
 #### Next - v3.13.x Cross-Browser and Workflow Completion
 

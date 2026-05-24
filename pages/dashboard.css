@@ -2053,6 +2053,110 @@ tr.row-over-budget {
   }
 }
 
+@media (forced-colors: active) {
+  :root {
+    --bg-body: Canvas;
+    --bg-header: Canvas;
+    --bg-row: Canvas;
+    --bg-row-hover: Canvas;
+    --bg-row-selected: Highlight;
+    --bg-input: Field;
+    --border-color: CanvasText;
+    --border-section: Highlight;
+    --text-primary: CanvasText;
+    --text-secondary: CanvasText;
+    --text-muted: GrayText;
+    --accent-green: Highlight;
+    --accent-green-dark: Highlight;
+    --accent-blue: LinkText;
+    --accent-red: CanvasText;
+    --accent-yellow: CanvasText;
+    --accent-orange: CanvasText;
+    --accent-purple: CanvasText;
+    --toggle-off: ButtonFace;
+    --toggle-on: Highlight;
+    --hairline: CanvasText;
+    --hairline-strong: CanvasText;
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
+    --overlay-scrim: Canvas;
+    --focus-ring: none;
+  }
+
+  *, *::before, *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  body,
+  .sidebar,
+  .main-content,
+  .panel,
+  .modal,
+  .cmd-dialog,
+  .toast,
+  .editor-overlay,
+  .progress-overlay {
+    background: Canvas !important;
+    color: CanvasText !important;
+  }
+
+  a,
+  .updated-link,
+  .toast-action {
+    color: LinkText !important;
+  }
+
+  button,
+  input,
+  select,
+  textarea,
+  .toolbar-btn,
+  .action-btn,
+  .tm-tab,
+  .tab,
+  .modal-close,
+  .toast-action {
+    background: ButtonFace !important;
+    border-color: ButtonText !important;
+    color: ButtonText !important;
+  }
+
+  :focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  .toolbar-btn:focus-visible,
+  .action-btn:focus-visible,
+  .tm-tab:focus-visible,
+  .tab:focus-visible,
+  .toast-action:focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px;
+    box-shadow: none !important;
+  }
+
+  .toast,
+  .modal,
+  .cmd-dialog,
+  .editor-overlay,
+  .progress-overlay,
+  .scripts-table,
+  .card {
+    border: 1px solid CanvasText !important;
+  }
+
+  .toggle input:checked + .toggle-slider,
+  .status-good,
+  .status-warn,
+  .status-neutral {
+    background: Highlight !important;
+    color: HighlightText !important;
+  }
+}
+
 /* ============================================
    Premium polish layer (v3.10) — global
    Focus-visible, selection, numeric alignment.

@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Accessibility surface pass
+
+- Added forced-colors system-color fallbacks for dashboard, popup, side panel,
+  and install surfaces so Windows High Contrast mode does not depend on
+  decorative shadows, gradients, or custom color-only focus rings.
+- Added skip links for popup, side panel, and install pages, and raised compact
+  popup/side-panel script toggles to 24px-class touch targets.
+- Expanded `npm run test:a11y` to run dashboard, popup, cross-surface UX, and
+  the new `tests/accessibility-surface-pass.test.js` forced-colors/live-region
+  audit.
+
 ### 2026-05-24 — CSV export formula-injection coverage
 
 - Inventory confirmed the current CSV emitters are dashboard stats, CSP
