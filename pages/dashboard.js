@@ -1111,8 +1111,10 @@
         const imported = Number(result?.imported || 0);
         const skipped = Number(result?.skipped || 0);
         const failed = Array.isArray(result?.errors) ? result.errors.length : 0;
+        const replaced = Array.isArray(result?.replacedScripts) ? result.replacedScripts.length : 0;
         const parts = [];
         if (imported) parts.push(`${numberFormatter.format(imported)} imported`);
+        if (replaced) parts.push(`${numberFormatter.format(replaced)} replaced`);
         if (skipped) parts.push(`${numberFormatter.format(skipped)} skipped`);
         if (failed) parts.push(`${numberFormatter.format(failed)} failed`);
         if (!parts.length) parts.push('no scripts changed');
@@ -6952,11 +6954,16 @@
                         const r = await chrome.runtime.sendMessage({
                             action: 'importFromZip',
                             zipData: btoa(binary),
-                            options: { overwrite: true }
+                            options: { overwrite: true, sourceLabel: `ZIP: ${file.name}` }
                         });
                         showToast(
                             r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
-                            r?.error ? 'error' : getImportResultTone(r)
+                            r?.error ? 'error' : getImportResultTone(r),
+                            r?.receiptId ? {
+                                actionLabel: 'Undo',
+                                action: () => rollbackRestoreReceipt(r.receiptId, { reason: 'import' }),
+                                duration: 15000
+                            } : {}
                         );
                     } else if (name.endsWith('.json')) {
                         const data = JSON.parse(await file.text());
@@ -6967,13 +6974,19 @@
                                 options: {
                                     overwrite: true,
                                     importSettings: transfer.includeSettings,
-                                    importStorage: transfer.includeStorage
+                                    importStorage: transfer.includeStorage,
+                                    sourceLabel: `JSON: ${file.name}`
                                 }
                             }
                         });
                         showToast(
                             r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
-                            r?.error ? 'error' : getImportResultTone(r)
+                            r?.error ? 'error' : getImportResultTone(r),
+                            r?.receiptId ? {
+                                actionLabel: 'Undo',
+                                action: () => rollbackRestoreReceipt(r.receiptId, { reason: 'import' }),
+                                duration: 15000
+                            } : {}
                         );
                     } else {
                         const code = await file.text();
@@ -10184,6 +10197,41 @@
         }
     }
 
+    async function verifyStoredBackup(backupId) {
+        if (!backupId) return null;
+        showProgress('Verifying backup…');
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'verifyBackup', backupId });
+            hideProgress();
+            if (!response || response.error) {
+                showToast(response?.error || 'Verification failed', 'error');
+                return response || null;
+            }
+            const summary = response.summary || {};
+            const scriptCount = Number(summary.scriptCount || 0);
+            const parseErrors = Number(summary.parseErrors || 0);
+            const optionsErrors = Number(summary.optionsParseErrors || 0);
+            const storageErrors = Number(summary.storageParseErrors || 0);
+            const issues = Array.isArray(response.issues) ? response.issues : [];
+            const valid = response.valid !== false && issues.length === 0;
+            const parts = [`${numberFormatter.format(scriptCount)} script${scriptCount === 1 ? '' : 's'}`];
+            if (parseErrors) parts.push(`${numberFormatter.format(parseErrors)} parse error${parseErrors === 1 ? '' : 's'}`);
+            if (optionsErrors) parts.push(`${numberFormatter.format(optionsErrors)} options error${optionsErrors === 1 ? '' : 's'}`);
+            if (storageErrors) parts.push(`${numberFormatter.format(storageErrors)} stored-value error${storageErrors === 1 ? '' : 's'}`);
+            if (!summary.globalSettingsValid) parts.push('global-settings.json invalid');
+            if (!summary.foldersValid) parts.push('folders.json invalid');
+            if (!summary.workspacesValid) parts.push('workspaces.json invalid');
+            const tone = valid ? 'success' : (scriptCount === 0 ? 'error' : 'warning');
+            const prefix = valid ? 'Backup verified' : 'Backup has issues';
+            showToast(`${prefix}: ${parts.join(', ')}`, tone, { duration: 7000 });
+            return response;
+        } catch (error) {
+            hideProgress();
+            showToast(error?.message || 'Verification failed', 'error');
+            return null;
+        }
+    }
+
     async function restoreStoredBackup(backupId, options = {}) {
         const progressTitle = options.progressTitle
             || (options.selective ? 'Restoring selected scripts…' : 'Restoring backup…');
@@ -10209,11 +10257,54 @@
             updateStats();
             updateProgress(3, 3, 'Restore complete');
             hideProgress();
-            showToast(`Backup restore: ${formatBackupRestoreSummary(response)}`, getBackupRestoreTone(response));
+            const summary = formatBackupRestoreSummary(response);
+            const tone = getBackupRestoreTone(response);
+            const toastOptions = response?.receiptId
+                ? {
+                    actionLabel: 'Undo',
+                    action: () => rollbackRestoreReceipt(response.receiptId, { reason: 'restore' }),
+                    duration: 15000
+                }
+                : {};
+            showToast(`Backup restore: ${summary}`, tone, toastOptions);
             return response;
         } catch (error) {
             hideProgress();
             showToast(error?.message || 'Restore failed', 'error');
+            return null;
+        }
+    }
+
+    async function rollbackRestoreReceipt(receiptId, { reason = 'restore' } = {}) {
+        if (!receiptId) return null;
+        const verb = reason === 'import' ? 'Rolling back import…' : 'Rolling back restore…';
+        showProgress(verb);
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'rollbackRestore', receiptId });
+            if (!response || response.error || response.success === false) {
+                hideProgress();
+                showToast(response?.error || 'Rollback failed', 'error');
+                return response || null;
+            }
+            await loadFolders();
+            await Promise.all([loadScripts(), loadSettings(), loadWorkspaces()]);
+            updateStats();
+            hideProgress();
+            const parts = [];
+            if (response.restoredScripts) parts.push(`${numberFormatter.format(response.restoredScripts)} scripts restored`);
+            if (response.removedScripts) parts.push(`${numberFormatter.format(response.removedScripts)} removed`);
+            if (response.restoredValues) parts.push(`${numberFormatter.format(response.restoredValues)} values reapplied`);
+            if (response.restoredSettings) parts.push('settings reverted');
+            if (response.restoredFolders) parts.push('folders reverted');
+            if (response.restoredWorkspaces) parts.push('workspaces reverted');
+            const failed = Array.isArray(response.errors) ? response.errors.length : 0;
+            if (failed) parts.push(`${numberFormatter.format(failed)} issues`);
+            const summary = parts.length ? parts.join(', ') : 'nothing to roll back';
+            showToast(`Rollback complete: ${summary}`, failed ? 'warning' : 'success');
+            return response;
+        } catch (error) {
+            hideProgress();
+            showToast(error?.message || 'Rollback failed', 'error');
             return null;
         }
     }
@@ -10430,7 +10521,8 @@
             };
             const modalActions = [
                 { label: 'Close', class: '', callback: () => hideModal() },
-                { label: 'Download ZIP', class: '', busyLabel: 'Downloading…', callback: async () => { await exportStoredBackup(backupId); } }
+                { label: 'Download ZIP', class: '', busyLabel: 'Downloading…', callback: async () => { await exportStoredBackup(backupId); } },
+                { label: 'Verify', class: '', busyLabel: 'Verifying…', callback: async () => { await verifyStoredBackup(backupId); } }
             ];
             if (hasScriptEntries) {
                 modalActions.push({

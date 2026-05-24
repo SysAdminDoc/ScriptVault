@@ -1309,14 +1309,17 @@ async function importScripts(data, options = {}) {
   const {
     overwrite = false,
     importSettings = false,
-    importStorage = false
+    importStorage = false,
+    recordReceipt = true,
+    sourceLabel = ''
   } = options;
   const results = {
     imported: 0,
     skipped: 0,
     errors: [],
     settingsImported: false,
-    storageImported: 0
+    storageImported: 0,
+    replacedScripts: []
   };
 
   if (!data.scripts || !Array.isArray(data.scripts)) {
@@ -1327,6 +1330,11 @@ async function importScripts(data, options = {}) {
   const allExistingScripts = await ScriptStorage.getAll();
   const usedScriptIds = new Set(allExistingScripts.map(script => script.id));
   let _importPosition = allExistingScripts.length;
+  // Capture pre-import snapshot for receipt + rollback. Only the scripts and
+  // values that will actually be replaced need to be retained, but it's
+  // cheaper to snapshot once up-front than to look each one up later.
+  const replacedSnapshots = [];
+  const valuesSnapshots = {};
 
   for (const script of data.scripts) {
     const rawScriptId = script && typeof script === 'object' ? script.id : undefined;
@@ -1369,7 +1377,37 @@ async function importScripts(data, options = {}) {
         createdAt: Number.isFinite(script.createdAt) ? script.createdAt : Date.now(),
         updatedAt: Number.isFinite(script.updatedAt) ? script.updatedAt : Date.now()
       };
-      if (script.versionHistory && Array.isArray(script.versionHistory)) {
+
+      // Snapshot the prior script for both versionHistory and the receipt
+      // rollback path before the overwrite happens.
+      if (existing) {
+        const priorClone = structuredClone(existing);
+        replacedSnapshots.push(priorClone);
+        try {
+          const priorValues = await ScriptValues.getAll(scriptId);
+          if (priorValues && Object.keys(priorValues).length > 0) {
+            valuesSnapshots[scriptId] = structuredClone(priorValues);
+          }
+        } catch (_) { /* values snapshot is best effort */ }
+
+        const inheritedHistory = Array.isArray(existing.versionHistory)
+          ? [...existing.versionHistory]
+          : [];
+        inheritedHistory.push({
+          version: existing.meta?.version || '',
+          code: existing.code || '',
+          updatedAt: existing.updatedAt || Date.now(),
+          source: 'import',
+          sourceLabel: sourceLabel || 'import'
+        });
+        if (inheritedHistory.length > 5) inheritedHistory.splice(0, inheritedHistory.length - 5);
+        importEntry.versionHistory = inheritedHistory;
+        results.replacedScripts.push({
+          id: scriptId,
+          name: existing.meta?.name || scriptId,
+          priorVersion: existing.meta?.version || ''
+        });
+      } else if (script.versionHistory && Array.isArray(script.versionHistory)) {
         importEntry.versionHistory = script.versionHistory;
       }
       await ScriptStorage.set(scriptId, importEntry);
@@ -1394,10 +1432,47 @@ async function importScripts(data, options = {}) {
     await SettingsManager.set(data.settings);
     results.settingsImported = true;
   }
-  
+
   // Re-register all scripts after import
   await registerAllScripts(true);
   await updateBadge();
+
+  // Persist an import receipt so the user can roll back when overwrite=true
+  // replaced existing scripts.
+  if (recordReceipt && typeof BackupScheduler !== 'undefined' && replacedSnapshots.length > 0) {
+    try {
+      const scriptIdsBefore = allExistingScripts
+        .map(script => script.id)
+        .filter(id => typeof id === 'string');
+      let scriptIdsAfter = [];
+      try {
+        const after = await ScriptStorage.getAll();
+        scriptIdsAfter = after.map(script => script.id).filter(id => typeof id === 'string');
+      } catch (_) {}
+      const beforeIdSet = new Set(scriptIdsBefore);
+      const addedScriptIds = scriptIdsAfter.filter(id => !beforeIdSet.has(id));
+      const receiptMeta = await BackupScheduler.recordReceipt({
+        type: 'import',
+        source: 'import-json',
+        sourceLabel: sourceLabel || 'JSON import (overwrite)',
+        result: {
+          imported: results.imported,
+          skipped: results.skipped,
+          replacedScripts: results.replacedScripts.length,
+          errors: results.errors.slice()
+        },
+        snapshot: {
+          scriptsBefore: replacedSnapshots,
+          valuesBefore: valuesSnapshots,
+          scriptIdsBefore,
+          addedScriptIds
+        }
+      });
+      if (receiptMeta) results.receiptId = receiptMeta.id;
+    } catch (e) {
+      console.warn('[ScriptVault] importScripts failed to persist receipt:', e);
+    }
+  }
 
   return results;
 }
@@ -1481,8 +1556,15 @@ async function exportToZip(options = {}) {
 
 // Import from ZIP (supports Tampermonkey and other formats)
 async function importFromZip(zipData, options = {}) {
-  const results = { imported: 0, skipped: 0, errors: [] };
-  
+  const results = { imported: 0, skipped: 0, errors: [], replacedScripts: [] };
+  const recordReceipt = options.recordReceipt !== false;
+  const sourceLabel = typeof options.sourceLabel === 'string' && options.sourceLabel.trim()
+    ? options.sourceLabel.trim()
+    : 'ZIP import (overwrite)';
+  // Pre-import snapshot for replaced scripts so the import is reversible.
+  const replacedSnapshots = [];
+  const valuesSnapshots = {};
+
   try {
     // Convert base64 to Uint8Array if needed
     let zipBytes;
@@ -1498,11 +1580,11 @@ async function importFromZip(zipData, options = {}) {
     } else {
       zipBytes = zipData;
     }
-    
+
     // Load the zip file using fflate
     const unzipped = fflate.unzipSync(zipBytes);
     const fileNames = Object.keys(unzipped);
-    
+
     // Find all .user.js files
     const userScripts = fileNames.filter(name => name.endsWith('.user.js'));
     const allExistingScripts = await ScriptStorage.getAll();
@@ -1571,7 +1653,7 @@ async function importFromZip(zipData, options = {}) {
           results.skipped++;
           continue;
         }
-        
+
         // Create or update script
         let scriptId;
         if (existing?.id && isSafeImportedScriptId(existing.id)) {
@@ -1589,14 +1671,45 @@ async function importFromZip(zipData, options = {}) {
           createdAt: existing?.createdAt || Date.now(),
           updatedAt: Date.now()
         };
-        
+
+        // Snapshot before overwrite — feeds both versionHistory and the
+        // restore receipt rollback path.
+        if (existing) {
+          const priorClone = structuredClone(existing);
+          replacedSnapshots.push(priorClone);
+          try {
+            const priorValues = await ScriptValues.getAll(scriptId);
+            if (priorValues && Object.keys(priorValues).length > 0) {
+              valuesSnapshots[scriptId] = structuredClone(priorValues);
+            }
+          } catch (_) {}
+
+          const inheritedHistory = Array.isArray(existing.versionHistory)
+            ? [...existing.versionHistory]
+            : [];
+          inheritedHistory.push({
+            version: existing.meta?.version || '',
+            code: existing.code || '',
+            updatedAt: existing.updatedAt || Date.now(),
+            source: 'import',
+            sourceLabel
+          });
+          if (inheritedHistory.length > 5) inheritedHistory.splice(0, inheritedHistory.length - 5);
+          script.versionHistory = inheritedHistory;
+          results.replacedScripts.push({
+            id: scriptId,
+            name: existing.meta?.name || scriptId,
+            priorVersion: existing.meta?.version || ''
+          });
+        }
+
         await ScriptStorage.set(scriptId, script);
-        
+
         // Import stored values
         if (Object.keys(storedValues).length > 0) {
           await ScriptValues.setAll(scriptId, storedValues);
         }
-        
+
         results.imported++;
       } catch (e) {
         results.errors.push({ name: filename, error: e.message });
@@ -1638,6 +1751,44 @@ async function importFromZip(zipData, options = {}) {
 
     // Re-register all scripts after import
     await registerAllScripts(true);
+
+    // Persist an import receipt if the import actually replaced existing
+    // scripts. Backup-restore goes through restoreBackup which records its
+    // own receipt; only standalone ZIP imports need their own receipt here.
+    if (recordReceipt && typeof BackupScheduler !== 'undefined' && replacedSnapshots.length > 0) {
+      try {
+        const scriptIdsBefore = allExistingScripts
+          .map(script => script.id)
+          .filter(id => typeof id === 'string');
+        let scriptIdsAfter = [];
+        try {
+          const after = await ScriptStorage.getAll();
+          scriptIdsAfter = after.map(script => script.id).filter(id => typeof id === 'string');
+        } catch (_) {}
+        const beforeIdSet = new Set(scriptIdsBefore);
+        const addedScriptIds = scriptIdsAfter.filter(id => !beforeIdSet.has(id));
+        const receiptMeta = await BackupScheduler.recordReceipt({
+          type: 'import',
+          source: 'import-zip',
+          sourceLabel,
+          result: {
+            imported: results.imported,
+            skipped: results.skipped,
+            replacedScripts: results.replacedScripts.length,
+            errors: results.errors.slice()
+          },
+          snapshot: {
+            scriptsBefore: replacedSnapshots,
+            valuesBefore: valuesSnapshots,
+            scriptIdsBefore,
+            addedScriptIds
+          }
+        });
+        if (receiptMeta) results.receiptId = receiptMeta.id;
+      } catch (e) {
+        console.warn('[ScriptVault] importFromZip failed to persist receipt:', e);
+      }
+    }
 
     return results;
   } catch (e) {
@@ -2784,8 +2935,49 @@ async function handleMessage(message, sender) {
         return { backups: [] };
       }
       case 'restoreBackup': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.restoreBackup(data.backupId, data.options);
+        if (typeof BackupScheduler !== 'undefined') {
+          const result = await BackupScheduler.restoreBackup(data.backupId, data.options);
+          // Restoring scripts means new IDs may now be live — make sure
+          // chrome.userScripts reflects the post-restore state.
+          if (result && result.success) {
+            try { await registerAllScripts(true); } catch (_) {}
+            try { await updateBadge(); } catch (_) {}
+          }
+          return result;
+        }
         return { error: 'BackupScheduler not available' };
+      }
+      case 'verifyBackup': {
+        if (typeof BackupScheduler !== 'undefined') {
+          return await BackupScheduler.verifyBackup(data.backupId, { parseUserscript });
+        }
+        return { error: 'BackupScheduler not available' };
+      }
+      case 'getRestoreReceipts': {
+        if (typeof BackupScheduler !== 'undefined') return { receipts: await BackupScheduler.listReceipts() };
+        return { receipts: [] };
+      }
+      case 'getRestoreReceipt': {
+        if (typeof BackupScheduler !== 'undefined') {
+          const receipt = await BackupScheduler.getReceipt(data.receiptId);
+          return { receipt };
+        }
+        return { receipt: null };
+      }
+      case 'rollbackRestore': {
+        if (typeof BackupScheduler !== 'undefined') {
+          const result = await BackupScheduler.rollbackRestoreReceipt(data.receiptId, data.options || {});
+          if (result && result.success) {
+            try { await registerAllScripts(true); } catch (_) {}
+            try { await updateBadge(); } catch (_) {}
+          }
+          return result;
+        }
+        return { error: 'BackupScheduler not available' };
+      }
+      case 'clearRestoreReceipts': {
+        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.clearReceipts();
+        return { success: false, error: 'BackupScheduler not available' };
       }
       case 'deleteBackup': {
         if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.deleteBackup(data.backupId);
