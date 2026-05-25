@@ -24,7 +24,7 @@
 
 ## Phase B — Install-time trust completion (P0)
 
-- [ ] **B-1** Install-page optional permission request for `@grant GM_cookie` / clipboard
+- [x] **B-1** Install-page optional permission request for `@grant GM_cookie` / clipboard (2026-05-24)
   - Evidence: PASS2 NF-2; CWS_COOKIES_JUSTIFICATION.md line 27 claim does not match code.
   - Touches: `pages/install.js` save handler, `src/background/install-handler.ts`, trust receipt schema, `tests/install-source.test.js` (or new).
   - Acceptance: install of `@grant GM_cookie` triggers Chrome optional-permission prompt before install page closes; receipt records `optionalPermissions.cookies = granted|denied`.
@@ -147,6 +147,7 @@
 | Date | Batch | Items closed | Commit(s) |
 |---|---|---|---|
 | 2026-05-24 | A | A-1, A-2 | 090afa4 |
-| 2026-05-24 | D | D-1, D-2, D-3, D-4, D-6 | next commit |
+| 2026-05-24 | D | D-1, D-2, D-3, D-4, D-6 | 6a95dde |
+| 2026-05-24 | B | B-1 | next commit |
 
 (Append a row each time work lands.)

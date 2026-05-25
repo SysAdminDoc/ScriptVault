@@ -4,6 +4,37 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Install-time optional permission gating
+
+- Installing a script with `@grant GM_cookie` previously left the script
+  silently broken because the optional `cookies` permission declared in
+  manifest.json was never requested at install. Same for `GM_setClipboard`
+  and the `clipboardWrite` permission. The install page now requests the
+  matching Chrome optional permission inside the install button's
+  user-gesture window via `chrome.permissions.contains` + `request` before
+  the save round-trips to the background worker.
+- Grant tags for `GM_cookie` / `GM.cookie` / `GM_setClipboard` /
+  `GM.setClipboard` get a `*` hint badge and a tooltip noting the
+  follow-up Chrome prompt; the section grows a one-line caption when any
+  of those grants are present so reviewers can predict the flow.
+- The trust receipt schema (`src/types/script.ts`) and both the runtime
+  builder (`background.core.js`) and the TS mirror
+  (`src/background/trust-receipt.ts`) now persist
+  `optionalPermissions: { requested, granted, denied, unavailable }` so
+  users can see later which prompts they accepted. `null` for receipts
+  that didn't surface a prompt (sync, internal saves, legacy entries).
+- Switched `vitest.config.mjs` from the removed `poolOptions.vmThreads`
+  shape to the Vitest 4 top-level `maxWorkers`/`minWorkers` keys; the
+  default pool stays `vmThreads` with single-worker concurrency.
+- Added `chrome.permissions.contains` + `remove` mocks to `tests/setup.js`
+  so jsdom tests can exercise the new install-page flow.
+- Regression coverage in `tests/install-optional-permissions.test.js`
+  (11 cases — grant-to-permission map, dedup across snake_case/dot
+  variants, no-op for safe-grant-only scripts, no-op for empty grant
+  arrays, contains() short-circuit when already granted, denied path
+  recorded, contains() rejection falls back to request, plus source-pin
+  tests that handleInstall wires the result into saveScript trust data).
+
 ### 2026-05-24 — Wrapper parity wave + per-site control docs
 
 - Added `GM_head` to the TypeScript wrapper mirror at

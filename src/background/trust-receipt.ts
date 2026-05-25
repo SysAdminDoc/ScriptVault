@@ -148,6 +148,19 @@ export async function createScriptTrustReceipt(options: {
   previousScript?: Script | null;
   rollbackIndex?: number;
   fetchDependencyBody?: (url: string) => Promise<string | null | undefined>;
+  /**
+   * Outcome of optional-permission prompts surfaced by the install page
+   * (e.g. `chrome.permissions.request({permissions:['cookies']})` for a
+   * script that requested `@grant GM_cookie`). When the install path did
+   * not surface a prompt — internal saves, sync, legacy receipts — pass
+   * `null` so the field round-trips as null instead of an empty record.
+   */
+  optionalPermissions?: {
+    requested?: string[];
+    granted?: string[];
+    denied?: string[];
+    unavailable?: string[];
+  } | null;
 }): Promise<ScriptTrustReceipt> {
   const { operation, code, meta, previousScript = null } = options;
   const sourceUrl = options.sourceUrl || meta.source || meta.downloadURL || meta.updateURL || '';
@@ -205,6 +218,14 @@ export async function createScriptTrustReceipt(options: {
       connect: diffStringList(asArray(previousScript?.meta?.connect), asArray(meta.connect)),
       match: diffStringList(asArray(previousScript?.meta?.match), asArray(meta.match)),
     },
+    optionalPermissions: options.optionalPermissions && typeof options.optionalPermissions === 'object'
+      ? {
+          requested: Array.isArray(options.optionalPermissions.requested) ? options.optionalPermissions.requested.slice() : [],
+          granted: Array.isArray(options.optionalPermissions.granted) ? options.optionalPermissions.granted.slice() : [],
+          denied: Array.isArray(options.optionalPermissions.denied) ? options.optionalPermissions.denied.slice() : [],
+          unavailable: Array.isArray(options.optionalPermissions.unavailable) ? options.optionalPermissions.unavailable.slice() : [],
+        }
+      : null,
     diff: {
       previousVersion: previousScript?.meta?.version || '',
       nextVersion: meta.version || '',
