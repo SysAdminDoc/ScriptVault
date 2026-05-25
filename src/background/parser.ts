@@ -257,7 +257,48 @@ export function parseUserscript(code: string): ParseResult {
         }
         case 'webRequest':
           try {
-            meta.webRequest = JSON.parse(value) as WebRequestRule[] | null;
+            const raw: unknown = JSON.parse(value);
+            // @webRequest accepts either a single rule object or an array of
+            // rules. Normalize to array, then drop entries that don't match
+            // the documented shape. The DNR rule constructor downstream
+            // assumes selector + action are well-formed, so reject early
+            // here rather than letting a malformed value reach the rule
+            // builder where the failure mode is harder to attribute.
+            const candidates: unknown[] = Array.isArray(raw) ? raw : [raw];
+            const validated: WebRequestRule[] = [];
+            for (const entry of candidates) {
+              if (!entry || typeof entry !== 'object') continue;
+              const obj = entry as Record<string, unknown>;
+              const action = obj['action'];
+              const selector = obj['selector'];
+              // action: must be a string (e.g. 'cancel') or a shape with
+              // cancel:boolean / redirect:string. Anything else is dropped.
+              let validAction = false;
+              if (typeof action === 'string' && action.length > 0) {
+                validAction = true;
+              } else if (action && typeof action === 'object') {
+                const a = action as Record<string, unknown>;
+                const cancel = a['cancel'];
+                const redirect = a['redirect'];
+                if (typeof cancel === 'boolean' || typeof redirect === 'string') {
+                  validAction = true;
+                }
+              }
+              if (!validAction) continue;
+              // selector: must be an object with optional include/exclude
+              // string-array properties. Missing selector defaults to a
+              // catch-all wildcard rule, which is intentional per spec.
+              if (selector != null && typeof selector !== 'object') continue;
+              if (selector && typeof selector === 'object') {
+                const s = selector as Record<string, unknown>;
+                const include = s['include'];
+                const exclude = s['exclude'];
+                if (include != null && !Array.isArray(include)) continue;
+                if (exclude != null && !Array.isArray(exclude)) continue;
+              }
+              validated.push(entry as WebRequestRule);
+            }
+            meta.webRequest = validated.length > 0 ? validated : null;
           } catch {
             // Malformed JSON — leave as null
           }

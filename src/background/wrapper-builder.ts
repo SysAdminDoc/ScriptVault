@@ -824,6 +824,18 @@ ${req.code}
     return control;
   }
 
+  // GM_head — convenience wrapper for HEAD requests. Mirrors the runtime
+  // background.core.js implementation so promoting wrapper-builder.ts to
+  // generated runtime output does not regress GM_head, which the install
+  // page advertises and the linter known-globals list expects.
+  function GM_head(url, callback) {
+    if (!hasGrant('GM_xmlhttpRequest') && !hasGrant('GM.xmlHttpRequest')) {
+      if (typeof callback === 'function') callback({ error: 'Missing @grant GM_xmlhttpRequest' });
+      return;
+    }
+    GM_xmlhttpRequest({ method: 'HEAD', url, onload: callback, onerror: callback });
+  }
+
   // GM_addValueChangeListener - Watch for value changes (like Tampermonkey)
   function GM_addValueChangeListener(key, callback) {
     if (!hasGrant('GM_addValueChangeListener') && !hasGrant('GM.addValueChangeListener')) return null;
@@ -914,6 +926,9 @@ ${req.code}
       timeout: opts.timeout || 0,
       tag: notifTag,
       silent: opts.silent || false,
+      // Tampermonkey/Violentmonkey parity — when set, Chrome pins the
+      // notification until the user explicitly dismisses or acts on it.
+      requireInteraction: typeof opts.requireInteraction === 'boolean' ? opts.requireInteraction : undefined,
       hasOnclick: !!opts.onclick,
       hasOndone: !!opts.ondone
     }).catch(() => {});
@@ -1343,6 +1358,7 @@ ${req.code}
   window.GM_deleteValues = GM_deleteValues;
   window.GM_addStyle = GM_addStyle;
   window.GM_xmlhttpRequest = GM_xmlhttpRequest;
+  window.GM_head = GM_head;
   window.GM_setClipboard = GM_setClipboard;
   window.GM_notification = GM_notification;
   window.GM_openInTab = GM_openInTab;
