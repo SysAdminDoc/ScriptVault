@@ -48,10 +48,15 @@ const A11y = (() => {
 }
 
 /* Focus visible styles — outline, not box-shadow */
-.a11y-active *:focus-visible {
+.a11y-active *:focus-visible:not(#scriptSearch) {
   outline: 2px solid var(--accent-blue) !important;
   outline-offset: 2px !important;
   box-shadow: none !important;
+}
+.a11y-active #scriptSearch:focus-visible {
+  outline: none !important;
+  border-color: rgba(34, 197, 94, 0.42) !important;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14), inset 0 1px 0 rgba(255,255,255,0.06) !important;
 }
 /* Override for toggles/checkboxes which may be hidden */
 .a11y-active input[type="checkbox"]:focus-visible + span,
@@ -109,6 +114,11 @@ const A11y = (() => {
 }
 .a11y-high-contrast *:focus-visible {
   outline-width: 3px !important;
+}
+.a11y-high-contrast #scriptSearch:focus-visible {
+  outline: 3px solid var(--accent-blue) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
 }
 
 /* Reduced motion */

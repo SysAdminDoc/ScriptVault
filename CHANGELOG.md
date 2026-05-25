@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Dashboard search focus refinement
+
+- Removed the double focus treatment on the installed-userscripts search field
+  by excluding it from the broad accessibility-module blue outline rule.
+- Kept keyboard focus visible with the polished green input ring in normal mode
+  and restored the stronger blue outline only for the explicit high-contrast
+  accessibility class.
+- Added regressions so the accessibility layer cannot double-paint the script
+  search focus state again.
+
 ### 2026-05-24 — Dashboard search field polish
 
 - Shortened the installed-userscripts search placeholder so it no longer clips

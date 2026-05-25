@@ -407,6 +407,13 @@ describe('dashboard surface modules', () => {
     expect(dashboardA11yCode).toContain('label[for="${escapeSelectorValue(id)}"]');
   });
 
+  it('dashboard accessibility focus layer does not double-paint script search', () => {
+    expect(dashboardA11yCode).toContain('.a11y-active *:focus-visible:not(#scriptSearch)');
+    expect(dashboardA11yCode).toContain('.a11y-active #scriptSearch:focus-visible');
+    expect(dashboardA11yCode).toContain('box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14)');
+    expect(dashboardA11yCode).toContain('.a11y-high-contrast #scriptSearch:focus-visible');
+  });
+
   it('legacy dashboard stylesheet avoids transition-all on shared controls', () => {
     expect(dashboardCss).not.toMatch(/transition:\s*all/i);
     // v3.10 polish pass tokenised transitions onto --t-fast/--t-base/--t-slow

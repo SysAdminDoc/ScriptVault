@@ -5435,7 +5435,6 @@
             overflow: clip;
         }
 
-        .search-box,
         .bulk-action-cluster,
         .scripts-toolbar-left,
         .settings-search,
@@ -5445,7 +5444,6 @@
             transition: var(--premium-state-transition);
         }
 
-        .search-box:focus-within,
         .settings-search:focus-within,
         .utilities-search:focus-within,
         .trash-search:focus-within,
@@ -5458,6 +5456,13 @@
         .search-box input {
             padding-left: calc(34px * var(--ui-scale));
             padding-right: calc(34px * var(--ui-scale));
+        }
+
+        .search-box input:focus,
+        .search-box input:focus-visible {
+            outline: none;
+            border-color: rgba(34, 197, 94, 0.42);
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.06);
         }
 
         .table-sort-button {
