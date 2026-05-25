@@ -28,7 +28,7 @@
   - Evidence: PASS2 NF-2; CWS_COOKIES_JUSTIFICATION.md line 27 claim does not match code.
   - Touches: `pages/install.js` save handler, `src/background/install-handler.ts`, trust receipt schema, `tests/install-source.test.js` (or new).
   - Acceptance: install of `@grant GM_cookie` triggers Chrome optional-permission prompt before install page closes; receipt records `optionalPermissions.cookies = granted|denied`.
-- [ ] **B-2** Diagnostics support snapshot redaction preview
+- [x] **B-2** Diagnostics support snapshot redaction preview (2026-05-24)
   - Evidence: PASS2 NF-4; `pages/dashboard.js:3525-3680`.
   - Touches: `pages/dashboard.js`, new `pages/dashboard-support.js`, snapshot schema.
   - Acceptance: clicking "Export support snapshot" opens a modal listing each data category with a default-off checkbox for sensitive categories; preview shows what each category contains.
@@ -149,6 +149,7 @@
 | 2026-05-24 | A | A-1, A-2 | 090afa4 |
 | 2026-05-24 | D | D-1, D-2, D-3, D-4, D-6 | 6a95dde |
 | 2026-05-24 | B | B-1 | cc59980 |
-| 2026-05-24 | E | E-1 | next commit |
+| 2026-05-24 | E | E-1 | 4560ff9 |
+| 2026-05-24 | B | B-2 | next commit |
 
 (Append a row each time work lands.)

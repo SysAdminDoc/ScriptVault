@@ -6941,10 +6941,10 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="settings-section">
                 <div class="section-label">Support Snapshot</div>
                 <div class="section-content">
-                    <div class="utility-note" style="margin-bottom:8px">Export a support bundle with runtime setup, trust state, sync summary, recovery inventory, script inventory, and recent diagnostics.</div>
-                    <div id="supportSnapshotSummary" class="utility-surface">Bundle includes runtime status, trusted origins, signing keys, backup inventory, recent errors, and script counts.</div>
+                    <div class="utility-note" style="margin-bottom:8px">Pick which data categories to include in the support bundle. Sensitive categories — script names, URLs, error log, network log, denied hosts — default to OFF so personal data stays on your device unless you opt in.</div>
+                    <div id="supportSnapshotSummary" class="utility-surface">Bundle includes runtime status, backup inventory, and counts by default. Sensitive categories are off until you explicitly tick them.</div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
-                        <button type="button" class="btn" id="btnExportSupportSnapshot">Export Snapshot</button>
+                        <button type="button" class="btn" id="btnExportSupportSnapshot">Export Snapshot…</button>
                         <span class="utility-inline-status" id="supportSnapshotStatus">Ready</span>
                     </div>
                 </div>
