@@ -125,6 +125,16 @@ describe("accessibility surface pass", () => {
     expect(dashboardHtml).toContain("top: var(--toolbar-bottom");
   });
 
+  test("dashboard script search keeps compact copy and icon-safe padding", () => {
+    const searchInputBlocks = styleBlocksFor(".search-box input");
+    const finalSearchInputBlock = searchInputBlocks.at(-1) || "";
+
+    expect(dashboardHtml).toContain('placeholder="Search scripts or code:fetch"');
+    expect(dashboardHtml).toContain('title="Search by script name, domain, tag, or code:fetch"');
+    expect(finalSearchInputBlock).toContain("padding-left: calc(34px * var(--ui-scale))");
+    expect(finalSearchInputBlock).toContain("padding-right: calc(34px * var(--ui-scale))");
+  });
+
   test("compact popup and side-panel toggles meet 24px touch-target height", () => {
     expect(popupHtml).toContain("width: 40px;");
     expect(popupHtml).toContain("height: 24px;");

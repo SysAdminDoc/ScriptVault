@@ -205,6 +205,9 @@ describe("dashboard accessibility markup", () => {
     expect(filterSelect).not.toBeNull();
     expect(search).not.toBeNull();
     expect(counter).not.toBeNull();
+    expect(search?.getAttribute("placeholder")).toBe("Search scripts or code:fetch");
+    expect(search?.getAttribute("title")).toContain("script name, domain, tag");
+    expect(search?.getAttribute("aria-label")).toContain("code:fetch");
 
     // Debloated away
     expect(doc.getElementById("scriptQuickFilters")).toBeNull();

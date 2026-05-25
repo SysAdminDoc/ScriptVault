@@ -968,14 +968,15 @@
 
         .search-box {
             position: relative;
-            flex: 1 1 240px;
-            max-width: 360px;
+            flex: 1 1 320px;
+            min-width: min(100%, 280px);
+            max-width: 440px;
         }
 
         .search-box input {
             width: 100%;
             min-height: 38px;
-            padding: 0 12px 0 34px;
+            padding: 0 34px 0 34px;
             background: var(--bg-input);
             border: 1px solid rgba(127, 127, 127, 0.24);
             border-radius: 12px;
@@ -4372,7 +4373,7 @@
             .scripts-table .col-perf,
             .scripts-table .col-lines,
             .scripts-table .col-size { display: none; }
-            .search-box { max-width: 220px; }
+            .search-box { max-width: 320px; }
         }
 
         /* Tablet */
@@ -5454,6 +5455,11 @@
             box-shadow: var(--premium-state-inset), 0 0 0 3px rgba(96, 165, 250, 0.14);
         }
 
+        .search-box input {
+            padding-left: calc(34px * var(--ui-scale));
+            padding-right: calc(34px * var(--ui-scale));
+        }
+
         .table-sort-button {
             min-height: 30px;
             padding: 0 4px;
@@ -5718,7 +5724,7 @@
                     <span class="script-counter" id="scriptCounter">0 scripts</span>
                     <div class="search-box" role="search" aria-label="Search installed scripts">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="text" id="scriptSearch" name="script_search" placeholder="Search name, domain, tag, or code:fetch" aria-label="Search scripts" aria-describedby="scriptCounter" autocomplete="off" spellcheck="false">
+                        <input type="text" id="scriptSearch" name="script_search" placeholder="Search scripts or code:fetch" title="Search by script name, domain, tag, or code:fetch" aria-label="Search scripts by name, domain, tag, or code:fetch" aria-describedby="scriptCounter" autocomplete="off" spellcheck="false">
                         <button type="button" class="search-box-clear" id="btnClearScriptSearch" aria-label="Clear script search" hidden>×</button>
                     </div>
                     <button type="button" class="toolbar-btn compact" id="btnViewToggle" title="Toggle table/card view" aria-label="Toggle table or card view" aria-pressed="false">

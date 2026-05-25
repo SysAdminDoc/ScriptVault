@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Dashboard search field polish
+
+- Shortened the installed-userscripts search placeholder so it no longer clips
+  inside the dense toolbar while preserving the full search grammar in the
+  tooltip and accessible label.
+- Widened the dashboard search flex target and restored icon-safe left/right
+  input padding after scaled-control CSS runs.
+- Added regressions for the compact search copy and final CSS padding cascade.
+
 ### 2026-05-24 — Dashboard table header anchoring
 
 - Fixed the installed-userscripts table header overlapping the third/fourth
