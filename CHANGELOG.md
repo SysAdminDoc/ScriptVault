@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Dashboard table header anchoring
+
+- Fixed the installed-userscripts table header overlapping the third/fourth
+  visible row by restoring `overflow: clip` on the final table-shell CSS
+  cascade, preserving rounded-corner clipping without trapping sticky headers.
+- Added a dashboard accessibility-surface regression so future polish layers
+  cannot silently switch the script table container back to `overflow: hidden`.
+- Verified the rendered dashboard geometry in headless Chrome: the header stays
+  at the table top and above the first row with no page errors.
+
 ### 2026-05-24 — Bounded fetch UTF-8 fallback
 
 - Tightened the shared bounded text reader so its non-stream fallback measures
