@@ -4,6 +4,31 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Chrome 138 chrome.userScripts.update adoption
+
+- Added `reregisterScript(script)` plus `_supportsUserScriptsUpdate()` in
+  both the runtime (`background.core.js`) and the TypeScript mirror
+  (`src/background/registration.ts`). The helper feature-detects Chrome
+  138's `chrome.userScripts.update` and swaps a single script's
+  registration in place when available, avoiding the brief unregistered
+  window where a tab navigation could miss the script. Falls back to
+  the existing unregister + register cycle for Chrome 130-137.
+- `registerScript` now accepts a `{ useUpdate: true }` option that routes
+  the underlying `chrome.userScripts.register([...])` call through the
+  new `update([...])` path when supported. On "no matching script" the
+  branch falls back to `register` so the first save after a service
+  worker restart still registers cleanly.
+- Migrated the two highest-frequency call sites (`saveScript` and the
+  `setScriptSettings` toggle path) to call `reregisterScript` instead of
+  the manual unregister + register pair. Other call sites (bulk reload,
+  install, factory reset) keep the explicit pair; their cadence makes
+  the flicker risk small and migration is a follow-up.
+- Regression coverage in `tests/reregister-script.test.js` (9 cases —
+  runtime helper presence, TS mirror presence, both call-site migrations
+  pinned, runtime + TS useUpdate option, branch behavior for the three
+  routes: disabled / Chrome 138 enabled / older Chrome enabled).
+- Rebuilt `background.js` (22,657 lines).
+
 ### 2026-05-24 — Install-time optional permission gating
 
 - Installing a script with `@grant GM_cookie` previously left the script

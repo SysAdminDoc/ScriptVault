@@ -15157,11 +15157,11 @@ async function handleMessage(message, sender) {
         await ScriptStorage.set(id, script);
         await updateBadge();
 
-        // Re-register BEFORE reloading tabs so reloaded pages pick up the new script
-        await unregisterScript(id);
-        if (script.enabled !== false) {
-          await registerScript(script);
-        }
+        // Re-register BEFORE reloading tabs so reloaded pages pick up the new
+        // script. reregisterScript uses chrome.userScripts.update on Chrome
+        // 138+ to avoid the unregister/register flicker; older Chrome falls
+        // back to the explicit two-step cycle.
+        await reregisterScript(script);
 
         // Live reload takes priority over debounced auto-reload (prevents double reload)
         try {
@@ -15342,10 +15342,10 @@ async function handleMessage(message, sender) {
           script.updatedAt = Date.now();
           await ScriptStorage.set(scriptId, script);
 
-          await unregisterScript(scriptId);
-          if (script.enabled) {
-            await registerScript(script);
-          }
+          // Toggle re-registration goes through reregisterScript so Chrome
+          // 138+ swaps the registration in place when enabling/disabling
+          // settings without dropping the script briefly.
+          await reregisterScript(script);
 
           await updateBadge();
 
@@ -15632,10 +15632,8 @@ async function handleMessage(message, sender) {
         script.updatedAt = Date.now();
 
         await ScriptStorage.set(data.scriptId, script);
-        await unregisterScript(data.scriptId);
-        if (script.enabled !== false) {
-          await registerScript(script);
-        }
+        // Same Chrome 138+ in-place swap behavior as saveScript above.
+        await reregisterScript(script);
         return { success: true, script: { ...script, metadata: script.meta } };
       }
 
@@ -19690,8 +19688,57 @@ async function registerAllScripts(forceReregister = false) {
   }
 }
 
+/**
+ * Feature-detect chrome.userScripts.update (Chrome 138+). When present, the
+ * runtime can replace a single script's registration in place instead of
+ * round-tripping through unregister + register, which avoids the brief
+ * unregistered window where a tab navigation could miss the script.
+ */
+function _supportsUserScriptsUpdate() {
+  return typeof chrome?.userScripts?.update === 'function';
+}
+
+/**
+ * Replace a script's registration without an unregister/register flicker.
+ *
+ * Behavior matrix:
+ *   - script.enabled === false   → unregister and return; nothing to update.
+ *   - chrome.userScripts.update supported (Chrome 138+) → re-run registerScript
+ *     with useUpdate so the same registration payload is swapped via update().
+ *     Falls back to the full cycle on any update failure.
+ *   - Older Chrome → existing unregister + register cycle.
+ *
+ * Callers that previously wrote `await unregisterScript(id); if
+ * (script.enabled !== false) await registerScript(script);` can replace the
+ * pair with `await reregisterScript(script)`.
+ */
+async function reregisterScript(script) {
+  if (!chrome.userScripts || !script) return;
+  if (script.enabled === false) {
+    await unregisterScript(script.id);
+    return;
+  }
+  if (_supportsUserScriptsUpdate()) {
+    try {
+      // Drop any prior @webRequest DNR rules before the update; the update
+      // path doesn't call unregisterScript so the rule reconciliation has
+      // to happen here. applyWebRequestRules() inside registerScript will
+      // re-establish the rules for the new metadata.
+      await removeWebRequestRules(script.id).catch(() => {});
+      await registerScript(script, { useUpdate: true });
+      return;
+    } catch (e) {
+      // Fall through to the full cycle. The unregister below is a safety
+      // net — update failures usually leave the prior registration intact,
+      // but unregistering guarantees a clean slate before re-registering.
+    }
+  }
+  await unregisterScript(script.id);
+  await registerScript(script);
+}
+
 // Register a single script
-async function registerScript(script) {
+async function registerScript(script, { useUpdate = false } = {}) {
   try {
     const meta = script.meta;
     const settings = script.settings || {};
@@ -19957,8 +20004,22 @@ async function registerScript(script) {
     }
 
     try {
-      // Chrome 131+ supports messaging in USER_SCRIPT world
-      await chrome.userScripts.register([{ ...registration, messaging: world === 'USER_SCRIPT' }]);
+      // Chrome 138+: when reregisterScript routed us here with useUpdate, swap
+      // the existing registration in place instead of failing on "already
+      // registered". Chrome 131+ supports messaging in USER_SCRIPT world for
+      // both register() and update(); keep the same fallback semantics.
+      const payload = [{ ...registration, messaging: world === 'USER_SCRIPT' }];
+      if (useUpdate && _supportsUserScriptsUpdate()) {
+        try {
+          await chrome.userScripts.update(payload);
+        } catch (updateErr) {
+          // update() throws on "no matching script" — fall back to register
+          // so the first save after a SW restart still registers cleanly.
+          await chrome.userScripts.register(payload);
+        }
+      } else {
+        await chrome.userScripts.register(payload);
+      }
     } catch (e) {
       if (e.message?.includes('messaging')) {
         // Fallback for older Chrome versions that don't support the messaging property

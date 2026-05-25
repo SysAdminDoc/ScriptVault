@@ -69,7 +69,7 @@
 
 ## Phase E — Ecosystem and modernization
 
-- [ ] **E-1** Adopt `chrome.userScripts.update()` (Chrome 138+) with fallback
+- [x] **E-1** Adopt `chrome.userScripts.update()` (Chrome 138+) with fallback (2026-05-24, saveScript + toggle migrated; other paths remain on the explicit cycle)
   - Evidence: PASS2 NF-1; [background.core.js:6647](background.core.js#L6647) and 7560.
   - Touches: `background.core.js`, `src/background/registration.ts`.
   - Acceptance: feature-detected; per-script edits use `update()` on Chrome 138+; fallback for Chrome 130-137 preserved.
@@ -148,6 +148,7 @@
 |---|---|---|---|
 | 2026-05-24 | A | A-1, A-2 | 090afa4 |
 | 2026-05-24 | D | D-1, D-2, D-3, D-4, D-6 | 6a95dde |
-| 2026-05-24 | B | B-1 | next commit |
+| 2026-05-24 | B | B-1 | cc59980 |
+| 2026-05-24 | E | E-1 | next commit |
 
 (Append a row each time work lands.)
