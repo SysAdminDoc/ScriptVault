@@ -50,6 +50,9 @@ jobs:
       - name: Store permission copy check
         run: npm run store-copy:check
 
+      - name: README claim check
+        run: npm run readme:check
+
       - name: TypeScript runtime artifact check
         run: npm run ts-runtime:check
 

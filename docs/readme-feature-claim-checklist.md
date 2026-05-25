@@ -72,7 +72,21 @@ and the regression test that pins it.
 | Storage rollback drill                                | `tests/storage-rollback-drill.test.js`                                            | `npm run release:rollback-drill`                   |
 | CWS publish tooling gate                              | `scripts/check-cws-publish-tooling.mjs`                                           | `npm run cws:check`                                |
 | Store permission-copy parity                          | `scripts/check-permission-copy.mjs`                                               | `npm run store-copy:check`                         |
+| README claim parity (no deleted modules, no missing providers/files) | `scripts/check-readme-claims.mjs`                                | `npm run readme:check`                             |
 | Userstyle parser baseline                             | `modules/userstyles.js` `parseUserCSS`                                            | `tests/userstyle-compat-fixtures.test.js`          |
+
+## Recent shipped features
+
+| Claim                                                | Entry point                                                                       | Pinned by                                          |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------- |
+| ESM userscript bundler (off-by-default, R-1)         | `bg/esm-bundler.js`, `src/bg/esm-bundler.ts`                                      | `tests/esm-bundler.test.js`, `tests/esm-csp.test.js` |
+| Per-install/update trust receipts with diff          | `background.core.js` `createScriptTrustReceipt`, `src/background/trust-receipt.ts` | `tests/trust-receipt.test.js`, `tests/trust-receipt-diff.test.js` |
+| Internal-host fetch guard (loopback/RFC1918/CGNAT/IPv6 ULA) | `modules/internal-host-guard.js`, `src/background/internal-host-guard.ts`  | `tests/internal-host-guard.test.js`                |
+| Sync cockpit (health, preview, revoke)                | `CloudSync.preview`, per-provider `getStatus`/`getStorageDisclosure`/`disconnect` | `tests/sync-cockpit.test.js`                       |
+| Dashboard table virtualization                        | `pages/dashboard-virtual-rows.js`, `dashboardVirtualizationThreshold` setting     | `tests/dashboard-virtual-rows.test.js`             |
+| Bounded streaming reads (5 MB cap) for install/update/`@require`/`@resource`/npm CDN | `src/background/fetch-bounded.ts`, `modules/internal-host-guard.js`, `modules/resources.js`, `modules/npm-resolve.js` | `tests/fetch-bounded.test.js`, `tests/source-hardening-parity.test.js`, `tests/resources.test.js`, `tests/npm-resolve.test.js` |
+| CSV export formula-injection defang                   | `pages/dashboard.js buildStatsCSV`, `pages/dashboard-csp.js`, `modules/error-log.js` | `tests/csv-export-formula.test.js`                 |
+| Restore receipts + undoable imports                   | `BackupScheduler.restoreBackup`/`rollbackRestoreReceipt`/`recordReceipt`          | `tests/backup-receipts.test.js`, `tests/import-snapshot.test.js` |
 
 ## How to use this checklist
 
