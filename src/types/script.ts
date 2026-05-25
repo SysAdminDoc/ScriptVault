@@ -178,6 +178,18 @@ export interface ScriptTrustReceipt {
     connect: ScriptTrustReceiptPermissionChangeSet;
     match: ScriptTrustReceiptPermissionChangeSet;
   };
+  /**
+   * Outcome of optional-permission prompts surfaced by the install page
+   * for grants that map to a Chrome optional permission (cookies,
+   * clipboardWrite, etc.). `null` for receipts whose install path did not
+   * surface a prompt (sync, internal saves, legacy receipts).
+   */
+  optionalPermissions?: {
+    requested: string[];
+    granted: string[];
+    denied: string[];
+    unavailable: string[];
+  } | null;
   diff: {
     previousVersion: string;
     nextVersion: string;

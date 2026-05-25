@@ -12,12 +12,9 @@ export default defineConfig({
     // --maxWorkers=1` to dodge both failures. Default to the same shape so
     // CI and contributors don't have to remember the flags.
     pool: "vmThreads",
-    poolOptions: {
-      vmThreads: {
-        maxThreads: 1,
-        minThreads: 1,
-      },
-    },
+    // Vitest 4 moved per-pool config to top-level pool options.
+    maxWorkers: 1,
+    minWorkers: 1,
     testTimeout: 30000,
     include: ["tests/**/*.test.{js,mjs}", "tests/**/*.spec.{js,mjs}"],
     coverage: {

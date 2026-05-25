@@ -448,7 +448,7 @@ async function _sha256Hex(text) {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '', previousScript = null, rollbackIndex = -1, fetchDependencyBody = null }) {
+async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '', previousScript = null, rollbackIndex = -1, fetchDependencyBody = null, optionalPermissions = null }) {
   const installUrl = sourceUrl || meta.source || meta.downloadURL || meta.updateURL || '';
   const previousCode = previousScript?.code || '';
   const nextHash = await _sha256Hex(code);
@@ -500,6 +500,17 @@ async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '',
       connect: _receiptDiffList(_receiptArray(previousScript?.meta?.connect), _receiptArray(meta.connect)),
       match: _receiptDiffList(_receiptArray(previousScript?.meta?.match), _receiptArray(meta.match))
     },
+    // Optional Chrome permissions the install page requested for grants like
+    // GM_cookie / GM_setClipboard. `null` means the install path didn't
+    // surface a prompt (older receipts, ScriptVault-internal saves, etc.).
+    optionalPermissions: optionalPermissions && typeof optionalPermissions === 'object'
+      ? {
+          requested: Array.isArray(optionalPermissions.requested) ? optionalPermissions.requested.slice() : [],
+          granted: Array.isArray(optionalPermissions.granted) ? optionalPermissions.granted.slice() : [],
+          denied: Array.isArray(optionalPermissions.denied) ? optionalPermissions.denied.slice() : [],
+          unavailable: Array.isArray(optionalPermissions.unavailable) ? optionalPermissions.unavailable.slice() : []
+        }
+      : null,
     diff: {
       previousVersion: previousScript?.meta?.version || '',
       nextVersion: meta.version || '',
@@ -2174,7 +2185,8 @@ async function handleMessage(message, sender) {
               meta: parsed.meta,
               sourceUrl: receiptOptions?.sourceUrl || '',
               previousScript,
-              rollbackIndex
+              rollbackIndex,
+              optionalPermissions: receiptOptions?.optionalPermissions || null
             })
           : existing?.trustReceipt;
         if (historyEntry && previousScript) {

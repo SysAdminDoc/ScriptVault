@@ -174,6 +174,8 @@ globalThis.chrome = {
   permissions: {
     request: vi.fn().mockResolvedValue(true),
     getAll: vi.fn().mockResolvedValue({ permissions: [] }),
+    contains: vi.fn().mockResolvedValue(false),
+    remove: vi.fn().mockResolvedValue(true),
   },
   declarativeNetRequest: {
     updateDynamicRules: vi.fn().mockResolvedValue(),

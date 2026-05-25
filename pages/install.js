@@ -51,6 +51,82 @@ const SAFE_PERMISSIONS = [
   'GM_info'
 ];
 
+// Maps each GM grant that needs a Chrome optional permission to its
+// permission token. The cookies + clipboard permissions are declared as
+// optional in manifest.json so the install page must prompt the user at
+// install time — otherwise the script silently fails when it later calls
+// chrome.cookies.* or chrome.clipboard.* because the permission was never
+// granted at install. Keep this map in sync with manifest.json
+// `optional_permissions`. Reading the clipboard (GM_getClipboard, if ever
+// added) would need `clipboardRead`; today no grant maps to it.
+const OPTIONAL_GRANT_PERMISSION_MAP = {
+  'GM_cookie': 'cookies',
+  'GM.cookie': 'cookies',
+  'GM_setClipboard': 'clipboardWrite',
+  'GM.setClipboard': 'clipboardWrite',
+};
+
+/**
+ * Walk the script's declared grants and return the Chrome optional
+ * permission tokens that should be requested at install time. Returns an
+ * empty array when the script doesn't need any — short-circuits the
+ * permission prompt entirely so the common install path is unchanged.
+ */
+function getRequiredOptionalPermissions(meta) {
+  if (!meta || !Array.isArray(meta.grant)) return [];
+  const seen = new Set();
+  const tokens = [];
+  for (const grant of meta.grant) {
+    const token = OPTIONAL_GRANT_PERMISSION_MAP[grant];
+    if (!token || seen.has(token)) continue;
+    seen.add(token);
+    tokens.push(token);
+  }
+  return tokens;
+}
+
+/**
+ * Inspect which optional permissions are already granted and request the
+ * rest. Returns a structured result that the install trust receipt will
+ * persist so users can see later which prompts they accepted.
+ *
+ * IMPORTANT: this must be called inside the same call stack as the install
+ * button click. Chrome enforces a user-gesture requirement on
+ * `chrome.permissions.request` — calling it after an `await` boundary that
+ * crosses a non-user-gesture promise resolution will reject with
+ * `This function must be called during a user gesture`.
+ */
+async function ensureOptionalPermissions(tokens) {
+  const result = { requested: tokens.slice(), granted: [], denied: [], unavailable: [] };
+  if (!tokens.length) return result;
+  if (!chrome.permissions || !chrome.permissions.request) {
+    result.unavailable = tokens.slice();
+    return result;
+  }
+  for (const token of tokens) {
+    let already = false;
+    try {
+      already = !!(await chrome.permissions.contains({ permissions: [token] }));
+    } catch {
+      // Treat lookup failure as "not granted" so we'll attempt the prompt.
+      already = false;
+    }
+    if (already) {
+      result.granted.push(token);
+      continue;
+    }
+    let approved = false;
+    try {
+      approved = !!(await chrome.permissions.request({ permissions: [token] }));
+    } catch {
+      approved = false;
+    }
+    if (approved) result.granted.push(token);
+    else result.denied.push(token);
+  }
+  return result;
+}
+
 // CodeMirror theme mapping per dashboard theme
 const CM_THEME_MAP = {
   dark: 'monokai',
@@ -1138,9 +1214,18 @@ function renderInstallUI(sourceUrl) {
                 const isDangerous = DANGEROUS_PERMISSIONS.includes(g);
                 const isSafe = SAFE_PERMISSIONS.includes(g);
                 const desc = GRANT_DESCRIPTIONS[g] || '';
-                return `<span class="tag ${isDangerous ? 'warning' : isSafe ? 'safe' : ''}" ${desc ? `title="${escapeHtml(desc)}"` : ''}>${escapeHtml(g)}</span>`;
+                const needsOptional = !!OPTIONAL_GRANT_PERMISSION_MAP[g];
+                const augmentedDesc = needsOptional
+                  ? `${desc}${desc ? ' — ' : ''}Will prompt for the Chrome '${OPTIONAL_GRANT_PERMISSION_MAP[g]}' permission at install.`
+                  : desc;
+                return `<span class="tag ${isDangerous ? 'warning' : isSafe ? 'safe' : ''}" ${augmentedDesc ? `title="${escapeHtml(augmentedDesc)}"` : ''}>${escapeHtml(g)}${needsOptional ? '<span class="optional-perm-hint" aria-hidden="true"> *</span>' : ''}</span>`;
               }).join('')}
         </div>
+        ${grants.some(g => OPTIONAL_GRANT_PERMISSION_MAP[g]) ? `
+          <p class="optional-perm-note" style="margin-top:8px;font-size:0.85em;color:var(--text-muted,#888);">
+            * Chrome will ask you for the matching browser permission after you click install. Decline to keep the script working without that capability.
+          </p>
+        ` : ''}
       </div>
 
       ${scriptMeta.connect.length > 0 ? `
@@ -1571,6 +1656,15 @@ async function handleInstall() {
   try {
     const scriptId = existingScript?.id || null;
 
+    // Request optional Chrome permissions for grants that need them
+    // (GM_cookie → cookies, GM_setClipboard → clipboardWrite). Run before
+    // any await on a non-permission promise so the user-gesture window
+    // from the install button click is still open when Chrome evaluates
+    // the request. Result lands in the trust receipt so the user can see
+    // later which prompts they accepted/denied.
+    const optionalPermissionTokens = getRequiredOptionalPermissions(scriptMeta);
+    const optionalPermissionsResult = await ensureOptionalPermissions(optionalPermissionTokens);
+
     // Round 11: The background saveScript handler doesn't read the `autoUpdate`
     // flag — the canonical per-script update opt-out is `@nodownload` in the
     // metadata block, which the update-checker honors. If the user toggled
@@ -1595,6 +1689,7 @@ async function handleInstall() {
         trust: {
           recordReceipt: true,
           sourceUrl: installSourceUrl,
+          optionalPermissions: optionalPermissionsResult,
           operation: presentation.isDowngrade
             ? 'downgrade'
             : presentation.isReinstall
