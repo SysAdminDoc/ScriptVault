@@ -168,7 +168,42 @@ export async function registerAllScripts(): Promise<void> {
 }
 
 // Register a single script
-export async function registerScript(script: Script): Promise<void> {
+/**
+ * Feature-detect chrome.userScripts.update (Chrome 138+). Mirrors the runtime
+ * helper in background.core.js so a future TS-runtime promotion preserves the
+ * in-place update path.
+ */
+export function supportsUserScriptsUpdate(): boolean {
+  return typeof (chrome as unknown as { userScripts?: { update?: unknown } })?.userScripts?.update === 'function';
+}
+
+/**
+ * Replace a script's registration without an unregister/register flicker.
+ * Chrome 138+ takes the in-place update path; older Chrome falls back to the
+ * existing unregister + register cycle. Mirrors the runtime helper in
+ * background.core.js — see that file's reregisterScript for the full
+ * behavior contract.
+ */
+export async function reregisterScript(script: Script): Promise<void> {
+  if (!chrome.userScripts || !script) return;
+  if (script.enabled === false) {
+    await unregisterScript(script.id);
+    return;
+  }
+  if (supportsUserScriptsUpdate()) {
+    try {
+      await removeWebRequestRules(script.id).catch(() => undefined);
+      await registerScript(script, { useUpdate: true });
+      return;
+    } catch {
+      // Fall through to the full unregister + register cycle.
+    }
+  }
+  await unregisterScript(script.id);
+  await registerScript(script);
+}
+
+export async function registerScript(script: Script, options: { useUpdate?: boolean } = {}): Promise<void> {
   try {
     if (!chrome.userScripts) return;
 
@@ -433,9 +468,22 @@ export async function registerScript(script: Script): Promise<void> {
     try {
       // Chrome 131+ supports messaging in USER_SCRIPT world
       // The `messaging` property is not in all chrome-types versions, so cast to any.
-      await chrome.userScripts.register([
+      const payload = [
         { ...registration, messaging: world === 'USER_SCRIPT' } as chrome.userScripts.RegisteredUserScript,
-      ]);
+      ];
+      if (options.useUpdate && supportsUserScriptsUpdate()) {
+        try {
+          await (chrome.userScripts as unknown as {
+            update(s: chrome.userScripts.RegisteredUserScript[]): Promise<void>;
+          }).update(payload);
+        } catch {
+          // update() throws on "no matching script" — fall back to register
+          // so the first save after SW restart still registers cleanly.
+          await chrome.userScripts.register(payload);
+        }
+      } else {
+        await chrome.userScripts.register(payload);
+      }
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
       if (errMsg?.includes('messaging')) {
