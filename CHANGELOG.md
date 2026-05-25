@@ -4,6 +4,38 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Support snapshot redaction preview
+
+- The dashboard's "Export Snapshot" button used to dump script names,
+  URLs, error log, recent network log, denied hosts, and the public API
+  audit to a JSON file with no opt-out. Replaced the one-click export
+  with a redaction-preview modal that lists 13 data categories, defaults
+  the 7 sensitive ones to OFF, and shows a per-category description so
+  users can see exactly what each checkbox unlocks before anything
+  reaches disk.
+- Runtime status and counts are always-on because the bundle is useless
+  for support without them and neither contains personal data. Backup
+  inventory, sync provider summary, recovery schedule, and trusted
+  signing key names default to ON. Script inventory, activity log,
+  error log, network log, denied hosts, public API audit, and public
+  API trusted-origins/permissions default to OFF and carry a
+  `sensitive` visual flag in the modal.
+- The exported JSON is now schema v2 with a top-level `redactionProfile`
+  block listing both `includedCategories` and `excludedCategories` so a
+  reviewer can see at a glance what data was redacted versus what
+  simply didn't exist.
+- The builder skips the matching `chrome.runtime.sendMessage` round-trip
+  for any opted-out category, so a snapshot with everything sensitive
+  unticked never even fetches the error log or network log.
+- Added `pages/dashboard.css` styles for `.snapshot-redaction`,
+  `.snapshot-category`, and the sensitive variant; the support-section
+  copy in `pages/dashboard.html` now describes the opt-in model.
+- Regression coverage in `tests/support-snapshot-redaction.test.js`
+  (13 cases — category inventory, sensitive/always-on/default-on
+  classifications, modal flow, always-on forcing, conditional fetch
+  wiring per category, schema v2 redactionProfile fields, conditional
+  attachment of every snapshot block, HTML and CSS surface checks).
+
 ### 2026-05-24 — Chrome 138 chrome.userScripts.update adoption
 
 - Added `reregisterScript(script)` plus `_supportsUserScriptsUpdate()` in

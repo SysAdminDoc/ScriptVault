@@ -3520,12 +3520,109 @@
             .filter(Boolean);
     }
 
+    // Support snapshot categories with redaction preview defaults. Categories
+    // flagged sensitive default to OFF so a misclick can't leak the user's
+    // script URLs, error log, network log, or denied-hosts list to disk.
+    // Always-on categories (runtime, counts) are non-toggleable because the
+    // bundle is useless for support without them and they don't contain
+    // sensitive content.
+    const SNAPSHOT_CATEGORIES = [
+      { id: 'runtime', label: 'Runtime status', description: 'Extension version, Chrome userScripts availability, browser version.', default: true, alwaysOn: true },
+      { id: 'counts', label: 'Counts only', description: 'Total / enabled script counts, folder count, selected count. No names.', default: true, alwaysOn: true },
+      { id: 'backupInventory', label: 'Backup inventory summary', description: 'Backup IDs, timestamps, sizes, and reasons for the most recent 10 backups.', default: true },
+      { id: 'syncSummary', label: 'Sync provider summary', description: 'Active sync provider name and last sync timestamp. No tokens.', default: true },
+      { id: 'recoverySchedule', label: 'Recovery schedule', description: 'Backup scheduler settings (frequency, retention).', default: true },
+      { id: 'trustedSigningKeys', label: 'Trusted signing key names', description: 'Names of keys in your signing trust store. Public keys excluded by default — see sensitive categories.', default: true },
+      { id: 'scriptInventory', label: 'Script inventory (names + URLs + provenance)', description: 'For each installed script: id, name, version, enabled, homepage, updateURL, downloadURL.', default: false, sensitive: true },
+      { id: 'activityLog', label: 'Recent activity log entries', description: 'Last 15 user-facing activity entries (install / update / error timestamps).', default: false, sensitive: true },
+      { id: 'errorLog', label: 'Error log (messages + stack frames)', description: 'Recent error log entries from background and dashboard. May reveal script names or URLs.', default: false, sensitive: true },
+      { id: 'networkLog', label: 'Recent network requests (URLs)', description: 'Last 25 GM_xmlhttpRequest URLs and statuses. Includes any hostnames your scripts contacted.', default: false, sensitive: true },
+      { id: 'deniedHosts', label: 'Denied hosts list', description: 'Hostnames you explicitly blocked from running scripts. May include private hostnames.', default: false, sensitive: true },
+      { id: 'publicApiAudit', label: 'Public API audit log', description: 'Last 25 external API events with origins, methods, and outcomes.', default: false, sensitive: true },
+      { id: 'publicApiPermissions', label: 'Public API trusted origins + permission policy', description: 'List of external web origins that can call the public API plus the per-method policy.', default: false, sensitive: true },
+    ];
+
+    function defaultSnapshotCategories() {
+      const set = new Set();
+      for (const c of SNAPSHOT_CATEGORIES) {
+        if (c.default || c.alwaysOn) set.add(c.id);
+      }
+      return set;
+    }
+
     async function exportSupportSnapshot() {
+      // Open the redaction-preview modal first. The user picks which data
+      // categories to include before anything is fetched or written to disk.
+      // Defaults match the SNAPSHOT_CATEGORIES inventory: sensitive groups
+      // start OFF; safe groups start ON; runtime + counts are required.
+      const initialCategories = defaultSnapshotCategories();
+      const sensitiveCount = SNAPSHOT_CATEGORIES.filter(c => c.sensitive).length;
+      const checkedCount = SNAPSHOT_CATEGORIES.filter(c => initialCategories.has(c.id)).length;
+      const html = `
+        <div class="snapshot-redaction" data-testid="snapshot-redaction">
+          <p class="snapshot-redaction-intro">
+            Pick which data categories to include in the support snapshot.
+            <strong>Sensitive categories default to OFF</strong> so personal data stays on your device until you opt in.
+            ${sensitiveCount} sensitive categor${sensitiveCount === 1 ? 'y is' : 'ies are'} listed below;
+            ${checkedCount - 2} optional safe categor${checkedCount - 2 === 1 ? 'y is' : 'ies are'} pre-selected.
+          </p>
+          <ul class="snapshot-categories-list" role="list">
+            ${SNAPSHOT_CATEGORIES.map(c => `
+              <li class="snapshot-category ${c.sensitive ? 'snapshot-category-sensitive' : ''}">
+                <label>
+                  <input
+                    type="checkbox"
+                    data-snapshot-category="${escapeHtml(c.id)}"
+                    ${initialCategories.has(c.id) ? 'checked' : ''}
+                    ${c.alwaysOn ? 'disabled aria-describedby="snapshot-required-hint"' : ''}
+                  >
+                  <span class="snapshot-category-label">
+                    ${escapeHtml(c.label)}
+                    ${c.alwaysOn ? '<span class="snapshot-category-flag">required</span>' : ''}
+                    ${c.sensitive ? '<span class="snapshot-category-flag snapshot-category-flag-sensitive">sensitive</span>' : ''}
+                  </span>
+                  <span class="snapshot-category-detail">${escapeHtml(c.description)}</span>
+                </label>
+              </li>
+            `).join('')}
+          </ul>
+          <p id="snapshot-required-hint" class="snapshot-redaction-footer">
+            Required categories cannot be unchecked — the support bundle needs them to be useful.
+            The exported JSON records which categories you included so reviewers can see what was redacted.
+          </p>
+        </div>
+      `;
+      showModal('Export support snapshot', html, [
+        { label: 'Export selected', class: 'btn-primary', callback: async () => {
+          // Collect the checked categories before hideModal() clears the body.
+          const checked = new Set();
+          const inputs = elements.modalBody?.querySelectorAll('input[data-snapshot-category]') || [];
+          for (const input of inputs) {
+            if (input.checked) checked.add(input.dataset.snapshotCategory);
+          }
+          // Force always-on categories in case a future edit removes the
+          // `disabled` attribute from the markup.
+          for (const c of SNAPSHOT_CATEGORIES) {
+            if (c.alwaysOn) checked.add(c.id);
+          }
+          hideModal();
+          await buildAndDownloadSupportSnapshot(checked);
+        } },
+        { label: 'Cancel', callback: () => hideModal() },
+      ]);
+    }
+
+    async function buildAndDownloadSupportSnapshot(enabledCategories) {
         if (elements.supportSnapshotStatus) {
             elements.supportSnapshotStatus.textContent = 'Collecting diagnostics…';
         }
         try {
             const provider = normalizeSyncProvider(state.settings);
+            // Skip the fetches for categories the user opted out of. Tracking
+            // each conditional through Promise.all keeps the existing
+            // destructure ergonomic — undefined for skipped categories means
+            // the snapshot omits the field entirely.
+            const wantPublicApi = enabledCategories.has('publicApiPermissions') || enabledCategories.has('publicApiAudit');
             const [
                 runtimeStatus,
                 publicApiData,
@@ -3538,57 +3635,112 @@
                 backupSettings
             ] = await Promise.all([
                 chrome.runtime.sendMessage({ action: 'getExtensionStatus' }),
-                Promise.all([
-                    chrome.runtime.sendMessage({ action: 'publicApi_getTrustedOrigins' }),
-                    chrome.runtime.sendMessage({ action: 'publicApi_getPermissions' }),
-                    chrome.runtime.sendMessage({ action: 'publicApi_getAuditLog', data: { limit: 25 } })
-                ]),
-                chrome.runtime.sendMessage({ action: 'signing_getTrustedKeys' }),
-                chrome.runtime.sendMessage({ action: 'getErrorLog' }),
-                chrome.runtime.sendMessage({ action: 'getErrorLogGrouped' }),
-                chrome.runtime.sendMessage({ action: 'getNetworkLogStats' }),
-                chrome.runtime.sendMessage({ action: 'getNetworkLog' }),
-                chrome.runtime.sendMessage({ action: 'getBackups' }),
-                chrome.runtime.sendMessage({ action: 'getBackupSettings' })
+                wantPublicApi
+                    ? Promise.all([
+                        chrome.runtime.sendMessage({ action: 'publicApi_getTrustedOrigins' }),
+                        chrome.runtime.sendMessage({ action: 'publicApi_getPermissions' }),
+                        chrome.runtime.sendMessage({ action: 'publicApi_getAuditLog', data: { limit: 25 } })
+                      ])
+                    : Promise.resolve([null, null, null]),
+                enabledCategories.has('trustedSigningKeys')
+                    ? chrome.runtime.sendMessage({ action: 'signing_getTrustedKeys' })
+                    : Promise.resolve(null),
+                enabledCategories.has('errorLog')
+                    ? chrome.runtime.sendMessage({ action: 'getErrorLog' })
+                    : Promise.resolve(null),
+                enabledCategories.has('errorLog')
+                    ? chrome.runtime.sendMessage({ action: 'getErrorLogGrouped' })
+                    : Promise.resolve(null),
+                enabledCategories.has('networkLog')
+                    ? chrome.runtime.sendMessage({ action: 'getNetworkLogStats' })
+                    : Promise.resolve(null),
+                enabledCategories.has('networkLog')
+                    ? chrome.runtime.sendMessage({ action: 'getNetworkLog' })
+                    : Promise.resolve(null),
+                enabledCategories.has('backupInventory')
+                    ? chrome.runtime.sendMessage({ action: 'getBackups' })
+                    : Promise.resolve(null),
+                enabledCategories.has('recoverySchedule')
+                    ? chrome.runtime.sendMessage({ action: 'getBackupSettings' })
+                    : Promise.resolve(null)
             ]);
 
-            const [originsResponse, permissionsResponse, auditResponse] = publicApiData;
-            const cloudStatus = provider && provider !== 'none'
+            const [originsResponse, permissionsResponse, auditResponse] = publicApiData || [null, null, null];
+            const cloudStatus = enabledCategories.has('syncSummary') && provider && provider !== 'none'
                 ? await chrome.runtime.sendMessage({ action: 'cloudStatus', provider })
                 : { connected: false };
             const backups = Array.isArray(backupInventory) ? backupInventory : (backupInventory?.backups || []);
-            state.backups = backups.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            state.backupSettings = normalizeBackupSettings(backupSettings);
-            const latestBackup = getLatestBackup();
-            const totalBackupSize = state.backups.reduce((sum, entry) => sum + Number(entry.size || 0), 0);
+            // Only refresh in-memory state when the user opted into the data
+            // — otherwise an export-with-everything-off would wipe what's
+            // already loaded.
+            if (enabledCategories.has('backupInventory')) {
+                state.backups = backups.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            }
+            if (enabledCategories.has('recoverySchedule') && backupSettings) {
+                state.backupSettings = normalizeBackupSettings(backupSettings);
+            }
+            const latestBackup = enabledCategories.has('backupInventory') ? getLatestBackup() : null;
+            const totalBackupSize = enabledCategories.has('backupInventory')
+                ? state.backups.reduce((sum, entry) => sum + Number(entry.size || 0), 0)
+                : 0;
 
             state.trustCenter.runtimeStatus = runtimeStatus || null;
-            state.trustCenter.publicApiOrigins = Array.isArray(originsResponse?.origins) ? originsResponse.origins : [];
-            state.trustCenter.publicApiPermissions = permissionsResponse?.permissions || {};
-            state.trustCenter.publicApiAudit = Array.isArray(auditResponse?.entries) ? auditResponse.entries : [];
-            state.trustCenter.signingKeys = signingKeys?.keys || {};
+            if (wantPublicApi) {
+                state.trustCenter.publicApiOrigins = Array.isArray(originsResponse?.origins) ? originsResponse.origins : [];
+                state.trustCenter.publicApiPermissions = permissionsResponse?.permissions || {};
+                state.trustCenter.publicApiAudit = Array.isArray(auditResponse?.entries) ? auditResponse.entries : [];
+            }
+            if (enabledCategories.has('trustedSigningKeys')) {
+                state.trustCenter.signingKeys = signingKeys?.keys || {};
+            }
 
             renderRuntimeStatus(runtimeStatus);
-            renderPublicApiAuditLog(state.trustCenter.publicApiAudit);
-            renderSigningTrustList(state.trustCenter.signingKeys);
+            if (wantPublicApi) renderPublicApiAuditLog(state.trustCenter.publicApiAudit);
+            if (enabledCategories.has('trustedSigningKeys')) renderSigningTrustList(state.trustCenter.signingKeys);
 
+            // Build the snapshot. Each top-level group is only attached when
+            // the matching category is enabled — the JSON schema therefore
+            // documents which data the user actually opted into.
             const snapshot = {
-                version: 1,
+                version: 2,
+                schema: 'scriptvault-support-snapshot/v2',
                 exportedAt: new Date().toISOString(),
                 extension: {
                     name: chrome.runtime.getManifest().name,
                     version: chrome.runtime.getManifest().version
                 },
+                // Redaction profile records which categories were included so
+                // a reviewer can see at a glance what was excluded vs absent
+                // because the data didn't exist in the first place.
+                redactionProfile: {
+                    includedCategories: SNAPSHOT_CATEGORIES
+                        .filter(c => enabledCategories.has(c.id))
+                        .map(c => c.id),
+                    excludedCategories: SNAPSHOT_CATEGORIES
+                        .filter(c => !enabledCategories.has(c.id))
+                        .map(c => ({ id: c.id, label: c.label, sensitive: !!c.sensitive }))
+                },
                 runtime: runtimeStatus,
-                sync: {
+                counts: enabledCategories.has('counts') ? {
+                    scripts: state.scripts.length,
+                    enabledScripts: state.scripts.filter(script => script.enabled !== false).length,
+                    folders: state.folders.length,
+                    selectedScripts: state.selectedScripts.size
+                } : undefined
+            };
+            if (enabledCategories.has('syncSummary')) {
+                snapshot.sync = {
                     enabled: normalizeSyncEnabled(state.settings),
                     provider,
                     lastSyncTime: state.settings.lastSyncTime || null,
                     cloudStatus
-                },
-                recovery: {
-                    schedule: state.backupSettings,
-                    inventory: {
+                };
+            }
+            if (enabledCategories.has('backupInventory') || enabledCategories.has('recoverySchedule')) {
+                snapshot.recovery = {};
+                if (enabledCategories.has('recoverySchedule')) snapshot.recovery.schedule = state.backupSettings;
+                if (enabledCategories.has('backupInventory')) {
+                    snapshot.recovery.inventory = {
                         count: state.backups.length,
                         totalSize: totalBackupSize,
                         totalSizeFormatted: formatBytes(totalBackupSize),
@@ -3612,29 +3764,37 @@
                             size: backup.size || 0,
                             sizeFormatted: backup.sizeFormatted || formatBytes(backup.size || 0)
                         }))
-                    }
-                },
-                trust: {
-                    publicApiOrigins: state.trustCenter.publicApiOrigins,
-                    publicApiPermissions: state.trustCenter.publicApiPermissions,
-                    publicApiAudit: state.trustCenter.publicApiAudit,
-                    trustedSigningKeys: state.trustCenter.signingKeys,
-                    deniedHosts: state.settings.deniedHosts || []
-                },
-                counts: {
-                    scripts: state.scripts.length,
-                    enabledScripts: state.scripts.filter(script => script.enabled !== false).length,
-                    folders: state.folders.length,
-                    selectedScripts: state.selectedScripts.size
-                },
-                diagnostics: {
-                    activityLog: getRecentActivityEntries(),
-                    errorLog,
-                    errorGroups,
-                    networkStats,
-                    recentNetworkLog: Array.isArray(networkLog) ? networkLog.slice(-25) : networkLog
-                },
-                scripts: state.scripts.map(script => {
+                    };
+                }
+            }
+            const trustBlock = {};
+            if (enabledCategories.has('publicApiPermissions')) {
+                trustBlock.publicApiOrigins = state.trustCenter.publicApiOrigins;
+                trustBlock.publicApiPermissions = state.trustCenter.publicApiPermissions;
+            }
+            if (enabledCategories.has('publicApiAudit')) {
+                trustBlock.publicApiAudit = state.trustCenter.publicApiAudit;
+            }
+            if (enabledCategories.has('trustedSigningKeys')) {
+                trustBlock.trustedSigningKeys = state.trustCenter.signingKeys;
+            }
+            if (enabledCategories.has('deniedHosts')) {
+                trustBlock.deniedHosts = state.settings.deniedHosts || [];
+            }
+            if (Object.keys(trustBlock).length > 0) snapshot.trust = trustBlock;
+            const diagnosticsBlock = {};
+            if (enabledCategories.has('activityLog')) diagnosticsBlock.activityLog = getRecentActivityEntries();
+            if (enabledCategories.has('errorLog')) {
+                diagnosticsBlock.errorLog = errorLog;
+                diagnosticsBlock.errorGroups = errorGroups;
+            }
+            if (enabledCategories.has('networkLog')) {
+                diagnosticsBlock.networkStats = networkStats;
+                diagnosticsBlock.recentNetworkLog = Array.isArray(networkLog) ? networkLog.slice(-25) : networkLog;
+            }
+            if (Object.keys(diagnosticsBlock).length > 0) snapshot.diagnostics = diagnosticsBlock;
+            if (enabledCategories.has('scriptInventory')) {
+                snapshot.scripts = state.scripts.map(script => {
                     const provenance = describeScriptProvenance(script);
                     return {
                         id: script.id,
@@ -3649,8 +3809,8 @@
                         userModified: !!script.settings?.userModified,
                         syncLock: !!script.settings?.syncLock
                     };
-                })
-            };
+                });
+            }
 
             const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
