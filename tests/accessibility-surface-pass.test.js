@@ -133,6 +133,9 @@ describe("accessibility surface pass", () => {
     expect(dashboardHtml).toContain('title="Search by script name, domain, tag, or code:fetch"');
     expect(finalSearchInputBlock).toContain("padding-left: calc(34px * var(--ui-scale))");
     expect(finalSearchInputBlock).toContain("padding-right: calc(34px * var(--ui-scale))");
+    expect(dashboardHtml).not.toContain(".search-box:focus-within");
+    expect(dashboardHtml).toContain(".search-box input:focus-visible");
+    expect(dashboardHtml).toContain("box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14)");
   });
 
   test("compact popup and side-panel toggles meet 24px touch-target height", () => {
