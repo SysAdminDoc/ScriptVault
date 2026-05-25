@@ -13196,7 +13196,36 @@ function parseUserscript(code) {
         break;
       }
       case 'webRequest':
-        try { meta.webRequest = JSON.parse(value); } catch (e) {}
+        try {
+          // @webRequest accepts either a single rule object or an array of
+          // rules. Normalize to array, then drop entries that don't match
+          // the documented shape so the DNR rule builder downstream never
+          // receives malformed input. Mirrors src/background/parser.ts.
+          const raw = JSON.parse(value);
+          const candidates = Array.isArray(raw) ? raw : [raw];
+          const validated = [];
+          for (const entry of candidates) {
+            if (!entry || typeof entry !== 'object') continue;
+            const action = entry.action;
+            const selector = entry.selector;
+            let validAction = false;
+            if (typeof action === 'string' && action.length > 0) {
+              validAction = true;
+            } else if (action && typeof action === 'object') {
+              if (typeof action.cancel === 'boolean' || typeof action.redirect === 'string') {
+                validAction = true;
+              }
+            }
+            if (!validAction) continue;
+            if (selector != null && typeof selector !== 'object') continue;
+            if (selector && typeof selector === 'object') {
+              if (selector.include != null && !Array.isArray(selector.include)) continue;
+              if (selector.exclude != null && !Array.isArray(selector.exclude)) continue;
+            }
+            validated.push(entry);
+          }
+          meta.webRequest = validated.length > 0 ? validated : null;
+        } catch (e) {}
         break;
       default:
         // Handle localized metadata like @name:ja or @name:zh-Hans
@@ -16939,6 +16968,14 @@ async function handleMessage(message, sender) {
           message: _clampString(data.text || '', SV_NOTIF_MESSAGE_MAX),
           silent: data.silent || false
         };
+        // Phase 41 — pass `requireInteraction` through so scripts can pin a
+        // notification until the user acts on it (Tampermonkey/ViolentMonkey
+        // parity). Chrome 50+ supports this for `basic` and `image` types;
+        // ignored on `progress`. Boolean coercion guards against truthy-but-
+        // non-boolean values producing unexpected chrome.notifications shape.
+        if (typeof data.requireInteraction === 'boolean' && data.requireInteraction) {
+          notifOpts.requireInteraction = true;
+        }
         if (hasProgress) {
           notifOpts.progress = Math.max(0, Math.min(100, Math.floor(data.progress)));
         }
@@ -17010,6 +17047,7 @@ async function handleMessage(message, sender) {
           }));
         }
         if (typeof data.silent === 'boolean') updateOpts.silent = data.silent;
+        if (typeof data.requireInteraction === 'boolean') updateOpts.requireInteraction = data.requireInteraction;
         try {
           const wasUpdated = await chrome.notifications.update(data.id, updateOpts);
           return { success: !!wasUpdated };
@@ -21414,6 +21452,9 @@ ${req.code}
       timeout: opts.timeout || 0,
       tag: notifTag,
       silent: opts.silent || false,
+      // Tampermonkey/Violentmonkey parity — when set, Chrome pins the
+      // notification until the user explicitly dismisses or acts on it.
+      requireInteraction: typeof opts.requireInteraction === 'boolean' ? opts.requireInteraction : undefined,
       progress: typeof opts.progress === 'number' ? opts.progress : undefined,
       buttons: wireButtons,
       hasOnclick: !!opts.onclick,
@@ -21441,7 +21482,8 @@ ${req.code}
                 ...(typeof b?.iconUrl === 'string' ? { iconUrl: b.iconUrl } : {})
               }))
             : undefined,
-          silent: typeof patch.silent === 'boolean' ? patch.silent : undefined
+          silent: typeof patch.silent === 'boolean' ? patch.silent : undefined,
+          requireInteraction: typeof patch.requireInteraction === 'boolean' ? patch.requireInteraction : undefined
         }).catch(() => {});
       }
     };
@@ -21465,7 +21507,8 @@ ${req.code}
             ...(typeof b?.iconUrl === 'string' ? { iconUrl: b.iconUrl } : {})
           }))
         : undefined,
-      silent: typeof details.silent === 'boolean' ? details.silent : undefined
+      silent: typeof details.silent === 'boolean' ? details.silent : undefined,
+      requireInteraction: typeof details.requireInteraction === 'boolean' ? details.requireInteraction : undefined
     }).catch(() => {});
   }
   function GM_closeNotification(notificationId) {

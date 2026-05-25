@@ -42,19 +42,19 @@
 
 ## Phase D — Code-level small parity / drift items
 
-- [ ] **D-1** Resolve `GM_head` drift — add to TS wrapper-builder mirror OR remove from runtime
+- [x] **D-1** Resolve `GM_head` drift — added to TS wrapper-builder mirror (2026-05-24)
   - Evidence: PASS2 NF-5; runtime has it ([background.core.js:8397](background.core.js#L8397)); TS mirror lacks it.
   - Touches: `src/background/wrapper-builder.ts` (~50 lines).
   - Acceptance: TS mirror exposes `GM_head` matching runtime; OR `GM_head` removed from runtime + linter known-globals + install.js GRANT_DESCRIPTIONS.
-- [ ] **D-2** Validate `@webRequest` JSON shape in parser
+- [x] **D-2** Validate `@webRequest` JSON shape in parser (2026-05-24)
   - Evidence: PASS2 NF-18; [src/background/parser.ts:258-263](src/background/parser.ts#L258-L263).
   - Touches: `src/background/parser.ts`, `tests/parser.test.js`.
   - Acceptance: malformed `@webRequest` JSON is rejected (returns `null`) with one regression test per rejection shape.
-- [ ] **D-3** Bake `--pool=vmThreads` into `vitest.config.mjs` as default
+- [x] **D-3** Bake `--pool=vmThreads` into `vitest.config.mjs` as default (2026-05-24)
   - Evidence: PASS2 NF-22; every CLAUDE.md 2026-05-24 verification block uses this flag.
   - Touches: `vitest.config.mjs`.
   - Acceptance: `npm test` runs with vmThreads pool by default; CI passes without per-test pool override.
-- [ ] **D-4** Pass through `requireInteraction` in GM_notification wrapper
+- [x] **D-4** Pass through `requireInteraction` in GM_notification wrapper (2026-05-24)
   - Evidence: PASS2 NF-23; [background.core.js GM_notification](background.core.js#L877).
   - Touches: `background.core.js`, `src/background/wrapper-builder.ts`, `tests/wrapper-dom-security.test.js` or notifications test.
   - Acceptance: `GM_notification({title, text, requireInteraction:true})` results in `chrome.notifications.create` receiving `requireInteraction:true`.
@@ -62,7 +62,7 @@
   - Evidence: PASS2 NF-10; [background.core.js:6399-6404](background.core.js#L6399-L6404).
   - Touches: `pages/dashboard.js` Trash panel, `pages/dashboard.css`.
   - Acceptance: each trash row shows "Will auto-delete on <date>"; panel header has a banner summarising the policy.
-- [ ] **D-6** Document `pageFilterMode` (whitelist / blacklist) in README
+- [x] **D-6** Document `pageFilterMode` (whitelist / blacklist) in README (2026-05-24)
   - Evidence: PASS2 NF-21.
   - Touches: `README.md` near line 88-94.
   - Acceptance: README "Advanced URL Matching" section has a "Per-site control" subsection explaining whitelist / blacklist / deniedHosts.
@@ -146,6 +146,7 @@
 
 | Date | Batch | Items closed | Commit(s) |
 |---|---|---|---|
-| 2026-05-24 | A | A-1, A-2 | _next commit_ |
+| 2026-05-24 | A | A-1, A-2 | 090afa4 |
+| 2026-05-24 | D | D-1, D-2, D-3, D-4, D-6 | next commit |
 
 (Append a row each time work lands.)

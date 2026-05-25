@@ -4,6 +4,31 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — Wrapper parity wave + per-site control docs
+
+- Added `GM_head` to the TypeScript wrapper mirror at
+  `src/background/wrapper-builder.ts` so a future TS-runtime promotion
+  cannot drop the convenience HEAD helper that the install page already
+  advertises and the runtime already implements.
+- Added `requireInteraction` passthrough across the four notification code
+  paths (runtime wrapper send + update, TS wrapper send, runtime background
+  create + update handlers). Scripts that need pinned notifications now
+  match Tampermonkey/Violentmonkey behavior. Regression coverage in
+  `tests/notification-require-interaction.test.js` (6 cases).
+- Tightened the `@webRequest` parser in both runtime `background.core.js`
+  and the `src/background/parser.ts` mirror to validate selector + action
+  shape before handing the rule to the DNR rule builder. Malformed entries
+  are dropped instead of silently propagating through to the DNR API.
+  Regression coverage in `tests/parser-webrequest.test.js` (8 cases).
+- Baked `pool: "vmThreads"` with single-worker concurrency into
+  `vitest.config.mjs` as the default so contributors and CI no longer need
+  to pass `--pool=vmThreads --maxWorkers=1` to dodge the recurring
+  `@exodus/bytes` and shared-drive access-violation crashes.
+- Added a "Per-Site Control" section to the README documenting the three
+  independent layers (`deniedHosts`, blacklist mode, whitelist mode) that
+  were already shipped but invisible in the public listing.
+- Rebuilt `background.js` (22,584 lines).
+
 ### 2026-05-24 — README marketing parity with shipped runtime
 
 - Reconciled the README marketing copy with the actual runtime: removed

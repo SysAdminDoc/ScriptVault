@@ -92,6 +92,18 @@ Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state, `window.close`
 - **Per-pattern toggles** &mdash; Disable individual original patterns per-script
 - Glob and regex pattern support
 
+### Per-Site Control
+
+ScriptVault has three independent layers for stopping scripts from running on a given site, all reachable from Settings (and the popup's "Run only on this domain" / "Do not run on this domain" quick actions):
+
+| Layer | Behavior | Setting |
+|---|---|---|
+| **Denied hosts** | Block every script on listed hosts. Highest priority — overrides script `@match` patterns. | `deniedHosts` (array of hostnames) |
+| **Blacklist mode** *(default)* | Run scripts everywhere except on URLs listed in `blacklistedPages` (one per line, glob-style patterns). | `pageFilterMode: 'blacklist'` + `blacklistedPages` |
+| **Whitelist mode** | Run scripts *only* on URLs listed in `whitelistedPages`. Nothing else triggers a script. | `pageFilterMode: 'whitelist'` + `whitelistedPages` |
+
+Per-script `@match`/`@include`/`@exclude` still apply on top of these global gates. The popup chip flips a single domain in or out of the active list in one click.
+
 ### Cloud Sync
 
 Sync scripts across devices with 5 providers:
