@@ -5428,7 +5428,10 @@
         }
 
         .scripts-table-container {
-            overflow: hidden;
+            /* Keep rounded-corner clipping without becoming the sticky
+               containing block for the table header. `overflow: hidden`
+               pushes the sticky header down into the rows. */
+            overflow: clip;
         }
 
         .search-box,

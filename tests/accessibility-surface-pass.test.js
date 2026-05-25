@@ -36,6 +36,12 @@ function hasClassLink(source, className, href) {
   return source.includes(`class="${className}"`) && source.includes(`href="${href}"`);
 }
 
+function styleBlocksFor(selector, source = dashboardHtml) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return [...source.matchAll(new RegExp(`${escapedSelector}\\s*\\{([\\s\\S]*?)\\}`, "g"))]
+    .map((match) => match[1]);
+}
+
 describe("accessibility surface pass", () => {
   test("a11y command runs every focused surface audit", () => {
     expect(packageJson.scripts["test:a11y"]).toContain("tests/dashboard-a11y.test.js");
@@ -107,6 +113,16 @@ describe("accessibility surface pass", () => {
     expect(sidepanelJs).toContain("No scripts in your vault yet.");
     expect(installHtml).toContain("Premium review polish");
     expect(installHtml).toContain("@keyframes installLoadingSweep");
+  });
+
+  test("dashboard table shell clips corners without trapping the sticky header", () => {
+    const tableContainerBlocks = styleBlocksFor(".scripts-table-container");
+    const finalTableContainerBlock = tableContainerBlocks.at(-1) || "";
+
+    expect(tableContainerBlocks.length).toBeGreaterThan(1);
+    expect(finalTableContainerBlock).toContain("overflow: clip");
+    expect(finalTableContainerBlock).not.toMatch(/overflow\s*:\s*hidden\s*;/);
+    expect(dashboardHtml).toContain("top: var(--toolbar-bottom");
   });
 
   test("compact popup and side-panel toggles meet 24px touch-target height", () => {
