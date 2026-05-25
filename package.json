@@ -25,6 +25,7 @@
     "ts-runtime:generate": "node scripts/generate-ts-runtime-modules.mjs",
     "ts-runtime:check": "node scripts/generate-ts-runtime-modules.mjs --check",
     "store-copy:check": "node scripts/check-permission-copy.mjs",
+    "readme:check": "node scripts/check-readme-claims.mjs",
     "support:matrix": "node scripts/generate-browser-support-matrix.mjs",
     "support:matrix:check": "node scripts/generate-browser-support-matrix.mjs --check",
     "locale:check": "node scripts/check-locales.mjs",

@@ -4,6 +4,27 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-05-24 — README marketing parity with shipped runtime
+
+- Reconciled the README marketing copy with the actual runtime: removed
+  references to four modules that were deleted in v2.0.0 (AI Assistant,
+  Performance Dashboard, Script Analytics, Onboarding Wizard) and rewrote
+  the Smart Recommendations line to drop the "AI-powered" claim because the
+  current module is heuristic only.
+- Replaced the "Browser Sync" entry in the sync provider table with the
+  shipped S3-compatible provider, and called out Easy Cloud + GitHub Gist
+  as separate-module sync flows.
+- Updated the Chrome/Tampermonkey/Violentmonkey comparison table to list
+  the actual five providers instead of the legacy "Cloud Sync (4 providers)".
+- Added `scripts/check-readme-claims.mjs` plus `npm run readme:check` as
+  a CI gate that fails when README marketing copy resurrects deleted module
+  names, claims a sync provider that is not in `CloudSyncProviders`, or
+  references a `pages/dashboard-*.js` file that no longer exists. Wired
+  into `.github/workflows/ci.yml` after the existing store-copy gate.
+- Regression coverage in `tests/check-readme-claims.test.js` (4 cases —
+  live-README pass, JSON shape, intentional deleted-module regression,
+  intentional missing-module regression).
+
 ### 2026-05-24 — Dashboard search focus refinement
 
 - Removed the double focus treatment on the installed-userscripts search field

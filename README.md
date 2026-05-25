@@ -102,7 +102,9 @@ Sync scripts across devices with 5 providers:
 | Google Drive | OAuth2 integration |
 | Dropbox | App folder sync |
 | OneDrive | Microsoft account integration |
-| Browser Sync | Chrome's built-in sync |
+| S3-compatible | AWS S3, Cloudflare R2, MinIO, Backblaze B2, and other S3 endpoints |
+
+Two additional zero-config flows ship as separate modules: **Easy Cloud** for one-click Google Drive sync via `chrome.identity`, and **GitHub Gist** import/export/sync via a personal access token.
 
 ### Monaco Editor
 
@@ -183,38 +185,32 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 - **Built-in Script Store** &mdash; Search, browse, and install scripts from Greasy Fork directly in the dashboard
 - **OpenUserJS Integration** &mdash; Additional script source alongside Greasy Fork
 - **Script Collections** &mdash; Group scripts into installable bundles with 4 built-in packs
-- **Smart Recommendations** &mdash; AI-powered script suggestions based on browsing patterns
+- **Recommendations Panel** &mdash; Heuristic script suggestions derived from installed scripts and Greasy Fork categories
 - **Script Sharing** &mdash; QR code generation, data URL encoding, standalone HTML export
 
-#### AI & Intelligence
-- **AI Assistant** &mdash; Generate scripts from natural language, explain code, security reviews, auto-fix errors
-- **Supports OpenAI, Anthropic, Ollama (local), and custom endpoints**
-- **Encrypted API key storage** (AES-256-GCM with PBKDF2)
-- **Advanced Linter** &mdash; 21 rules with one-click auto-fix, hardcoded secret detection
-- **Script Diff Tool** &mdash; Side-by-side and unified diff with merge support
+#### Linting & Diff
+- **Advanced Linter** &mdash; Rule-driven `@grant`/metadata linter with one-click auto-fix
+- **Script Diff Tool** &mdash; Side-by-side and unified diff with LCS algorithm and merge support
 
-#### Monitoring & Analytics
-- **Performance Dashboard** &mdash; Impact scores, sparkline trends, auto-disable recommendations
-- **Script Analytics** &mdash; 90-day execution stats with canvas charts (line/bar/donut)
+#### Monitoring
 - **Activity Heatmap** &mdash; 365-day GitHub-style contribution grid
 - **Error Log** &mdash; 500-entry structured log with JSON/CSV/text export
 - **CSP Compatibility Reporter** &mdash; Track which sites block scripts with workaround suggestions
 
 #### Debugging & Development
 - **Script Debugger** &mdash; Per-script console capture, live reload, variable inspector, error timeline
-- **DevTools Waterfall** &mdash; Canvas-based network timeline with request body inspector
+- **DevTools Network Panel** &mdash; Capture of every GM_xmlhttpRequest plus fetch/XHR/WebSocket/sendBeacon call, with HAR export
 - **Visual Pattern Builder** &mdash; Construct @match patterns by decomposing URLs
 - **30+ Code Snippets** &mdash; Searchable library across 8 categories with editor integration
 - **Custom Templates** &mdash; Save/share script templates with variable substitution wizard
 
 #### UX & Customization
 - **Card View** &mdash; Grid layout alternative with site favicons and status indicators
-- **10 Theme Presets** &mdash; Dark, Light, Catppuccin, OLED, Nord, Dracula, Solarized, Monokai, Gruvbox
+- **10 Theme Presets** &mdash; Custom theme editor ships with Dark, Light, Catppuccin, OLED, Nord, Dracula, Solarized Dark, Solarized Light, Monokai, and Gruvbox starting points
 - **Custom Theme Editor** &mdash; 21 CSS variable pickers with live preview and import/export
 - **Keyboard Navigation** &mdash; Full keyboard-first nav with optional Vim keybindings
-- **Onboarding Wizard** &mdash; 5-step welcome flow with Tampermonkey import
 - **What's New Modal** &mdash; Changelog shown once per version update
-- **Gamification** &mdash; 31 achievements, streaks, user levels, shareable profile cards
+- **Gamification** &mdash; Achievements, streaks, user levels, shareable profile cards
 
 #### Sync & Backup
 - **Zero-Config Cloud Sync** &mdash; One-click Google Drive sync via chrome.identity
@@ -428,7 +424,7 @@ that script in the dashboard editor.
 | Side Panel | Yes | No | No |
 | Script Signing (Ed25519) | Yes | No | No |
 | AST Static Analysis (31 detectors) | Yes | No | No |
-| Cloud Sync (4 providers) | Yes | Yes | Yes |
+| Cloud Sync (WebDAV, Google Drive, Dropbox, OneDrive, S3) | Yes | Yes | Yes |
 | 3-Way Sync Merge | Yes | No | No |
 | Tabbed Multi-Script Editor | Yes | No | No |
 | Built-in Script Search | Yes | No | No |
