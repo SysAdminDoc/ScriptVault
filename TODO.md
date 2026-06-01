@@ -6,6 +6,7 @@
 > - [RESEARCH_FEATURE_PLAN_PASS2.md](RESEARCH_FEATURE_PLAN_PASS2.md) net-new findings NF-1 through NF-25
 > - [docs/wcag3-gap-analysis.md](docs/wcag3-gap-analysis.md) net-new rows
 > - [FIREFOX-PORT.md](FIREFOX-PORT.md) Phase 1+
+> - [RESEARCH_REPORT.md](RESEARCH_REPORT.md) canonical research/planning map
 >
 > **Shipped items are pruned** — check those source files for completion history. Items here are the open queue only. Update the box when work lands and keep the per-row evidence pointer so reviewers can audit without re-deriving context.
 

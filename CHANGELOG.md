@@ -4,6 +4,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-01 — Planning and research index consolidation
+
+- Added root-level `COMPLETED.md` and `RESEARCH_REPORT.md` indexes so active
+  roadmap, TODO, Firefox-port, research, and shipped-ledger files have a
+  single navigation map without moving active planning inputs.
+
 ### 2026-05-24 — Support snapshot redaction preview
 
 - The dashboard's "Export Snapshot" button used to dump script names,
