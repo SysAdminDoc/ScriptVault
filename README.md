@@ -26,6 +26,14 @@
 
 ---
 
+## Project Planning And Research
+
+- [TODO.md](TODO.md) - active consolidated open-work queue.
+- [ROADMAP.md](ROADMAP.md) - broad Round 14 roadmap and planning history.
+- [RESEARCH_REPORT.md](RESEARCH_REPORT.md) - research and planning map.
+- [COMPLETED.md](COMPLETED.md) - completed-work navigator.
+- [CHANGELOG.md](CHANGELOG.md) - shipped release ledger.
+
 ## Features
 
 ### GM API &mdash; 35+ Functions
