@@ -921,10 +921,14 @@ export const BackupScheduler = {
   async pruneOldBackups(): Promise<number> {
     const settings: BackupSchedulerSettings = await _loadSettings();
     const backups: BackupEntry[] = await _getBackupList();
-    if (backups.length <= settings.maxBackups) return 0;
+    // Defensively clamp maxBackups: a negative value would make slice() keep
+    // the OLDEST backups, and NaN/non-numeric would slice to [] and wipe all.
+    const rawMax = Number(settings.maxBackups);
+    const maxBackups = Number.isFinite(rawMax) && rawMax >= 0 ? Math.floor(rawMax) : 5;
+    if (backups.length <= maxBackups) return 0;
 
     // Keep the newest N
-    const pruned: BackupEntry[] = backups.slice(0, settings.maxBackups);
+    const pruned: BackupEntry[] = backups.slice(0, maxBackups);
     await _saveBackupList(pruned);
     return Math.max(0, backups.length - pruned.length);
   },
