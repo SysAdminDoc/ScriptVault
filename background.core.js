@@ -5054,8 +5054,10 @@ function matchPattern(pattern, url, urlObj) {
       }
     }
     
-    // Check path (convert glob to regex)
-    const pathRegex = new RegExp('^' + path.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+    // Check path (convert glob to regex). Collapse consecutive `*` first so a
+    // crafted @match like `/****…****a` can't produce `(.*){N}` — catastrophic
+    // backtracking that freezes the SW per evaluated URL (matches matchIncludePattern).
+    const pathRegex = new RegExp('^' + path.replace(/\*+/g, '*').replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
     if (!pathRegex.test(urlObj.pathname + urlObj.search)) {
       return false;
     }
@@ -6825,6 +6827,13 @@ async function registerScript(script, { useUpdate = false } = {}) {
     if (meta.crontab) {
       const alarmName = 'crontab_' + script.id;
       await chrome.alarms.clear(alarmName).catch(() => {});
+      // Metadata may have just gained @crontab on an in-place update (the
+      // Chrome 138+ update path never calls unregisterScript). Drop any prior
+      // page-load registration so the script doesn't run BOTH on load and on
+      // schedule.
+      if (chrome.userScripts) {
+        try { await chrome.userScripts.unregister({ ids: [script.id] }); } catch (_) {}
+      }
       const minutes = Math.max(1, parseCronToMinutes(meta.crontab));
       chrome.alarms.create(alarmName, { periodInMinutes: minutes });
       debugLog(`Registered @crontab: ${meta.name} (every ${minutes} min)`);
@@ -6832,6 +6841,10 @@ async function registerScript(script, { useUpdate = false } = {}) {
     }
 
     if (!chrome.userScripts) return;
+    // Not a @crontab script — clear any stale crontab alarm left over from a
+    // prior version of this script's metadata (e.g. @crontab was just removed
+    // on an in-place update) so it stops firing on schedule.
+    await chrome.alarms.clear('crontab_' + script.id).catch(() => {});
     
     // Build match patterns with URL override support
     const matches = [];

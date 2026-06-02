@@ -214,9 +214,11 @@ export function matchPattern(pattern: string, url: string, urlObj: URL): boolean
       }
     }
 
-    // Check path (convert glob to regex)
+    // Check path (convert glob to regex). Collapse consecutive `*` first so a
+    // crafted @match like `/****…****a` can't produce `(.*){N}` — catastrophic
+    // backtracking that freezes the SW per evaluated URL (matches matchIncludePattern).
     const pathRegex = new RegExp(
-      '^' + path.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$',
+      '^' + path.replace(/\*+/g, '*').replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$',
     );
     if (!pathRegex.test(urlObj.pathname + urlObj.search)) {
       return false;

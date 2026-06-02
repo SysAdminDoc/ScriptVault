@@ -48,3 +48,6 @@ coverage/
 CLAUDE.md
 AGENTS.md
 .factory/
+.claude/
+CODEX_CHANGELOG.md
+CODEX_*.md

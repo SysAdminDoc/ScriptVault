@@ -244,12 +244,14 @@ var CloudSyncProviders = {
       let token = await this.getToken();
       if (!token) return null;
 
-      // Test if token is still valid
-      const test = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+      // Test if token is still valid. Use the timeout wrapper so a hung probe
+      // can't block every getValidToken() caller (upload/download) indefinitely;
+      // a null/failed probe means "not confirmed valid" → fall through to refresh.
+      const test = await _oauthFetchWithTimeout('https://www.googleapis.com/drive/v3/about?fields=user', {
         headers: { 'Authorization': `Bearer ${token}` }
-      });
+      }, 'Google Drive');
 
-      if (test.ok) return token;
+      if (test && test.ok) return token;
 
       // Try refresh
       token = await this.refreshToken();
@@ -614,12 +616,12 @@ var CloudSyncProviders = {
 
     async getValidToken(settings) {
       if (!settings.dropboxToken) return null;
-      // Test current token
-      const test = await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
+      // Test current token (timeout-wrapped so a hung probe can't stall sync).
+      const test = await _oauthFetchWithTimeout('https://api.dropboxapi.com/2/users/get_current_account', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${settings.dropboxToken}` }
-      });
-      if (test.ok) return settings.dropboxToken;
+      }, 'Dropbox');
+      if (test && test.ok) return settings.dropboxToken;
       // Try refresh
       return await this.refreshToken(settings);
     },
@@ -881,10 +883,10 @@ var CloudSyncProviders = {
       let token = settings.onedriveToken;
       if (!token) return null;
 
-      const test = await fetch('https://graph.microsoft.com/v1.0/me', {
+      const test = await _oauthFetchWithTimeout('https://graph.microsoft.com/v1.0/me', {
         headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (test.ok) return token;
+      }, 'OneDrive');
+      if (test && test.ok) return token;
 
       return await this.refreshToken();
     },

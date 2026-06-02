@@ -10,7 +10,7 @@
  * Checks performed:
  *
  *  1. **Deleted-module mentions** — fails if README marketing copy resurrects
- *     names of modules removed in v2.0.0 (per CLAUDE.md "Deleted Modules"
+ *     names of modules removed in v2.0.0 (per the project working notes "Deleted Modules"
  *     section). Catches the recurring README/code drift class.
  *
  *  2. **Cloud sync provider parity** — every provider name claimed in the
@@ -46,7 +46,7 @@ const README_PATH = join(repoRoot, 'README.md');
 const SYNC_PROVIDERS_PATH = join(repoRoot, 'modules', 'sync-providers.js');
 const PAGES_DIR = join(repoRoot, 'pages');
 
-// Modules deleted in v2.0.0 per CLAUDE.md. Catching their names in README
+// Modules deleted in v2.0.0 per the project working notes. Catching their names in README
 // marketing copy prevents the regression PASS2 NF-3 caught (README marketed
 // AI Assistant / Performance Dashboard / Script Analytics / Onboarding Wizard
 // long after the code was deleted).
@@ -54,10 +54,10 @@ const DELETED_MODULE_MARKETING = [
   // Each entry: { needle, why }. The needle is matched case-insensitively as
   // a substring; pick distinctive phrases so historical changelog mentions in
   // CHANGELOG.md or ROADMAP.md don't accidentally trip the gate.
-  { needle: 'ai assistant', why: 'dashboard-ai.js was removed in v2.0.0 per CLAUDE.md' },
-  { needle: 'performance dashboard', why: 'dashboard-performance.js was removed in v2.0.0 per CLAUDE.md' },
-  { needle: 'script analytics', why: 'dashboard-analytics.js was removed in v2.0.0 per CLAUDE.md' },
-  { needle: 'onboarding wizard', why: 'dashboard-onboarding.js was removed in v2.0.0 per CLAUDE.md' },
+  { needle: 'ai assistant', why: 'dashboard-ai.js was removed in v2.0.0 per the project working notes' },
+  { needle: 'performance dashboard', why: 'dashboard-performance.js was removed in v2.0.0 per the project working notes' },
+  { needle: 'script analytics', why: 'dashboard-analytics.js was removed in v2.0.0 per the project working notes' },
+  { needle: 'onboarding wizard', why: 'dashboard-onboarding.js was removed in v2.0.0 per the project working notes' },
   { needle: 'ai-powered', why: 'no AI/LLM code currently ships in any dashboard module' },
 ];
 

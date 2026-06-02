@@ -1,1 +1,15 @@
 *.sh text eol=lf
+
+# Keep internal planning / research / working docs out of the `git archive`
+# source ZIP that ships to AMO reviewers and release consumers. These are not
+# build inputs for the extension and must not leak development workflow notes.
+docs/research/ export-ignore
+ROADMAP.md export-ignore
+TODO.md export-ignore
+COMPLETED.md export-ignore
+RESEARCH_REPORT.md export-ignore
+RESEARCH_FEATURE_PLAN.md export-ignore
+RESEARCH_FEATURE_PLAN_PASS2.md export-ignore
+FIREFOX-PORT.md export-ignore
+docs/manifest-generation-design.md export-ignore
+docs/wcag3-gap-analysis.md export-ignore
