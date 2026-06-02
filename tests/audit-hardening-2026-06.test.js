@@ -167,6 +167,18 @@ describe('ScriptValues.deleteAll init-race guard', () => {
   });
 });
 
+describe('Backup retention hardening', () => {
+  it('caps restore receipts by bytes, not just by count', () => {
+    const src = read('modules/backup-scheduler.js');
+    expect(src).toContain('RECEIPT_BYTE_BUDGET');
+    expect(src).toContain('total > RECEIPT_BYTE_BUDGET');
+  });
+  it('pruneOldBackups clamps maxBackups against negative/NaN values', () => {
+    const src = read('modules/backup-scheduler.js');
+    expect(src).toContain('Number.isFinite(rawMax) && rawMax >= 0 ? Math.floor(rawMax) : 5');
+  });
+});
+
 describe('Cross-device delete propagation (background.core.js sync)', () => {
   it('applies remote tombstone deletions locally and aligns empty-base merge', () => {
     const src = read('background.core.js');

@@ -8560,6 +8560,7 @@ const BackupScheduler = (() => {
   const STORAGE_KEY_SETTINGS = 'backupSchedulerSettings';
   const STORAGE_KEY_RECEIPTS = 'restoreReceipts';
   const RECEIPT_RETENTION = 10;
+  const RECEIPT_BYTE_BUDGET = 5 * 1024 * 1024; // ~5 MB across all retained receipts
   const ALARM_NAME = 'sv_backup_scheduled';
   const DEBOUNCE_ALARM = 'sv_backup_debounce';
   const DEBOUNCE_MINUTES = 5;
@@ -8798,11 +8799,28 @@ const BackupScheduler = (() => {
     await chrome.storage.local.set({ [STORAGE_KEY_RECEIPTS]: list });
   }
 
+  // Approximate serialized size (chars ≈ bytes for the budget purpose).
+  function _approxJsonBytes(value) {
+    try { return JSON.stringify(value).length; } catch { return 0; }
+  }
+
   async function _pushReceipt(receipt) {
     const receipts = await _getReceipts();
     receipts.unshift(receipt);
     if (receipts.length > RECEIPT_RETENTION) {
       receipts.length = RECEIPT_RETENTION;
+    }
+    // Bound by BYTES as well as count: each receipt snapshots every script's
+    // code + values, so a few full-library restores can balloon
+    // chrome.storage.local well past the count cap. Drop oldest receipts until
+    // the total is under budget, always keeping at least the newest one.
+    let total = 0;
+    for (let i = 0; i < receipts.length; i++) {
+      total += _approxJsonBytes(receipts[i]);
+      if (i > 0 && total > RECEIPT_BYTE_BUDGET) {
+        receipts.length = i; // drop this (oldest reached) and everything older
+        break;
+      }
     }
     await _saveReceipts(receipts);
     return receipt;
@@ -9393,10 +9411,14 @@ const BackupScheduler = (() => {
     async pruneOldBackups() {
       const settings = await _loadSettings();
       const backups = await _getBackupList();
-      if (backups.length <= settings.maxBackups) return 0;
+      // Defensively clamp maxBackups: a negative value would make slice() keep
+      // the OLDEST backups, and NaN/non-numeric would slice to [] and wipe all.
+      const rawMax = Number(settings.maxBackups);
+      const maxBackups = Number.isFinite(rawMax) && rawMax >= 0 ? Math.floor(rawMax) : 5;
+      if (backups.length <= maxBackups) return 0;
 
       // Keep the newest N
-      const pruned = backups.slice(0, settings.maxBackups);
+      const pruned = backups.slice(0, maxBackups);
       await _saveBackupList(pruned);
       return Math.max(0, backups.length - pruned.length);
     },

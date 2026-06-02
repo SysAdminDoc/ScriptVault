@@ -28,6 +28,12 @@ All notable changes to ScriptVault will be documented in this file.
   back into the cache after `deleteAll` cleared it, leaving the cache serving
   deleted values while IndexedDB was empty. `deleteAll` now serializes on
   `init()` before clearing.
+- **Backup retention hardening.** Restore-receipt retention was capped only by
+  count (10); since each receipt snapshots every script's code + values, a few
+  full-library restores could balloon `chrome.storage.local`. Added a ~5 MB byte
+  budget that drops the oldest receipts (always keeping the newest). Also clamped
+  `pruneOldBackups`'s `maxBackups` so a negative/NaN value can't keep the oldest
+  backups or wipe them all.
 - **Release hygiene.** Added `.gitattributes export-ignore` for internal
   planning/research docs so the `git archive` source ZIP shipped to add-on
   reviewers no longer carries development working notes; closed `.gitignore`
