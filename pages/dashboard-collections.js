@@ -855,7 +855,7 @@ const CollectionManager = (() => {
 
     card.innerHTML = `
       <div class="sv-coll-card-header">
-        <span class="sv-coll-icon">${coll.icon || '\u{1F4E6}'}</span>
+        <span class="sv-coll-icon">${escapeHtml(coll.icon || '\u{1F4E6}')}</span>
         <span class="sv-coll-title">${escapeHtml(coll.name)}</span>
         ${coll.builtIn ? '<span class="sv-coll-badge">Built-in</span>' : ''}
       </div>
@@ -1115,7 +1115,7 @@ const CollectionManager = (() => {
             <div style="flex:1">
               <label>Icon / Emoji</label>
               <input type="text" id="sv-coll-icon" placeholder="\u{1F4E6}" maxlength="4"
-                     value="${isEdit ? (editing.icon || '') : ''}" style="width:60px">
+                     value="${isEdit ? escapeHtml(editing.icon || '') : ''}" style="width:60px">
             </div>
             <div style="flex:2">
               <label>Author</label>

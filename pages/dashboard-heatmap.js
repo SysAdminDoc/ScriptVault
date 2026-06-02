@@ -656,6 +656,11 @@ const ActivityHeatmap = (() => {
     if (_tooltip) { _tooltip.remove(); _tooltip = null; }
     if (_container) _container.innerHTML = '';
     if (_styleEl) { _styleEl.remove(); _styleEl = null; }
+    // Drop the global hook so a post-destroy caller can't re-persist stale,
+    // now-cleared activity data through the dangling closure.
+    if (typeof window !== 'undefined' && window.__svRecordActivity === _recordActivity) {
+      delete window.__svRecordActivity;
+    }
     _container = null;
     _canvas = null;
     _ctx = null;

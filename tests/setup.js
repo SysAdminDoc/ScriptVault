@@ -203,12 +203,33 @@ if (!globalThis.crypto.randomUUID) {
     }),
   });
 }
-if (!globalThis.crypto.subtle?.digest) {
-  Object.defineProperty(globalThis.crypto, 'subtle', {
-    configurable: true,
-    value: {
-      ...(globalThis.crypto.subtle || {}),
-      digest: vi.fn().mockResolvedValue(new ArrayBuffer(32)),
-    },
-  });
+// Some Vitest worker pools expose a partial (or no) SubtleCrypto. Fill in the
+// primitives the source modules + their tests rely on (digest/importKey/sign/
+// verify/exportKey/generateKey) without clobbering a real implementation when
+// one is present. Native SubtleCrypto exposes its methods on the prototype, so
+// `typeof base.method === 'function'` is the reliable presence check.
+{
+  const base = globalThis.crypto.subtle || {};
+  const needsFill =
+    typeof base.digest !== 'function' ||
+    typeof base.importKey !== 'function' ||
+    typeof base.sign !== 'function' ||
+    typeof base.verify !== 'function';
+  if (needsFill) {
+    const filled = { ...base };
+    const ensure = (name, factory) => {
+      if (typeof filled[name] !== 'function') filled[name] = factory();
+    };
+    ensure('digest', () => vi.fn().mockResolvedValue(new ArrayBuffer(32)));
+    ensure('importKey', () => vi.fn().mockResolvedValue({}));
+    ensure('exportKey', () => vi.fn().mockResolvedValue(new ArrayBuffer(32)));
+    ensure('sign', () => vi.fn().mockResolvedValue(new ArrayBuffer(64)));
+    ensure('verify', () => vi.fn().mockResolvedValue(true));
+    ensure('generateKey', () =>
+      vi.fn().mockResolvedValue({ publicKey: {}, privateKey: {} }));
+    Object.defineProperty(globalThis.crypto, 'subtle', {
+      configurable: true,
+      value: filled,
+    });
+  }
 }

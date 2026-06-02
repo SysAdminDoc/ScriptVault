@@ -1051,19 +1051,14 @@ const ScriptScheduler = (() => {
     if (!persisted) {
       if (previous) _schedules[_activeScriptId] = previous;
       else delete _schedules[_activeScriptId];
-      if (typeof showToast === 'function') {
-        showToast('Failed to save schedule', 'error');
-      }
+      window.ScriptVaultDashboardUI?.toast?.('Failed to save schedule', 'error');
       return;
     }
     await syncAlarms();
     updateScriptRowIndicators();
     closeModal();
 
-    // Notify via toast if available
-    if (typeof showToast === 'function') {
-      showToast('Schedule saved', 'success');
-    }
+    window.ScriptVaultDashboardUI?.toast?.('Schedule saved', 'success');
   }
 
   async function clearAndClose() {
@@ -1075,18 +1070,14 @@ const ScriptScheduler = (() => {
     const persisted = await persistSchedules();
     if (!persisted) {
       if (previous) _schedules[_activeScriptId] = previous;
-      if (typeof showToast === 'function') {
-        showToast('Failed to clear schedule', 'error');
-      }
+      window.ScriptVaultDashboardUI?.toast?.('Failed to clear schedule', 'error');
       return;
     }
     await syncAlarms();
     updateScriptRowIndicators();
     closeModal();
 
-    if (typeof showToast === 'function') {
-      showToast('Schedule cleared', 'success');
-    }
+    window.ScriptVaultDashboardUI?.toast?.('Schedule cleared', 'success');
   }
 
   /* ------------------------------------------------------------------ */

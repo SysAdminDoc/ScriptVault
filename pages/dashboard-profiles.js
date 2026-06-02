@@ -473,6 +473,13 @@ const ProfileManager = (() => {
       .replace(/'/g, '&#39;');
   }
 
+  // Validate a profile color against a hex/named-color pattern so an unvalidated
+  // value (profiles flow in via importProfile()) cannot break out of a style
+  // attribute. Falls back to a neutral gray for anything that doesn't match.
+  function _safeColor(color) {
+    return /^(#[0-9a-f]{3,8}|[a-z]+)$/i.test(String(color || '')) ? color : '#6b7280';
+  }
+
   function _buildInputId(prefix, value, index) {
     const normalized = String(value ?? '')
       .replace(/[^a-zA-Z0-9_-]+/g, '-')
@@ -668,7 +675,7 @@ const ProfileManager = (() => {
       const isActive = p.id === _activeProfileId;
       const shortcut = idx < 9 ? `Alt+${idx + 1}` : '';
       // Validate color against a hex/named-color pattern to prevent style-attr breakout
-      const safeColor = /^(#[0-9a-f]{3,8}|[a-z]+)$/i.test(String(p.color || '')) ? p.color : '#6b7280';
+      const safeColor = _safeColor(p.color);
       html += `
         <button type="button"
               class="sv-profile-chip${isActive ? ' active' : ''}"
@@ -742,9 +749,12 @@ const ProfileManager = (() => {
     indicator.setAttribute('aria-expanded', 'false');
     indicator.setAttribute('aria-controls', dropdownId);
     indicator.setAttribute('aria-label', `Active profile: ${active.name}`);
+    // Validate color against a hex/named-color pattern to prevent style-attr
+    // breakout, and escape emoji \u2014 both flow in unvalidated via importProfile().
+    const indicatorColor = _safeColor(active.color);
     indicator.innerHTML = `
-      <span class="sv-pi-dot" style="background:${active.color}"></span>
-      <span>${active.emoji || ''} ${_escapeHtml(active.name)}</span>
+      <span class="sv-pi-dot" style="background:${indicatorColor}"></span>
+      <span>${_escapeHtml(active.emoji || '')} ${_escapeHtml(active.name)}</span>
       <span style="font-size:10px;color:var(--text-muted)">\u25BE</span>
     `;
 
@@ -776,7 +786,7 @@ const ProfileManager = (() => {
         item.setAttribute('aria-checked', p.id === _activeProfileId ? 'true' : 'false');
         item.innerHTML = `
           <span class="sv-dd-check">${p.id === _activeProfileId ? '\u2713' : ''}</span>
-          <span>${p.emoji || ''}</span>
+          <span>${_escapeHtml(p.emoji || '')}</span>
           <span style="flex:1">${_escapeHtml(p.name)}</span>
         `;
         item.addEventListener('click', async (e) => {

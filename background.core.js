@@ -1128,8 +1128,8 @@ const CloudSync = {
         if (existing && remoteScript && localScript &&
             existing.code !== remoteScript.code &&
             existing.code !== localScript.code) {
-          const base = existing.syncBaseCode || existing.code;
-          if (base && base !== localScript.code && base !== remoteScript.code) {
+          const base = existing.syncBaseCode ?? existing.code;
+          if (base != null && base !== localScript.code && base !== remoteScript.code) {
             try {
               await ScriptAnalyzer._ensureOffscreen();
               const mergeResult = await chrome.runtime.sendMessage({
@@ -1172,9 +1172,28 @@ const CloudSync = {
         }
       }
 
+      // Apply remote tombstone deletions locally so a delete on another device
+      // propagates to this one. Without this, a script deleted elsewhere keeps
+      // running here (we'd merely stop re-importing it). Skip user-modified
+      // scripts so local edits take precedence, matching the import path above.
+      let deletedAny = false;
+      for (const tombstonedId of Object.keys(mergedTombstones)) {
+        if (tombstones[tombstonedId]) continue; // already deleted locally
+        const existing = await ScriptStorage.get(tombstonedId);
+        if (existing && !existing.settings?.userModified) {
+          try { await unregisterScript(tombstonedId); } catch (_) { /* best effort */ }
+          await ScriptStorage.delete(tombstonedId);
+          deletedAny = true;
+        }
+      }
+
       // Persist merged tombstones locally
       if (Object.keys(mergedTombstones).length > Object.keys(tombstones).length) {
         await chrome.storage.local.set({ syncTombstones: mergedTombstones });
+      }
+
+      if (deletedAny) {
+        try { await updateBadge(); } catch (_) { /* best effort */ }
       }
 
       // Upload merged data (includes tombstones)
@@ -7210,24 +7229,41 @@ function isUnfetchableUrl(url) {
 
 // Fetch a @require script with caching and fallbacks
 // Verify SRI hash for fetched content
+// Normalize a base64 / base64url value (with or without padding) to canonical
+// padded standard base64 so SRI hashes pasted in either encoding compare equal.
+function _normalizeSriBase64(value) {
+  let s = String(value).replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, '');
+  const rem = s.length % 4;
+  if (rem === 2) s += '==';
+  else if (rem === 3) s += '=';
+  return s;
+}
+
 async function verifySRI(code, hashStr) {
-  if (!hashStr) return true;
-  // Support formats: sha256-<base64>, md5-<hex>, or just <hex>
+  if (!hashStr) return true; // No integrity requested — nothing to verify.
+  // Support formats: sha256-<base64>, sha384/512, md5-<hex>, with - or = separator.
   const match = hashStr.match(/^(sha256|sha384|sha512|md5)[-=](.+)$/i);
-  if (!match) return true; // Unknown format, skip verification
+  if (!match) return true; // Not an SRI hash string — nothing enforceable to verify.
   const [, algo, expected] = match;
-  if (algo.toLowerCase() === 'md5') {
-    console.warn('[ScriptVault] SRI: MD5 hash cannot be verified with SubtleCrypto; skipping integrity check for', hashStr);
-    return true; // Can't verify MD5 with SubtleCrypto
-  }
+  if (!expected) return true;
   const algoMap = { sha256: 'SHA-256', sha384: 'SHA-384', sha512: 'SHA-512' };
+  const algoName = algoMap[algo.toLowerCase()];
+  // MD5 (and anything SubtleCrypto can't compute) is unverifiable; treat as
+  // "no enforceable integrity" rather than failing closed and breaking scripts.
+  if (!algoName) {
+    console.warn('[ScriptVault] SRI: hash algorithm cannot be verified with SubtleCrypto; skipping integrity check for', hashStr);
+    return true;
+  }
   try {
-    const digest = await crypto.subtle.digest(algoMap[algo.toLowerCase()], new TextEncoder().encode(code));
+    const digest = await crypto.subtle.digest(algoName, new TextEncoder().encode(code));
     const actual = btoa(String.fromCharCode(...new Uint8Array(digest)));
-    return actual === expected;
+    return _normalizeSriBase64(actual) === _normalizeSriBase64(expected);
   } catch (e) {
-    console.warn('[ScriptVault] SRI verification error for hash', hashStr, '—', e.message, '; allowing require');
-    return true; // Verification not possible, allow
+    // Integrity WAS requested with a verifiable algorithm but verification could
+    // not complete — fail CLOSED. Accepting unverified bytes would make the SRI
+    // pin a no-op and defeat protection against a compromised/MITM'd CDN.
+    console.warn('[ScriptVault] SRI verification error for hash', hashStr, '—', e.message, '; rejecting require');
+    return false;
   }
 }
 

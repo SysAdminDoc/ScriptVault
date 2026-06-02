@@ -461,6 +461,7 @@
   // ── Render all scripts ────────────────────────────────────────────────────
   function renderAllScripts() {
     const list = $('allScriptList');
+    if (!list) return; // mirror renderPageScripts — degrade instead of crashing if the element is missing
     const focusDescriptor = list.contains(document.activeElement) ? getSidepanelFocusDescriptor(document.activeElement) : null;
     let filtered = [...allScripts];
 
