@@ -849,6 +849,7 @@ const StorageModule = (() => {
       }
     },
     async deleteAll(scriptId) {
+      await this.init(scriptId);
       const hadCache = Object.hasOwn(this.cache, scriptId);
       const prev = hadCache ? this.cache[scriptId] : void 0;
       try {

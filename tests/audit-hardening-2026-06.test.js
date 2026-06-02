@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { webcrypto } from 'node:crypto';
 import { verifySRI } from '../src/background/resource-loader.ts';
+import { matchPattern } from '../src/background/url-matcher.ts';
 
 const read = (p) => readFileSync(resolve(process.cwd(), p), 'utf8');
 
@@ -114,6 +115,55 @@ describe('Sidepanel null-safety parity', () => {
   it('renderAllScripts guards the list element', () => {
     const src = read('pages/sidepanel.js');
     expect(src).toContain('if (!list) return;');
+  });
+});
+
+describe('matchPattern @match ReDoS guard', () => {
+  it('evaluates a pathological consecutive-* @match path in well under a second', () => {
+    // Pre-fix this froze the SW for ~minute per evaluated URL.
+    const pattern = '*://example.com/' + '*'.repeat(40) + 'a';
+    const url = 'https://example.com/' + 'b'.repeat(200);
+    const urlObj = new URL(url);
+    const start = Date.now();
+    const result = matchPattern(pattern, url, urlObj);
+    const elapsed = Date.now() - start;
+    expect(result).toBe(false);
+    expect(elapsed).toBeLessThan(500);
+  });
+
+  it('still matches a normal single-wildcard path', () => {
+    const url = 'https://example.com/foo/bar';
+    expect(matchPattern('*://example.com/*', url, new URL(url))).toBe(true);
+  });
+});
+
+describe('Cloud token probe timeout', () => {
+  it('routes all three provider getValidToken probes through the timeout wrapper', () => {
+    const src = read('modules/sync-providers.js');
+    // No raw fetch() probe should remain in a getValidToken body; all use the wrapper.
+    expect(src).toContain("_oauthFetchWithTimeout('https://www.googleapis.com/drive/v3/about");
+    expect(src).toContain("_oauthFetchWithTimeout('https://api.dropboxapi.com/2/users/get_current_account");
+    expect(src).toContain("_oauthFetchWithTimeout('https://graph.microsoft.com/v1.0/me");
+  });
+});
+
+describe('@crontab alarm reconciliation on in-place update', () => {
+  it('drops a prior page-load registration when switching to crontab, and clears stale alarms otherwise', () => {
+    const src = read('background.core.js');
+    expect(src).toContain("Metadata may have just gained @crontab");
+    expect(src).toContain("clear any stale crontab alarm");
+  });
+});
+
+describe('ScriptValues.deleteAll init-race guard', () => {
+  it('serializes deleteAll on init() before clearing the cache', () => {
+    const src = read('src/modules/storage.ts');
+    const idx = src.indexOf('async deleteAll(');
+    expect(idx).toBeGreaterThan(-1);
+    // The await init must appear at the top of deleteAll, before the IDB delete.
+    const body = src.slice(idx, idx + 900);
+    expect(body).toContain('await this.init(scriptId)');
+    expect(body.indexOf('await this.init(scriptId)')).toBeLessThan(body.indexOf('ValuesDAO.deleteAll'));
   });
 });
 

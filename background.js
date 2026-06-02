@@ -3159,12 +3159,14 @@ var CloudSyncProviders = {
       let token = await this.getToken();
       if (!token) return null;
 
-      // Test if token is still valid
-      const test = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+      // Test if token is still valid. Use the timeout wrapper so a hung probe
+      // can't block every getValidToken() caller (upload/download) indefinitely;
+      // a null/failed probe means "not confirmed valid" → fall through to refresh.
+      const test = await _oauthFetchWithTimeout('https://www.googleapis.com/drive/v3/about?fields=user', {
         headers: { 'Authorization': `Bearer ${token}` }
-      });
+      }, 'Google Drive');
 
-      if (test.ok) return token;
+      if (test && test.ok) return token;
 
       // Try refresh
       token = await this.refreshToken();
@@ -3529,12 +3531,12 @@ var CloudSyncProviders = {
 
     async getValidToken(settings) {
       if (!settings.dropboxToken) return null;
-      // Test current token
-      const test = await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
+      // Test current token (timeout-wrapped so a hung probe can't stall sync).
+      const test = await _oauthFetchWithTimeout('https://api.dropboxapi.com/2/users/get_current_account', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${settings.dropboxToken}` }
-      });
-      if (test.ok) return settings.dropboxToken;
+      }, 'Dropbox');
+      if (test && test.ok) return settings.dropboxToken;
       // Try refresh
       return await this.refreshToken(settings);
     },
@@ -3796,10 +3798,10 @@ var CloudSyncProviders = {
       let token = settings.onedriveToken;
       if (!token) return null;
 
-      const test = await fetch('https://graph.microsoft.com/v1.0/me', {
+      const test = await _oauthFetchWithTimeout('https://graph.microsoft.com/v1.0/me', {
         headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (test.ok) return token;
+      }, 'OneDrive');
+      if (test && test.ok) return token;
 
       return await this.refreshToken();
     },
@@ -5543,6 +5545,7 @@ const StorageModule = (() => {
       }
     },
     async deleteAll(scriptId) {
+      await this.init(scriptId);
       const hadCache = Object.hasOwn(this.cache, scriptId);
       const prev = hadCache ? this.cache[scriptId] : void 0;
       try {
@@ -17996,8 +17999,10 @@ function matchPattern(pattern, url, urlObj) {
       }
     }
     
-    // Check path (convert glob to regex)
-    const pathRegex = new RegExp('^' + path.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+    // Check path (convert glob to regex). Collapse consecutive `*` first so a
+    // crafted @match like `/****…****a` can't produce `(.*){N}` — catastrophic
+    // backtracking that freezes the SW per evaluated URL (matches matchIncludePattern).
+    const pathRegex = new RegExp('^' + path.replace(/\*+/g, '*').replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
     if (!pathRegex.test(urlObj.pathname + urlObj.search)) {
       return false;
     }
@@ -19767,6 +19772,13 @@ async function registerScript(script, { useUpdate = false } = {}) {
     if (meta.crontab) {
       const alarmName = 'crontab_' + script.id;
       await chrome.alarms.clear(alarmName).catch(() => {});
+      // Metadata may have just gained @crontab on an in-place update (the
+      // Chrome 138+ update path never calls unregisterScript). Drop any prior
+      // page-load registration so the script doesn't run BOTH on load and on
+      // schedule.
+      if (chrome.userScripts) {
+        try { await chrome.userScripts.unregister({ ids: [script.id] }); } catch (_) {}
+      }
       const minutes = Math.max(1, parseCronToMinutes(meta.crontab));
       chrome.alarms.create(alarmName, { periodInMinutes: minutes });
       debugLog(`Registered @crontab: ${meta.name} (every ${minutes} min)`);
@@ -19774,6 +19786,10 @@ async function registerScript(script, { useUpdate = false } = {}) {
     }
 
     if (!chrome.userScripts) return;
+    // Not a @crontab script — clear any stale crontab alarm left over from a
+    // prior version of this script's metadata (e.g. @crontab was just removed
+    // on an in-place update) so it stops firing on schedule.
+    await chrome.alarms.clear('crontab_' + script.id).catch(() => {});
     
     // Build match patterns with URL override support
     const matches = [];

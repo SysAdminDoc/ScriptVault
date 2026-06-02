@@ -50,7 +50,7 @@ echo "Building ScriptVault for Firefox v$VERSION..."
 
 # Build background.js using the same esbuild pipeline as Chrome.
 # The legacy `build-background.sh` bash builder was removed once
-# esbuild.config.mjs reached parity (CLAUDE.md Round 10 history note).
+# esbuild.config.mjs reached parity (see build history notes).
 if [ -f "$SCRIPT_DIR/esbuild.config.mjs" ]; then
   echo "Building background.js via esbuild..."
   node "$SCRIPT_DIR/esbuild.config.mjs" --bg-only

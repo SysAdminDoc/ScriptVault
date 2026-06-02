@@ -532,6 +532,12 @@ export const ScriptValues = {
   },
 
   async deleteAll(scriptId: string): Promise<void> {
+    // Serialize against any in-flight init() for this script. Without this, a
+    // concurrent init (triggered by a GM_getValue/GM_setValue) can read the
+    // pre-delete values, then resolve AFTER we clear the cache and write that
+    // stale bag back — leaving the cache serving deleted values while IDB is
+    // empty. Awaiting init first makes both share the same _initPromises entry.
+    await this.init(scriptId);
     const hadCache = Object.hasOwn(this.cache, scriptId);
     const prev = hadCache ? this.cache[scriptId]! : undefined;
     try {

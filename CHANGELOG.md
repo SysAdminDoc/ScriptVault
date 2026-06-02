@@ -4,6 +4,35 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-02 — Deep audit hardening pass (wave 2)
+
+- **`@match` ReDoS fixed.** The `@match` path-glob → regex conversion did not
+  collapse consecutive `*` (unlike `@include`), so a crafted pattern such as
+  `*://site/****…****a` produced a catastrophically-backtracking regex that
+  could freeze the service worker for ~a minute *per evaluated tab URL*. Now
+  collapses runs of `*` first (semantically identical glob), in both the
+  runtime and the TS matcher. Added a timing regression test.
+- **Cloud token-validity probes now time out.** Google Drive / Dropbox /
+  OneDrive `getValidToken()` issued a raw `fetch` with no timeout on the hot
+  upload/download path; a hung probe blocked every caller indefinitely (the
+  prior timeout only covered the refresh path). All three now use the existing
+  15s timeout wrapper and fall through to refresh on a failed/timed-out probe.
+- **`@crontab` schedule reconciliation on in-place update.** On the Chrome
+  138+ `userScripts.update` path, editing a script to add `@crontab` left the
+  old page-load registration in place (script ran on load *and* on schedule),
+  and removing `@crontab` left a zombie alarm firing forever. Registration now
+  drops the prior page-load registration when switching to crontab and clears
+  any stale crontab alarm when a script is no longer scheduled.
+- **`ScriptValues.deleteAll` cache/IDB race fixed.** A concurrent
+  `GM_getValue`/`GM_setValue`-triggered `init()` could write pre-delete values
+  back into the cache after `deleteAll` cleared it, leaving the cache serving
+  deleted values while IndexedDB was empty. `deleteAll` now serializes on
+  `init()` before clearing.
+- **Release hygiene.** Added `.gitattributes export-ignore` for internal
+  planning/research docs so the `git archive` source ZIP shipped to add-on
+  reviewers no longer carries development working notes; closed `.gitignore`
+  gaps; removed stray working-notes references from two build-tooling comments.
+
 ### 2026-06-01 — Deep audit hardening pass
 
 - **@require SRI now fails closed.** Subresource-integrity verification for
