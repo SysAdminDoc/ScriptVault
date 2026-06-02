@@ -655,7 +655,11 @@ const ThemeEditor = (() => {
   }
 
   function toast(msg, type = 'success') {
-    if (typeof showToast === 'function') showToast(msg, type);
+    // showToast lives inside dashboard.js's IIFE and isn't in this module's
+    // scope; the dashboard exposes it via window.ScriptVaultDashboardUI.toast.
+    const fn = window.ScriptVaultDashboardUI?.toast
+      || (typeof showToast === 'function' ? showToast : null);
+    if (fn) fn(msg, type);
   }
 
   /* ------------------------------------------------------------------ */

@@ -4,6 +4,38 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-01 — Deep audit hardening pass
+
+- **@require SRI now fails closed.** Subresource-integrity verification for
+  `@require`/npm dependencies previously returned "valid" when the digest
+  computation threw, silently accepting unverified bytes on a correctly-pinned
+  `sha256` hash. It now rejects on any verification error. SRI hashes are also
+  compared after normalizing base64url and missing padding, so a correctly
+  pinned require can no longer silently fail and fall through to a fallback CDN.
+- **Stored-XSS fixes.** The collection card icon and the collection editor's
+  icon input interpolated an imported/shared `icon` value into HTML without
+  escaping; both are now escaped. The multi-profile header indicator and
+  switcher dropdown interpolated an imported profile's `color` (into a style
+  attribute) and `emoji` without validation; color is now validated against a
+  hex/named-color allowlist and emoji is HTML-escaped, matching the profile bar.
+- **Install-page dependency probe hardened.** The `@require` reachability
+  preview auto-fetched every dependency URL from untrusted userscript metadata
+  before any user action, with no scheme or host check — usable to probe
+  loopback/private/cloud-metadata hosts. It now only probes external `http(s)`
+  URLs and marks internal or non-http(s) URLs as unverified without fetching.
+- **Cross-device deletes now propagate.** Cloud sync recorded remote deletions
+  but never removed the already-installed local copy, so a script deleted on
+  another device kept running locally. Sync now applies remote tombstone
+  deletions locally (skipping user-modified scripts), and the 3-way merge base
+  handles an empty-string sync base correctly.
+- **UX/robustness.** Schedule and theme-editor save/clear/error toasts were
+  bound to an out-of-scope `showToast` and never appeared; they now route
+  through the exposed dashboard toast. The activity heatmap clears its global
+  recording hook on teardown, and the side panel's all-scripts render degrades
+  instead of throwing if its list element is missing.
+- Hardened the Vitest crypto mock so the signing source suite runs in all
+  worker pools (was the one persistently failing case). Full suite: 1114 green.
+
 ### 2026-06-01 — Planning and research index consolidation
 
 - Added root-level `COMPLETED.md` and `RESEARCH_REPORT.md` indexes so active

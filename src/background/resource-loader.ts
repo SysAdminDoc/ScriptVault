@@ -124,23 +124,40 @@ export function isUnfetchableUrl(url: string): boolean {
 // verifySRI — verify SubResource Integrity hash for fetched content
 // ---------------------------------------------------------------------------
 
+// Normalize a base64 / base64url value (with or without padding) to a canonical
+// padded standard-base64 string so SRI hashes pasted in either encoding compare
+// equal. Prevents a correctly-pinned require from silently failing the integrity
+// check (and then falling through to a different fallback CDN).
+function normalizeSriBase64(value: string): string {
+  let s = value.replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, '');
+  const rem = s.length % 4;
+  if (rem === 2) s += '==';
+  else if (rem === 3) s += '=';
+  return s;
+}
+
 export async function verifySRI(code: string, hashStr: string | null): Promise<boolean> {
-  if (!hashStr) return true;
-  // Support formats: sha256-<base64>, md5-<hex>, or just <hex>
+  if (!hashStr) return true; // No integrity requested — nothing to verify.
+  // Support formats: sha256-<base64>, sha384/512, md5-<hex>, with - or = separator.
   const match = hashStr.match(/^(sha256|sha384|sha512|md5)[-=](.+)$/i);
-  if (!match) return true; // Unknown format, skip verification
+  if (!match) return true; // Not an SRI hash string — nothing enforceable to verify.
   const [, algo, expected] = match;
   if (!algo || !expected) return true;
-  if (algo.toLowerCase() === 'md5') return true; // Can't verify MD5 with SubtleCrypto
   const algoMap: Record<string, string> = { sha256: 'SHA-256', sha384: 'SHA-384', sha512: 'SHA-512' };
+  const algoName = algoMap[algo.toLowerCase()];
+  // MD5 (and any algorithm SubtleCrypto cannot compute) is unverifiable here.
+  // Treat it as "no enforceable integrity" rather than failing closed, which
+  // would break existing scripts pinned with a legacy/weak hash.
+  if (!algoName) return true;
   try {
-    const algoName = algoMap[algo.toLowerCase()];
-    if (!algoName) return true;
     const digest = await crypto.subtle.digest(algoName, new TextEncoder().encode(code));
     const actual = btoa(String.fromCharCode(...new Uint8Array(digest)));
-    return actual === expected;
+    return normalizeSriBase64(actual) === normalizeSriBase64(expected);
   } catch (_e) {
-    return true; // Verification not possible, allow
+    // Integrity WAS requested with a verifiable algorithm but verification could
+    // not complete — fail CLOSED. Accepting unverified bytes here would make the
+    // SRI pin a no-op and defeat protection against a compromised/MITM'd CDN.
+    return false;
   }
 }
 

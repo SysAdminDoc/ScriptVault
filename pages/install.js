@@ -1937,6 +1937,46 @@ async function runSignatureVerification(sourceUrl) {
 }
 
 // v2.0: Check @require dependency URLs
+// The @require reachability preview probes URLs taken from untrusted userscript
+// metadata, and it auto-fires before the user clicks Install. Mirror the
+// background's InternalHostGuard here (the page can't import it) so the preview
+// can never be coerced into probing loopback/RFC-1918/link-local/metadata hosts
+// or non-http(s) schemes. URL.hostname normalizes numeric/hex/octal IPv4 forms,
+// so the dotted-quad check below also covers http://2130706433/ etc.
+function _isInternalDepV4(ip) {
+  const p = String(ip).split('.').map(n => parseInt(n, 10));
+  if (p.length !== 4 || p.some(n => !Number.isFinite(n) || n < 0 || n > 255)) return true;
+  const [a, b] = p;
+  if (a === 0 || a === 10 || a === 127) return true;
+  if (a === 169 && b === 254) return true;          // link-local + cloud metadata
+  if (a === 172 && b >= 16 && b <= 31) return true; // RFC 1918
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  if (a === 255 && b === 255) return true;
+  return false;
+}
+function _isInternalDepHost(host) {
+  host = String(host || '').toLowerCase();
+  if (!host) return true;
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.localdomain')) return true;
+  if (host.includes(':')) { // IPv6 literal
+    if (host === '::1' || host === '::' || host === '::0') return true;
+    if (/^fe[89ab]/.test(host)) return true; // fe80::/10 link-local
+    if (/^f[cd]/.test(host)) return true;     // fc00::/7 ULA
+    const m = host.match(/^::ffff:([0-9.]+)$/);
+    if (m) return _isInternalDepV4(m[1]);
+    return false;
+  }
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return _isInternalDepV4(host);
+  return false;
+}
+function _isProbeableDepUrl(url) {
+  let parsed;
+  try { parsed = new URL(url); } catch { return false; }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+  return !_isInternalDepHost(parsed.hostname);
+}
+
 async function checkDependencies(requires) {
   const counters = {
     ok: 0,
@@ -1992,21 +2032,28 @@ async function checkDependencies(requires) {
     let outcome = 'fail';
     let detail = `${url} — unreachable`;
 
-    try {
-      const resp = await fetch(url, { method: 'HEAD' });
-      if (resp.ok) {
-        outcome = 'ok';
-        detail = `${url} — OK (${resp.status})`;
-      } else {
-        detail = `${url} — HTTP ${resp.status}`;
-      }
-    } catch {
+    if (!_isProbeableDepUrl(url)) {
+      // Refuse to probe non-http(s) or internal/loopback hosts — surface it as
+      // unverified rather than fetching (avoids a renderer-side host probe).
+      outcome = 'unverifiable';
+      detail = `${url} — not probed (only external http(s) URLs are checked)`;
+    } else {
       try {
-        await fetch(url, { method: 'HEAD', mode: 'no-cors' });
-        outcome = 'unverifiable';
-        detail = `${url} — server reachable (status unverifiable)`;
+        const resp = await fetch(url, { method: 'HEAD' });
+        if (resp.ok) {
+          outcome = 'ok';
+          detail = `${url} — OK (${resp.status})`;
+        } else {
+          detail = `${url} — HTTP ${resp.status}`;
+        }
       } catch {
-        detail = `${url} — unreachable`;
+        try {
+          await fetch(url, { method: 'HEAD', mode: 'no-cors' });
+          outcome = 'unverifiable';
+          detail = `${url} — server reachable (status unverifiable)`;
+        } catch {
+          detail = `${url} — unreachable`;
+        }
       }
     }
 
