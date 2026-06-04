@@ -70,13 +70,13 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 
 **Goal:** decide which of these ship on Firefox v1 and which are explicitly out-of-scope.
 
-- [ ] **Cloud sync providers** (`modules/sync-providers.js` + `sync-easycloud.js`):
+- [x] **Cloud sync providers** (`modules/sync-providers.js` + `sync-easycloud.js`):
   - Google Drive PKCE — needs `moz-extension://<uuid>/` redirect URI registered in Google Cloud Console
   - Dropbox PKCE — same
   - OneDrive PKCE — same
   - WebDAV — should work as-is (no OAuth)
   - Easy Cloud (`chrome.identity` + `chrome.storage.managed`) — may not work on Firefox depending on identity flow support
-  - **Current gate:** Firefox does not accept `identity` in `optional_permissions`; the validation manifest omits it. Treat Firefox v1 as WebDAV-only until OAuth providers get a dedicated permission/UI pass or `identity` becomes an install-time Firefox permission.
+  - **Shipped 2026-06-04:** Firefox v1 is explicitly WebDAV-only. `manifest-firefox.json` still omits `identity`, and `npm run smoke:firefox` now starts a local WebDAV fixture, saves WebDAV settings, checks provider health, runs a no-write dry-run preview, performs `syncNow`, verifies the uploaded JSON backup, and confirms Basic Auth was sent to the configured endpoint. Google Drive, Dropbox, OneDrive, and Easy Cloud stay deferred until a dedicated install-time `identity`/OAuth redirect pass.
 - [ ] **DeclarativeNetRequest rule management** (`src/background/dnr-rules.ts`) — Firefox MV3 DNR is supported but the dynamic rule API may differ. Test rule registration + teardown.
 - [ ] **`@require` SRI verification** (`src/background/resource-loader.ts`) — works the same on both (pure crypto).
 - [ ] **Ed25519 signing** (`bg/signing.js`) — Web Crypto API, identical.
@@ -123,7 +123,7 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 
 ## Open decisions for the user
 
-1. **Cloud sync scope for v1 Firefox build** — current validation package is WebDAV-only because Firefox doesn't support `identity` as optional. Decide whether to add install-time `identity` later or keep OAuth providers Chrome-only.
+1. **OAuth sync provider timing after Firefox v1** — Firefox v1 is WebDAV-only. A future pass should decide whether OAuth providers get install-time `identity` plus registered `moz-extension://` redirect URIs, or stay Chrome-only.
 2. **Editor approach** — keep the sandboxed iframe architecture on Firefox (simpler code, small perf overhead) or inline Monaco directly in the dashboard (cleaner, more work)?
 3. **Source tree strategy** — stay with runtime feature detects in shared files, or split Firefox-specific code into a `firefox/` overlay directory?
 4. **AMO listing visibility** — go public on day one, or start unlisted with a private signing for personal testing?
@@ -196,6 +196,13 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - `tests/migration.test.js` now proves legacy v1.x script migration is idempotent across repeated runs.
 - Focused verification: `node --check scripts/smoke-firefox-sideload.mjs`, `npm test -- tests/firefox-package.test.js tests/migration.test.js`, and `node scripts/smoke-firefox-sideload.mjs --skip-package` with Firefox Developer Edition 151.0b10.
 - Next Firefox-port session starts at **Phase 3 — Integrations that need per-provider work**, beginning with the WebDAV-only baseline and explicit OAuth/identity decision.
+
+### 2026-06-04 — Phase 3 WebDAV-only sync baseline
+
+- Closed the Firefox Phase 3 cloud-sync provider decision for v1: WebDAV ships in the validation package; Google Drive, Dropbox, OneDrive, and Easy Cloud remain deferred because Firefox does not accept `identity` as an optional permission in this package.
+- `npm run smoke:firefox` now starts a local WebDAV fixture, configures WebDAV sync through runtime settings, verifies provider health, runs dry-run preview without writing, performs `syncNow`, checks the uploaded JSON payload, and asserts Basic Auth reached the configured endpoint.
+- Focused verification: `node --check scripts/smoke-firefox-sideload.mjs`, `npm test -- tests/firefox-package.test.js tests/source-sync-providers.test.js`, and `node scripts/smoke-firefox-sideload.mjs --skip-package` with Firefox Developer Edition 151.0b10.
+- Next Firefox-port session continues Phase 3 with DNR dynamic-rule registration/teardown, `@require` SRI, and Ed25519 signing parity checks.
 
 ---
 

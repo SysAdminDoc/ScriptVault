@@ -297,7 +297,7 @@ npm run firefox:package
 npm run smoke:firefox
 ```
 
-Artifacts are written to `firefox-artifacts/`: the Firefox package ZIP, a source-review ZIP, and `web-ext-lint.json`. The package gate currently passes with 0 linter errors and 0 notices. `npm run smoke:firefox` uses geckodriver plus Firefox Developer Edition/Nightly 140+ to temporary-install the package, open the dashboard and popup, save/toggle a smoke userscript, verify it runs on a local target page, import Chrome-shaped JSON/ZIP backup fixtures, import a 26-script quota fixture, and verify trash restore after a profile-backed Firefox restart. Monaco is omitted from the Firefox package until the dedicated editor-loading pass lands, so the editor falls back to the textarea adapter; OAuth cloud providers are deferred because Firefox does not support `identity` as an optional permission.
+Artifacts are written to `firefox-artifacts/`: the Firefox package ZIP, a source-review ZIP, and `web-ext-lint.json`. The package gate currently passes with 0 linter errors and 0 notices. `npm run smoke:firefox` uses geckodriver plus Firefox Developer Edition/Nightly 140+ to temporary-install the package, open the dashboard and popup, save/toggle a smoke userscript, verify it runs on a local target page, validate WebDAV sync against a local fixture, import Chrome-shaped JSON/ZIP backup fixtures, import a 26-script quota fixture, and verify trash restore after a profile-backed Firefox restart. Monaco is omitted from the Firefox package until the dedicated editor-loading pass lands, so the editor falls back to the textarea adapter; OAuth cloud providers are deferred because Firefox does not support `identity` as an optional permission.
 
 ---
 

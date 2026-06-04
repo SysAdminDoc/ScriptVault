@@ -44,6 +44,12 @@ All notable changes to ScriptVault will be documented in this file.
   trash survived the restart, and restores the deleted script. The migration
   suite also proves the v1.x -> v2.0 migration is idempotent across repeated
   runs.
+- **Validated Firefox WebDAV-only sync for v1.** The Firefox smoke now runs a
+  local WebDAV fixture, saves WebDAV settings through the runtime, checks
+  provider health, runs a no-write dry-run preview, performs `syncNow`, verifies
+  the uploaded JSON backup, and confirms Basic Auth reached the configured
+  endpoint. OAuth sync providers remain deferred because the Firefox package
+  omits `identity`.
 - **Cleared the high-severity `web-ext` audit path.** `web-ext` now resolves to
   the `10.3.0` line with fixed `tmp@0.2.6`, restoring the high-level npm audit
   gate.
