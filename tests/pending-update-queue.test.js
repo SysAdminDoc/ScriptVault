@@ -179,6 +179,24 @@ describe('pending update queue', () => {
     expect(result.pendingUpdates[0].reviewReasons).toContain('Adds permissions or host scope');
   });
 
+  it('marks provenance verification failures for review', () => {
+    const reasons = UpdateSystem._getUpdateReviewReasons({
+      permissionChanges: null,
+      dependencyChanges: { require: [] },
+      dependencies: {
+        require: [{
+          url: 'https://cdn.example.com/lib.js',
+          provenance: {
+            status: 'declared',
+            verification: 'root-verification-failed',
+          },
+        }],
+      },
+    }, false);
+
+    expect(reasons).toContain('Fails @require provenance verification');
+  });
+
   it('applies only safe queued updates and leaves review items queued', async () => {
     const scripts = new Map([
       ['safe', makeScript('safe')],

@@ -914,8 +914,9 @@ const UpdateSystem = {
   },
 
   _hasAddedPermission(permissionChanges = {}) {
+    const changes = permissionChanges || {};
     return ['grant', 'connect', 'match'].some(key => {
-      const group = permissionChanges[key] || {};
+      const group = changes[key] || {};
       return Array.isArray(group.added) && group.added.length > 0;
     });
   },
@@ -928,6 +929,17 @@ const UpdateSystem = {
     );
   },
 
+  _hasProvenanceReviewFlag(receipt = {}) {
+    const deps = receipt.dependencies?.require || [];
+    return deps.some(dep => {
+      const provenance = dep?.provenance;
+      if (!provenance) return false;
+      if (provenance.status && provenance.status !== 'declared') return true;
+      return ['signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
+        .includes(provenance.verification || '');
+    });
+  },
+
   _getUpdateReviewReasons(receipt, sourceIdentityChanged) {
     const reasons = [];
     if (this._hasAddedPermission(receipt.permissionChanges)) {
@@ -935,6 +947,9 @@ const UpdateSystem = {
     }
     if (this._hasRiskyDependencyChange(receipt.dependencyChanges)) {
       reasons.push('Changes external dependencies');
+    }
+    if (this._hasProvenanceReviewFlag(receipt)) {
+      reasons.push('Fails @require provenance verification');
     }
     if (sourceIdentityChanged) {
       reasons.push('Changes install source');

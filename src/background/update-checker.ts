@@ -390,8 +390,9 @@ export const UpdateSystem = {
   },
 
   _hasAddedPermission(permissionChanges: Record<string, { added?: string[] }> = {}): boolean {
+    const changes = permissionChanges || {};
     return ['grant', 'connect', 'match'].some((key) => {
-      const group = permissionChanges[key] || {};
+      const group = changes[key] || {};
       return Array.isArray(group.added) && group.added.length > 0;
     });
   },
@@ -404,13 +405,27 @@ export const UpdateSystem = {
     );
   },
 
-  _getUpdateReviewReasons(receipt: { permissionChanges?: Record<string, { added?: string[] }>; dependencyChanges?: { require?: Array<{ change?: string; nextError?: string }> } }, sourceIdentityChanged: boolean): string[] {
+  _hasProvenanceReviewFlag(receipt: { dependencies?: { require?: Array<{ provenance?: { status?: string; verification?: string } }> } } = {}): boolean {
+    const deps = receipt.dependencies?.require || [];
+    return deps.some((dep) => {
+      const provenance = dep.provenance;
+      if (!provenance) return false;
+      if (provenance.status && provenance.status !== 'declared') return true;
+      return ['signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
+        .includes(provenance.verification || '');
+    });
+  },
+
+  _getUpdateReviewReasons(receipt: { permissionChanges?: Record<string, { added?: string[] }>; dependencyChanges?: { require?: Array<{ change?: string; nextError?: string }> }; dependencies?: { require?: Array<{ provenance?: { status?: string; verification?: string } }> } }, sourceIdentityChanged: boolean): string[] {
     const reasons: string[] = [];
     if (this._hasAddedPermission(receipt.permissionChanges)) {
       reasons.push('Adds permissions or host scope');
     }
     if (this._hasRiskyDependencyChange(receipt.dependencyChanges)) {
       reasons.push('Changes external dependencies');
+    }
+    if (this._hasProvenanceReviewFlag(receipt)) {
+      reasons.push('Fails @require provenance verification');
     }
     if (sourceIdentityChanged) {
       reasons.push('Changes install source');
