@@ -51,6 +51,47 @@ function firefoxLintSummary() {
   }
 }
 
+function edgeBuildSummary(version) {
+  const reportPath = `edge-artifacts/edge-build-${version}.json`;
+  const reportFullPath = resolve(root, reportPath);
+  if (!existsSync(reportFullPath)) {
+    throw new Error(`Edge build report is missing: ${reportPath}. Run \`npm run build:edge:check\` before \`npm run support:matrix${check ? ':check' : ''}\`.`);
+  }
+
+  let report;
+  try {
+    report = readJson(reportPath);
+  } catch (err) {
+    throw new Error(`Edge build report is unreadable: ${reportPath} (${err?.message || err})`);
+  }
+
+  const artifact = report.artifact || `edge-artifacts/scriptvault-edge-v${version}.zip`;
+  const failures = [];
+  if (report.version !== version) failures.push(`version ${report.version || '<missing>'} does not match manifest ${version}`);
+  if (Array.isArray(report.missingFiles) && report.missingFiles.length > 0) {
+    failures.push(`missing files: ${report.missingFiles.join(', ')}`);
+  }
+  if (!artifact || !existsSync(resolve(root, artifact))) failures.push(`missing Edge ZIP: ${artifact || '<missing>'}`);
+  if (report.edgeReadiness?.updateUrlRemoved !== true) failures.push('Edge manifest update_url removal was not verified');
+  if (failures.length > 0) {
+    throw new Error(`Edge build report is not release-ready: ${failures.join('; ')}. Run \`npm run build:edge:check\`.`);
+  }
+
+  return {
+    reportPath,
+    artifact,
+    generatedAt: report.generatedAt || null,
+    packageCommand: report.packageCommand || 'npm run build:edge:check',
+    browserSmoke: report.edgeReadiness?.browserSmoke || 'No dedicated Edge browser smoke is wired in CI.',
+    initialPublication: report.edgeReadiness?.initialPublication || 'Manual Partner Center upload remains required.',
+    updateAutomation: report.edgeReadiness?.updateAutomation || 'Edge Add-ons REST update automation is deferred.',
+  };
+}
+
+function trimSentence(value) {
+  return String(value || '').replace(/[.。]+$/u, '');
+}
+
 function matrixMarkdown(date) {
   const chromeManifest = readJson('manifest.json');
   const firefoxManifest = readJson('manifest-firefox.json');
@@ -59,6 +100,7 @@ function matrixMarkdown(date) {
   const firefoxMin = firefoxManifest.browser_specific_settings?.gecko?.strict_min_version || 'unknown';
   const hasFirefoxAndroidTarget = !!firefoxManifest.browser_specific_settings?.gecko_android?.strict_min_version;
   const firefoxEvidence = firefoxLintSummary();
+  const edgeEvidence = edgeBuildSummary(version);
   const firefoxAndroidRow = hasFirefoxAndroidTarget
     ? `| Firefox for Android | Manifest validation target | Firefox for Android ${firefoxManifest.browser_specific_settings.gecko_android.strict_min_version}+ | ${date} package/manifests; no Android device smoke yet | \`manifest-firefox.json\` \`gecko_android\` target plus Firefox source/package ZIP | Same Firefox API deferrals; no side panel; Android device smoke is not wired |`
     : `| Firefox for Android | Deferred; not an AMO compatibility target | No current \`gecko_android\` manifest target | ${date} | \`manifest-firefox.json\` intentionally omits \`gecko_android\` until an Android smoke gate exists | Android UI/runtime, extension-action overlay, host-permission, import/export, and WebDAV paths are unverified |`;
@@ -69,7 +111,7 @@ _Last generated: ${date} with \`npm run support:matrix\`. Version source: \`mani
 | Browser | Support level | Tested version / target | Last successful verification | Verification evidence | Unsupported or deferred APIs |
 |---|---|---|---|---|---|
 | Chrome / Chromium | Tier 1 published target | Chrome ${chromeMin}+ MV3 | ${date} | \`npm run smoke:dashboard\`, \`npm run cws:check\`, Chrome ZIP packaging in CI | Chrome 138+ requires per-extension Allow User Scripts; per-script \`worldId\` is Chrome 133+ and feature-gated |
-| Microsoft Edge | Tier 1 compatible package; separate store automation pending | Edge ${chromeMin}+ Chromium MV3 package | ${date} package/manifests; no separate Edge CI smoke yet | Same ZIP as Chrome; smoke harness can run with Edge via \`SCRIPT_VAULT_CHROME_PATH\` | Edge Add-ons package/publish path is not automated yet |
+| Microsoft Edge | Tier 1 compatible package; Partner Center publication manual | Edge ${chromeMin}+ Chromium MV3 package | ${date} generated package/report; no separate Edge browser smoke in CI | \`${edgeEvidence.packageCommand}\`, \`${edgeEvidence.artifact}\`, \`${edgeEvidence.reportPath}\`; CI uploads \`edge-artifacts/*\` | ${trimSentence(edgeEvidence.initialPublication)}; ${trimSentence(edgeEvidence.updateAutomation)}; ${trimSentence(edgeEvidence.browserSmoke)} |
 | Firefox Desktop | AMO validation target, not a published listing | Firefox ${firefoxMin}+ MV3 | ${date} | ${firefoxEvidence} | \`sidePanel\`, \`offscreen\`, \`identity\` OAuth, and some \`userScripts.execute\` flows are unsupported/deferred; Firefox package omits Monaco until the Firefox editor-loading pass |
 ${firefoxAndroidRow}
 | Brave / Vivaldi / Opera / Arc | Chromium derivative watchlist | Chrome ${chromeMin}+ package may load | Not release-verified | No CI smoke or store package for these browsers | Store policy, shields/sidebar behavior, and extension UI chrome are unverified |

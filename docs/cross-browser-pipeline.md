@@ -79,7 +79,14 @@ WXT also handles:
 
 ### Stage 3 — Edge target
 
-Edge accepts the Chrome ZIP as-is. Add a target that's a thin wrapper around the Chrome build:
+The pre-WXT Edge target is now a thin package wrapper around the Chrome MV3
+build. It stages `build-edge/`, applies the Edge manifest transform profile,
+removes `update_url` defensively, writes
+`edge-artifacts/scriptvault-edge-v<version>.zip`, and records release evidence
+in `edge-artifacts/edge-build-<version>.json`. The generated browser support
+matrix reads that report and fails closed when the report or ZIP is missing.
+
+When WXT replaces the current build, keep the same evidence contract:
 
 ```typescript
 // wxt.config.ts
@@ -94,7 +101,11 @@ export default defineConfig({
 });
 ```
 
-**Exit:** `npm run build:edge` produces `scriptvault-edge.zip` for Partner Center upload.
+**Exit:** `npm run build:edge:check` produces the Edge ZIP and report, CI uploads
+`edge-artifacts/*`, and `npm run support:matrix:check` validates the report.
+Initial Partner Center publication remains manual; Microsoft Edge Add-ons REST
+update automation is deferred until a live listing and credential-custody model
+exist.
 
 ### Stage 4 — Chromium-derivative validation (Brave, Vivaldi, Opera, Arc)
 
@@ -108,7 +119,7 @@ _Last generated: 2026-06-04 with `npm run support:matrix`. Version source: `mani
 | Browser | Support level | Tested version / target | Last successful verification | Verification evidence | Unsupported or deferred APIs |
 |---|---|---|---|---|---|
 | Chrome / Chromium | Tier 1 published target | Chrome 130+ MV3 | 2026-06-04 | `npm run smoke:dashboard`, `npm run cws:check`, Chrome ZIP packaging in CI | Chrome 138+ requires per-extension Allow User Scripts; per-script `worldId` is Chrome 133+ and feature-gated |
-| Microsoft Edge | Tier 1 compatible package; separate store automation pending | Edge 130+ Chromium MV3 package | 2026-06-04 package/manifests; no separate Edge CI smoke yet | Same ZIP as Chrome; smoke harness can run with Edge via `SCRIPT_VAULT_CHROME_PATH` | Edge Add-ons package/publish path is not automated yet |
+| Microsoft Edge | Tier 1 compatible package; Partner Center publication manual | Edge 130+ Chromium MV3 package | 2026-06-04 generated package/report; no separate Edge browser smoke in CI | `npm run build:edge:check`, `edge-artifacts/scriptvault-edge-v3.11.0.zip`, `edge-artifacts/edge-build-3.11.0.json`; CI uploads `edge-artifacts/*` | Manual Partner Center upload remains required until a live Edge Add-ons listing exists; Microsoft Edge Add-ons REST update automation is deferred until listing identifiers and publisher credentials are provisioned; No dedicated Edge browser smoke is wired in CI; release operators sideload build-edge/ manually through edge://extensions |
 | Firefox Desktop | AMO validation target, not a published listing | Firefox 140.0+ MV3 | 2026-06-04 | `npm run firefox:package`, `npm run smoke:firefox`; web-ext lint 0 errors / 0 notices / 140 warnings | `sidePanel`, `offscreen`, `identity` OAuth, and some `userScripts.execute` flows are unsupported/deferred; Firefox package omits Monaco until the Firefox editor-loading pass |
 | Firefox for Android | Deferred; not an AMO compatibility target | No current `gecko_android` manifest target | 2026-06-04 | `manifest-firefox.json` intentionally omits `gecko_android` until an Android smoke gate exists | Android UI/runtime, extension-action overlay, host-permission, import/export, and WebDAV paths are unverified |
 | Brave / Vivaldi / Opera / Arc | Chromium derivative watchlist | Chrome 130+ package may load | Not release-verified | No CI smoke or store package for these browsers | Store policy, shields/sidebar behavior, and extension UI chrome are unverified |
@@ -153,7 +164,7 @@ strategy:
 Each matrix entry:
 1. Build target with WXT.
 2. Lint (`web-ext lint` for Firefox, no lint for Chrome/Edge today).
-3. Smoke test (Puppeteer for Chrome/Edge; `npm run smoke:firefox` for Firefox).
+3. Smoke test (Puppeteer for Chrome; `npm run smoke:firefox` for Firefox; Edge browser smoke remains manual until a dedicated runner is wired).
 4. Upload build artifact per browser.
 
 CI runtime impact: ~2x current runtime if matrix runs in parallel.
@@ -188,7 +199,10 @@ Total: 6-10 weeks for Chrome + Firefox + Edge + derivatives + Orion. Safari adds
 - [Firefox userScripts API (optional_permissions)](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts)
 - [Firefox declarativeNetRequest](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/declarativeNetRequest)
 - [Chrome vs Firefox API differences](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Chrome_incompatibilities)
-- [Edge Add-ons publish guide](https://learn.microsoft.com/en-us/microsoft-edge/extensions-chromium/publish/publish-extension)
+- [Edge Chrome-port guide](https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/port-chrome-extension)
+- [Edge supported extension APIs](https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/api-support)
+- [Edge Add-ons publish guide](https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension)
+- [Edge Add-ons REST update API](https://learn.microsoft.com/en-us/microsoft-edge/extensions/update/api/using-addons-api)
 - [Brave Shields + extension interactions](https://brave.com/shields/)
 - [Orion browser (Kagi)](https://browser.kagi.com/)
 - [Safari Web Extensions](https://developer.apple.com/safari/extensions/)

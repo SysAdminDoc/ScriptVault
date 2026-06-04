@@ -76,6 +76,7 @@ phase.
 - [x] CONTRIBUTING local-state guidance: `CONTRIBUTING.md` now covers setup, verification, release evidence, and generic local-only state hygiene; `.factory/` is excluded from source archives through `.gitattributes` while staying ignored locally — *Source: docs/archive/TODO.md I-1; commit docs: add contributor local-state guidance*
 - [x] README feature-claim checklist shipped-feature rows: the checklist contains ESM bundler, trust receipts, install-source badges, internal-host guard, sync cockpit, and dashboard virtualization rows, and `tests/check-readme-claims.test.js` now pins them — *Source: docs/archive/TODO.md I-2; commit test: pin readme checklist shipped rows*
 - [x] Optional client-side cloud sync encryption: CloudSync and EasyCloud now read plaintext v1 or encrypted v2 envelopes, upload sanitized v2 `AES-256-GCM` envelopes when the user enables sync encryption, and redact `syncEncryptionPassphrase` from normal settings exports/backups — *Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-2; commit feat: add cloud sync encryption*
+- [x] Edge package evidence gate: `npm run build:edge:check` now writes release-readiness evidence consumed by the browser support matrix; CI uploads `edge-artifacts/*`, and release docs distinguish automated Edge packaging from manual Partner Center publication and deferred REST update automation — *Source: ROADMAP.md Microsoft Edge release quality; commit ci: add edge artifact evidence*
 
 ## Stale / Obsolete Items
 

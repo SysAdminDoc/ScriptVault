@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Edge package evidence gate
+
+- **Tied Edge support claims to generated artifacts.** `npm run
+  build:edge:check` now writes a release-readiness report with Edge package,
+  manifest-transform, manual Partner Center publication, deferred REST update,
+  and no-CI-browser-smoke status; the browser support matrix reads that report.
+- **Added Edge CI artifact coverage.** CI now builds and uploads
+  `edge-artifacts/*`, and release docs distinguish automated package
+  generation from manual initial Edge Add-ons publication.
+
 ### 2026-06-04 — Cloud sync encryption
 
 - **Added optional client-side encryption for sync payloads.** CloudSync and

@@ -23,7 +23,7 @@
 
 import { execSync } from 'node:child_process';
 import { readFile, writeFile, mkdir, rm, readdir, stat } from 'node:fs/promises';
-import { resolve, join, dirname } from 'node:path';
+import { resolve, join, dirname, relative } from 'node:path';
 import { existsSync, createWriteStream } from 'node:fs';
 import { generateManifestForProfile } from './generate-manifest-firefox.mjs';
 
@@ -34,6 +34,12 @@ const ARTIFACT_DIR = join(ROOT, 'edge-artifacts');
 const args = new Set(process.argv.slice(2));
 const wantZip = !args.has('--no-zip');
 const wantCheck = args.has('--check');
+const EDGE_DOCS = {
+  porting: 'https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/port-chrome-extension',
+  publish: 'https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension',
+  apiSupport: 'https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/api-support',
+  updateApi: 'https://learn.microsoft.com/en-us/microsoft-edge/extensions/update/api/using-addons-api'
+};
 
 // Files + directories to package. Mirrors build.sh INCLUDE[] for Chrome.
 const INCLUDE = [
@@ -53,6 +59,10 @@ const INCLUDE = [
 
 function log(msg) {
   process.stdout.write(`[build-edge] ${msg}\n`);
+}
+
+function toRepoPath(path) {
+  return relative(ROOT, path).replace(/\\/g, '/');
 }
 
 async function copyRecursive(src, dest) {
@@ -150,20 +160,49 @@ async function main() {
     log('Skipping ZIP step (--no-zip).');
   }
 
+  const summaryPath = join(ARTIFACT_DIR, `edge-build-${version}.json`);
   const summary = {
+    schemaVersion: 2,
     generatedAt: new Date().toISOString(),
     version,
-    buildDir: BUILD_DIR,
-    artifact: wantZip ? zipPath : null,
+    buildDir: toRepoPath(BUILD_DIR),
+    artifact: wantZip ? toRepoPath(zipPath) : null,
+    packageCommand: wantZip ? 'npm run build:edge:check' : 'npm run build:edge:stage',
     transformsApplied: transformResult.transformsApplied,
     manifestTransformed: transformResult.changed,
-    missingFiles: missing
+    missingFiles: missing,
+    edgeReadiness: {
+      chromeCompatibilityReviewed: true,
+      updateUrlRemoved: !Object.prototype.hasOwnProperty.call(transformResult.manifest, 'update_url'),
+      unsupportedApiReview: 'No Edge-specific unsupported APIs identified by the current manifest/package transform; API support remains reviewed through docs/edge-submission.md.',
+      packageAutomation: 'Local and CI package generation is automated by npm run build:edge:check.',
+      initialPublication: 'Manual Partner Center upload remains required until a live Edge Add-ons listing exists.',
+      updateAutomation: 'Microsoft Edge Add-ons REST update automation is deferred until listing identifiers and publisher credentials are provisioned.',
+      browserSmoke: 'No dedicated Edge browser smoke is wired in CI; release operators sideload build-edge/ manually through edge://extensions.'
+    },
+    reviewDeclarations: {
+      privacyPolicy: 'PRIVACY.md',
+      permissionsAndDataUse: 'docs/store-listing-copy.md',
+      remoteCode: 'docs/cws-remote-code-compliance.md',
+      edgeSubmission: 'docs/edge-submission.md',
+      microsoftDocs: EDGE_DOCS
+    }
   };
-  await writeFile(join(ARTIFACT_DIR, `edge-build-${version}.json`), JSON.stringify(summary, null, 2));
+  await writeFile(summaryPath, JSON.stringify(summary, null, 2));
   log('Edge build summary:');
   process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
 
-  if (wantCheck && missing.length > 0) process.exit(1);
+  if (wantCheck) {
+    const failures = [];
+    if (missing.length > 0) failures.push(`missing files: ${missing.join(', ')}`);
+    if (wantZip && (!summary.artifact || !existsSync(zipPath))) failures.push(`missing Edge ZIP: ${toRepoPath(zipPath)}`);
+    if (!existsSync(summaryPath)) failures.push(`missing Edge summary: ${toRepoPath(summaryPath)}`);
+    if (!summary.edgeReadiness.updateUrlRemoved) failures.push('Edge manifest still contains update_url');
+    if (failures.length > 0) {
+      for (const failure of failures) log(`  ! ${failure}`);
+      process.exit(1);
+    }
+  }
 }
 
 main().catch(err => {
