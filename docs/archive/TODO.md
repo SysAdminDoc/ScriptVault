@@ -120,6 +120,7 @@
   - Verification: `npm test -- tests/local-health-report.test.js tests/support-snapshot-redaction.test.js tests/user-scripts-onboarding.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`.
 - [ ] **F-4** Sigstore `@require-provenance` implementation
   - Evidence: `docs/require-provenance-design.md`; design-complete.
+  - Progress: 2026-06-04 Phase A parser/storage foundation shipped. `@require-provenance` and `@require-identity` persist through the main parser and public API install path; trust receipts record declaration-only provenance metadata. Bundle parser, cryptographic verification, UI, and author guide remain open.
 - [ ] **F-5** Module-mode service worker (Chrome 124+ `"type":"module"` background)
   - Evidence: PASS2 NF-17.
 

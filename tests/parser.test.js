@@ -20,6 +20,8 @@ function parseUserscript(code) {
     excludeMatch: [],
     grant: [],
     require: [],
+    requireProvenance: [],
+    requireIdentity: [],
     resource: {},
     'run-at': 'document-idle',
     noframes: false,
@@ -92,12 +94,19 @@ function parseUserscript(code) {
       case 'excludeMatch':
       case 'grant':
       case 'require':
+      case 'require-provenance':
+      case 'requireProvenance':
+      case 'require-identity':
+      case 'requireIdentity':
       case 'connect':
       case 'antifeature':
       case 'tag':
       case 'compatible':
       case 'incompatible': {
-        const arrayKey = key === 'exclude-match' ? 'excludeMatch' : key;
+        const arrayKey = key === 'exclude-match' ? 'excludeMatch'
+          : key === 'require-provenance' ? 'requireProvenance'
+          : key === 'require-identity' ? 'requireIdentity'
+          : key;
         if (!meta[arrayKey]) meta[arrayKey] = [];
         if (value) {
           // Phase 36.6 — comma-separated convenience syntax
@@ -106,6 +115,8 @@ function parseUserscript(code) {
             arrayKey === 'include' ||
             arrayKey === 'exclude' ||
             arrayKey === 'excludeMatch' ||
+            arrayKey === 'requireProvenance' ||
+            arrayKey === 'requireIdentity' ||
             arrayKey === 'connect';
           if (splittable && value.includes(',')) {
             for (const part of value.split(',')) {
@@ -541,5 +552,76 @@ describe('parseUserscript', () => {
     // "v3.8, beta". We only desugar comma syntax for URL-pattern arrays.
     expect(meta.tag).toEqual(['tools,utility']);
   });
-});
 
+  describe('@require-provenance Phase A metadata parsing', () => {
+    it('parses provenance bundle URLs and signer identities as ordered arrays', () => {
+      const code = [
+        '// ==UserScript==',
+        '// @name Provenance',
+        '// @require https://cdn.example.com/lib-a.js',
+        '// @require-provenance https://cdn.example.com/lib-a.js.bundle',
+        '// @require-identity https://github.com/exampleuser (issuer: https://github.com/login/oauth)',
+        '// @require https://cdn.example.com/lib-b.js',
+        '// @require-provenance https://cdn.example.com/lib-b.js.bundle',
+        '// @require-identity https://accounts.google.com/example@example.com (issuer: https://accounts.google.com)',
+        '// ==/UserScript==',
+        'console.log("ok");'
+      ].join('\n');
+
+      const { meta } = parseUserscript(code);
+      expect(meta.require).toEqual([
+        'https://cdn.example.com/lib-a.js',
+        'https://cdn.example.com/lib-b.js'
+      ]);
+      expect(meta.requireProvenance).toEqual([
+        'https://cdn.example.com/lib-a.js.bundle',
+        'https://cdn.example.com/lib-b.js.bundle'
+      ]);
+      expect(meta.requireIdentity).toEqual([
+        'https://github.com/exampleuser (issuer: https://github.com/login/oauth)',
+        'https://accounts.google.com/example@example.com (issuer: https://accounts.google.com)'
+      ]);
+    });
+
+    it('defaults provenance metadata to empty arrays when omitted', () => {
+      const { meta } = parseUserscript(makeScript({ name: 'No Provenance', require: 'https://cdn.example.com/lib.js' }));
+      expect(meta.require).toEqual(['https://cdn.example.com/lib.js']);
+      expect(meta.requireProvenance).toEqual([]);
+      expect(meta.requireIdentity).toEqual([]);
+    });
+
+    it('splits comma-separated provenance and identity lists', () => {
+      const code = [
+        '// ==UserScript==',
+        '// @name Provenance CSV',
+        '// @require-provenance https://cdn.example.com/a.bundle, https://cdn.example.com/b.bundle',
+        '// @require-identity https://github.com/a (issuer: https://github.com/login/oauth), https://github.com/b (issuer: https://github.com/login/oauth)',
+        '// ==/UserScript==',
+      ].join('\n');
+
+      const { meta } = parseUserscript(code);
+      expect(meta.requireProvenance).toEqual([
+        'https://cdn.example.com/a.bundle',
+        'https://cdn.example.com/b.bundle'
+      ]);
+      expect(meta.requireIdentity).toEqual([
+        'https://github.com/a (issuer: https://github.com/login/oauth)',
+        'https://github.com/b (issuer: https://github.com/login/oauth)'
+      ]);
+    });
+
+    it('accepts canonical camelCase aliases used by stored metadata migrations', () => {
+      const code = [
+        '// ==UserScript==',
+        '// @name Provenance Aliases',
+        '// @requireProvenance https://cdn.example.com/a.bundle',
+        '// @requireIdentity https://github.com/a (issuer: https://github.com/login/oauth)',
+        '// ==/UserScript==',
+      ].join('\n');
+
+      const { meta } = parseUserscript(code);
+      expect(meta.requireProvenance).toEqual(['https://cdn.example.com/a.bundle']);
+      expect(meta.requireIdentity).toEqual(['https://github.com/a (issuer: https://github.com/login/oauth)']);
+    });
+  });
+});

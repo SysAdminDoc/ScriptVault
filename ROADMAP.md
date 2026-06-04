@@ -48,6 +48,7 @@ priority section below.
   - Source: docs/archive/TODO.md F-3 (ROADMAP Larger Bets).
 - [ ] P2 — Sigstore `@require-provenance` implementation
   - Why: design-complete supply-chain provenance for `@require`.
+  - Progress: 2026-06-04 shipped Phase A parser/storage foundation. `@require-provenance` and `@require-identity` now persist as ordered metadata arrays across the main parser and public API install path, and trust receipts record declaration-only provenance metadata with `verification: not-yet-implemented`. Remaining: Sigstore bundle parser, signature/root verification, install/details UI, and author guide.
   - Source: docs/archive/TODO.md F-4 (`docs/require-provenance-design.md`).
 - [ ] P2 — Module-mode service worker (Chrome 124+ `"type":"module"` background)
   - Source: docs/archive/TODO.md F-5 (PASS2 NF-17).

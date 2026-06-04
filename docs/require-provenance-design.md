@@ -1,7 +1,7 @@
 # `@require-provenance` Design — Sigstore-Style Verification for `@require`
 
 **Phase:** 39.5 (extends Phase 11.8 SRI).
-**Status:** Design — not yet implemented.
+**Status:** Phase A parser + storage foundation shipped 2026-06-04; bundle parsing, cryptographic verification, UI, and author guide remain open.
 **Owner:** Phase 17 (Security Round 2) follow-up.
 **Last reviewed:** 2026-05-17.
 
@@ -93,12 +93,13 @@ Got author:      https://github.com/attacker
 
 ## Implementation phases
 
-### Phase A — Parser + storage (no verification yet)
+### Phase A — Parser + storage (no verification yet) — shipped 2026-06-04
 
 - Extend `parseUserscript` to collect `@require-provenance` and `@require-identity` arrays.
 - Store alongside the existing `meta.require[]` array.
 - No runtime behavior change; verification remains a no-op.
 - **Tests:** 10 parser cases covering valid, malformed, missing identity, comma-separated lists.
+- **Shipped:** The main parser, background-core bridge parser, and public API install parser persist ordered `requireProvenance[]` / `requireIdentity[]` metadata. Trust receipts record declaration-only dependency provenance blocks with `verification: not-yet-implemented`.
 
 ### Phase B — Bundle fetcher + parser
 

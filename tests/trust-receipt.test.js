@@ -39,6 +39,8 @@ function makeMeta(overrides = {}) {
     'run-in': '',
     grant: ['GM_xmlhttpRequest'],
     require: ['https://cdn.example.com/lib.js'],
+    requireProvenance: [],
+    requireIdentity: [],
     resource: { logo: 'https://cdn.example.com/logo.png' },
     connect: ['https://api.example.com/*'],
     'top-level-await': false,
@@ -125,6 +127,28 @@ describe('script trust receipts', () => {
       scriptId: 'script_receipt',
       version: '1.0.0',
       historyIndex: 0,
+    });
+  });
+
+  it('records declared @require provenance metadata without treating it as verified yet', async () => {
+    const receipt = await createScriptTrustReceipt({
+      operation: 'install',
+      code: '// ==UserScript==\n// @name Receipt Demo\n// ==/UserScript==\nconsole.log("new");',
+      meta: makeMeta({
+        requireProvenance: ['https://cdn.example.com/lib.js.bundle'],
+        requireIdentity: ['https://github.com/exampleuser (issuer: https://github.com/login/oauth)'],
+      }),
+      fetchDependencyBody: vi.fn(async () => 'library-body'),
+    });
+
+    expect(receipt.dependencies.require[0]).toMatchObject({
+      url: 'https://cdn.example.com/lib.js',
+      provenance: {
+        bundleUrl: 'https://cdn.example.com/lib.js.bundle',
+        identity: 'https://github.com/exampleuser (issuer: https://github.com/login/oauth)',
+        status: 'declared',
+        verification: 'not-yet-implemented',
+      },
     });
   });
 
