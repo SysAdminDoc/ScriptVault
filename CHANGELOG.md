@@ -62,6 +62,11 @@ All notable changes to ScriptVault will be documented in this file.
   verifies hidden provider options, popup width, and dashboard/popup dark and
   light theme tokens. Static Firefox package tests also pin command shortcuts
   and action icon dimensions.
+- **Prepared AMO source review and reviewer rationale.** The source-review ZIP
+  now includes `AMO-SOURCE-README.md` with reproducible Firefox build
+  instructions, AMO data-collection copy, permission rationale, Firefox v1
+  listing scope, and unlisted-first manual submission steps. The
+  `store-copy:check` gate now requires that AMO source-review copy.
 - **Cleared the high-severity `web-ext` audit path.** `web-ext` now resolves to
   the `10.3.0` line with fixed `tmp@0.2.6`, restoring the high-level npm audit
   gate.

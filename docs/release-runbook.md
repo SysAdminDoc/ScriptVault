@@ -16,7 +16,7 @@ Before any release branch is created:
 2. **Smoke test green:** `npm run smoke:dashboard` passes locally on Linux + Windows.
 3. **Dependency audit green:** `npm audit --audit-level=high --omit=optional` exits 0. High and critical advisories are blocking unless the release notes document a temporary false-positive exception.
 4. **CWS tooling green:** `npm run cws:check` confirms the installed `chrome-webstore-upload-cli` major, Node engine, removed flag usage, and credential names.
-5. **Store permission copy green:** `npm run store-copy:check` confirms `manifest.json` and `manifest-firefox.json` permissions, host matches, web-accessible resources, sandbox pages, and AMO data-collection declarations are covered by `PRIVACY.md` and `docs/store-listing-copy.md`.
+5. **Store permission copy green:** `npm run store-copy:check` confirms `manifest.json` and `manifest-firefox.json` permissions, host matches, web-accessible resources, sandbox pages, and AMO data-collection declarations are covered by `PRIVACY.md`, `docs/store-listing-copy.md`, and `AMO-SOURCE-README.md`.
 6. **Locale lint green:** `tests/manifest-locales.test.js` passes - no locale's `extName` exceeds 75 chars, no `extDescription` exceeds 132 chars, all locales share the `en` key set.
 7. **Version sources synced:** `manifest.json`, `manifest-firefox.json`, `package.json`, and `package-lock.json` all point to the same target version.
 8. **Rollback drill green:** `npm run release:rollback-drill` proves the previous public `chrome.storage.local` snapshot survives the current storage migration safety window.
@@ -109,7 +109,10 @@ References: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/frega
 12. **CWS draft upload:** `bash publish.sh --draft`; review the draft in the CWS Developer Dashboard.
 13. **CWS publish:** `bash publish.sh` when ready to submit/publish through CWS review.
 14. **Verify CWS listing:** open the public listing after approval; confirm version, screenshots, and store description rendered.
-15. **Record store status:** rerun `npm run release:store-status` with `CWS_ACCESS_TOKEN` when available and attach the output to release notes or the release checklist.
+15. **AMO unlisted upload:** upload `firefox-artifacts/scriptvault-firefox-vX.Y.Z.zip` and attach `firefox-artifacts/scriptvault-firefox-source-vX.Y.Z.zip`. Use `AMO-SOURCE-README.md` for reviewer build instructions and privacy/permission rationale. Start unlisted for internal signing/smoke validation.
+16. **Record AMO review feedback:** copy any reviewer notes into `FIREFOX-PORT.md` before changing code. Resolve all review findings before requesting listed publication.
+17. **AMO listed publication:** move from unlisted to listed only after the unlisted build is signed, installed, smoked, and any review feedback is resolved.
+18. **Record store status:** rerun `npm run release:store-status` with `CWS_ACCESS_TOKEN` when available and attach the output to release notes or the release checklist.
 
 ## 5. CWS review backlog buffer (Phase 39.49)
 

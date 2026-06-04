@@ -107,8 +107,8 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - [x] **Lint pass.** Run `web-ext lint` against the XPI; fix every warning Mozilla flags before submission.
 - [x] **`web-ext build`** to produce a canonical source-plus-artifact pair.
 - [x] **Source submission bundle.** AMO requires source code if the extension uses minified libraries. `npm run firefox:package` now writes a source ZIP alongside the Firefox package.
-- [ ] **Privacy policy + permissions rationale** — reuse the Chrome listing as a starting point, adapt for AMO format.
-  - **Current gate:** AMO manifest data-collection declarations are explicit; full AMO listing/privacy copy remains for the generated permissions/privacy/store-copy roadmap item.
+- [x] **Privacy policy + permissions rationale** — reuse the Chrome listing as a starting point, adapt for AMO format.
+  - **Shipped 2026-06-04:** `AMO-SOURCE-README.md` now gives AMO reviewers source-build instructions, Firefox v1 listing scope, data-collection copy, permission rationale, and unlisted-first manual submission steps. `npm run store-copy:check` now gates that file alongside `PRIVACY.md` and `docs/store-listing-copy.md`.
 - [ ] **Initial AMO listing** as *unlisted* for internal smoke testing before going public.
 - [ ] **Review feedback loop.** Mozilla reviews typically flag `unsafe-eval`, broad `host_permissions`, and undocumented use of `userScripts`. Be ready to justify each.
 - [ ] **Publish as listed** once all feedback resolved.
@@ -230,6 +230,15 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - Static Firefox package tests pin the AMO-facing command shortcuts and action icon assets/dimensions used for Firefox toolbar scaling.
 - Verification: `node --check pages/dashboard-firefox-compat.js`, `node --check pages/dashboard.js`, `node --check scripts/smoke-firefox-sideload.mjs`, `npm test -- tests/dashboard-firefox-compat.test.js tests/firefox-package.test.js`, and `npm run smoke:firefox` with Firefox Developer Edition 151.0b10.
 - Next Firefox-port session starts at **Phase 5 — AMO submission**, beginning with privacy/permissions rationale copy and the unlisted listing prep.
+
+### 2026-06-04 — Phase 5 AMO source review and rationale prep
+
+- Closed the AMO privacy policy and permissions-rationale row. `AMO-SOURCE-README.md` now sits at the source ZIP root with reviewer build instructions, source/dependency notes, listing summary, Firefox v1 scope, AMO data-collection copy, permission rationale, and manual unlisted-first submission steps.
+- `npm run store-copy:check` now requires the AMO source-review README and verifies it keeps the reviewer build instructions, data-collection categories, permission rationale, unlisted flow, and credentialed manual blockers.
+- `docs/store-listing-copy.md` and `docs/release-runbook.md` now cross-link the AMO source-review README so store-copy rationale, release steps, and source-review instructions stay synchronized.
+- Official AMO references checked on 2026-06-04: Extension Workshop source-code submission, Add-on Policies, Firefox built-in data consent, MDN permissions, and MDN extension CSP guidance.
+- Verification: `node --check scripts/check-permission-copy.mjs`, `npm run store-copy:check`, and `npm test -- tests/firefox-package.test.js`.
+- Remaining Phase 5 blockers require maintainer AMO access: developer account setup, initial unlisted upload/signing, review feedback handling, and listed publication.
 
 ---
 
