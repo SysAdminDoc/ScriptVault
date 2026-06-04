@@ -29,10 +29,11 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 **Goal:** installs without manifest errors, opens the dashboard, basic userscripts register and run.
 
 - [x] **Strip `manifest.sandbox` from `manifest-firefox.json`.** Firefox MV3 doesn't support sandboxed manifest pages. Verify the build script doesn't copy the Chrome `content_security_policy` block either.
-- [ ] **Feature-flag `chrome.offscreen`.** `bg/analyzer.js` and `background.core.js` call `chrome.offscreen.createDocument(...)`. On Firefox this throws. Under Firefox's persistent background script you can run Acorn inline. Plan:
+- [x] **Feature-flag `chrome.offscreen`.** `bg/analyzer.js` and `background.core.js` call `chrome.offscreen.createDocument(...)`. On Firefox this throws. Under Firefox's persistent background script you can run Acorn inline. Plan:
   - Guard all `chrome.offscreen.*` call sites with `if (typeof chrome.offscreen !== 'undefined')`
   - Provide a `loadAcornInline()` fallback that imports `lib/acorn.min.js` via `importScripts` (bg script) or a dynamic `<script>` inject (Firefox bg is a full document, not a worker)
   - Same treatment for `lib/diff.min.js` 3-way merge
+  - **Shipped 2026-06-04:** `ScriptAnalyzer` now feature-detects offscreen support, keeps Chrome on the offscreen document path, and uses inline local Acorn/Diff for Firefox AST analysis, ESM import parsing, and sync merge. The Firefox package copies `lib/acorn.min.js` and `lib/diff.min.js` without copying the full Monaco `lib/` tree.
 - [ ] **Feature-flag `chrome.sidePanel`.** Dashboard has side-panel hooks. Firefox has no equivalent. Hide the toggle in `pages/dashboard.js` when `typeof chrome.sidePanel === 'undefined'`.
 - [x] **Strip `worldId` on Firefox.** `src/background/registration.ts` / `bg/*` may set `worldId` on `chrome.userScripts.register()`. Chrome 133+ only. Firefox rejects unknown fields. Guard with `if (USERSCRIPT_API_SUPPORTS_WORLD_ID)` after a runtime probe.
 - [ ] **Monaco editor loading path.** Firefox MV3 `extension_pages` CSP allows `'unsafe-eval'` by default, so Monaco can load directly in the dashboard extension origin with *no* sandboxed iframe at all. Two options:
@@ -105,7 +106,7 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 
 | # | Issue | File(s) | Blocker level |
 |---|-------|---------|----|
-| 1 | `chrome.offscreen` not in Firefox | `background.core.js`, `bg/analyzer.js`, `offscreen.html` / `.js` | **Hard** — AST analysis breaks |
+| 1 | `chrome.offscreen` not in Firefox | `background.core.js`, `bg/analyzer.js`, `offscreen.html` / `.js` | **Mitigated** — offscreen calls are feature-detected; Firefox uses inline local Acorn/Diff fallbacks |
 | 2 | `manifest.sandbox.pages` not in Firefox | `manifest-firefox.json`, `pages/editor-sandbox.html` | **Mitigated** — Firefox manifest has no sandbox key; Monaco still needs a dedicated loading path |
 | 3 | `chrome.sidePanel` not in Firefox | `pages/dashboard.js`, `pages/sidepanel.html` | Medium — UI-only |
 | 4 | Per-script `worldId` is Chrome 133+ only | `background.core.js`, `src/background/registration.ts` | **Mitigated** — guarded behind Chromium 133+ detection |
@@ -144,6 +145,13 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - Did not run temporary sideload or browser runtime smoke; Phase 1 Build + temporary install remains open.
 - `npm run support:matrix:check` now fails on a stale `README.md` generated matrix; tracked in `ROADMAP.md`.
 - The live tree contains active Sigstore provenance-verifier source/test/generated changes; preserve them for the build lane. Package bumps, generated support-matrix updates, and runtime smoke remain build-lane work.
+
+### 2026-06-04 — Offscreen feature flag
+
+- Closed the Phase 1 `chrome.offscreen` checkbox. `ScriptAnalyzer._ensureOffscreen()` now returns `false` when the API is missing instead of dereferencing `chrome.offscreen`, and analyzer/ESM/sync merge callers route through `ScriptAnalyzer` helpers.
+- Firefox background runtime now loads local `lib/acorn.min.js` or `lib/diff.min.js` inline only when offscreen is absent. Chrome keeps using `offscreen.html` and `chrome.runtime.sendMessage(...)` for AST, ESM, and merge work.
+- `build-firefox.sh` now includes `lib/acorn.min.js` and `lib/diff.min.js`, while continuing to omit the full `lib/` directory and Monaco.
+- Focused verification: `npm test -- tests/source-modules.test.js tests/analyzer-generated.test.js tests/esm-bundler-generated.test.js tests/firefox-package.test.js tests/source-cloud-sync.test.js`, `npm run typecheck`, `node --check bg/analyzer.js`, and `node --check background.js`.
 
 ---
 

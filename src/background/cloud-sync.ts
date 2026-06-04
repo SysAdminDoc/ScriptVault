@@ -37,7 +37,8 @@ declare const SettingsManager: {
 };
 
 declare const ScriptAnalyzer: {
-  _ensureOffscreen(): Promise<void>;
+  _ensureOffscreen?(): Promise<boolean>;
+  mergeText?(base: string, local: string, remote: string): Promise<MergeResult>;
 };
 
 // ---------------------------------------------------------------------------
@@ -173,6 +174,23 @@ async function updateBadgeIfAvailable(): Promise<void> {
       debugLog('[CloudSync] Failed to refresh badge after sync:', e);
     }
   }
+}
+
+async function mergeScriptText(base: string, local: string, remote: string): Promise<MergeResult> {
+  if (typeof ScriptAnalyzer !== 'undefined' && typeof ScriptAnalyzer.mergeText === 'function') {
+    return ScriptAnalyzer.mergeText(base, local, remote);
+  }
+  if (typeof ScriptAnalyzer !== 'undefined' && typeof ScriptAnalyzer._ensureOffscreen === 'function') {
+    const ready = await ScriptAnalyzer._ensureOffscreen();
+    if (!ready) throw new Error('No script merge engine available');
+    return chrome.runtime.sendMessage({
+      type: 'offscreen_merge',
+      base,
+      local,
+      remote
+    }) as Promise<MergeResult>;
+  }
+  throw new Error('No script merge engine available');
 }
 
 // ---------------------------------------------------------------------------
@@ -415,7 +433,8 @@ export const CloudSync = {
       }
 
       // Apply merged data locally, skipping tombstoned (deleted) scripts
-      // Uses 3-way text merge (via offscreen doc) when both sides have changed since sync base
+      // Uses 3-way text merge when both sides have changed since sync base.
+      // Chrome routes through the offscreen document; Firefox runs Diff inline.
       for (const script of merged.scripts) {
         if (mergedTombstones[script.id]) continue; // deleted on some device, don't re-import
         const existing = await ScriptStorage.get(script.id);
@@ -436,13 +455,7 @@ export const CloudSync = {
           // Allow empty-string base (valid code); only skip if truly missing
           if (base != null && base !== localScript.code && base !== remoteScript.code) {
             try {
-              await ScriptAnalyzer._ensureOffscreen();
-              const mergeResult: MergeResult = await chrome.runtime.sendMessage({
-                type: 'offscreen_merge',
-                base,
-                local: localScript.code,
-                remote: remoteScript.code
-              });
+              const mergeResult: MergeResult = await mergeScriptText(base, localScript.code, remoteScript.code);
               if (mergeResult && !mergeResult.error) {
                 codeToSave = mergeResult.merged ?? script.code;
                 mergeConflict = mergeResult.conflicts ?? false;

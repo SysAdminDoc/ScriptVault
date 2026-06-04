@@ -67,6 +67,8 @@ INCLUDE=(
   background.js
   content.js
   shared
+  lib/acorn.min.js
+  lib/diff.min.js
   pages
   images/icon16.png
   images/icon32.png

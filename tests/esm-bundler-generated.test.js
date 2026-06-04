@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 const code = readFileSync(resolve(process.cwd(), 'bg/esm-bundler.js'), 'utf8');
 
-function createBundler(fetchRequireScript = async () => null) {
+function createBundler(fetchRequireScript = async () => null, analyzer = { _ensureOffscreen: async () => undefined }) {
   const self = {};
   const fn = new Function(
     'chrome',
@@ -15,7 +15,7 @@ function createBundler(fetchRequireScript = async () => null) {
   );
   return fn(
     { runtime: { sendMessage: async () => ({ imports: [], exports: [], dynamicImports: [], unsupportedExports: [] }) } },
-    { _ensureOffscreen: async () => undefined },
+    analyzer,
     fetchRequireScript,
     self,
   );
@@ -78,5 +78,52 @@ describe('generated ESM userscript bundler runtime', () => {
     expect(fetchRequireScript).toHaveBeenCalledWith('https://cdn.example.com/value.js');
     expect(result.code).toContain('const value = __require("https://cdn.example.com/value.js").default;');
     expect(result.code).toContain('__exports.default = 7;');
+  });
+
+  it('uses ScriptAnalyzer inline ESM parsing when available', async () => {
+    const source = "import { answer } from 'https://cdn.example.com/value.js';\nconsole.log(answer);";
+    const dependency = 'export const answer = 42;';
+    const fetchRequireScript = vi.fn(async () => dependency);
+    const analyzeESMImports = vi.fn(async (codeText) => {
+      if (codeText === source) {
+        return {
+          imports: [{
+            start: 0,
+            end: source.indexOf('\n'),
+            source: 'https://cdn.example.com/value.js',
+            specifiers: [{ kind: 'named', imported: 'answer', local: 'answer' }],
+          }],
+          exports: [],
+          dynamicImports: [],
+          unsupportedExports: [],
+        };
+      }
+      if (codeText === dependency) {
+        return {
+          imports: [],
+          exports: [{
+            kind: 'named-declaration',
+            start: 0,
+            end: dependency.length,
+            declarationStart: 'export '.length,
+            declarationEnd: dependency.length,
+            names: ['answer'],
+          }],
+          dynamicImports: [],
+          unsupportedExports: [],
+        };
+      }
+      return blankSyntax();
+    });
+    const { bundler } = createBundler(fetchRequireScript, { analyzeESMImports });
+
+    const result = await bundler.bundle(source, {
+      sourceUrl: 'https://cdn.example.com/main.user.js',
+    });
+
+    expect(analyzeESMImports).toHaveBeenCalledWith(source);
+    expect(fetchRequireScript).toHaveBeenCalledWith('https://cdn.example.com/value.js');
+    expect(result.code).toContain('const { answer } = __require("https://cdn.example.com/value.js");');
+    expect(result.code).toContain('__exports.answer = answer;');
   });
 });

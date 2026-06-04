@@ -42,6 +42,8 @@ describe('Firefox AMO validation gate', () => {
     expect(buildFirefox).toContain('npx web-ext lint');
     expect(buildFirefox).toContain('npx web-ext build');
     expect(buildFirefox).toContain('scriptvault-firefox-source-v${VERSION}.zip');
+    expect(buildFirefox).toContain('lib/acorn.min.js');
+    expect(buildFirefox).toContain('lib/diff.min.js');
     expect(buildFirefox).not.toMatch(/^\s+lib\s*$/m);
     expect(ciWorkflow).toContain('npm run firefox:package');
     expect(ciWorkflow).toContain('scriptvault-firefox-package');

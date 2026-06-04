@@ -4,21 +4,22 @@ import { resolve } from 'node:path';
 
 const code = readFileSync(resolve(process.cwd(), 'bg/analyzer.js'), 'utf8');
 
-function createAnalyzer() {
-  const fn = new Function('chrome', 'debugLog', `${code}\nreturn ScriptAnalyzer;`);
-  return fn(
-    {
-      runtime: {
-        getURL: (path) => `chrome-extension://id/${path}`,
-        sendMessage: async () => ({ parseError: true }),
-      },
-      offscreen: {
-        hasDocument: async () => true,
-        createDocument: async () => undefined,
-      },
+function defaultChrome() {
+  return {
+    runtime: {
+      getURL: (path) => `chrome-extension://id/${path}`,
+      sendMessage: async () => ({ parseError: true }),
     },
-    () => undefined,
-  );
+    offscreen: {
+      hasDocument: async () => true,
+      createDocument: async () => undefined,
+    },
+  };
+}
+
+function createAnalyzer(chromeApi = defaultChrome()) {
+  const fn = new Function('chrome', 'debugLog', `${code}\nreturn ScriptAnalyzer;`);
+  return fn(chromeApi, () => undefined);
 }
 
 describe('generated ScriptAnalyzer runtime', () => {
@@ -38,5 +39,54 @@ describe('generated ScriptAnalyzer runtime', () => {
     const result = analyzer.analyze(`const a = "${benign}"; const b = "${highEntropy}";`);
 
     expect(result.findings.some((finding) => finding.id === 'high-entropy')).toBe(true);
+  });
+
+  it('feature-detects missing chrome.offscreen without throwing', async () => {
+    const analyzer = createAnalyzer({
+      runtime: {
+        getURL: (path) => `chrome-extension://id/${path}`,
+        sendMessage: async () => {
+          throw new Error('should not send');
+        },
+      },
+    });
+
+    await expect(analyzer._ensureOffscreen()).resolves.toBe(false);
+    expect(analyzer._supportsOffscreen()).toBe(false);
+  });
+
+  it('uses inline Acorn analysis in the generated runtime when offscreen is absent', async () => {
+    const originalAcorn = globalThis.acorn;
+    globalThis.acorn = {
+      parse: () => ({
+        type: 'Program',
+        body: [{
+          type: 'ExpressionStatement',
+          expression: {
+            type: 'CallExpression',
+            callee: { type: 'Identifier', name: 'eval' },
+            arguments: [],
+            loc: { start: { line: 1, column: 0 } },
+          },
+        }],
+      }),
+    };
+    const analyzer = createAnalyzer({
+      runtime: {
+        getURL: (path) => `chrome-extension://id/${path}`,
+        sendMessage: async () => {
+          throw new Error('should not send');
+        },
+      },
+    });
+
+    try {
+      const result = await analyzer.analyzeAsync('eval("x");');
+
+      expect(result.astAnalyzed).toBe(true);
+      expect(result.findings.some((finding) => finding.id === 'eval')).toBe(true);
+    } finally {
+      globalThis.acorn = originalAcorn;
+    }
   });
 });

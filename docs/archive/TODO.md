@@ -127,8 +127,9 @@
 
 ## Phase G — Firefox port carry-over
 
-- [ ] **G-1** Feature-flag `chrome.offscreen` for Firefox MV3
+- [x] **G-1** Feature-flag `chrome.offscreen` for Firefox MV3
   - Evidence: FIREFOX-PORT.md Phase 1, third checkbox; `bg/analyzer.js` + `background.core.js` call `chrome.offscreen.createDocument(...)`.
+  - Progress: 2026-06-04 `ScriptAnalyzer` now guards `chrome.offscreen` and supplies Firefox inline Acorn/Diff fallbacks for AST analysis, ESM import parsing, and 3-way sync merges. `build-firefox.sh` copies only `lib/acorn.min.js` and `lib/diff.min.js` so the Firefox background can load the local libraries without reintroducing the Monaco bundle gate.
 - [ ] **G-2** Feature-flag `chrome.sidePanel` for Firefox MV3
   - Evidence: FIREFOX-PORT.md Phase 1, fourth checkbox.
 - [ ] **G-3** Monaco editor loading path on Firefox (decide A vs B)

@@ -17,6 +17,22 @@ function debugLog(...args) {
 function debugWarn(...args) {
   if (_debugEnabled) console.warn('[ScriptVault]', ...args);
 }
+async function mergeScriptText(base, local, remote) {
+  if (typeof ScriptAnalyzer !== 'undefined' && typeof ScriptAnalyzer.mergeText === 'function') {
+    return ScriptAnalyzer.mergeText(base, local, remote);
+  }
+  if (typeof ScriptAnalyzer !== 'undefined' && typeof ScriptAnalyzer._ensureOffscreen === 'function') {
+    const ready = await ScriptAnalyzer._ensureOffscreen();
+    if (!ready) throw new Error('No script merge engine available');
+    return chrome.runtime.sendMessage({
+      type: 'offscreen_merge',
+      base,
+      local,
+      remote
+    });
+  }
+  throw new Error('No script merge engine available');
+}
 
 // Load debug setting on startup (async — logs before this completes go to console.log)
 (async () => {
@@ -2114,7 +2130,8 @@ const CloudSync = {
       const merged = this.mergeData(localData, remoteData);
 
       // Apply merged data locally, skipping tombstoned (deleted) scripts
-      // Uses 3-way text merge (via offscreen doc) when both sides have changed since sync base
+      // Uses 3-way text merge when both sides have changed since sync base.
+      // Chrome routes through the offscreen document; Firefox runs Diff inline.
       for (const script of merged.scripts) {
         if (mergedTombstones[script.id]) continue; // deleted on some device, don't re-import
         const existing = await ScriptStorage.get(script.id);
@@ -2134,13 +2151,7 @@ const CloudSync = {
           const base = existing.syncBaseCode ?? existing.code;
           if (base != null && base !== localScript.code && base !== remoteScript.code) {
             try {
-              await ScriptAnalyzer._ensureOffscreen();
-              const mergeResult = await chrome.runtime.sendMessage({
-                type: 'offscreen_merge',
-                base,
-                local: localScript.code,
-                remote: remoteScript.code
-              });
+              const mergeResult = await mergeScriptText(base, localScript.code, remoteScript.code);
               if (mergeResult && !mergeResult.error) {
                 codeToSave = mergeResult.merged;
                 mergeConflict = mergeResult.conflicts || false;

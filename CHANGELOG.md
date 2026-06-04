@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Firefox offscreen fallback
+
+- **Firefox no longer calls `chrome.offscreen`.** `ScriptAnalyzer` now
+  feature-detects offscreen support before creating a document. Chrome keeps
+  the offscreen document path, while Firefox uses inline local Acorn for AST
+  analysis and ESM import parsing.
+- **3-way sync merge has a Firefox fallback.** Cloud sync merge paths now route
+  through `ScriptAnalyzer.mergeText()`, which uses the offscreen Diff worker on
+  Chrome and inline local `lib/diff.min.js` when `chrome.offscreen` is absent.
+- **Firefox packaging includes the parser libraries only.** `build-firefox.sh`
+  copies `lib/acorn.min.js` and `lib/diff.min.js` without copying the full
+  Monaco `lib/` tree.
+
 ### 2026-06-04 — Module-mode service worker
 
 - **Chrome now loads the MV3 background as a module service worker.**

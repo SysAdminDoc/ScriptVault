@@ -24,7 +24,8 @@ declare const SettingsManager: {
 };
 
 declare const ScriptAnalyzer: {
-  _ensureOffscreen(): Promise<void>;
+  _ensureOffscreen?(): Promise<boolean>;
+  mergeText?(base: string, local: string, remote: string): Promise<MergeResult>;
 };
 
 // ============================================================================
@@ -86,6 +87,12 @@ interface SyncResult {
   offline?: boolean;
   error?: string;
   timestamp?: number;
+}
+
+interface MergeResult {
+  merged?: string;
+  conflicts?: boolean;
+  error?: string;
 }
 
 interface ConnectResult {
@@ -273,6 +280,23 @@ async function _updateBadgeIfAvailable(): Promise<void> {
       warn('Failed to refresh badge after sync:', e);
     }
   }
+}
+
+async function _mergeScriptText(base: string, local: string, remote: string): Promise<MergeResult> {
+  if (typeof ScriptAnalyzer !== 'undefined' && typeof ScriptAnalyzer.mergeText === 'function') {
+    return ScriptAnalyzer.mergeText(base, local, remote);
+  }
+  if (typeof ScriptAnalyzer !== 'undefined' && typeof ScriptAnalyzer._ensureOffscreen === 'function') {
+    const ready = await ScriptAnalyzer._ensureOffscreen();
+    if (!ready) throw new Error('No script merge engine available');
+    return chrome.runtime.sendMessage({
+      type: 'offscreen_merge',
+      base,
+      local,
+      remote,
+    }) as Promise<MergeResult>;
+  }
+  throw new Error('No script merge engine available');
 }
 
 function setStatus(newStatus: string): void {
@@ -614,28 +638,18 @@ async function _mergeData(
       const base: string | null = local.syncBaseCode || remote.syncBaseCode || null;
 
       if (base && base !== local.code && base !== remote.code) {
-        // Both sides changed since base — attempt 3-way merge
+        // Both sides changed since base — attempt 3-way merge. Chrome routes
+        // through the offscreen document; Firefox runs Diff inline.
         try {
-          if (typeof ScriptAnalyzer !== 'undefined' && ScriptAnalyzer._ensureOffscreen) {
-            await ScriptAnalyzer._ensureOffscreen();
-            const mergeResult = await chrome.runtime.sendMessage({
-              type: 'offscreen_merge',
-              base,
-              local: local.code,
-              remote: remote.code,
-            }) as { merged?: string; conflicts?: boolean; error?: string } | undefined;
-            if (mergeResult && !mergeResult.error) {
-              merged.code = mergeResult.merged ?? merged.code;
-              if (mergeResult.conflicts) {
-                merged.settings = { ...(merged.settings || {}), mergeConflict: true };
-              }
-              log(`3-way merge for ${id}: conflicts=${String(mergeResult.conflicts || false)}`);
-            } else {
-              // Merge failed — newest wins
-              merged.code = localNewer ? local.code : remote.code;
+          const mergeResult = await _mergeScriptText(base, local.code, remote.code);
+          if (mergeResult && !mergeResult.error) {
+            merged.code = mergeResult.merged ?? merged.code;
+            if (mergeResult.conflicts) {
+              merged.settings = { ...(merged.settings || {}), mergeConflict: true };
             }
+            log(`3-way merge for ${id}: conflicts=${String(mergeResult.conflicts || false)}`);
           } else {
-            // No offscreen available — newest wins
+            // Merge failed — newest wins
             merged.code = localNewer ? local.code : remote.code;
           }
         } catch (e: unknown) {
