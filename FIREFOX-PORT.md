@@ -138,6 +138,13 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - Guarded Chrome-only per-script `worldId` in both runtime JS and the TypeScript mirror so Firefox never receives the unsupported field.
 - `web-ext lint` now exits with 0 errors and 0 notices. It still reports existing dynamic-HTML warnings; those are recorded in `firefox-artifacts/web-ext-lint.json` and should be handled in a separate AMO hardening pass.
 
+### 2026-06-04 — Research refresh / lint recheck
+
+- Ran `npm run firefox:lint` via UNC-safe `cmd /c pushd`; the Firefox build still lints with 0 errors and 0 notices, now 139 warnings.
+- Did not run temporary sideload or browser runtime smoke; Phase 1 Build + temporary install remains open.
+- `npm run support:matrix:check` now fails on a stale `README.md` generated matrix; tracked in `ROADMAP.md`.
+- The live tree contains active Sigstore provenance-verifier source/test/generated changes; preserve them for the build lane. Package bumps, generated support-matrix updates, and runtime smoke remain build-lane work.
+
 ---
 
 *Update this file at the end of every Firefox-port session. Link to it from the repo's `CLAUDE.md` so any future Claude session resumes from the correct phase without re-deriving the plan.*
