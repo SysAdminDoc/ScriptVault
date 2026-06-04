@@ -116,7 +116,8 @@
     {
       "runtime": "bg/esm-bundler.js",
       "sources": ["src/bg/esm-bundler.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "bg/netlog.js",

@@ -119,6 +119,13 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'ScriptAnalyzer',
   },
   {
+    id: 'esm-bundler',
+    source: 'src/bg/esm-bundler.ts',
+    output: 'bg/esm-bundler.js',
+    exportName: 'ESMUserscriptBundler',
+    selfExportName: 'ESMUserscriptBundler',
+  },
+  {
     id: 'signing',
     source: 'src/bg/signing.ts',
     output: 'bg/signing.js',
@@ -185,6 +192,12 @@ export async function buildTsRuntimeModuleText(definition, options = {}) {
     compiled.split('\n').map((line) => line ? `  ${line}` : '').join('\n'),
     `  return module.exports.default || module.exports.${definition.exportName} || module.exports;`,
     '})();',
+    ...(definition.selfExportName ? [
+      '',
+      'if (typeof self !== \'undefined\') {',
+      `  self.${definition.selfExportName} = ${definition.exportName};`,
+      '}',
+    ] : []),
     '',
   ].join('\n');
 }

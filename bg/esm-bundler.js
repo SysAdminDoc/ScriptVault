@@ -1,52 +1,78 @@
-// ScriptVault - Experimental ESM userscript bundler (disabled by default).
-// Static install-time rewrite only: imports are discovered by Acorn in the
-// offscreen document, fetched through the existing @require path, and bundled
-// into a classic script body for chrome.userScripts.register().
+// ============================================================================
+// Generated from src/bg/esm-bundler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
 
 const ESMUserscriptBundler = (() => {
-  function isESMMetadata(meta) {
-    return !!meta && (meta.module === '1' || meta['inject-into'] === 'module' || meta.esm === true);
-  }
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+  // src/bg/esm-bundler.ts
+  var esm_bundler_exports = {};
+  __export(esm_bundler_exports, {
+    ESMUserscriptBundler: () => ESMUserscriptBundler,
+    bundle: () => bundle,
+    bundleIfNeeded: () => bundleIfNeeded,
+    isESMMetadata: () => isESMMetadata,
+    resolveImportSpecifier: () => resolveImportSpecifier,
+    rewriteModuleSyntax: () => rewriteModuleSyntax
+  });
+  module.exports = __toCommonJS(esm_bundler_exports);
+  function isESMMetadata(meta) {
+    return !!meta && (meta.module === "1" || meta["inject-into"] === "module" || meta.esm === true);
+  }
   function resolveImportSpecifier(specifier, parentUrl) {
     if (/^https?:\/\//i.test(specifier)) return specifier;
-    if (/^[./]/.test(specifier) && /^https?:\/\//i.test(parentUrl || '')) {
+    if (/^[./]/.test(specifier) && /^https?:\/\//i.test(parentUrl || "")) {
       return new URL(specifier, parentUrl).toString();
     }
     throw new Error(`Unsupported ESM import specifier: ${specifier}`);
   }
-
   async function collectSyntaxViaOffscreen(code) {
-    if (typeof ScriptAnalyzer === 'undefined' || !ScriptAnalyzer?._ensureOffscreen) {
-      throw new Error('ESM bundler requires the offscreen Acorn parser');
+    if (typeof ScriptAnalyzer === "undefined" || !ScriptAnalyzer?._ensureOffscreen) {
+      throw new Error("ESM bundler requires the offscreen Acorn parser");
     }
     await ScriptAnalyzer._ensureOffscreen();
-    const result = await chrome.runtime.sendMessage({ type: 'offscreen_esm_imports', code });
-    if (!result || result.error) {
-      throw new Error(result?.error || 'ESM parse failed');
-    }
+    const result = await chrome.runtime.sendMessage({ type: "offscreen_esm_imports", code });
+    if (!result || result.error) throw new Error(result?.error || "ESM parse failed");
     if (Array.isArray(result.dynamicImports) && result.dynamicImports.length > 0) {
       const first = result.dynamicImports[0];
-      const where = first?.line ? ` at line ${first.line}` : '';
+      const where = first?.line ? ` at line ${first.line}` : "";
       throw new Error(`Dynamic import() is not supported by ScriptVault's ESM bundler${where}.`);
     }
     if (Array.isArray(result.unsupportedExports) && result.unsupportedExports.length > 0) {
-      throw new Error(`Unsupported ESM export syntax: ${result.unsupportedExports[0].type}`);
+      throw new Error(`Unsupported ESM export syntax: ${result.unsupportedExports[0]?.type}`);
     }
     return result;
   }
-
   function assertSupportedSyntax(analysis) {
     if (Array.isArray(analysis.dynamicImports) && analysis.dynamicImports.length > 0) {
       const first = analysis.dynamicImports[0];
-      const where = first?.line ? ` at line ${first.line}` : '';
+      const where = first?.line ? ` at line ${first.line}` : "";
       throw new Error(`Dynamic import() is not supported by ScriptVault's ESM bundler${where}.`);
     }
     if (Array.isArray(analysis.unsupportedExports) && analysis.unsupportedExports.length > 0) {
-      throw new Error(`Unsupported ESM export syntax: ${analysis.unsupportedExports[0].type}`);
+      throw new Error(`Unsupported ESM export syntax: ${analysis.unsupportedExports[0]?.type}`);
     }
   }
-
   function importReplacement(imp) {
     const id = JSON.stringify(imp.resolvedSource || imp.source);
     if (!imp.specifiers || imp.specifiers.length === 0) {
@@ -55,41 +81,29 @@ const ESMUserscriptBundler = (() => {
     const lines = [];
     const named = [];
     for (const spec of imp.specifiers) {
-      if (spec.kind === 'default') {
+      if (spec.kind === "default") {
         lines.push(`const ${spec.local} = __require(${id}).default;`);
-      } else if (spec.kind === 'namespace') {
+      } else if (spec.kind === "namespace") {
         lines.push(`const ${spec.local} = __require(${id});`);
-      } else if (spec.kind === 'named') {
+      } else if (spec.kind === "named") {
         named.push(spec.imported === spec.local ? spec.imported : `${spec.imported}: ${spec.local}`);
       }
     }
-    if (named.length) {
-      lines.push(`const { ${named.join(', ')} } = __require(${id});`);
-    }
-    return lines.join('\n');
+    if (named.length) lines.push(`const { ${named.join(", ")} } = __require(${id});`);
+    return lines.join("\n");
   }
-
   function exportReplacement(exp, code) {
-    if (exp.kind === 'named-specifiers') {
-      return (exp.specifiers || [])
-        .map(spec => `__exports.${spec.exported} = ${spec.local};`)
-        .join('\n');
+    if (exp.kind === "named-specifiers") {
+      return (exp.specifiers || []).map((spec) => `__exports.${spec.exported} = ${spec.local};`).join("\n");
     }
-
     const declaration = code.slice(exp.declarationStart, exp.declarationEnd);
-    if (exp.kind === 'default') {
-      if (exp.localName) {
-        return `${declaration}\n__exports.default = ${exp.localName};`;
-      }
+    if (exp.kind === "default") {
+      if (exp.localName) return [declaration, `__exports.default = ${exp.localName};`].join("\n");
       return `__exports.default = ${declaration};`;
     }
-
-    const assignments = (exp.names || [])
-      .map(name => `__exports.${name} = ${name};`)
-      .join('\n');
-    return `${declaration}\n${assignments}`;
+    const assignments = (exp.names || []).map((name) => `__exports.${name} = ${name};`).join("\n");
+    return [declaration, assignments].join("\n");
   }
-
   function rewriteModuleSyntax(code, analysis) {
     const replacements = [];
     for (const imp of analysis.imports || []) {
@@ -105,58 +119,53 @@ const ESMUserscriptBundler = (() => {
     }
     return out;
   }
-
   function buildBundle(entryCode, modules) {
-    const moduleDefs = [...modules.values()]
-      .map(mod => `__modules[${JSON.stringify(mod.url)}] = function(__module, __exports, __require) {\n${mod.code}\n};`)
-      .join('\n');
+    const moduleDefs = [...modules.values()].map((mod) => [
+      `__modules[${JSON.stringify(mod.url)}] = function(__module, __exports, __require) {`,
+      mod.code,
+      "};"
+    ].join("\n")).join("\n");
     return [
-      '(function () {',
+      "(function () {",
       "'use strict';",
-      'const __modules = Object.create(null);',
-      'const __cache = Object.create(null);',
+      "const __modules = Object.create(null);",
+      "const __cache = Object.create(null);",
       moduleDefs,
-      'function __require(id) {',
-      '  if (__cache[id]) return __cache[id].exports;',
-      '  const factory = __modules[id];',
+      "function __require(id) {",
+      "  if (__cache[id]) return __cache[id].exports;",
+      "  const factory = __modules[id];",
       '  if (!factory) throw new Error("Missing ESM module: " + id);',
-      '  const module = { exports: {} };',
-      '  __cache[id] = module;',
-      '  factory(module, module.exports, __require);',
-      '  return module.exports;',
-      '}',
-      'const __exports = {};',
+      "  const module = { exports: {} };",
+      "  __cache[id] = module;",
+      "  factory(module, module.exports, __require);",
+      "  return module.exports;",
+      "}",
+      "const __exports = {};",
       entryCode,
-      '})();'
-    ].filter(Boolean).join('\n');
+      "})();"
+    ].filter(Boolean).join("\n");
   }
-
   async function bundleModule(url, code, context) {
     if (context.modules.has(url)) return;
-    context.modules.set(url, { url, code: '' });
-
+    context.modules.set(url, { url, code: "" });
     const analysis = await context.collectSyntax(code);
     assertSupportedSyntax(analysis);
     for (const imp of analysis.imports || []) {
       imp.resolvedSource = resolveImportSpecifier(imp.source, url);
       const depCode = await context.fetchImport(imp.resolvedSource);
-      if (!depCode) {
-        throw new Error(`Failed to fetch ESM import: ${imp.resolvedSource}`);
-      }
+      if (!depCode) throw new Error(`Failed to fetch ESM import: ${imp.resolvedSource}`);
       await bundleModule(imp.resolvedSource, depCode, context);
     }
-
     context.modules.set(url, {
       url,
       code: rewriteModuleSyntax(code, analysis),
       bytes: code.length
     });
   }
-
   async function bundle(code, options = {}) {
-    const entryUrl = options.sourceUrl || 'scriptvault:entry';
+    const entryUrl = options.sourceUrl || "scriptvault:entry";
     const context = {
-      modules: new Map(),
+      modules: /* @__PURE__ */ new Map(),
       fetchImport: options.fetchImport || fetchRequireScript,
       collectSyntax: options.collectSyntax || collectSyntaxViaOffscreen
     };
@@ -165,37 +174,36 @@ const ESMUserscriptBundler = (() => {
     for (const imp of entryAnalysis.imports || []) {
       imp.resolvedSource = resolveImportSpecifier(imp.source, entryUrl);
       const depCode = await context.fetchImport(imp.resolvedSource);
-      if (!depCode) {
-        throw new Error(`Failed to fetch ESM import: ${imp.resolvedSource}`);
-      }
+      if (!depCode) throw new Error(`Failed to fetch ESM import: ${imp.resolvedSource}`);
       await bundleModule(imp.resolvedSource, depCode, context);
     }
     const rewrittenEntry = rewriteModuleSyntax(code, entryAnalysis);
     return {
       code: buildBundle(rewrittenEntry, context.modules),
-      imports: [...context.modules.values()].map(mod => ({ url: mod.url, bytes: mod.bytes || 0 })),
+      imports: [...context.modules.values()].map((mod) => ({ url: mod.url, bytes: mod.bytes || 0 })),
       entryUrl
     };
   }
-
   async function bundleIfNeeded(code, meta, settings, options = {}) {
     if (!isESMMetadata(meta)) {
-      return { bundled: false, code, imports: [], entryUrl: options.sourceUrl || '' };
+      return { bundled: false, code, imports: [], entryUrl: options.sourceUrl || "" };
     }
     if (!settings?.experimentalESMUserscripts) {
-      throw new Error('ESM userscripts are experimental and require the experimentalESMUserscripts setting.');
+      throw new Error("ESM userscripts are experimental and require the experimentalESMUserscripts setting.");
     }
     const result = await bundle(code, options);
     return { bundled: true, ...result };
   }
-
-  return {
+  var ESMUserscriptBundler = {
     isESMMetadata,
     resolveImportSpecifier,
     rewriteModuleSyntax,
     bundle,
     bundleIfNeeded
   };
+  return module.exports.default || module.exports.ESMUserscriptBundler || module.exports;
 })();
 
-self.ESMUserscriptBundler = ESMUserscriptBundler;
+if (typeof self !== 'undefined') {
+  self.ESMUserscriptBundler = ESMUserscriptBundler;
+}

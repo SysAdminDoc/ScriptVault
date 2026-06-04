@@ -4,6 +4,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-03 — ESM bundler TypeScript promotion
+
+- **ESM bundler runtime is now generated from TypeScript.** `bg/esm-bundler.js`
+  is produced from `src/bg/esm-bundler.ts`, preserving the runtime
+  `fetchRequireScript` dependency and `self.ESMUserscriptBundler` worker alias.
+
 ### 2026-06-03 — Signing runtime TypeScript promotion
 
 - **Signing runtime is now generated from TypeScript.** `bg/signing.js` is
