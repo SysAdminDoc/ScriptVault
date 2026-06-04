@@ -197,9 +197,12 @@ Two additional zero-config flows ship as separate modules: **Easy Cloud** for on
 
 ### Internationalization
 
-Available in 8 languages:
+Manifest and browser-facing extension messages are localized in 8 languages:
 
 English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portuguese &bull; Russian &bull; Chinese
+
+The dashboard interface is currently English-only until a full DOM translation
+pass is wired.
 
 ### v2.0 — New Features
 

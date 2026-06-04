@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Remove dead dashboard i18n-v2 table
+
+- **Removed the unused dashboard i18n-v2 dictionary.** The dashboard no longer
+  eager-loads the 8-language table that had no `data-i18n` consumers.
+- **Stopped advertising translated dashboard UI.** The settings language
+  selector was removed, README now scopes localization to manifest/runtime
+  messages, and locale docs say the dashboard is English-only until a real DOM
+  translation pass exists.
+- **Narrowed the locale gate to live surfaces.** `scripts/check-locales.mjs`
+  now audits `_locales/` and `modules/i18n.js` instead of a deleted dashboard
+  table.
+
 ### 2026-06-04 — Restore What's New for v3.x
 
 - **Added the v3.11.0 dashboard What's New entry.** First-run dashboard visits

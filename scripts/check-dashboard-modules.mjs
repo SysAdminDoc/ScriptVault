@@ -104,7 +104,6 @@ const wiringChecks = [
   ['dashboard-gamification.js', dashboardSource, 'Gamification.init', 'pages/dashboard.js'],
   ['dashboard-gist.js', dashboardSource, 'GistIntegration.init', 'pages/dashboard.js'],
   ['dashboard-heatmap.js', dashboardSource, 'ActivityHeatmap.init', 'pages/dashboard.js'],
-  ['dashboard-i18n-v2.js', dashboardSource, 'syncDashboardModuleLanguage', 'pages/dashboard.js'],
   ['dashboard-keyboard.js', dashboardSource, 'KeyboardNav.init', 'pages/dashboard.js'],
   ['dashboard-lazy-loader.js', dashboardSource, 'LazyLoader.loadForTab', 'pages/dashboard.js'],
   ['dashboard-linter.js', dashboardSource, 'AdvancedLinter.init', 'pages/dashboard.js'],

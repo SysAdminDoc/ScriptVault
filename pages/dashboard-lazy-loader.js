@@ -16,7 +16,6 @@ const LazyLoader = (() => {
     'dashboard-a11y.js',       // Accessibility must be immediate
     'dashboard-keyboard.js',   // Keyboard nav must be immediate
     'dashboard-firefox-compat.js', // Polyfills must be immediate
-    'dashboard-i18n-v2.js',    // Translations must be immediate
     'dashboard-store.js',      // Script Store — primary feature, load eagerly
   ]);
 

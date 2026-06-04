@@ -454,9 +454,11 @@ Priorities/sizes preserve the source labels.
   - Progress: 2026-06-04 added the exact `3.11.0` What's New entry, changed the show predicate to require an exact manifest-version entry, exposed entry lookup for validation, and added `npm run whatsnew:check` to fail when `manifest.json` and the dashboard modal drift.
   - Verification: `node --check pages/dashboard-whatsnew.js`; `node --check scripts/check-whatsnew-changelog.mjs`; `node --check tests/whatsnew-changelog.test.js`; `npm run whatsnew:check`; `npm test -- tests/whatsnew-changelog.test.js`; `npm run check`; `npm run smoke:dashboard`; `npm run readme:check`; `npm run store-copy:check`; `npm run cws:remote-code:check`; `git diff --check`.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-1.
-- [ ] P1 — i18n-v2 table is 100% dead, eager-loaded
+- [x] P1 — i18n-v2 table is 100% dead, eager-loaded
   - Why: `dashboard-i18n-v2.js` (600 keys / 8 langs, 39 KB) is referenced nowhere; `dashboard.html` has 0 `data-i18n`; eager-loaded for nothing; `npm run locale:check` audits a table no user sees.
   - Acceptance: implement a real `applyTranslations()` over `data-i18n` + a language selector, OR remove from eager load and stop advertising multi-language UI.
+  - Progress: 2026-06-04 removed the dead dashboard i18n-v2 dictionary from the package, eager loader, dashboard HTML, module triage, and locale gate. Removed the dashboard language selector that had no translation target, narrowed locale docs/checks to `_locales/` plus `modules/i18n.js`, and scoped README language claims to manifest/runtime messages while stating that the dashboard is English-only.
+  - Verification: `node --check pages/dashboard.js`; `node --check pages/dashboard-lazy-loader.js`; `node --check scripts/check-dashboard-modules.mjs`; `node --check scripts/check-locales.mjs`; `node --check tests/check-locales-report.test.js`; `node --check tests/dashboard-i18n-removal.test.js`; `npm run dashboard:modules:check`; `npm run locale:check:gate`; `npm test -- tests/check-locales-report.test.js tests/dashboard-i18n-removal.test.js`; `npm test -- tests/error-log.test.js`; `npm run check`; `npm run smoke:dashboard`; `npm run readme:check`; `npm run store-copy:check`; `npm run cws:remote-code:check`; `git diff --check`.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-2.
 
 ### Ecosystem parity and author ergonomics

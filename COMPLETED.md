@@ -82,6 +82,7 @@ phase.
 - [x] Dashboard module reachability triage: formerly unmounted dashboard modules are now wired to scripts/settings/utilities/editor surfaces, profile switching no longer registers hidden Alt+number shortcuts, and `npm run dashboard:modules:check` gates module triage plus reachable UI wiring — *Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md O-1 / EI-4; commit feat: wire dashboard modules*
 - [x] `@crontab` next-fire engine: complex crontab metadata now schedules the exact next local fire time with one-shot alarms, supports common five-field cron syntax, and surfaces invalid expressions through the Advanced Linter instead of falling back to hourly execution — *Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-9; commit feat: correct crontab scheduling*
 - [x] What's New v3.x freshness: the dashboard What's New module now includes an exact v3.11.0 entry, refuses to show without an exact manifest-version changelog entry, and `npm run whatsnew:check` gates manifest/modal freshness through `npm run check` — *Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-1; commit feat: restore whats new modal*
+- [x] Dashboard i18n-v2 cleanup: the unused dashboard translation table and language selector were removed, locale docs/checks now cover only live manifest/runtime surfaces, and README no longer claims translated dashboard UI — *Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-2; commit chore: remove dead dashboard i18n*
 
 ## Stale / Obsolete Items
 
