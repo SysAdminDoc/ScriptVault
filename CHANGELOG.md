@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Correct @crontab next-fire scheduling
+
+- **Replaced the hourly fallback with real next-fire scheduling.** `@crontab`
+  scripts now parse five cron fields with lists, ranges, steps, month/day
+  names, and Sunday as `7`, then schedule the exact next local fire time.
+- **Re-armed crontab jobs as one-shot alarms.** Crontab alarms now use
+  `chrome.alarms.create({ when })` and re-compute after each fire, so complex
+  expressions like `30 9 * * 1` no longer run hourly.
+- **Surfaced invalid crontab metadata in the editor.** The Advanced Linter now
+  flags unsupported `@crontab` expressions instead of letting them silently
+  fall back.
+
 ### 2026-06-04 — Dashboard module reachability
 
 - **Mounted the formerly unreachable dashboard modules.** Scripts, settings,

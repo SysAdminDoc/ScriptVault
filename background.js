@@ -23067,41 +23067,155 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 // @crontab Support
 // ============================================================================
 
-// Convert a simplified cron expression to a period in minutes.
-// Chrome alarms have a minimum of 1 minute.
-// Supports: every-N-minutes, hourly, every-N-hours, daily.
-// Falls back to 1 minute for complex expressions.
-function parseCronToMinutes(expr) {
-  if (!expr || typeof expr !== 'string') return 60;
+const CRON_MONTH_NAMES = Object.freeze({
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
+});
+const CRON_DOW_NAMES = Object.freeze({
+  sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6
+});
+const CRON_MAX_SEARCH_MINUTES = 366 * 24 * 60 * 5;
+
+function normalizeCronFieldValue(value, names, allowSevenAsSunday = false) {
+  const token = String(value || '').trim().toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(names || {}, token)) return names[token];
+  if (!/^\d+$/.test(token)) return null;
+  const parsed = parseInt(token, 10);
+  return parsed;
+}
+
+function parseCronField(field, min, max, options = {}) {
+  const names = options.names || {};
+  const allowSevenAsSunday = !!options.allowSevenAsSunday;
+  const text = String(field || '').trim().toLowerCase();
+  const values = new Set();
+  if (!text) return { ok: false, error: 'empty field' };
+
+  const addValue = value => {
+    const normalized = allowSevenAsSunday && value === 7 ? 0 : value;
+    if (!Number.isInteger(normalized) || normalized < min || normalized > max) return false;
+    values.add(normalized);
+    return true;
+  };
+
+  for (const part of text.split(',')) {
+    if (!part) return { ok: false, error: `empty list item in "${field}"` };
+    const [rangePart, stepPart] = part.split('/');
+    if (part.split('/').length > 2) return { ok: false, error: `invalid step in "${part}"` };
+    const step = stepPart == null ? 1 : parseInt(stepPart, 10);
+    if (!Number.isInteger(step) || step < 1) return { ok: false, error: `invalid step in "${part}"` };
+
+    let start;
+    let end;
+    if (rangePart === '*') {
+      start = min;
+      end = max;
+    } else if (rangePart.includes('-')) {
+      const [rawStart, rawEnd] = rangePart.split('-');
+      if (!rawStart || !rawEnd || rangePart.split('-').length !== 2) {
+        return { ok: false, error: `invalid range in "${part}"` };
+      }
+      start = normalizeCronFieldValue(rawStart, names, allowSevenAsSunday);
+      end = normalizeCronFieldValue(rawEnd, names, allowSevenAsSunday);
+    } else {
+      start = normalizeCronFieldValue(rangePart, names, allowSevenAsSunday);
+      end = start;
+    }
+
+    if (start == null || end == null) return { ok: false, error: `invalid value in "${part}"` };
+    if (start < min || start > max || end < min || end > max || start > end) {
+      return { ok: false, error: `out-of-range value in "${part}"` };
+    }
+    for (let value = start; value <= end; value += step) {
+      if (!addValue(value)) return { ok: false, error: `out-of-range value in "${part}"` };
+    }
+  }
+
+  if (!values.size) return { ok: false, error: `no values in "${field}"` };
+  return {
+    ok: true,
+    any: text === '*',
+    values: [...values].sort((a, b) => a - b)
+  };
+}
+
+function parseCronExpression(expr) {
+  if (!expr || typeof expr !== 'string') return { ok: false, error: 'missing expression' };
   const parts = expr.trim().split(/\s+/);
-  if (parts.length < 5) return 60;
-  const [min, hour, dom, month, dow] = parts;
-  if (min.startsWith('*/') && hour === '*' && dom === '*' && month === '*' && dow === '*') {
-    const n = parseInt(min.slice(2), 10);
-    return isNaN(n) || n < 1 ? 1 : Math.min(n, 1440);
+  if (parts.length !== 5) return { ok: false, error: 'expected 5 fields: minute hour day-of-month month day-of-week' };
+  const [minute, hour, dom, month, dow] = parts;
+  const parsed = {
+    minute: parseCronField(minute, 0, 59),
+    hour: parseCronField(hour, 0, 23),
+    dom: parseCronField(dom, 1, 31),
+    month: parseCronField(month, 1, 12, { names: CRON_MONTH_NAMES }),
+    dow: parseCronField(dow, 0, 7, { names: CRON_DOW_NAMES, allowSevenAsSunday: true })
+  };
+  for (const [field, result] of Object.entries(parsed)) {
+    if (!result.ok) return { ok: false, error: `${field}: ${result.error}` };
   }
-  if (min === '0' && hour.startsWith('*/') && dom === '*' && month === '*' && dow === '*') {
-    const n = parseInt(hour.slice(2), 10);
-    return isNaN(n) || n < 1 ? 60 : Math.min(n * 60, 1440);
+  return { ok: true, schedule: parsed };
+}
+
+function cronMatchesDate(schedule, date) {
+  if (!schedule || !(date instanceof Date) || Number.isNaN(date.getTime())) return false;
+  const minute = date.getMinutes();
+  const hour = date.getHours();
+  const dom = date.getDate();
+  const month = date.getMonth() + 1;
+  const dow = date.getDay();
+  if (!schedule.minute.values.includes(minute)) return false;
+  if (!schedule.hour.values.includes(hour)) return false;
+  if (!schedule.month.values.includes(month)) return false;
+
+  const domMatches = schedule.dom.values.includes(dom);
+  const dowMatches = schedule.dow.values.includes(dow);
+  if (schedule.dom.any && schedule.dow.any) return true;
+  if (schedule.dom.any) return dowMatches;
+  if (schedule.dow.any) return domMatches;
+  return domMatches || dowMatches;
+}
+
+function nextCronFire(expr, from = new Date()) {
+  const parsed = parseCronExpression(expr);
+  if (!parsed.ok) return parsed;
+  const candidate = new Date(from.getTime());
+  candidate.setSeconds(0, 0);
+  candidate.setMinutes(candidate.getMinutes() + 1);
+  for (let i = 0; i < CRON_MAX_SEARCH_MINUTES; i++) {
+    if (cronMatchesDate(parsed.schedule, candidate)) {
+      return { ok: true, when: candidate.getTime(), date: new Date(candidate.getTime()) };
+    }
+    candidate.setMinutes(candidate.getMinutes() + 1);
   }
-  if (min === '0' && hour === '*' && dom === '*' && month === '*' && dow === '*') {
-    return 60;
+  return { ok: false, error: 'no matching fire time within 5 years' };
+}
+
+function getCrontabAlarmName(scriptId) {
+  return 'crontab_' + scriptId;
+}
+
+function scheduleCrontabAlarm(script, from = new Date()) {
+  const alarmName = getCrontabAlarmName(script.id);
+  const next = nextCronFire(script.meta?.crontab, from);
+  if (!next.ok) {
+    debugLog(`Invalid @crontab for ${script.meta?.name || script.id}: ${next.error}`);
+    return next;
   }
-  if (min === '0' && hour === '0' && dom === '*' && month === '*' && dow === '*') {
-    return 1440;
-  }
-  // Complex expression not supported by simplified parser — fall back to hourly
-  debugLog(`[parseCronToMinutes] Unrecognized cron expression: "${expr}", defaulting to 60 min`);
-  return 60;
+  chrome.alarms.create(alarmName, { when: next.when });
+  debugLog(`Registered @crontab: ${script.meta?.name || script.id} next ${next.date.toISOString()}`);
+  return next;
 }
 
 /** Execute a @crontab script in all currently-open matching tabs. */
 async function handleCrontabAlarm(scriptId) {
   const script = await ScriptStorage.get(scriptId);
   if (!script || !script.enabled || !script.meta?.crontab) {
-    chrome.alarms.clear('crontab_' + scriptId).catch(() => {});
+    chrome.alarms.clear(getCrontabAlarmName(scriptId)).catch(() => {});
     return;
   }
+
+  scheduleCrontabAlarm(script);
 
   const meta = script.meta;
   const hasMatches = (meta.match && meta.match.length > 0) || (meta.include && meta.include.length > 0);
@@ -23154,11 +23268,10 @@ async function handleCrontabAlarm(scriptId) {
 async function setupCrontabAlarms() {
   const scripts = await ScriptStorage.getAll();
   for (const script of scripts) {
-    const alarmName = 'crontab_' + script.id;
+    const alarmName = getCrontabAlarmName(script.id);
     await chrome.alarms.clear(alarmName).catch(() => {});
     if (script.enabled && script.meta?.crontab) {
-      const minutes = Math.max(1, parseCronToMinutes(script.meta.crontab));
-      chrome.alarms.create(alarmName, { periodInMinutes: minutes });
+      scheduleCrontabAlarm(script);
     }
   }
 }
@@ -24268,7 +24381,7 @@ async function registerScript(script, { useUpdate = false } = {}) {
     // @crontab scripts execute on a schedule rather than on page load.
     // Register a chrome alarm instead of a chrome.userScripts entry.
     if (meta.crontab) {
-      const alarmName = 'crontab_' + script.id;
+      const alarmName = getCrontabAlarmName(script.id);
       await chrome.alarms.clear(alarmName).catch(() => {});
       // Metadata may have just gained @crontab on an in-place update (the
       // Chrome 138+ update path never calls unregisterScript). Drop any prior
@@ -24277,9 +24390,7 @@ async function registerScript(script, { useUpdate = false } = {}) {
       if (chrome.userScripts) {
         try { await chrome.userScripts.unregister({ ids: [script.id] }); } catch (_) {}
       }
-      const minutes = Math.max(1, parseCronToMinutes(meta.crontab));
-      chrome.alarms.create(alarmName, { periodInMinutes: minutes });
-      debugLog(`Registered @crontab: ${meta.name} (every ${minutes} min)`);
+      scheduleCrontabAlarm(script);
       return;
     }
 
@@ -24287,7 +24398,7 @@ async function registerScript(script, { useUpdate = false } = {}) {
     // Not a @crontab script — clear any stale crontab alarm left over from a
     // prior version of this script's metadata (e.g. @crontab was just removed
     // on an in-place update) so it stops firing on schedule.
-    await chrome.alarms.clear('crontab_' + script.id).catch(() => {});
+    await chrome.alarms.clear(getCrontabAlarmName(script.id)).catch(() => {});
     
     // Build match patterns with URL override support
     const matches = [];
@@ -25376,7 +25487,7 @@ async function reconcileWebRequestRuleMap() {
 
 async function unregisterScript(scriptId) {
   // Clear @crontab alarm if present
-  chrome.alarms.clear('crontab_' + scriptId).catch(() => {});
+  chrome.alarms.clear(getCrontabAlarmName(scriptId)).catch(() => {});
   // Remove any @webRequest declarativeNetRequest rules
   await removeWebRequestRules(scriptId);
   try {

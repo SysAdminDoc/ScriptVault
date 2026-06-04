@@ -335,6 +335,71 @@ const AdvancedLinter = (() => {
     return used;
   }
 
+  const CRON_MONTH_NAMES = {
+    jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+    jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
+  };
+  const CRON_DOW_NAMES = {
+    sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6
+  };
+
+  function _normalizeCronLintValue(value, names, allowSevenAsSunday = false) {
+    const token = String(value || '').trim().toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(names || {}, token)) return names[token];
+    if (!/^\d+$/.test(token)) return null;
+    const parsed = parseInt(token, 10);
+    return parsed;
+  }
+
+  function _validateCronField(field, min, max, options = {}) {
+    const text = String(field || '').trim().toLowerCase();
+    if (!text) return 'empty field';
+    const names = options.names || {};
+    const allowSevenAsSunday = !!options.allowSevenAsSunday;
+    for (const part of text.split(',')) {
+      if (!part) return `empty list item in "${field}"`;
+      const pieces = part.split('/');
+      if (pieces.length > 2) return `invalid step in "${part}"`;
+      const [rangePart, stepPart] = pieces;
+      const step = stepPart == null ? 1 : parseInt(stepPart, 10);
+      if (!Number.isInteger(step) || step < 1) return `invalid step in "${part}"`;
+      let start;
+      let end;
+      if (rangePart === '*') {
+        start = min;
+        end = max;
+      } else if (rangePart.includes('-')) {
+        const range = rangePart.split('-');
+        if (range.length !== 2 || !range[0] || !range[1]) return `invalid range in "${part}"`;
+        start = _normalizeCronLintValue(range[0], names, allowSevenAsSunday);
+        end = _normalizeCronLintValue(range[1], names, allowSevenAsSunday);
+      } else {
+        start = _normalizeCronLintValue(rangePart, names, allowSevenAsSunday);
+        end = start;
+      }
+      if (start == null || end == null) return `invalid value in "${part}"`;
+      if (start < min || start > max || end < min || end > max || start > end) {
+        return `out-of-range value in "${part}"`;
+      }
+    }
+    return '';
+  }
+
+  function _validateCronExpression(expr) {
+    if (!expr || typeof expr !== 'string') return 'missing expression';
+    const parts = expr.trim().split(/\s+/);
+    if (parts.length !== 5) return 'expected 5 fields: minute hour day-of-month month day-of-week';
+    const checks = [
+      ['minute', _validateCronField(parts[0], 0, 59)],
+      ['hour', _validateCronField(parts[1], 0, 23)],
+      ['day-of-month', _validateCronField(parts[2], 1, 31)],
+      ['month', _validateCronField(parts[3], 1, 12, { names: CRON_MONTH_NAMES })],
+      ['day-of-week', _validateCronField(parts[4], 0, 7, { names: CRON_DOW_NAMES, allowSevenAsSunday: true })]
+    ];
+    const failure = checks.find(([, error]) => error);
+    return failure ? `${failure[0]}: ${failure[1]}` : '';
+  }
+
   /* --- Individual Rules --- */
 
   const RULES = [
@@ -743,6 +808,26 @@ const AdvancedLinter = (() => {
           return [{ line: meta.endLine >= 0 ? meta.endLine + 1 : 1, message: 'Script has @version but no @updateURL or @downloadURL for auto-updates.' }];
         }
         return [];
+      },
+    },
+    {
+      id: 'invalid-crontab',
+      name: 'Invalid @crontab Expression',
+      severity: SEVERITY.ERROR,
+      fixable: false,
+      check(_code, meta) {
+        const entries = meta.keys.crontab || [];
+        const issues = [];
+        for (const entry of entries) {
+          const error = _validateCronExpression(entry.value);
+          if (error) {
+            issues.push({
+              line: entry.line + 1,
+              message: `Invalid @crontab expression: ${error}. Use five cron fields with lists, ranges, and steps.`
+            });
+          }
+        }
+        return issues;
       },
     },
     {
