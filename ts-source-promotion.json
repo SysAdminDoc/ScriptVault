@@ -87,7 +87,8 @@
     {
       "runtime": "modules/public-api.js",
       "sources": ["src/modules/public-api.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "modules/migration.js",

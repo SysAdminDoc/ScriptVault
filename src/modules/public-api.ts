@@ -2,8 +2,6 @@
 // Allows other extensions and web pages to interact with ScriptVault.
 // Designed for service worker (no DOM dependencies).
 
-import { ScriptStorage } from './storage';
-
 /* ------------------------------------------------------------------ */
 /*  Local Types                                                        */
 /* ------------------------------------------------------------------ */
@@ -28,6 +26,12 @@ interface FlatScript {
   updatedAt?: number;
   [key: string]: unknown;
 }
+
+declare const ScriptStorage: {
+  get(id: string): Promise<(FlatScript & Record<string, unknown>) | null>;
+  getAll(): Promise<Array<FlatScript & { meta?: Record<string, unknown>; settings?: Record<string, unknown> }>>;
+  set(id: string, script: Record<string, unknown>): Promise<unknown>;
+};
 
 interface AuditEntry {
   timestamp: number;
@@ -309,6 +313,29 @@ function validateWebInstallUrl(url: string): string | null {
     return 'Internal URLs are not allowed';
   }
   return null;
+}
+
+function isInternalWebhookUrl(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return 'malformed URL';
+  }
+  const host = parsed.hostname || '';
+  if (!host) return 'empty hostname';
+  if (!isInternalHost(host)) return null;
+  if (host === 'localhost' || host.endsWith('.localdomain')) return 'localhost alias';
+  if (host.includes(':')) return 'IPv6 loopback/internal';
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return 'IPv4 private/loopback/CGNAT';
+  return 'internal host';
+}
+
+function generateExternalScriptId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `ext_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function measuredUtf8Length(text: string): number {
@@ -1065,18 +1092,7 @@ const HANDLERS: Record<string, HandlerFn> = {
       // Parse basic userscript metadata
       const meta = parseUserscriptMeta(code);
 
-      // Derive a script ID that is unique among existing scripts
-      const baseId: string = meta.name
-        ? meta.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase()
-        : `ext_${Date.now()}`;
-      const existingScripts = await ScriptStorage.getAll();
-      const usedIds = new Set(existingScripts.map(s => s.id));
-      let scriptId = baseId;
-      if (usedIds.has(scriptId)) {
-        let counter = 2;
-        while (usedIds.has(`${baseId}_${counter}`)) counter++;
-        scriptId = `${baseId}_${counter}`;
-      }
+      const scriptId = generateExternalScriptId();
 
       const newScript: FlatScript = {
         id: scriptId,
@@ -1238,18 +1254,7 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
       // Parse and install directly (authorization already checked above)
       const meta = parseUserscriptMeta(code);
 
-      // Derive a unique script ID
-      const baseId: string = meta.name
-        ? meta.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase()
-        : `ext_${Date.now()}`;
-      const existingScripts = await ScriptStorage.getAll();
-      const usedIds = new Set(existingScripts.map(s => s.id));
-      let scriptId = baseId;
-      if (usedIds.has(scriptId)) {
-        let counter = 2;
-        while (usedIds.has(`${baseId}_${counter}`)) counter++;
-        scriptId = `${baseId}_${counter}`;
-      }
+      const scriptId = generateExternalScriptId();
 
       const newScript: FlatScript = {
         id: scriptId,
@@ -1300,12 +1305,25 @@ async function fireWebhook(eventType: string, payload: Record<string, unknown>):
   const hook = _webhooks[eventType];
   if (!hook?.enabled || !hook.url) return;
 
-  const body = {
-    event: eventType,
-    timestamp: Date.now(),
-    version: API_VERSION,
-    data: payload
-  };
+  const guardReason = isInternalWebhookUrl(hook.url);
+  if (guardReason) {
+    console.warn(`[PublicAPI] webhook ${eventType} blocked at fire time: ${guardReason}`);
+    return;
+  }
+
+  let body: string;
+  try {
+    body = JSON.stringify({
+      event: eventType,
+      timestamp: Date.now(),
+      version: API_VERSION,
+      data: payload
+    });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn(`[PublicAPI] webhook ${eventType} payload serialization failed:`, message);
+    return;
+  }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
@@ -1313,7 +1331,7 @@ async function fireWebhook(eventType: string, payload: Record<string, unknown>):
     await fetch(hook.url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body,
       signal: controller.signal
     });
   } catch (e: unknown) {
@@ -1509,6 +1527,10 @@ const PublicAPI = {
     await savePermissions();
   },
 
+  getPermissions(): Record<string, PermissionLevel> {
+    return { ...(_permissions || DEFAULT_PERMISSIONS) };
+  },
+
   /**
    * Set trusted web page origins.
    */
@@ -1540,12 +1562,9 @@ const PublicAPI = {
       // hosts. Webhooks fire from the extension's network context, so a URL
       // pointing at the user's LAN is an SSRF vector for any web origin
       // that obtains capability-token access via PublicAPI.
-      let parsed: URL;
-      try { parsed = new URL(url); } catch { throw new Error('Webhook URL is malformed'); }
-      const host = parsed.hostname || '';
-      if (!host) throw new Error('Webhook URL has empty hostname');
-      if (isInternalHost(host)) {
-        throw new Error('Webhook URL points at internal/loopback host');
+      const reason = isInternalWebhookUrl(url);
+      if (reason) {
+        throw new Error('Webhook URL points at internal/loopback host: ' + reason);
       }
     }
     _webhooks[eventType] = {

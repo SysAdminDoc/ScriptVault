@@ -98,6 +98,7 @@ beforeEach(() => {
   globalThis.registerAllScripts = vi.fn().mockResolvedValue();
   globalThis.updateBadge = vi.fn().mockResolvedValue();
   globalThis.autoReloadMatchingTabs = vi.fn().mockResolvedValue();
+  globalThis.ScriptStorage = ScriptStorage;
   vi.clearAllMocks();
   vi.useRealTimers();
 });
@@ -713,9 +714,10 @@ describe('source public api module', () => {
     );
     // v3.0: PublicAPI is loaded as a fresh module (separate ScriptStorage
     // cache); read straight from IDB via the DAO to bypass cache.
-    const stored = await ScriptsDAO.get('script_beta');
+    const stored = await ScriptsDAO.get(result.scriptId);
 
     expect(result.ok).toBe(true);
+    expect(stored?.id).toBe(result.scriptId);
     expect(stored?.meta.name).toBe('Script Beta');
     expect(stored?.meta.version).toBe('2.1.0');
     expect(stored?.meta.match).toEqual(['https://example.com/*']);
@@ -730,7 +732,7 @@ describe('source public api module', () => {
     expect(globalThis.registerAllScripts).toHaveBeenCalledTimes(1);
     expect(globalThis.updateBadge).toHaveBeenCalledTimes(1);
     expect(globalThis.autoReloadMatchingTabs).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'script_beta',
+      id: result.scriptId,
       name: 'Script Beta',
       meta: expect.objectContaining({
         match: ['https://example.com/*'],

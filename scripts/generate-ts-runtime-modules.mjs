@@ -56,6 +56,12 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'ScriptSubscriptions',
   },
   {
+    id: 'public-api',
+    source: 'src/modules/public-api.ts',
+    output: 'modules/public-api.js',
+    exportName: 'PublicAPI',
+  },
+  {
     id: 'userstyles',
     source: 'src/modules/userstyles.ts',
     output: 'modules/userstyles.js',
