@@ -19,6 +19,7 @@ declare function debugLog(...args: unknown[]): void;
 export const requireCache: Map<string, string> = new Map();
 
 const MAX_REQUIRE_BYTES = 5 * 1024 * 1024;
+const MAX_PROVENANCE_BUNDLE_BYTES = 256 * 1024;
 
 // ---------------------------------------------------------------------------
 // Common library fallback URLs
@@ -265,6 +266,40 @@ export async function fetchRequireScript(url: string): Promise<string | null> {
 
   console.error(`[ScriptVault] Failed to fetch ${url} (tried ${urlsToTry.length} URLs)`);
   return null;
+}
+
+export async function fetchProvenanceBundle(url: string): Promise<string | null> {
+  const preCheck = classifyFetchUrl(url, ['http:', 'https:']);
+  if (!preCheck.ok) {
+    throw new Error(`@require-provenance URL rejected: ${preCheck.message}`);
+  }
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const controller = new AbortController();
+    timeoutId = setTimeout(() => controller.abort(), 10000);
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/vnd.dev.sigstore.bundle.v0.3+json, application/json, text/plain, */*',
+        'Cache-Control': 'no-cache',
+      },
+      mode: 'cors',
+      credentials: 'omit',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) {
+      throw new Error(`@require-provenance URL redirected to ${postCheck.message}`);
+    }
+    const text = await fetchTextBounded(response, MAX_PROVENANCE_BUNDLE_BYTES, 'Provenance bundle');
+    return text && text.trim().length > 0 ? text : null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 // ---------------------------------------------------------------------------

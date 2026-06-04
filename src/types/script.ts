@@ -128,7 +128,13 @@ export interface ScriptTrustReceiptDependency {
     bundleUrl: string;
     identity: string;
     status: 'declared' | 'missing-bundle' | 'missing-identity';
-    verification: 'not-yet-implemented';
+    verification: 'not-yet-implemented' | 'signature-verified' | 'signature-failed' | 'bundle-unavailable' | 'unsupported-bundle';
+    error?: string;
+    certificateIdentity?: string;
+    certificateIssuer?: string;
+    digestVerified?: boolean;
+    signatureVerified?: boolean;
+    rootVerified?: 'not-checked';
   };
 }
 

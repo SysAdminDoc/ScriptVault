@@ -152,6 +152,27 @@ describe('script trust receipts', () => {
     });
   });
 
+  it('records provenance bundle fetch failures when verification is attempted', async () => {
+    const receipt = await createScriptTrustReceipt({
+      operation: 'install',
+      code: '// ==UserScript==\n// @name Receipt Demo\n// ==/UserScript==\nconsole.log("new");',
+      meta: makeMeta({
+        requireProvenance: ['https://cdn.example.com/lib.js.bundle'],
+        requireIdentity: ['https://github.com/exampleuser (issuer: https://github.com/login/oauth)'],
+      }),
+      fetchDependencyBody: vi.fn(async () => 'library-body'),
+      fetchProvenanceBundle: vi.fn(async () => null),
+    });
+
+    expect(receipt.dependencies.require[0].provenance).toMatchObject({
+      bundleUrl: 'https://cdn.example.com/lib.js.bundle',
+      identity: 'https://github.com/exampleuser (issuer: https://github.com/login/oauth)',
+      status: 'declared',
+      verification: 'bundle-unavailable',
+      error: 'Provenance bundle unavailable',
+    });
+  });
+
   it('applyUpdate stores a latest receipt and a rollback-point receipt', async () => {
     const oldScript = makeScript();
     const oldCode = oldScript.code;

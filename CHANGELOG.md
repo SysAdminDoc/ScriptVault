@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Sigstore message-signature verifier
+
+- **Sigstore message-signature verification now feeds trust receipts.**
+  Added `src/modules/sigstore-bundle-verifier.ts` with generated
+  `modules/sigstore-bundle-verifier.js`, plus a bounded
+  `fetchProvenanceBundle()` path for update and pending-update receipts.
+- **Receipts now record real provenance outcomes when verification can run.**
+  For declared `@require-provenance` entries, receipts can now store
+  `signature-verified`, `signature-failed`, `bundle-unavailable`, or
+  `unsupported-bundle` alongside certificate identity, issuer, digest, and
+  signature flags. Fulcio root/expiry checks remain the next phase.
+
 ### 2026-06-04 — Sigstore bundle parser
 
 - **Sigstore bundle parsing is now generated from TypeScript.**
@@ -21,8 +33,8 @@ All notable changes to ScriptVault will be documented in this file.
   ordered `requireProvenance[]` and `requireIdentity[]` arrays.
 - **Trust receipts record declaration-only provenance.** Each `@require`
   dependency can now carry its declared Sigstore bundle URL and expected OIDC
-  identity with `verification: not-yet-implemented`; cryptographic bundle
-  verification remains the next F-4 phase.
+  identity with `verification: not-yet-implemented`; message-signature
+  verification is covered by the later Sigstore verifier entry.
 
 ### 2026-06-04 — Local health diagnostics
 

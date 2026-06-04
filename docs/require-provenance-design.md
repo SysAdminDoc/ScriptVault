@@ -1,7 +1,7 @@
 # `@require-provenance` Design — Sigstore-Style Verification for `@require`
 
 **Phase:** 39.5 (extends Phase 11.8 SRI).
-**Status:** Phase A parser + storage foundation and Phase B bundle parser shipped 2026-06-04; cryptographic verification, UI, and author guide remain open.
+**Status:** Phase A parser + storage foundation, Phase B bundle parser, and Phase C message-signature verifier shipped 2026-06-04; Fulcio root/expiry verification, UI, and author guide remain open.
 **Owner:** Phase 17 (Security Round 2) follow-up.
 **Last reviewed:** 2026-05-17.
 
@@ -106,14 +106,16 @@ Got author:      https://github.com/attacker
 - Add `src/modules/sigstore-bundle-parser.ts` and generated `modules/sigstore-bundle-parser.js` — strict parser for the `.bundle` JSON format (Sigstore Protobuf bundle profile, draft v0.3).
 - No external deps; pure parser.
 - **Tests:** parse synthetic v0.3 message-signature and DSSE bundles, reject unsupported media types, malformed base64 payloads, ambiguous key material, and multi-signature DSSE bundles, and load the generated runtime export.
-- **Shipped:** Parser normalizes Sigstore v0.3 JSON bundles with certificate, x509 chain, or public-key-identifier verification material plus message-signature or DSSE content. It extracts transparency-log entries and RFC3161 timestamps but does not perform cryptographic verification yet.
+- **Shipped:** Parser normalizes Sigstore v0.3 JSON bundles with certificate, x509 chain, or public-key-identifier verification material plus message-signature or DSSE content. It extracts transparency-log entries and RFC3161 timestamps; message-signature cryptographic verification lives in Phase C.
 
-### Phase C — Signature verification
+### Phase C — Signature verification — shipped 2026-06-04
 
-- Use `crypto.subtle.verify('ECDSA', ...)` with P-256 (the certificate algorithm Fulcio mints).
-- Extract the leaf certificate's public key, hash the `@require` body, verify.
-- **No new deps;** Web Crypto API is sufficient.
-- **Tests:** golden-path verification, tampered body, mismatched identity, expired cert.
+- Add `src/modules/sigstore-bundle-verifier.ts` and generated `modules/sigstore-bundle-verifier.js`.
+- Compute the SHA-256 digest of the `@require` body, validate the bundle `messageDigest`, extract the leaf certificate's P-256 `SubjectPublicKeyInfo`, and verify DER/raw ECDSA signatures against the artifact digest.
+- Match the certificate URI/e-mail SAN and Fulcio OIDC issuer extension against the `@require-identity` declaration.
+- Wire `fetchProvenanceBundle()` through update, pending-update, and subscription-install trust receipts. Receipts record `signature-verified`, `signature-failed`, `bundle-unavailable`, or `unsupported-bundle`; root verification remains `not-checked`.
+- **No new deps:** uses Web Crypto for SHA-256 and a local P-256 ECDSA verifier because Sigstore message signatures are over the artifact digest.
+- **Tests:** golden-path verification, tampered body, mismatched identity, mismatched issuer, first-certificate chain handling, DSSE unsupported status, generated runtime export, and receipt bundle-unavailable wiring.
 
 ### Phase D — Fulcio root verification
 

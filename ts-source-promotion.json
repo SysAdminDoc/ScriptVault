@@ -117,6 +117,12 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
+      "runtime": "modules/sigstore-bundle-verifier.js",
+      "sources": ["src/modules/sigstore-bundle-verifier.ts"],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
+    },
+    {
       "runtime": "bg/analyzer.js",
       "sources": ["src/bg/analyzer.ts"],
       "status": "promoted",

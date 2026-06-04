@@ -69,6 +69,12 @@ describe('TS runtime module generator', () => {
         exportName: 'SigstoreBundleParser',
       }),
       expect.objectContaining({
+        id: 'sigstore-bundle-verifier',
+        source: 'src/modules/sigstore-bundle-verifier.ts',
+        output: 'modules/sigstore-bundle-verifier.js',
+        exportName: 'SigstoreBundleVerifier',
+      }),
+      expect.objectContaining({
         id: 'public-api',
         source: 'src/modules/public-api.ts',
         output: 'modules/public-api.js',
