@@ -82,6 +82,12 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
+      "runtime": "modules/script-config.js",
+      "sources": ["src/modules/script-config.ts"],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for userscript @var author configuration."
+    },
+    {
       "runtime": "modules/backup-scheduler.js",
       "sources": ["src/modules/backup-scheduler.ts"],
       "status": "promoted",

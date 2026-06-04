@@ -88,6 +88,7 @@ TypeScript userscripts can reference `lib/scriptvault.d.ts` for generated ambien
 - **Tampermonkey import** &mdash; Import from Tampermonkey's `.txt` backup format
 - **Batch URL install** &mdash; Paste multiple `.user.js` URLs to install at once
 - **Script notes** &mdash; Personal notes per script, saved with settings
+- **Script configuration** &mdash; Userscript `@var` fields render in per-script Settings and expose values through `CAT_userConfig`, `GM_config`, and `GM_info.script.config`
 - **Version diff view** &mdash; Compare any previous version against current code
 - **Script folders** &mdash; Organize scripts into color-coded folders with drag-and-drop
 - **Workspaces** &mdash; Named snapshots of enabled/disabled script states for quick context switching

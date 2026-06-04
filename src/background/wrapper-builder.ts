@@ -8,6 +8,7 @@
  */
 
 import type { Script, ScriptMeta } from '../types/script';
+import { ScriptConfig } from '../modules/script-config';
 
 /** A fetched @require script with its source URL and code text. */
 export interface RequireScript {
@@ -35,6 +36,12 @@ export function buildWrappedScript(
 ): string {
   const meta = script.meta;
   const grants: string[] = meta.grant.length > 0 ? meta.grant : ['none'];
+  const scriptConfigValues = ScriptConfig.normalizeValues(
+    Array.isArray(meta.config) ? meta.config : [],
+    (script.settings?.userConfig && typeof script.settings.userConfig === 'object')
+      ? (script.settings.userConfig as Record<string, unknown>)
+      : {},
+  );
 
   // Build @require scripts section
   // Code runs INSIDE the main IIFE after GM APIs are available
@@ -216,6 +223,29 @@ ${req.code}
   const meta = ${JSON.stringify(meta)};
   const grants = ${JSON.stringify(grants)};
   const grantSet = new Set(grants);
+  const __scriptConfigValues = Object.freeze(${JSON.stringify(scriptConfigValues)});
+  const CAT_userConfig = Object.freeze({
+    ...__scriptConfigValues,
+    get(name, defaultValue) {
+      return Object.prototype.hasOwnProperty.call(__scriptConfigValues, name)
+        ? __scriptConfigValues[name]
+        : defaultValue;
+    },
+    getAll() {
+      return { ...__scriptConfigValues };
+    }
+  });
+  const GM_configShim = Object.freeze({
+    get(name, defaultValue) { return CAT_userConfig.get(name, defaultValue); },
+    getValue(name, defaultValue) { return CAT_userConfig.get(name, defaultValue); },
+    getAll() { return CAT_userConfig.getAll(); },
+    set() { return false; },
+    setValue() { return false; },
+    save() { return false; },
+    open() { return false; },
+    close() { return false; },
+    fields: Object.freeze({})
+  });
 
   // Channel ID for communication with content script bridge
   // Extension ID is injected at build time since chrome.runtime isn't available in USER_SCRIPT world
@@ -265,6 +295,8 @@ ${req.code}
       updateURL: meta.updateURL || '',
       downloadURL: meta.downloadURL || '',
       supportURL: meta.supportURL || '',
+      config: CAT_userConfig.getAll(),
+      configVars: meta.config || [],
       // Phase 38.12 — VM v2.37.0 renamed "tag" to "tags". Older scripts read
       // the singular form; expose a getter that returns the first tag for
       // back-compat with pre-2026 Violentmonkey scripts.
@@ -1773,8 +1805,14 @@ ${req.code}
 
   // ============ @require Scripts ============
   // These run after GM APIs are available on window
+  const __svPreRequireGMConfig = window.GM_config;
 ${requireCode}
 ${libraryExports}
+  const __svRequireGMConfig = (typeof GM_config !== 'undefined' && GM_config !== __svPreRequireGMConfig)
+    ? GM_config
+    : null;
+  window.CAT_userConfig = CAT_userConfig;
+  window.GM_config = __svRequireGMConfig || GM_configShim;
   // ============ End @require Scripts ============
 
   // Wait for storage to be refreshed, then execute the userscript

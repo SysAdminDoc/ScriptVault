@@ -3618,6 +3618,46 @@
             min-width: 180px;
         }
 
+        .script-config-fields {
+            display: grid;
+            gap: 10px;
+        }
+
+        .script-config-row {
+            display: grid;
+            grid-template-columns: minmax(120px, 220px) minmax(160px, 1fr);
+            align-items: center;
+            gap: 12px;
+        }
+
+        .script-config-label {
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .script-config-input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+        }
+
+        .script-config-input[type="color"] {
+            width: 52px;
+            min-width: 52px;
+            padding: 2px;
+        }
+
+        .script-config-input[type="range"] {
+            width: min(320px, 100%);
+        }
+
+        @media (max-width: 700px) {
+            .script-config-row {
+                grid-template-columns: 1fr;
+                align-items: stretch;
+            }
+        }
+
         .editor-panel-note {
             color: var(--text-secondary);
             font-size: 12px;
@@ -7913,6 +7953,13 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         </div>
 
                                 <div class="settings-section">
+                            <div class="section-label">Configuration</div>
+                            <div class="section-content">
+                                <div class="script-config-fields" id="scriptConfigFields"></div>
+                            </div>
+                        </div>
+
+                                <div class="settings-section">
                             <div class="section-label">Notes</div>
                             <div class="section-content">
                                 <div class="setting-row">
@@ -8127,6 +8174,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <script src="../lib/codemirror/addon/lint/lint.min.js"></script>
     <script src="../lib/codemirror/addon/lint/userscript-lint.js"></script>
     <script src="../shared/utils.js"></script>
+    <script src="../modules/script-config.js"></script>
 
     <!-- Eager modules (critical path — loaded synchronously) -->
     <script src="dashboard-lazy-loader.js"></script>

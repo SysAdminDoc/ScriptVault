@@ -1476,6 +1476,7 @@
         elements.scriptInjectInto = document.getElementById('scriptInjectInto');
         elements.scriptFrameMode = document.getElementById('scriptFrameMode');
         elements.scriptNotifyErrors = document.getElementById('scriptNotifyErrors');
+        elements.scriptConfigFields = document.getElementById('scriptConfigFields');
         elements.btnSaveScriptSettings = document.getElementById('btnSaveScriptSettings');
         elements.btnResetScriptSettings = document.getElementById('btnResetScriptSettings');
         
@@ -3478,12 +3479,42 @@
     // ============================================
     // Per-Script Settings Functions
     // ============================================
+
+    function getScriptMetadata(script) {
+        return script?.metadata || script?.meta || {};
+    }
+
+    function getScriptConfigVariables(script) {
+        const meta = getScriptMetadata(script);
+        return Array.isArray(meta.config) ? meta.config : [];
+    }
+
+    function renderScriptConfigFields(script) {
+        const container = elements.scriptConfigFields;
+        if (!container) return;
+        const config = globalThis.ScriptConfig;
+        if (!config?.renderFields) {
+            container.textContent = '';
+            const empty = document.createElement('div');
+            empty.className = 'panel-empty-inline';
+            empty.textContent = 'Configuration controls unavailable.';
+            container.appendChild(empty);
+            return;
+        }
+        config.renderFields(container, getScriptConfigVariables(script), script?.settings?.userConfig || {});
+    }
+
+    function getScriptConfigValuesFromForm(script) {
+        const config = globalThis.ScriptConfig;
+        if (!elements.scriptConfigFields || !config?.readFields) return {};
+        return config.readFields(elements.scriptConfigFields, getScriptConfigVariables(script));
+    }
     
     function loadScriptSettings(script) {
         if (!script) return;
         
         const settings = script.settings || {};
-        const meta = script.metadata || {};
+        const meta = getScriptMetadata(script);
         
         // Basic settings
         if (elements.scriptAutoUpdate) elements.scriptAutoUpdate.checked = settings.autoUpdate !== false;
@@ -3521,6 +3552,7 @@
         renderUserPatterns('userIncludesList', settings.userIncludes || [], 'include');
         renderUserPatterns('userMatchesList', settings.userMatches || [], 'match');
         renderUserPatterns('userExcludesList', settings.userExcludes || [], 'exclude');
+        renderScriptConfigFields(script);
         
         // Update visual state based on checkbox states
         updateOriginalPatternsState();
@@ -3630,6 +3662,7 @@
     
     async function saveScriptSettings() {
         if (!state.currentScriptId) return;
+        const script = state.scripts.find(s => s.id === state.currentScriptId);
         
         const settings = {
             autoUpdate: elements.scriptAutoUpdate?.checked ?? true,
@@ -3646,14 +3679,14 @@
             useOriginalExcludes: elements.useOriginalExcludes?.checked ?? true,
             userIncludes: getUserPatternsFromList('userIncludesList'),
             userMatches: getUserPatternsFromList('userMatchesList'),
-            userExcludes: getUserPatternsFromList('userExcludesList')
+            userExcludes: getUserPatternsFromList('userExcludesList'),
+            userConfig: getScriptConfigValuesFromForm(script)
         };
         
         try {
             await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: state.currentScriptId, settings });
             
             // Update local state
-            const script = state.scripts.find(s => s.id === state.currentScriptId);
             if (script) script.settings = settings;
             
             showToast('Settings saved', 'success');
@@ -3673,6 +3706,9 @@
             injectInto: 'auto',
             frameMode: 'default',
             notifyErrors: false,
+            userConfig: {},
+            notes: '',
+            userModified: false,
             // URL Override defaults
             useOriginalIncludes: true,
             useOriginalMatches: true,

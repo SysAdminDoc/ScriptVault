@@ -481,9 +481,11 @@ Priorities/sizes preserve the source labels.
 
 ### Ecosystem parity and author ergonomics
 
-- [ ] P1 — Script-author configuration UI (`@var` / GM_config / CAT_userConfig)
+- [x] P1 — Script-author configuration UI (`@var` / GM_config / CAT_userConfig)
   - Why: no userscript settings surface; the `GM_config`/`CAT_userConfig` pattern is the most-requested author ergonomic and a ScriptCat wedge. The variable editor already exists for `.user.css`.
   - Touches: new `modules/script-config.js` (reuse `userstyles.ts` widgets), `parser.ts` (`@var` for userscripts), per-script config modal, wrapper injection.
+  - Progress: 2026-06-04 added a promoted `ScriptConfig` runtime module for userscript `@var` parsing, value coercion, dashboard field rendering, and dashboard reads. `parseUserscript` now stores userscript `@var` directives as `meta.config`; the per-script Settings panel renders those fields and saves values under `settings.userConfig`; sync allowlisting and re-registration now include `userConfig`; wrappers expose normalized values through `CAT_userConfig`, a read-only fallback `GM_config`, and `GM_info.script.config` while preserving real `@require` GM_config libraries.
+  - Verification: `node --check pages/dashboard.js`; `node --check modules/script-config.js`; `node --check scripts/generate-ts-runtime-modules.mjs`; `npm run typecheck`; `npm test -- tests/script-config.test.js tests/wrapper-script-config.test.js tests/ts-runtime-modules.test.js`; `npm test -- tests/wrapper-script-config.test.js tests/ts-source-drift-gate.test.js`; `npm run ts-runtime:check`; `npm run ts-source:check`; `npm run readme:check`; `npm run store-copy:check`; `npm run check`; `npm run smoke:dashboard`; `npm run cws:remote-code:check`; `git diff --check`.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-3.
 - [ ] P1 — Structured `@antifeature` parsing + install label + row chip
   - Why: parser pushes the whole directive as one element; `install.js` `afLabels` covers only ads/tracking/miner, so descriptioned antifeatures miss the label and print run-on text, and antifeatures vanish after install.

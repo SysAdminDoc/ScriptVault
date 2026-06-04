@@ -2,6 +2,8 @@
  * Core script data types for ScriptVault.
  */
 
+import type { ScriptConfigVariable } from '../modules/script-config';
+
 /** Parsed userscript metadata from ==UserScript== block */
 export interface ScriptMeta {
   name: string;
@@ -62,6 +64,8 @@ export interface ScriptMeta {
   // Features
   'top-level-await': boolean;
   webRequest: WebRequestRule[] | null;
+  /** Userscript `@var` author configuration fields. */
+  config: ScriptConfigVariable[];
   priority: number;
   /** Userscripts (Safari) `@weight 1..999` injection priority — higher = earlier. */
   weight: number;
