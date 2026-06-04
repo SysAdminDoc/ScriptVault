@@ -10,7 +10,11 @@
 // Web Crypto Ed25519 support: Chrome 113+
 
 import type { Settings } from '../types/settings';
-import { SettingsManager } from '../modules/storage';
+
+declare const SettingsManager: {
+  get(): Promise<Settings>;
+  set(settings: Partial<Settings>): Promise<Settings>;
+};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -107,7 +111,7 @@ export const ScriptSigning = {
     // Convert to base64url to match JWK's x field encoding
     const signatureB64: string = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    const publicKeyB64: string = kp.publicKeyJwk.x ?? ''; // JWK x field is base64url-encoded
+    const publicKeyB64: string = kp.publicKeyJwk.x as string; // JWK x field is base64url-encoded
     return {
       signature: signatureB64,
       publicKey: publicKeyB64,
@@ -118,8 +122,8 @@ export const ScriptSigning = {
 
   // ── Verification ──────────────────────────────────────────────────────────
 
-  async verifyScript(code: string, signatureInfo: SignatureInfo): Promise<VerifyResult> {
-    if (!signatureInfo.signature || !signatureInfo.publicKey) {
+  async verifyScript(code: string, signatureInfo: SignatureInfo | null | undefined): Promise<VerifyResult> {
+    if (!signatureInfo?.signature || !signatureInfo?.publicKey) {
       return { valid: false, reason: 'Missing signature or public key' };
     }
 
@@ -160,7 +164,7 @@ export const ScriptSigning = {
       const trustedKeys: TrustedKeysMap = settings.trustedSigningKeys ?? {};
       const trusted = Object.hasOwn(trustedKeys, signatureInfo.publicKey)
         ? trustedKeys[signatureInfo.publicKey]
-        : undefined;
+        : null;
 
       return {
         valid: true,

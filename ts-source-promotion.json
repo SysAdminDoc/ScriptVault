@@ -127,7 +127,8 @@
     {
       "runtime": "bg/signing.js",
       "sources": ["src/bg/signing.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "bg/workspaces.js",

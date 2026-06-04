@@ -124,6 +124,12 @@ describe('TS runtime module generator', () => {
         output: 'bg/workspaces.js',
         exportName: 'WorkspaceManager',
       }),
+      expect.objectContaining({
+        id: 'signing',
+        source: 'src/bg/signing.ts',
+        output: 'bg/signing.js',
+        exportName: 'ScriptSigning',
+      }),
     ]));
   });
 

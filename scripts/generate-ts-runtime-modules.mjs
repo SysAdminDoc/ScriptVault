@@ -119,6 +119,12 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'ScriptAnalyzer',
   },
   {
+    id: 'signing',
+    source: 'src/bg/signing.ts',
+    output: 'bg/signing.js',
+    exportName: 'ScriptSigning',
+  },
+  {
     id: 'workspaces',
     source: 'src/bg/workspaces.ts',
     output: 'bg/workspaces.js',

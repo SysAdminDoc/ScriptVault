@@ -14,6 +14,7 @@ afterEach(() => {
   delete globalThis.registerAllScripts;
   delete globalThis.updateBadge;
   delete globalThis.generateId;
+  delete globalThis.SettingsManager;
 });
 
 async function loadFreshWorkspaceManager(scripts) {
@@ -72,9 +73,7 @@ async function loadFreshSigningModule() {
     return structuredClone(settingsState);
   });
 
-  vi.doMock('../src/modules/storage.ts', () => ({
-    SettingsManager: { get, set },
-  }));
+  globalThis.SettingsManager = { get, set };
 
   const mod = await import('../src/bg/signing.ts');
   return { ScriptSigning: mod.ScriptSigning, settingsState, get, set };
