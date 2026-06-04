@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Require provenance metadata foundation
+
+- **`@require-provenance` metadata now persists.** The main userscript parser,
+  public API install parser, and generated background runtime now store
+  ordered `requireProvenance[]` and `requireIdentity[]` arrays.
+- **Trust receipts record declaration-only provenance.** Each `@require`
+  dependency can now carry its declared Sigstore bundle URL and expected OIDC
+  identity with `verification: not-yet-implemented`; cryptographic bundle
+  verification remains the next F-4 phase.
+
 ### 2026-06-04 — Local health diagnostics
 
 - **Support snapshots now include local health diagnostics.** Added

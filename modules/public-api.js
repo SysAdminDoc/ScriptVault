@@ -249,6 +249,10 @@ const PublicAPI = (() => {
     "exclude-match": "excludeMatch",
     grant: "grant",
     require: "require",
+    "require-provenance": "requireProvenance",
+    requireProvenance: "requireProvenance",
+    "require-identity": "requireIdentity",
+    requireIdentity: "requireIdentity",
     connect: "connect",
     tag: "tag",
     compatible: "compatible",
@@ -257,11 +261,12 @@ const PublicAPI = (() => {
   };
   var BOOLEAN_META_KEYS = /* @__PURE__ */ new Set(["noframes", "unwrap", "top-level-await"]);
   function appendMetaValue(meta, key, value) {
+    const values = (key === "requireProvenance" || key === "requireIdentity") && value.includes(",") ? value.split(",").map((part) => part.trim()).filter(Boolean) : [value];
     const current = meta[key];
     if (Array.isArray(current)) {
-      current.push(value);
+      current.push(...values);
     } else {
-      meta[key] = [value];
+      meta[key] = values;
     }
   }
   var DEFAULT_PERMISSIONS = {
@@ -613,6 +618,8 @@ const PublicAPI = (() => {
           return grants.length > 0 ? grants : ["none"];
         })(),
         require: getMetaArray(meta, existingMeta, "require"),
+        requireProvenance: getMetaArray(meta, existingMeta, "requireProvenance"),
+        requireIdentity: getMetaArray(meta, existingMeta, "requireIdentity"),
         resource: resources,
         connect: getMetaArray(meta, existingMeta, "connect"),
         "top-level-await": getMetaBoolean(meta, existingMeta, "top-level-await"),
@@ -663,6 +670,8 @@ const PublicAPI = (() => {
         excludeMatch: Array.isArray(meta.excludeMatch) ? [...meta.excludeMatch] : [],
         grant: Array.isArray(meta.grant) && meta.grant.length > 0 ? [...meta.grant] : ["none"],
         require: Array.isArray(meta.require) ? [...meta.require] : [],
+        requireProvenance: Array.isArray(meta.requireProvenance) ? [...meta.requireProvenance] : [],
+        requireIdentity: Array.isArray(meta.requireIdentity) ? [...meta.requireIdentity] : [],
         resource: meta.resource ?? {},
         connect: Array.isArray(meta.connect) ? [...meta.connect] : [],
         "run-at": script.runAt ?? meta.runAt ?? "document_idle"

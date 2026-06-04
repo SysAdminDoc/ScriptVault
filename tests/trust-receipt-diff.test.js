@@ -42,6 +42,8 @@ function makeMeta(overrides = {}) {
     'run-in': '',
     grant: ['GM_xmlhttpRequest', 'GM_setValue'],
     require: ['https://cdn.example.com/shared.js', 'https://cdn.example.com/old-lib.js'],
+    requireProvenance: [],
+    requireIdentity: [],
     resource: {},
     connect: ['https://api.same.example/*', 'https://api.old.example/*'],
     'top-level-await': false,

@@ -73,24 +73,44 @@ function errorMessage(error: unknown): string {
   return typeof error === 'string' ? error : 'Dependency body unavailable';
 }
 
+function buildDependencyProvenance(bundleUrl = '', identity = ''): ScriptTrustReceiptDependency['provenance'] | undefined {
+  if (!bundleUrl && !identity) return undefined;
+  return {
+    bundleUrl,
+    identity,
+    status: bundleUrl && identity
+      ? 'declared'
+      : bundleUrl
+        ? 'missing-identity'
+        : 'missing-bundle',
+    verification: 'not-yet-implemented',
+  };
+}
+
 async function snapshotDependency(
   url: string,
   fetchDependencyBody?: (url: string) => Promise<string | null | undefined>,
   known?: ScriptTrustReceiptDependency,
+  bundleUrl = '',
+  identity = '',
 ): Promise<ScriptTrustReceiptDependency> {
-  if (known?.sha256) return known;
-  if (!fetchDependencyBody) return known || { url };
+  const provenance = buildDependencyProvenance(bundleUrl, identity);
+  const withProvenance = (dependency: ScriptTrustReceiptDependency): ScriptTrustReceiptDependency =>
+    provenance ? { ...dependency, provenance } : dependency;
+
+  if (known?.sha256) return withProvenance(known);
+  if (!fetchDependencyBody) return withProvenance(known || { url });
 
   try {
     const body = await fetchDependencyBody(url);
-    if (typeof body !== 'string') return { url, error: 'Dependency body unavailable' };
-    return {
+    if (typeof body !== 'string') return withProvenance({ url, error: 'Dependency body unavailable' });
+    return withProvenance({
       url,
       sha256: await sha256Hex(body),
       bytes: new TextEncoder().encode(body).length,
-    };
+    });
   } catch (error) {
-    return { url, error: errorMessage(error) };
+    return withProvenance({ url, error: errorMessage(error) });
   }
 }
 
@@ -98,10 +118,12 @@ async function snapshotDependencies(
   urls: string[],
   fetchDependencyBody: ((url: string) => Promise<string | null | undefined>) | undefined,
   known: Map<string, ScriptTrustReceiptDependency>,
+  bundleUrls: string[] = [],
+  identities: string[] = [],
 ): Promise<ScriptTrustReceiptDependency[]> {
   const snapshots: ScriptTrustReceiptDependency[] = [];
-  for (const url of urls) {
-    snapshots.push(await snapshotDependency(url, fetchDependencyBody, known.get(url)));
+  for (const [index, url] of urls.entries()) {
+    snapshots.push(await snapshotDependency(url, fetchDependencyBody, known.get(url), bundleUrls[index] || '', identities[index] || ''));
   }
   return snapshots;
 }
@@ -167,14 +189,20 @@ export async function createScriptTrustReceipt(options: {
   const previousCode = previousScript?.code || '';
   const createdAt = Date.now();
   const requires = asArray(meta.require);
+  const requireProvenance = asArray(meta.requireProvenance);
+  const requireIdentity = asArray(meta.requireIdentity);
   const previousRequires = asArray(previousScript?.meta?.require);
+  const previousRequireProvenance = asArray(previousScript?.meta?.requireProvenance);
+  const previousRequireIdentity = asArray(previousScript?.meta?.requireIdentity);
   const knownDependencySnapshots = getKnownDependencySnapshots(previousScript);
   const previousRequireSnapshots = await snapshotDependencies(
     previousRequires,
     options.fetchDependencyBody,
     knownDependencySnapshots,
+    previousRequireProvenance,
+    previousRequireIdentity,
   );
-  const requireSnapshots = await snapshotDependencies(requires, options.fetchDependencyBody, new Map());
+  const requireSnapshots = await snapshotDependencies(requires, options.fetchDependencyBody, new Map(), requireProvenance, requireIdentity);
   const resources = meta.resource && typeof meta.resource === 'object'
     ? Object.entries(meta.resource)
         .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0)

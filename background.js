@@ -10514,6 +10514,10 @@ const PublicAPI = (() => {
     "exclude-match": "excludeMatch",
     grant: "grant",
     require: "require",
+    "require-provenance": "requireProvenance",
+    requireProvenance: "requireProvenance",
+    "require-identity": "requireIdentity",
+    requireIdentity: "requireIdentity",
     connect: "connect",
     tag: "tag",
     compatible: "compatible",
@@ -10522,11 +10526,12 @@ const PublicAPI = (() => {
   };
   var BOOLEAN_META_KEYS = /* @__PURE__ */ new Set(["noframes", "unwrap", "top-level-await"]);
   function appendMetaValue(meta, key, value) {
+    const values = (key === "requireProvenance" || key === "requireIdentity") && value.includes(",") ? value.split(",").map((part) => part.trim()).filter(Boolean) : [value];
     const current = meta[key];
     if (Array.isArray(current)) {
-      current.push(value);
+      current.push(...values);
     } else {
-      meta[key] = [value];
+      meta[key] = values;
     }
   }
   var DEFAULT_PERMISSIONS = {
@@ -10878,6 +10883,8 @@ const PublicAPI = (() => {
           return grants.length > 0 ? grants : ["none"];
         })(),
         require: getMetaArray(meta, existingMeta, "require"),
+        requireProvenance: getMetaArray(meta, existingMeta, "requireProvenance"),
+        requireIdentity: getMetaArray(meta, existingMeta, "requireIdentity"),
         resource: resources,
         connect: getMetaArray(meta, existingMeta, "connect"),
         "top-level-await": getMetaBoolean(meta, existingMeta, "top-level-await"),
@@ -10928,6 +10935,8 @@ const PublicAPI = (() => {
         excludeMatch: Array.isArray(meta.excludeMatch) ? [...meta.excludeMatch] : [],
         grant: Array.isArray(meta.grant) && meta.grant.length > 0 ? [...meta.grant] : ["none"],
         require: Array.isArray(meta.require) ? [...meta.require] : [],
+        requireProvenance: Array.isArray(meta.requireProvenance) ? [...meta.requireProvenance] : [],
+        requireIdentity: Array.isArray(meta.requireIdentity) ? [...meta.requireIdentity] : [],
         resource: meta.resource ?? {},
         connect: Array.isArray(meta.connect) ? [...meta.connect] : [],
         "run-at": script.runAt ?? meta.runAt ?? "document_idle"
@@ -13126,6 +13135,8 @@ function parseUserscript(code) {
     excludeTop: [],
     grant: [],
     require: [],
+    requireProvenance: [],
+    requireIdentity: [],
     resource: {},
     'run-at': 'document-idle',
     noframes: false,
@@ -13201,6 +13212,10 @@ function parseUserscript(code) {
       case 'excludeMatch':
       case 'grant':
       case 'require':
+      case 'require-provenance':
+      case 'requireProvenance':
+      case 'require-identity':
+      case 'requireIdentity':
       case 'connect':
       case 'antifeature':
       case 'tag':
@@ -13217,6 +13232,8 @@ function parseUserscript(code) {
         const arrayKey = key === 'exclude-match' ? 'excludeMatch'
           : key === 'match-top' ? 'matchTop'
           : key === 'exclude-top' ? 'excludeTop'
+          : key === 'require-provenance' ? 'requireProvenance'
+          : key === 'require-identity' ? 'requireIdentity'
           : key;
         if (!meta[arrayKey]) meta[arrayKey] = [];
         if (value) {
@@ -13231,6 +13248,8 @@ function parseUserscript(code) {
             arrayKey === 'excludeMatch' ||
             arrayKey === 'matchTop' ||
             arrayKey === 'excludeTop' ||
+            arrayKey === 'requireProvenance' ||
+            arrayKey === 'requireIdentity' ||
             arrayKey === 'connect';
           if (splittable && value.includes(',')) {
             for (const part of value.split(',')) {
@@ -13417,26 +13436,42 @@ function _receiptErrorMessage(error) {
   return error?.message || (typeof error === 'string' ? error : 'Dependency body unavailable');
 }
 
-async function _snapshotDependency(url, fetchDependencyBody, known) {
-  if (known?.sha256) return known;
-  if (typeof fetchDependencyBody !== 'function') return known || { url };
+function _receiptDependencyProvenance(bundleUrl = '', identity = '') {
+  if (!bundleUrl && !identity) return undefined;
+  return {
+    bundleUrl,
+    identity,
+    status: bundleUrl && identity
+      ? 'declared'
+      : bundleUrl
+        ? 'missing-identity'
+        : 'missing-bundle',
+    verification: 'not-yet-implemented'
+  };
+}
+
+async function _snapshotDependency(url, fetchDependencyBody, known, bundleUrl = '', identity = '') {
+  const provenance = _receiptDependencyProvenance(bundleUrl, identity);
+  const withProvenance = dependency => provenance ? { ...dependency, provenance } : dependency;
+  if (known?.sha256) return withProvenance(known);
+  if (typeof fetchDependencyBody !== 'function') return withProvenance(known || { url });
   try {
     const body = await fetchDependencyBody(url);
-    if (typeof body !== 'string') return { url, error: 'Dependency body unavailable' };
-    return {
+    if (typeof body !== 'string') return withProvenance({ url, error: 'Dependency body unavailable' });
+    return withProvenance({
       url,
       sha256: await _sha256Hex(body),
       bytes: new TextEncoder().encode(body).length
-    };
+    });
   } catch (error) {
-    return { url, error: _receiptErrorMessage(error) };
+    return withProvenance({ url, error: _receiptErrorMessage(error) });
   }
 }
 
-async function _snapshotDependencies(urls, fetchDependencyBody, known) {
+async function _snapshotDependencies(urls, fetchDependencyBody, known, bundleUrls = [], identities = []) {
   const snapshots = [];
-  for (const url of urls) {
-    snapshots.push(await _snapshotDependency(url, fetchDependencyBody, known.get(url)));
+  for (const [index, url] of urls.entries()) {
+    snapshots.push(await _snapshotDependency(url, fetchDependencyBody, known.get(url), bundleUrls[index] || '', identities[index] || ''));
   }
   return snapshots;
 }
@@ -13476,9 +13511,13 @@ async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '',
   const nextHash = await _sha256Hex(code);
   const previousHash = previousScript ? await _sha256Hex(previousCode) : '';
   const requireUrls = _receiptArray(meta.require);
+  const requireProvenance = _receiptArray(meta.requireProvenance);
+  const requireIdentity = _receiptArray(meta.requireIdentity);
   const previousRequireUrls = _receiptArray(previousScript?.meta?.require);
-  const previousRequireSnapshots = await _snapshotDependencies(previousRequireUrls, fetchDependencyBody, _knownDependencySnapshots(previousScript));
-  const requireSnapshots = await _snapshotDependencies(requireUrls, fetchDependencyBody, new Map());
+  const previousRequireProvenance = _receiptArray(previousScript?.meta?.requireProvenance);
+  const previousRequireIdentity = _receiptArray(previousScript?.meta?.requireIdentity);
+  const previousRequireSnapshots = await _snapshotDependencies(previousRequireUrls, fetchDependencyBody, _knownDependencySnapshots(previousScript), previousRequireProvenance, previousRequireIdentity);
+  const requireSnapshots = await _snapshotDependencies(requireUrls, fetchDependencyBody, new Map(), requireProvenance, requireIdentity);
   const resources = meta.resource && typeof meta.resource === 'object'
     ? Object.entries(meta.resource)
         .filter(([, url]) => typeof url === 'string' && url.length > 0)

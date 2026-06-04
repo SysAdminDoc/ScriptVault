@@ -80,6 +80,8 @@ type ArrayMetaKey =
   | 'excludeTop'
   | 'grant'
   | 'require'
+  | 'requireProvenance'
+  | 'requireIdentity'
   | 'connect'
   | 'antifeature'
   | 'tag'
@@ -92,6 +94,8 @@ const ARRAY_ALIASES: Readonly<Record<string, ArrayMetaKey>> = {
   'exclude-match': 'excludeMatch',
   'match-top': 'matchTop',
   'exclude-top': 'excludeTop',
+  'require-provenance': 'requireProvenance',
+  'require-identity': 'requireIdentity',
 };
 
 const ARRAY_KEYS: ReadonlySet<string> = new Set<string>([
@@ -106,6 +110,10 @@ const ARRAY_KEYS: ReadonlySet<string> = new Set<string>([
   'excludeTop',
   'grant',
   'require',
+  'require-provenance',
+  'requireProvenance',
+  'require-identity',
+  'requireIdentity',
   'connect',
   'antifeature',
   'tag',
@@ -144,6 +152,8 @@ export function parseUserscript(code: string): ParseResult {
     excludeTop: [],
     grant: [],
     require: [],
+    requireProvenance: [],
+    requireIdentity: [],
     resource: {},
     'run-at': 'document-idle',
     noframes: false,
@@ -206,6 +216,8 @@ export function parseUserscript(code: string): ParseResult {
           arrayKey === 'excludeMatch' ||
           arrayKey === 'matchTop' ||
           arrayKey === 'excludeTop' ||
+          arrayKey === 'requireProvenance' ||
+          arrayKey === 'requireIdentity' ||
           arrayKey === 'connect';
         if (splittable && value.includes(',')) {
           for (const part of value.split(',')) {

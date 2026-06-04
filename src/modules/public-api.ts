@@ -109,6 +109,8 @@ interface ParsedMeta {
   excludeMatch?: string[];
   grant?: string[];
   require?: string[];
+  requireProvenance?: string[];
+  requireIdentity?: string[];
   connect?: string[];
   tag?: string[];
   compatible?: string[];
@@ -396,6 +398,10 @@ const ARRAY_META_KEYS: Record<string, keyof ParsedMeta> = {
   'exclude-match': 'excludeMatch',
   grant: 'grant',
   require: 'require',
+  'require-provenance': 'requireProvenance',
+  requireProvenance: 'requireProvenance',
+  'require-identity': 'requireIdentity',
+  requireIdentity: 'requireIdentity',
   connect: 'connect',
   tag: 'tag',
   compatible: 'compatible',
@@ -405,11 +411,14 @@ const ARRAY_META_KEYS: Record<string, keyof ParsedMeta> = {
 const BOOLEAN_META_KEYS = new Set(['noframes', 'unwrap', 'top-level-await']);
 
 function appendMetaValue(meta: ParsedMeta, key: keyof ParsedMeta, value: string): void {
+  const values = (key === 'requireProvenance' || key === 'requireIdentity') && value.includes(',')
+    ? value.split(',').map(part => part.trim()).filter(Boolean)
+    : [value];
   const current = meta[key];
   if (Array.isArray(current)) {
-    current.push(value);
+    current.push(...values);
   } else {
-    (meta as Record<string, unknown>)[key] = [value];
+    (meta as Record<string, unknown>)[key] = values;
   }
 }
 
@@ -892,6 +901,8 @@ function createNestedStoredScript(
         return grants.length > 0 ? grants : ['none'];
       })(),
       require: getMetaArray(meta, existingMeta, 'require'),
+      requireProvenance: getMetaArray(meta, existingMeta, 'requireProvenance'),
+      requireIdentity: getMetaArray(meta, existingMeta, 'requireIdentity'),
       resource: resources,
       connect: getMetaArray(meta, existingMeta, 'connect'),
       'top-level-await': getMetaBoolean(meta, existingMeta, 'top-level-await'),
@@ -957,6 +968,8 @@ function toRuntimeScriptShape(script: FlatScript, meta: ParsedMeta): FlatScript 
       excludeMatch: Array.isArray(meta.excludeMatch) ? [...meta.excludeMatch] : [],
       grant: Array.isArray(meta.grant) && meta.grant.length > 0 ? [...meta.grant] : ['none'],
       require: Array.isArray(meta.require) ? [...meta.require] : [],
+      requireProvenance: Array.isArray(meta.requireProvenance) ? [...meta.requireProvenance] : [],
+      requireIdentity: Array.isArray(meta.requireIdentity) ? [...meta.requireIdentity] : [],
       resource: meta.resource ?? {},
       connect: Array.isArray(meta.connect) ? [...meta.connect] : [],
       'run-at': script.runAt ?? meta.runAt ?? 'document_idle',

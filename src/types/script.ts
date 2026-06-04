@@ -54,6 +54,8 @@ export interface ScriptMeta {
   // Grants & dependencies
   grant: string[];
   require: string[];
+  requireProvenance: string[];
+  requireIdentity: string[];
   resource: Record<string, string>;
   connect: string[];
 
@@ -122,6 +124,12 @@ export interface ScriptTrustReceiptDependency {
   sha256?: string;
   bytes?: number;
   error?: string;
+  provenance?: {
+    bundleUrl: string;
+    identity: string;
+    status: 'declared' | 'missing-bundle' | 'missing-identity';
+    verification: 'not-yet-implemented';
+  };
 }
 
 export interface ScriptTrustReceiptDependencyChange {
