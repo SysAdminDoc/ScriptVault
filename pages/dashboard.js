@@ -28,6 +28,7 @@
         trashItems: [],
         trustCenter: {
             runtimeStatus: null,
+            runtimeHostPermissionStatus: null,
             publicApiOrigins: [],
             publicApiPermissions: {},
             publicApiAudit: [],
@@ -1798,6 +1799,8 @@
         elements.batchUrlInput = document.getElementById('batchUrlInput');
         elements.runtimeStatusSummary = document.getElementById('runtimeStatusSummary');
         elements.runtimeStatusDetails = document.getElementById('runtimeStatusDetails');
+        elements.runtimeHostPermissionSummary = document.getElementById('runtimeHostPermissionSummary');
+        elements.runtimeHostPermissionDetails = document.getElementById('runtimeHostPermissionDetails');
         elements.supportSnapshotSummary = document.getElementById('supportSnapshotSummary');
         elements.supportSnapshotStatus = document.getElementById('supportSnapshotStatus');
         elements.publicApiTrustedOrigins = document.getElementById('publicApiTrustedOrigins');
@@ -1807,6 +1810,7 @@
         elements.signingTrustSummary = document.getElementById('signingTrustSummary');
         elements.signingKeysList = document.getElementById('signingKeysList');
         elements.btnRefreshRuntimeStatus = document.getElementById('btnRefreshRuntimeStatus');
+        elements.btnGrantCurrentHostAccess = document.getElementById('btnGrantCurrentHostAccess');
         elements.btnRepairRuntime = document.getElementById('btnRepairRuntime');
         elements.btnShowSetupGuide = document.getElementById('btnShowSetupGuide');
         elements.btnExportSupportSnapshot = document.getElementById('btnExportSupportSnapshot');
@@ -4225,10 +4229,115 @@
         updateSupportSnapshotSummary();
     }
 
+    function summarizeRuntimeHostPermission(status) {
+        const blocked = Array.isArray(status?.blockedScripts) ? status.blockedScripts : [];
+        const names = blocked.slice(0, 3).map(script => script.name || script.id || 'script').join(', ');
+        const remaining = status?.blockedCount > blocked.slice(0, 3).length
+            ? ` and ${status.blockedCount - blocked.slice(0, 3).length} more`
+            : '';
+        if (names) return `${names}${remaining}`;
+        return '';
+    }
+
+    function renderRuntimeHostPermissionStatus(status, errorMessage = '') {
+        if (elements.runtimeHostPermissionSummary) {
+            elements.runtimeHostPermissionSummary.textContent = errorMessage
+                ? 'Unavailable'
+                : status?.needsHostAccess
+                    ? 'Blocked'
+                    : status?.granted === true
+                        ? 'Granted'
+                        : status?.supported
+                            ? 'Not Granted'
+                            : 'No Site';
+        }
+
+        if (elements.runtimeHostPermissionDetails) {
+            if (errorMessage) {
+                elements.runtimeHostPermissionDetails.textContent = errorMessage;
+            } else if (!status?.supported) {
+                elements.runtimeHostPermissionDetails.textContent = status?.message || 'No recent HTTP(S) tab is available for host access diagnostics.';
+            } else {
+                const lines = [
+                    `Target: ${status.host || status.origin || 'unknown'}`,
+                    `Pattern: ${status.pattern || 'none'}`,
+                    status.message || 'Host access status available.'
+                ];
+                const blockedSummary = summarizeRuntimeHostPermission(status);
+                if (blockedSummary) lines.push(`Blocked scripts: ${blockedSummary}.`);
+                if (status.requestMethod) lines.push(`Recovery: ${status.requestMethod}.`);
+                elements.runtimeHostPermissionDetails.innerHTML = lines
+                    .map(line => `<div>${escapeHtml(line)}</div>`)
+                    .join('');
+            }
+        }
+
+        if (elements.btnGrantCurrentHostAccess) {
+            const showButton = !!status?.needsHostAccess;
+            elements.btnGrantCurrentHostAccess.hidden = !showButton;
+            elements.btnGrantCurrentHostAccess.textContent = status?.requestMethod === 'addHostAccessRequest'
+                ? 'Request Site Access'
+                : 'Grant Site Access';
+        }
+    }
+
+    async function loadRuntimeHostPermissionStatus(options = {}) {
+        const { announce = false } = options;
+        try {
+            const status = await chrome.runtime.sendMessage({ action: 'getHostPermissionStatus' });
+            state.trustCenter.runtimeHostPermissionStatus = status || null;
+            renderRuntimeHostPermissionStatus(status);
+            if (announce && status?.needsHostAccess) showToast('Current site access is blocked', 'warning');
+            return status;
+        } catch (error) {
+            const message = error?.message || 'Failed to load host access status';
+            state.trustCenter.runtimeHostPermissionStatus = null;
+            renderRuntimeHostPermissionStatus(null, message);
+            if (announce) showToast(message, 'error');
+            return null;
+        }
+    }
+
+    async function requestCurrentHostAccessFromDashboard() {
+        const status = state.trustCenter.runtimeHostPermissionStatus || await loadRuntimeHostPermissionStatus();
+        if (!status?.supported || !status.pattern) {
+            showToast(status?.message || 'Host access is not available for the current site', 'warning');
+            return false;
+        }
+
+        if (status.requestMethod === 'addHostAccessRequest') {
+            const response = await chrome.runtime.sendMessage({
+                action: 'queueHostAccessRequest',
+                url: status.url,
+                tabId: status.tabId
+            });
+            if (response?.error || response?.success === false) {
+                showToast(response?.error || 'Failed to queue site access request', 'error');
+                return false;
+            }
+            showToast(response.message || 'Site access request added', 'info');
+            await loadRuntimeHostPermissionStatus();
+            return true;
+        }
+
+        if (chrome.permissions?.request) {
+            const granted = await chrome.permissions.request({ origins: [status.pattern] });
+            showToast(granted ? 'Site access granted' : 'Site access was not granted', granted ? 'success' : 'warning');
+            await loadRuntimeHostPermissionStatus();
+            return granted;
+        }
+
+        await chrome.tabs.create({ url: `chrome://extensions/?id=${chrome.runtime.id}` });
+        return false;
+    }
+
     async function loadRuntimeStatus(options = {}) {
         const { announce = false } = options;
         try {
-            const status = await chrome.runtime.sendMessage({ action: 'getExtensionStatus' });
+            const [status] = await Promise.all([
+                chrome.runtime.sendMessage({ action: 'getExtensionStatus' }),
+                loadRuntimeHostPermissionStatus()
+            ]);
             state.trustCenter.runtimeStatus = status || null;
             renderRuntimeStatus(status);
             if (announce) {
@@ -11052,6 +11161,9 @@
         elements.btnRefreshRuntimeStatus?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, () => loadRuntimeStatus({ announce: true }), { busyLabel: 'Refreshing…', errorMessage: 'Failed to refresh runtime status' });
         });
+        elements.btnGrantCurrentHostAccess?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, requestCurrentHostAccessFromDashboard, { busyLabel: 'Requesting…', errorMessage: 'Failed to request site access' });
+        });
         elements.btnShowSetupGuide?.addEventListener('click', showSetupInstructions);
         elements.btnRepairRuntime?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, async () => {
@@ -11070,6 +11182,11 @@
                     showToast(error?.message || 'Runtime repair failed', 'error');
                 }
             }, { busyLabel: 'Repairing…', errorMessage: 'Runtime repair failed' });
+        });
+        chrome.runtime.onMessage?.addListener((message) => {
+            if (message?.action === 'runtimeHostPermissionsChanged') {
+                loadRuntimeHostPermissionStatus().catch(() => {});
+            }
         });
         elements.btnExportSupportSnapshot?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, exportSupportSnapshot, { busyLabel: 'Exporting…', errorMessage: 'Failed to export support snapshot' });

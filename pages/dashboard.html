@@ -7218,9 +7218,15 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             <span class="script-counter" id="runtimeStatusSummary">Checking…</span>
                         </div>
                         <div class="utility-note" id="runtimeStatusDetails">Loading runtime diagnostics…</div>
+                        <div class="setting-row" style="margin:0;display:flex;justify-content:space-between;align-items:center;gap:12px">
+                            <span class="label-text">Current-site access</span>
+                            <span class="script-counter" id="runtimeHostPermissionSummary">Checking…</span>
+                        </div>
+                        <div class="utility-note" id="runtimeHostPermissionDetails">Loading host access diagnostics…</div>
                     </div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
                         <button type="button" class="btn" id="btnRefreshRuntimeStatus">Refresh Status</button>
+                        <button type="button" class="btn" id="btnGrantCurrentHostAccess" hidden>Grant Site Access</button>
                         <button type="button" class="btn" id="btnRepairRuntime">Repair Runtime</button>
                         <button type="button" class="btn" id="btnShowSetupGuide">Setup Guide</button>
                     </div>

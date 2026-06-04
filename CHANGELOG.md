@@ -4,6 +4,20 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Host-permission recovery prompts
+
+- **Added current-site host access diagnostics.** The background now reports the
+  active/recent site origin pattern, browser-granted state, and matching enabled
+  scripts blocked by withheld site access.
+- **Surfaced recovery in popup, side panel, and dashboard.** Users see the
+  blocked script names and can queue Chrome `addHostAccessRequest` prompts or
+  use the standard `permissions.request({ origins })` fallback from extension
+  pages.
+- **Gated the optional-host manifest prototype.** `npm run
+  host-permissions:prototype` writes a deterministic report for moving
+  `http://*/*` and `https://*/*` to `optional_host_permissions` later while the
+  shipping manifests and reviewer copy remain unchanged.
+
 ### 2026-06-04 — NPM/ESM `@require` resolver wiring
 
 - **Wired `npm:` specs into the real `@require` fetch path.**

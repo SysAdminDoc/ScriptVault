@@ -76,6 +76,11 @@
         .sp-status { display: none; padding: 7px 9px; border: 1px solid rgba(76,175,80,0.24); border-radius: var(--radius-panel); background: rgba(76,175,80,0.1); color: var(--text); font-size: 11px; flex-shrink: 0; }
         .sp-status.show { display: block; }
         .sp-status.error { border-color: rgba(239,68,68,0.34); background: rgba(239,68,68,0.1); }
+        .sp-host-access { display: none; padding: 8px 9px; border: 1px solid rgba(245,158,11,0.36); border-radius: var(--radius-panel); background: rgba(245,158,11,0.12); color: var(--text); font-size: 11px; flex-shrink: 0; gap: 7px; }
+        .sp-host-access.show { display: grid; }
+        .sp-host-access-message { line-height: 1.35; color: var(--text); }
+        .sp-host-access-btn { justify-self: start; border: 1px solid rgba(245,158,11,0.48); border-radius: var(--radius-control); background: rgba(245,158,11,0.14); color: var(--text); padding: 5px 8px; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .sp-host-access-btn:hover { background: rgba(245,158,11,0.22); transform: translateY(-1px); }
 
         /* Section headers */
         .sp-section { border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; background: var(--bg-raised); flex-shrink: 0; }
@@ -360,6 +365,10 @@
     </div>
 
     <div class="sp-status" id="statusMessage" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+    <div class="sp-host-access" id="hostAccessPanel" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <div class="sp-host-access-message" id="hostAccessMessage"></div>
+        <button class="sp-host-access-btn" id="btnGrantHostAccess" type="button">Grant Site Access</button>
+    </div>
 
     <div class="sp-section">
         <div class="sp-section-header">
