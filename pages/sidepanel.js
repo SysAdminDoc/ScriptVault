@@ -798,10 +798,17 @@
     });
   }
 
+  function openHelpDashboard() {
+    chrome.runtime.sendMessage({ action: 'openDashboard', data: { tab: 'help' } }).catch(() => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('pages/dashboard.html#tab=help') });
+    });
+  }
+
   // ── Event listeners ───────────────────────────────────────────────────────
   function setupEventListeners() {
     $('btnRefresh').addEventListener('click', refresh);
     $('btnPendingUpdates')?.addEventListener('click', openUpdatesDashboard);
+    $('btnHelp')?.addEventListener('click', openHelpDashboard);
     $('btnDashboard').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }).catch(() => {}));
     $('btnNewScript').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard', data: { newScript: true } }).catch(() => {}));
     $('btnFindScripts').addEventListener('click', () => {

@@ -222,6 +222,38 @@
       font-weight: 500;
       font-variant-numeric: tabular-nums;
     }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .header-help-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      min-height: 30px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    }
+
+    .header-help-btn:hover {
+      background: var(--bg-hover);
+      border-color: var(--accent);
+      color: var(--text-primary);
+      transform: translateY(-1px);
+    }
     
     .reinstall-badge {
       display: inline-flex;
@@ -1455,6 +1487,7 @@
       select,
       textarea,
       .btn,
+      .header-help-btn,
       .review-nav button,
       .match-list-toggle {
         background: ButtonFace !important;
@@ -1535,6 +1568,11 @@
         padding: 18px 16px 14px;
       }
 
+      .header-actions {
+        width: 100%;
+        justify-content: space-between;
+      }
+
       .content {
         padding: 16px;
       }
@@ -1556,7 +1594,10 @@
           <p>Review permissions, scope, and source details before bringing a script into ScriptVault.</p>
         </div>
       </div>
-      <div id="install-type-badge"></div>
+      <div class="header-actions">
+        <button class="header-help-btn" id="btnHelp" type="button" aria-label="Help" title="Help" data-help>?</button>
+        <div id="install-type-badge"></div>
+      </div>
     </div>
     
     <div class="content" id="content">

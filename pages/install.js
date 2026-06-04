@@ -184,6 +184,10 @@ let cancelReviewTimer = null;
 let reviewExitGuardActive = false;
 let suppressExitGuard = false;
 
+function openHelpDashboard() {
+  chrome.tabs.create({ url: chrome.runtime.getURL('pages/dashboard.html#tab=help') });
+}
+
 function setReviewExitGuard(active) {
   reviewExitGuardActive = active;
   if (!active) {
@@ -363,6 +367,8 @@ function updateDecisionHero() {
 }
 
 async function init() {
+  document.getElementById('btnHelp')?.addEventListener('click', openHelpDashboard);
+
   window.addEventListener('beforeunload', (event) => {
     if (!reviewExitGuardActive || suppressExitGuard) return;
     event.preventDefault();

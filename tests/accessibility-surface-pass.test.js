@@ -36,6 +36,13 @@ function hasClassLink(source, className, href) {
   return source.includes(`class="${className}"`) && source.includes(`href="${href}"`);
 }
 
+function expectHelpControl(source, id) {
+  const tag = findTagById(source, id);
+  expect(tag).toBeTruthy();
+  expect(tag).toMatch(/\bdata-help\b/i);
+  expect(getAttr(tag, "aria-label")).toBe("Help");
+}
+
 function styleBlocksFor(selector, source = dashboardHtml) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return [...source.matchAll(new RegExp(`${escapedSelector}\\s*\\{([\\s\\S]*?)\\}`, "g"))]
@@ -69,6 +76,21 @@ describe("accessibility surface pass", () => {
 
     expect(hasClassLink(installHtml, "install-skip-link", "#content")).toBe(true);
     expect(findTagById(installHtml, "content")).toBeTruthy();
+  });
+
+  test("major extension surfaces expose a consistent Help deep link", () => {
+    expectHelpControl(dashboardHtml, "btnHelpTab");
+    expectHelpControl(popupHtml, "btnHelp");
+    expectHelpControl(sidepanelHtml, "btnHelp");
+    expectHelpControl(installHtml, "btnHelp");
+
+    expect(dashboardJs).toContain("const DASHBOARD_TABS = ['scripts', 'updates', 'settings', 'utilities', 'trash', 'store', 'help']");
+    expect(dashboardJs).toContain("await switchTab('help')");
+    expect(popupJs).toContain("data: { tab: 'help' }");
+    expect(popupJs).toContain("pages/dashboard.html#tab=help");
+    expect(sidepanelJs).toContain("data: { tab: 'help' }");
+    expect(sidepanelJs).toContain("pages/dashboard.html#tab=help");
+    expect(installJs).toContain("pages/dashboard.html#tab=help");
   });
 
   test("status, toast, and async surfaces have live-region contracts", () => {

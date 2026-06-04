@@ -138,6 +138,8 @@ describe("dashboard accessibility markup", () => {
     expect(doc.getElementById("storePanel")?.hasAttribute("hidden")).toBe(true);
 
     expect(helpButton).not.toBeNull();
+    expect(helpButton?.hasAttribute("data-help")).toBe(true);
+    expect(helpButton?.getAttribute("aria-label")).toBe("Help");
     expect(helpButton?.getAttribute("aria-controls")).toBe("helpPanel");
     expect(helpButton?.getAttribute("aria-expanded")).toBe("false");
     expect(helpButton?.getAttribute("aria-pressed")).toBe("false");
