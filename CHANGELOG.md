@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Research feature plan refresh
+
+- **Added the current research-backed feature plan.** `RESEARCH_FEATURE_PLAN.md`
+  now consolidates ScriptVault's product map, feature inventory, competitive
+  research, security/data-safety priorities, UX/accessibility work,
+  maintainability themes, prioritized roadmap entries, quick wins, larger bets,
+  non-goals, and open questions while keeping `ROADMAP.md` as the active queue.
+
 ### 2026-06-04 — GM_xmlhttpRequest internal-host guard
 
 - **Blocked GM_xmlhttpRequest internal-host SSRF by default.** GM_xhr now runs
