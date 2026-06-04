@@ -64,6 +64,7 @@
   loaderScript.onload = () => initMonaco(LOCAL_VS_PATH);
   loaderScript.onerror = () => {
     loading.innerHTML = '<div><strong>Editor Bundle Missing</strong><small>Rebuild the local Monaco assets with:<br>node esbuild.config.mjs --monaco-only</small></div>';
+    parent.postMessage({ type: 'monaco-load-error', reason: 'missing-bundle' }, '*');
   };
   document.head.appendChild(loaderScript);
 

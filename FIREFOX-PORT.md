@@ -37,11 +37,12 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - [x] **Feature-flag `chrome.sidePanel`.** Dashboard has side-panel hooks. Firefox has no equivalent. Hide the toggle in `pages/dashboard.js` when `typeof chrome.sidePanel === 'undefined'`.
   - **Shipped 2026-06-04:** `dashboard-firefox-compat.js` no longer creates a no-op `chrome.sidePanel` on unsupported browsers. Firefox leaves the API absent so dashboard feature gates can hide side-panel entry points; native Chromium support is unchanged.
 - [x] **Strip `worldId` on Firefox.** `src/background/registration.ts` / `bg/*` may set `worldId` on `chrome.userScripts.register()`. Chrome 133+ only. Firefox rejects unknown fields. Guard with `if (USERSCRIPT_API_SUPPORTS_WORLD_ID)` after a runtime probe.
-- [ ] **Monaco editor loading path.** Firefox MV3 `extension_pages` CSP allows `'unsafe-eval'` by default, so Monaco can load directly in the dashboard extension origin with *no* sandboxed iframe at all. Two options:
+- [x] **Monaco editor loading path.** Firefox MV3 `extension_pages` CSP allows `'unsafe-eval'` by default, so Monaco can load directly in the dashboard extension origin with *no* sandboxed iframe at all. Two options:
   - **A (minimal):** keep the iframe, drop the manifest `sandbox` declaration, switch CSP to allow eval. `monaco-adapter.js` already posts with `'*'` targetOrigin.
   - **B (cleaner):** inline the Monaco container directly in the dashboard, delete the iframe on Firefox. More invasive.
-  - **Decision needed:** start with A to prove loading; revisit B in Phase 4 polish.
-  - **Current gate:** `build-firefox.sh` intentionally omits `lib/monaco/` because AMO's linter rejects the bundled TypeScript worker as too large to parse. The dashboard can fall back to the textarea adapter until this dedicated Monaco port item is completed.
+  - **Decision:** Phase 1 keeps the existing iframe adapter for Chromium/local builds and ships Firefox AMO builds with a deterministic textarea fallback. Direct Monaco packaging remains a Phase 4 polish path after a pruned bundle can satisfy AMO lint.
+  - **Shipped 2026-06-04:** `editor-sandbox.html` posts `monaco-load-error` when `lib/monaco/` is absent, and `monaco-adapter.js` immediately hides the iframe, preserves pending code, binds textarea input events, focuses the fallback, and reports `isMonaco: false`.
+  - **Current gate:** `build-firefox.sh` intentionally omits `lib/monaco/` because AMO's linter rejects the bundled TypeScript worker as too large to parse. The dashboard now falls back immediately to the textarea adapter in Firefox AMO builds.
 - [ ] **Build + temporary install test.**
   - `npm run firefox:lint` (builds a lintable `build-firefox/`, runs `web-ext lint`, and writes `firefox-artifacts/web-ext-lint.json`)
   - `npm run firefox:package` (builds, lints, writes `firefox-artifacts/scriptvault-firefox-v<version>.zip`, and writes `firefox-artifacts/scriptvault-firefox-source-v<version>.zip`)
@@ -108,7 +109,7 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 | # | Issue | File(s) | Blocker level |
 |---|-------|---------|----|
 | 1 | `chrome.offscreen` not in Firefox | `background.core.js`, `bg/analyzer.js`, `offscreen.html` / `.js` | **Mitigated** — offscreen calls are feature-detected; Firefox uses inline local Acorn/Diff fallbacks |
-| 2 | `manifest.sandbox.pages` not in Firefox | `manifest-firefox.json`, `pages/editor-sandbox.html` | **Mitigated** — Firefox manifest has no sandbox key; Monaco still needs a dedicated loading path |
+| 2 | `manifest.sandbox.pages` not in Firefox | `manifest-firefox.json`, `pages/editor-sandbox.html` | **Mitigated** — Firefox manifest has no sandbox key; AMO builds use immediate textarea fallback while direct Monaco packaging remains Phase 4 polish |
 | 3 | `chrome.sidePanel` not in Firefox | `pages/dashboard.js`, `pages/sidepanel.html` | **Mitigated** — Firefox no longer gets a fake sidePanel object; feature detects see the API as absent |
 | 4 | Per-script `worldId` is Chrome 133+ only | `background.core.js`, `src/background/registration.ts` | **Mitigated** — guarded behind Chromium 133+ detection |
 | 5 | Google / Dropbox / OneDrive PKCE redirect URI plus `identity` permission | `modules/sync-providers.js`, `modules/sync-easycloud.js`, `manifest-firefox.json` | Medium — deferred; WebDAV-only for validation gate |
@@ -159,6 +160,13 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - Closed the Phase 1 `chrome.sidePanel` checkbox. `FirefoxCompat.polyfill()` now preserves native side-panel APIs but leaves `chrome.sidePanel` undefined when unsupported instead of installing a no-op object.
 - Added `tests/dashboard-firefox-compat.test.js` to execute the compatibility layer in Firefox-like and Chromium-like VM contexts and pin both behaviors.
 - Focused verification: `npm test -- tests/dashboard-firefox-compat.test.js tests/firefox-package.test.js tests/manifest-generator.test.js`, `node --check tests/dashboard-firefox-compat.test.js pages/dashboard-firefox-compat.js`, and `node scripts/generate-manifest-firefox.mjs --profile firefox --check`.
+
+### 2026-06-04 — Monaco fallback path
+
+- Closed the Phase 1 Monaco loading-path checkbox with the minimal AMO-safe decision: keep Chromium/local builds on the existing Monaco iframe and keep Firefox packages Monaco-free until a pruned bundle can pass AMO lint.
+- `editor-sandbox.html` now posts `monaco-load-error` when the local Monaco loader is missing. `monaco-adapter.js` consumes that message and activates the textarea fallback immediately instead of waiting for the 15-second timeout.
+- The textarea fallback now preserves the cached value, binds `input` events back through the dashboard change listeners, supports focus, and reports `isMonaco: false`.
+- Focused verification: `npm test -- tests/monaco-firefox-fallback.test.js tests/search-corpus-history.test.js tests/firefox-package.test.js` and `node --check pages/monaco-adapter.js tests/monaco-firefox-fallback.test.js`.
 
 ---
 

@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Firefox Monaco fallback path
+
+- **Firefox AMO builds now fall back to an editable textarea immediately when
+  Monaco is omitted.** `editor-sandbox.html` reports missing local Monaco
+  bundles to the parent, and `monaco-adapter.js` hides the iframe without
+  waiting for the timeout.
+- **The fallback editor now preserves dashboard editing semantics.** Pending
+  code is copied into the textarea, textarea input fires the adapter change
+  listeners, focus works, and `isMonaco` reports `false` while the fallback is
+  active.
+
 ### 2026-06-04 — Firefox side-panel feature flag
 
 - **Firefox no longer receives a fake `chrome.sidePanel`.**
