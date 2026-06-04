@@ -81,7 +81,8 @@
   - Touches: `tests/source-cloud-sync.test.js`.
   - Acceptance: install A, delete A, sync (tombstone), wipe local, re-sync from remote → A is NOT resurrected.
   - Verification: `npm run check` (89 files / 1128 tests), `npm test -- tests/source-cloud-sync.test.js`, `npm run readme:check`.
-- [ ] **E-3** Implement or remove README "Browser Sync" provider claim *(folded into A-1)*
+- [x] **E-3** Implement or remove README "Browser Sync" provider claim *(folded into A-1; verified 2026-06-03)*
+  - Verification: `rg -n "Browser Sync|browser sync" README.md` returns no README hits; `npm run readme:check`.
 - [ ] **E-4** Generate `gm-api.d.ts` ambient declarations
   - Evidence: PASS2 NF-13.
   - Touches: `scripts/generate-gm-types.mjs`, `lib/scriptvault.d.ts`, `build.sh`.
@@ -158,5 +159,6 @@
 | 2026-06-03 | C | C-1 | feat: queue script updates for review |
 | 2026-06-03 | D | D-5 | feat: show trash auto-purge dates |
 | 2026-06-03 | E | E-2 | test: cover sync tombstone resurrection |
+| 2026-06-03 | E | E-3 | docs: close folded browser sync TODO |
 
 (Append a row each time work lands.)
