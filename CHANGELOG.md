@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Restore What's New for v3.x
+
+- **Added the v3.11.0 dashboard What's New entry.** First-run dashboard visits
+  after a v3.11.0 upgrade now have a real modal entry instead of silently
+  marking the version as seen.
+- **Made What's New freshness a checked contract.** `npm run whatsnew:check`
+  evaluates the dashboard module against `manifest.json.version` and now runs
+  inside `npm run check`.
+
 ### 2026-06-04 — Correct @crontab next-fire scheduling
 
 - **Replaced the hourly fallback with real next-fire scheduling.** `@crontab`
