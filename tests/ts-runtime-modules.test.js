@@ -63,6 +63,12 @@ describe('TS runtime module generator', () => {
         exportName: 'ScriptSubscriptions',
       }),
       expect.objectContaining({
+        id: 'sigstore-bundle-parser',
+        source: 'src/modules/sigstore-bundle-parser.ts',
+        output: 'modules/sigstore-bundle-parser.js',
+        exportName: 'SigstoreBundleParser',
+      }),
+      expect.objectContaining({
         id: 'public-api',
         source: 'src/modules/public-api.ts',
         output: 'modules/public-api.js',

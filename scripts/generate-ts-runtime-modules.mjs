@@ -63,6 +63,12 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'ScriptSubscriptions',
   },
   {
+    id: 'sigstore-bundle-parser',
+    source: 'src/modules/sigstore-bundle-parser.ts',
+    output: 'modules/sigstore-bundle-parser.js',
+    exportName: 'SigstoreBundleParser',
+  },
+  {
     id: 'public-api',
     source: 'src/modules/public-api.ts',
     output: 'modules/public-api.js',
