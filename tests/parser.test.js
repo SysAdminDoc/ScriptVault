@@ -2,6 +2,20 @@ import { describe, it, expect } from 'vitest';
 
 // Re-implement parseUserscript for testing (extracted from background.core.js)
 
+function parseAntifeatureDirective(value, locale = '') {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/^(\S+)(?:\s+([\s\S]*))?$/);
+  if (!match) return null;
+
+  return {
+    type: String(match[1] || '').toLowerCase(),
+    description: String(match[2] || '').trim(),
+    locale
+  };
+}
+
 function parseUserscript(code) {
   const metaBlockMatch = code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/);
   if (!metaBlockMatch) {
@@ -99,7 +113,6 @@ function parseUserscript(code) {
       case 'require-identity':
       case 'requireIdentity':
       case 'connect':
-      case 'antifeature':
       case 'tag':
       case 'compatible':
       case 'incompatible': {
@@ -127,6 +140,11 @@ function parseUserscript(code) {
             meta[arrayKey].push(value);
           }
         }
+        break;
+      }
+      case 'antifeature': {
+        const parsedAntifeature = parseAntifeatureDirective(value);
+        if (parsedAntifeature) meta.antifeature.push(parsedAntifeature);
         break;
       }
       case 'resource': {
@@ -174,9 +192,14 @@ function parseUserscript(code) {
           const locale = key.slice(colonIdx + 1);
           const POLLUTED = ['__proto__', 'constructor', 'prototype'];
           if (baseKey && locale && !POLLUTED.includes(baseKey) && !POLLUTED.includes(locale)) {
-            if (!meta.localized) meta.localized = Object.create(null);
-            if (!Object.hasOwn(meta.localized, locale)) meta.localized[locale] = Object.create(null);
-            meta.localized[locale][baseKey] = value;
+            if (baseKey === 'antifeature') {
+              const parsedAntifeature = parseAntifeatureDirective(value, locale);
+              if (parsedAntifeature) meta.antifeature.push(parsedAntifeature);
+            } else {
+              if (!meta.localized) meta.localized = Object.create(null);
+              if (!Object.hasOwn(meta.localized, locale)) meta.localized[locale] = Object.create(null);
+              meta.localized[locale][baseKey] = value;
+            }
           }
         }
     }

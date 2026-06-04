@@ -67,6 +67,55 @@ const OPTIONAL_GRANT_PERMISSION_MAP = {
   'GM.setClipboard': 'clipboardWrite',
 };
 
+const ANTIFEATURE_LABELS = Object.freeze({
+  ads: 'Contains advertising',
+  membership: 'Requires membership',
+  miner: 'Contains cryptocurrency miner',
+  payment: 'Requires payment',
+  'referral-link': 'Uses referral links',
+  tracking: 'Includes tracking'
+});
+
+function parseAntifeatureDirective(value, locale = '') {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/^(\S+)(?:\s+([\s\S]*))?$/);
+  if (!match) return null;
+
+  return {
+    type: String(match[1] || '').toLowerCase(),
+    description: String(match[2] || '').trim(),
+    locale
+  };
+}
+
+function normalizeAntifeatureEntry(entry) {
+  if (typeof entry === 'string') return parseAntifeatureDirective(entry);
+  if (!entry || typeof entry !== 'object') return null;
+
+  const type = typeof entry.type === 'string' ? entry.type.trim().toLowerCase() : '';
+  if (!type) return null;
+
+  return {
+    type,
+    description: typeof entry.description === 'string' ? entry.description.trim() : '',
+    locale: typeof entry.locale === 'string' ? entry.locale.trim() : ''
+  };
+}
+
+function getDeclaredAntifeatures(meta) {
+  if (!meta || !Array.isArray(meta.antifeature)) return [];
+  return meta.antifeature.map(normalizeAntifeatureEntry).filter(Boolean);
+}
+
+function formatAntifeatureLabel(entry) {
+  const label = ANTIFEATURE_LABELS[entry.type] || entry.type;
+  const description = entry.description ? ` - ${entry.description}` : '';
+  const locale = entry.locale ? ` [${entry.locale}]` : '';
+  return `${label}${description}${locale}`;
+}
+
 /**
  * Walk the script's declared grants and return the Chrome optional
  * permission tokens that should be requested at install time. Returns an
@@ -545,6 +594,10 @@ function parseMetadata(code) {
       meta.delay = Math.max(0, parseInt(val, 10) || 0);
     } else if (key === 'top-level-await') {
       meta['top-level-await'] = true;
+    } else if (key === 'antifeature' || key.startsWith('antifeature:')) {
+      const locale = key.startsWith('antifeature:') ? key.slice('antifeature:'.length) : '';
+      const parsedAntifeature = parseAntifeatureDirective(val, locale);
+      if (parsedAntifeature) meta.antifeature.push(parsedAntifeature);
     } else if (key === 'resource') {
       const resourceMatch = val.match(/^(\S+)\s+(.+)$/);
       if (resourceMatch && !['__proto__', 'constructor', 'prototype'].includes(resourceMatch[1])) {
@@ -1087,12 +1140,12 @@ function renderInstallUI(sourceUrl) {
       `This script mentions wallet, seed phrase, or other crypto-related terms AND was loaded from a source that is not a known userscript repository (Greasy Fork, OpenUserJS, GitHub). Active scam campaigns distribute wallet-draining scripts this way — verify the author before installing.`
     ));
   }
-  if (scriptMeta.antifeature.length > 0) {
-    const afLabels = { ads: 'Contains advertising', tracking: 'Includes tracking', miner: 'Contains cryptocurrency miner' };
+  const declaredAntifeatures = getDeclaredAntifeatures(scriptMeta);
+  if (declaredAntifeatures.length > 0) {
     alerts.push(buildInstallAlert(
       'is-warning',
       'Anti-Features Declared',
-      `<div class="install-alert-list">${scriptMeta.antifeature.map(af => `<div class="install-alert-list-item">• ${escapeHtml(afLabels[af] || af)}</div>`).join('')}</div>`
+      `<div class="install-alert-list">${declaredAntifeatures.map(af => `<div class="install-alert-list-item">• ${escapeHtml(formatAntifeatureLabel(af))}</div>`).join('')}</div>`
     ));
   }
   if (codeSize > 500000) {

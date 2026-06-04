@@ -408,7 +408,7 @@ that script in the dashboard editor.
 // @supportURL     https://github.com/user/repo/issues
 // @homepageURL    https://github.com/user/repo
 // @license        MIT
-// @antifeature    tracking
+// @antifeature    tracking Analytics beacon
 // @tag            productivity
 // @priority       10
 // @inject-into    auto

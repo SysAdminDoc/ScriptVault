@@ -103,6 +103,14 @@
         reset: 'Reset Selected',
         delete: 'Delete Selected'
     };
+    const ANTIFEATURE_LABELS = Object.freeze({
+        ads: 'Contains advertising',
+        membership: 'Requires membership',
+        miner: 'Contains cryptocurrency miner',
+        payment: 'Requires payment',
+        'referral-link': 'Uses referral links',
+        tracking: 'Includes tracking'
+    });
     const BACKUP_BROWSER_FILTER_LABELS = {
         all: 'all backups',
         vault: 'vault snapshots',
@@ -232,6 +240,46 @@
     function normalizeSyncProvider(settings = {}) {
         const provider = settings.syncProvider || settings.syncType || 'none';
         return provider === 'browser' ? 'none' : provider;
+    }
+
+    function parseAntifeatureDirective(value, locale = '') {
+        const trimmed = String(value || '').trim();
+        if (!trimmed) return null;
+
+        const match = trimmed.match(/^(\S+)(?:\s+([\s\S]*))?$/);
+        if (!match) return null;
+
+        return {
+            type: String(match[1] || '').toLowerCase(),
+            description: String(match[2] || '').trim(),
+            locale
+        };
+    }
+
+    function normalizeAntifeatureEntry(entry) {
+        if (typeof entry === 'string') return parseAntifeatureDirective(entry);
+        if (!entry || typeof entry !== 'object') return null;
+
+        const type = typeof entry.type === 'string' ? entry.type.trim().toLowerCase() : '';
+        if (!type) return null;
+
+        return {
+            type,
+            description: typeof entry.description === 'string' ? entry.description.trim() : '',
+            locale: typeof entry.locale === 'string' ? entry.locale.trim() : ''
+        };
+    }
+
+    function getDeclaredAntifeatures(meta) {
+        if (!meta || !Array.isArray(meta.antifeature)) return [];
+        return meta.antifeature.map(normalizeAntifeatureEntry).filter(Boolean);
+    }
+
+    function formatAntifeatureLabel(entry) {
+        const label = ANTIFEATURE_LABELS[entry.type] || entry.type;
+        const description = entry.description ? ` - ${entry.description}` : '';
+        const locale = entry.locale ? ` [${entry.locale}]` : '';
+        return `${label}${description}${locale}`;
     }
 
     function parseBrowserVersionFromUserAgent(browserName) {
@@ -6043,6 +6091,14 @@
         const esmBadgeHtml = isESMScript
           ? `<span class="script-health-badge esm" data-esm-badge="true" title="${escapeHtml(esmBadgeTitle)}">ESM</span>`
           : '';
+        const antifeatures = getDeclaredAntifeatures(metadata);
+        const antifeatureTitle = antifeatures.map(formatAntifeatureLabel).join('\n');
+        const antifeatureBadgeLabel = antifeatures.length === 1
+          ? (ANTIFEATURE_LABELS[antifeatures[0].type] || antifeatures[0].type)
+          : `${numberFormatter.format(antifeatures.length)} anti-features`;
+        const antifeatureBadgeHtml = antifeatures.length > 0
+          ? `<span class="script-health-badge antifeature" data-antifeature-badge="true" title="${escapeHtml(antifeatureTitle)}">${escapeHtml(antifeatureBadgeLabel)}</span>`
+          : '';
 
         // Health indicators
         const hasErrors = script.stats?.errors > 0;
@@ -6106,6 +6162,7 @@
                         <div class="script-name-badges">
                             ${sourceBadgeHtml}
                             ${sourceChangedHtml}
+                            ${antifeatureBadgeHtml}
                             ${esmBadgeHtml}
                             ${localEditsHtml}
                             ${errorHtml}

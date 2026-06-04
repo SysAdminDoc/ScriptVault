@@ -11684,10 +11684,20 @@ const PublicAPI = (() => {
     connect: "connect",
     tag: "tag",
     compatible: "compatible",
-    incompatible: "incompatible",
-    antifeature: "antifeature"
+    incompatible: "incompatible"
   };
   var BOOLEAN_META_KEYS = /* @__PURE__ */ new Set(["noframes", "unwrap", "top-level-await"]);
+  function parseAntifeatureDirective(value, locale = "") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const match = trimmed.match(/^(\S+)(?:\s+([\s\S]*))?$/);
+    if (!match?.[1]) return null;
+    return {
+      type: match[1].toLowerCase(),
+      description: (match[2] ?? "").trim(),
+      locale
+    };
+  }
   function appendMetaValue(meta, key, value) {
     const values = (key === "requireProvenance" || key === "requireIdentity") && value.includes(",") ? value.split(",").map((part) => part.trim()).filter(Boolean) : [value];
     const current = meta[key];
@@ -11696,6 +11706,22 @@ const PublicAPI = (() => {
     } else {
       meta[key] = values;
     }
+  }
+  function normalizeAntifeatureEntry(entry) {
+    if (typeof entry === "string") return parseAntifeatureDirective(entry);
+    if (!entry || typeof entry !== "object") return null;
+    const obj = entry;
+    const type = typeof obj.type === "string" ? obj.type.trim().toLowerCase() : "";
+    if (!type) return null;
+    return {
+      type,
+      description: typeof obj.description === "string" ? obj.description.trim() : "",
+      locale: typeof obj.locale === "string" ? obj.locale.trim() : ""
+    };
+  }
+  function asAntifeatureArray(value) {
+    if (!Array.isArray(value)) return [];
+    return value.map(normalizeAntifeatureEntry).filter((entry) => entry !== null);
   }
   var DEFAULT_PERMISSIONS = {
     ping: "allow",
@@ -11937,6 +11963,11 @@ const PublicAPI = (() => {
     }
     return asStringArray(meta[key] ?? existingMeta[key]);
   }
+  function getMetaAntifeatureArray(meta, existingMeta) {
+    const fromSource = asAntifeatureArray(meta.antifeature);
+    if (fromSource.length > 0) return fromSource;
+    return asAntifeatureArray(existingMeta.antifeature);
+  }
   function getMetaBoolean(meta, existingMeta, key) {
     const value = meta[key] ?? existingMeta[key];
     return value === true;
@@ -12053,7 +12084,7 @@ const PublicAPI = (() => {
         "top-level-await": getMetaBoolean(meta, existingMeta, "top-level-await"),
         webRequest: existingMeta.webRequest ?? null,
         priority: asNumber(existingMeta.priority) ?? 0,
-        antifeature: getMetaArray(meta, existingMeta, "antifeature"),
+        antifeature: getMetaAntifeatureArray(meta, existingMeta),
         tag: getMetaArray(meta, existingMeta, "tag"),
         compatible: getMetaArray(meta, existingMeta, "compatible"),
         incompatible: getMetaArray(meta, existingMeta, "incompatible")
@@ -12254,7 +12285,14 @@ const PublicAPI = (() => {
       if (!m?.[1]) continue;
       const key = m[1].trim();
       const val = (m[2] || "").trim();
-      if (BOOLEAN_META_KEYS.has(key)) {
+      if (key === "antifeature" || key.startsWith("antifeature:")) {
+        const locale = key.startsWith("antifeature:") ? key.slice("antifeature:".length) : "";
+        const parsedAntifeature = parseAntifeatureDirective(val, locale);
+        if (parsedAntifeature) {
+          meta.antifeature = meta.antifeature ?? [];
+          meta.antifeature.push(parsedAntifeature);
+        }
+      } else if (BOOLEAN_META_KEYS.has(key)) {
         meta[key] = true;
       } else if (ARRAY_META_KEYS[key]) {
         if (val) appendMetaValue(meta, ARRAY_META_KEYS[key], val);
@@ -16170,6 +16208,20 @@ self.SessionState = SessionState;
 // Userscript Parser
 // ============================================================================
 
+function parseAntifeatureDirective(value, locale = '') {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/^(\S+)(?:\s+([\s\S]*))?$/);
+  if (!match) return null;
+
+  return {
+    type: String(match[1] || '').toLowerCase(),
+    description: String(match[2] || '').trim(),
+    locale
+  };
+}
+
 /**
  * Parse a userscript's metadata block and extract all supported directives.
  * @param {string} code - The full userscript source code
@@ -16279,7 +16331,6 @@ function parseUserscript(code) {
       case 'require-identity':
       case 'requireIdentity':
       case 'connect':
-      case 'antifeature':
       case 'tag':
       case 'compatible':
       case 'incompatible':
@@ -16323,6 +16374,11 @@ function parseUserscript(code) {
           }
         }
         break;
+      case 'antifeature': {
+        const parsedAntifeature = parseAntifeatureDirective(value);
+        if (parsedAntifeature) meta.antifeature.push(parsedAntifeature);
+        break;
+      }
       case 'resource':
         const resourceMatch = value.match(/^(\S+)\s+(.+)$/);
         if (resourceMatch) {
@@ -16413,11 +16469,16 @@ function parseUserscript(code) {
           if (baseKey && locale
               && !POLLUTED.includes(baseKey)
               && !POLLUTED.includes(locale)) {
-            if (!meta.localized) meta.localized = Object.create(null);
-            if (!Object.hasOwn(meta.localized, locale)) {
-              meta.localized[locale] = Object.create(null);
+            if (baseKey === 'antifeature') {
+              const parsedAntifeature = parseAntifeatureDirective(value, locale);
+              if (parsedAntifeature) meta.antifeature.push(parsedAntifeature);
+            } else {
+              if (!meta.localized) meta.localized = Object.create(null);
+              if (!Object.hasOwn(meta.localized, locale)) {
+                meta.localized[locale] = Object.create(null);
+              }
+              meta.localized[locale][baseKey] = value;
             }
-            meta.localized[locale][baseKey] = value;
           }
         }
     }

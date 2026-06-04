@@ -201,6 +201,20 @@ self.SessionState = SessionState;
 // Userscript Parser
 // ============================================================================
 
+function parseAntifeatureDirective(value, locale = '') {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/^(\S+)(?:\s+([\s\S]*))?$/);
+  if (!match) return null;
+
+  return {
+    type: String(match[1] || '').toLowerCase(),
+    description: String(match[2] || '').trim(),
+    locale
+  };
+}
+
 /**
  * Parse a userscript's metadata block and extract all supported directives.
  * @param {string} code - The full userscript source code
@@ -310,7 +324,6 @@ function parseUserscript(code) {
       case 'require-identity':
       case 'requireIdentity':
       case 'connect':
-      case 'antifeature':
       case 'tag':
       case 'compatible':
       case 'incompatible':
@@ -354,6 +367,11 @@ function parseUserscript(code) {
           }
         }
         break;
+      case 'antifeature': {
+        const parsedAntifeature = parseAntifeatureDirective(value);
+        if (parsedAntifeature) meta.antifeature.push(parsedAntifeature);
+        break;
+      }
       case 'resource':
         const resourceMatch = value.match(/^(\S+)\s+(.+)$/);
         if (resourceMatch) {
@@ -444,11 +462,16 @@ function parseUserscript(code) {
           if (baseKey && locale
               && !POLLUTED.includes(baseKey)
               && !POLLUTED.includes(locale)) {
-            if (!meta.localized) meta.localized = Object.create(null);
-            if (!Object.hasOwn(meta.localized, locale)) {
-              meta.localized[locale] = Object.create(null);
+            if (baseKey === 'antifeature') {
+              const parsedAntifeature = parseAntifeatureDirective(value, locale);
+              if (parsedAntifeature) meta.antifeature.push(parsedAntifeature);
+            } else {
+              if (!meta.localized) meta.localized = Object.create(null);
+              if (!Object.hasOwn(meta.localized, locale)) {
+                meta.localized[locale] = Object.create(null);
+              }
+              meta.localized[locale][baseKey] = value;
             }
-            meta.localized[locale][baseKey] = value;
           }
         }
     }
