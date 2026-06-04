@@ -102,6 +102,7 @@ const StorageModule = (() => {
     injectIntoFrames: true,
     xhrTimeout: 3e4,
     allowInternalXhr: false,
+    allowInternalSyncEndpoints: false,
     blacklist: [],
     badgeInfo: "running",
     autoReload: false,

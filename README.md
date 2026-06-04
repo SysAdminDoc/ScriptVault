@@ -31,7 +31,7 @@
 See [ROADMAP.md](ROADMAP.md) for planned work.
 
 - [ROADMAP.md](ROADMAP.md) - single source of truth for planned work (active queue + research-driven additions + Round 14 history).
-- [RESEARCH_FEATURE_PLAN.md](RESEARCH_FEATURE_PLAN.md) - current comprehensive research-backed feature plan.
+- [RESEARCH_FEATURE_PLAN.md](RESEARCH_FEATURE_PLAN.md) - current comprehensive research-backed feature context; active checkboxes stay in ROADMAP.
 - [RESEARCH_REPORT.md](RESEARCH_REPORT.md) - research and planning map.
 - [COMPLETED.md](COMPLETED.md) - completed-work navigator.
 - [CHANGELOG.md](CHANGELOG.md) - shipped release ledger.

@@ -3,6 +3,11 @@
 // ============================================================================
 
 import type { Settings } from '../types/index';
+import {
+  classifyFetchUrl,
+  classifyResponseUrl,
+  type InternalHostCheckResult,
+} from '../background/internal-host-guard';
 
 declare const SettingsManager: {
   get(): Promise<Settings>;
@@ -74,6 +79,11 @@ interface SyncStorageDisclosureConfig {
   notes?: string;
 }
 
+interface SyncEndpointGuardOptions {
+  label: string;
+  allowInternalEndpoint?: boolean;
+}
+
 interface GoogleDriveFile {
   id: string;
   name: string;
@@ -84,6 +94,36 @@ function getRequiredWebDavBaseUrl(settings: Pick<Settings, 'webdavUrl'>): string
   const baseUrl = settings.webdavUrl?.trim();
   if (!baseUrl) throw new Error('WebDAV URL is required');
   return baseUrl.replace(/\/$/, '');
+}
+
+function allowsInternalSyncEndpoints(settings: Partial<Settings>): boolean {
+  return settings.allowInternalSyncEndpoints === true;
+}
+
+function syncEndpointMessage(prefix: string, result: InternalHostCheckResult): string {
+  return `${prefix}: ${result.message || 'rejected URL'}`;
+}
+
+function assertSyncEndpointAllowed(
+  url: string,
+  options: SyncEndpointGuardOptions,
+): void {
+  if (options.allowInternalEndpoint === true) return;
+  const preCheck = classifyFetchUrl(url, ['http:', 'https:']);
+  if (!preCheck.ok) {
+    throw new Error(syncEndpointMessage(`${options.label} URL rejected`, preCheck));
+  }
+}
+
+function assertSyncResponseAllowed(
+  response: Response,
+  options: SyncEndpointGuardOptions,
+): void {
+  if (options.allowInternalEndpoint === true) return;
+  const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+  if (!postCheck.ok) {
+    throw new Error(syncEndpointMessage(`${options.label} redirected to internal host`, postCheck));
+  }
 }
 
 function getWebDavAuthHeader(
@@ -166,11 +206,15 @@ async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
   timeoutMs = 30_000,
+  guardOptions: SyncEndpointGuardOptions = { label: 'Cloud sync endpoint' },
 ): Promise<Response> {
+  assertSyncEndpointAllowed(url, guardOptions);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    assertSyncResponseAllowed(response, guardOptions);
+    return response;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -202,6 +246,10 @@ const webdav = {
   async upload(data: unknown, settings: Settings): Promise<SyncUploadResult> {
     const url = `${getRequiredWebDavBaseUrl(settings)}/scriptvault-backup.json`;
     const auth = getWebDavAuthHeader(settings);
+    const guardOptions = {
+      label: 'WebDAV sync endpoint',
+      allowInternalEndpoint: allowsInternalSyncEndpoints(settings),
+    };
 
     const response = await fetchWithTimeout(url, {
       method: 'PUT',
@@ -210,7 +258,7 @@ const webdav = {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(data),
-    }, 60_000);
+    }, 60_000, guardOptions);
 
     if (!response.ok) throw new Error(`WebDAV upload failed: HTTP ${response.status}`);
     return { success: true, timestamp: Date.now() };
@@ -219,11 +267,15 @@ const webdav = {
   async download(settings: Settings): Promise<unknown | null> {
     const url = `${getRequiredWebDavBaseUrl(settings)}/scriptvault-backup.json`;
     const auth = getWebDavAuthHeader(settings);
+    const guardOptions = {
+      label: 'WebDAV sync endpoint',
+      allowInternalEndpoint: allowsInternalSyncEndpoints(settings),
+    };
 
     const response = await fetchWithTimeout(url, {
       method: 'GET',
       headers: { 'Authorization': auth },
-    }, 60_000);
+    }, 60_000, guardOptions);
 
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`WebDAV download failed: HTTP ${response.status}`);
@@ -235,11 +287,15 @@ const webdav = {
     try {
       const url = getRequiredWebDavBaseUrl(settings);
       const auth = getWebDavAuthHeader(settings);
+      const guardOptions = {
+        label: 'WebDAV sync endpoint',
+        allowInternalEndpoint: allowsInternalSyncEndpoints(settings),
+      };
 
       const response = await fetchWithTimeout(url, {
         method: 'PROPFIND',
         headers: { 'Authorization': auth, 'Depth': '0' },
-      }, 15_000);
+      }, 15_000, guardOptions);
 
       return { success: response.ok || response.status === 207 };
     } catch (e: unknown) {
@@ -1373,6 +1429,11 @@ const s3 = {
       throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(' ')}`);
     }
     const url = this._buildObjectUrl(settings, this._objectKey(settings));
+    const guardOptions = {
+      label: 'S3 sync endpoint',
+      allowInternalEndpoint: allowsInternalSyncEndpoints(settings),
+    };
+    assertSyncEndpointAllowed(url, guardOptions);
     const body = JSON.stringify(data);
     const signed = await this._signRequest({
       method: 'PUT',
@@ -1389,6 +1450,7 @@ const s3 = {
       body,
       signal: opts.signal,
     });
+    assertSyncResponseAllowed(response, guardOptions);
     if (!response.ok) {
       const text = await response.text().catch(() => '');
       throw new Error(`S3 upload failed: HTTP ${response.status}${text ? ` — ${text.slice(0, 200)}` : ''}`);
@@ -1405,6 +1467,11 @@ const s3 = {
       throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(' ')}`);
     }
     const url = this._buildObjectUrl(settings, this._objectKey(settings));
+    const guardOptions = {
+      label: 'S3 sync endpoint',
+      allowInternalEndpoint: allowsInternalSyncEndpoints(settings),
+    };
+    assertSyncEndpointAllowed(url, guardOptions);
     const signed = await this._signRequest({
       method: 'GET',
       url,
@@ -1417,6 +1484,7 @@ const s3 = {
       headers: signed.headers,
       signal: opts.signal,
     });
+    assertSyncResponseAllowed(response, guardOptions);
     if (response.status === 404) return null;
     if (!response.ok) {
       const text = await response.text().catch(() => '');
@@ -1432,6 +1500,11 @@ const s3 = {
     }
     try {
       const url = this._buildObjectUrl(settings, this._objectKey(settings));
+      const guardOptions = {
+        label: 'S3 sync endpoint',
+        allowInternalEndpoint: allowsInternalSyncEndpoints(settings),
+      };
+      assertSyncEndpointAllowed(url, guardOptions);
       const signed = await this._signRequest({
         method: 'HEAD',
         url,
@@ -1440,6 +1513,7 @@ const s3 = {
         secretKey: settings.s3SecretKey,
       });
       const response = await fetch(url, { method: 'HEAD', headers: signed.headers });
+      assertSyncResponseAllowed(response, guardOptions);
       if (response.ok || response.status === 404) return { success: true };
       return { success: false, error: `HTTP ${response.status}` };
     } catch (e: unknown) {

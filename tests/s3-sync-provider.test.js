@@ -147,6 +147,63 @@ describe('S3 provider — SigV4 signing', () => {
 });
 
 describe('S3 provider — upload/download round trip against a mock server', () => {
+  it('rejects internal-host endpoints before signing or fetching by default', async () => {
+    const fetchImpl = async () => {
+      throw new Error('should not fetch');
+    };
+    const { providers, fakeFetch } = loadProviders({ fetchImpl });
+
+    const internalEndpoints = [
+      'http://127.0.0.1:9000',
+      'http://169.254.169.254',
+      'http://192.168.1.20:9000',
+      'http://[fd12:3456:789a::1]:9000',
+    ];
+
+    for (const s3Endpoint of internalEndpoints) {
+      await expect(providers.s3.upload({ data: 1 }, validSettings({
+        s3Endpoint,
+        s3PathStyle: true,
+      }))).rejects.toThrow(/S3 sync endpoint URL rejected: internal host/);
+    }
+
+    expect(fakeFetch).not.toHaveBeenCalled();
+  });
+
+  it('allows internal-host endpoints only with explicit sync endpoint opt-in', async () => {
+    const calls = [];
+    const fetchImpl = async (url, init) => {
+      calls.push({ url, init });
+      return { ok: true, status: 200, url: '', json: async () => ({}), text: async () => '' };
+    };
+    const { providers, fakeFetch } = loadProviders({ fetchImpl });
+    const result = await providers.s3.upload({ data: 1 }, validSettings({
+      s3Endpoint: 'http://127.0.0.1:9000',
+      s3PathStyle: true,
+      allowInternalSyncEndpoints: true,
+    }));
+
+    expect(result.success).toBe(true);
+    expect(fakeFetch).toHaveBeenCalledTimes(1);
+    expect(calls[0].url).toBe('http://127.0.0.1:9000/scriptvault-backups/scriptvault-backup.json');
+  });
+
+  it('rejects S3 redirects into internal hosts before reading the body', async () => {
+    const jsonSpy = vi.fn(async () => ({ data: { scripts: [] } }));
+    const fetchImpl = async () => ({
+      ok: true,
+      status: 200,
+      url: 'http://169.254.169.254/latest/meta-data/',
+      json: jsonSpy,
+      text: async () => '',
+    });
+    const { providers } = loadProviders({ fetchImpl });
+
+    await expect(providers.s3.download(validSettings()))
+      .rejects.toThrow(/S3 sync endpoint redirected to internal host: internal host/);
+    expect(jsonSpy).not.toHaveBeenCalled();
+  });
+
   it('uploads via PUT with the signed Authorization header', async () => {
     const calls = [];
     const fetchImpl = async (url, init) => {

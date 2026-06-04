@@ -82,6 +82,7 @@ export interface Settings {
   injectIntoFrames: boolean;
   xhrTimeout: number;
   allowInternalXhr: boolean;
+  allowInternalSyncEndpoints: boolean;
 
   // Blacklist
   blacklist: string[];

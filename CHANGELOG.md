@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Sync endpoint internal-host guard
+
+- **Blocked WebDAV and S3 sync SSRF by default.** User-configured sync
+  endpoints now run internal-host preflight checks before request and final-URL
+  checks after fetch, before response bodies are read.
+- **Added an explicit local/private sync endpoint opt-in.** The advanced
+  `allowInternalSyncEndpoints` setting is available from Userscript Sync for
+  deliberate self-hosted WebDAV, Nextcloud, MinIO, or S3-compatible endpoints on
+  localhost, LAN, link-local, or private IPv6 networks.
+
 ### 2026-06-04 — Research feature plan refresh
 
 - **Added the current research-backed feature plan.** `RESEARCH_FEATURE_PLAN.md`

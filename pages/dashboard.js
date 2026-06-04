@@ -1490,6 +1490,7 @@
         // Settings - Userscript Sync
         elements.settingsEnableSync = document.getElementById('settingsEnableSync');
         elements.settingsSyncType = document.getElementById('settingsSyncType');
+        elements.settingsAllowInternalSyncEndpoints = document.getElementById('settingsAllowInternalSyncEndpoints');
         elements.firefoxSyncNote = document.getElementById('firefoxSyncNote');
         elements.lastSyncTime = document.getElementById('lastSyncTime');
         elements.syncWebdavSettings = document.getElementById('syncWebdavSettings');
@@ -2705,6 +2706,9 @@
         
         // Sync settings
         if (elements.settingsEnableSync) elements.settingsEnableSync.checked = normalizeSyncEnabled(s);
+        if (elements.settingsAllowInternalSyncEndpoints) {
+            elements.settingsAllowInternalSyncEndpoints.checked = s.allowInternalSyncEndpoints === true;
+        }
         const runtimeSyncProvider = coerceSyncProviderForRuntime(normalizeSyncProvider(s));
         if (elements.settingsSyncType) {
             elements.settingsSyncType.value = runtimeSyncProvider;
@@ -9736,6 +9740,7 @@
             
             // Sync
             settingsEnableSync: ['syncEnabled', 'checked'],
+            settingsAllowInternalSyncEndpoints: ['allowInternalSyncEndpoints', 'checked'],
             
             // Editor
             settingsEnableEditor: ['enableEditor', 'checked'],
@@ -9856,6 +9861,7 @@
                 }
                 await saveSettingOrThrow('syncEnabled', !!elements.settingsEnableSync?.checked);
                 await saveSettingOrThrow('syncProvider', provider);
+                await saveSettingOrThrow('allowInternalSyncEndpoints', !!elements.settingsAllowInternalSyncEndpoints?.checked);
                 if (provider === 'webdav') {
                     await saveSettingOrThrow('webdavUrl', elements.settingsWebdavUrl?.value.trim() || '');
                     await saveSettingOrThrow('webdavUsername', elements.settingsWebdavUsername?.value.trim() || '');

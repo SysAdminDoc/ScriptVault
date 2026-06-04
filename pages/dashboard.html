@@ -6227,6 +6227,10 @@
                     <div class="setting-row" id="firefoxSyncNote" hidden>
                         <span class="utility-inline-status">Firefox build currently supports WebDAV sync only.</span>
                     </div>
+                    <div class="setting-row">
+                        <label><input type="checkbox" id="settingsAllowInternalSyncEndpoints"> Allow local/private sync endpoints</label>
+                        <span class="help-icon" title="Advanced: permits WebDAV/S3 sync to localhost, LAN, link-local, or private IPv6 endpoints. Leave off unless you operate the server.">!</span>
+                    </div>
 
                     <!-- S3-compatible Settings (hidden by default) -->
                     <div id="syncS3Settings" class="sync-provider-settings" style="display:none; margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 4px;">

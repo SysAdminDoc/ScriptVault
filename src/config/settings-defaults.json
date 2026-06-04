@@ -55,6 +55,7 @@
   "injectIntoFrames": true,
   "xhrTimeout": 30000,
   "allowInternalXhr": false,
+  "allowInternalSyncEndpoints": false,
   "blacklist": [],
   "badgeInfo": "running",
   "autoReload": false,

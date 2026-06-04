@@ -698,7 +698,11 @@ Release architecture:
 
 ## Prioritized Roadmap
 
-- [ ] **P1 - Apply internal-host guard to sync provider endpoints**
+The active checkbox queue lives only in `ROADMAP.md`. The entries below are a
+non-authoritative research snapshot kept for context; update completion state in
+`ROADMAP.md`.
+
+- **P1 - Apply internal-host guard to sync provider endpoints**
   - Priority: P1.
   - Why: WebDAV/S3 sync URLs are user-controlled network egress and can target
     internal/private hosts or redirect there.
@@ -711,7 +715,7 @@ Release architecture:
   - Verify: provider unit tests plus WebDAV/S3 redirect fixtures and a public
     endpoint regression test.
 
-- [ ] **P1 - Redact credential-bearing settings from exports and backups**
+- **P1 - Redact credential-bearing settings from exports and backups**
   - Priority: P1.
   - Why: current settings export/backup can include provider secrets and tokens.
   - Evidence: `src/types/settings.ts`, `src/background/core.ts`,
@@ -722,7 +726,7 @@ Release architecture:
     credential fields; credential-inclusive archives are explicitly marked.
   - Verify: fixture tests inspect archive JSON and restore behavior.
 
-- [ ] **P1 - Bound backup ZIP/JSON intake before decompression and parse**
+- **P1 - Bound backup ZIP/JSON intake before decompression and parse**
   - Priority: P1.
   - Why: untrusted backup data can currently be decompressed and parsed before
     shared caps are enforced.
@@ -733,7 +737,7 @@ Release architecture:
     nested archive, and script-code limits are enforced.
   - Verify: malicious archive fixtures and valid backup regression fixtures.
 
-- [ ] **P1 - Partition sync-safe and device-local per-script settings**
+- **P1 - Partition sync-safe and device-local per-script settings**
   - Priority: P1.
   - Why: open-ended script settings currently roam wholesale through sync.
   - Evidence: `src/types/script.ts` and cloud-sync serialization paths;
@@ -745,7 +749,7 @@ Release architecture:
   - Verify: upload/download merge tests with local-only, conflict, and unknown
     keys.
 
-- [ ] **P1 - Add coverage inclusion and threshold gate**
+- **P1 - Add coverage inclusion and threshold gate**
   - Priority: P1.
   - Why: CI can pass without measuring many important files.
   - Evidence: `vitest.config.mjs` has `all:false` and no threshold.
@@ -755,7 +759,7 @@ Release architecture:
   - Verify: `npm run check` or focused coverage script in CI with failure on
     reduced coverage.
 
-- [ ] **P1 - Automate dependency freshness**
+- **P1 - Automate dependency freshness**
   - Priority: P1.
   - Why: manual updates are reactive and dependency drift remains.
   - Evidence: `npm outdated --json`; previous `web-ext`/`tmp` advisory path;
@@ -765,7 +769,7 @@ Release architecture:
     grouping.
   - Verify: config validation and first update PR behavior.
 
-- [ ] **P1 - Pin GitHub Actions to full-length SHAs**
+- **P1 - Pin GitHub Actions to full-length SHAs**
   - Priority: P1.
   - Why: release-trust workflows currently use mutable tags.
   - Evidence: `.github/workflows/ci.yml`; GitHub secure-use reference.
@@ -774,7 +778,7 @@ Release architecture:
     is documented.
   - Verify: static workflow check rejects tag-only action refs.
 
-- [ ] **P1 - Add optional client-side E2E encryption for cloud sync**
+- **P1 - Add optional client-side E2E encryption for cloud sync**
   - Priority: P1.
   - Why: provider-hosted sync should not require provider trust.
   - Evidence: current sync providers and privacy posture in docs.
@@ -783,7 +787,7 @@ Release architecture:
     wrong-key states.
   - Verify: encrypted/plain migration, wrong-key, rotation, and provider tests.
 
-- [ ] **P1 - Add per-script host scope for GM network/cookie/DNR primitives**
+- **P1 - Add per-script host scope for GM network/cookie/DNR primitives**
   - Priority: P1.
   - Why: extension host permissions are broad while script trust is per-script.
   - Evidence: manifest host permissions, GM_xhr/internal-host work,
@@ -794,7 +798,7 @@ Release architecture:
   - Verify: install/update/runtime tests for broad, narrow, revoked, and
     redirected hosts.
 
-- [ ] **P1 - Triage unreachable and duplicated dashboard modules**
+- **P1 - Triage unreachable and duplicated dashboard modules**
   - Priority: P1.
   - Why: tested-but-unmounted modules create false confidence and maintenance
     drag.
@@ -804,7 +808,7 @@ Release architecture:
     removed.
   - Verify: static route inventory and browser navigation smoke.
 
-- [ ] **P1 - Correct crontab next-fire engine**
+- **P1 - Correct crontab next-fire engine**
   - Priority: P1.
   - Why: simplified parsing can schedule incorrectly and hide errors.
   - Evidence: roadmap item and current parser behavior in background code.
@@ -813,7 +817,7 @@ Release architecture:
     unsupported expressions fail clearly.
   - Verify: table-driven parser tests across edge cases.
 
-- [ ] **P1 - Fix stale What's New behavior for v3.x users**
+- **P1 - Fix stale What's New behavior for v3.x users**
   - Priority: P1.
   - Why: release communication is part of trust and upgrade safety.
   - Evidence: existing research and roadmap item.
@@ -822,7 +826,7 @@ Release architecture:
     them from help/settings.
   - Verify: simulated upgrade tests for old and current versions.
 
-- [ ] **P1 - Add script-author configuration UI**
+- **P1 - Add script-author configuration UI**
   - Priority: P1.
   - Why: userscript authors and users expect first-class runtime options.
   - Evidence: ScriptCat runtime options and Tampermonkey-style ecosystem
@@ -833,7 +837,7 @@ Release architecture:
     expose to script runtime.
   - Verify: metadata fixture tests and dashboard interaction tests.
 
-- [ ] **P1 - Parse and display structured antifeatures**
+- **P1 - Parse and display structured antifeatures**
   - Priority: P1.
   - Why: antifeature metadata is high-signal trust information at install time.
   - Evidence: roadmap item and userscript metadata ecosystem.
@@ -842,7 +846,7 @@ Release architecture:
   - Acceptance: known and unknown antifeatures are preserved and visible.
   - Verify: install/update/dashboard tests with multiple antifeatures.
 
-- [ ] **P2 - Add Firefox Android smoke or remove Android compatibility claim**
+- **P2 - Add Firefox Android smoke or remove Android compatibility claim**
   - Priority: P2.
   - Why: manifest/docs claim Android compatibility without device smoke.
   - Evidence: `manifest-firefox.json`, `FIREFOX-PORT.md`, README support
@@ -852,7 +856,7 @@ Release architecture:
     explicitly deferred.
   - Verify: ADB/web-ext smoke output or docs/package diff removing the claim.
 
-- [ ] **P2 - Add reviewer-reproducible provenance for packaged minified libraries**
+- **P2 - Add reviewer-reproducible provenance for packaged minified libraries**
   - Priority: P2.
   - Why: AMO source review needs exact source and provenance for packaged
     minified third-party files.
@@ -863,7 +867,7 @@ Release architecture:
     packaged hash, and reviewer instructions.
   - Verify: store-copy/source-review gate fails on hash drift.
 
-- [ ] **P2 - Add optional-dependency reach check for audit exemption**
+- **P2 - Add optional-dependency reach check for audit exemption**
   - Priority: P2.
   - Why: `--omit=optional` is safe only if optional dependencies do not ship.
   - Evidence: dependency audit policy and CI audit command.
@@ -872,7 +876,7 @@ Release architecture:
     without a failing gate or explicit policy update.
   - Verify: package-content fixture and CI check.
 
-- [ ] **P2 - Improve help consistency and plain-language copy**
+- **P2 - Improve help consistency and plain-language copy**
   - Priority: P2.
   - Why: README documents commands/omnibox, but in-app help and roadmap wording
     need reconciliation.
@@ -882,7 +886,7 @@ Release architecture:
     are plain-language.
   - Verify: static link check and plain-language report.
 
-- [ ] **P2 - Consolidate settings defaults and validation**
+- **P2 - Consolidate settings defaults and validation**
   - Priority: P2.
   - Why: safety-critical settings are scattered across UI and runtime logic.
   - Evidence: `src/types/settings.ts`, roadmap settings audit item.
@@ -891,7 +895,7 @@ Release architecture:
     export/sync/credential classifications.
   - Verify: generated settings table and validation tests.
 
-- [ ] **P3 - Add package manager and Node version contributor anchors**
+- **P3 - Add package manager and Node version contributor anchors**
   - Priority: P3.
   - Why: package engines define a lower bound but contributor shells need exact
     install guidance.
