@@ -64,6 +64,25 @@ imports. External anchors: OWASP File Upload guidance
 and MITRE CWE-409
 (`https://cwe.mitre.org/data/definitions/409.html`).
 
+2026-06-04 Cycle 6 Firefox Android smoke refresh: the desktop Firefox package
+and sideload smoke now have strong coverage, but `manifest-firefox.json` also
+declares `gecko_android.strict_min_version: 142.0` and the generated support
+matrix lists Firefox for Android as a manifest validation target while explicitly
+stating no Android device smoke exists. `ROADMAP.md` now promotes a P2
+hardware-gated item to either add an ADB/web-ext Firefox Android smoke for the
+critical userscript, permission, UI, WebDAV, and import paths, or remove/defer
+the Android compatibility claim before AMO listing. External anchors: Mozilla's
+Android compatibility/listing guidance
+(`https://extensionworkshop.com/documentation/publish/version-compatibility/`),
+Firefox-for-Android extension development checklist and MV3 caveats
+(`https://extensionworkshop.com/documentation/develop/developing-extensions-for-firefox-for-android/`),
+web-ext Android run workflow
+(`https://extensionworkshop.com/documentation/develop/getting-started-with-web-ext/`),
+Firefox `userScripts` optional-permission docs
+(`https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts`),
+and Android desktop-difference guidance
+(`https://extensionworkshop.com/documentation/develop/differences-between-desktop-and-android-extensions/`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
@@ -93,9 +112,10 @@ Top opportunities (one line each):
 6. **[Verified] User-configured sync endpoints lack the internal-host guard** — WebDAV/S3 provider URLs are arbitrary settings and should share the same internal/private-host policy now used by GM_xhr and script-resource fetches, with explicit local endpoint opt-in. (P1)
 7. **[Verified] Backup/export settings can include sync credentials** — JSON exports and ZIP/scheduled backups serialize global settings wholesale while provider settings hold OAuth tokens, WebDAV passwords, and S3 access keys; redact by default and require a separate credential-export opt-in. (P1)
 8. **[Verified] Backup ZIP/JSON intake is not resource-bounded** — import/inspect/verify/restore use synchronous full ZIP decompression and JSON imports bypass the install path's per-script code cap; add archive and entry limits before parse/write. (P1)
-9. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
-10. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
-11. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
+9. **[Verified] Firefox for Android is claimed but not smoke-tested** — the Firefox manifest declares `gecko_android` and docs list Android as a validation target, while the repo explicitly says no Android device smoke exists; add an ADB/web-ext smoke or remove the Android claim before AMO listing. (P2)
+10. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
+11. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
+12. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
 
 ## Evidence Reviewed
 
@@ -108,6 +128,7 @@ Top opportunities (one line each):
 - **Sync endpoint egress**: WebDAV `test`/`upload`/`download` and S3 `test`/`upload`/`download` build URLs from `webdavUrl`/`s3Endpoint` and call `fetch`/`fetchWithTimeout`; existing `InternalHostGuard` pre/post checks are present in script-source, `@require`, provenance, GM_loadScript, and GM_xhr paths but not these provider endpoints.
 - **Backup/export settings**: `exportAllScripts()` reads `SettingsManager.get()` into export data; `BackupScheduler.createBackup()` writes `global-settings.json` from `SettingsManager.get()`; backup restore and import paths call `SettingsManager.set(...)`; dashboard copy exposes an "Include ScriptVault settings" checkbox and says cloud backups can restore settings when enabled, but credential-bearing settings are not split from ordinary preferences.
 - **Backup archive intake**: `importFromZip`, `BackupScheduler.importBackup`, `BackupScheduler.inspectBackup`, `BackupScheduler.verifyBackup`, and restore paths call `fflate.unzipSync(...)` on decoded archive bytes; code then converts `.user.js`, options, storage, settings, folders, and workspace entries with `strFromU8`/`JSON.parse`. Existing tests cover identity, selective restore, and metadata preservation, but not decompression amplification, file-count limits, oversized per-entry JSON, nested archives, or the install path's 5 MB code cap on backup imports.
+- **Firefox Android target**: `manifest-firefox.json` declares `gecko_android.strict_min_version: 142.0`; `FIREFOX-PORT.md`, `README.md`, `docs/cross-browser-pipeline.md`, and `scripts/generate-browser-support-matrix.mjs` state Android is only a manifest validation target and that no Android device smoke is wired; `scripts/smoke-firefox-sideload.mjs` targets desktop Firefox/geckodriver only.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -115,6 +136,7 @@ Top opportunities (one line each):
   - OWASP SSRF Prevention, AWS IMDS, and Chrome extension network-request docs anchor the sync-endpoint egress guard: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html, https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html, https://developer.chrome.com/docs/extensions/develop/concepts/network-requests
   - OWASP Secrets Management, Google OAuth token storage best practices, and AWS IAM access-key guidance anchor the backup/export credential redaction item: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html, https://developers.google.com/identity/protocols/oauth2/resources/best-practices, https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
   - OWASP File Upload guidance and MITRE CWE-409 anchor the backup ZIP/JSON intake bounds item: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html and https://cwe.mitre.org/data/definitions/409.html
+  - Mozilla Android compatibility/listing guidance, Firefox-for-Android development checklist/MV3 caveats, web-ext Android run workflow, Firefox `userScripts` optional-permission docs, and Android desktop-difference guidance anchor the Firefox Android smoke item: https://extensionworkshop.com/documentation/publish/version-compatibility/, https://extensionworkshop.com/documentation/develop/developing-extensions-for-firefox-for-android/, https://extensionworkshop.com/documentation/develop/getting-started-with-web-ext/, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts, https://extensionworkshop.com/documentation/develop/differences-between-desktop-and-android-extensions/
   - Userscript-manager landscape (Tampermonkey / Violentmonkey / ScriptCat sync, MV3, GitHub-Gist sync, granular execution control): comparison sources at extensionfixes.com and addons.mozilla.org Violentmonkey listing.
 - **Unverifiable here** [Needs validation]: live MV3 runtime behavior (cross-tab GM listener fan-out, omnibox UX, settings round-trips) — no browser run performed this pass; all runtime claims are static-read [Verified] or [Likely].
 
@@ -152,6 +174,7 @@ Top opportunities (one line each):
 | `sv` omnibox search | address bar `sv ` | `background.core.js:5682` | shipped | code only — **undocumented** |
 | Keyboard commands | `Alt+Shift+S/D/E` | `manifest.json` commands | shipped | **undocumented**, no rebind note |
 | CI audit gate | CI | `ci.yml` `npm audit --audit-level=high` | shipped | clean after `web-ext@^10.3.0` |
+| Firefox Android compatibility claim | AMO / Android listing via `gecko_android` | `manifest-firefox.json`, generated support matrix | declared, unverified | no ADB/device smoke; desktop `npm run smoke:firefox` only |
 | Coverage report | `npm run test:cov` | `vitest.config.mjs` | shipped | `all:false`, **no threshold** |
 | Dependency audit policy | manual | `docs/dependency-audit-policy.md` | doc only | **no bot automation** |
 | Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | actions **tag-pinned, not SHA** |
@@ -173,7 +196,7 @@ Top opportunities (one line each):
 - **Major** — `--omit=optional` audit exemption is unguarded against shipped optional deps. → ROADMAP P2 reach check. [Likely]
 - **Major** — No consolidated/validated Settings surface for operator knobs. → ROADMAP P2 settings audit. [Likely]
 - **Minor** — `sv` omnibox + keyboard commands undocumented. → ROADMAP P3 doc items. [Verified]
-- **Cosmetic** — No `packageManager`/`.nvmrc` companion to the planned `engines.node`. → ROADMAP P3. [Verified]
+- **Cosmetic** — `engines.node` now exists at `>=21.2.0`, but there is still no `packageManager`/`.nvmrc` companion for contributor shell/tooling alignment. → ROADMAP P3. [Verified]
 
 ## Architecture & Technical Findings
 
@@ -202,7 +225,6 @@ Top opportunities (one line each):
 
 ## Open Questions (genuine blockers only)
 
-- Does I-3 (`engines.node`) land independently? If so, the P3 `packageManager`/`.nvmrc` item should be merged into it rather than committed separately. [Needs validation]
 - Does any optional/peerOptional dep currently reach shipped `src/**`/`modules/**` code? The P2 reach-check assumes "no" today; this must be confirmed by the new script before relying on the `--omit=optional` exemption. [Needs validation]
 
 ## Maintenance Rule

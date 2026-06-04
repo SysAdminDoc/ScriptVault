@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier promotions, `ts-source:check` reports 25 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 5 - 2026-06-04.
+> Last researched: Cycle 6 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -154,7 +154,8 @@ priority section below.
   - Source: docs/archive/TODO.md I-1 (PASS2 Architecture #8).
 - [ ] P3 — Expand `docs/readme-feature-claim-checklist.md` rows for ESM bundler, trust receipts, install-source badges, internal-host guard, sync cockpit, virtualized dashboard
   - Source: docs/archive/TODO.md I-2 (PASS2 quick-win 13).
-- [ ] P3 — Add `"engines": {"node": ">=20"}` to `package.json`
+- [x] P3 — Add `"engines": {"node": ">=20"}` to `package.json`
+  - Progress: 2026-06-04 shipped by `a9cb4ab`; `package.json` now declares `"engines": {"node": ">=21.2.0"}` to match the current `import.meta.dirname` requirement.
   - Source: docs/archive/TODO.md I-3 (PASS2 quick-win 14).
 
 ---
@@ -212,6 +213,28 @@ Priorities/sizes preserve the source labels.
   the fflate Zip64 dependency bump: the gap is intake-side resource bounding
   before full archive materialization and before oversized script/settings/value
   entries are converted to strings or written.
+
+### Researcher Queue (Cycle 6 - 2026-06-04)
+
+- [x] 🔬 `firefox-android-smoke-2026-06-04` - rechecked the Firefox validation
+  target after the desktop sideload smoke and AMO source-review prep. The repo
+  now declares `gecko_android.strict_min_version: 142.0` and generated docs list
+  Firefox for Android as a manifest validation target, but the same docs state
+  no Android device smoke exists yet. Mozilla's Android extension guidance says
+  API, UI, critical-path, offline, and device-size behavior should be tested on
+  Android before making an extension available there, and its MV3 notes call out
+  mobile-specific host-permission and feature-parity gaps. The promoted row
+  below is not a duplicate of the desktop `npm run smoke:firefox` gate.
+
+### Firefox and mobile release quality
+
+- [ ] 🤖 🔧 🔬 P2 — Add a Firefox for Android smoke gate or remove the Android compatibility claim before AMO listing
+  - Why: `manifest-firefox.json` declares `browser_specific_settings.gecko_android.strict_min_version: "142.0"`, which signals Android compatibility to AMO, while `FIREFOX-PORT.md` and the generated support matrix explicitly say Android UI/runtime smoke is not yet wired. An unverified Android claim can expose users to broken extension-action overlay, optional `userScripts` permission, host-permission, DNR, WebDAV, import/export, and fixed-width popup flows on a mobile runtime that differs from desktop Firefox.
+  - Evidence: `manifest-firefox.json:22-23`; `FIREFOX-PORT.md:7-8`; `scripts/generate-browser-support-matrix.mjs:60-71`; `README.md:313-314`; Mozilla Android compatibility listing guidance (`https://extensionworkshop.com/documentation/publish/version-compatibility/`); Mozilla Firefox-for-Android development checklist and MV3 caveats (`https://extensionworkshop.com/documentation/develop/developing-extensions-for-firefox-for-android/`); `web-ext run --target=firefox-android` workflow (`https://extensionworkshop.com/documentation/develop/getting-started-with-web-ext/`); Firefox `userScripts` optional-permission requirement (`https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts`); Android UI/API differences (`https://extensionworkshop.com/documentation/develop/differences-between-desktop-and-android-extensions/`).
+  - Touches: new `scripts/smoke-firefox-android.mjs` or documented manual harness, `package.json` script wiring, `tests/firefox-package.test.js`, `manifest-firefox.json` if Android is deferred, `scripts/generate-browser-support-matrix.mjs`, `README.md`, `docs/cross-browser-pipeline.md`, `FIREFOX-PORT.md`.
+  - Acceptance: either (A) an ADB/emulator-gated smoke can run against `org.mozilla.firefox`, `org.mozilla.firefox_beta`, or `org.mozilla.fenix` with `web-ext run --target=firefox-android`, temporarily loads the Firefox package, grants/handles `userScripts`, opens the extension action/dashboard path, saves/toggles/runs a smoke userscript on a local target page, checks no horizontal overflow in the action overlay, validates WebDAV-only provider copy, imports a small JSON backup, and records logcat manifest/runtime errors; or (B) the build removes/deactivates `gecko_android` and all Android support-matrix claims until that evidence exists.
+  - Verify: `npm run firefox:android:smoke` with `ANDROID_SERIAL`/`FIREFOX_APK` or an equivalent manual checklist recorded in `FIREFOX-PORT.md`; `npm run support:matrix:check`; `npm test -- tests/firefox-package.test.js`.
+  - Complexity: M
 
 ### Security and data safety
 
@@ -325,11 +348,11 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
 
 #### Quick Wins (P2/P3, <1hr)
 
-- [ ] P3 — Add `"engines": {"node": ">=20"}` companion: `packageManager` field + `.nvmrc`
-  - Why: CI pins Node 20 (`setup-node@v4`, `node-version: 20`) but the repo declares no Node floor for contributors; I-3 covers `engines.node` — this is the matching `packageManager`/`.nvmrc` so local installs and CI agree. Skip if I-3 already lands `engines`.
+- [ ] P3 — Add `packageManager` field + `.nvmrc` matching the Node 21.2.0 floor
+  - Why: `a9cb4ab` shipped `engines.node >=21.2.0`, but the repo still has no package-manager pin or shell-friendly Node version file. Add the matching `packageManager`/`.nvmrc` so local installs and CI-style verification do not drift from the documented runtime floor.
   - Touches: `package.json` (`packageManager`), new `.nvmrc`.
-  - Acceptance: `corepack`/`nvm use` resolve the same Node/npm CI uses.
-  - Verify: `node -v` matches `.nvmrc`; `npm run check` still green.
+  - Acceptance: `corepack`/`nvm use` resolve the documented Node/npm floor; contributors on older Node get a clear local signal before running build scripts.
+  - Verify: `node -v` satisfies `.nvmrc`; package-manager metadata parses; `npm run check` still green.
   - Complexity: S
 - [ ] P3 — Document the `sv` omnibox keyword in README/help
   - Why: `background.core.js:5682` registers `chrome.omnibox` (`sv ` address-bar search over scripts) but it is undocumented; users can't discover it. `readme:check` will not flag a missing feature claim, only an unsupported one.
