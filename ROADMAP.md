@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier promotions, `ts-source:check` reports 25 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 7 - 2026-06-04.
+> Last researched: Cycle 9 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -142,7 +142,10 @@ priority section below.
   - Progress: 2026-06-04 added the shared Help controls to popup footer, side-panel header, install header, and dashboard header metadata; dashboard already owned the `#tab=help` route and now has an explicit `data-help` contract.
   - Verification: `node --check pages\popup.js`; `node --check pages\sidepanel.js`; `node --check pages\install.js`; `npm test -- tests/accessibility-surface-pass.test.js tests/dashboard-a11y.test.js tests/popup-a11y.test.js -- --pool=vmThreads --maxWorkers=1`.
   - Source: docs/archive/TODO.md H-1 (`docs/wcag3-gap-analysis.md`).
-- [ ] P2 — Plain-language audit (Flesch ≥ 60) per Phase 34.6
+- [x] P2 — Plain-language audit (Flesch ≥ 60) per Phase 34.6
+  - Acceptance: setup/install/trust copy is audited at Flesch Reading Ease >= 60; the gate reports offending strings with IDs and source files; CI and local checks run the gate.
+  - Progress: 2026-06-04 added `scripts/check-readability.mjs`, wired `npm run readability:check`, `npm run test:a11y`, `npm run check`, and CI, and rewrote dense setup/install/trust copy into shorter plain-language sentences.
+  - Verification: `node --check scripts\check-readability.mjs`; `node --check pages\install.js`; `node scripts\check-readability.mjs --report`; `npm run readability:check`; `npm run test:a11y`; `npm run check`; `git diff --check`; rendered loopback Playwright check for dashboard/popup/install warning and header copy after the in-app Browser attach timed out twice.
   - Source: docs/archive/TODO.md H-2 (`docs/wcag3-gap-analysis.md`).
 
 ### Documentation hygiene
@@ -243,6 +246,20 @@ Priorities/sizes preserve the source labels.
   provenance. The promoted row below is not a duplicate of AMO account/upload
   work; it is a source-review quality gate to complete before upload.
 
+### Researcher Queue (Cycle 9 - 2026-06-04)
+
+- [x] 🔬 `cws-remote-code-review-packet-2026-06-04` - rechecked current
+  Chrome Web Store remote-hosted-code policy against ScriptVault's store copy,
+  privacy policy, and package gates. The privacy policy explains that ScriptVault
+  executes externally sourced userscripts and the manifest correctly uses
+  `userScripts` plus a sandboxed editor page, but the active reviewer gate only
+  checks manifest permission/privacy coverage. It does not produce a CWS
+  remote-code compliance memo or scan the packaged Chrome artifact for
+  policy-sensitive remote execution outside the `chrome.userScripts` and
+  sandboxed-page exceptions. The promoted row below is not a duplicate of
+  per-script SRI, provenance, or host-scope controls; it is a release-review
+  packet and guardrail for CWS submissions.
+
 ### Firefox and mobile release quality
 
 - [x] 🤖 🔧 🔬 P2 — Add a Firefox for Android smoke gate or remove the Android compatibility claim before AMO listing
@@ -265,6 +282,16 @@ Priorities/sizes preserve the source labels.
   - Verify: `npm run firefox:package`; `npm test -- tests/firefox-package.test.js`; new provenance check; compare source-review ZIP contents against the inventory.
   - Progress: 2026-06-04 added exact npm dev pins for `acorn@8.16.0` and `diff@9.0.0`, regenerated `lib/acorn.min.js` from the official npm Acorn source with esbuild, copied `lib/diff.min.js` from the official npm jsdiff package, and added `docs/amo-vendored-libraries.md` with package URLs, tarball integrity, source hashes, packaged hashes, licenses, and source-map status.
   - Verification: `npm run vendored:provenance`; `npm run vendored:provenance:check`; `npm test -- tests/firefox-package.test.js tests/vendored-library-provenance.test.js tests/esm-bundler.test.js tests/esm-csp.test.js tests/source-modules.test.js`; `npm run store-copy:check`; `npm run readme:check`.
+  - Complexity: M
+
+### Chrome Web Store review quality
+
+- [ ] 🤖 🔬 P1 — Add a CWS remote-hosted-code compliance packet and package scan
+  - Why: Chrome Web Store MV3 policy requires extension logic to be discernible from submitted code, forbids fetched/external logic except through documented APIs such as User Scripts, and notes that the exemption applies only to code covered by those APIs. ScriptVault's purpose depends on user-installed script bodies, remote `@require`/npm CDN dependencies, and sandboxed editor tooling, so reviewer evidence must clearly separate allowed user-provided code/sandbox behavior from forbidden extension-page or service-worker remote logic. Today the privacy policy explains remote script execution, but `docs/store-listing-copy.md` and `scripts/check-permission-copy.mjs` only gate permission/privacy copy and do not scan the built Chrome ZIP for remote script tags, remote workers, dynamic imports, or fetched strings executed outside the allowed surfaces.
+  - Evidence: `manifest.json:21,65-72`; `PRIVACY.md:39-57`; `docs/store-listing-copy.md:49-65`; `scripts/check-permission-copy.mjs:22-131`; `README.md:80,180,186,250,396,434`; `src/background/resource-loader.ts:166-326`; `src/background/registration.ts:388-496`; `src/background/wrapper-builder.ts:1172`; historical Phase 19.6 only exists in the appendix at `ROADMAP.md:2406-2411`; Chrome Web Store program policies on MV3 logic and User Scripts API exemptions (`https://developer.chrome.com/docs/webstore/program-policies/policies`); Chrome remote-hosted-code violation guidance (`https://developer.chrome.com/docs/extensions/develop/migrate/remote-hosted-code`); Chrome `userScripts` API purpose and toggle requirements (`https://developer.chrome.com/docs/extensions/reference/api/userScripts`).
+  - Touches: new `docs/cws-remote-code-compliance.md`, new `scripts/check-cws-remote-code.mjs`, `package.json` script wiring, `.github/workflows/ci.yml`, `docs/store-listing-copy.md`, `docs/release-runbook.md`, and focused tests for the scanner.
+  - Acceptance: reviewer memo maps every remote-code-capable flow to its allowed policy bucket (`chrome.userScripts`, sandboxed editor page, remote data/config/resources, or user-configured sync) and states that extension service worker/pages do not execute remote logic directly; package scanner runs against the built Chrome ZIP or build directory and fails on remote `<script src>`, remote `Worker`/`importScripts`, dynamic `import(http...)`, `eval`/`new Function` of fetched strings, or remote script URLs outside documented allowlisted user-script/sandbox paths; CWS release checklist requires the memo and scanner output before upload.
+  - Verify: `npm run cws:remote-code:check`; `npm run store-copy:check`; `npm run readme:check`; package scanner negative fixtures for remote script tags, fetched eval, remote workers, and allowed `chrome.userScripts.register({js:[{code}]})` paths.
   - Complexity: M
 
 ### Security and data safety

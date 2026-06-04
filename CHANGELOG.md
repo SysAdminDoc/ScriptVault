@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Plain-language readability gate
+
+- **Added a Flesch 60+ readability gate for high-impact UI copy.**
+  `scripts/check-readability.mjs` audits setup, install, and trust strings,
+  reports offending IDs and source files, and now runs through CI,
+  `npm run test:a11y`, and `npm run check`.
+- **Rewrote dense setup and install review copy.** The dashboard/popup setup
+  warnings and install trust/review states now use shorter, plain-language
+  sentences while preserving the same browser/version guidance.
+
 ### 2026-06-04 — Cross-surface Help links
 
 - **Added consistent Help entry points across extension pages.** Dashboard,

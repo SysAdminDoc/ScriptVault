@@ -2,6 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { runReadabilityCheck } from "../scripts/check-readability.mjs";
 
 const dashboardHtml = readFileSync(resolve(process.cwd(), "pages/dashboard.html"), "utf8");
 const dashboardCss = readFileSync(resolve(process.cwd(), "pages/dashboard.css"), "utf8");
@@ -13,6 +14,7 @@ const sidepanelJs = readFileSync(resolve(process.cwd(), "pages/sidepanel.js"), "
 const installHtml = readFileSync(resolve(process.cwd(), "pages/install.html"), "utf8");
 const installJs = readFileSync(resolve(process.cwd(), "pages/install.js"), "utf8");
 const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
+const ciWorkflow = readFileSync(resolve(process.cwd(), ".github/workflows/ci.yml"), "utf8");
 
 function expectForcedColorsSurface(source) {
   expect(source).toContain("@media (forced-colors: active)");
@@ -51,10 +53,20 @@ function styleBlocksFor(selector, source = dashboardHtml) {
 
 describe("accessibility surface pass", () => {
   test("a11y command runs every focused surface audit", () => {
+    expect(packageJson.scripts["readability:check"]).toBe("node scripts/check-readability.mjs --check");
+    expect(packageJson.scripts["test:a11y"]).toContain("scripts/check-readability.mjs");
     expect(packageJson.scripts["test:a11y"]).toContain("tests/dashboard-a11y.test.js");
     expect(packageJson.scripts["test:a11y"]).toContain("tests/popup-a11y.test.js");
     expect(packageJson.scripts["test:a11y"]).toContain("tests/gui-ux-audit.test.js");
     expect(packageJson.scripts["test:a11y"]).toContain("tests/accessibility-surface-pass.test.js");
+    expect(ciWorkflow).toContain("npm run readability:check");
+  });
+
+  test("plain-language audit keeps setup and install copy readable", () => {
+    const { results, failures } = runReadabilityCheck();
+    expect(failures).toEqual([]);
+    expect(results.length).toBeGreaterThanOrEqual(10);
+    expect(Math.min(...results.map((result) => result.score))).toBeGreaterThanOrEqual(60);
   });
 
   test("major extension surfaces include forced-colors system-color fallbacks", () => {

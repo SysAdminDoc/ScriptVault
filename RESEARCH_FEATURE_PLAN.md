@@ -210,7 +210,7 @@ Platform state:
 | Release/CI | Build, web-ext lint, Firefox smoke, support matrix, attestations, SBOM | `.github/workflows/ci.yml`, scripts | Strong | Coverage floor, dependency automation, action SHA pinning |
 | Cross-browser | Chrome primary, Firefox package/smoke, Edge artifact path | `FIREFOX-PORT.md`, manifests | Strong desktop | Android claim requires device smoke or deferral |
 | Docs/help | README, ROADMAP, CHANGELOG, completed work, privacy/store copy | root docs | Strong | Keep in-app help aligned and prune stale roadmap doc rows |
-| Accessibility | WCAG planning, per-page Help affordances, command docs | `docs/wcag3-gap-analysis.md`, README | Developing | Plain-language audit |
+| Accessibility | WCAG planning, per-page Help affordances, Flesch 60+ readability gate, command docs | `docs/wcag3-gap-analysis.md`, README | Developing | Expand readability catalog as new high-impact copy lands |
 
 ## Competitive and Ecosystem Research
 
@@ -596,8 +596,9 @@ Help consistency and plain language:
 - README documents the `sv` omnibox and keyboard shortcuts, and the dashboard
   Help tab is now reachable from dashboard, popup, side-panel, and install
   surfaces through a consistent `[data-help]` control.
-- Run the planned plain-language pass and keep dashboard Help aligned with
-  README feature claims.
+- Setup/install/trust copy now has a Flesch 60+ readability gate. Expand the
+  audited copy catalog as new high-impact errors, warnings, and trust states
+  land, and keep dashboard Help aligned with README feature claims.
 
 Settings discoverability:
 
