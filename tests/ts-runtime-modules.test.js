@@ -26,6 +26,13 @@ describe('TS runtime module generator', () => {
         ]),
       }),
       expect.objectContaining({
+        id: 'sync-providers',
+        source: 'src/modules/sync-providers.ts',
+        output: 'modules/sync-providers.js',
+        exportName: 'CloudSyncProviders',
+        selfExportName: 'CloudSyncProviders',
+      }),
+      expect.objectContaining({
         id: 'error-log',
         source: 'src/modules/error-log.ts',
         output: 'modules/error-log.js',

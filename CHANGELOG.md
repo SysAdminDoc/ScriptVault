@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Cloud sync providers TypeScript promotion
+
+- **Cloud sync providers runtime is now generated from TypeScript.**
+  `modules/sync-providers.js` is produced from `src/modules/sync-providers.ts`,
+  including WebDAV, Google Drive, Dropbox, OneDrive, and S3-compatible SigV4
+  providers plus the OAuth timeout helper and `self.CloudSyncProviders`
+  compatibility export.
+
 ### 2026-06-04 — EasyCloud sync TypeScript promotion
 
 - **EasyCloud sync runtime is now generated from TypeScript.**

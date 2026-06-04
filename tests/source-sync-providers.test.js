@@ -9,6 +9,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  Reflect.deleteProperty(globalThis, 'SettingsManager');
 });
 
 async function loadFreshSyncProviders() {
@@ -45,6 +46,8 @@ async function loadFreshSyncProviders() {
       return structuredClone(settingsState);
     }),
   };
+
+  globalThis.SettingsManager = SettingsManager;
 
   vi.doMock('../src/modules/storage.ts', () => ({ SettingsManager }));
 

@@ -26,6 +26,13 @@ export const TS_RUNTIME_MODULES = [
     ],
   },
   {
+    id: 'sync-providers',
+    source: 'src/modules/sync-providers.ts',
+    output: 'modules/sync-providers.js',
+    exportName: 'CloudSyncProviders',
+    selfExportName: 'CloudSyncProviders',
+  },
+  {
     id: 'error-log',
     source: 'src/modules/error-log.ts',
     output: 'modules/error-log.js',
