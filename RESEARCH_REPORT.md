@@ -54,6 +54,16 @@ Google OAuth token storage best practices
 and AWS IAM access-key guidance
 (`https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html`).
 
+2026-06-04 Cycle 5 backup archive intake refresh: ZIP/JSON import, stored-backup
+import, inspect, verify, and restore paths decode and decompress archives before
+enforcing decompressed-size, file-count, per-entry, or per-script code caps.
+`ROADMAP.md` now promotes a P1 item to replace raw archive intake with a shared
+bounded helper and to apply the existing 5 MB script-size policy to backup
+imports. External anchors: OWASP File Upload guidance
+(`https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html`)
+and MITRE CWE-409
+(`https://cwe.mitre.org/data/definitions/409.html`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
@@ -82,9 +92,10 @@ Top opportunities (one line each):
 5. **[Verified] Sync envelopes mix shared script data with device-local state** — per-script `settings` are uploaded wholesale despite open-ended local/conflict/error keys; partition sync-safe settings before upload/import. (P1)
 6. **[Verified] User-configured sync endpoints lack the internal-host guard** — WebDAV/S3 provider URLs are arbitrary settings and should share the same internal/private-host policy now used by GM_xhr and script-resource fetches, with explicit local endpoint opt-in. (P1)
 7. **[Verified] Backup/export settings can include sync credentials** — JSON exports and ZIP/scheduled backups serialize global settings wholesale while provider settings hold OAuth tokens, WebDAV passwords, and S3 access keys; redact by default and require a separate credential-export opt-in. (P1)
-8. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
-9. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
-10. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
+8. **[Verified] Backup ZIP/JSON intake is not resource-bounded** — import/inspect/verify/restore use synchronous full ZIP decompression and JSON imports bypass the install path's per-script code cap; add archive and entry limits before parse/write. (P1)
+9. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
+10. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
+11. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
 
 ## Evidence Reviewed
 
@@ -96,12 +107,14 @@ Top opportunities (one line each):
 - **Sync state**: `src/types/script.ts` defines open-ended per-script `settings`; `src/background/cloud-sync.ts`, `src/background/core.ts`, and `src/modules/sync-easycloud.ts` serialize those settings wholesale into cloud-sync data and merge remote settings back into local scripts.
 - **Sync endpoint egress**: WebDAV `test`/`upload`/`download` and S3 `test`/`upload`/`download` build URLs from `webdavUrl`/`s3Endpoint` and call `fetch`/`fetchWithTimeout`; existing `InternalHostGuard` pre/post checks are present in script-source, `@require`, provenance, GM_loadScript, and GM_xhr paths but not these provider endpoints.
 - **Backup/export settings**: `exportAllScripts()` reads `SettingsManager.get()` into export data; `BackupScheduler.createBackup()` writes `global-settings.json` from `SettingsManager.get()`; backup restore and import paths call `SettingsManager.set(...)`; dashboard copy exposes an "Include ScriptVault settings" checkbox and says cloud backups can restore settings when enabled, but credential-bearing settings are not split from ordinary preferences.
+- **Backup archive intake**: `importFromZip`, `BackupScheduler.importBackup`, `BackupScheduler.inspectBackup`, `BackupScheduler.verifyBackup`, and restore paths call `fflate.unzipSync(...)` on decoded archive bytes; code then converts `.user.js`, options, storage, settings, folders, and workspace entries with `strFromU8`/`JSON.parse`. Existing tests cover identity, selective restore, and metadata preservation, but not decompression amplification, file-count limits, oversized per-entry JSON, nested archives, or the install path's 5 MB code cap on backup imports.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
   - ScriptCat PR #1309 + v0.16.14 changelog moved device-related sync config to `chrome.storage.local` after cross-device sync leaked OneDrive state and OAuth prompts: https://github.com/scriptscat/scriptcat/pull/1309 and https://docs.scriptcat.org/docs/change/
   - OWASP SSRF Prevention, AWS IMDS, and Chrome extension network-request docs anchor the sync-endpoint egress guard: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html, https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html, https://developer.chrome.com/docs/extensions/develop/concepts/network-requests
   - OWASP Secrets Management, Google OAuth token storage best practices, and AWS IAM access-key guidance anchor the backup/export credential redaction item: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html, https://developers.google.com/identity/protocols/oauth2/resources/best-practices, https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
+  - OWASP File Upload guidance and MITRE CWE-409 anchor the backup ZIP/JSON intake bounds item: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html and https://cwe.mitre.org/data/definitions/409.html
   - Userscript-manager landscape (Tampermonkey / Violentmonkey / ScriptCat sync, MV3, GitHub-Gist sync, granular execution control): comparison sources at extensionfixes.com and addons.mozilla.org Violentmonkey listing.
 - **Unverifiable here** [Needs validation]: live MV3 runtime behavior (cross-tab GM listener fan-out, omnibox UX, settings round-trips) — no browser run performed this pass; all runtime claims are static-read [Verified] or [Likely].
 
