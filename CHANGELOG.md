@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Sync-safe script settings partition
+
+- **Stopped syncing local-only per-script diagnostics.** CloudSync and
+  EasyCloud now strip `userModified`, `mergeConflict`, failed `@require`
+  markers, registration errors, and source-identity warnings from upload
+  envelopes while preserving them locally.
+- **Whitelisted portable per-script preferences.** Remote envelopes can still
+  carry user-facing settings such as run timing, injection/frame overrides,
+  URL override lists, notes, tags, pinned state, and performance budget.
+
 ### 2026-06-04 — Bounded backup archive intake
 
 - **Rejected unsafe backup and import archives before parsing.** JSON imports,

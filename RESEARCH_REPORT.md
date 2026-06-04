@@ -29,6 +29,13 @@ payloads, excessive file counts, aggregate expanded data, oversized entries,
 nested archives, and high compression ratios; JSON imports also enforce the
 5 MB per-script code cap plus a total import budget.
 
+2026-06-04 build-lane sync-settings update: CloudSync and EasyCloud now
+partition per-script settings before sync. Upload envelopes include only
+allowlisted user-facing preferences, while local-only state such as
+`userModified`, `mergeConflict`, failed dependency diagnostics, registration
+errors, and source-identity warnings remains on the originating device and is
+ignored when found in legacy remote envelopes.
+
 2026-06-04 implementation refresh: the 2026-06-03 findings still stand, but the
 currently-breaking dependency item is now closed. `web-ext` was bumped to
 `^10.3.0`, `npm ls tmp` resolves `tmp@0.2.6`, and

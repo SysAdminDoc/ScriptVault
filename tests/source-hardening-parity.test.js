@@ -144,6 +144,31 @@ describe('source hardening parity guards', () => {
     expect(backupScheduler).toContain('= unzipArchiveBounded(data);');
   });
 
+  it('keeps cloud sync per-script settings partitioned from local-only state', () => {
+    const core = source('src/background/core.ts');
+    const cloudSync = source('src/background/cloud-sync.ts');
+    const easyCloud = source('src/modules/sync-easycloud.ts');
+    const scriptTypes = source('src/types/script.ts');
+
+    for (const text of [core, cloudSync, easyCloud]) {
+      expect(text).toContain('SYNC_SAFE_SCRIPT_SETTING_KEYS');
+      expect(text).toContain('LOCAL_ONLY_SCRIPT_SETTING_KEYS');
+      expect(text).toContain('cloneSyncSafeScriptSettings');
+      expect(text).toContain('mergeSyncedScriptSettings');
+      expect(text).toContain('sanitizeSyncEnvelopeForUpload');
+      expect(text).toContain('_registrationError');
+      expect(text).toContain('_failedRequires');
+      expect(text).toContain('userModified');
+      expect(text).toContain('mergeConflict');
+      expect(text).toContain('runAt');
+      expect(text).toContain('userMatches');
+    }
+    expect(scriptTypes).toContain('Cloud sync helpers must not upload these.');
+    expect(core).toContain('provider.upload(sanitizeSyncEnvelopeForUpload');
+    expect(cloudSync).toContain('provider.upload(sanitizeSyncEnvelopeForUpload');
+    expect(easyCloud).toContain('_uploadToDrive(token, sanitizeSyncEnvelopeForUpload');
+  });
+
   it('keeps @require fetches on extension host-permission fetch semantics', () => {
     const loader = source('src/background/resource-loader.ts');
     const core = source('src/background/core.ts');

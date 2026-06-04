@@ -248,6 +248,81 @@ describe('source cloud sync module', () => {
     ]);
   });
 
+  it('syncs only allowlisted per-script settings and keeps local-only flags local', async () => {
+    await chrome.storage.local.set({
+      syncTombstones: {},
+    });
+
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_settings',
+          code: '// local settings',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Settings' },
+          settings: {
+            runAt: 'document-idle',
+            notes: 'local note',
+            userModified: false,
+            sourceIdentityChanged: true,
+            _failedRequires: ['https://cdn.example.com/missing.js'],
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 10,
+        scripts: [
+          {
+            id: 'script_settings',
+            code: '// Remote Settings',
+            enabled: true,
+            position: 0,
+            settings: {
+              runAt: 'document-start',
+              userMatches: ['https://example.com/*'],
+              userModified: true,
+              mergeConflict: true,
+              _registrationError: 'remote registration failed',
+            },
+            updatedAt: 10,
+          },
+        ],
+        tombstones: {},
+      },
+    );
+    const { CloudSync, ScriptStorage, provider, scriptState, getRemoteData } = harness;
+
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+
+    expect(ScriptStorage.set).toHaveBeenCalledWith(
+      'script_settings',
+      expect.objectContaining({
+        settings: expect.objectContaining({
+          runAt: 'document-start',
+          notes: 'local note',
+          sourceIdentityChanged: true,
+          _failedRequires: ['https://cdn.example.com/missing.js'],
+          userMatches: ['https://example.com/*'],
+        }),
+      }),
+    );
+    expect(scriptState[0].settings).not.toMatchObject({
+      mergeConflict: true,
+      _registrationError: 'remote registration failed',
+    });
+
+    const uploaded = getRemoteData();
+    expect(provider.upload).toHaveBeenCalled();
+    expect(uploaded.scripts[0].settings).toEqual({
+      runAt: 'document-start',
+      userMatches: ['https://example.com/*'],
+    });
+  });
+
   it('previews sync conflicts and direction without writing local or remote data', async () => {
     const harness = await loadFreshCloudSync(
       [

@@ -299,6 +299,91 @@ async function _mergeScriptText(base: string, local: string, remote: string): Pr
   throw new Error('No script merge engine available');
 }
 
+const SYNC_SAFE_SCRIPT_SETTING_KEYS = new Set<string>([
+  'autoUpdate',
+  'notifyUpdates',
+  'runAt',
+  'injectInto',
+  'frameMode',
+  'notifyErrors',
+  'notes',
+  'useOriginalIncludes',
+  'useOriginalMatches',
+  'useOriginalExcludes',
+  'userIncludes',
+  'userMatches',
+  'userExcludes',
+  'pinned',
+  'perfBudget',
+  'tags',
+]);
+
+const LOCAL_ONLY_SCRIPT_SETTING_KEYS = new Set<string>([
+  'userModified',
+  'mergeConflict',
+  'syncLock',
+  'sourceIdentityChanged',
+  '_failedRequires',
+  '_failedRequireErrors',
+  '_registrationError',
+]);
+
+function cloneScriptSettingValue(value: unknown): unknown {
+  if (value == null || typeof value !== 'object') return value;
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value);
+    } catch (_) {
+      // Fall through to JSON clone.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as unknown;
+  } catch (_) {
+    return undefined;
+  }
+}
+
+function cloneSyncSafeScriptSettings(settings: unknown): ScriptSettings {
+  if (!settings || typeof settings !== 'object') return {};
+  const result: ScriptSettings = {};
+  for (const [key, value] of Object.entries(settings as Record<string, unknown>)) {
+    if (!SYNC_SAFE_SCRIPT_SETTING_KEYS.has(key) || LOCAL_ONLY_SCRIPT_SETTING_KEYS.has(key)) {
+      continue;
+    }
+    result[key] = cloneScriptSettingValue(value);
+  }
+  return result;
+}
+
+function mergeSyncedScriptSettings(
+  localSettings: unknown,
+  remoteSettings: unknown,
+  options: { mergeConflict?: boolean } = {},
+): ScriptSettings {
+  return {
+    ...((localSettings && typeof localSettings === 'object')
+      ? localSettings as ScriptSettings
+      : {}),
+    ...cloneSyncSafeScriptSettings(remoteSettings),
+    ...(options.mergeConflict ? { mergeConflict: true } : {}),
+  };
+}
+
+function sanitizeSyncScriptForEnvelope(script: SyncScript): SyncScript {
+  return {
+    ...script,
+    settings: cloneSyncSafeScriptSettings(script.settings),
+  };
+}
+
+function sanitizeSyncEnvelopeForUpload(envelope: SyncEnvelope): SyncEnvelope {
+  return {
+    ...envelope,
+    scripts: (envelope.scripts || []).map((script) => sanitizeSyncScriptForEnvelope(script)),
+  };
+}
+
 function setStatus(newStatus: string): void {
   if (_status === newStatus) return;
   _status = newStatus;
@@ -612,25 +697,25 @@ async function _mergeData(
 
     if (!remote) {
       // Only local — keep it
-      if (local) mergedScripts.push(local);
+      if (local) mergedScripts.push(sanitizeSyncScriptForEnvelope(local));
       continue;
     }
 
     if (!local) {
       // Only remote — import it
-      mergedScripts.push(remote);
+      mergedScripts.push(sanitizeSyncScriptForEnvelope(remote));
       continue;
     }
 
     // Both exist — merge
-    const merged: SyncScript = { ...local };
+    const merged: SyncScript = sanitizeSyncScriptForEnvelope(local);
     const localNewer = (local.updatedAt || 0) >= (remote.updatedAt || 0);
 
     // Enable/disable: newest wins
     if ((remote.updatedAt || 0) > (local.updatedAt || 0)) {
       merged.enabled = remote.enabled;
       merged.position = remote.position;
-      merged.settings = { ...local.settings, ...remote.settings };
+      merged.settings = mergeSyncedScriptSettings(local.settings, remote.settings);
     }
 
     // Code merge
@@ -645,7 +730,9 @@ async function _mergeData(
           if (mergeResult && !mergeResult.error) {
             merged.code = mergeResult.merged ?? merged.code;
             if (mergeResult.conflicts) {
-              merged.settings = { ...(merged.settings || {}), mergeConflict: true };
+              merged.settings = mergeSyncedScriptSettings(merged.settings, {}, {
+                mergeConflict: true,
+              });
             }
             log(`3-way merge for ${id}: conflicts=${String(mergeResult.conflicts || false)}`);
           } else {
@@ -720,7 +807,7 @@ async function _performSync(): Promise<SyncResult> {
         code: s.code,
         enabled: s.enabled,
         position: s.position,
-        settings: s.settings || {},
+        settings: cloneSyncSafeScriptSettings(s.settings),
         updatedAt: s.updatedAt || 0,
         syncBaseCode: s.syncBaseCode || null,
       })),
@@ -763,11 +850,7 @@ async function _performSync(): Promise<SyncResult> {
               meta: parsed.meta,
               enabled: script.enabled,
               position: script.position,
-              settings: {
-                ...(existing?.settings || {}),
-                ...(script.settings || {}),
-                userModified: false,
-              },
+              settings: mergeSyncedScriptSettings(existing?.settings, script.settings),
               updatedAt: script.updatedAt,
               createdAt: existing?.createdAt || script.updatedAt,
               syncBaseCode: script.code,
@@ -790,10 +873,10 @@ async function _performSync(): Promise<SyncResult> {
 
       // Upload merged data
       merged.timestamp = Date.now();
-      await _uploadToDrive(token, merged);
+      await _uploadToDrive(token, sanitizeSyncEnvelopeForUpload(merged));
     } else {
       // First sync — upload local data
-      await _uploadToDrive(token, localData);
+      await _uploadToDrive(token, sanitizeSyncEnvelopeForUpload(localData));
     }
 
     const now = Date.now();

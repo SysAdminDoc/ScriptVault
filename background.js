@@ -7762,6 +7762,77 @@ const EasyCloudSync = (() => {
     }
     throw new Error("No script merge engine available");
   }
+  var SYNC_SAFE_SCRIPT_SETTING_KEYS = /* @__PURE__ */ new Set([
+    "autoUpdate",
+    "notifyUpdates",
+    "runAt",
+    "injectInto",
+    "frameMode",
+    "notifyErrors",
+    "notes",
+    "useOriginalIncludes",
+    "useOriginalMatches",
+    "useOriginalExcludes",
+    "userIncludes",
+    "userMatches",
+    "userExcludes",
+    "pinned",
+    "perfBudget",
+    "tags"
+  ]);
+  var LOCAL_ONLY_SCRIPT_SETTING_KEYS = /* @__PURE__ */ new Set([
+    "userModified",
+    "mergeConflict",
+    "syncLock",
+    "sourceIdentityChanged",
+    "_failedRequires",
+    "_failedRequireErrors",
+    "_registrationError"
+  ]);
+  function cloneScriptSettingValue(value) {
+    if (value == null || typeof value !== "object") return value;
+    if (typeof structuredClone === "function") {
+      try {
+        return structuredClone(value);
+      } catch (_) {
+      }
+    }
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+      return void 0;
+    }
+  }
+  function cloneSyncSafeScriptSettings(settings) {
+    if (!settings || typeof settings !== "object") return {};
+    const result = {};
+    for (const [key, value] of Object.entries(settings)) {
+      if (!SYNC_SAFE_SCRIPT_SETTING_KEYS.has(key) || LOCAL_ONLY_SCRIPT_SETTING_KEYS.has(key)) {
+        continue;
+      }
+      result[key] = cloneScriptSettingValue(value);
+    }
+    return result;
+  }
+  function mergeSyncedScriptSettings(localSettings, remoteSettings, options = {}) {
+    return {
+      ...localSettings && typeof localSettings === "object" ? localSettings : {},
+      ...cloneSyncSafeScriptSettings(remoteSettings),
+      ...options.mergeConflict ? { mergeConflict: true } : {}
+    };
+  }
+  function sanitizeSyncScriptForEnvelope(script) {
+    return {
+      ...script,
+      settings: cloneSyncSafeScriptSettings(script.settings)
+    };
+  }
+  function sanitizeSyncEnvelopeForUpload(envelope) {
+    return {
+      ...envelope,
+      scripts: (envelope.scripts || []).map((script) => sanitizeSyncScriptForEnvelope(script))
+    };
+  }
   function setStatus(newStatus) {
     if (_status === newStatus) return;
     _status = newStatus;
@@ -7973,19 +8044,19 @@ const EasyCloudSync = (() => {
       const local = localScripts.get(id);
       const remote = remoteScripts.get(id);
       if (!remote) {
-        if (local) mergedScripts.push(local);
+        if (local) mergedScripts.push(sanitizeSyncScriptForEnvelope(local));
         continue;
       }
       if (!local) {
-        mergedScripts.push(remote);
+        mergedScripts.push(sanitizeSyncScriptForEnvelope(remote));
         continue;
       }
-      const merged = { ...local };
+      const merged = sanitizeSyncScriptForEnvelope(local);
       const localNewer = (local.updatedAt || 0) >= (remote.updatedAt || 0);
       if ((remote.updatedAt || 0) > (local.updatedAt || 0)) {
         merged.enabled = remote.enabled;
         merged.position = remote.position;
-        merged.settings = { ...local.settings, ...remote.settings };
+        merged.settings = mergeSyncedScriptSettings(local.settings, remote.settings);
       }
       if (local.code !== remote.code) {
         const base = local.syncBaseCode || remote.syncBaseCode || null;
@@ -7995,7 +8066,9 @@ const EasyCloudSync = (() => {
             if (mergeResult && !mergeResult.error) {
               merged.code = mergeResult.merged ?? merged.code;
               if (mergeResult.conflicts) {
-                merged.settings = { ...merged.settings || {}, mergeConflict: true };
+                merged.settings = mergeSyncedScriptSettings(merged.settings, {}, {
+                  mergeConflict: true
+                });
               }
               log(`3-way merge for ${id}: conflicts=${String(mergeResult.conflicts || false)}`);
             } else {
@@ -8053,7 +8126,7 @@ const EasyCloudSync = (() => {
           code: s.code,
           enabled: s.enabled,
           position: s.position,
-          settings: s.settings || {},
+          settings: cloneSyncSafeScriptSettings(s.settings),
           updatedAt: s.updatedAt || 0,
           syncBaseCode: s.syncBaseCode || null
         })),
@@ -8082,11 +8155,7 @@ const EasyCloudSync = (() => {
                 meta: parsed.meta,
                 enabled: script.enabled,
                 position: script.position,
-                settings: {
-                  ...existing?.settings || {},
-                  ...script.settings || {},
-                  userModified: false
-                },
+                settings: mergeSyncedScriptSettings(existing?.settings, script.settings),
                 updatedAt: script.updatedAt,
                 createdAt: existing?.createdAt || script.updatedAt,
                 syncBaseCode: script.code
@@ -8104,9 +8173,9 @@ const EasyCloudSync = (() => {
           await _updateBadgeIfAvailable();
         }
         merged.timestamp = Date.now();
-        await _uploadToDrive(token, merged);
+        await _uploadToDrive(token, sanitizeSyncEnvelopeForUpload(merged));
       } else {
-        await _uploadToDrive(token, localData);
+        await _uploadToDrive(token, sanitizeSyncEnvelopeForUpload(localData));
       }
       const now = Date.now();
       await _setStorageValues({ [KEYS.LAST_SYNC]: now });
@@ -15270,6 +15339,85 @@ async function mergeScriptText(base, local, remote) {
   throw new Error('No script merge engine available');
 }
 
+const SYNC_SAFE_SCRIPT_SETTING_KEYS = new Set([
+  'autoUpdate',
+  'notifyUpdates',
+  'runAt',
+  'injectInto',
+  'frameMode',
+  'notifyErrors',
+  'notes',
+  'useOriginalIncludes',
+  'useOriginalMatches',
+  'useOriginalExcludes',
+  'userIncludes',
+  'userMatches',
+  'userExcludes',
+  'pinned',
+  'perfBudget',
+  'tags',
+]);
+
+const LOCAL_ONLY_SCRIPT_SETTING_KEYS = new Set([
+  'userModified',
+  'mergeConflict',
+  'syncLock',
+  'sourceIdentityChanged',
+  '_failedRequires',
+  '_failedRequireErrors',
+  '_registrationError',
+]);
+
+function cloneScriptSettingValue(value) {
+  if (value == null || typeof value !== 'object') return value;
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value);
+    } catch (_) {
+      // Fall through to JSON clone.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (_) {
+    return undefined;
+  }
+}
+
+function cloneSyncSafeScriptSettings(settings) {
+  if (!settings || typeof settings !== 'object') return {};
+  const result = {};
+  for (const [key, value] of Object.entries(settings)) {
+    if (!SYNC_SAFE_SCRIPT_SETTING_KEYS.has(key) || LOCAL_ONLY_SCRIPT_SETTING_KEYS.has(key)) {
+      continue;
+    }
+    result[key] = cloneScriptSettingValue(value);
+  }
+  return result;
+}
+
+function mergeSyncedScriptSettings(localSettings, remoteSettings, options = {}) {
+  return {
+    ...((localSettings && typeof localSettings === 'object') ? localSettings : {}),
+    ...cloneSyncSafeScriptSettings(remoteSettings),
+    ...(options.mergeConflict ? { mergeConflict: true } : {})
+  };
+}
+
+function sanitizeSyncScriptForEnvelope(script) {
+  return {
+    ...script,
+    settings: cloneSyncSafeScriptSettings(script.settings)
+  };
+}
+
+function sanitizeSyncEnvelopeForUpload(envelope) {
+  return {
+    ...envelope,
+    scripts: (envelope.scripts || []).map(script => sanitizeSyncScriptForEnvelope(script))
+  };
+}
+
 // Load debug setting on startup (async — logs before this completes go to console.log)
 (async () => {
   try {
@@ -17218,7 +17366,7 @@ const CloudSync = {
           code: s.code,
           enabled: s.enabled,
           position: s.position,
-          settings: s.settings || {},
+          settings: cloneSyncSafeScriptSettings(s.settings),
           updatedAt: s.updatedAt,
           syncBaseCode: s.syncBaseCode ?? null,
           name: s.meta?.name || s.metadata?.name || s.name || s.id
@@ -17430,10 +17578,9 @@ const CloudSync = {
               meta: parsed.meta,
               enabled: script.enabled,
               position: script.position,
-              settings: {
-                ...(existing?.settings || {}),
-                ...(mergeConflict ? { mergeConflict: true } : {})
-              },
+              settings: mergeSyncedScriptSettings(existing?.settings, script.settings, {
+                mergeConflict
+              }),
               updatedAt: Math.max(script.updatedAt, existing?.updatedAt || 0),
               createdAt: existing?.createdAt || script.updatedAt,
               syncBaseCode: codeToSave // record merged result as new base for future syncs
@@ -17477,14 +17624,14 @@ const CloudSync = {
           code: s.code,
           enabled: s.enabled,
           position: s.position,
-          settings: s.settings || {},
+          settings: cloneSyncSafeScriptSettings(s.settings),
           updatedAt: s.updatedAt,
           syncBaseCode: s.syncBaseCode ?? null
         })),
         tombstones: mergedTombstones
       };
       if (signal?.aborted) throw new Error('Sync aborted');
-      await provider.upload(uploadData, settings, { signal });
+      await provider.upload(sanitizeSyncEnvelopeForUpload(uploadData), settings, { signal });
     } else {
       // First sync, just upload (include tombstones and syncBaseCode)
       if (signal?.aborted) throw new Error('Sync aborted');
@@ -17492,7 +17639,7 @@ const CloudSync = {
         ...s,
         syncBaseCode: s.syncBaseCode ?? null
       }));
-      await provider.upload(localData, settings, { signal });
+      await provider.upload(sanitizeSyncEnvelopeForUpload(localData), settings, { signal });
     }
 
     await SettingsManager.set('lastSync', Date.now());
@@ -17505,14 +17652,14 @@ const CloudSync = {
 
     // Add all local scripts
     for (const script of (local.scripts || [])) {
-      scriptsMap.set(script.id, script);
+      scriptsMap.set(script.id, sanitizeSyncScriptForEnvelope(script));
     }
 
     // Merge remote scripts (prefer newer)
     for (const script of (remote.scripts || [])) {
       const existing = scriptsMap.get(script.id);
       if (!existing || script.updatedAt > existing.updatedAt) {
-        scriptsMap.set(script.id, script);
+        scriptsMap.set(script.id, sanitizeSyncScriptForEnvelope(script));
       }
     }
 

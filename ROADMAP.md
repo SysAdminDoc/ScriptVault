@@ -301,12 +301,14 @@ Priorities/sizes preserve the source labels.
   - Touches: new `modules/sync-crypto.js`, `cloud-sync.ts` `_performSync`, each provider `upload/download`.
   - Acceptance: PBKDF2→AES-256-GCM round-trip identity; wrong-passphrase rejection; mixed v1/v2 envelope handling.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-2.
-- [ ] 🤖 🔬 P1 — Partition sync-safe vs device-local per-script settings in cloud sync envelopes
+- [x] 🤖 🔬 P1 — Partition sync-safe vs device-local per-script settings in cloud sync envelopes
   - Why: `ScriptSettings` is intentionally open-ended (`userModified`, `mergeConflict`, `_failedRequires`, `_registrationError`, plus arbitrary keys), while the cloud-sync builders serialize `settings` wholesale into provider envelopes. That can propagate local conflict markers, registration failures, stale diagnostics, or device-specific execution/UI preferences across machines as if they were shared script data.
   - Evidence: `src/types/script.ts:94-99`; `src/background/cloud-sync.ts:232-249,390-411`; `src/background/core.ts:1961-1975,2100-2123`; `src/modules/sync-easycloud.ts:685-725,760-773`; ScriptCat PR #1309 moved device-related cloud/sync config to `chrome.storage.local` after cross-device sync forced OneDrive state and OAuth prompts onto other machines (`https://github.com/scriptscat/scriptcat/pull/1309`, also summarized in `https://docs.scriptcat.org/docs/change/` v0.16.14).
   - Touches: `src/background/cloud-sync.ts`, `src/background/core.ts`, `src/modules/sync-easycloud.ts`, `src/types/script.ts`, sync/import/export tests.
   - Acceptance: add a sync schema/helper that whitelists sync-safe per-script settings and strips local-only flags before upload; remote envelopes containing local-only keys are ignored on import/merge; old envelopes remain backward-compatible through read-time filtering; local-only flags survive on the originating device.
   - Verify: focused sync-envelope tests with `userModified`, `mergeConflict`, `_registrationError`, and at least one allowed shared setting; `npm run ts-runtime:check`; relevant sync/import/export tests.
+  - Progress: 2026-06-04 CloudSync and EasyCloud now serialize only allowlisted user-facing per-script settings into sync envelopes, strip local-only flags such as `userModified`, `mergeConflict`, `_failedRequires`, and `_registrationError` from uploads, and ignore those remote legacy keys on merge while preserving local-only state already present on the device.
+  - Verification: `npm run ts-runtime:generate`; `npm run build:bg`; `npm run typecheck`; `npm test -- tests/source-cloud-sync.test.js tests/source-sync-easycloud.test.js tests/source-hardening-parity.test.js`; `npm run ts-runtime:check`; `npm run ts-source:check`; `npm run store-copy:check`; `npm run readme:check`; `npm run test:a11y`; `npm run check`; `git diff --check`.
   - Complexity: M
 - [ ] P1 — Per-script host scope for GM network/cookie/DNR primitives
   - Why: injection is `@match`-scoped but background GM_xhr/GM_cookie/GM_download/GM_webRequest run with the extension's ambient `<all_urls>`; umbrella for NF-1/B-1/H-1.
