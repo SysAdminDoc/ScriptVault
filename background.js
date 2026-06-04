@@ -12122,6 +12122,253 @@ const QuotaManager = (() => {
 })();
 
 // ============================================================================
+// Generated from src/modules/subscriptions.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const ScriptSubscriptions = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/modules/subscriptions.ts
+  var subscriptions_exports = {};
+  __export(subscriptions_exports, {
+    ScriptSubscriptions: () => ScriptSubscriptions,
+    default: () => subscriptions_default
+  });
+  module.exports = __toCommonJS(subscriptions_exports);
+
+  // src/shared/utils.ts
+  function generateId() {
+    return "script_" + crypto.randomUUID();
+  }
+
+  // src/modules/subscriptions.ts
+  var STORAGE_KEY = "scriptSubscriptions";
+  var MAX_SUBSCRIPTIONS = 50;
+  var MAX_FEED_ITEMS = 200;
+  var MAX_ERRORS = 10;
+  function asRecord(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  }
+  function asCleanString(value) {
+    return typeof value === "string" ? value.trim() : "";
+  }
+  function normalizeHttpUrl(value, baseUrl) {
+    const raw = asCleanString(value);
+    if (!raw) throw new Error("Subscription URL is required");
+    let resolved;
+    try {
+      resolved = baseUrl ? new URL(raw, baseUrl) : new URL(raw);
+    } catch (_) {
+      throw new Error(`Invalid subscription URL: ${raw}`);
+    }
+    if (resolved.protocol !== "http:" && resolved.protocol !== "https:") {
+      throw new Error("Subscription URLs must use http or https");
+    }
+    resolved.hash = "";
+    return resolved.href;
+  }
+  function getFeedItemUrl(item) {
+    return asCleanString(item.url) || asCleanString(item.downloadURL) || asCleanString(item.downloadUrl) || asCleanString(item.codeURL) || asCleanString(item.codeUrl) || asCleanString(item.sourceURL) || asCleanString(item.sourceUrl) || asCleanString(item.href);
+  }
+  function normalizeFeedItem(item, feedUrl) {
+    if (typeof item === "string") {
+      return { url: normalizeHttpUrl(item, feedUrl) };
+    }
+    const record = asRecord(item);
+    if (!record) return null;
+    const rawUrl = getFeedItemUrl(record);
+    if (!rawUrl) return null;
+    const normalized = {
+      url: normalizeHttpUrl(rawUrl, feedUrl)
+    };
+    const name = asCleanString(record.name);
+    const namespace = asCleanString(record.namespace);
+    const version = asCleanString(record.version);
+    if (name) normalized.name = name;
+    if (namespace) normalized.namespace = namespace;
+    if (version) normalized.version = version;
+    return normalized;
+  }
+  function getFeedItems(root) {
+    if (Array.isArray(root)) return root;
+    const record = asRecord(root);
+    if (!record) throw new Error("Subscription feed must be a JSON array or object");
+    for (const key of ["scripts", "items", "subscriptions"]) {
+      const value = record[key];
+      if (Array.isArray(value)) return value;
+    }
+    throw new Error("Subscription feed must include a scripts, items, or subscriptions array");
+  }
+  function fallbackNameFromUrl(url) {
+    try {
+      return new URL(url).hostname || "Script subscription";
+    } catch (_) {
+      return "Script subscription";
+    }
+  }
+  function normalizeSubscription(value) {
+    const record = asRecord(value);
+    if (!record) return null;
+    try {
+      const url = normalizeHttpUrl(record.url);
+      const now = Date.now();
+      return {
+        id: asCleanString(record.id) || generateId(),
+        url,
+        name: asCleanString(record.name) || fallbackNameFromUrl(url),
+        enabled: record.enabled !== false,
+        scripts: Array.isArray(record.scripts) ? record.scripts.map((item) => normalizeFeedItem(item, url)).filter((item) => !!item).slice(0, MAX_FEED_ITEMS) : [],
+        createdAt: typeof record.createdAt === "number" ? record.createdAt : now,
+        updatedAt: typeof record.updatedAt === "number" ? record.updatedAt : now,
+        lastCheckedAt: typeof record.lastCheckedAt === "number" ? record.lastCheckedAt : null,
+        lastQueued: typeof record.lastQueued === "number" ? record.lastQueued : 0,
+        lastSkipped: typeof record.lastSkipped === "number" ? record.lastSkipped : 0,
+        lastErrors: Array.isArray(record.lastErrors) ? record.lastErrors.filter((item) => typeof item === "string").slice(0, MAX_ERRORS) : []
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+  async function readAll() {
+    const data = await chrome.storage.local.get(STORAGE_KEY);
+    const raw = data[STORAGE_KEY];
+    return Array.isArray(raw) ? raw.map(normalizeSubscription).filter((item) => !!item).slice(0, MAX_SUBSCRIPTIONS) : [];
+  }
+  async function writeAll(subscriptions) {
+    const normalized = subscriptions.map(normalizeSubscription).filter((item) => !!item).slice(0, MAX_SUBSCRIPTIONS);
+    await chrome.storage.local.set({ [STORAGE_KEY]: normalized });
+    return normalized.map((item) => ({ ...item, scripts: item.scripts.map((script) => ({ ...script })) }));
+  }
+  function cloneSubscription(subscription) {
+    return {
+      ...subscription,
+      scripts: subscription.scripts.map((script) => ({ ...script })),
+      lastErrors: [...subscription.lastErrors]
+    };
+  }
+  function parseFeed(text, feedUrl) {
+    const sourceUrl = normalizeHttpUrl(feedUrl);
+    let root;
+    try {
+      root = JSON.parse(text);
+    } catch (_) {
+      throw new Error("Subscription feed is not valid JSON");
+    }
+    const record = asRecord(root);
+    const name = asCleanString(record?.name) || asCleanString(record?.title) || fallbackNameFromUrl(sourceUrl);
+    const seen = /* @__PURE__ */ new Set();
+    const scripts = [];
+    for (const rawItem of getFeedItems(root)) {
+      if (scripts.length >= MAX_FEED_ITEMS) break;
+      const item = normalizeFeedItem(rawItem, sourceUrl);
+      if (!item || seen.has(item.url)) continue;
+      seen.add(item.url);
+      scripts.push(item);
+    }
+    if (scripts.length === 0) {
+      throw new Error("Subscription feed did not contain any script URLs");
+    }
+    return {
+      name,
+      sourceUrl,
+      scripts,
+      parsedAt: Date.now()
+    };
+  }
+  async function list() {
+    return (await readAll()).sort((a, b) => a.createdAt - b.createdAt).map(cloneSubscription);
+  }
+  async function get(id) {
+    const subscriptions = await readAll();
+    const subscription = subscriptions.find((item) => item.id === id || item.url === id);
+    return subscription ? cloneSubscription(subscription) : null;
+  }
+  async function upsertFromFeed(url, feed, options = {}) {
+    const normalizedUrl = normalizeHttpUrl(url);
+    const subscriptions = await readAll();
+    const existingIndex = subscriptions.findIndex((item) => item.url === normalizedUrl);
+    const existing = existingIndex >= 0 ? subscriptions[existingIndex] : null;
+    const now = Date.now();
+    const subscription = {
+      id: existing?.id || generateId(),
+      url: normalizedUrl,
+      name: asCleanString(options.name) || feed.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
+      enabled: typeof options.enabled === "boolean" ? options.enabled : existing?.enabled !== false,
+      scripts: feed.scripts.map((script) => ({ ...script })),
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      lastCheckedAt: now,
+      lastQueued: existing?.lastQueued || 0,
+      lastSkipped: existing?.lastSkipped || 0,
+      lastErrors: existing?.lastErrors ? [...existing.lastErrors] : []
+    };
+    const next = existingIndex >= 0 ? subscriptions.map((item, index) => index === existingIndex ? subscription : item) : [subscription, ...subscriptions];
+    await writeAll(next);
+    return cloneSubscription(subscription);
+  }
+  async function remove(id) {
+    const subscriptions = await readAll();
+    const next = subscriptions.filter((item) => item.id !== id && item.url !== id);
+    if (next.length === subscriptions.length) return false;
+    await writeAll(next);
+    return true;
+  }
+  async function markRefreshResult(id, result = {}) {
+    const subscriptions = await readAll();
+    const index = subscriptions.findIndex((item) => item.id === id || item.url === id);
+    if (index < 0) return null;
+    const now = Date.now();
+    const current = subscriptions[index];
+    if (!current) return null;
+    const updated = {
+      ...current,
+      updatedAt: now,
+      lastCheckedAt: now,
+      lastQueued: Math.max(0, result.queued || 0),
+      lastSkipped: Math.max(0, result.skipped || 0),
+      lastErrors: Array.isArray(result.errors) ? result.errors.slice(0, MAX_ERRORS) : []
+    };
+    subscriptions[index] = updated;
+    await writeAll(subscriptions);
+    return cloneSubscription(updated);
+  }
+  var ScriptSubscriptions = {
+    STORAGE_KEY,
+    MAX_SUBSCRIPTIONS,
+    MAX_FEED_ITEMS,
+    normalizeFeedUrl: normalizeHttpUrl,
+    parseFeed,
+    list,
+    get,
+    upsertFromFeed,
+    remove,
+    markRefreshResult
+  };
+  var subscriptions_default = ScriptSubscriptions;
+  return module.exports.default || module.exports.ScriptSubscriptions || module.exports;
+})();
+
+// ============================================================================
 // Generated from src/bg/analyzer.ts; do not edit by hand.
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
@@ -13861,6 +14108,7 @@ const UpdateSystem = {
     const now = Date.now();
 
     return {
+      kind: 'update',
       id: update.id,
       name: script.meta?.name || update.name || update.id,
       currentVersion: script.meta?.version || update.currentVersion || '',
@@ -13890,6 +14138,55 @@ const UpdateSystem = {
     };
   },
 
+  async _buildPendingSubscriptionInstall(update, source = 'subscription') {
+    if (!update?.id || typeof update.code !== 'string') return null;
+    const parsed = parseUserscript(update.code);
+    if (parsed.error) return null;
+
+    const sourceUrl = update.sourceUrl || parsed.meta.downloadURL || parsed.meta.updateURL || '';
+    const receipt = await createScriptTrustReceipt({
+      operation: 'subscription-install',
+      code: update.code,
+      meta: parsed.meta,
+      sourceUrl,
+      fetchDependencyBody: fetchRequireScript
+    });
+    const now = Date.now();
+
+    return {
+      kind: 'subscription-install',
+      id: update.id,
+      name: parsed.meta.name || update.name || update.id,
+      currentVersion: 'new',
+      newVersion: parsed.meta.version || update.newVersion || '',
+      code: update.code,
+      sourceUrl,
+      source,
+      queuedAt: now,
+      checkedAt: now,
+      safeToApply: false,
+      reviewReasons: ['New script from subscription'],
+      sourceIdentityChanged: false,
+      subscriptionId: update.subscriptionId || '',
+      subscriptionName: update.subscriptionName || '',
+      installSource: classifyInstallSource(sourceUrl),
+      previousInstallSource: null,
+      trustReceipt: receipt,
+      dependencyChanges: receipt.dependencyChanges || { require: [] },
+      permissionChanges: receipt.permissionChanges || null,
+      diff: receipt.diff || null,
+      sourceInfo: receipt.source || null,
+      rollback: {
+        available: false,
+        action: 'rollbackScript',
+        scriptId: '',
+        version: '',
+        updatedAt: null,
+        historyIndex: null
+      }
+    };
+  },
+
   async queueUpdates(updates = [], { source = 'manual-check' } = {}) {
     const incoming = Array.isArray(updates) ? updates : [];
     const existing = await this._loadPendingUpdates();
@@ -13903,6 +14200,32 @@ const UpdateSystem = {
         if (pending) queued.push(pending);
       } catch (error) {
         console.warn('[ScriptVault] Failed to queue update:', update?.name || update?.id, error?.message || error);
+      }
+    }
+
+    const pendingUpdates = await this._savePendingUpdates([...queued, ...retained]);
+    return {
+      success: true,
+      queued: queued.length,
+      pendingUpdates,
+      safeCount: pendingUpdates.filter(item => item.safeToApply).length,
+      reviewCount: pendingUpdates.filter(item => !item.safeToApply).length
+    };
+  },
+
+  async queueSubscriptionInstalls(installs = [], { source = 'subscription' } = {}) {
+    const incoming = Array.isArray(installs) ? installs : [];
+    const existing = await this._loadPendingUpdates();
+    const incomingIds = new Set(incoming.map(update => update?.id).filter(Boolean));
+    const retained = existing.filter(item => !incomingIds.has(item.id));
+    const queued = [];
+
+    for (const install of incoming) {
+      try {
+        const pending = await this._buildPendingSubscriptionInstall(install, source);
+        if (pending) queued.push(pending);
+      } catch (error) {
+        console.warn('[ScriptVault] Failed to queue subscription script:', install?.name || install?.id, error?.message || error);
       }
     }
 
@@ -13941,6 +14264,26 @@ const UpdateSystem = {
     const pendingUpdates = await this._loadPendingUpdates();
     const item = pendingUpdates.find(update => update.id === scriptId);
     if (!item) return { error: 'Pending update not found' };
+
+    if (item.kind === 'subscription-install') {
+      const result = await installFromCode(item.code, {
+        sourceUrl: item.sourceUrl || '',
+        operation: 'subscription-install'
+      });
+      if (result?.success) {
+        await this.clearPendingUpdates(scriptId);
+        this._recordRecentUpdates([{
+          id: item.id,
+          name: item.name,
+          previousVersion: 'new',
+          newVersion: item.newVersion,
+          dependencyChanges: result.script?.trustReceipt?.dependencyChanges || item.dependencyChanges || { require: [] },
+          permissionChanges: result.script?.trustReceipt?.permissionChanges || item.permissionChanges || null,
+          appliedAt: Date.now()
+        }]);
+      }
+      return result;
+    }
 
     const result = await this.applyUpdate(scriptId, item.code, { force, sourceUrl: item.sourceUrl || '' });
     if (result?.success) {
@@ -14031,6 +14374,238 @@ const UpdateSystem = {
   /** Clear the recent-updates ring (called when the dashboard banner is dismissed). */
   clearRecentUpdates() {
     this._recentUpdates = [];
+  }
+};
+
+// ============================================================================
+// Script Subscriptions
+// ============================================================================
+
+const SubscriptionSystem = {
+  _FETCH_TIMEOUT_MS: 15 * 1000,
+  _MAX_FEED_BYTES: 512 * 1024,
+  _MAX_SCRIPT_BYTES: MAX_SCRIPT_SIZE,
+  _MAX_SCRIPTS_PER_REFRESH: 50,
+
+  async fetchText(url, label, maxBytes) {
+    InternalHostGuard.assertExternalFetchUrl(url, label, ['http:', 'https:']);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this._FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) {
+        throw new Error(`${label} fetch failed with HTTP ${response.status}`);
+      }
+      const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+      if (!postCheck.ok) {
+        throw new Error(`${label} redirected to ${postCheck.message}`);
+      }
+      return await _fetchTextBounded(response, maxBytes, label);
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        throw new Error(`${label} fetch timed out after ${Math.round(this._FETCH_TIMEOUT_MS / 1000)} seconds`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  },
+
+  async fetchFeed(url) {
+    const feedUrl = ScriptSubscriptions.normalizeFeedUrl(url);
+    const text = await this.fetchText(feedUrl, 'Subscription feed', this._MAX_FEED_BYTES);
+    return ScriptSubscriptions.parseFeed(text, feedUrl);
+  },
+
+  async fetchScript(url) {
+    const scriptUrl = ScriptSubscriptions.normalizeFeedUrl(url);
+    return await this.fetchText(scriptUrl, 'Subscription script', this._MAX_SCRIPT_BYTES);
+  },
+
+  hashString(input) {
+    let hash = 2166136261;
+    const text = String(input || '');
+    for (let i = 0; i < text.length; i++) {
+      hash = Math.imul(hash ^ text.charCodeAt(i), 16777619) >>> 0;
+    }
+    return hash.toString(36);
+  },
+
+  scriptIdentity(meta = {}) {
+    const name = meta.name || '';
+    if (!name) return '';
+    return `${name}\n${meta.namespace || ''}`;
+  },
+
+  collectScriptSourceUrls(script) {
+    return [
+      script?.meta?.downloadURL,
+      script?.meta?.updateURL,
+      script?.trustReceipt?.source?.downloadUrl,
+      script?.trustReceipt?.source?.updateUrl,
+      script?.trustReceipt?.source?.installUrl,
+      script?.installSource?.url
+    ].filter(Boolean);
+  },
+
+  async buildInstallCandidates(subscription, scripts = []) {
+    const installedScripts = await ScriptStorage.getAll();
+    const installedIdentities = new Set();
+    const installedSources = new Set();
+    installedScripts.forEach(script => {
+      const identity = this.scriptIdentity(script?.meta || {});
+      if (identity) installedIdentities.add(identity);
+      this.collectScriptSourceUrls(script).forEach(url => installedSources.add(url));
+    });
+
+    const pending = await UpdateSystem.getPendingUpdates();
+    const pendingSources = new Set(pending.map(item => item.sourceUrl).filter(Boolean));
+    const pendingIdentities = new Set(pending.map(item => item.kind === 'subscription-install' ? `${item.name || ''}\n` : '').filter(Boolean));
+    const installs = [];
+    const errors = [];
+    let skipped = 0;
+
+    for (const item of (Array.isArray(scripts) ? scripts : []).slice(0, this._MAX_SCRIPTS_PER_REFRESH)) {
+      if (!item?.url) {
+        skipped++;
+        continue;
+      }
+      if (installedSources.has(item.url) || pendingSources.has(item.url)) {
+        skipped++;
+        continue;
+      }
+      const hintedIdentity = item.name ? `${item.name}\n${item.namespace || ''}` : '';
+      if (hintedIdentity && (installedIdentities.has(hintedIdentity) || pendingIdentities.has(hintedIdentity))) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        const code = await this.fetchScript(item.url);
+        const parsed = parseUserscript(code);
+        if (parsed.error) {
+          errors.push(`${item.url}: ${parsed.error}`);
+          skipped++;
+          continue;
+        }
+        const identity = this.scriptIdentity(parsed.meta || {});
+        if (identity && (installedIdentities.has(identity) || pendingIdentities.has(identity))) {
+          skipped++;
+          continue;
+        }
+        if (identity) pendingIdentities.add(identity);
+        pendingSources.add(item.url);
+        installs.push({
+          id: `subscription_${subscription.id}_${this.hashString(item.url || identity)}`,
+          code,
+          sourceUrl: item.url,
+          name: parsed.meta?.name || item.name || item.url,
+          newVersion: parsed.meta?.version || item.version || '',
+          subscriptionId: subscription.id,
+          subscriptionName: subscription.name
+        });
+      } catch (error) {
+        errors.push(`${item.url}: ${error?.message || error}`);
+        skipped++;
+      }
+    }
+
+    return { installs, skipped, errors };
+  },
+
+  async list() {
+    return {
+      success: true,
+      subscriptions: await ScriptSubscriptions.list()
+    };
+  },
+
+  async addSubscription(url, name = '') {
+    if (!url) return { success: false, error: 'Subscription URL is required' };
+    try {
+      const feed = await this.fetchFeed(url);
+      const subscription = await ScriptSubscriptions.upsertFromFeed(feed.sourceUrl, feed, { name });
+      return await this.refreshSubscription(subscription.id, { feed, subscription });
+    } catch (error) {
+      return { success: false, error: error?.message || String(error) };
+    }
+  },
+
+  async refreshSubscription(id, options = {}) {
+    if (!id) return { success: false, error: 'Subscription id is required' };
+    try {
+      let subscription = options.subscription || await ScriptSubscriptions.get(id);
+      if (!subscription) return { success: false, error: 'Subscription not found' };
+      let feed = options.feed || null;
+      if (!feed) {
+        feed = await this.fetchFeed(subscription.url);
+        subscription = await ScriptSubscriptions.upsertFromFeed(subscription.url, feed, {
+          name: subscription.name,
+          enabled: subscription.enabled
+        });
+      }
+
+      const { installs, skipped, errors } = await this.buildInstallCandidates(subscription, feed.scripts);
+      const queueResult = await UpdateSystem.queueSubscriptionInstalls(installs, {
+        source: `subscription:${subscription.id}`
+      });
+      const updated = await ScriptSubscriptions.markRefreshResult(subscription.id, {
+        queued: queueResult.queued,
+        skipped,
+        errors
+      });
+
+      return {
+        success: true,
+        subscription: updated || subscription,
+        queued: queueResult.queued,
+        skipped,
+        errors,
+        pendingUpdates: queueResult.pendingUpdates
+      };
+    } catch (error) {
+      return { success: false, error: error?.message || String(error) };
+    }
+  },
+
+  async refreshSubscriptions() {
+    const subscriptions = await ScriptSubscriptions.list();
+    const results = [];
+    let queued = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const subscription of subscriptions.filter(item => item.enabled !== false)) {
+      const result = await this.refreshSubscription(subscription.id);
+      results.push(result);
+      if (result?.success) {
+        queued += result.queued || 0;
+        skipped += result.skipped || 0;
+        errors.push(...(result.errors || []));
+      } else if (result?.error) {
+        errors.push(`${subscription.name}: ${result.error}`);
+      }
+    }
+
+    return {
+      success: true,
+      queued,
+      skipped,
+      errors,
+      results,
+      subscriptions: await ScriptSubscriptions.list(),
+      pendingUpdates: await UpdateSystem.getPendingUpdates()
+    };
+  },
+
+  async removeSubscription(id) {
+    if (!id) return { success: false, error: 'Subscription id is required' };
+    const removed = await ScriptSubscriptions.remove(id);
+    return {
+      success: true,
+      removed,
+      subscriptions: await ScriptSubscriptions.list()
+    };
   }
 };
 
@@ -15809,6 +16384,21 @@ async function handleMessage(message, sender) {
 
       case 'applySafePendingUpdates':
         return await UpdateSystem.applySafePendingUpdates(data?.scriptIds || null);
+
+      case 'getSubscriptions':
+        return await SubscriptionSystem.list();
+
+      case 'addSubscription':
+        return await SubscriptionSystem.addSubscription(data?.url || '', data?.name || '');
+
+      case 'refreshSubscription':
+        return await SubscriptionSystem.refreshSubscription(data?.subscriptionId || data?.id || data?.url || '');
+
+      case 'refreshSubscriptions':
+        return await SubscriptionSystem.refreshSubscriptions();
+
+      case 'removeSubscription':
+        return await SubscriptionSystem.removeSubscription(data?.subscriptionId || data?.id || data?.url || '');
 
       // Phase 12.10 — recently-applied updates for the in-app dashboard banner.
       case 'getRecentUpdates':

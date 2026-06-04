@@ -27,10 +27,6 @@ P1 core workflow gaps, P2 polish, P3 nice-to-have.
 
 ### Ecosystem and modernization
 
-- [ ] P2 — ScriptCat-style script subscriptions (URL → JSON list)
-  - Why: auto-updating curated bundle install.
-  - Touches: `background.core.js`, new `modules/subscriptions.js`, dashboard import UI.
-  - Source: docs/archive/TODO.md E-7 (PASS2 ecosystem item 14).
 - [ ] P2 — `navigator.storage.persist()` prompt on first non-trivial write
   - Why: avoid silent eviction of script data under storage pressure.
   - Touches: `modules/quota-manager.js`, `background.core.js`.
@@ -151,10 +147,6 @@ Priorities/sizes preserve the source labels.
   - Touches: `parser.ts`, `src/types/script.ts`, `install.js`, `dashboard.js renderScriptRow`.
   - Acceptance: parse into `{type, description, locale}`; all 6 GreasyFork types labelled; amber chip in the script row.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-3.
-- [ ] P2 — Script subscriptions (URL → JSON list), authored in TS
-  - Why: curated auto-updating bundle install (ScriptCat differentiator); sharpens E-7. New members land in the pending-update inbox, not auto-installed.
-  - Touches: new `src/modules/subscriptions.ts`; reuse `InternalHostGuard` + `_fetchTextBounded` + install-source classification.
-  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-6.
 - [ ] P2 — Wire the built npm/ESM `@require` resolver
   - Why: `modules/npm-resolve.js` (SRI + 5 MB cap) is built but unwired; fix the documented computed-integrity TOCTOU before wiring, or delete to shrink attack surface.
   - Touches: `resource-loader.ts` `@require` fetch path.

@@ -281,6 +281,34 @@ interface ApplySafePendingUpdates {
   scriptIds?: string[];
 }
 
+interface GetSubscriptions {
+  action: 'getSubscriptions';
+}
+
+interface AddSubscription {
+  action: 'addSubscription';
+  url: string;
+  name?: string;
+}
+
+interface RefreshSubscription {
+  action: 'refreshSubscription';
+  subscriptionId?: string;
+  id?: string;
+  url?: string;
+}
+
+interface RefreshSubscriptions {
+  action: 'refreshSubscriptions';
+}
+
+interface RemoveSubscription {
+  action: 'removeSubscription';
+  subscriptionId?: string;
+  id?: string;
+  url?: string;
+}
+
 interface GetVersionHistory {
   action: 'getVersionHistory';
   scriptId: string;
@@ -1038,6 +1066,7 @@ export type BackgroundMessage =
   // Updates
   | CheckUpdates | ForceUpdate | ApplyUpdate | QueueUpdates | GetPendingUpdates
   | ClearPendingUpdates | ApplyPendingUpdate | ApplySafePendingUpdates
+  | GetSubscriptions | AddSubscription | RefreshSubscription | RefreshSubscriptions | RemoveSubscription
   | GetVersionHistory | RollbackScript
   // Cloud sync
   | SyncNow | TestSync | ConnectSyncProvider | DisconnectSyncProvider
@@ -1181,6 +1210,11 @@ export interface ResponseMap {
   clearPendingUpdates: SuccessOrError<{ cleared?: number | 'all'; pendingUpdates?: unknown[] }>;
   applyPendingUpdate: SuccessOrError<{ script?: Script }>;
   applySafePendingUpdates: SuccessOrError<{ applied: number; skipped: number; failed: number; pendingUpdates: unknown[] }>;
+  getSubscriptions: SuccessOrError<{ subscriptions: unknown[] }>;
+  addSubscription: SuccessOrError<{ subscription?: unknown; queued?: number; skipped?: number; errors?: string[]; pendingUpdates?: unknown[] }>;
+  refreshSubscription: SuccessOrError<{ subscription?: unknown; queued?: number; skipped?: number; errors?: string[]; pendingUpdates?: unknown[] }>;
+  refreshSubscriptions: SuccessOrError<{ subscriptions?: unknown[]; queued?: number; skipped?: number; errors?: string[]; pendingUpdates?: unknown[] }>;
+  removeSubscription: SuccessOrError<{ removed?: boolean; subscriptions?: unknown[] }>;
   getRecentUpdates: RecentUpdateResponseItem[];
   clearRecentUpdates: SuccessResponse;
 

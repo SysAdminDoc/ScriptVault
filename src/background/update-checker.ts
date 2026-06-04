@@ -39,6 +39,10 @@ declare function parseUserscript(code: string): {
 
 declare function registerScript(script: Script): Promise<void>;
 declare function unregisterScript(scriptId: string): Promise<void>;
+declare function installFromCode(
+  code: string,
+  receiptOptions?: { sourceUrl?: string; operation?: ScriptTrustReceipt['operation'] },
+): Promise<ApplyUpdateResult>;
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -53,13 +57,26 @@ export interface UpdateInfo {
   sourceUrl?: string;
 }
 
+export interface SubscriptionInstallInfo {
+  id: string;
+  code: string;
+  sourceUrl?: string;
+  name?: string;
+  newVersion?: string;
+  subscriptionId?: string;
+  subscriptionName?: string;
+}
+
 export interface PendingUpdateInfo extends UpdateInfo {
+  kind?: 'update' | 'subscription-install';
   source: string;
   queuedAt: number;
   checkedAt: number;
   safeToApply: boolean;
   reviewReasons: string[];
   sourceIdentityChanged: boolean;
+  subscriptionId?: string;
+  subscriptionName?: string;
   trustReceipt?: unknown;
   dependencyChanges?: unknown;
   permissionChanges?: unknown;
@@ -419,6 +436,7 @@ export const UpdateSystem = {
     const now = Date.now();
 
     return {
+      kind: 'update',
       id: update.id,
       name: script.meta?.name || update.name || update.id,
       currentVersion: script.meta?.version || update.currentVersion || '',
@@ -446,6 +464,51 @@ export const UpdateSystem = {
     };
   },
 
+  async _buildPendingSubscriptionInstall(update: SubscriptionInstallInfo, source = 'subscription'): Promise<PendingUpdateInfo | null> {
+    if (!update?.id || typeof update.code !== 'string') return null;
+    const parsed = parseUserscript(update.code);
+    if (parsed.error !== undefined || !parsed.meta) return null;
+    const sourceUrl = update.sourceUrl || parsed.meta.downloadURL || parsed.meta.updateURL || '';
+    const receipt = await createScriptTrustReceipt({
+      operation: 'subscription-install',
+      code: update.code,
+      meta: parsed.meta,
+      sourceUrl,
+      fetchDependencyBody: fetchRequireScript,
+    });
+    const now = Date.now();
+    return {
+      kind: 'subscription-install',
+      id: update.id,
+      name: parsed.meta.name || update.name || update.id,
+      currentVersion: 'new',
+      newVersion: parsed.meta.version || update.newVersion || '',
+      code: update.code,
+      sourceUrl,
+      source,
+      queuedAt: now,
+      checkedAt: now,
+      safeToApply: false,
+      reviewReasons: ['New script from subscription'],
+      sourceIdentityChanged: false,
+      subscriptionId: update.subscriptionId || '',
+      subscriptionName: update.subscriptionName || '',
+      trustReceipt: receipt,
+      dependencyChanges: receipt.dependencyChanges,
+      permissionChanges: receipt.permissionChanges,
+      diff: receipt.diff,
+      sourceInfo: receipt.source,
+      rollback: {
+        ...receipt.rollback,
+        available: false,
+        scriptId: '',
+        version: '',
+        updatedAt: null,
+        historyIndex: null,
+      },
+    };
+  },
+
   async queueUpdates(updates: UpdateInfo[] = [], { source = 'manual-check' } = {}): Promise<{ success: true; queued: number; pendingUpdates: PendingUpdateInfo[]; safeCount: number; reviewCount: number }> {
     const incoming = Array.isArray(updates) ? updates : [];
     const existing = await this._loadPendingUpdates();
@@ -455,6 +518,28 @@ export const UpdateSystem = {
 
     for (const update of incoming) {
       const pending = await this._buildPendingUpdate(update, source);
+      if (pending) queued.push(pending);
+    }
+
+    const pendingUpdates = await this._savePendingUpdates([...queued, ...retained]);
+    return {
+      success: true,
+      queued: queued.length,
+      pendingUpdates,
+      safeCount: pendingUpdates.filter((item) => item.safeToApply).length,
+      reviewCount: pendingUpdates.filter((item) => !item.safeToApply).length,
+    };
+  },
+
+  async queueSubscriptionInstalls(installs: SubscriptionInstallInfo[] = [], { source = 'subscription' } = {}): Promise<{ success: true; queued: number; pendingUpdates: PendingUpdateInfo[]; safeCount: number; reviewCount: number }> {
+    const incoming = Array.isArray(installs) ? installs : [];
+    const existing = await this._loadPendingUpdates();
+    const incomingIds = new Set(incoming.map((update) => update?.id).filter(Boolean));
+    const retained = existing.filter((item) => !incomingIds.has(item.id));
+    const queued: PendingUpdateInfo[] = [];
+
+    for (const install of incoming) {
+      const pending = await this._buildPendingSubscriptionInstall(install, source);
       if (pending) queued.push(pending);
     }
 
@@ -493,6 +578,25 @@ export const UpdateSystem = {
     const pendingUpdates = await this._loadPendingUpdates();
     const item = pendingUpdates.find((update) => update.id === scriptId);
     if (!item) return { error: 'Pending update not found' };
+    if (item.kind === 'subscription-install') {
+      const result = await installFromCode(item.code, {
+        sourceUrl: item.sourceUrl || '',
+        operation: 'subscription-install',
+      });
+      if (result.success) {
+        await this.clearPendingUpdates(scriptId);
+        this._recordRecentUpdates([{
+          id: item.id,
+          name: item.name,
+          previousVersion: 'new',
+          newVersion: item.newVersion,
+          dependencyChanges: result.script.trustReceipt?.dependencyChanges || item.dependencyChanges as ScriptTrustReceipt['dependencyChanges'],
+          permissionChanges: result.script.trustReceipt?.permissionChanges || item.permissionChanges as ScriptTrustReceipt['permissionChanges'],
+          appliedAt: Date.now(),
+        }]);
+      }
+      return result;
+    }
     const result = await this.applyUpdate(scriptId, item.code, { force, sourceUrl: item.sourceUrl || '' });
     if (result.success) {
       await this.clearPendingUpdates(scriptId);

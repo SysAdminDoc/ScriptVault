@@ -1922,6 +1922,68 @@
             contain-intrinsic-size: 220px;
         }
 
+        .subscription-form {
+            display: grid;
+            grid-template-columns: minmax(220px, 2fr) minmax(160px, 1fr) auto;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .subscription-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .subscription-item {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            background: rgba(255, 255, 255, 0.025);
+        }
+
+        .subscription-copy {
+            display: grid;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .subscription-copy strong,
+        .subscription-url {
+            overflow-wrap: anywhere;
+        }
+
+        .subscription-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .subscription-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        @media (max-width: 900px) {
+            .subscription-form,
+            .subscription-item {
+                grid-template-columns: 1fr;
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .subscription-actions {
+                justify-content: flex-start;
+            }
+        }
+
         .backup-browser-list,
         .restore-preview-list {
             display: flex;
@@ -6913,6 +6975,24 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="setting-row">
                         <input type="url" class="input-field wide" id="importUrlInput" name="import_script_url" aria-label="Userscript URL" autocomplete="off" spellcheck="false" inputmode="url" placeholder="https://example.com/script.user.js">
                         <button type="button" class="btn" id="btnInstallFromUrl" style="margin-left:10px">Install</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Script Subscriptions</div>
+                <div class="section-content">
+                    <div class="setting-row subscription-form">
+                        <input type="url" class="input-field wide" id="subscriptionUrlInput" name="subscription_feed_url" aria-label="Subscription feed URL" autocomplete="off" spellcheck="false" inputmode="url" placeholder="https://example.com/scripts.json">
+                        <input type="text" class="input-field" id="subscriptionNameInput" name="subscription_feed_name" aria-label="Subscription name" autocomplete="off" spellcheck="false" placeholder="Name">
+                        <button type="button" class="btn" id="btnAddSubscription">Add Feed</button>
+                    </div>
+                    <div class="setting-row" style="gap:8px">
+                        <button type="button" class="btn" id="btnRefreshSubscriptions">Refresh Feeds</button>
+                        <span class="utility-inline-status" id="subscriptionStatus">No feeds loaded</span>
+                    </div>
+                    <div id="subscriptionList" class="subscription-list utility-surface">
+                        <div class="panel-empty-inline">No subscriptions saved.</div>
                     </div>
                 </div>
             </div>
