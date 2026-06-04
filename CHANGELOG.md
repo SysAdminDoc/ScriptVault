@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Sigstore bundle parser
+
+- **Sigstore bundle parsing is now generated from TypeScript.**
+  Added `src/modules/sigstore-bundle-parser.ts` with generated
+  `modules/sigstore-bundle-parser.js` and promotion-gate coverage.
+- **The parser validates Sigstore v0.3 bundle shape before verification.**
+  It accepts message-signature and DSSE content, extracts certificate or
+  public-key verification material, transparency-log entries, and RFC3161
+  timestamps, and rejects unsupported media types or ambiguous key material.
+
 ### 2026-06-04 — Require provenance metadata foundation
 
 - **`@require-provenance` metadata now persists.** The main userscript parser,

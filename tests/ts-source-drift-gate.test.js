@@ -53,6 +53,7 @@ describe('TS source drift gate', () => {
     expect(map.entries.some((entry) => entry.runtime === 'modules/migration.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/subscriptions.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/public-api.js' && entry.status === 'promoted')).toBe(true);
+    expect(map.entries.some((entry) => entry.runtime === 'modules/sigstore-bundle-parser.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/backup-scheduler.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/sync-easycloud.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'bg/netlog.js' && entry.status === 'promoted')).toBe(true);
@@ -68,7 +69,7 @@ describe('TS source drift gate', () => {
     const report = analyzeSourceDrift(map, []);
     const text = formatTextReport(report, { reportMode: true });
 
-    expect(report.totals.promoted).toBe(23);
+    expect(report.totals.promoted).toBe(24);
     expect(report.totals.candidate).toBe(0);
     expect(report.totals.mirrored).toBe(0);
     expect(report.totals['intentionally-divergent']).toBe(0);

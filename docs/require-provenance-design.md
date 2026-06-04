@@ -1,7 +1,7 @@
 # `@require-provenance` Design — Sigstore-Style Verification for `@require`
 
 **Phase:** 39.5 (extends Phase 11.8 SRI).
-**Status:** Phase A parser + storage foundation shipped 2026-06-04; bundle parsing, cryptographic verification, UI, and author guide remain open.
+**Status:** Phase A parser + storage foundation and Phase B bundle parser shipped 2026-06-04; cryptographic verification, UI, and author guide remain open.
 **Owner:** Phase 17 (Security Round 2) follow-up.
 **Last reviewed:** 2026-05-17.
 
@@ -101,11 +101,12 @@ Got author:      https://github.com/attacker
 - **Tests:** 10 parser cases covering valid, malformed, missing identity, comma-separated lists.
 - **Shipped:** The main parser, background-core bridge parser, and public API install parser persist ordered `requireProvenance[]` / `requireIdentity[]` metadata. Trust receipts record declaration-only dependency provenance blocks with `verification: not-yet-implemented`.
 
-### Phase B — Bundle fetcher + parser
+### Phase B — Bundle fetcher + parser — shipped 2026-06-04
 
-- Add `lib/sigstore-bundle-parser.js` — strict parser for the `.bundle` JSON format (Sigstore Protobuf bundle profile, draft v0.3). Approx 300 LOC.
+- Add `src/modules/sigstore-bundle-parser.ts` and generated `modules/sigstore-bundle-parser.js` — strict parser for the `.bundle` JSON format (Sigstore Protobuf bundle profile, draft v0.3).
 - No external deps; pure parser.
-- **Tests:** parse a known-good bundle from Sigstore's test fixtures.
+- **Tests:** parse synthetic v0.3 message-signature and DSSE bundles, reject unsupported media types, malformed base64 payloads, ambiguous key material, and multi-signature DSSE bundles, and load the generated runtime export.
+- **Shipped:** Parser normalizes Sigstore v0.3 JSON bundles with certificate, x509 chain, or public-key-identifier verification material plus message-signature or DSSE content. It extracts transparency-log entries and RFC3161 timestamps but does not perform cryptographic verification yet.
 
 ### Phase C — Signature verification
 
