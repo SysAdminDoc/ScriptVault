@@ -213,6 +213,23 @@ support matrix no longer describes Edge as the Chrome ZIP; it reads
 `edge-build-<version>.json` and records manual Partner Center publication,
 deferred REST update automation, and no dedicated Edge browser smoke in CI.
 
+2026-06-04 Cycle 11 Node toolchain-contract refresh: the repo now declares
+`engines.node >=21.2.0`, and tests use Node ESM `import.meta.dirname`, but CI
+still pins setup-node to `node-version: 20`, no `.nvmrc` / `.node-version` /
+`.npmrc` / `packageManager` companion exists, and local npm reports
+`engine-strict=false`. The existing `packageManager` / `.nvmrc` quick win is
+therefore promoted into a P2 release-quality item: make CI, contributor shells,
+npm engine enforcement, package-manager metadata, CWS tooling checks, and the
+release runbook all consume the same Node floor.
+External anchors: Node ESM `import.meta.dirname`
+(`https://nodejs.org/api/esm.html#importmetadirname`), Node v21
+`packageManager` / Corepack docs
+(`https://nodejs.org/download/release/v21.1.0/docs/api/packages.html#packagemanager`),
+npm `engines` / `engine-strict` docs
+(`https://docs.npmjs.com/files/package.json/#engines`,
+`https://docs.npmjs.com/cli/using-npm/config#engine-strict`), and setup-node
+`node-version-file` docs (`https://github.com/actions/setup-node#usage`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
@@ -247,9 +264,10 @@ Top opportunities (one line each):
 11. **[Closed 2026-06-04] AMO vendored-library provenance was incomplete** — Firefox package libraries now have exact npm pins, official source/package hashes, and a provenance check. (P2)
 12. **[Closed 2026-06-04] CWS remote-hosted-code review packet was missing** — `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check` now separate allowed User Scripts/sandbox flows from forbidden extension remote logic and scan source/package inputs plus the built Chrome ZIP in CI. (P1)
 13. **[Closed 2026-06-04] Edge artifact evidence was not wired into CI or support claims** — CI now builds/uploads `edge-artifacts/*`, and the support matrix validates the current Edge ZIP/report instead of claiming the Chrome ZIP is the Edge package. (P2)
-14. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
-15. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
-16. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
+14. **[Verified] Node toolchain contract drift** — `package.json` declares `engines.node >=21.2.0`, CI still runs setup-node `20`, there is no Node version file / package-manager pin / engine-strict gate, and npm treats `engines` as advisory by default. (P2)
+15. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
+16. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
+17. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
 
 ## Evidence Reviewed
 
@@ -266,6 +284,7 @@ Top opportunities (one line each):
 - **AMO vendored libraries**: `build-firefox.sh` includes `lib/acorn.min.js` and `lib/diff.min.js`; `AMO-SOURCE-README.md` describes only local library paths and generic source ZIP contents; tests pin those library inclusions but not reviewer provenance; `lib/acorn.min.js` says it was minified by jsDelivr from `acorn@8.14.1`, while `package-lock.json` currently resolves npm `acorn@8.16.0`.
 - **CWS remote-code review**: `manifest.json` declares `userScripts` and limits extension-page CSP to `script-src 'self'` while sandboxing `pages/editor-sandbox.html`; `PRIVACY.md` explains externally sourced userscript execution; `docs/cws-remote-code-compliance.md` maps policy buckets; `scripts/check-cws-remote-code.mjs` scans source/package inputs and the built Chrome ZIP for forbidden remote-code execution patterns.
 - **Edge artifact/support claims**: `scripts/build-edge.mjs` stages `build-edge/`, writes `edge-artifacts/scriptvault-edge-v<version>.zip`, and emits an `edge-build-<version>.json` release-readiness report; `tests/edge-build.test.js` covers the builder/report; CI now builds and uploads `edge-artifacts/*`; `scripts/generate-browser-support-matrix.mjs`, `README.md`, and `docs/cross-browser-pipeline.md` validate the current Edge report and state that Partner Center publication remains manual while REST update automation is deferred.
+- **Node/toolchain contract**: `package.json:6-8` declares `engines.node >=21.2.0`, `.github/workflows/ci.yml:25-29` still uses setup-node `node-version: 20`, `.nvmrc` / `.node-version` / `.npmrc` are absent, local `npm config get engine-strict` returns `false`, `tests/audit-hardening-2026-06-04*.test.js:12` uses `import.meta.dirname`, and `scripts/check-cws-publish-tooling.mjs:40-58` still checks CWS tooling against a hard-coded Node 20 lower bound.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -277,6 +296,7 @@ Top opportunities (one line each):
   - Mozilla source-code submission, third-party library usage, add-on policies, and MDN publishing notes anchor the AMO vendored-library provenance item: https://extensionworkshop.com/documentation/publish/source-code-submission/, https://extensionworkshop.com/documentation/publish/third-party-library-usage/, https://extensionworkshop.com/documentation/publish/add-on-policies/, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/What_next
   - Chrome Web Store program policies, Chrome remote-hosted-code violation guidance, and the Chrome `userScripts` API reference anchor the CWS remote-code review packet item: https://developer.chrome.com/docs/webstore/program-policies/policies, https://developer.chrome.com/docs/extensions/develop/migrate/remote-hosted-code, https://developer.chrome.com/docs/extensions/reference/api/userScripts
   - Microsoft Edge Chrome-port guidance, Add-ons publish flow, supported API table, and update REST API docs anchor the Edge artifact/support-matrix item: https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/port-chrome-extension, https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension, https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/api-support, https://learn.microsoft.com/en-us/microsoft-edge/extensions/update/api/using-addons-api
+  - Node ESM, Node v21 package metadata/Corepack, npm engines/engine-strict, and setup-node version-file docs anchor the Node toolchain contract item: https://nodejs.org/api/esm.html#importmetadirname, https://nodejs.org/download/release/v21.1.0/docs/api/packages.html#packagemanager, https://docs.npmjs.com/files/package.json/#engines, https://docs.npmjs.com/cli/using-npm/config#engine-strict, https://github.com/actions/setup-node#usage
   - Userscript-manager landscape (Tampermonkey / Violentmonkey / ScriptCat sync, MV3, GitHub-Gist sync, granular execution control): comparison sources at extensionfixes.com and addons.mozilla.org Violentmonkey listing.
 - **Unverifiable here** [Needs validation]: live MV3 runtime behavior (cross-tab GM listener fan-out, omnibox UX, settings round-trips) — no browser run performed this pass; all runtime claims are static-read [Verified] or [Likely].
 
@@ -320,6 +340,7 @@ Top opportunities (one line each):
 | AMO vendored library provenance | AMO source review | `AMO-SOURCE-README.md`, `docs/amo-vendored-libraries.md`, `build-firefox.sh`, `lib/acorn.min.js`, `lib/diff.min.js` | shipped | exact package/source/hash inventory gated |
 | CWS remote-code review packet | Chrome Web Store review | `PRIVACY.md`, `docs/store-listing-copy.md`, `docs/cws-remote-code-compliance.md`, `manifest.json`, package ZIP | shipped 2026-06-04 | reviewer memo plus source/package and built-artifact remote-code scan |
 | Edge package evidence | Edge Add-ons package/release | `scripts/build-edge.mjs`, `edge-artifacts/edge-build-<version>.json`, support matrix | shipped | CI builds/uploads Edge artifacts; support matrix validates the Edge report |
+| Node toolchain contract | CI/contributor bootstrap/release scripts | `package.json`, `.github/workflows/ci.yml`, missing `.nvmrc` / `.node-version` / `.npmrc`, CWS tooling script | partial | `engines.node` exists, but CI/version files/package-manager pin/engine enforcement drift |
 | Coverage report | `npm run test:cov` | `vitest.config.mjs` | shipped | `all:false`, **no threshold** |
 | Dependency audit policy | manual | `docs/dependency-audit-policy.md` | doc only | **no bot automation** |
 | Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | actions **tag-pinned, not SHA** |
@@ -344,13 +365,14 @@ Top opportunities (one line each):
 - **Major** — `--omit=optional` audit exemption is unguarded against shipped optional deps. → ROADMAP P2 reach check. [Likely]
 - **Major** — No consolidated/validated Settings surface for operator knobs. → ROADMAP P2 settings audit. [Likely]
 - **Minor** — `sv` omnibox + keyboard commands undocumented. → ROADMAP P3 doc items. [Verified]
-- **Cosmetic** — `engines.node` now exists at `>=21.2.0`, but there is still no `packageManager`/`.nvmrc` companion for contributor shell/tooling alignment. → ROADMAP P3. [Verified]
+- **Major** — Node/toolchain contract drift: `engines.node >=21.2.0` is advisory under default npm config, CI still sets up Node 20, and the repo lacks a version file/package-manager pin/engine-strict gate. → ROADMAP P2 toolchain alignment. [Verified]
 
 ## Architecture & Technical Findings
 
 - Build authority is still concatenated runtime JS, not `src/**` (F-1 tracks convergence); this pass adds no new architectural item there — it is already the top Larger Bet.
 - `vitest` runs `pool: vmThreads, maxWorkers:1` to dodge an `@exodus/bytes` ESM-in-CJS crash under jsdom on the VMware share — a real environment fragility worth noting for contributors (documented in `vitest.config.mjs`, no action needed).
 - `error-log.js` and other `modules/*.js` are generated from `src/modules/*.ts` ("do not edit by hand") — confirms the TS-source direction; coverage gate (P1) should target `src/**`, consistent with that generation flow.
+- Toolchain authority is split between `package.json` (`>=21.2.0`), CI (`node-version: 20`), the release runbook's Node 20 CWS note, and a CWS helper script that hard-codes Node 20+. The P2 toolchain item should collapse those into one source of truth.
 - Dependency health: 10 devDeps were behind at research time. The `web-ext`/`tmp` security issue is closed; esbuild/monaco/puppeteer majors remain low-risk dev-only and should fold into the Dependabot grouped PRs rather than ad-hoc bumps.
 
 ## Security / Privacy / Data Safety
