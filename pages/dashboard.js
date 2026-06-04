@@ -1512,6 +1512,8 @@
         elements.settingsEnableSync = document.getElementById('settingsEnableSync');
         elements.settingsSyncType = document.getElementById('settingsSyncType');
         elements.settingsAllowInternalSyncEndpoints = document.getElementById('settingsAllowInternalSyncEndpoints');
+        elements.settingsSyncEncryptionEnabled = document.getElementById('settingsSyncEncryptionEnabled');
+        elements.settingsSyncEncryptionPassphrase = document.getElementById('settingsSyncEncryptionPassphrase');
         elements.firefoxSyncNote = document.getElementById('firefoxSyncNote');
         elements.lastSyncTime = document.getElementById('lastSyncTime');
         elements.syncWebdavSettings = document.getElementById('syncWebdavSettings');
@@ -2731,6 +2733,12 @@
         if (elements.settingsEnableSync) elements.settingsEnableSync.checked = normalizeSyncEnabled(s);
         if (elements.settingsAllowInternalSyncEndpoints) {
             elements.settingsAllowInternalSyncEndpoints.checked = s.allowInternalSyncEndpoints === true;
+        }
+        if (elements.settingsSyncEncryptionEnabled) {
+            elements.settingsSyncEncryptionEnabled.checked = s.syncEncryptionEnabled === true;
+        }
+        if (elements.settingsSyncEncryptionPassphrase) {
+            elements.settingsSyncEncryptionPassphrase.value = s.syncEncryptionPassphrase || '';
         }
         const runtimeSyncProvider = coerceSyncProviderForRuntime(normalizeSyncProvider(s));
         if (elements.settingsSyncType) {
@@ -9776,6 +9784,7 @@
             // Sync
             settingsEnableSync: ['syncEnabled', 'checked'],
             settingsAllowInternalSyncEndpoints: ['allowInternalSyncEndpoints', 'checked'],
+            settingsSyncEncryptionEnabled: ['syncEncryptionEnabled', 'checked'],
             
             // Editor
             settingsEnableEditor: ['enableEditor', 'checked'],
@@ -9862,6 +9871,7 @@
         elements.settingsWebdavUrl?.addEventListener('blur', e => saveSetting('webdavUrl', e.target.value.trim()));
         elements.settingsWebdavUsername?.addEventListener('blur', e => saveSetting('webdavUsername', e.target.value.trim()));
         elements.settingsWebdavPassword?.addEventListener('blur', e => saveSetting('webdavPassword', e.target.value));
+        elements.settingsSyncEncryptionPassphrase?.addEventListener('blur', e => saveSetting('syncEncryptionPassphrase', e.target.value));
         elements.settingsLintMaxSize?.addEventListener('blur', e => saveSetting('lintMaxSize', parseInt(e.target.value) || 500));
 
         // Textarea inputs that save on blur
@@ -9897,6 +9907,8 @@
                 await saveSettingOrThrow('syncEnabled', !!elements.settingsEnableSync?.checked);
                 await saveSettingOrThrow('syncProvider', provider);
                 await saveSettingOrThrow('allowInternalSyncEndpoints', !!elements.settingsAllowInternalSyncEndpoints?.checked);
+                await saveSettingOrThrow('syncEncryptionEnabled', !!elements.settingsSyncEncryptionEnabled?.checked);
+                await saveSettingOrThrow('syncEncryptionPassphrase', elements.settingsSyncEncryptionPassphrase?.value || '');
                 if (provider === 'webdav') {
                     await saveSettingOrThrow('webdavUrl', elements.settingsWebdavUrl?.value.trim() || '');
                     await saveSettingOrThrow('webdavUsername', elements.settingsWebdavUsername?.value.trim() || '');

@@ -1,6 +1,8 @@
+import { webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const originalGlobals = {
+  crypto: globalThis.crypto,
   debugLog: globalThis.debugLog,
   parseUserscript: globalThis.parseUserscript,
   ScriptAnalyzer: globalThis.ScriptAnalyzer,
@@ -12,7 +14,7 @@ const originalGlobals = {
   updateBadge: globalThis.updateBadge,
 };
 
-async function loadFreshCloudSync(initialScripts, remoteData) {
+async function loadFreshCloudSync(initialScripts, remoteData, settingsOverride = {}) {
   vi.resetModules();
 
   const scriptState = initialScripts.map((script) => structuredClone(script));
@@ -41,6 +43,7 @@ async function loadFreshCloudSync(initialScripts, remoteData) {
       syncEnabled: true,
       syncProvider: 'googledrive',
       lastSync: 0,
+      ...settingsOverride,
     })),
     set: vi.fn(async () => {}),
   };
@@ -88,12 +91,17 @@ async function loadFreshCloudSync(initialScripts, remoteData) {
 
 beforeEach(() => {
   globalThis.__resetStorageMock();
+  Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
   vi.clearAllMocks();
 });
 
 afterEach(() => {
   for (const [key, value] of Object.entries(originalGlobals)) {
-    globalThis[key] = value;
+    if (key === 'crypto') {
+      Object.defineProperty(globalThis, 'crypto', { value, configurable: true });
+    } else {
+      globalThis[key] = value;
+    }
   }
 });
 
@@ -447,5 +455,91 @@ describe('source cloud sync module', () => {
     expect(ScriptStorage.set).not.toHaveBeenCalled();
     expect(ScriptStorage.delete).not.toHaveBeenCalled();
     expect(SettingsManager.set).not.toHaveBeenCalled();
+  });
+
+  it('uploads encrypted v2 envelopes when sync encryption is enabled', async () => {
+    await chrome.storage.local.set({
+      syncTombstones: {},
+    });
+
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_secret',
+          code: '// ==UserScript==\n// @name Secret\n// ==/UserScript==\nconst token = "secret-token";',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Secret' },
+          settings: {},
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      null,
+      {
+        syncEncryptionEnabled: true,
+        syncEncryptionPassphrase: 'vault passphrase',
+        syncEncryptionKdfIterations: 2,
+      },
+    );
+    const { CloudSync, getRemoteData } = harness;
+
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+
+    const uploaded = getRemoteData();
+    expect(uploaded).toEqual(
+      expect.objectContaining({
+        version: 2,
+        encrypted: true,
+        algorithm: 'AES-256-GCM',
+        kdf: 'PBKDF2-SHA-256',
+      }),
+    );
+    expect(uploaded).not.toHaveProperty('scripts');
+    expect(JSON.stringify(uploaded)).not.toContain('secret-token');
+  });
+
+  it('rejects encrypted remote envelopes with a wrong passphrase before writing local data', async () => {
+    await chrome.storage.local.set({
+      syncTombstones: {},
+    });
+
+    const firstHarness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_secret',
+          code: '// ==UserScript==\n// @name Secret\n// ==/UserScript==\nconst token = "secret-token";',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Secret' },
+          settings: {},
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      null,
+      {
+        syncEncryptionEnabled: true,
+        syncEncryptionPassphrase: 'correct passphrase',
+        syncEncryptionKdfIterations: 2,
+      },
+    );
+    await expect(firstHarness.CloudSync.sync()).resolves.toEqual({ success: true });
+
+    const secondHarness = await loadFreshCloudSync(
+      [],
+      firstHarness.getRemoteData(),
+      {
+        syncEncryptionEnabled: true,
+        syncEncryptionPassphrase: 'wrong passphrase',
+        syncEncryptionKdfIterations: 2,
+      },
+    );
+
+    await expect(secondHarness.CloudSync.sync()).resolves.toEqual({
+      error: 'Unable to decrypt sync data. Check the sync encryption passphrase.',
+    });
+    expect(secondHarness.ScriptStorage.set).not.toHaveBeenCalled();
+    expect(secondHarness.provider.upload).not.toHaveBeenCalled();
   });
 });

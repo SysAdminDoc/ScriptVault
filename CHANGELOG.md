@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Cloud sync encryption
+
+- **Added optional client-side encryption for sync payloads.** CloudSync and
+  EasyCloud can now upload v2 `AES-256-GCM` envelopes derived with
+  `PBKDF2-SHA-256`, while still reading legacy plaintext v1 sync files.
+- **Kept the encryption passphrase out of normal exports.** The dashboard
+  exposes the sync-encryption opt-in and passphrase field, and JSON/ZIP backup
+  credential redaction treats `syncEncryptionPassphrase` as a sync credential.
+
 ### 2026-06-04 — Contributor local-state guidance
 
 - **Added a public CONTRIBUTING guide.** The guide covers setup,

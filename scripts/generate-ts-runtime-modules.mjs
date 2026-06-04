@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Generates runtime-compatible JavaScript artifacts from promoted TypeScript
 // modules while ScriptVault keeps its ordered single-file MV3 concatenation
 // build.
@@ -31,6 +30,13 @@ export const TS_RUNTIME_MODULES = [
     output: 'modules/sync-providers.js',
     exportName: 'CloudSyncProviders',
     selfExportName: 'CloudSyncProviders',
+  },
+  {
+    id: 'sync-crypto',
+    source: 'src/modules/sync-crypto.ts',
+    output: 'modules/sync-crypto.js',
+    exportName: 'SyncCrypto',
+    selfExportName: 'SyncCrypto',
   },
   {
     id: 'error-log',

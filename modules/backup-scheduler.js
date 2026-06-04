@@ -70,6 +70,7 @@ const BackupScheduler = (() => {
     "dropboxRefreshToken",
     "onedriveToken",
     "onedriveRefreshToken",
+    "syncEncryptionPassphrase",
     "s3AccessKeyId",
     "s3SecretKey"
   ];

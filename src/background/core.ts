@@ -119,6 +119,21 @@ function sanitizeSyncEnvelopeForUpload(envelope) {
   };
 }
 
+async function readSyncEnvelopeFromRemote(remoteEnvelope, settings) {
+  if (typeof SyncCrypto !== 'undefined' && typeof SyncCrypto.decryptSyncEnvelope === 'function') {
+    return await SyncCrypto.decryptSyncEnvelope(remoteEnvelope, settings);
+  }
+  return remoteEnvelope || null;
+}
+
+async function prepareSyncEnvelopeForRemoteUpload(envelope, settings) {
+  const sanitized = sanitizeSyncEnvelopeForUpload(envelope);
+  if (typeof SyncCrypto !== 'undefined' && typeof SyncCrypto.prepareSyncEnvelopeForUpload === 'function') {
+    return await SyncCrypto.prepareSyncEnvelopeForUpload(sanitized, settings);
+  }
+  return sanitized;
+}
+
 // Load debug setting on startup (async — logs before this completes go to console.log)
 (async () => {
   try {
@@ -2094,7 +2109,8 @@ const CloudSync = {
     const { localData } = await this._buildLocalData(tombstones);
     let remoteData = null;
     try {
-      remoteData = await provider.download(settings);
+      const remoteEnvelope = await provider.download(settings);
+      remoteData = await readSyncEnvelopeFromRemote(remoteEnvelope, settings);
     } catch (e) {
       return {
         success: false,
@@ -2224,7 +2240,8 @@ const CloudSync = {
     };
 
     // Get remote data
-    const remoteData = await provider.download(settings, { signal });
+    const remoteEnvelope = await provider.download(settings, { signal });
+    const remoteData = await readSyncEnvelopeFromRemote(remoteEnvelope, settings);
     if (signal?.aborted) throw new Error('Sync aborted');
 
     if (remoteData) {
@@ -2332,7 +2349,7 @@ const CloudSync = {
         tombstones: mergedTombstones
       };
       if (signal?.aborted) throw new Error('Sync aborted');
-      await provider.upload(sanitizeSyncEnvelopeForUpload(uploadData), settings, { signal });
+      await provider.upload(await prepareSyncEnvelopeForRemoteUpload(uploadData, settings), settings, { signal });
     } else {
       // First sync, just upload (include tombstones and syncBaseCode)
       if (signal?.aborted) throw new Error('Sync aborted');
@@ -2340,7 +2357,7 @@ const CloudSync = {
         ...s,
         syncBaseCode: s.syncBaseCode ?? null
       }));
-      await provider.upload(sanitizeSyncEnvelopeForUpload(localData), settings, { signal });
+      await provider.upload(await prepareSyncEnvelopeForRemoteUpload(localData, settings), settings, { signal });
     }
 
     await SettingsManager.set('lastSync', Date.now());
@@ -2621,6 +2638,7 @@ const SETTINGS_CREDENTIAL_KEYS = [
   'dropboxRefreshToken',
   'onedriveToken',
   'onedriveRefreshToken',
+  'syncEncryptionPassphrase',
   's3AccessKeyId',
   's3SecretKey'
 ];

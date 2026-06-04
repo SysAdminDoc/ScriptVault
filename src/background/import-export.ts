@@ -350,6 +350,7 @@ const SETTINGS_CREDENTIAL_KEYS: Array<keyof Settings> = [
   'dropboxRefreshToken',
   'onedriveToken',
   'onedriveRefreshToken',
+  'syncEncryptionPassphrase',
   's3AccessKeyId',
   's3SecretKey'
 ];

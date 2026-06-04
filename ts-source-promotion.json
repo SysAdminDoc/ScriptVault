@@ -21,6 +21,12 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs; S3 SigV4 implementation now lives in TypeScript."
     },
     {
+      "runtime": "modules/sync-crypto.js",
+      "sources": ["src/modules/sync-crypto.ts"],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for optional sync envelope encryption."
+    },
+    {
       "runtime": "modules/i18n.js",
       "sources": ["src/modules/i18n.ts"],
       "status": "promoted",

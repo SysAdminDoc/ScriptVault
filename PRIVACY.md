@@ -104,6 +104,11 @@ The only way your data leaves your device is:
 2. When network requests are made to fetch scripts/resources you requested
 3. When you configure a cloud sync provider and choose to sync data with that provider
 
+When sync encryption is enabled, ScriptVault encrypts sync payloads locally
+before upload and decrypts them locally after download. The sync encryption
+passphrase stays in extension settings and is treated as a credential for
+normal exports and backups.
+
 ## Limited Use
 
 The use of information received from Google APIs will adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements. ScriptVault uses Google API information only to provide user-configured extension functionality such as cloud sync, does not sell or transfer that information for advertising, and does not allow human access except where legally required or explicitly authorized by you for support.

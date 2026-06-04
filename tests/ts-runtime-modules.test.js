@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import {
+import { pathToFileURL } from 'node:url';
+
+const {
   TS_RUNTIME_MODULES,
   buildTsRuntimeModuleText,
   generateTsRuntimeModules,
-} from '../scripts/generate-ts-runtime-modules.mjs';
+} = await import(/* @vite-ignore */ pathToFileURL(resolve(process.cwd(), 'scripts/generate-ts-runtime-modules.mjs')).href);
 
 const ROOT = process.cwd();
 
@@ -31,6 +33,13 @@ describe('TS runtime module generator', () => {
         output: 'modules/sync-providers.js',
         exportName: 'CloudSyncProviders',
         selfExportName: 'CloudSyncProviders',
+      }),
+      expect.objectContaining({
+        id: 'sync-crypto',
+        source: 'src/modules/sync-crypto.ts',
+        output: 'modules/sync-crypto.js',
+        exportName: 'SyncCrypto',
+        selfExportName: 'SyncCrypto',
       }),
       expect.objectContaining({
         id: 'error-log',

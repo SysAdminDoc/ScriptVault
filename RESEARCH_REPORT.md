@@ -36,6 +36,13 @@ allowlisted user-facing preferences, while local-only state such as
 errors, and source-identity warnings remains on the originating device and is
 ignored when found in legacy remote envelopes.
 
+2026-06-04 build-lane sync-encryption update: CloudSync and EasyCloud now read
+plaintext v1 sync envelopes and encrypted v2 envelopes, then upload sanitized
+`AES-256-GCM` v2 envelopes when the user enables sync encryption with a local
+passphrase. The dashboard exposes the opt-in, and
+`syncEncryptionPassphrase` is handled as a redacted sync credential in exports
+and backups.
+
 2026-06-04 build-lane Firefox Android update: the unverified Android
 compatibility claim is deferred until a real device/emulator smoke exists.
 `manifest-firefox.json` no longer declares `gecko_android`, and the generated
@@ -212,8 +219,8 @@ The dominant constraint remains runtime/TS mirror drift, already tracked under F
 
 The active queue (`ROADMAP.md` → Existing Planned Work) plus the PASS3 deep-audit block
 (`## Research-Driven Additions`) already cover the deepest *runtime* findings (GM_xhr SSRF,
-plaintext cloud sync, `@crontab` engine, unmounted dashboard modules, dead What's New /
-i18n-v2). This 2026-06-03 pass therefore concentrated on the layers PASS3 did **not**
+now-closed plaintext cloud sync, `@crontab` engine, unmounted dashboard modules,
+dead What's New / i18n-v2). This 2026-06-03 pass therefore concentrated on the layers PASS3 did **not**
 touch — dependency health, CI/supply-chain, coverage gating, settings/UX, and competitive
 parity — and surfaced one then-breaking issue: a real CVE in a CI dependency.
 That P0 dependency item is now closed in the build lane.
@@ -225,16 +232,17 @@ Top opportunities (one line each):
 3. **[Verified] No dependency-update automation** — 10 devDeps behind latest; the audit gate is reactive only, which is exactly how the `tmp` CVE slipped in. Add Dependabot/Renovate. (P1)
 4. **[Likely] Floating Action tags in a signing/attestation pipeline** — `ci.yml` uses `@v4`/`@v1` tags while also doing SLSA attestation + SBOM; SHA-pin to protect the trusted artifact. (P1)
 5. **[Closed 2026-06-04] Sync envelopes mixed shared script data with device-local state** — CloudSync/EasyCloud now upload only allowlisted user-facing per-script settings and ignore legacy local-only remote keys. (P1)
-6. **[Closed 2026-06-04] User-configured sync endpoints lacked the internal-host guard** — WebDAV/S3 now share preflight and post-fetch redirect guards with explicit local/private endpoint opt-in. (P1)
-7. **[Closed 2026-06-04] Backup/export settings could include sync credentials** — exports/backups now redact provider credentials by default and require separate credential opt-ins. (P1)
-8. **[Closed 2026-06-04] Backup ZIP/JSON intake was not resource-bounded** — import/inspect/verify/restore now use bounded archive intake before decode, parse, or registration. (P1)
-9. **[Closed 2026-06-04] Firefox for Android was claimed but not smoke-tested** — `gecko_android` and Android support-matrix claims are deferred until a real device/emulator smoke exists. (P2)
-10. **[Closed 2026-06-04] AMO vendored-library provenance was incomplete** — Firefox package libraries now have exact npm pins, official source/package hashes, and a provenance check. (P2)
-11. **[Closed 2026-06-04] CWS remote-hosted-code review packet was missing** — `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check` now separate allowed User Scripts/sandbox flows from forbidden extension remote logic and scan source/package inputs plus the built Chrome ZIP in CI. (P1)
-12. **[Verified] Edge artifact evidence is not wired into CI or support claims** — `build:edge` exists, but CI/support matrix still treat Edge as Chrome-ZIP/manual-only. (P2)
-13. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
-14. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
-15. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
+6. **[Closed 2026-06-04] Cloud sync uploaded plaintext script source** — CloudSync/EasyCloud now support optional local-passphrase v2 sync-envelope encryption while still reading legacy v1 plaintext envelopes. (P1)
+7. **[Closed 2026-06-04] User-configured sync endpoints lacked the internal-host guard** — WebDAV/S3 now share preflight and post-fetch redirect guards with explicit local/private endpoint opt-in. (P1)
+8. **[Closed 2026-06-04] Backup/export settings could include sync credentials** — exports/backups now redact provider credentials by default and require separate credential opt-ins. (P1)
+9. **[Closed 2026-06-04] Backup ZIP/JSON intake was not resource-bounded** — import/inspect/verify/restore now use bounded archive intake before decode, parse, or registration. (P1)
+10. **[Closed 2026-06-04] Firefox for Android was claimed but not smoke-tested** — `gecko_android` and Android support-matrix claims are deferred until a real device/emulator smoke exists. (P2)
+11. **[Closed 2026-06-04] AMO vendored-library provenance was incomplete** — Firefox package libraries now have exact npm pins, official source/package hashes, and a provenance check. (P2)
+12. **[Closed 2026-06-04] CWS remote-hosted-code review packet was missing** — `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check` now separate allowed User Scripts/sandbox flows from forbidden extension remote logic and scan source/package inputs plus the built Chrome ZIP in CI. (P1)
+13. **[Verified] Edge artifact evidence is not wired into CI or support claims** — `build:edge` exists, but CI/support matrix still treat Edge as Chrome-ZIP/manual-only. (P2)
+14. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
+15. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
+16. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
 
 ## Evidence Reviewed
 
