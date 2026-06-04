@@ -6768,6 +6768,10 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <label><input type="checkbox" id="exportIncludeSettings"> Include ScriptVault settings in JSON and cloud backups, then restore them when present</label>
                     </div>
                     <div class="setting-row">
+                        <label><input type="checkbox" id="exportIncludeSettingsCredentials"> Include sync credentials when settings are exported or restored</label>
+                        <span class="utility-inline-status">Risk: this can write WebDAV credentials, OAuth tokens, and S3 keys into portable archives or replace the live credentials during restore.</span>
+                    </div>
+                    <div class="setting-row">
                         <span class="utility-inline-status">ZIP archives already preserve each script's declared <code>@require</code> and <code>@resource</code> metadata.</span>
                     </div>
                 </div>
@@ -6896,6 +6900,10 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                     <div class="setting-row">
                         <label><input type="checkbox" id="backupWarnOnStorageFull" checked> Warn when backup storage gets too large</label>
+                    </div>
+                    <div class="setting-row">
+                        <label><input type="checkbox" id="backupIncludeSettingsCredentials"> Include sync credentials in scheduled backup archives</label>
+                        <span class="utility-inline-status">Off by default. Enables WebDAV credentials, OAuth tokens, and S3 keys inside managed backup ZIPs.</span>
                     </div>
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnSaveBackupSettings">Save Backup Schedule</button>

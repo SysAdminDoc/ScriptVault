@@ -35,12 +35,16 @@ declare function updateBadge(): Promise<void>;
 interface ImportOptions {
   overwrite?: boolean;
   importSettings?: boolean;
+  importSettingsCredentials?: boolean;
 }
 
 interface ImportResults {
   imported: number;
   skipped: number;
   errors: Array<{ name: string; error: string }>;
+  settingsImported?: boolean;
+  settingsCredentialsImported?: boolean;
+  skippedSettingsCredentialKeys?: string[];
   error?: string;
 }
 
@@ -56,7 +60,9 @@ interface ExportedScript {
 interface ExportData {
   version: number;
   exportedAt: string;
-  settings: Settings;
+  settings?: Partial<Settings>;
+  settingsCredentialsIncluded?: boolean;
+  redactedSettingsCredentialKeys?: string[];
   scripts: ExportedScript[];
 }
 
@@ -71,7 +77,13 @@ interface ImportScriptEntry {
 
 interface ImportData {
   scripts?: ImportScriptEntry[];
-  settings?: Settings;
+  settings?: Partial<Settings>;
+  settingsCredentialsIncluded?: boolean;
+}
+
+interface ExportAllOptions {
+  includeSettings?: boolean;
+  includeSettingsCredentials?: boolean;
 }
 
 interface ZipExportResult {
@@ -120,14 +132,111 @@ interface TampermonkeyOptions {
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function exportAllScripts(): Promise<ExportData> {
+const SETTINGS_CREDENTIAL_KEYS: Array<keyof Settings> = [
+  'webdavUsername',
+  'webdavPassword',
+  'googleDriveToken',
+  'googleDriveRefreshToken',
+  'dropboxToken',
+  'dropboxRefreshToken',
+  'onedriveToken',
+  'onedriveRefreshToken',
+  's3AccessKeyId',
+  's3SecretKey'
+];
+
+function cloneSettingsForTransfer(value: unknown): Partial<Settings> {
+  if (!value || typeof value !== 'object') return {};
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value) as Partial<Settings>;
+    } catch (_) {
+      // Fall through.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as Partial<Settings>;
+  } catch (_) {
+    return { ...(value as Partial<Settings>) };
+  }
+}
+
+function redactSettingsCredentials(
+  settings: unknown,
+  options: { includeCredentials?: boolean } = {},
+): {
+  settings: Partial<Settings>;
+  settingsCredentialsIncluded: boolean;
+  redactedSettingsCredentialKeys: string[];
+} {
+  const includeCredentials = options.includeCredentials === true;
+  const sanitized = cloneSettingsForTransfer(settings);
+  const redactedSettingsCredentialKeys: string[] = [];
+  if (!includeCredentials) {
+    for (const key of SETTINGS_CREDENTIAL_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(sanitized, key)) {
+        delete sanitized[key];
+        redactedSettingsCredentialKeys.push(key);
+      }
+    }
+  }
+  return {
+    settings: sanitized,
+    settingsCredentialsIncluded: includeCredentials,
+    redactedSettingsCredentialKeys,
+  };
+}
+
+function prepareSettingsForPortableImport(
+  settings: unknown,
+  options: { allowCredentials?: boolean } = {},
+): {
+  settings: Partial<Settings>;
+  settingsCredentialsImported: boolean;
+  skippedSettingsCredentialKeys: string[];
+} {
+  const allowCredentials = options.allowCredentials === true;
+  const sanitized = cloneSettingsForTransfer(settings);
+  const skippedSettingsCredentialKeys: string[] = [];
+  if (!allowCredentials) {
+    for (const key of SETTINGS_CREDENTIAL_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(sanitized, key)) {
+        delete sanitized[key];
+        skippedSettingsCredentialKeys.push(key);
+      }
+    }
+  }
+  return {
+    settings: sanitized,
+    settingsCredentialsImported: allowCredentials,
+    skippedSettingsCredentialKeys,
+  };
+}
+
+export async function exportAllScripts(
+  options: ExportAllOptions = {},
+): Promise<ExportData> {
+  const {
+    includeSettings = true,
+    includeSettingsCredentials = false,
+  } = options;
   const scripts: Script[] = await ScriptStorage.getAll();
-  const settings = await SettingsManager.get() as unknown as Settings;
+  const settingsExport = includeSettings
+    ? redactSettingsCredentials(await SettingsManager.get(), {
+        includeCredentials: includeSettingsCredentials,
+      })
+    : null;
 
   return {
     version: 2,
     exportedAt: new Date().toISOString(),
-    settings: settings,
+    ...(includeSettings && settingsExport
+      ? {
+          settings: settingsExport.settings,
+          settingsCredentialsIncluded: settingsExport.settingsCredentialsIncluded,
+          redactedSettingsCredentialKeys: settingsExport.redactedSettingsCredentialKeys,
+        }
+      : {}),
     scripts: scripts.map((s: Script) => ({
       id: s.id,
       code: s.code,
@@ -169,7 +278,14 @@ export async function importScripts(
   options: ImportOptions = {},
 ): Promise<ImportResults | { error: string }> {
   const { overwrite = false } = options;
-  const results: ImportResults = { imported: 0, skipped: 0, errors: [] };
+  const results: ImportResults = {
+    imported: 0,
+    skipped: 0,
+    errors: [],
+    settingsImported: false,
+    settingsCredentialsImported: false,
+    skippedSettingsCredentialKeys: [],
+  };
 
   if (!data.scripts || !Array.isArray(data.scripts)) {
     return { error: 'Invalid import format' };
@@ -225,7 +341,15 @@ export async function importScripts(
 
   // Import settings if present
   if (data.settings && options.importSettings) {
-    await SettingsManager.set(data.settings);
+    const settingsImport = prepareSettingsForPortableImport(data.settings, {
+      allowCredentials:
+        options.importSettingsCredentials === true &&
+        data.settingsCredentialsIncluded === true,
+    });
+    await SettingsManager.set(settingsImport.settings);
+    results.settingsImported = true;
+    results.settingsCredentialsImported = settingsImport.settingsCredentialsImported;
+    results.skippedSettingsCredentialKeys = settingsImport.skippedSettingsCredentialKeys;
   }
 
   // Re-register all scripts after import

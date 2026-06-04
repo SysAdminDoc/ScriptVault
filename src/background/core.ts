@@ -2361,13 +2361,85 @@ async function buildSyncProviderHealth(providerName) {
 // Import/Export
 // ============================================================================
 
+const SETTINGS_CREDENTIAL_KEYS = [
+  'webdavUsername',
+  'webdavPassword',
+  'googleDriveToken',
+  'googleDriveRefreshToken',
+  'dropboxToken',
+  'dropboxRefreshToken',
+  'onedriveToken',
+  'onedriveRefreshToken',
+  's3AccessKeyId',
+  's3SecretKey'
+];
+
+function cloneSettingsForTransfer(value) {
+  if (!value || typeof value !== 'object') return {};
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value);
+    } catch (_e) {
+      /* fall through */
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (_e) {
+    return { ...value };
+  }
+}
+
+function redactSettingsCredentials(settings, options = {}) {
+  const includeCredentials = options.includeCredentials === true;
+  const sanitized = cloneSettingsForTransfer(settings);
+  const redactedSettingsCredentialKeys = [];
+  if (!includeCredentials) {
+    for (const key of SETTINGS_CREDENTIAL_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(sanitized, key)) {
+        delete sanitized[key];
+        redactedSettingsCredentialKeys.push(key);
+      }
+    }
+  }
+  return {
+    settings: sanitized,
+    settingsCredentialsIncluded: includeCredentials,
+    redactedSettingsCredentialKeys
+  };
+}
+
+function prepareSettingsForPortableImport(settings, options = {}) {
+  const allowCredentials = options.allowCredentials === true;
+  const sanitized = cloneSettingsForTransfer(settings);
+  const skippedSettingsCredentialKeys = [];
+  if (!allowCredentials) {
+    for (const key of SETTINGS_CREDENTIAL_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(sanitized, key)) {
+        delete sanitized[key];
+        skippedSettingsCredentialKeys.push(key);
+      }
+    }
+  }
+  return {
+    settings: sanitized,
+    settingsCredentialsImported: allowCredentials,
+    skippedSettingsCredentialKeys
+  };
+}
+
 async function exportAllScripts(options = {}) {
   const {
     includeSettings = true,
-    includeStorage = false
+    includeStorage = false,
+    includeSettingsCredentials = false
   } = options;
   const scripts = await ScriptStorage.getAll();
-  const settings = includeSettings ? await SettingsManager.get() : null;
+  const settingsExport = includeSettings
+    ? redactSettingsCredentials(await SettingsManager.get(), {
+        includeCredentials: includeSettingsCredentials
+      })
+    : null;
 
   const exportedScripts = await Promise.all(scripts.map(async s => {
     const entry = {
@@ -2396,7 +2468,11 @@ async function exportAllScripts(options = {}) {
   return {
     version: 2,
     exportedAt: new Date().toISOString(),
-    ...(includeSettings ? { settings } : {}),
+    ...(includeSettings ? {
+      settings: settingsExport.settings,
+      settingsCredentialsIncluded: settingsExport.settingsCredentialsIncluded,
+      redactedSettingsCredentialKeys: settingsExport.redactedSettingsCredentialKeys
+    } : {}),
     scripts: exportedScripts
   };
 }
@@ -2560,6 +2636,7 @@ async function importScripts(data, options = {}) {
     overwrite = false,
     importSettings = false,
     importStorage = false,
+    importSettingsCredentials = false,
     recordReceipt = true,
     sourceLabel = ''
   } = options;
@@ -2568,6 +2645,8 @@ async function importScripts(data, options = {}) {
     skipped: 0,
     errors: [],
     settingsImported: false,
+    settingsCredentialsImported: false,
+    skippedSettingsCredentialKeys: [],
     storageImported: 0,
     replacedScripts: []
   };
@@ -2680,8 +2759,13 @@ async function importScripts(data, options = {}) {
   
   // Import settings if present
   if (data.settings && importSettings) {
-    await SettingsManager.set(data.settings);
+    const settingsImport = prepareSettingsForPortableImport(data.settings, {
+      allowCredentials: importSettingsCredentials === true && data.settingsCredentialsIncluded === true
+    });
+    await SettingsManager.set(settingsImport.settings);
     results.settingsImported = true;
+    results.settingsCredentialsImported = settingsImport.settingsCredentialsImported;
+    results.skippedSettingsCredentialKeys = settingsImport.skippedSettingsCredentialKeys;
   }
 
   // Re-register all scripts after import
@@ -4068,13 +4152,20 @@ async function handleMessage(message, sender) {
         try {
           const includeSettings = data?.includeSettings !== false;
           const includeStorage = data?.includeStorage !== false;
-          const exportData = await exportAllScripts({ includeSettings, includeStorage });
+          const includeSettingsCredentials = data?.includeSettingsCredentials === true;
+          const exportData = await exportAllScripts({
+            includeSettings,
+            includeStorage,
+            includeSettingsCredentials
+          });
           const settings = await SettingsManager.get();
           await provider.upload(exportData, settings);
           return {
             success: true,
             exported: exportData.scripts?.length || 0,
             settingsIncluded: includeSettings,
+            settingsCredentialsIncluded: exportData.settingsCredentialsIncluded === true,
+            redactedSettingsCredentialKeys: exportData.redactedSettingsCredentialKeys || [],
             storageIncluded: includeStorage
           };
         } catch (e) {
@@ -4094,7 +4185,8 @@ async function handleMessage(message, sender) {
           const result = await importScripts(remoteData, {
             overwrite: true,
             importSettings: data?.importSettings === true,
-            importStorage: data?.importStorage !== false
+            importStorage: data?.importStorage !== false,
+            importSettingsCredentials: data?.importSettingsCredentials === true
           });
           return { success: !result.error, ...result };
         } catch (e) {

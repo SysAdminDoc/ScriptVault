@@ -629,9 +629,11 @@
     }
 
     function getTransferPreferences() {
+        const includeSettings = !!elements.exportIncludeSettings?.checked;
         return {
             includeStorage: elements.exportIncludeStorage?.checked !== false,
-            includeSettings: !!elements.exportIncludeSettings?.checked
+            includeSettings,
+            includeSettingsCredentials: includeSettings && !!elements.exportIncludeSettingsCredentials?.checked
         };
     }
 
@@ -797,6 +799,8 @@
                 backup.hasFolders ? 'folders' : '',
                 backup.hasWorkspaces ? 'workspaces' : '',
                 backup.hasScriptStorage ? 'stored values' : '',
+                backup.settingsCredentialsIncluded ? 'sync credentials' : '',
+                Array.isArray(backup.redactedSettingsCredentialKeys) && backup.redactedSettingsCredentialKeys.length ? 'credentials redacted' : '',
                 backup.timestamp ? dateTimeFormatter.format(new Date(backup.timestamp)) : ''
             ].join(' '));
             return haystack.includes(query);
@@ -1125,6 +1129,7 @@
             hour: Number.isFinite(Number(rawSettings?.hour)) ? Number(rawSettings.hour) : 3,
             dayOfWeek: Number.isFinite(Number(rawSettings?.dayOfWeek)) ? Number(rawSettings.dayOfWeek) : 0,
             maxBackups: Math.max(1, Number(rawSettings?.maxBackups || 5)),
+            includeSettingsCredentials: rawSettings?.includeSettingsCredentials === true,
             notifyOnSuccess: rawSettings?.notifyOnSuccess !== false,
             notifyOnFailure: rawSettings?.notifyOnFailure !== false,
             warnOnStorageFull: rawSettings?.warnOnStorageFull !== false
@@ -1193,6 +1198,11 @@
         if (failed) parts.push(`${numberFormatter.format(failed)} failed`);
         if (!parts.length) parts.push('no scripts changed');
         if (result?.settingsImported) parts.push('settings restored');
+        if (result?.settingsCredentialsImported) {
+            parts.push('sync credentials restored');
+        } else if (Array.isArray(result?.skippedSettingsCredentialKeys) && result.skippedSettingsCredentialKeys.length) {
+            parts.push('sync credentials kept local');
+        }
         return parts.join(', ');
     }
 
@@ -1214,6 +1224,11 @@
         if (restoredScripts) parts.push(`${numberFormatter.format(restoredScripts)} scripts restored`);
         if (skippedScripts) parts.push(`${numberFormatter.format(skippedScripts)} skipped`);
         if (result?.restoredSettings) parts.push('settings restored');
+        if (result?.settingsCredentialsRestored) {
+            parts.push('sync credentials restored');
+        } else if (Array.isArray(result?.skippedSettingsCredentialKeys) && result.skippedSettingsCredentialKeys.length) {
+            parts.push('sync credentials kept local');
+        }
         if (result?.restoredFolders) parts.push('folders restored');
         if (result?.restoredWorkspaces) parts.push('workspaces restored');
         if (failed) parts.push(`${numberFormatter.format(failed)} issues`);
@@ -1237,6 +1252,7 @@
             supportsSettings = false,
             supportsStorage = false,
             importSettings = false,
+            importSettingsCredentials = false,
             importStorage = false,
             settingsUnavailableReason = '',
             storageUnavailableReason = ''
@@ -1253,6 +1269,11 @@
             details.push(importSettings
                 ? 'ScriptVault settings in the backup will also be restored when present.'
                 : 'ScriptVault settings in the backup will not be restored.');
+            if (importSettings) {
+                details.push(importSettingsCredentials
+                    ? 'Archived sync credentials will restore only when the archive metadata proves they were intentionally included.'
+                    : 'Archived sync credentials will stay local-only even if the archive contains them.');
+            }
         } else if (settingsUnavailableReason) {
             details.push(settingsUnavailableReason);
         }
@@ -1597,6 +1618,7 @@
         elements.btnExportZip = document.getElementById('btnExportZip');
         elements.exportIncludeStorage = document.getElementById('exportIncludeStorage');
         elements.exportIncludeSettings = document.getElementById('exportIncludeSettings');
+        elements.exportIncludeSettingsCredentials = document.getElementById('exportIncludeSettingsCredentials');
         elements.backupBrowserSummary = document.getElementById('backupBrowserSummary');
         elements.backupBrowserQuickFilter = document.getElementById('backupBrowserQuickFilter');
         elements.backupBrowserSort = document.getElementById('backupBrowserSort');
@@ -1617,6 +1639,7 @@
         elements.backupNotifyOnSuccess = document.getElementById('backupNotifyOnSuccess');
         elements.backupNotifyOnFailure = document.getElementById('backupNotifyOnFailure');
         elements.backupWarnOnStorageFull = document.getElementById('backupWarnOnStorageFull');
+        elements.backupIncludeSettingsCredentials = document.getElementById('backupIncludeSettingsCredentials');
         elements.btnSaveBackupSettings = document.getElementById('btnSaveBackupSettings');
         elements.btnCreateBackup = document.getElementById('btnCreateBackup');
         elements.btnImportBackupArchive = document.getElementById('btnImportBackupArchive');
@@ -3579,6 +3602,7 @@
             if (elements.backupNotifyOnSuccess) elements.backupNotifyOnSuccess.checked = settings.notifyOnSuccess;
             if (elements.backupNotifyOnFailure) elements.backupNotifyOnFailure.checked = settings.notifyOnFailure;
             if (elements.backupWarnOnStorageFull) elements.backupWarnOnStorageFull.checked = settings.warnOnStorageFull;
+            if (elements.backupIncludeSettingsCredentials) elements.backupIncludeSettingsCredentials.checked = settings.includeSettingsCredentials === true;
             applyBackupScheduleFormState();
             updateBackupScheduleSummary(settings);
             updateSupportSnapshotSummary();
@@ -3604,6 +3628,7 @@
             hour: Math.max(0, Math.min(23, Number(elements.backupHour?.value || 3))),
             dayOfWeek: Math.max(0, Math.min(6, Number(elements.backupDayOfWeek?.value || 0))),
             maxBackups: Math.max(1, Math.min(50, Number(elements.backupMaxBackups?.value || 5))),
+            includeSettingsCredentials: !!elements.backupIncludeSettingsCredentials?.checked,
             notifyOnSuccess: !!elements.backupNotifyOnSuccess?.checked,
             notifyOnFailure: !!elements.backupNotifyOnFailure?.checked,
             warnOnStorageFull: !!elements.backupWarnOnStorageFull?.checked
@@ -3621,6 +3646,7 @@
                     hour: Number.isFinite(Number(response.settings.hour)) ? Number(response.settings.hour) : nextSettings.hour,
                     dayOfWeek: Number.isFinite(Number(response.settings.dayOfWeek)) ? Number(response.settings.dayOfWeek) : nextSettings.dayOfWeek,
                     maxBackups: Math.max(1, Number(response.settings.maxBackups || nextSettings.maxBackups)),
+                    includeSettingsCredentials: response.settings.includeSettingsCredentials === true,
                     notifyOnSuccess: response.settings.notifyOnSuccess !== false,
                     notifyOnFailure: response.settings.notifyOnFailure !== false,
                     warnOnStorageFull: response.settings.warnOnStorageFull !== false
@@ -7801,7 +7827,11 @@
             if (hasStructuredImports) {
                 const confirmed = await showConfirmModal(
                     'Import Files',
-                    `Import ${files.length} file${files.length === 1 ? '' : 's'}? Matching scripts may be overwritten.`
+                    `Import ${files.length} file${files.length === 1 ? '' : 's'}? Matching scripts may be overwritten. ${
+                        transfer.includeSettingsCredentials
+                            ? 'Archived sync credentials restore only when archive metadata proves they were intentionally included.'
+                            : 'Archived sync credentials stay local-only.'
+                    }`
                 );
                 if (!confirmed) return;
             }
@@ -7842,6 +7872,7 @@
                                     overwrite: true,
                                     importSettings: transfer.includeSettings,
                                     importStorage: transfer.includeStorage,
+                                    importSettingsCredentials: transfer.includeSettingsCredentials,
                                     sourceLabel: `JSON: ${file.name}`
                                 }
                             }
@@ -7878,7 +7909,8 @@
                 action: 'exportAll',
                 options: {
                     includeSettings: transfer.includeSettings,
-                    includeStorage: transfer.includeStorage
+                    includeStorage: transfer.includeStorage,
+                    includeSettingsCredentials: transfer.includeSettingsCredentials
                 }
             });
             if (response) {
@@ -7893,7 +7925,10 @@
                 const exportDetails = [
                     `${numberFormatter.format(exportedCount)} scripts`,
                     transfer.includeStorage ? 'stored values included' : 'stored values excluded',
-                    transfer.includeSettings ? 'app settings included' : 'app settings excluded'
+                    transfer.includeSettings ? 'app settings included' : 'app settings excluded',
+                    ...(transfer.includeSettings
+                        ? [transfer.includeSettingsCredentials ? 'sync credentials included' : 'sync credentials redacted']
+                        : [])
                 ];
                 showToast(`JSON export ready: ${exportDetails.join(', ')}`, 'success');
             }
@@ -10231,6 +10266,17 @@
             notifyOnSuccess: !!elements.backupNotifyOnSuccess?.checked,
             notifyOnFailure: !!elements.backupNotifyOnFailure?.checked
         }));
+        elements.backupIncludeSettingsCredentials?.addEventListener('change', () => updateBackupScheduleSummary({
+            ...(state.backupSettings || {}),
+            enabled: !!elements.backupEnabled?.checked,
+            scheduleType: elements.backupScheduleType?.value || 'manual',
+            hour: Number(elements.backupHour?.value || 3),
+            dayOfWeek: Number(elements.backupDayOfWeek?.value || 0),
+            maxBackups: Number(elements.backupMaxBackups?.value || 5),
+            includeSettingsCredentials: !!elements.backupIncludeSettingsCredentials?.checked,
+            notifyOnSuccess: !!elements.backupNotifyOnSuccess?.checked,
+            notifyOnFailure: !!elements.backupNotifyOnFailure?.checked
+        }));
         elements.btnSaveBackupSettings?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, saveBackupSettings, { busyLabel: 'Saving Schedule…' });
         });
@@ -10541,12 +10587,16 @@
                         action: 'cloudExport',
                         provider,
                         includeSettings: transfer.includeSettings,
-                        includeStorage: transfer.includeStorage
+                        includeStorage: transfer.includeStorage,
+                        includeSettingsCredentials: transfer.includeSettingsCredentials
                     });
                     if (r?.success) {
                         const parts = [`${numberFormatter.format(r.exported || 0)} scripts backed up`];
                         parts.push(r.storageIncluded ? 'stored values included' : 'stored values excluded');
                         parts.push(r.settingsIncluded ? 'app settings included' : 'app settings excluded');
+                        if (r.settingsIncluded) {
+                            parts.push(r.settingsCredentialsIncluded ? 'sync credentials included' : 'sync credentials redacted');
+                        }
                         showToast(`Cloud backup ready: ${parts.join(', ')}`, 'success');
                     } else {
                         showToast(r?.error || 'Export failed', 'error');
@@ -10573,6 +10623,7 @@
                         supportsSettings: true,
                         supportsStorage: true,
                         importSettings: transfer.includeSettings,
+                        importSettingsCredentials: transfer.includeSettingsCredentials,
                         importStorage: transfer.includeStorage,
                         overwriteTarget: 'matching scripts in this vault'
                     })
@@ -10584,7 +10635,8 @@
                         action: 'cloudImport',
                         provider,
                         importSettings: transfer.includeSettings,
-                        importStorage: transfer.includeStorage
+                        importStorage: transfer.includeStorage,
+                        importSettingsCredentials: transfer.includeSettingsCredentials
                     });
                     if (r?.success) {
                         await loadScripts();
@@ -10623,6 +10675,7 @@
                             supportsSettings: true,
                             supportsStorage: true,
                             importSettings: transfer.includeSettings,
+                            importSettingsCredentials: transfer.includeSettingsCredentials,
                             importStorage: transfer.includeStorage
                         });
                 if (!await showConfirmModal(isScriptFile ? 'Install Script' : 'Restore File', confirmMessage)) return;
@@ -10662,7 +10715,8 @@
                                 options: {
                                     overwrite: true,
                                     importSettings: transfer.includeSettings,
-                                    importStorage: transfer.includeStorage
+                                    importStorage: transfer.includeStorage,
+                                    importSettingsCredentials: transfer.includeSettingsCredentials
                                 }
                             }
                         });
@@ -10820,7 +10874,8 @@
                     action: 'exportAll',
                     options: {
                         includeSettings: transfer.includeSettings,
-                        includeStorage: transfer.includeStorage
+                        includeStorage: transfer.includeStorage,
+                        includeSettingsCredentials: transfer.includeSettingsCredentials
                     }
                 });
                 if (r && elements.textareaData) {
@@ -10841,6 +10896,7 @@
                         supportsSettings: true,
                         supportsStorage: true,
                         importSettings: transfer.includeSettings,
+                        importSettingsCredentials: transfer.includeSettingsCredentials,
                         importStorage: transfer.includeStorage
                     }))) return;
                     showProgress(`Importing ${data.scripts?.length || 0} scripts…`);
@@ -10853,7 +10909,8 @@
                                 options: {
                                     overwrite: true,
                                     importSettings: transfer.includeSettings,
-                                    importStorage: transfer.includeStorage
+                                    importStorage: transfer.includeStorage,
+                                    importSettingsCredentials: transfer.includeSettingsCredentials
                                 }
                             }
                         });
@@ -11211,6 +11268,8 @@
                                 ${backup.hasFolders ? '<span class="info-tag">Folders</span>' : ''}
                                 ${backup.hasWorkspaces ? '<span class="info-tag">Workspaces</span>' : ''}
                                 ${backup.hasScriptStorage ? '<span class="info-tag">Stored values</span>' : ''}
+                                ${backup.settingsCredentialsIncluded ? '<span class="info-tag warning">Sync credentials</span>' : ''}
+                                ${Array.isArray(backup.redactedSettingsCredentialKeys) && backup.redactedSettingsCredentialKeys.length ? '<span class="info-tag">Credentials redacted</span>' : ''}
                             </div>
                         </div>
                         <div class="backup-browser-actions">
@@ -11439,6 +11498,10 @@
             const currentWorkspaceCount = Array.isArray(state.workspaces) ? state.workspaces.length : 0;
             const archivedFolders = Array.isArray(manifest.folders) ? manifest.folders : [];
             const archivedWorkspaces = Array.isArray(manifest.workspaces) ? manifest.workspaces : [];
+            const settingsCredentialsIncluded = manifest.settingsCredentialsIncluded === true;
+            const redactedSettingsCredentialKeys = Array.isArray(manifest.redactedSettingsCredentialKeys)
+                ? manifest.redactedSettingsCredentialKeys.filter(Boolean)
+                : [];
             const formatNamedPreview = (entries, formatter, maxItems = 3) => {
                 const values = entries
                     .map(formatter)
@@ -11461,10 +11524,17 @@
                     : 'This backup only contains script-level data.';
             const impactRows = [];
             if (manifest.hasGlobalSettings) {
+                const credentialDetail = settingsCredentialsIncluded
+                    ? ' This archive metadata says sync credentials are present; they restore only when explicitly enabled below.'
+                    : redactedSettingsCredentialKeys.length
+                        ? ` Sync credentials were redacted from ${numberFormatter.format(redactedSettingsCredentialKeys.length)} setting key${redactedSettingsCredentialKeys.length === 1 ? '' : 's'} and cannot be restored from this backup.`
+                        : ' Sync credentials stay local unless archive metadata explicitly includes them.';
                 impactRows.push({
                     label: 'App settings',
-                    tag: `${numberFormatter.format(manifest.settingsKeyCount || 0)} keys in backup`,
-                    detail: `Full restore will replace the current ${numberFormatter.format(currentSettingsKeyCount)} setting key${currentSettingsKeyCount === 1 ? '' : 's'} with the backup snapshot.`,
+                    tag: settingsCredentialsIncluded
+                        ? `${numberFormatter.format(manifest.settingsKeyCount || 0)} keys + credentials`
+                        : `${numberFormatter.format(manifest.settingsKeyCount || 0)} keys in backup`,
+                    detail: `Full restore will replace the current ${numberFormatter.format(currentSettingsKeyCount)} setting key${currentSettingsKeyCount === 1 ? '' : 's'} with the backup snapshot.${credentialDetail}`,
                     tone: 'warning'
                 });
             }
@@ -11565,7 +11635,24 @@
                     </div>
                 `
                 : '';
-            const buildRestoreMessage = ({ mode, selectedCount = 0, overwriteCount = 0, newScriptCount = 0, storageCount = 0 }) => {
+            const credentialRestoreHtml = manifest.hasGlobalSettings
+                ? `
+                    <div class="utility-surface">
+                        ${
+                            settingsCredentialsIncluded
+                                ? `
+                                    <label class="setting-row" style="margin:0">
+                                        <input type="checkbox" id="restoreSettingsCredentials">
+                                        <span>Restore archived sync credentials during full-vault restore</span>
+                                    </label>
+                                    <div class="utility-note" style="margin-top:8px">Risk: this replaces current WebDAV credentials, OAuth tokens, and S3 keys. The backup metadata says credentials were intentionally included.</div>
+                                `
+                                : `<div class="utility-note">Sync credentials will stay local. ${redactedSettingsCredentialKeys.length ? `This backup redacted ${numberFormatter.format(redactedSettingsCredentialKeys.length)} credential key${redactedSettingsCredentialKeys.length === 1 ? '' : 's'}.` : 'This backup does not contain credential metadata.'}</div>`
+                        }
+                    </div>
+                `
+                : '';
+            const buildRestoreMessage = ({ mode, selectedCount = 0, overwriteCount = 0, newScriptCount = 0, storageCount = 0, includeSettingsCredentials = false }) => {
                 if (mode === 'full') {
                     const parts = [`Restore the full vault from ${dateTimeFormatter.format(new Date(backup.timestamp || Date.now()))}?`];
                     if (manifest.scriptCount) {
@@ -11573,6 +11660,9 @@
                     }
                     if (manifest.hasGlobalSettings) {
                         parts.push(`App settings will be replaced with ${numberFormatter.format(manifest.settingsKeyCount || 0)} archived setting key${Number(manifest.settingsKeyCount || 0) === 1 ? '' : 's'}.`);
+                        parts.push(settingsCredentialsIncluded && includeSettingsCredentials
+                            ? 'Archived sync credentials will replace current WebDAV, OAuth, and S3 credentials.'
+                            : 'Sync credentials will stay local-only.');
                     }
                     if (manifest.hasFolders) {
                         parts.push(`${numberFormatter.format(manifest.folderCount || 0)} archived folder${Number(manifest.folderCount || 0) === 1 ? '' : 's'} will replace the current folder layout.`);
@@ -11696,9 +11786,10 @@
                     class: restoreAllScriptIds.length ? '' : 'btn-primary',
                     callback: async () => {
                         const preservedSelection = getSelectedRestoreIds();
+                        const includeSettingsCredentials = settingsCredentialsIncluded && !!document.getElementById('restoreSettingsCredentials')?.checked;
                         const confirmed = await showConfirmModal(
                             'Restore Full Vault',
-                            buildRestoreMessage({ mode: 'full' })
+                            buildRestoreMessage({ mode: 'full', includeSettingsCredentials })
                         );
                         if (!confirmed) {
                             await reopenBackupReview(preservedSelection);
@@ -11707,6 +11798,7 @@
                         hideModal();
                         await restoreStoredBackup(backupId, {
                             selective: false,
+                            importSettingsCredentials: includeSettingsCredentials,
                             progressTitle: 'Restoring full vault…',
                             progressDetail: 'Applying archived scripts, settings, folders, and workspaces…'
                         });
@@ -11741,6 +11833,7 @@
                     </div>
                     ${impactHtml}
                     ${scopeNoteHtml}
+                    ${credentialRestoreHtml}
                     ${hasScriptEntries ? `
                         <div class="utility-surface">
                             <div class="setting-row" style="margin:0 0 10px 0;justify-content:space-between;align-items:center;gap:10px">

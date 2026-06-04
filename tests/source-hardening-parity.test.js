@@ -92,6 +92,31 @@ describe('source hardening parity guards', () => {
     expect(providers).toContain('assertSyncResponseAllowed(response, guardOptions);');
   });
 
+  it('keeps portable settings exports from carrying sync credentials by default', () => {
+    const core = source('src/background/core.ts');
+    const importExport = source('src/background/import-export.ts');
+    const backupScheduler = source('src/modules/backup-scheduler.ts');
+    const dashboard = source('pages/dashboard.js');
+
+    for (const text of [core, importExport, backupScheduler]) {
+      expect(text).toContain('webdavPassword');
+      expect(text).toContain('googleDriveToken');
+      expect(text).toContain('dropboxToken');
+      expect(text).toContain('onedriveToken');
+      expect(text).toContain('s3AccessKeyId');
+      expect(text).toContain('s3SecretKey');
+      expect(text).toContain('settingsCredentialsIncluded');
+      expect(text).toContain('redactedSettingsCredentialKeys');
+    }
+    expect(core).toContain('prepareSettingsForPortableImport');
+    expect(importExport).toContain('prepareSettingsForPortableImport');
+    expect(backupScheduler).toContain('global-settings.metadata.json');
+    expect(backupScheduler).toContain('_prepareSettingsForRestore');
+    expect(dashboard).toContain('restoreSettingsCredentials');
+    expect(dashboard).toContain('includeSettingsCredentials: transfer.includeSettingsCredentials');
+    expect(dashboard).toContain('importSettingsCredentials: transfer.includeSettingsCredentials');
+  });
+
   it('keeps @require fetches on extension host-permission fetch semantics', () => {
     const loader = source('src/background/resource-loader.ts');
     const core = source('src/background/core.ts');

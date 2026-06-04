@@ -57,7 +57,12 @@ function makeScript(id, name, { version = '1.0.0', code: body = `console.log(${J
   };
 }
 
-function createSchedulerHarness({ scripts = [], values = {}, importFromZipImpl } = {}) {
+function createSchedulerHarness({
+  scripts = [],
+  values = {},
+  importFromZipImpl,
+  settings = { theme: 'dark' },
+} = {}) {
   const fakeFflate = makeFakeFflate();
   // Internal mutable store so set/delete/getAll all see the same state.
   const store = new Map(scripts.map(s => [s.id, structuredClone(s)]));
@@ -82,7 +87,7 @@ function createSchedulerHarness({ scripts = [], values = {}, importFromZipImpl }
     deleteAll: vi.fn(async (id) => { valueStore.delete(id); }),
   };
   const SettingsManager = {
-    get: vi.fn(async () => ({ theme: 'dark' })),
+    get: vi.fn(async () => structuredClone(settings)),
     set: vi.fn(async () => {}),
   };
   const FolderStorage = { cache: null };
@@ -221,6 +226,24 @@ describe('verifyBackup', () => {
     const result = await BackupScheduler.verifyBackup(created.backupId);
     const entry = result.scripts.find(s => s.scriptId === 'alpha');
     expect(entry?.conflictsWithId).toBe('alpha');
+  });
+
+  it('reports backup credential metadata as booleans and counts only', async () => {
+    const { BackupScheduler } = createSchedulerHarness({
+      scripts: [makeScript('alpha', 'Alpha')],
+      settings: {
+        theme: 'dark',
+        webdavPassword: 'secret',
+        s3SecretKey: 's3-secret',
+      },
+    });
+    const created = await BackupScheduler.createBackup('manual');
+    const result = await BackupScheduler.verifyBackup(created.backupId);
+
+    expect(result.summary.settingsCredentialsIncluded).toBe(false);
+    expect(result.summary.redactedSettingsCredentialKeyCount).toBeGreaterThanOrEqual(2);
+    expect(JSON.stringify(result.summary)).not.toContain('webdavPassword');
+    expect(JSON.stringify(result.summary)).not.toContain('s3SecretKey');
   });
 
   it('reports invalid auxiliary JSON', async () => {

@@ -66,7 +66,7 @@ function makeScript(id, name) {
   };
 }
 
-function createSchedulerHarness(scripts, valuesByScript = {}) {
+function createSchedulerHarness(scripts, valuesByScript = {}, settings = { enabled: true, theme: 'dark' }) {
   const fakeFflate = makeFakeFflate();
   const importFromZip = vi.fn().mockResolvedValue({ imported: 1, skipped: 0, errors: [] });
   const ScriptStorage = {
@@ -78,7 +78,7 @@ function createSchedulerHarness(scripts, valuesByScript = {}) {
     setAll: vi.fn(),
   };
   const SettingsManager = {
-    get: vi.fn(async () => ({ enabled: true, theme: 'dark' })),
+    get: vi.fn(async () => structuredClone(settings)),
     set: vi.fn(),
   };
   const FolderStorage = { cache: null };
@@ -112,6 +112,7 @@ function createSchedulerHarness(scripts, valuesByScript = {}) {
     fakeFflate,
     importFromZip,
     ScriptStorage,
+    SettingsManager,
   };
 }
 
@@ -154,6 +155,102 @@ describe('runtime backup scheduler', () => {
       hasStorage: true,
     });
     expect(inspected.scriptsWithStorageCount).toBe(1);
+  });
+
+  it('redacts sync credentials from managed backup settings by default', async () => {
+    const script = makeScript('script_alpha', 'Alpha Script');
+    const { BackupScheduler, fakeFflate } = createSchedulerHarness(
+      [script],
+      {},
+      {
+        enabled: true,
+        theme: 'dark',
+        webdavUsername: 'operator',
+        webdavPassword: 'secret',
+        googleDriveToken: 'access-token',
+        s3AccessKeyId: 'AKIA_TEST',
+        s3SecretKey: 'secret-key',
+      },
+    );
+
+    const created = await BackupScheduler.createBackup('manual');
+    const stored = await chrome.storage.local.get('autoBackups');
+    const backup = stored.autoBackups[0];
+    const files = fakeFflate.unzipSync(base64ToBytes(backup.data));
+    const globalSettings = JSON.parse(fakeFflate.strFromU8(files['global-settings.json']));
+    const metadata = JSON.parse(fakeFflate.strFromU8(files['global-settings.metadata.json']));
+    const inspected = await BackupScheduler.inspectBackup(created.backupId);
+
+    expect(globalSettings).toMatchObject({ enabled: true, theme: 'dark' });
+    expect(globalSettings).not.toHaveProperty('webdavPassword');
+    expect(globalSettings).not.toHaveProperty('googleDriveToken');
+    expect(globalSettings).not.toHaveProperty('s3SecretKey');
+    expect(metadata.settingsCredentialsIncluded).toBe(false);
+    expect(metadata.redactedSettingsCredentialKeys).toEqual(
+      expect.arrayContaining(['webdavPassword', 'googleDriveToken', 's3SecretKey']),
+    );
+    expect(backup.settingsCredentialsIncluded).toBe(false);
+    expect(inspected.settingsCredentialsIncluded).toBe(false);
+    expect(inspected.redactedSettingsCredentialKeys).toEqual(
+      expect.arrayContaining(['webdavPassword', 'googleDriveToken', 's3SecretKey']),
+    );
+  });
+
+  it('restores backup credentials only when metadata and restore option both opt in', async () => {
+    await chrome.storage.local.set({
+      backupSchedulerSettings: {
+        enabled: true,
+        scheduleType: 'manual',
+        hour: 3,
+        dayOfWeek: 0,
+        maxBackups: 5,
+        includeSettingsCredentials: true,
+        notifyOnSuccess: false,
+        notifyOnFailure: false,
+        warnOnStorageFull: false,
+      },
+    });
+    const script = makeScript('script_alpha', 'Alpha Script');
+    const { BackupScheduler, SettingsManager } = createSchedulerHarness(
+      [script],
+      {},
+      {
+        theme: 'dark',
+        webdavPassword: 'archive-secret',
+        s3SecretKey: 'archive-s3-secret',
+      },
+    );
+
+    const created = await BackupScheduler.createBackup('manual');
+    SettingsManager.set.mockClear();
+
+    const guardedRestore = await BackupScheduler.restoreBackup(created.backupId, {
+      recordReceipt: false,
+    });
+    expect(guardedRestore.restoredSettings).toBe(true);
+    expect(guardedRestore.settingsCredentialsRestored).toBe(false);
+    expect(guardedRestore.skippedSettingsCredentialKeys).toEqual(
+      expect.arrayContaining(['webdavPassword', 's3SecretKey']),
+    );
+    expect(SettingsManager.set).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        webdavPassword: expect.anything(),
+        s3SecretKey: expect.anything(),
+      }),
+    );
+
+    SettingsManager.set.mockClear();
+    const credentialRestore = await BackupScheduler.restoreBackup(created.backupId, {
+      importSettingsCredentials: true,
+      recordReceipt: false,
+    });
+    expect(credentialRestore.settingsCredentialsRestored).toBe(true);
+    expect(SettingsManager.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webdavPassword: 'archive-secret',
+        s3SecretKey: 'archive-s3-secret',
+      }),
+    );
   });
 
   it('selective restore imports only selected script ID files through the shared zip importer', async () => {
