@@ -451,6 +451,12 @@ describe("dashboard accessibility markup", () => {
   });
 
   test("trash and workspace actions use guarded async buttons and refresh live summaries", () => {
+    expect(dashboardHtml).toMatch(/id="trashRetentionBanner" role="status" aria-live="polite"/);
+    expect(dashboardHtml).toMatch(/\.trash-retention-banner/);
+    expect(dashboardHtml).toMatch(/\.trash-item-purge/);
+    expect(dashboardJs).toMatch(/function getTrashPurgeTimestamp\(script\)/);
+    expect(dashboardJs).toMatch(/Will auto-delete on/);
+    expect(dashboardJs).toMatch(/next automatic purge is/);
     expect(dashboardJs).toMatch(/runButtonTask\(button, async \(\) => \{\s*try \{\s*const response = await chrome\.runtime\.sendMessage\(\{ action: 'restoreFromTrash', scriptId: script\.id \}\);/);
     expect(dashboardJs).toMatch(/await Promise\.all\(\[loadTrash\(\), loadScripts\(\)\]\);\s*updateStats\(\);\s*showToast\('Script restored', 'success'\);/);
     expect(dashboardJs).toMatch(/runButtonTask\(button, async \(\) => \{\s*const confirm = await showConfirmModal\(\s*'Delete Forever'/);

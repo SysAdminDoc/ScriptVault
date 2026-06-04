@@ -60,10 +60,11 @@
   - Evidence: PASS2 NF-23; [background.core.js GM_notification](background.core.js#L877).
   - Touches: `background.core.js`, `src/background/wrapper-builder.ts`, `tests/wrapper-dom-security.test.js` or notifications test.
   - Acceptance: `GM_notification({title, text, requireInteraction:true})` results in `chrome.notifications.create` receiving `requireInteraction:true`.
-- [ ] **D-5** Add Trash retention banner showing auto-purge date
+- [x] **D-5** Add Trash retention banner showing auto-purge date (2026-06-03)
   - Evidence: PASS2 NF-10; [background.core.js:6399-6404](background.core.js#L6399-L6404).
-  - Touches: `pages/dashboard.js` Trash panel, `pages/dashboard.css`.
+  - Touches: `pages/dashboard.js` Trash panel, dashboard CSS in `pages/dashboard.html`.
   - Acceptance: each trash row shows "Will auto-delete on <date>"; panel header has a banner summarising the policy.
+  - Verification: `npm run check` (89 files / 1127 tests), `npm test -- tests/dashboard-a11y.test.js tests/dashboard-modules.test.js`, `npm run readme:check`, `node --check pages/dashboard.js`.
 - [x] **D-6** Document `pageFilterMode` (whitelist / blacklist) in README (2026-05-24)
   - Evidence: PASS2 NF-21.
   - Touches: `README.md` near line 88-94.
@@ -154,5 +155,6 @@
 | 2026-05-24 | E | E-1 | 4560ff9 |
 | 2026-05-24 | B | B-2 | 38a6b8f |
 | 2026-06-03 | C | C-1 | feat: queue script updates for review |
+| 2026-06-03 | D | D-5 | feat: show trash auto-purge dates |
 
 (Append a row each time work lands.)

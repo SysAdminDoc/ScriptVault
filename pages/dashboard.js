@@ -118,6 +118,7 @@
         recent: 'deletions from the last 7 days',
         older: 'older deletions'
     };
+    const TRASH_RETENTION_MS_PER_DAY = 24 * 60 * 60 * 1000;
     const HELP_FILTER_LABELS = {
         all: 'all references',
         actions: 'action references',
@@ -1372,6 +1373,7 @@
         elements.trashCountSummary = document.getElementById('trashCountSummary');
         elements.trashRetentionSummary = document.getElementById('trashRetentionSummary');
         elements.trashLatestSummary = document.getElementById('trashLatestSummary');
+        elements.trashRetentionBanner = document.getElementById('trashRetentionBanner');
         elements.trashQuickFilter = document.getElementById('trashQuickFilter');
         elements.trashFilterStatus = document.getElementById('trashFilterStatus');
         elements.trashEmptyState = document.getElementById('trashEmptyState');
@@ -4179,6 +4181,23 @@
         return Number.isFinite(days) ? `${days} day${days === 1 ? '' : 's'}` : 'Manual';
     }
 
+    function getTrashRetentionDays(mode = state.settings?.trashMode || 'disabled') {
+        if (mode === 'disabled') return 0;
+        const days = parseInt(mode, 10);
+        return Number.isFinite(days) && days > 0 ? days : 0;
+    }
+
+    function getTrashPurgeTimestamp(script) {
+        const days = getTrashRetentionDays();
+        const deletedAt = getTrashTimestamp(script);
+        return days > 0 && deletedAt ? deletedAt + (days * TRASH_RETENTION_MS_PER_DAY) : 0;
+    }
+
+    function formatTrashPurgeDate(script) {
+        const purgeAt = getTrashPurgeTimestamp(script);
+        return purgeAt ? dateTimeFormatter.format(new Date(purgeAt)) : '';
+    }
+
     function formatRelativeTimeLabel(ts) {
         const formatted = formatTime(ts);
         if (formatted === '-') return 'Unknown';
@@ -4230,6 +4249,20 @@
             elements.trashLatestSummary.textContent = latestDeletedAt
                 ? formatRelativeTimeLabel(latestDeletedAt)
                 : 'Never';
+        }
+        if (elements.trashRetentionBanner) {
+            const nextPurgeAt = state.trashItems.reduce((soonest, item) => {
+                const purgeAt = getTrashPurgeTimestamp(item);
+                if (!purgeAt) return soonest;
+                return soonest === 0 ? purgeAt : Math.min(soonest, purgeAt);
+            }, 0);
+            if (retentionLabel === 'Disabled') {
+                elements.trashRetentionBanner.textContent = 'Trash is disabled. New deletes bypass recovery and are removed immediately.';
+            } else if (nextPurgeAt) {
+                elements.trashRetentionBanner.textContent = `Deleted scripts stay here for ${retentionLabel.toLowerCase()}; next automatic purge is ${dateTimeFormatter.format(new Date(nextPurgeAt))}.`;
+            } else {
+                elements.trashRetentionBanner.textContent = `Deleted scripts stay here for ${retentionLabel.toLowerCase()} before permanent cleanup.`;
+            }
         }
         if (elements.btnEmptyTrash) {
             elements.btnEmptyTrash.disabled = total === 0;
@@ -4287,6 +4320,7 @@
             const deletedAt = getTrashTimestamp(script);
             const deletedLabel = deletedAt ? formatRelativeTimeLabel(deletedAt) : 'Unknown';
             const deletedExact = deletedAt ? dateTimeFormatter.format(new Date(deletedAt)) : 'Unknown time';
+            const purgeLabel = formatTrashPurgeDate(script);
             const scriptIdAttr = escapeHtml(script.id);
             const item = document.createElement('article');
             item.className = 'trash-item';
@@ -4301,6 +4335,7 @@
                         ${metadata.author ? `<span>${escapeHtml(metadata.author)}</span>` : ''}
                         <span>Deleted ${escapeHtml(deletedLabel)}</span>
                         <span>Removed ${escapeHtml(deletedExact)}</span>
+                        <span class="trash-item-purge">${purgeLabel ? `Will auto-delete on ${escapeHtml(purgeLabel)}` : 'No automatic deletion scheduled'}</span>
                     </div>
                 </div>
                 <div class="trash-item-actions">

@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-03 — Trash retention visibility
+
+- **Trash policy is now explicit in the recovery panel.** The Trash tab shows a
+  live retention banner that summarizes the configured cleanup policy and the
+  next automatic purge time when deleted scripts are waiting.
+- **Deleted script rows show purge dates.** Each recoverable row now includes a
+  "Will auto-delete on ..." label derived from the current `trashMode` retention
+  setting, or a no-automatic-deletion label when trash cleanup is disabled.
+
 ### 2026-06-03 — Pending update inbox queue
 
 - **Auto-update now defaults to notify-only review.** Scheduled checks queue
