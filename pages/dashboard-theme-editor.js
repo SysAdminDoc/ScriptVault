@@ -1333,6 +1333,11 @@ const ThemeEditor = (() => {
     e.target.value = ''; // Reset for re-import
   }
 
+  function _safeCssValue(val) {
+    if (typeof val !== 'string') return '';
+    return val.replace(/[{}<>"';]/g, '').replace(/url\s*\(/gi, '').replace(/expression\s*\(/gi, '').slice(0, 200);
+  }
+
   function importThemeData(theme) {
     if (!theme || typeof theme !== 'object') {
       toast('Invalid theme data', 'error');
@@ -1340,10 +1345,26 @@ const ThemeEditor = (() => {
     }
 
     if (theme.vars && typeof theme.vars === 'object') {
-      _workingVars = { ..._workingVars, ...theme.vars };
+      const sanitized = {};
+      for (const [k, v] of Object.entries(theme.vars)) {
+        if (typeof k === 'string' && k.startsWith('--')) {
+          sanitized[k] = _safeCssValue(v);
+        }
+      }
+      _workingVars = { ..._workingVars, ...sanitized };
     }
     if (theme.fonts && typeof theme.fonts === 'object') {
-      _workingFonts = { ...theme.fonts };
+      const safeFonts = {};
+      if (typeof theme.fonts.family === 'string') {
+        safeFonts.family = theme.fonts.family.replace(/[{}<>"';]/g, '').slice(0, 200);
+      }
+      if (typeof theme.fonts.size === 'string') {
+        safeFonts.size = /^\d{1,3}(px|rem|em|%)$/.test(theme.fonts.size) ? theme.fonts.size : '';
+      }
+      if (typeof theme.fonts.mono === 'string') {
+        safeFonts.mono = theme.fonts.mono.replace(/[{}<>"';]/g, '').slice(0, 200);
+      }
+      _workingFonts = { ...safeFonts };
     }
 
     applyLivePreview();

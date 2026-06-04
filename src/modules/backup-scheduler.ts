@@ -802,12 +802,12 @@ export const BackupScheduler = {
         data: base64,
       };
 
+      // Prune old backups BEFORE writing to avoid quota exhaustion
+      await BackupScheduler.pruneOldBackups();
+
       const backups: BackupEntry[] = await _getBackupList();
       backups.unshift(backup); // newest first
       await _saveBackupList(backups);
-
-      // Prune old backups
-      await BackupScheduler.pruneOldBackups();
 
       // Storage warning check
       if (settings.warnOnStorageFull) {
@@ -1236,10 +1236,10 @@ export const BackupScheduler = {
         data,
       };
 
+      await BackupScheduler.pruneOldBackups();
       const backups: BackupEntry[] = await _getBackupList();
       backups.unshift(backup);
       await _saveBackupList(backups);
-      await BackupScheduler.pruneOldBackups();
 
       return { success: true, backupId: backup.id };
     } catch (err: unknown) {
