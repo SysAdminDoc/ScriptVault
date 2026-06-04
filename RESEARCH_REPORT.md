@@ -42,6 +42,15 @@ compatibility claim is deferred until a real device/emulator smoke exists.
 support matrix now labels Firefox for Android as deferred instead of an AMO
 compatibility target.
 
+2026-06-04 build-lane AMO vendored-library provenance update: the Firefox
+package now has reviewer-reproducible provenance for packaged minified
+third-party libraries. `acorn@8.16.0` and `diff@9.0.0` are exact npm dev pins,
+`lib/acorn.min.js` is regenerated from official npm Acorn source with esbuild,
+`lib/diff.min.js` is copied from the official npm jsdiff package, and
+`docs/amo-vendored-libraries.md` plus `npm run vendored:provenance:check` gate
+the package URLs, tarball integrity, source hashes, packaged hashes, licenses,
+and Firefox package includes.
+
 2026-06-04 implementation refresh: the 2026-06-03 findings still stand, but the
 currently-breaking dependency item is now closed. `web-ext` was bumped to
 `^10.3.0`, `npm ls tmp` resolves `tmp@0.2.6`, and

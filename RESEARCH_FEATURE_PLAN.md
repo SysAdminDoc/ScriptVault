@@ -33,13 +33,16 @@ backup intake is bounded before text decode, JSON parse, or registration.
 Per-script cloud-sync settings are now partitioned so local-only diagnostics
 stay on the originating device. Firefox for Android compatibility is deferred
 until a real smoke gate exists, so the Firefox package no longer advertises an
-Android target.
+Android target. AMO source-review provenance for packaged minified libraries is
+now reviewer-reproducible through exact npm pins, generated packaged hashes, and
+the `vendored:provenance:check` gate.
 
 Current top priorities:
 
 1. Add a real coverage gate for source/runtime code and automate dependency
    freshness so CI catches drift before advisories or store-review failures.
-2. Finish AMO source-review provenance for packaged minified libraries.
+2. Pin release workflow actions and dependency-refresh automation so the store
+   artifact path is less exposed to supply-chain drift.
 3. Clean up dashboard reachability and stale affordances so documented features
    match what a user can actually reach.
 
@@ -61,8 +64,8 @@ Local repository evidence:
   AMO provenance, and Firefox Android validation.
 - `RESEARCH_REPORT.md`: current research map with 2026-06-04 cycles covering
   dependency, sync, backup, Firefox Android, and AMO library provenance.
-- `FIREFOX-PORT.md`: Firefox 140+ desktop target, Firefox for Android 142+
-  manifest validation target, Phase 5 AMO submission state, and manual AMO
+- `FIREFOX-PORT.md`: Firefox 140+ desktop target, Firefox for Android deferred
+  until a real smoke gate exists, Phase 5 AMO submission state, and manual AMO
   account blocker.
 - `CHANGELOG.md` and `COMPLETED.md`: shipped Firefox smoke, AMO prep,
   high-severity audit fix, module-mode service worker, Monaco fallback, and
@@ -71,7 +74,7 @@ Local repository evidence:
   as `build`, `firefox:package`, `smoke:firefox`, `store-copy:check`,
   `support:matrix:check`, `release:trust`, and `check`.
 - `manifest.json` and `manifest-firefox.json`: MV3 background shape, broad
-  host permissions, `sv` omnibox keyword, commands, Firefox desktop and Android
+  host permissions, `sv` omnibox keyword, commands, and Firefox desktop
   compatibility declarations.
 - `vitest.config.mjs`: coverage uses V8, `all:false`, no threshold.
 - `.github/workflows/ci.yml`: audit gate, Firefox package, support matrix,

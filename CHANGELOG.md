@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — AMO vendored library provenance
+
+- **Added reviewer-reproducible vendored library provenance.** Firefox package
+  libraries now come from exact npm dev pins, with Acorn regenerated from
+  `acorn@8.16.0` source and jsdiff copied from the official `diff@9.0.0`
+  package file.
+- **Gated AMO source-review inventory drift.** `npm run vendored:provenance`
+  writes packaged bytes plus `docs/amo-vendored-libraries.md`, and
+  `npm run firefox:package` now fails if versions, hashes, lockfile integrity,
+  or Firefox minified-library includes drift from the reviewer inventory.
+
 ### 2026-06-04 — Firefox Android compatibility deferred
 
 - **Removed the unverified Android AMO compatibility claim.** The Firefox
