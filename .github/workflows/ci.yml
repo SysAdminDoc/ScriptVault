@@ -58,6 +58,9 @@ jobs:
       - name: README claim check
         run: npm run readme:check
 
+      - name: Readability copy check
+        run: npm run readability:check
+
       - name: TypeScript runtime artifact check
         run: npm run ts-runtime:check
 

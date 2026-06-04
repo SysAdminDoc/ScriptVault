@@ -263,7 +263,7 @@ function getDecisionHeroState() {
       tone: 'neutral',
       badge: 'In review',
       title: 'Checks are still running',
-      copy: 'ScriptVault is still scanning this install. You can keep reviewing permissions, scope, source, and code while the final checks finish.'
+      copy: 'ScriptVault is still checking this script. You can keep reviewing permissions, scope, source, and code. The final checks will update here.'
     };
   }
 
@@ -272,7 +272,7 @@ function getDecisionHeroState() {
       tone: 'warn',
       badge: 'Needs review',
       title: 'Proceed with caution',
-      copy: analysisDecisionState.detail || 'Static analysis surfaced findings that deserve review before installing.'
+      copy: analysisDecisionState.detail || 'Review these items first.'
     };
   }
 
@@ -281,7 +281,7 @@ function getDecisionHeroState() {
       tone: 'warn',
       badge: 'Dependency issue',
       title: 'Dependency checks failed',
-      copy: dependencyDecisionState.detail || 'One or more external dependencies failed to respond cleanly.'
+      copy: dependencyDecisionState.detail || 'Some dependency checks failed. Review them before you install.'
     };
   }
 
@@ -290,7 +290,7 @@ function getDecisionHeroState() {
       tone: 'warn',
       badge: 'Provenance issue',
       title: 'Dependency provenance needs review',
-      copy: provenanceDecisionState.detail || 'One or more @require provenance checks failed or are incomplete.'
+      copy: provenanceDecisionState.detail || 'One or more @require provenance checks failed or did not finish. Review them before you install.'
     };
   }
 
@@ -299,7 +299,7 @@ function getDecisionHeroState() {
       tone: 'warn',
       badge: 'Signature warning',
       title: 'Signer trust needs attention',
-      copy: signatureDecisionState.detail || 'Signature verification surfaced a warning.'
+      copy: signatureDecisionState.detail || 'A signature check found a warning. Review the signer before you install.'
     };
   }
 
@@ -313,7 +313,7 @@ function getDecisionHeroState() {
       tone: 'good',
       badge: 'Ready',
       title: 'Ready to install',
-      copy: 'Static analysis, dependency checks, provenance, and signer trust all look good for this install.'
+      copy: 'The scans, dependency checks, provenance, and signer trust all look good.'
     };
   }
 
@@ -723,7 +723,7 @@ function getProvenanceSummary(sourceUrl, meta) {
   const comparisonUrl = updateUrl || downloadUrl || installSource.label;
   let label = installSource.host;
   let detail = sourceUrl
-    ? 'Review the install source and update channel before trusting future updates.'
+    ? 'Review where this script came from. Check the update channel before you trust future updates.'
     : 'This review started from a local file rather than a remote install page.';
 
   if (/greasyfork\.org/i.test(comparisonUrl)) {
@@ -818,7 +818,7 @@ function renderTrustCard(sourceUrl) {
     <div class="install-card-header">
       <div>
         <div class="install-card-title">Source & Trust</div>
-        <div class="install-card-subtitle">Review where this script came from and whether its signer is already trusted.</div>
+        <div class="install-card-subtitle">Review where this script came from and whether you trust its signer.</div>
       </div>
       <span class="count ${signatureState.tone}">${escapeHtml(signatureState.badge)}</span>
     </div>
@@ -1349,7 +1349,7 @@ function renderInstallUI(sourceUrl) {
               </div>
               <span class="count status-neutral" id="analysisStatus" role="status" aria-live="polite" aria-atomic="true">Scanning</span>
             </div>
-            <div class="analysis-summary">Static analysis runs in the background so you can keep reviewing while ScriptVault checks the script.</div>
+            <div class="analysis-summary">ScriptVault checks the script in the background while you review it.</div>
           </div>
         </div>
 
@@ -1360,7 +1360,7 @@ function renderInstallUI(sourceUrl) {
             <div class="install-card-header">
               <div>
                 <div class="install-card-title">Source & Trust</div>
-                <div class="install-card-subtitle">Review where this script came from and whether its signer is already trusted.</div>
+                <div class="install-card-subtitle">Review where this script came from and whether you trust its signer.</div>
               </div>
               <span class="count status-neutral">${hasSignature ? 'Verifying' : 'Unsigned'}</span>
             </div>
@@ -1392,7 +1392,7 @@ function renderInstallUI(sourceUrl) {
               <span class="decision-hero-badge" id="decisionHeroBadge">In review</span>
             </div>
             <div class="decision-hero-title" id="decisionHeroTitle">Checks are still running</div>
-            <div class="decision-hero-copy" id="decisionHeroCopy" role="status" aria-live="polite" aria-atomic="true">ScriptVault is still scanning this install. You can keep reviewing permissions, scope, source, and code while the final checks finish.</div>
+            <div class="decision-hero-copy" id="decisionHeroCopy" role="status" aria-live="polite" aria-atomic="true">ScriptVault is still checking this script. You can keep reviewing permissions, scope, source, and code. The final checks will update here.</div>
           </div>
 
           <div class="decision-list">
@@ -2345,14 +2345,14 @@ async function runStaticAnalysis(code) {
       analysisDecisionState = {
         label: 'Unavailable',
         tone: 'neutral',
-        detail: 'ScriptVault could not complete the static scan for this install.'
+        detail: 'ScriptVault could not finish this scan.'
       };
       updateDecisionStates();
       mount.innerHTML = `
         <div class="install-card-header">
           <div>
             <div class="install-card-title">Security Analysis</div>
-            <div class="install-card-subtitle">ScriptVault could not complete the static scan for this install.</div>
+            <div class="install-card-subtitle">ScriptVault could not finish this scan.</div>
           </div>
           <span class="count status-neutral">Unavailable</span>
         </div>
@@ -2403,7 +2403,7 @@ async function runStaticAnalysis(code) {
     analysisDecisionState = {
       label: 'Unavailable',
       tone: 'neutral',
-      detail: 'The scanner ran into an error while processing this script.'
+      detail: 'The scanner hit an error while it checked this script.'
     };
     updateDecisionStates();
     const mount = document.getElementById('analysisMount');
@@ -2412,7 +2412,7 @@ async function runStaticAnalysis(code) {
         <div class="install-card-header">
           <div>
             <div class="install-card-title">Security Analysis</div>
-            <div class="install-card-subtitle">The scanner ran into an error while processing this script.</div>
+            <div class="install-card-subtitle">The scanner hit an error while it checked this script.</div>
           </div>
           <span class="count status-neutral">Unavailable</span>
         </div>

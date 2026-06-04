@@ -1,9 +1,9 @@
 # WCAG 3.0 Readiness Gap Analysis
 
 **Phase:** 39.43 (extends Phases 14 + 34).
-**Status:** Initial gap matrix — March 2026 Working Draft baseline.
+**Status:** Initial gap matrix — March 2026 Working Draft baseline; H-1/H-2 implementation refresh.
 **Owner:** Phase 34 (Deep Accessibility) follow-up.
-**Last reviewed:** 2026-05-17.
+**Last reviewed:** 2026-06-04.
 
 ---
 
@@ -54,7 +54,7 @@ Three-bucket classification per WCAG 3 requirement, where the requirement crosse
 | Drag movements have keyboard alternative | Bronze | 🟢 Covered | Phase 14.5 | — |
 | Timeouts: user is warned & can extend | Silver | 🟢 Covered | No auto-timeouts in ScriptVault UI; sync polling is silent | — |
 | No flashing content > 3 Hz | Bronze | 🟢 Covered | No flashing animations | — |
-| Help is consistent across pages | Silver | 🔴 Net-new | — | Centralized "Help" entry in dashboard header, link consistent across popup/sidepanel/install. ~3 hours. |
+| Help is consistent across pages | Silver | 🟢 Covered | Phase 34.6 follow-up | Dashboard, popup, sidepanel, and install expose a `[data-help]` control named "Help" that links to the dashboard Help tab. |
 | Cognitive function tests don't gate access | Silver | 🟢 Covered | No CAPTCHA, no math-puzzle gates | — |
 
 ### Category 3: Understandable
@@ -65,12 +65,12 @@ Three-bucket classification per WCAG 3 requirement, where the requirement crosse
 | Language of parts (inline) | Bronze | 🟡 Partial | Most strings flow through i18n | Mixed-language strings (e.g., script names in dashboard) lack `lang=""` on inline spans. Low priority. |
 | Consistent navigation | Bronze | 🟢 Covered | Dashboard tabs are stable; popup layout consistent | — |
 | Consistent identification (same components labeled same way) | Bronze | 🟢 Covered | Existing terminology audit (Phase 34.6) | — |
-| Plain language (Flesch 60+) | Bronze | 🟡 Partial | Phase 34.6 plans the audit | Error messages still technical. ~6 hours per Phase 34.6. |
+| Plain language (Flesch 60+) | Bronze | 🟢 Covered | Phase 34.6 follow-up | `scripts/check-readability.mjs` audits high-impact setup/install/trust copy at Flesch 60+ and reports offending IDs/files. |
 | Error identification (errors clearly indicated) | Bronze | 🟢 Covered | Toast system, form error styling | — |
 | Error suggestion (offer correction) | Silver | 🟡 Partial | Linter (Phase 11.x) suggests `@grant` additions; many other errors don't | Round 12 / Phase 39.10 banner is a model: identify + suggest CTA. |
 | Error prevention for important transactions | Silver | 🟢 Covered | Bulk delete + factory reset gated by confirmation modals | — |
 | Predictable: on-input doesn't navigate | Bronze | 🟢 Covered | Search inputs don't navigate on type | — |
-| Reading level (Flesch-Kincaid grade ≤ 8) | Silver | 🟡 Partial | Phase 34.6 in progress | Once shipped, this requirement is met. |
+| Reading level (Flesch-Kincaid grade ≤ 8) | Silver | 🟡 Partial | Phase 34.6 follow-up | High-impact setup/install/trust copy is gated; expand the catalog as new errors, warnings, and trust states land. |
 
 ### Category 4: Robust
 
@@ -86,11 +86,11 @@ Three-bucket classification per WCAG 3 requirement, where the requirement crosse
 In rough effort order:
 
 1. **Skip-to-main-content links** on all 5 extension pages — ~2 hours.
-2. **Help affordance consistency** — centralized help entry + link in each page header — ~3 hours.
-3. **APCA contrast re-audit** on all 5 themes including the new Claude theme — ~12 hours total.
-4. **Combobox + grid ARIA APG patterns** for script table + search — ~6 hours per Phase 34.3 estimate.
-5. **Status-message live-region audit** — ~2 hours.
-6. **Mixed-language inline `lang=""` attributes** for script names — low priority but cheap; ~1 hour.
+2. **APCA contrast re-audit** on all 5 themes including the new Claude theme — ~12 hours total.
+3. **Combobox + grid ARIA APG patterns** for script table + search — ~6 hours per Phase 34.3 estimate.
+4. **Status-message live-region audit** — ~2 hours.
+5. **Mixed-language inline `lang=""` attributes** for script names — low priority but cheap; ~1 hour.
+6. **Readability catalog expansion** for any new high-impact errors, warnings, and trust states — ongoing with the Flesch 60+ gate.
 
 ## Roadmap impact
 

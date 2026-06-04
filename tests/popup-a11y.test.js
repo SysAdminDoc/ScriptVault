@@ -92,7 +92,7 @@ describe("popup UX markup", () => {
     expect(warning?.getAttribute("aria-atomic")).toBe("true");
     expect(warning?.getAttribute("data-setup-state")).toBe("unknown");
     expect(title?.textContent).toMatch(/Setup Required/);
-    expect(warning?.textContent).toContain("Chrome 138+");
+    expect(warning?.textContent).toContain("Chrome 138 or newer");
     expect(warning?.textContent).toContain("Chrome 120-137");
     expect(action?.textContent).toBe("Open Extension Details");
   });
