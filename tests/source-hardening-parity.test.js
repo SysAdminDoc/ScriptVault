@@ -128,9 +128,14 @@ describe('source hardening parity guards', () => {
     }
     expect(core).toContain('prepareSettingsForPortableImport');
     expect(importExport).toContain('prepareSettingsForPortableImport');
+    expect(core).toContain('applyImportedScriptTrust');
+    expect(importExport).toContain('applyImportedScriptTrust');
+    expect(backupScheduler).toContain('trustImportedScripts');
     expect(backupScheduler).toContain('global-settings.metadata.json');
     expect(backupScheduler).toContain('_prepareSettingsForRestore');
     expect(dashboard).toContain('restoreSettingsCredentials');
+    expect(dashboard).toContain('trustBackupScripts');
+    expect(dashboard).toContain('Import review');
     expect(dashboard).toContain('includeSettingsCredentials: transfer.includeSettingsCredentials');
     expect(dashboard).toContain('importSettingsCredentials: transfer.includeSettingsCredentials');
   });

@@ -308,7 +308,7 @@ describe('runtime import/export archive identity', () => {
     expect(harness.generateId).not.toHaveBeenCalled();
   });
 
-  it('uses ScriptVault ZIP script IDs to restore existing scripts whose names changed', async () => {
+  it('quarantines archive-enabled ZIP imports while preserving ScriptVault IDs', async () => {
     const existing = makeScript('script_preserved', 'Renamed Local Script');
     const harness = createRuntimeHarness([existing]);
     const zipBytes = harness.fakeFflate.zipSync({
@@ -329,7 +329,48 @@ describe('runtime import/export archive identity', () => {
 
     const result = await harness.importFromZip(bytesToBase64(zipBytes), { overwrite: true });
 
-    expect(result).toMatchObject({ imported: 1, skipped: 0 });
+    expect(result).toMatchObject({ imported: 1, skipped: 0, quarantinedScripts: 1 });
+    expect(harness.ScriptStorage.set).toHaveBeenCalledWith(
+      'script_preserved',
+      expect.objectContaining({
+        id: 'script_preserved',
+        enabled: false,
+        meta: expect.objectContaining({ name: 'Preserved Script' }),
+        settings: expect.objectContaining({
+          _importQuarantine: expect.objectContaining({
+            source: 'import-zip',
+          }),
+        }),
+      }),
+    );
+    expect(harness.generateId).not.toHaveBeenCalled();
+  });
+
+  it('preserves archive-enabled ZIP imports only with a trusted override', async () => {
+    const existing = makeScript('script_preserved', 'Renamed Local Script');
+    const harness = createRuntimeHarness([existing]);
+    const zipBytes = harness.fakeFflate.zipSync({
+      'Preserved.user.js': harness.fakeFflate.strToU8([
+        '// ==UserScript==',
+        '// @name Preserved Script',
+        '// @namespace scriptvault/preserved',
+        '// @version 1.0.0',
+        '// @match https://example.com/*',
+        '// ==/UserScript==',
+        'console.log("preserved");',
+      ].join('\n')),
+      'Preserved.options.json': harness.fakeFflate.strToU8(JSON.stringify({
+        scriptId: 'script_preserved',
+        settings: { enabled: true },
+      })),
+    });
+
+    const result = await harness.importFromZip(bytesToBase64(zipBytes), {
+      overwrite: true,
+      trustImportedScripts: true,
+    });
+
+    expect(result).toMatchObject({ imported: 1, skipped: 0, trustedEnabledScripts: 1 });
     expect(harness.ScriptStorage.set).toHaveBeenCalledWith(
       'script_preserved',
       expect.objectContaining({
@@ -338,7 +379,6 @@ describe('runtime import/export archive identity', () => {
         meta: expect.objectContaining({ name: 'Preserved Script' }),
       }),
     );
-    expect(harness.generateId).not.toHaveBeenCalled();
   });
 
   it('generates safe IDs for unsafe JSON import script IDs', async () => {

@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Import and restore quarantine
+
+- **Quarantined restored executable scripts by default.** JSON imports, ZIP
+  imports, raw-JS ZIP fallback imports, selected backup restores, cloud restores,
+  and full-vault restores now keep archive-enabled scripts disabled until review.
+- **Added an explicit trusted restore override.** Backup review shows how many
+  archive-enabled scripts will become active immediately when the user selects
+  the trusted override; archived-disabled scripts stay disabled either way.
+- **Recorded trust posture in restore/import results.** Receipts and toasts now
+  count quarantined, preserved-disabled, and trusted-enabled scripts without
+  storing script bodies or credentials in the summary.
+
 ### 2026-06-04 — Host-permission recovery prompts
 
 - **Added current-site host access diagnostics.** The background now reports the

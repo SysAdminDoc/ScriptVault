@@ -40,6 +40,8 @@ interface ImportOptions {
   overwrite?: boolean;
   importSettings?: boolean;
   importSettingsCredentials?: boolean;
+  trustImportedScripts?: boolean;
+  sourceLabel?: string;
 }
 
 interface ImportResults {
@@ -49,6 +51,9 @@ interface ImportResults {
   settingsImported?: boolean;
   settingsCredentialsImported?: boolean;
   skippedSettingsCredentialKeys?: string[];
+  quarantinedScripts?: number;
+  preservedDisabledScripts?: number;
+  trustedEnabledScripts?: number;
   error?: string;
 }
 
@@ -483,11 +488,43 @@ function finiteBackupNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function applyImportedScriptTrust(
+  settings: Record<string, unknown> | undefined,
+  archiveEnabled: boolean,
+  options: { trustImportedScripts?: boolean; source?: string; sourceLabel?: string } = {},
+): { enabled: boolean; settings: Record<string, unknown>; disposition: string } {
+  const nextSettings = settings && typeof settings === 'object' ? { ...settings } : {};
+  delete nextSettings._importQuarantine;
+  if (archiveEnabled === false) {
+    return { enabled: false, settings: nextSettings, disposition: 'preserved-disabled' };
+  }
+  if (options.trustImportedScripts === true) {
+    return { enabled: true, settings: nextSettings, disposition: 'trusted-enabled' };
+  }
+  nextSettings._importQuarantine = {
+    source: options.source || 'import',
+    sourceLabel: options.sourceLabel || '',
+    importedAt: Date.now(),
+    archiveEnabled: true,
+  };
+  return { enabled: false, settings: nextSettings, disposition: 'quarantined' };
+}
+
+function countImportTrustDisposition(results: ImportResults, disposition: string): void {
+  if (disposition === 'quarantined') {
+    results.quarantinedScripts = (results.quarantinedScripts || 0) + 1;
+  } else if (disposition === 'preserved-disabled') {
+    results.preservedDisabledScripts = (results.preservedDisabledScripts || 0) + 1;
+  } else if (disposition === 'trusted-enabled') {
+    results.trustedEnabledScripts = (results.trustedEnabledScripts || 0) + 1;
+  }
+}
+
 export async function importScripts(
   data: ImportData,
   options: ImportOptions = {},
 ): Promise<ImportResults | { error: string }> {
-  const { overwrite = false } = options;
+  const { overwrite = false, trustImportedScripts = false, sourceLabel = '' } = options;
   const results: ImportResults = {
     imported: 0,
     skipped: 0,
@@ -495,6 +532,9 @@ export async function importScripts(
     settingsImported: false,
     settingsCredentialsImported: false,
     skippedSettingsCredentialKeys: [],
+    quarantinedScripts: 0,
+    preservedDisabledScripts: 0,
+    trustedEnabledScripts: 0,
   };
 
   if (!data.scripts || !Array.isArray(data.scripts)) {
@@ -534,12 +574,19 @@ export async function importScripts(
         ? existing.id
         : allocateImportedScriptId(requestedScriptId, usedScriptIds);
       usedScriptIds.add(scriptId);
+      const trustState = applyImportedScriptTrust({}, script.enabled !== false, {
+        trustImportedScripts,
+        source: 'import-json',
+        sourceLabel: sourceLabel || 'JSON import',
+      });
+      countImportTrustDisposition(results, trustState.disposition);
 
       await ScriptStorage.set(scriptId, {
         id: scriptId,
         code: script.code,
         meta: parsed.meta,
-        enabled: script.enabled !== false,
+        enabled: trustState.enabled,
+        ...(Object.keys(trustState.settings).length > 0 ? { settings: trustState.settings } : {}),
         position: Number.isFinite(script.position) ? script.position : _importPosition++,
         createdAt: Number.isFinite(script.createdAt) ? script.createdAt : Date.now(),
         updatedAt: Number.isFinite(script.updatedAt) ? script.updatedAt : Date.now()
@@ -658,7 +705,18 @@ export async function importFromZip(
   zipData: string | ArrayBuffer | Uint8Array,
   options: ImportOptions = {},
 ): Promise<ImportResults> {
-  const results: ImportResults = { imported: 0, skipped: 0, errors: [] };
+  const results: ImportResults = {
+    imported: 0,
+    skipped: 0,
+    errors: [],
+    quarantinedScripts: 0,
+    preservedDisabledScripts: 0,
+    trustedEnabledScripts: 0,
+  };
+  const trustImportedScripts = options.trustImportedScripts === true;
+  const sourceLabel = typeof options.sourceLabel === 'string' && options.sourceLabel.trim()
+    ? options.sourceLabel.trim()
+    : 'ZIP import';
 
   try {
     const unzipped: Record<string, Uint8Array> = unzipArchiveBounded(zipData);
@@ -763,15 +821,24 @@ export async function importFromZip(
         }
         usedScriptIds.add(scriptId);
         const now = Date.now();
+        const trustState = applyImportedScriptTrust({}, enabled, {
+          trustImportedScripts,
+          source: 'import-zip',
+          sourceLabel,
+        });
+        countImportTrustDisposition(results, trustState.disposition);
         const script: Script = {
           id: scriptId,
           code: code,
           meta: parsedMeta,
-          enabled: enabled,
+          enabled: trustState.enabled,
           position: existing?.position ?? (importedPosition ?? _importPosition++),
           createdAt: finiteBackupNumber(existing?.createdAt) ?? importedCreatedAt ?? now,
           updatedAt: importedUpdatedAt ?? now
         };
+        if (Object.keys(trustState.settings).length > 0) {
+          script.settings = trustState.settings;
+        }
 
         await ScriptStorage.set(scriptId, script);
 
@@ -802,14 +869,26 @@ export async function importFromZip(
           if (parsed.error) continue;
 
           const scriptId: string = generateId();
-          await ScriptStorage.set(scriptId, {
+          const trustState = applyImportedScriptTrust({}, true, {
+            trustImportedScripts,
+            source: 'import-zip-raw',
+            sourceLabel,
+          });
+          countImportTrustDisposition(results, trustState.disposition);
+          const script: Script = {
             id: scriptId,
             code: code,
             meta: parsed.meta,
-            enabled: true,
+            enabled: trustState.enabled,
             position: _importPosition++,
             createdAt: Date.now(),
             updatedAt: Date.now()
+          } as Script;
+          if (Object.keys(trustState.settings).length > 0) {
+            script.settings = trustState.settings;
+          }
+          await ScriptStorage.set(scriptId, {
+            ...script,
           } as Script);
           results.imported++;
         } catch (e: unknown) {

@@ -2976,6 +2976,34 @@ function finiteBackupNumber(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function applyImportedScriptTrust(settings, archiveEnabled, options = {}) {
+  const nextSettings = settings && typeof settings === 'object' ? { ...settings } : {};
+  delete nextSettings._importQuarantine;
+  if (archiveEnabled === false) {
+    return { enabled: false, settings: nextSettings, disposition: 'preserved-disabled' };
+  }
+  if (options.trustImportedScripts === true) {
+    return { enabled: true, settings: nextSettings, disposition: 'trusted-enabled' };
+  }
+  nextSettings._importQuarantine = {
+    source: options.source || 'import',
+    sourceLabel: options.sourceLabel || '',
+    importedAt: Date.now(),
+    archiveEnabled: true
+  };
+  return { enabled: false, settings: nextSettings, disposition: 'quarantined' };
+}
+
+function countImportTrustDisposition(results, disposition) {
+  if (disposition === 'quarantined') {
+    results.quarantinedScripts = (results.quarantinedScripts || 0) + 1;
+  } else if (disposition === 'preserved-disabled') {
+    results.preservedDisabledScripts = (results.preservedDisabledScripts || 0) + 1;
+  } else if (disposition === 'trusted-enabled') {
+    results.trustedEnabledScripts = (results.trustedEnabledScripts || 0) + 1;
+  }
+}
+
 async function importScripts(data, options = {}) {
   const {
     overwrite = false,
@@ -2983,7 +3011,8 @@ async function importScripts(data, options = {}) {
     importStorage = false,
     importSettingsCredentials = false,
     recordReceipt = true,
-    sourceLabel = ''
+    sourceLabel = '',
+    trustImportedScripts = false
   } = options;
   const results = {
     imported: 0,
@@ -2993,7 +3022,10 @@ async function importScripts(data, options = {}) {
     settingsCredentialsImported: false,
     skippedSettingsCredentialKeys: [],
     storageImported: 0,
-    replacedScripts: []
+    replacedScripts: [],
+    quarantinedScripts: 0,
+    preservedDisabledScripts: 0,
+    trustedEnabledScripts: 0
   };
 
   if (!data.scripts || !Array.isArray(data.scripts)) {
@@ -3042,13 +3074,19 @@ async function importScripts(data, options = {}) {
       const nextSettings = importSettings && script.settings && typeof script.settings === 'object'
         ? { ...script.settings }
         : { ...(existing?.settings || {}) };
+      const trustState = applyImportedScriptTrust(nextSettings, script.enabled !== false, {
+        trustImportedScripts,
+        source: 'import-json',
+        sourceLabel: sourceLabel || 'JSON import'
+      });
+      countImportTrustDisposition(results, trustState.disposition);
 
       const importEntry = {
         id: scriptId,
         code: script.code,
         meta: parsed.meta,
-        enabled: script.enabled !== false,
-        settings: nextSettings,
+        enabled: trustState.enabled,
+        settings: trustState.settings,
         position: Number.isFinite(script.position) ? script.position : _importPosition++,
         createdAt: Number.isFinite(script.createdAt) ? script.createdAt : Date.now(),
         updatedAt: Number.isFinite(script.updatedAt) ? script.updatedAt : Date.now()
@@ -3141,6 +3179,9 @@ async function importScripts(data, options = {}) {
           imported: results.imported,
           skipped: results.skipped,
           replacedScripts: results.replacedScripts.length,
+          quarantinedScripts: results.quarantinedScripts,
+          preservedDisabledScripts: results.preservedDisabledScripts,
+          trustedEnabledScripts: results.trustedEnabledScripts,
           errors: results.errors.slice()
         },
         snapshot: {
@@ -3244,11 +3285,20 @@ async function exportToZip(options = {}) {
 
 // Import from ZIP (supports Tampermonkey and other formats)
 async function importFromZip(zipData, options = {}) {
-  const results = { imported: 0, skipped: 0, errors: [], replacedScripts: [] };
+  const results = {
+    imported: 0,
+    skipped: 0,
+    errors: [],
+    replacedScripts: [],
+    quarantinedScripts: 0,
+    preservedDisabledScripts: 0,
+    trustedEnabledScripts: 0
+  };
   const recordReceipt = options.recordReceipt !== false;
   const sourceLabel = typeof options.sourceLabel === 'string' && options.sourceLabel.trim()
     ? options.sourceLabel.trim()
     : 'ZIP import (overwrite)';
+  const trustImportedScripts = options.trustImportedScripts === true;
   // Pre-import snapshot for replaced scripts so the import is reversible.
   const replacedSnapshots = [];
   const valuesSnapshots = {};
@@ -3344,15 +3394,24 @@ async function importFromZip(zipData, options = {}) {
         }
         usedScriptIds.add(scriptId);
         const now = Date.now();
+        const trustState = applyImportedScriptTrust({}, enabled, {
+          trustImportedScripts,
+          source: 'import-zip',
+          sourceLabel
+        });
+        countImportTrustDisposition(results, trustState.disposition);
         const script = {
           id: scriptId,
           code: code,
           meta: parsed.meta,
-          enabled: enabled,
+          enabled: trustState.enabled,
           position: existing?.position ?? (importedPosition ?? _importPosition++),
           createdAt: finiteBackupNumber(existing?.createdAt) ?? importedCreatedAt ?? now,
           updatedAt: importedUpdatedAt ?? now
         };
+        if (Object.keys(trustState.settings).length > 0) {
+          script.settings = trustState.settings;
+        }
 
         // Snapshot before overwrite — feeds both versionHistory and the
         // restore receipt rollback path.
@@ -3414,16 +3473,26 @@ async function importFromZip(zipData, options = {}) {
           if (parsed.error) continue;
           
           const scriptId = generateId();
-          await ensurePersistentStorageForScriptWrite('zip-import', code);
-          await ScriptStorage.set(scriptId, {
+          const trustState = applyImportedScriptTrust({}, true, {
+            trustImportedScripts,
+            source: 'import-zip-raw',
+            sourceLabel
+          });
+          countImportTrustDisposition(results, trustState.disposition);
+          const script = {
             id: scriptId,
             code: code,
             meta: parsed.meta,
-            enabled: true,
+            enabled: trustState.enabled,
             position: _importPosition++,
             createdAt: Date.now(),
             updatedAt: Date.now()
-          });
+          };
+          if (Object.keys(trustState.settings).length > 0) {
+            script.settings = trustState.settings;
+          }
+          await ensurePersistentStorageForScriptWrite('zip-import', code);
+          await ScriptStorage.set(scriptId, script);
           results.imported++;
         } catch (e) {
           results.errors.push({ name: filename, error: e.message });
@@ -3459,6 +3528,9 @@ async function importFromZip(zipData, options = {}) {
             imported: results.imported,
             skipped: results.skipped,
             replacedScripts: results.replacedScripts.length,
+            quarantinedScripts: results.quarantinedScripts,
+            preservedDisabledScripts: results.preservedDisabledScripts,
+            trustedEnabledScripts: results.trustedEnabledScripts,
             errors: results.errors.slice()
           },
           snapshot: {
@@ -4294,6 +4366,10 @@ async function handleMessage(message, sender) {
           }
 
           script.enabled = data.enabled !== undefined ? !!data.enabled : !script.enabled;
+          if (script.enabled && script.settings?._importQuarantine) {
+            script.settings = { ...script.settings };
+            delete script.settings._importQuarantine;
+          }
           script.updatedAt = Date.now();
           await ScriptStorage.set(scriptId, script);
 
@@ -4830,7 +4906,8 @@ async function handleMessage(message, sender) {
             overwrite: true,
             importSettings: data?.importSettings === true,
             importStorage: data?.importStorage !== false,
-            importSettingsCredentials: data?.importSettingsCredentials === true
+            importSettingsCredentials: data?.importSettingsCredentials === true,
+            trustImportedScripts: data?.trustImportedScripts === true
           });
           return { success: !result.error, ...result };
         } catch (e) {

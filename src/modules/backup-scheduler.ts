@@ -26,10 +26,18 @@ declare const fflate: {
 
 declare function importFromZip(
   zipData: string,
-  options?: { overwrite?: boolean; recordReceipt?: boolean },
+  options?: {
+    overwrite?: boolean;
+    recordReceipt?: boolean;
+    trustImportedScripts?: boolean;
+    sourceLabel?: string;
+  },
 ): Promise<{
   imported: number;
   skipped: number;
+  quarantinedScripts?: number;
+  preservedDisabledScripts?: number;
+  trustedEnabledScripts?: number;
   errors: Array<{ name: string; error: string }>;
   error?: string;
 }>;
@@ -118,6 +126,9 @@ interface RestoreResult {
   restoredWorkspaces?: boolean;
   settingsCredentialsRestored?: boolean;
   skippedSettingsCredentialKeys?: string[];
+  quarantinedScripts?: number;
+  preservedDisabledScripts?: number;
+  trustedEnabledScripts?: number;
   errors?: Array<{ name: string; error: string }>;
   receiptId?: string;
   error?: string;
@@ -138,6 +149,7 @@ interface InspectedScript {
   name: string;
   namespace?: string;
   hasStorage: boolean;
+  enabled: boolean;
 }
 
 interface InspectedFolder {
@@ -174,6 +186,7 @@ interface RestoreOptions {
   selective?: boolean;
   scriptIds?: string[];
   importSettingsCredentials?: boolean;
+  trustImportedScripts?: boolean;
   recordReceipt?: boolean;
   sourceLabel?: string;
 }
@@ -1238,8 +1251,12 @@ export const BackupScheduler = {
       let restoredWorkspaces = false;
       let settingsCredentialsRestored = false;
       let skippedSettingsCredentialKeys: string[] = [];
+      let quarantinedScripts = 0;
+      let preservedDisabledScripts = 0;
+      let trustedEnabledScripts = 0;
       const errors: Array<{ name: string; error: string }> = [];
       const settingsMetadata = _readSettingsMetadata(unzipped, backup);
+      const trustImportedScripts = options.trustImportedScripts === true;
 
       // --- Restore scripts ---
       const userScripts: string[] = fileNames.filter((n: string) =>
@@ -1314,6 +1331,9 @@ export const BackupScheduler = {
             restoredSettings: false,
             restoredFolders: false,
             restoredWorkspaces: false,
+            quarantinedScripts: 0,
+            preservedDisabledScripts: 0,
+            trustedEnabledScripts: 0,
             errors: [],
           };
         }
@@ -1321,13 +1341,21 @@ export const BackupScheduler = {
         const selectiveZip = fflate.zipSync(selectedFiles, { level: 6 });
         const importResult = await importFromZip(
           _zipBytesToBase64(selectiveZip),
-          { overwrite: true, recordReceipt: false },
+          {
+            overwrite: true,
+            recordReceipt: false,
+            trustImportedScripts,
+            sourceLabel,
+          },
         );
         if (importResult.error) {
           errors.push({ name: 'archive', error: importResult.error });
         }
         restoredScripts = importResult.imported;
         skippedScripts = importResult.skipped;
+        quarantinedScripts = Number(importResult.quarantinedScripts || 0);
+        preservedDisabledScripts = Number(importResult.preservedDisabledScripts || 0);
+        trustedEnabledScripts = Number(importResult.trustedEnabledScripts || 0);
         if (Array.isArray(importResult.errors)) {
           errors.push(...importResult.errors);
         }
@@ -1337,12 +1365,17 @@ export const BackupScheduler = {
           const importResult = await importFromZip(backup.data, {
             overwrite: true,
             recordReceipt: false,
+            trustImportedScripts,
+            sourceLabel,
           });
           if (importResult.error) {
             errors.push({ name: 'archive', error: importResult.error });
           }
           restoredScripts = importResult.imported;
           skippedScripts = importResult.skipped;
+          quarantinedScripts = Number(importResult.quarantinedScripts || 0);
+          preservedDisabledScripts = Number(importResult.preservedDisabledScripts || 0);
+          trustedEnabledScripts = Number(importResult.trustedEnabledScripts || 0);
           if (Array.isArray(importResult.errors)) {
             errors.push(...importResult.errors);
           }
@@ -1447,6 +1480,9 @@ export const BackupScheduler = {
         restoredWorkspaces,
         settingsCredentialsRestored,
         skippedSettingsCredentialKeys,
+        quarantinedScripts,
+        preservedDisabledScripts,
+        trustedEnabledScripts,
         errors,
       };
 
@@ -1708,6 +1744,7 @@ export const BackupScheduler = {
               const optionsData = parseArchiveJson<{
                 scriptId?: string;
                 meta?: { name?: string; namespace?: string };
+                settings?: { enabled?: boolean };
               }>(unzipped, `${baseName}.options.json`, ARCHIVE_MAX_OPTIONS_BYTES);
               scriptId =
                 typeof optionsData.scriptId === 'string'
@@ -1715,12 +1752,14 @@ export const BackupScheduler = {
                   : null;
               const name = optionsData.meta?.name || displayName;
               const namespace = optionsData.meta?.namespace || '';
+              const enabled = optionsData.settings?.enabled !== false;
               if (optionsData.meta?.name) {
                 return {
                   id: scriptId || (namespace ? `${name}::${namespace}` : name),
                   name,
                   namespace,
                   hasStorage: !!unzipped[`${baseName}.storage.json`],
+                  enabled,
                 };
               }
             } catch (_) {
@@ -1731,6 +1770,7 @@ export const BackupScheduler = {
             id: scriptId || displayName,
             name: displayName,
             hasStorage: !!unzipped[`${baseName}.storage.json`],
+            enabled: true,
           };
         });
       const scriptsWithStorageCount = scripts.filter((script) => script.hasStorage).length;

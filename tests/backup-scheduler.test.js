@@ -206,6 +206,7 @@ describe('runtime backup scheduler', () => {
       id: 'script_alpha',
       name: 'Alpha Script',
       hasStorage: true,
+      enabled: true,
     });
     expect(inspected.scriptsWithStorageCount).toBe(1);
   });
@@ -324,10 +325,15 @@ describe('runtime backup scheduler', () => {
       scriptIds: ['script_beta'],
     });
 
-    const [zipBase64] = importFromZip.mock.calls[0];
+    const [zipBase64, importOptions] = importFromZip.mock.calls[0];
     const selectedFiles = fakeFflate.unzipSync(base64ToBytes(zipBase64));
 
     expect(restored).toMatchObject({ success: true, restoredScripts: 1 });
+    expect(importOptions).toMatchObject({
+      overwrite: true,
+      recordReceipt: false,
+      trustImportedScripts: false,
+    });
     expect(Object.keys(selectedFiles).sort()).toEqual([
       'scripts/Beta.options.json',
       'scripts/Beta.storage.json',
@@ -380,6 +386,36 @@ describe('runtime backup scheduler', () => {
 
     expect(chrome.alarms.clear).toHaveBeenCalledWith('sv_backup_scheduled');
     expect(chrome.alarms.clear).toHaveBeenCalledWith('sv_backup_debounce');
+  });
+
+  it('passes the trusted restore override through full backup restore', async () => {
+    const { BackupScheduler, importFromZip } = createSchedulerHarness([
+      makeScript('script_alpha', 'Alpha'),
+    ]);
+
+    await chrome.storage.local.set({
+      backupSchedulerSettings: {
+        enabled: true,
+        scheduleType: 'manual',
+        hour: 3,
+        dayOfWeek: 0,
+        maxBackups: 5,
+        notifyOnSuccess: false,
+        notifyOnFailure: false,
+        warnOnStorageFull: false,
+      },
+    });
+
+    const created = await BackupScheduler.createBackup('manual');
+    await BackupScheduler.restoreBackup(created.backupId, {
+      trustImportedScripts: true,
+    });
+
+    expect(importFromZip.mock.calls[0][1]).toMatchObject({
+      overwrite: true,
+      recordReceipt: false,
+      trustImportedScripts: true,
+    });
   });
 
   it('rejects nested archive imports before storing backup records', async () => {

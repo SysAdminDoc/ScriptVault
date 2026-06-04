@@ -500,7 +500,7 @@ Priorities/sizes preserve the source labels.
   - Progress: 2026-06-04 JSON import, ZIP import, managed backup import, inspect, verify, and restore now route through bounded archive intake. The helper caps compressed payload bytes, file count, aggregate expanded bytes, per-entry size, script-code size, nested archive entries, and compression ratio before any text decode, JSON parse, or script registration path runs.
   - Verification: `npm run ts-runtime:generate`; `npm run build:bg`; `npm run typecheck`; `npm test -- tests/runtime-import-export.test.js tests/source-backup-modules.test.js tests/backup-scheduler.test.js tests/source-hardening-parity.test.js`; `npm test -- tests/import-snapshot.test.js`; `npm run ts-runtime:check`; `npm run ts-source:check`; `npm run store-copy:check`; `npm run readme:check`; `npm run test:a11y`; `npm run check`; `git diff --check`.
   - Complexity: M
-- [ ] P1 - Quarantine imported/restored executable scripts before first run
+- [x] P1 - Quarantine imported/restored executable scripts before first run
   - Why: JSON import, ZIP import, selected backup restore, full-vault restore,
     and raw-JS fallback import are now bounded and credential-safe, but they can
     still persist executable script bodies as enabled and call
@@ -547,6 +547,17 @@ Priorities/sizes preserve the source labels.
     quarantine and trusted override copy; `npm run ts-runtime:check`;
     `npm run ts-source:check`; relevant import/export, backup scheduler, store
     copy, and a11y gates.
+  - Progress: 2026-06-04 added a shared import trust decision path for JSON
+    imports, ZIP imports, raw-JS ZIP fallback imports, cloud restores, selected
+    backup restores, and full-vault restores. Archive-enabled executable scripts
+    now persist as disabled with a local `_importQuarantine` review marker unless
+    the caller passes an explicit `trustImportedScripts` override; archived
+    disabled entries stay disabled without a review marker. Backup review exposes
+    a trusted restore checkbox with exact active-script counts, import/restore
+    toasts and receipts record quarantined / preserved-disabled /
+    trusted-enabled counts, and the dashboard attention filter plus script-list
+    badge surface the later enable/review path.
+  - Verification: `npm run ts-runtime:generate`; `npm run build:bg`; `npx vitest run tests/runtime-import-export.test.js tests/source-backup-modules.test.js tests/backup-scheduler.test.js tests/import-snapshot.test.js tests/source-hardening-parity.test.js tests/dashboard-a11y.test.js --pool=vmThreads --maxWorkers=1 --reporter=dot`; `npm run typecheck`; `npm run ts-runtime:check`; `npm run ts-source:check`; `npm run store-copy:check`; `npm run readme:check`; `npm run test:a11y`; `npm run check`; `git diff --check`.
   - Complexity: M
 - [x] 🤖 🔬 P1 — Optional client-side E2E encryption for cloud sync
   - Why: synced script source (often embedding API keys) uploads as plaintext `JSON.stringify` to every provider; a WebDAV operator or compromised Drive/Dropbox account reads the whole library.
