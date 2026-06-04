@@ -411,10 +411,10 @@ const BackupScheduler = (() => {
           sizeFormatted: _formatBytes(sizeBytes),
           data: base64
         };
+        await BackupScheduler.pruneOldBackups();
         const backups = await _getBackupList();
         backups.unshift(backup);
         await _saveBackupList(backups);
-        await BackupScheduler.pruneOldBackups();
         if (settings.warnOnStorageFull) {
           const allBackups = await _getBackupList();
           const totalSize = _estimateBackupSize(allBackups);

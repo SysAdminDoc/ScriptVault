@@ -154,7 +154,7 @@ export function parseUserscript(code: string): ParseResult {
     require: [],
     requireProvenance: [],
     requireIdentity: [],
-    resource: {},
+    resource: Object.create(null) as Record<string, string>,
     'run-at': 'document-idle',
     noframes: false,
     icon: '',

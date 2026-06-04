@@ -2218,14 +2218,32 @@ const CloudSync = {
         try { await updateBadge(); } catch (_) { /* best effort */ }
       }
 
-      // Upload merged data (includes tombstones)
-      merged.timestamp = Date.now();
-      merged.tombstones = mergedTombstones;
+      // Rebuild the upload envelope from the current post-merge ScriptStorage state
+      // so the remote gets 3-way merge results, updated syncBaseCode, and conflict markers.
+      const postMergeScripts = await ScriptStorage.getAll();
+      const uploadData = {
+        version: 1,
+        timestamp: Date.now(),
+        scripts: postMergeScripts.map(s => ({
+          id: s.id,
+          code: s.code,
+          enabled: s.enabled,
+          position: s.position,
+          settings: s.settings || {},
+          updatedAt: s.updatedAt,
+          syncBaseCode: s.syncBaseCode ?? null
+        })),
+        tombstones: mergedTombstones
+      };
       if (signal?.aborted) throw new Error('Sync aborted');
-      await provider.upload(merged, settings, { signal });
+      await provider.upload(uploadData, settings, { signal });
     } else {
-      // First sync, just upload (include tombstones so remote gets deletion info)
+      // First sync, just upload (include tombstones and syncBaseCode)
       if (signal?.aborted) throw new Error('Sync aborted');
+      localData.scripts = localData.scripts.map(s => ({
+        ...s,
+        syncBaseCode: s.syncBaseCode ?? null
+      }));
       await provider.upload(localData, settings, { signal });
     }
 
@@ -7292,7 +7310,7 @@ async function installFromCode(code, receiptOptions = {}) {
 
     await ensurePersistentStorageForScriptWrite(existing ? 'script-reinstall' : 'script-install', script.code);
     await ScriptStorage.set(id, script);
-    await registerAllScripts(true);
+    await reregisterScript(script);
     await updateBadge();
     await autoReloadMatchingTabs(script);
 
