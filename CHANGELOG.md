@@ -12,6 +12,13 @@ All notable changes to ScriptVault will be documented in this file.
   `.factory/` as `export-ignore`, matching the existing `.gitignore` rule and
   keeping local workflow state out of release/source-review archives.
 
+### 2026-06-04 — README checklist regression pin
+
+- **Pinned recent shipped-feature checklist rows.** The README claim test now
+  asserts that the feature-claim checklist keeps rows for the ESM bundler,
+  trust receipts, install-source badges, internal-host guard, sync cockpit, and
+  dashboard virtualization.
+
 ### 2026-06-04 — CWS remote-code compliance gate
 
 - **Added a Chrome Web Store remote-code compliance packet.**

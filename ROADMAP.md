@@ -160,7 +160,9 @@ priority section below.
   - Progress: 2026-06-04 added `CONTRIBUTING.md` with generic local-only state guidance and added `.factory/** export-ignore` to `.gitattributes`, keeping the local automation state untracked and out of source-review archives without exposing workflow internals.
   - Verification: `git check-attr export-ignore -- .factory/state.yaml`; `npm run readme:check`; `git diff --check`.
   - Source: docs/archive/TODO.md I-1 (PASS2 Architecture #8).
-- [ ] P3 — Expand `docs/readme-feature-claim-checklist.md` rows for ESM bundler, trust receipts, install-source badges, internal-host guard, sync cockpit, virtualized dashboard
+- [x] P3 — Expand `docs/readme-feature-claim-checklist.md` rows for ESM bundler, trust receipts, install-source badges, internal-host guard, sync cockpit, virtualized dashboard
+  - Progress: 2026-06-04 verified the checklist already covers the requested shipped-feature rows and added a regression assertion so ESM bundler, trust receipts, install-source badges, internal-host guard, sync cockpit, and dashboard virtualization rows stay present.
+  - Verification: `npm test -- tests/check-readme-claims.test.js`; `npm run readme:check`; `git diff --check`.
   - Source: docs/archive/TODO.md I-2 (PASS2 quick-win 13).
 - [x] P3 — Add `"engines": {"node": ">=20"}` to `package.json`
   - Progress: 2026-06-04 shipped by `a9cb4ab`; `package.json` now declares `"engines": {"node": ">=21.2.0"}` to match the current `import.meta.dirname` requirement.
