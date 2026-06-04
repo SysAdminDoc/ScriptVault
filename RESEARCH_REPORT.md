@@ -350,6 +350,25 @@ anchors: MDN form constraint validation
 and WCAG 2.1 SC 3.3.1 Error Identification
 (`https://www.w3.org/TR/WCAG21/#error-identification`).
 
+2026-06-04 Cycle 19 GM namespace parity refresh: rechecked the wrapper GM API
+against the source wrapper and primary userscript-manager docs. The wrapper
+defines 34 `window.GM_*` exports but only 25 top-level `GM.*` properties. The
+missing promise aliases are `GM.addElement`, `GM.audio`, `GM.cookie`,
+`GM.focusTab`, `GM.getMenuCommands`, `GM.head`, `GM.log`, and `GM.webRequest`;
+the only cookie promise namespace is plural `GM.cookies` even though grant and
+optional-permission checks already accept singular `GM.cookie`; and no
+`GM.fetch` / `GM_fetch` path exists. Violentmonkey documents
+Greasemonkey4-compatible `GM.*` aliases, Tampermonkey documents
+`GM.xmlHttpRequest` as the promise form, and ScriptVault already routes
+`GM_xmlhttpRequest` through `@connect`, host-scope, and internal-host pre/post
+checks. `ROADMAP.md` now sharpens the existing P3 item to require a generated or
+explicit alias contract, singular/plural cookie coverage, and any fetch-shaped
+alias to reuse the guarded network path. External anchors: Violentmonkey GM API
+(`https://violentmonkey.github.io/api/gm/`), Tampermonkey GM_xmlhttpRequest docs
+(`https://www.tampermonkey.net/documentation.php?ext=d2&q=GM_xmlhttpRequest`),
+and Tampermonkey's `GM.fetch` / streaming proposal
+(`https://github.com/Tampermonkey/tampermonkey/issues/1278`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
@@ -390,6 +409,7 @@ Top opportunities (one line each):
 17. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
 18. **[Verified] Settings surface is not schema-driven or consistently validated** — the Settings tab exists, but 51 saveable keys are outside the defaults/type contract and raw text controls lack shared field-level validation. (P2)
 19. **[Verified] `--omit=optional` audit exemption is unguarded** — current static scan found zero shipped import/require hits, but package-lock contains optional/peer-optional entries and no CI guard proves they stay unreachable. (P2)
+20. **[Verified] `GM.*` namespace parity drifts from shipped `GM_*` APIs** — wrapper code exposes 34 callback-style `window.GM_*` entries but only 25 top-level `GM.*` properties; several shipped APIs lack promise aliases, singular `GM.cookie` is accepted for grants but not exposed, and `GM.fetch` remains absent. (P3)
 
 ## Evidence Reviewed
 
@@ -414,6 +434,7 @@ Top opportunities (one line each):
 - **Action pinning state**: `.github/workflows/ci.yml:9-12` grants `id-token: write` and `attestations: write`; `.github/workflows/ci.yml:21`, `:26`, `:87`, `:120`, `:126`, `:132`, `:141`, and `:148` use movable major tags for checkout, setup-node, setup-chrome, attest, and upload-artifact in the same trusted artifact job.
 - **Dependency updater state**: `.github/` contains only `workflows/ci.yml`; no `.github/dependabot.yml`, `renovate.json`, or equivalent updater config is present for npm or workflow action references.
 - **Settings schema/validation state**: `src/config/settings-defaults.json` has 71 default keys; `src/types/settings.ts` is a hand-written interface; `SettingsManager.set(...)` merges arbitrary keys; `pages/dashboard.html:5985-6554` exposes 91 Settings controls; dashboard listeners can save 80 keys; a parity scan found 51 saveable keys absent from defaults/types and 42 default keys with no Settings UI save path; settings inputs use some URL/password controls, but no shared `setCustomValidity` / `aria-invalid` pattern exists for Settings fields.
+- **GM namespace parity state**: `src/background/wrapper-builder.ts:1328-1393` defines 25 top-level `GM.*` properties, while the wrapper exports 34 `window.GM_*` symbols through `src/background/wrapper-builder.ts:1393-1592`. Missing promise aliases are `GM.addElement`, `GM.audio`, `GM.cookie`, `GM.focusTab`, `GM.getMenuCommands`, `GM.head`, `GM.log`, and `GM.webRequest`; `tests/gm-types.test.js:79-124` covers `GM.xmlHttpRequest` and plural `GM.cookies` but not those missing aliases; `tests/install-optional-permissions.test.js:81-93` maps singular `GM.cookie`; and `src/background/core.ts:5635-5778` already applies `@connect` and internal-host pre/post checks to the underlying network path.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -433,6 +454,7 @@ Top opportunities (one line each):
   - GitHub Actions secure-use and action release-management docs anchor the action SHA-pinning item: https://docs.github.com/en/actions/reference/security/secure-use and https://docs.github.com/en/actions/how-tos/create-and-publish-actions/manage-custom-actions
   - GitHub Dependabot version-update, action-update, and options docs anchor the dependency-freshness item: https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/configuring-dependabot-version-updates, https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/keeping-your-actions-up-to-date-with-dependabot, and https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
   - MDN constraint-validation guidance and WCAG 2.1 Error Identification anchor the Settings validation item: https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Constraint_validation and https://www.w3.org/TR/WCAG21/#error-identification
+  - Violentmonkey GM API docs, Tampermonkey GM_xmlhttpRequest docs, and Tampermonkey's GM.fetch / streaming proposal anchor the GM namespace parity item: https://violentmonkey.github.io/api/gm/, https://www.tampermonkey.net/documentation.php?ext=d2&q=GM_xmlhttpRequest, and https://github.com/Tampermonkey/tampermonkey/issues/1278
   - Userscript-manager landscape (Tampermonkey / Violentmonkey / ScriptCat sync, MV3, GitHub-Gist sync, granular execution control): comparison sources at extensionfixes.com and addons.mozilla.org Violentmonkey listing.
 - **Unverifiable here** [Needs validation]: live MV3 runtime behavior (cross-tab GM listener fan-out, omnibox UX, settings round-trips) — no browser run performed this pass; all runtime claims are static-read [Verified] or [Likely].
 
@@ -482,6 +504,7 @@ Top opportunities (one line each):
 | Dependency audit policy | manual / CI | `docs/dependency-audit-policy.md`, `.github/workflows/ci.yml`, `package-lock.json` | partial | high+ audit gate exists; optional-dep reach is manually verified but not gated |
 | Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | eight workflow actions are tag-pinned, not SHA-pinned |
 | Dashboard Settings | dashboard Settings tab | `pages/dashboard.html`, `pages/dashboard.js`, `settings-defaults.json`, `Settings` type | partial | consolidated tab exists; schema parity and field-level validation are missing |
+| `GM.*` promise namespace | userscript wrapper | `src/background/wrapper-builder.ts`, generated `background.core.js`, GM type tests | partial | 25 top-level aliases vs 34 `window.GM_*` exports; missing several shipped aliases and `GM.fetch` |
 
 ## Competitive Landscape
 
@@ -503,6 +526,7 @@ Top opportunities (one line each):
 - **Major** — `--omit=optional` audit exemption is unguarded against shipped optional deps. Current scan found zero shipped import/require hits, but this is not automated. → ROADMAP P2 reach check. [Verified]
 - **Major** — Settings surface exists but is not schema-driven or consistently validated. → ROADMAP P2 settings audit. [Verified]
 - **Minor** — `sv` omnibox + keyboard commands undocumented. → ROADMAP P3 doc items. [Verified]
+- **Minor** — `GM.*` promise namespace is hand-maintained and has drifted from shipped `GM_*` APIs. → ROADMAP P3 namespace parity item. [Verified]
 - **Major** — Node/toolchain contract drift: `engines.node >=21.2.0` is advisory under default npm config, CI still sets up Node 20, and the repo lacks a version file/package-manager pin/engine-strict gate. → ROADMAP P2 toolchain alignment. [Verified]
 - **Closed 2026-06-04** — Host-permission recovery/narrow-host prototype now has runtime diagnostics, UI recovery prompts, permission event refresh, support-matrix copy, and a generated optional-host prototype report. → ROADMAP P2 host-permission recovery. [Closed]
 - **Closed 2026-06-04** — Import/restore execution trust now defaults archive-enabled executable scripts to disabled-for-review, exposes an explicit trusted restore override with active counts, and records trust-posture counters in import/restore results. → ROADMAP P1 import/restore quarantine. [Closed]
