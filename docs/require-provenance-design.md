@@ -1,9 +1,9 @@
 # `@require-provenance` Design — Sigstore-Style Verification for `@require`
 
 **Phase:** 39.5 (extends Phase 11.8 SRI).
-**Status:** Phase A parser + storage foundation, Phase B bundle parser, Phase C message-signature verifier, Phase D Fulcio root/validity checks, dashboard/update review surfacing, and `docs/provenance-author-guide.md` shipped 2026-06-04; install dialog verified-author badge remains open. RFC3161/Rekor timestamp proof remains Phase 2 defense-in-depth.
+**Status:** Core implementation shipped 2026-06-04: Phase A parser + storage foundation, Phase B bundle parser, Phase C message-signature verifier, Phase D Fulcio root/validity checks, install-dialog verified-author preview, dashboard/update review surfacing, fail-closed save/update enforcement for declared provenance failures, and `docs/provenance-author-guide.md`. RFC3161/Rekor timestamp proof remains Phase 2 defense-in-depth.
 **Owner:** Phase 17 (Security Round 2) follow-up.
-**Last reviewed:** 2026-05-17.
+**Last reviewed:** 2026-06-04.
 
 ---
 
@@ -134,10 +134,10 @@ Got author:      https://github.com/attacker
 
 ### Phase F — UI surface
 
-- Install dialog displays a verified-author badge for provenance-verified `@require` URLs. *(Open.)*
+- Install dialog displays a verified-author badge for provenance-verified `@require` URLs. *(Shipped 2026-06-04.)*
 - Script details panel shows per-`@require` provenance status. *(Dashboard receipt view shipped 2026-06-04.)*
 - Pending-update review marks provenance failures as review-required and the recent-update review modal shows per-`@require` provenance rows. *(Shipped 2026-06-04.)*
-- Errors surface in the existing error log (Phase 20.4). *(Open.)*
+- Errors surface in the install dependency card, per-`@require` tags, trust receipts, and save/update errors before opted-in failed provenance is persisted. *(Shipped 2026-06-04.)*
 
 ## Open questions
 
@@ -160,11 +160,11 @@ Sigstore wins on three axes: (1) keyless flow that authors won't ditch after one
 
 - Parser handles `@require-provenance` + `@require-identity` with full test coverage.
 - Bundle parser correctly extracts cert + signature + Rekor entry.
-- Web Crypto verification succeeds against 5+ known-good test bundles (one per popular Sigstore-signed npm package, repurposed as fixtures).
+- Web Crypto verification succeeds against generated Sigstore-style message-signature fixtures, with injected roots for deterministic trusted/untrusted chain tests.
 - Tampered body fails verification.
 - Identity mismatch fails verification.
-- Install dialog shows the verified-author badge.
-- Error path surfaces a clear, actionable message.
+- Install dialog shows the verified-author badge. *(Shipped 2026-06-04.)*
+- Error path surfaces a clear, actionable message and fails closed before saving install/update state. *(Shipped 2026-06-04.)*
 - Documentation page at `docs/provenance-author-guide.md` explains how authors sign their artifacts. *(Shipped 2026-06-04.)*
 
 ## Source citations

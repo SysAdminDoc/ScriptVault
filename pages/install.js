@@ -161,6 +161,11 @@ let dependencyDecisionState = {
   tone: 'neutral',
   detail: 'Dependency checks have not started yet.'
 };
+let provenanceDecisionState = {
+  label: 'Pending',
+  tone: 'neutral',
+  detail: 'Dependency provenance checks have not started yet.'
+};
 let signatureDecisionState = {
   label: 'Reviewing',
   tone: 'neutral',
@@ -229,12 +234,13 @@ function setCancelReviewArmed(armed) {
 function updateDecisionStates() {
   updateDecisionBadge('decisionRiskState', analysisDecisionState);
   updateDecisionBadge('decisionDependencyState', dependencyDecisionState);
+  updateDecisionBadge('decisionProvenanceState', provenanceDecisionState);
   updateDecisionBadge('decisionSignatureState', signatureDecisionState);
   updateDecisionHero();
 }
 
 function getDecisionHeroState() {
-  const states = [analysisDecisionState, dependencyDecisionState, signatureDecisionState];
+  const states = [analysisDecisionState, dependencyDecisionState, provenanceDecisionState, signatureDecisionState];
   const hasPendingCheck = states.some((state) => {
     const label = String(state?.label || '');
     return state?.tone === 'neutral' && /(Scanning|Checking|Verifying|Pending|Reviewing)/i.test(label);
@@ -267,6 +273,15 @@ function getDecisionHeroState() {
     };
   }
 
+  if (provenanceDecisionState.tone === 'warn') {
+    return {
+      tone: 'warn',
+      badge: 'Provenance issue',
+      title: 'Dependency provenance needs review',
+      copy: provenanceDecisionState.detail || 'One or more @require provenance checks failed or are incomplete.'
+    };
+  }
+
   if (signatureDecisionState.tone === 'warn') {
     return {
       tone: 'warn',
@@ -276,12 +291,17 @@ function getDecisionHeroState() {
     };
   }
 
-  if (signatureDecisionState.label === 'Trusted' && analysisDecisionState.tone === 'good' && dependencyDecisionState.tone === 'good') {
+  if (
+    signatureDecisionState.label === 'Trusted' &&
+    analysisDecisionState.tone === 'good' &&
+    dependencyDecisionState.tone === 'good' &&
+    provenanceDecisionState.tone !== 'warn'
+  ) {
     return {
       tone: 'good',
       badge: 'Ready',
       title: 'Ready to install',
-      copy: 'Static analysis, dependency checks, and signer trust all look good for this install.'
+      copy: 'Static analysis, dependency checks, provenance, and signer trust all look good for this install.'
     };
   }
 
@@ -935,6 +955,7 @@ function renderInstallUI(sourceUrl) {
   const iconUrl = scriptMeta.icon64 || scriptMeta.icon;
   const source = getSourceSummary(sourceUrl);
   const dependencyCount = scriptMeta.require.length;
+  const hasRequireProvenance = (scriptMeta.requireProvenance || []).length > 0 || (scriptMeta.requireIdentity || []).length > 0;
   const hasUpdater = Boolean(scriptMeta.updateURL || scriptMeta.downloadURL);
   const hasSignature = Boolean(extractSignatureInfo(scriptCode));
   analysisDecisionState = {
@@ -948,6 +969,23 @@ function renderInstallUI(sourceUrl) {
         tone: 'neutral',
         detail: 'Verifying each @require URL before install.'
       }
+    : {
+        label: 'None declared',
+        tone: 'good',
+        detail: 'No external @require dependencies were declared.'
+      };
+  provenanceDecisionState = dependencyCount > 0
+    ? hasRequireProvenance
+      ? {
+          label: 'Checking',
+          tone: 'neutral',
+          detail: 'Verifying declared Sigstore provenance for @require dependencies.'
+        }
+      : {
+          label: 'Not declared',
+          tone: 'neutral',
+          detail: 'No @require-provenance metadata was declared for these dependencies.'
+        }
     : {
         label: 'None declared',
         tone: 'good',
@@ -1070,13 +1108,34 @@ function renderInstallUI(sourceUrl) {
     <div class="surface-card analysis-card review-section" id="reviewDependencies">
       <div class="install-card-header">
         <div>
-          <div class="install-card-title">Dependency Reachability</div>
-          <div class="install-card-subtitle">Check whether each @require URL can still be reached before install.</div>
+          <div class="install-card-title">Dependency Reachability & Provenance</div>
+          <div class="install-card-subtitle">Check whether each @require URL is reachable and whether declared Sigstore provenance verifies.</div>
         </div>
         <span class="count status-neutral" id="dep-status" role="status" aria-live="polite" aria-atomic="true">Checking…</span>
       </div>
       <div class="tag-list" id="dep-list">
         ${scriptMeta.require.map(url => `<span class="tag" data-dep-url="${escapeHtml(url)}" title="${escapeHtml(url)}">${escapeHtml(getUrlFilename(url))}</span>`).join('')}
+      </div>
+      <div class="install-card-header" style="margin-top:14px;margin-bottom:8px">
+        <div class="install-card-subtitle">Sigstore provenance</div>
+        <span class="count status-neutral" id="provenance-status" role="status" aria-live="polite" aria-atomic="true">${hasRequireProvenance ? 'Checking' : 'Not declared'}</span>
+      </div>
+      <div class="analysis-summary" id="provenance-summary" style="margin-top:12px">
+        ${hasRequireProvenance ? 'Checking declared @require-provenance bundles.' : 'No @require-provenance metadata was declared for these dependencies.'}
+      </div>
+      <div class="tag-list" id="provenance-list">
+        ${scriptMeta.require.map((url, index) => {
+          const bundleUrl = scriptMeta.requireProvenance?.[index] || '';
+          const identity = scriptMeta.requireIdentity?.[index] || '';
+          const title = bundleUrl && identity
+            ? `${url} — ${bundleUrl} — ${identity}`
+            : bundleUrl
+              ? `${url} — missing @require-identity`
+              : identity
+                ? `${url} — missing @require-provenance`
+                : `${url} — no provenance declared`;
+          return `<span class="tag neutral" data-provenance-index="${index}" title="${escapeHtml(title)}">${escapeHtml(bundleUrl || identity ? 'Checking provenance' : 'No provenance')}</span>`;
+        }).join('')}
       </div>
     </div>
   ` : '';
@@ -1345,6 +1404,12 @@ function renderInstallUI(sourceUrl) {
               <span>Dependencies</span>
               <span class="count status-neutral" id="decisionDependencyState" title="${escapeHtml(dependencyCount > 0 ? 'Verifying external @require URLs.' : 'No external @require dependencies were declared.')}">${dependencyCount > 0 ? `Checking ${numberFormatter.format(dependencyCount)}` : 'None declared'}</span>
             </div>
+            ${dependencyCount > 0 ? `
+              <div class="decision-row">
+                <span>Dependency provenance</span>
+                <span class="count status-neutral" id="decisionProvenanceState" title="${escapeHtml(hasRequireProvenance ? 'Verifying declared Sigstore provenance for @require dependencies.' : 'No @require-provenance metadata was declared.')}">${hasRequireProvenance ? 'Checking' : 'Not declared'}</span>
+              </div>
+            ` : ''}
             <div class="decision-row">
               <span>Signature</span>
               <span class="count status-neutral" id="decisionSignatureState" title="${escapeHtml(hasSignature ? 'Checking the embedded signature and signer trust.' : 'No embedded @signature metadata was found.')}">${hasSignature ? 'Verifying' : 'Unsigned'}</span>
@@ -1441,6 +1506,7 @@ function renderInstallUI(sourceUrl) {
 
   if (dependencyCount > 0) {
     setTimeout(() => checkDependencies(scriptMeta.require), 100);
+    setTimeout(() => checkRequireProvenance(scriptMeta), 100);
   }
 
   // Keyboard shortcuts
@@ -2064,6 +2130,191 @@ async function checkDependencies(requires) {
   });
 
   await Promise.all(checks);
+}
+
+function getRequireProvenanceDeclarations(meta) {
+  const requires = Array.isArray(meta?.require) ? meta.require : [];
+  const bundles = Array.isArray(meta?.requireProvenance) ? meta.requireProvenance : [];
+  const identities = Array.isArray(meta?.requireIdentity) ? meta.requireIdentity : [];
+  return {
+    requires,
+    bundles,
+    identities,
+    hasDeclarations: bundles.length > 0 || identities.length > 0
+  };
+}
+
+function isVerifiedRequireProvenanceEntry(entry) {
+  return entry?.verification === 'signature-verified' && entry?.rootVerified === 'verified';
+}
+
+function requireProvenanceNeedsReview(entry) {
+  if (!entry) return false;
+  if (entry.status && entry.status !== 'declared' && entry.status !== 'not-declared') return true;
+  return ['signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
+    .includes(entry.verification || '');
+}
+
+function getRequireProvenanceLabel(entry) {
+  if (isVerifiedRequireProvenanceEntry(entry)) return 'Verified author';
+  if (!entry || entry.status === 'not-declared') return 'No provenance';
+  if (entry.status === 'missing-identity') return 'Missing identity';
+  if (entry.status === 'missing-bundle') return 'Missing bundle';
+  if (entry.verification === 'root-verification-failed') return 'Root failed';
+  if (entry.verification === 'signature-failed') return 'Signature failed';
+  if (entry.verification === 'bundle-unavailable') return 'Bundle unavailable';
+  if (entry.verification === 'unsupported-bundle') return 'Unsupported bundle';
+  if (entry.verification === 'signature-verified') return 'Signature verified';
+  return 'Pending provenance';
+}
+
+function getRequireProvenanceDetail(entry) {
+  if (!entry) return 'No provenance result returned.';
+  if (entry.error) return entry.error;
+  if (isVerifiedRequireProvenanceEntry(entry)) {
+    const identity = entry.certificateIdentity || entry.identity || 'declared author';
+    const issuer = entry.certificateIssuer ? ` via ${entry.certificateIssuer}` : '';
+    return `${entry.url} — verified ${identity}${issuer}`;
+  }
+  if (entry.status === 'not-declared') return `${entry.url} — no @require-provenance declared`;
+  if (entry.status === 'missing-identity') return `${entry.url} — bundle declared without @require-identity`;
+  if (entry.status === 'missing-bundle') return `${entry.url} — identity declared without @require-provenance`;
+  return `${entry.url} — ${getRequireProvenanceLabel(entry)}`;
+}
+
+function setRequireProvenanceStatus(state) {
+  provenanceDecisionState = state;
+  updateDecisionStates();
+
+  const statusEl = document.getElementById('provenance-status');
+  if (!statusEl) return;
+  statusEl.textContent = state.label;
+  statusEl.className = `count ${getDecisionToneClass(state.tone)}`;
+  if (state.detail) {
+    statusEl.title = state.detail;
+  } else {
+    statusEl.removeAttribute('title');
+  }
+}
+
+function renderRequireProvenanceEntries(entries = []) {
+  const listEl = document.getElementById('provenance-list');
+  if (!listEl) return;
+
+  if (entries.length === 0) {
+    listEl.innerHTML = '<span class="tag neutral">No provenance</span>';
+    return;
+  }
+
+  listEl.innerHTML = entries.map((entry) => {
+    const cls = isVerifiedRequireProvenanceEntry(entry)
+      ? 'safe'
+      : requireProvenanceNeedsReview(entry)
+        ? 'warning'
+        : 'neutral';
+    const label = getRequireProvenanceLabel(entry);
+    const detail = getRequireProvenanceDetail(entry);
+    return `<span class="tag ${cls}" data-provenance-index="${entry.index}" title="${escapeHtml(detail)}">${escapeHtml(label)}</span>`;
+  }).join('');
+}
+
+async function checkRequireProvenance(meta) {
+  const { requires, bundles, identities, hasDeclarations } = getRequireProvenanceDeclarations(meta);
+  const summaryEl = document.getElementById('provenance-summary');
+  const statusEl = document.getElementById('provenance-status');
+
+  if (requires.length === 0) {
+    setRequireProvenanceStatus({
+      label: 'None declared',
+      tone: 'good',
+      detail: 'No external @require dependencies were declared.'
+    });
+    if (summaryEl) summaryEl.textContent = 'No external @require dependencies were declared.';
+    return;
+  }
+
+  if (!hasDeclarations) {
+    setRequireProvenanceStatus({
+      label: 'Not declared',
+      tone: 'neutral',
+      detail: 'No @require-provenance metadata was declared for these dependencies.'
+    });
+    if (summaryEl) summaryEl.textContent = 'No @require-provenance metadata was declared for these dependencies.';
+    renderRequireProvenanceEntries(requires.map((url, index) => ({
+      index,
+      url,
+      status: 'not-declared',
+      verification: 'not-declared'
+    })));
+    return;
+  }
+
+  setRequireProvenanceStatus({
+    label: 'Checking',
+    tone: 'neutral',
+    detail: 'Verifying Sigstore bundle signatures and Fulcio identities.'
+  });
+  if (summaryEl) summaryEl.textContent = 'Checking declared @require-provenance bundles.';
+  if (statusEl) statusEl.setAttribute('aria-busy', 'true');
+
+  try {
+    const result = await chrome.runtime.sendMessage({
+      action: 'verifyRequireProvenancePreview',
+      data: {
+        requires,
+        requireProvenance: bundles,
+        requireIdentity: identities
+      }
+    });
+
+    if (!result || result.error) {
+      throw new Error(result?.error || 'No provenance result returned');
+    }
+
+    const entries = Array.isArray(result.entries) ? result.entries : [];
+    const counts = result.counts || {};
+    renderRequireProvenanceEntries(entries);
+
+    if (result.status === 'verified') {
+      setRequireProvenanceStatus({
+        label: 'Verified author',
+        tone: 'good',
+        detail: `${numberFormatter.format(counts.verified || entries.length)} @require dependencies were signed by the declared Fulcio identities.`
+      });
+      if (summaryEl) summaryEl.textContent = 'All declared @require-provenance bundles verified against the dependency bytes and expected author identities.';
+    } else if (result.status === 'partial') {
+      setRequireProvenanceStatus({
+        label: `${numberFormatter.format(counts.verified || 0)} verified`,
+        tone: 'neutral',
+        detail: 'Declared provenance verified for some dependencies; other dependencies do not declare provenance.'
+      });
+      if (summaryEl) summaryEl.textContent = 'Declared provenance verified, but not every @require dependency has provenance metadata.';
+    } else if (result.status === 'review-required') {
+      const failed = (counts.failed || 0) + (counts.missing || 0);
+      setRequireProvenanceStatus({
+        label: `${numberFormatter.format(failed)} issue${failed === 1 ? '' : 's'}`,
+        tone: 'warn',
+        detail: 'One or more @require provenance checks failed or are incomplete.'
+      });
+      if (summaryEl) summaryEl.textContent = 'One or more declared provenance checks failed or are missing required metadata. Review before installing.';
+    } else {
+      setRequireProvenanceStatus({
+        label: 'Not declared',
+        tone: 'neutral',
+        detail: 'No @require-provenance metadata was declared for these dependencies.'
+      });
+      if (summaryEl) summaryEl.textContent = 'No @require-provenance metadata was declared for these dependencies.';
+    }
+  } catch (error) {
+    setRequireProvenanceStatus({
+      label: 'Unavailable',
+      tone: 'warn',
+      detail: error?.message || 'Dependency provenance verification failed.'
+    });
+    if (summaryEl) summaryEl.textContent = error?.message || 'Dependency provenance verification failed.';
+  } finally {
+    if (statusEl) statusEl.removeAttribute('aria-busy');
+  }
 }
 
 // Static analysis

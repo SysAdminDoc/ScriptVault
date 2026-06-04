@@ -118,9 +118,9 @@
 - [x] **F-3** Local health diagnostics (other half of large-library bet)
   - Evidence: ROADMAP Larger Bets; perf harness + virtualization shipped; local diagnostics now report aggregate runtime, storage, update queue, callback, and script-health warnings without script source, script names, URLs, or external beacons.
   - Verification: `npm test -- tests/local-health-report.test.js tests/support-snapshot-redaction.test.js tests/user-scripts-onboarding.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`.
-- [ ] **F-4** Sigstore `@require-provenance` implementation
+- [x] **F-4** Sigstore `@require-provenance` implementation
   - Evidence: `docs/require-provenance-design.md`; design-complete.
-  - Progress: 2026-06-04 Phase A parser/storage foundation, Phase B bundle parser, Phase C message-signature verifier, Phase D Fulcio root/validity checks, dashboard/update review surfacing, and `docs/provenance-author-guide.md` shipped. `@require-provenance` and `@require-identity` persist through the main parser and public API install path; `modules/sigstore-bundle-parser.js` validates Sigstore v0.3 JSON; `modules/sigstore-bundle-verifier.js` verifies message-signature bundles, chains certificates to the bundled Fulcio v1 root, and trust receipts opportunistically record signature/bundle/root outcomes. Pending updates with failed provenance are review-required, and dashboard receipt/update panels show per-`@require` provenance rows. Install dialog verified-author badge remains open; RFC3161/Rekor timestamp proof remains Phase 2 defense-in-depth.
+  - Progress: 2026-06-04 Phase A parser/storage foundation, Phase B bundle parser, Phase C message-signature verifier, Phase D Fulcio root/validity checks, dashboard/update review surfacing, install-dialog verified-author preview, fail-closed save/update enforcement, and `docs/provenance-author-guide.md` shipped. `@require-provenance` and `@require-identity` persist through the main parser and public API install path; `modules/sigstore-bundle-parser.js` validates Sigstore v0.3 JSON; `modules/sigstore-bundle-verifier.js` verifies message-signature bundles, chains certificates to the bundled Fulcio v1 root, and trust receipts record signature/bundle/root outcomes. Pending updates with failed provenance are review-required, dashboard receipt/update panels show per-`@require` provenance rows, and install/reinstall/downgrade/update saves reject opted-in provenance failures before script state is saved. RFC3161/Rekor timestamp proof remains Phase 2 defense-in-depth.
 - [ ] **F-5** Module-mode service worker (Chrome 124+ `"type":"module"` background)
   - Evidence: PASS2 NF-17.
 
@@ -184,5 +184,6 @@
 | 2026-06-04 | F | F-1 complete: `background.core.js` TS bridge promotion | feat: promote background core runtime |
 | 2026-06-04 | F | F-2 release trust store-status gate | feat: add release store status gate |
 | 2026-06-04 | F | F-3 local health diagnostics | feat: add local health diagnostics |
+| 2026-06-04 | F | F-4 Sigstore `@require-provenance` implementation | feat: preview require provenance on install |
 
 (Append a row each time work lands.)

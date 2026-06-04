@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Require provenance install preview
+
+- **Install review now previews `@require` provenance.** The dependency card
+  shows a Sigstore provenance status, per-`@require` labels, and a
+  verified-author badge when declared bundles verify against the dependency
+  bytes, Fulcio root, and expected OIDC identity.
+- **Opted-in provenance now fails closed on save/update.** Direct install,
+  reinstall, downgrade, and update receipts use the hardened background
+  `fetchRequireScript()` and `fetchProvenanceBundle()` paths; a declared
+  provenance failure returns a clear install/update error before script state is
+  saved.
+
 ### 2026-06-04 — Require provenance author guide
 
 - **Added `docs/provenance-author-guide.md`.** The guide documents Cosign

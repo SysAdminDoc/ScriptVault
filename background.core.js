@@ -458,6 +458,146 @@ async function _receiptDependencyProvenance(bundleUrl = '', identity = '', body 
   }
 }
 
+function _isVerifiedRequireProvenance(provenance) {
+  return provenance?.verification === 'signature-verified' && provenance?.rootVerified === 'verified';
+}
+
+function _requireProvenancePreviewEntry(index, url, provenance) {
+  return {
+    index,
+    url,
+    bundleUrl: provenance?.bundleUrl || '',
+    identity: provenance?.identity || '',
+    status: provenance?.status || 'not-declared',
+    verification: provenance?.verification || 'not-declared',
+    error: provenance?.error || '',
+    certificateIdentity: provenance?.certificateIdentity || '',
+    certificateIssuer: provenance?.certificateIssuer || '',
+    certificateNotBefore: provenance?.certificateNotBefore || '',
+    certificateNotAfter: provenance?.certificateNotAfter || '',
+    digestVerified: provenance?.digestVerified === true,
+    signatureVerified: provenance?.signatureVerified === true,
+    rootVerified: provenance?.rootVerified || ''
+  };
+}
+
+function _summarizeRequireProvenancePreview(entries) {
+  const counts = {
+    total: entries.length,
+    declared: 0,
+    verified: 0,
+    missing: 0,
+    failed: 0,
+    notDeclared: 0
+  };
+
+  for (const entry of entries) {
+    if (entry.status === 'not-declared') {
+      counts.notDeclared += 1;
+      continue;
+    }
+    counts.declared += 1;
+    if (_isVerifiedRequireProvenance(entry)) {
+      counts.verified += 1;
+    } else if (
+      entry.status !== 'declared' ||
+      ['signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle'].includes(entry.verification)
+    ) {
+      counts.failed += 1;
+    } else {
+      counts.missing += 1;
+    }
+  }
+
+  let status = 'not-declared';
+  if (counts.total === 0) status = 'no-requires';
+  else if (counts.failed > 0 || counts.missing > 0) status = 'review-required';
+  else if (counts.declared > 0 && counts.verified === counts.declared && counts.notDeclared === 0) status = 'verified';
+  else if (counts.declared > 0 && counts.verified === counts.declared) status = 'partial';
+
+  return { status, counts };
+}
+
+function _getRequireProvenanceFailure(receipt = {}) {
+  const deps = receipt?.dependencies?.require || [];
+  for (const dep of deps) {
+    const provenance = dep?.provenance;
+    if (!provenance) continue;
+    if (_isVerifiedRequireProvenance(provenance)) continue;
+
+    const reason = provenance.error
+      || (provenance.status === 'missing-identity' ? 'missing @require-identity'
+        : provenance.status === 'missing-bundle' ? 'missing @require-provenance'
+        : provenance.verification === 'bundle-unavailable' ? 'bundle unavailable'
+        : provenance.verification === 'unsupported-bundle' ? 'unsupported Sigstore bundle'
+        : provenance.verification === 'root-verification-failed' ? 'Fulcio root verification failed'
+        : provenance.verification === 'signature-failed' ? 'signature verification failed'
+        : provenance.verification === 'not-yet-implemented' ? 'verification did not run'
+        : 'verification incomplete');
+
+    return {
+      url: dep.url || '',
+      provenance,
+      message: `@require provenance verification failed for ${dep.url || 'dependency'}: ${reason}`
+    };
+  }
+  return null;
+}
+
+async function previewRequireProvenance(data = {}) {
+  const meta = data.meta && typeof data.meta === 'object' ? data.meta : {};
+  const requireUrls = _receiptArray(data.requires || data.require || meta.require);
+  const bundleUrls = _receiptArray(data.requireProvenance || meta.requireProvenance);
+  const identities = _receiptArray(data.requireIdentity || meta.requireIdentity);
+  const entries = [];
+
+  for (let index = 0; index < requireUrls.length; index += 1) {
+    const url = requireUrls[index];
+    const bundleUrl = bundleUrls[index] || '';
+    const identity = identities[index] || '';
+    let provenance = null;
+
+    if (!bundleUrl && !identity) {
+      provenance = { bundleUrl: '', identity: '', status: 'not-declared', verification: 'not-declared' };
+    } else if (!bundleUrl || !identity) {
+      provenance = await _receiptDependencyProvenance(bundleUrl, identity, '', null);
+    } else {
+      try {
+        const body = await fetchRequireScript(url);
+        if (typeof body !== 'string' || body.length === 0) {
+          provenance = {
+            bundleUrl,
+            identity,
+            status: 'declared',
+            verification: 'signature-failed',
+            error: 'Dependency body unavailable'
+          };
+        } else {
+          provenance = await _receiptDependencyProvenance(bundleUrl, identity, body, fetchProvenanceBundle);
+        }
+      } catch (error) {
+        provenance = {
+          bundleUrl,
+          identity,
+          status: 'declared',
+          verification: 'signature-failed',
+          error: _receiptErrorMessage(error)
+        };
+      }
+    }
+
+    entries.push(_requireProvenancePreviewEntry(index, url, provenance));
+  }
+
+  const summary = _summarizeRequireProvenancePreview(entries);
+  return {
+    success: true,
+    status: summary.status,
+    counts: summary.counts,
+    entries
+  };
+}
+
 async function _snapshotDependency(url, fetchDependencyBody, known, bundleUrl = '', identity = '', fetchProvenanceBundle = null) {
   const withProvenance = async (dependency, body = '') => {
     const provenance = await _receiptDependencyProvenance(bundleUrl, identity, body, fetchProvenanceBundle);
@@ -842,6 +982,10 @@ const UpdateSystem = {
       fetchDependencyBody: fetchDependencyBody || fetchRequireScript,
       fetchProvenanceBundle: fetchProvenanceBundleOption || fetchProvenanceBundle
     });
+    const provenanceFailure = _getRequireProvenanceFailure(trustReceipt);
+    if (provenanceFailure) {
+      return { error: provenanceFailure.message };
+    }
     historyEntry.trustReceipt = previousScript.trustReceipt || await createScriptTrustReceipt({
       operation: 'rollback-point',
       code: previousScript.code,
@@ -3087,9 +3231,15 @@ async function handleMessage(message, sender) {
               sourceUrl: receiptOptions?.sourceUrl || '',
               previousScript,
               rollbackIndex,
+              fetchDependencyBody: fetchRequireScript,
+              fetchProvenanceBundle,
               optionalPermissions: receiptOptions?.optionalPermissions || null
             })
           : existing?.trustReceipt;
+        const provenanceFailure = shouldRecordReceipt ? _getRequireProvenanceFailure(trustReceipt) : null;
+        if (provenanceFailure) {
+          return { error: provenanceFailure.message };
+        }
         if (historyEntry && previousScript) {
           historyEntry.trustReceipt = previousScript.trustReceipt || await createScriptTrustReceipt({
             operation: 'rollback-point',
@@ -4472,6 +4622,9 @@ async function handleMessage(message, sender) {
           sourceUrl: data.sourceUrl || '',
           operation: data.operation || 'install'
         });
+
+      case 'verifyRequireProvenancePreview':
+        return await previewRequireProvenance(data);
         
       // Resources
       case 'fetchResource':
@@ -6993,8 +7146,14 @@ async function installFromCode(code, receiptOptions = {}) {
       meta,
       sourceUrl: receiptOptions.sourceUrl || '',
       previousScript,
-      rollbackIndex
+      rollbackIndex,
+      fetchDependencyBody: fetchRequireScript,
+      fetchProvenanceBundle
     });
+    const provenanceFailure = _getRequireProvenanceFailure(trustReceipt);
+    if (provenanceFailure) {
+      throw new Error(provenanceFailure.message);
+    }
     if (historyEntry && previousScript) {
       historyEntry.trustReceipt = previousScript.trustReceipt || await createScriptTrustReceipt({
         operation: 'rollback-point',
