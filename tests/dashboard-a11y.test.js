@@ -409,6 +409,9 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/includeSettingsCredentials:\s*includeSettings && !!elements\.exportIncludeSettingsCredentials\?\.checked/);
     expect(dashboardJs).toMatch(/importSettingsCredentials:\s*transfer\.includeSettingsCredentials/);
     expect(dashboardJs).toMatch(/id="restoreSettingsCredentials"/);
+    expect(dashboardJs).toMatch(/id="trustBackupScripts"/);
+    expect(dashboardJs).toContain('disabled for review');
+    expect(dashboardJs).toContain('Import review');
     expect(dashboardJs).toMatch(/elements\.btnRepairRuntime\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnSavePublicApiOrigins\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnInstallFromUrl\?\.\s*addEventListener\('click', async event =>/);

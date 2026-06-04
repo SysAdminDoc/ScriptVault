@@ -1277,12 +1277,18 @@
     function formatImportSummary(result) {
         const imported = Number(result?.imported || 0);
         const skipped = Number(result?.skipped || 0);
+        const quarantined = Number(result?.quarantinedScripts || 0);
+        const preservedDisabled = Number(result?.preservedDisabledScripts || 0);
+        const trustedEnabled = Number(result?.trustedEnabledScripts || 0);
         const failed = Array.isArray(result?.errors) ? result.errors.length : 0;
         const replaced = Array.isArray(result?.replacedScripts) ? result.replacedScripts.length : 0;
         const parts = [];
         if (imported) parts.push(`${numberFormatter.format(imported)} imported`);
         if (replaced) parts.push(`${numberFormatter.format(replaced)} replaced`);
         if (skipped) parts.push(`${numberFormatter.format(skipped)} skipped`);
+        if (quarantined) parts.push(`${numberFormatter.format(quarantined)} disabled for review`);
+        if (preservedDisabled) parts.push(`${numberFormatter.format(preservedDisabled)} kept disabled`);
+        if (trustedEnabled) parts.push(`${numberFormatter.format(trustedEnabled)} trusted enabled`);
         if (failed) parts.push(`${numberFormatter.format(failed)} failed`);
         if (!parts.length) parts.push('no scripts changed');
         if (result?.settingsImported) parts.push('settings restored');
@@ -1307,10 +1313,16 @@
     function formatBackupRestoreSummary(result) {
         const restoredScripts = Number(result?.restoredScripts || 0);
         const skippedScripts = Number(result?.skippedScripts || 0);
+        const quarantined = Number(result?.quarantinedScripts || 0);
+        const preservedDisabled = Number(result?.preservedDisabledScripts || 0);
+        const trustedEnabled = Number(result?.trustedEnabledScripts || 0);
         const failed = Array.isArray(result?.errors) ? result.errors.length : 0;
         const parts = [];
         if (restoredScripts) parts.push(`${numberFormatter.format(restoredScripts)} scripts restored`);
         if (skippedScripts) parts.push(`${numberFormatter.format(skippedScripts)} skipped`);
+        if (quarantined) parts.push(`${numberFormatter.format(quarantined)} disabled for review`);
+        if (preservedDisabled) parts.push(`${numberFormatter.format(preservedDisabled)} kept disabled`);
+        if (trustedEnabled) parts.push(`${numberFormatter.format(trustedEnabled)} trusted enabled`);
         if (result?.restoredSettings) parts.push('settings restored');
         if (result?.settingsCredentialsRestored) {
             parts.push('sync credentials restored');
@@ -1346,6 +1358,7 @@
             storageUnavailableReason = ''
         } = options;
         const details = [`${overwriteTarget} will be overwritten.`];
+        details.push('Executable scripts from the archive stay disabled for review unless a trusted restore override is selected.');
         if (supportsStorage) {
             details.push(importStorage
                 ? 'Stored values in the backup will also be restored when present.'
@@ -5436,6 +5449,10 @@
         return corpus;
     }
 
+    function isImportQuarantined(script) {
+        return script?.enabled === false && !!script?.settings?._importQuarantine;
+    }
+
     function getFilteredScripts() {
         const rawSearch = (elements.scriptSearch?.value || '').trim();
         const statusFilter = elements.filterSelect?.value || 'all';
@@ -5531,6 +5548,7 @@
                     s.stats?.errors > 0 ||
                     s.settings?.mergeConflict ||
                     s.settings?.userModified ||
+                    isImportQuarantined(s) ||
                     isStale ||
                     overBudget
                 );
@@ -6218,6 +6236,10 @@
         const localEditsHtml = script.settings?.userModified
           ? '<span class="script-health-badge warning" title="Local edits are present for this script.">Local edits</span>'
           : '';
+        const importQuarantine = script.settings?._importQuarantine;
+        const importQuarantineHtml = isImportQuarantined(script)
+          ? `<span class="script-health-badge alert" title="${escapeHtml(`Imported from ${importQuarantine?.sourceLabel || 'an archive'} and kept disabled until you enable it after review.`)}">Import review</span>`
+          : '';
         const staleHtml = isStale
           ? '<span class="script-health-badge warning" title="This remote script has not been refreshed in over 180 days.">Stale</span>'
           : '';
@@ -6243,6 +6265,7 @@
           ? `<span class="script-health-badge alert" title="The update channel now points to a different registry than the original install (${escapeHtml(script.previousInstallSource?.name || 'unknown')} → ${escapeHtml(script.installSource?.name || 'unknown')}). Review before trusting future updates.">Source changed</span>`
           : '';
         if (hasErrors) tr.classList.add('row-has-errors');
+        if (isImportQuarantined(script)) tr.classList.add('row-import-quarantined');
         if (isStale) tr.classList.add('row-stale');
         if (overBudget) tr.classList.add('row-over-budget');
 
@@ -6274,6 +6297,7 @@
                             ${antifeatureBadgeHtml}
                             ${esmBadgeHtml}
                             ${localEditsHtml}
+                            ${importQuarantineHtml}
                             ${errorHtml}
                             ${slowHtml}
                             ${staleHtml}
@@ -8389,7 +8413,7 @@
             if (hasStructuredImports) {
                 const confirmed = await showConfirmModal(
                     'Import Files',
-                    `Import ${files.length} file${files.length === 1 ? '' : 's'}? Matching scripts may be overwritten. ${
+                    `Import ${files.length} file${files.length === 1 ? '' : 's'}? Matching scripts may be overwritten. Imported archive scripts stay disabled for review. ${
                         transfer.includeSettingsCredentials
                             ? 'Archived sync credentials restore only when archive metadata proves they were intentionally included.'
                             : 'Archived sync credentials stay local-only.'
@@ -8413,7 +8437,7 @@
                         const r = await chrome.runtime.sendMessage({
                             action: 'importFromZip',
                             zipData: btoa(binary),
-                            options: { overwrite: true, sourceLabel: `ZIP: ${file.name}` }
+                            options: { overwrite: true, trustImportedScripts: false, sourceLabel: `ZIP: ${file.name}` }
                         });
                         showToast(
                             r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
@@ -8435,6 +8459,7 @@
                                     importSettings: transfer.includeSettings,
                                     importStorage: transfer.includeStorage,
                                     importSettingsCredentials: transfer.includeSettingsCredentials,
+                                    trustImportedScripts: false,
                                     sourceLabel: `JSON: ${file.name}`
                                 }
                             }
@@ -11484,7 +11509,8 @@
                         provider,
                         importSettings: transfer.includeSettings,
                         importStorage: transfer.includeStorage,
-                        importSettingsCredentials: transfer.includeSettingsCredentials
+                        importSettingsCredentials: transfer.includeSettingsCredentials,
+                        trustImportedScripts: false
                     });
                     if (r?.success) {
                         await loadScripts();
@@ -11539,7 +11565,7 @@
                         }
                         updateProgress(1, 2, 'Processing zip…');
                         const b64 = btoa(binary);
-                        const r = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: b64, options: { overwrite: true } });
+                        const r = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: b64, options: { overwrite: true, trustImportedScripts: false } });
                         showToast(
                             r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
                             r?.error ? 'error' : getImportResultTone(r)
@@ -11564,7 +11590,8 @@
                                     overwrite: true,
                                     importSettings: transfer.includeSettings,
                                     importStorage: transfer.includeStorage,
-                                    importSettingsCredentials: transfer.includeSettingsCredentials
+                                    importSettingsCredentials: transfer.includeSettingsCredentials,
+                                    trustImportedScripts: false
                                 }
                             }
                         });
@@ -11935,7 +11962,7 @@
                             binary += String.fromCharCode.apply(null, bytes.subarray(j, j + 8192));
                         }
                         const base64 = btoa(binary);
-                        const res = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: base64, options: { overwrite: true } });
+                        const res = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: base64, options: { overwrite: true, trustImportedScripts: false } });
                         installed += res?.imported || 0;
                         errors += res?.errors?.length || 0;
                     }
@@ -12335,10 +12362,13 @@
             const scripts = (Array.isArray(manifest.scripts) ? manifest.scripts : []).map(script => ({
                 ...script,
                 identity: script.id || getScriptIdentityKey(script),
-                existsInVault: installedIdentitySet.has(script.id || getScriptIdentityKey(script))
+                existsInVault: installedIdentitySet.has(script.id || getScriptIdentityKey(script)),
+                enabled: script.enabled !== false
             }));
             const existingCount = scripts.filter(script => script.existsInVault).length;
             const newCount = scripts.length - existingCount;
+            const archiveEnabledCount = scripts.filter(script => script.enabled !== false).length;
+            const archiveDisabledCount = scripts.length - archiveEnabledCount;
             const hasScriptEntries = scripts.length > 0;
             const scriptsWithStorageCount = Number(manifest.scriptsWithStorageCount || scripts.filter(script => script.hasStorage).length);
             const currentSettingsKeyCount = Object.keys(state.settings || {}).length;
@@ -12456,6 +12486,7 @@
                                 <strong style="color:var(--text-primary)">${escapeHtml(script.name || script.id)}</strong>
                                 ${script.namespace ? `<span class="panel-empty-inline">${escapeHtml(script.namespace)}</span>` : ''}
                                 <span class="info-tag ${script.existsInVault ? 'warning' : 'success'}">${script.existsInVault ? 'Will overwrite' : 'New script'}</span>
+                                ${script.enabled === false ? '<span class="info-tag">Archived disabled</span>' : ''}
                                 ${script.hasStorage ? '<span class="info-tag success">Stored values</span>' : ''}
                             </div>
                             <div class="restore-preview-meta">
@@ -12500,11 +12531,30 @@
                     </div>
                 `
                 : '';
-            const buildRestoreMessage = ({ mode, selectedCount = 0, overwriteCount = 0, newScriptCount = 0, storageCount = 0, includeSettingsCredentials = false }) => {
+            const trustRestoreHtml = hasScriptEntries
+                ? `
+                    <div class="utility-surface">
+                        <label class="setting-row" style="margin:0">
+                            <input type="checkbox" id="trustBackupScripts"${archiveEnabledCount === 0 ? ' disabled' : ''}>
+                            <span>Trust archive-enabled scripts during this restore</span>
+                        </label>
+                        <div class="utility-note" style="margin-top:8px">
+                            Default: ${numberFormatter.format(archiveEnabledCount)} archive-enabled script${archiveEnabledCount === 1 ? '' : 's'} will be restored disabled for review. ${archiveDisabledCount ? `${numberFormatter.format(archiveDisabledCount)} archived-disabled script${archiveDisabledCount === 1 ? '' : 's'} stay disabled either way.` : 'Archived-disabled scripts stay disabled either way.'}
+                        </div>
+                    </div>
+                `
+                : '';
+            const buildRestoreMessage = ({ mode, selectedCount = 0, overwriteCount = 0, newScriptCount = 0, storageCount = 0, archivedEnabledCount = 0, archivedDisabledCount = 0, trustImportedScripts = false, includeSettingsCredentials = false }) => {
                 if (mode === 'full') {
                     const parts = [`Restore the full vault from ${dateTimeFormatter.format(new Date(backup.timestamp || Date.now()))}?`];
                     if (manifest.scriptCount) {
                         parts.push(`${numberFormatter.format(manifest.scriptCount)} scripts will be restored (${numberFormatter.format(existingCount)} overwrite, ${numberFormatter.format(newCount)} new).`);
+                        parts.push(trustImportedScripts
+                            ? `${numberFormatter.format(archiveEnabledCount)} archive-enabled script${archiveEnabledCount === 1 ? '' : 's'} will become active immediately.`
+                            : `${numberFormatter.format(archiveEnabledCount)} archive-enabled script${archiveEnabledCount === 1 ? '' : 's'} will stay disabled for review.`);
+                        if (archiveDisabledCount) {
+                            parts.push(`${numberFormatter.format(archiveDisabledCount)} archived-disabled script${archiveDisabledCount === 1 ? '' : 's'} will stay disabled.`);
+                        }
                     }
                     if (manifest.hasGlobalSettings) {
                         parts.push(`App settings will be replaced with ${numberFormatter.format(manifest.settingsKeyCount || 0)} archived setting key${Number(manifest.settingsKeyCount || 0) === 1 ? '' : 's'}.`);
@@ -12531,6 +12581,12 @@
                 if (storageCount > 0) {
                     detailParts.push(`${numberFormatter.format(storageCount)} with stored values`);
                 }
+                detailParts.push(trustImportedScripts
+                    ? `${numberFormatter.format(archivedEnabledCount)} trusted active`
+                    : `${numberFormatter.format(archivedEnabledCount)} disabled for review`);
+                if (archivedDisabledCount > 0) {
+                    detailParts.push(`${numberFormatter.format(archivedDisabledCount)} kept disabled`);
+                }
                 const scopeSentence = hasVaultRestoreItems
                     ? 'App settings, folders, and workspaces will stay unchanged.'
                     : 'This backup only contains script-level data.';
@@ -12544,12 +12600,15 @@
                 const selectedCount = selectedScripts.length;
                 const overwriteCount = selectedScripts.filter(script => script.existsInVault).length;
                 const storageCount = selectedScripts.filter(script => script.hasStorage).length;
+                const archivedEnabledCount = selectedScripts.filter(script => script.enabled !== false).length;
                 return {
                     selectedScripts,
                     selectedCount,
                     overwriteCount,
                     newScriptCount: selectedCount - overwriteCount,
-                    storageCount
+                    storageCount,
+                    archivedEnabledCount,
+                    archivedDisabledCount: selectedCount - archivedEnabledCount
                 };
             };
             const getSelectedRestoreIds = () => Array.from(elements.modalBody?.querySelectorAll('[data-restore-script-id]:checked') || [])
@@ -12574,6 +12633,7 @@
                             return;
                         }
                         const stats = getSelectedRestoreStats();
+                        const trustImportedScripts = !!document.getElementById('trustBackupScripts')?.checked;
                         const confirmed = await showConfirmModal(
                             'Restore Selected Scripts',
                             buildRestoreMessage({
@@ -12581,7 +12641,10 @@
                                 selectedCount: stats.selectedCount,
                                 overwriteCount: stats.overwriteCount,
                                 newScriptCount: stats.newScriptCount,
-                                storageCount: stats.storageCount
+                                storageCount: stats.storageCount,
+                                archivedEnabledCount: stats.archivedEnabledCount,
+                                archivedDisabledCount: stats.archivedDisabledCount,
+                                trustImportedScripts
                             })
                         );
                         if (!confirmed) {
@@ -12592,6 +12655,7 @@
                         await restoreStoredBackup(backupId, {
                             selective: true,
                             scriptIds: selected,
+                            trustImportedScripts,
                             progressTitle: 'Restoring selected scripts…',
                             progressDetail: `Applying ${numberFormatter.format(stats.selectedCount)} selected script${stats.selectedCount === 1 ? '' : 's'}…`
                         });
@@ -12604,6 +12668,7 @@
                     class: 'btn-primary',
                     callback: async () => {
                         const preservedSelection = getSelectedRestoreIds();
+                        const trustImportedScripts = !!document.getElementById('trustBackupScripts')?.checked;
                         const confirmed = await showConfirmModal(
                             hasVaultRestoreItems ? 'Restore Scripts Only' : 'Restore All Scripts',
                             buildRestoreMessage({
@@ -12611,7 +12676,10 @@
                                 selectedCount: restoreAllScriptIds.length,
                                 overwriteCount: existingCount,
                                 newScriptCount: newCount,
-                                storageCount: scriptsWithStorageCount
+                                storageCount: scriptsWithStorageCount,
+                                archivedEnabledCount: archiveEnabledCount,
+                                archivedDisabledCount: archiveDisabledCount,
+                                trustImportedScripts
                             })
                         );
                         if (!confirmed) {
@@ -12622,6 +12690,7 @@
                         await restoreStoredBackup(backupId, {
                             selective: true,
                             scriptIds: restoreAllScriptIds,
+                            trustImportedScripts,
                             progressTitle: hasVaultRestoreItems ? 'Restoring scripts only…' : 'Restoring all scripts…',
                             progressDetail: `Applying ${numberFormatter.format(restoreAllScriptIds.length)} archived script${restoreAllScriptIds.length === 1 ? '' : 's'}…`
                         });
@@ -12635,9 +12704,10 @@
                     callback: async () => {
                         const preservedSelection = getSelectedRestoreIds();
                         const includeSettingsCredentials = settingsCredentialsIncluded && !!document.getElementById('restoreSettingsCredentials')?.checked;
+                        const trustImportedScripts = !!document.getElementById('trustBackupScripts')?.checked;
                         const confirmed = await showConfirmModal(
                             'Restore Full Vault',
-                            buildRestoreMessage({ mode: 'full', includeSettingsCredentials })
+                            buildRestoreMessage({ mode: 'full', trustImportedScripts, includeSettingsCredentials })
                         );
                         if (!confirmed) {
                             await reopenBackupReview(preservedSelection);
@@ -12647,6 +12717,7 @@
                         await restoreStoredBackup(backupId, {
                             selective: false,
                             importSettingsCredentials: includeSettingsCredentials,
+                            trustImportedScripts,
                             progressTitle: 'Restoring full vault…',
                             progressDetail: 'Applying archived scripts, settings, folders, and workspaces…'
                         });
@@ -12681,6 +12752,7 @@
                     </div>
                     ${impactHtml}
                     ${scopeNoteHtml}
+                    ${trustRestoreHtml}
                     ${credentialRestoreHtml}
                     ${hasScriptEntries ? `
                         <div class="utility-surface">

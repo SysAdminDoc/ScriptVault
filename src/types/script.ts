@@ -109,6 +109,12 @@ export interface ScriptSettings {
   _failedRequires?: string[];
   _failedRequireErrors?: Array<{ url: string; message: string }>;
   _registrationError?: string;
+  _importQuarantine?: {
+    source: string;
+    sourceLabel: string;
+    importedAt: number;
+    archiveEnabled: boolean;
+  };
   // User-facing preferences such as runAt, URL overrides, notes, tags, and
   // pinned state are synced only when explicitly allowlisted by the sync helper.
   [key: string]: unknown;

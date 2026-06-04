@@ -197,6 +197,11 @@ describe('importScripts overwrite snapshotting', () => {
       type: 'import',
       source: 'import-json',
       sourceLabel: 'JSON: bundle.json',
+      result: expect.objectContaining({
+        quarantinedScripts: 1,
+        preservedDisabledScripts: 0,
+        trustedEnabledScripts: 0,
+      }),
     });
     expect(receiptArg.snapshot.scriptsBefore).toHaveLength(1);
     expect(receiptArg.snapshot.scriptsBefore[0].meta.version).toBe('1.0.0');
@@ -280,6 +285,12 @@ describe('importFromZip overwrite snapshotting', () => {
     expect(stored.versionHistory).toHaveLength(1);
     expect(stored.versionHistory[0]).toMatchObject({ version: '1.0.0', source: 'import', sourceLabel: 'ZIP: imported.zip' });
     expect(harness.BackupScheduler.recordReceipt).toHaveBeenCalledTimes(1);
+    const [receiptArg] = harness.BackupScheduler.recordReceipt.mock.calls[0];
+    expect(receiptArg.result).toMatchObject({
+      quarantinedScripts: 1,
+      preservedDisabledScripts: 0,
+      trustedEnabledScripts: 0,
+    });
     expect(typeof result.receiptId).toBe('string');
   });
 

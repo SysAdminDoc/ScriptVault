@@ -728,8 +728,12 @@ const BackupScheduler = (() => {
         let restoredWorkspaces = false;
         let settingsCredentialsRestored = false;
         let skippedSettingsCredentialKeys = [];
+        let quarantinedScripts = 0;
+        let preservedDisabledScripts = 0;
+        let trustedEnabledScripts = 0;
         const errors = [];
         const settingsMetadata = _readSettingsMetadata(unzipped, backup);
+        const trustImportedScripts = options.trustImportedScripts === true;
         const userScripts = fileNames.filter(
           (n) => n.endsWith(".user.js")
         );
@@ -782,19 +786,30 @@ const BackupScheduler = (() => {
               restoredSettings: false,
               restoredFolders: false,
               restoredWorkspaces: false,
+              quarantinedScripts: 0,
+              preservedDisabledScripts: 0,
+              trustedEnabledScripts: 0,
               errors: []
             };
           }
           const selectiveZip = fflate.zipSync(selectedFiles, { level: 6 });
           const importResult = await importFromZip(
             _zipBytesToBase64(selectiveZip),
-            { overwrite: true, recordReceipt: false }
+            {
+              overwrite: true,
+              recordReceipt: false,
+              trustImportedScripts,
+              sourceLabel
+            }
           );
           if (importResult.error) {
             errors.push({ name: "archive", error: importResult.error });
           }
           restoredScripts = importResult.imported;
           skippedScripts = importResult.skipped;
+          quarantinedScripts = Number(importResult.quarantinedScripts || 0);
+          preservedDisabledScripts = Number(importResult.preservedDisabledScripts || 0);
+          trustedEnabledScripts = Number(importResult.trustedEnabledScripts || 0);
           if (Array.isArray(importResult.errors)) {
             errors.push(...importResult.errors);
           }
@@ -802,13 +817,18 @@ const BackupScheduler = (() => {
           try {
             const importResult = await importFromZip(backup.data, {
               overwrite: true,
-              recordReceipt: false
+              recordReceipt: false,
+              trustImportedScripts,
+              sourceLabel
             });
             if (importResult.error) {
               errors.push({ name: "archive", error: importResult.error });
             }
             restoredScripts = importResult.imported;
             skippedScripts = importResult.skipped;
+            quarantinedScripts = Number(importResult.quarantinedScripts || 0);
+            preservedDisabledScripts = Number(importResult.preservedDisabledScripts || 0);
+            trustedEnabledScripts = Number(importResult.trustedEnabledScripts || 0);
             if (Array.isArray(importResult.errors)) {
               errors.push(...importResult.errors);
             }
@@ -894,6 +914,9 @@ const BackupScheduler = (() => {
           restoredWorkspaces,
           settingsCredentialsRestored,
           skippedSettingsCredentialKeys,
+          quarantinedScripts,
+          preservedDisabledScripts,
+          trustedEnabledScripts,
           errors
         };
         if (recordReceipt && snapshot && (restoredScripts > 0 || restoredSettings || restoredFolders || restoredWorkspaces)) {
@@ -1105,12 +1128,14 @@ const BackupScheduler = (() => {
               scriptId = typeof optionsData.scriptId === "string" ? optionsData.scriptId : null;
               const name = optionsData.meta?.name || displayName;
               const namespace = optionsData.meta?.namespace || "";
+              const enabled = optionsData.settings?.enabled !== false;
               if (optionsData.meta?.name) {
                 return {
                   id: scriptId || (namespace ? `${name}::${namespace}` : name),
                   name,
                   namespace,
-                  hasStorage: !!unzipped[`${baseName}.storage.json`]
+                  hasStorage: !!unzipped[`${baseName}.storage.json`],
+                  enabled
                 };
               }
             } catch (_) {
@@ -1119,7 +1144,8 @@ const BackupScheduler = (() => {
           return {
             id: scriptId || displayName,
             name: displayName,
-            hasStorage: !!unzipped[`${baseName}.storage.json`]
+            hasStorage: !!unzipped[`${baseName}.storage.json`],
+            enabled: true
           };
         });
         const scriptsWithStorageCount = scripts.filter((script) => script.hasStorage).length;
