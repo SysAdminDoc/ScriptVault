@@ -162,6 +162,12 @@ describe('TS runtime module generator', () => {
         output: 'bg/signing.js',
         exportName: 'ScriptSigning',
       }),
+      expect.objectContaining({
+        id: 'background-core',
+        source: 'src/background/core.ts',
+        output: 'background.core.js',
+        copySource: true,
+      }),
     ]));
   });
 
@@ -195,6 +201,16 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const SharedUtils = (() => {');
     expect(text).toContain('const escapeHtml = SharedUtils.escapeHtml;');
     expect(text).toContain('const classifyInstallSource = SharedUtils.classifyInstallSource;');
+  });
+
+  it('generates the raw background core bridge without hiding top-level functions', async () => {
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'background-core');
+    const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
+
+    expect(text).toContain('Generated from src/background/core.ts');
+    expect(text).toContain('function parseUserscript(code)');
+    expect(text).toContain('chrome.runtime.onMessage.addListener');
+    expect(text).not.toContain('const BackgroundCore = (() => {');
   });
 
   it('keeps committed runtime artifacts in sync', async () => {

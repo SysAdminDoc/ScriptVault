@@ -13014,6 +13014,12 @@ const WorkspaceManager = (() => {
   return module.exports.default || module.exports.WorkspaceManager || module.exports;
 })();
 
+// ============================================================================
+// Generated from src/background/core.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+// @ts-nocheck
 console.log('[ScriptVault] Service worker starting...');
 
 // ============================================================================

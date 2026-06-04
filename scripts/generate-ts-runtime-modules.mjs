@@ -162,6 +162,12 @@ export const TS_RUNTIME_MODULES = [
     output: 'bg/workspaces.js',
     exportName: 'WorkspaceManager',
   },
+  {
+    id: 'background-core',
+    source: 'src/background/core.ts',
+    output: 'background.core.js',
+    copySource: true,
+  },
 ];
 
 function normalizeNewlines(text) {
@@ -171,6 +177,20 @@ function normalizeNewlines(text) {
 export async function buildTsRuntimeModuleText(definition, options = {}) {
   const rootDir = options.rootDir || DEFAULT_ROOT;
   const sourcePath = join(rootDir, definition.source);
+
+  if (definition.copySource) {
+    const source = normalizeNewlines(await readFile(sourcePath, 'utf8')).trimEnd();
+    return [
+      '// ============================================================================',
+      `// Generated from ${definition.source}; do not edit by hand.`,
+      '// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.',
+      '// ============================================================================',
+      '',
+      source,
+      '',
+    ].join('\n');
+  }
+
   const result = await build({
     entryPoints: [sourcePath],
     bundle: true,

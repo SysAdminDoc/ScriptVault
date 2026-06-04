@@ -143,22 +143,10 @@
     {
       "runtime": "background.core.js",
       "sources": [
-        "src/background/badge.ts",
-        "src/background/cloud-sync.ts",
-        "src/background/context-menu.ts",
-        "src/background/dnr-rules.ts",
-        "src/background/import-export.ts",
-        "src/background/install-handler.ts",
-        "src/background/parser.ts",
-        "src/background/registration.ts",
-        "src/background/tab-reload.ts",
-        "src/background/trust-receipt.ts",
-        "src/background/update-checker.ts",
-        "src/background/url-matcher.ts",
-        "src/background/wrapper-builder.ts"
+        "src/background/core.ts"
       ],
-      "status": "intentionally-divergent",
-      "notes": "Main worker remains JS-owned until leaf modules and message orchestration are promoted."
+      "status": "promoted",
+      "notes": "Generated as a raw TypeScript bridge from src/background/core.ts so top-level runtime helpers stay visible while the core orchestrator is typed and split further."
     }
   ]
 }

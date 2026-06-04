@@ -60,7 +60,7 @@ describe('TS source drift gate', () => {
     expect(map.entries.some((entry) => entry.runtime === 'bg/esm-bundler.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'bg/signing.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'bg/workspaces.js' && entry.status === 'promoted')).toBe(true);
-    expect(map.entries.some((entry) => entry.runtime === 'background.core.js' && entry.status === 'intentionally-divergent')).toBe(true);
+    expect(map.entries.some((entry) => entry.runtime === 'background.core.js' && entry.status === 'promoted')).toBe(true);
   });
 
   it('reports the status inventory in report mode', async () => {
@@ -68,12 +68,12 @@ describe('TS source drift gate', () => {
     const report = analyzeSourceDrift(map, []);
     const text = formatTextReport(report, { reportMode: true });
 
-    expect(report.totals.promoted).toBe(22);
+    expect(report.totals.promoted).toBe(23);
     expect(report.totals.candidate).toBe(0);
     expect(report.totals.mirrored).toBe(0);
-    expect(report.totals['intentionally-divergent']).toBeGreaterThanOrEqual(1);
+    expect(report.totals['intentionally-divergent']).toBe(0);
     expect(text).toContain('modules/error-log.js -> src/modules/error-log.ts');
-    expect(text).toContain('background.core.js -> src/background/badge.ts');
+    expect(text).toContain('background.core.js -> src/background/core.ts');
   });
 
   it('fails when a promoted runtime JS file changes without its TS source', () => {
