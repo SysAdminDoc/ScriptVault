@@ -4,6 +4,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-03 — Workspace manager TypeScript promotion
+
+- **Workspace runtime is now generated from TypeScript.** `bg/workspaces.js`
+  is produced from `src/bg/workspaces.ts`, reducing the remaining mirrored
+  runtime surface while preserving the cold-start `_initPromise` guard.
+
 ### 2026-06-03 — Storage persistence prompt
 
 - **Persistent storage is requested before meaningful script writes.** The

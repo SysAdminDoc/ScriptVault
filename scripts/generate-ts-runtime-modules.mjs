@@ -118,6 +118,12 @@ export const TS_RUNTIME_MODULES = [
     output: 'bg/analyzer.js',
     exportName: 'ScriptAnalyzer',
   },
+  {
+    id: 'workspaces',
+    source: 'src/bg/workspaces.ts',
+    output: 'bg/workspaces.js',
+    exportName: 'WorkspaceManager',
+  },
 ];
 
 function normalizeNewlines(text) {

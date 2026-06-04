@@ -118,6 +118,12 @@ describe('TS runtime module generator', () => {
         output: 'bg/analyzer.js',
         exportName: 'ScriptAnalyzer',
       }),
+      expect.objectContaining({
+        id: 'workspaces',
+        source: 'src/bg/workspaces.ts',
+        output: 'bg/workspaces.js',
+        exportName: 'WorkspaceManager',
+      }),
     ]));
   });
 
