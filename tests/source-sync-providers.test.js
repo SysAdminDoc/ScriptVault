@@ -104,6 +104,73 @@ describe('source sync providers module', () => {
     );
   });
 
+  it('rejects internal-host WebDAV endpoints before network I/O by default', async () => {
+    const { CloudSyncProviders } = await loadFreshSyncProviders();
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 201 }));
+    globalThis.fetch = fetchMock;
+
+    const internalEndpoints = [
+      'http://127.0.0.1:8080/backups',
+      'http://169.254.169.254/latest',
+      'http://192.168.1.20/dav',
+      'http://[fd12:3456:789a::1]/dav',
+    ];
+
+    for (const webdavUrl of internalEndpoints) {
+      await expect(CloudSyncProviders.webdav.upload(
+        { scripts: [] },
+        {
+          webdavUrl,
+          webdavUsername: 'alice',
+          webdavPassword: 'secret',
+        },
+      )).rejects.toThrow(/WebDAV sync endpoint URL rejected: internal host/);
+    }
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('allows internal-host WebDAV endpoints only with explicit sync endpoint opt-in', async () => {
+    const { CloudSyncProviders } = await loadFreshSyncProviders();
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 201 }));
+    globalThis.fetch = fetchMock;
+
+    const result = await CloudSyncProviders.webdav.upload(
+      { scripts: [] },
+      {
+        webdavUrl: 'http://127.0.0.1:8080/backups',
+        webdavUsername: 'alice',
+        webdavPassword: 'secret',
+        allowInternalSyncEndpoints: true,
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:8080/backups/scriptvault-backup.json',
+      expect.objectContaining({ method: 'PUT' }),
+    );
+  });
+
+  it('rejects WebDAV redirects into internal hosts before reading the response', async () => {
+    const { CloudSyncProviders } = await loadFreshSyncProviders();
+    const redirected = new Response('{}', { status: 200 });
+    Object.defineProperty(redirected, 'url', {
+      value: 'http://169.254.169.254/latest/meta-data/',
+      configurable: true,
+    });
+    const fetchMock = vi.fn().mockResolvedValue(redirected);
+    globalThis.fetch = fetchMock;
+
+    await expect(CloudSyncProviders.webdav.download({
+      webdavUrl: 'https://dav.example.com/backups',
+      webdavUsername: 'alice',
+      webdavPassword: 'secret',
+    })).rejects.toThrow(/WebDAV sync endpoint redirected to internal host: internal host/);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('encodes Unicode WebDAV credentials without crashing Basic Auth generation', async () => {
     const { CloudSyncProviders } = await loadFreshSyncProviders();
     const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 201 }));

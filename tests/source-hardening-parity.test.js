@@ -82,6 +82,16 @@ describe('source hardening parity guards', () => {
     expect(core).toContain("GM_xmlhttpRequest redirected to internal host");
   });
 
+  it('keeps sync provider endpoints behind the internal-host preflight and redirect guard', () => {
+    const providers = source('src/modules/sync-providers.ts');
+    expect(providers).toContain("import {\n  classifyFetchUrl,\n  classifyResponseUrl,");
+    expect(providers).toContain("const preCheck = classifyFetchUrl(url, ['http:', 'https:']);");
+    expect(providers).toContain('WebDAV sync endpoint');
+    expect(providers).toContain('S3 sync endpoint');
+    expect(providers).toContain('allowInternalSyncEndpoints');
+    expect(providers).toContain('assertSyncResponseAllowed(response, guardOptions);');
+  });
+
   it('keeps @require fetches on extension host-permission fetch semantics', () => {
     const loader = source('src/background/resource-loader.ts');
     const core = source('src/background/core.ts');

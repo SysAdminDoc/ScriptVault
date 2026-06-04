@@ -95,6 +95,7 @@ describe('SettingsManager', () => {
     expect(settings.experimentalESMUserscripts).toBe(false);
     expect(settings.dashboardVirtualizationThreshold).toBe(500);
     expect(settings.allowInternalXhr).toBe(false);
+    expect(settings.allowInternalSyncEndpoints).toBe(false);
   });
 
   it('merges stored settings with defaults', async () => {

@@ -11,6 +11,11 @@ risks, UX/accessibility/trust items, maintainability themes, prioritized
 checkbox roadmap entries, quick wins, larger bets, non-goals, and open
 questions.
 
+2026-06-04 build-lane sync-endpoint update: WebDAV and S3 sync endpoints now
+share the internal-host preflight and redirect guard. `ROADMAP.md` remains the
+only active checkbox queue; `RESEARCH_FEATURE_PLAN.md` is a companion synthesis
+without an independent checklist.
+
 2026-06-04 implementation refresh: the 2026-06-03 findings still stand, but the
 currently-breaking dependency item is now closed. `web-ext` was bumped to
 `^10.3.0`, `npm ls tmp` resolves `tmp@0.2.6`, and

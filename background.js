@@ -184,6 +184,7 @@ const SCRIPTVAULT_SETTINGS_DEFAULTS = {
   "injectIntoFrames": true,
   "xhrTimeout": 30000,
   "allowInternalXhr": false,
+  "allowInternalSyncEndpoints": false,
   "blacklist": [],
   "badgeInfo": "running",
   "autoReload": false,
@@ -2948,6 +2949,94 @@ const CloudSyncProviders = (() => {
     CloudSyncProviders: () => CloudSyncProviders
   });
   module.exports = __toCommonJS(sync_providers_exports);
+
+  // src/background/internal-host-guard.ts
+  function isInternalIPv4(ip) {
+    const parts = ip.split(".").map((p) => parseInt(p, 10));
+    if (parts.length !== 4 || parts.some((p) => !Number.isFinite(p) || p < 0 || p > 255)) return true;
+    const [a, b, c, d] = parts;
+    if (a === 0) return true;
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a === 192 && b === 0 && c === 2) return true;
+    if (a === 198 && b === 51 && c === 100) return true;
+    if (a === 203 && b === 0 && c === 113) return true;
+    if (a === 198 && (b === 18 || b === 19)) return true;
+    if (a >= 240) return true;
+    return false;
+  }
+  function isInternalHost(rawHost) {
+    if (typeof rawHost !== "string" || !rawHost) return true;
+    let h = rawHost.toLowerCase();
+    if (h.startsWith("[") && h.endsWith("]")) h = h.slice(1, -1);
+    if (h === "localhost" || h === "localhost.localdomain" || h === "ip6-localhost" || h === "ip6-loopback" || h.endsWith(".localhost")) {
+      return true;
+    }
+    if (h.includes(":")) {
+      if (h === "::1" || h === "::" || h === "::0" || h === "0:0:0:0:0:0:0:0" || h === "0:0:0:0:0:0:0:1") return true;
+      if (/^fe[89ab][0-9a-f]?:/.test(h)) return true;
+      if (/^f[cd][0-9a-f]{0,2}:/.test(h)) return true;
+      const v4MappedDotted = h.match(/^::ffff:([0-9.]+)$/);
+      if (v4MappedDotted) return isInternalIPv4(v4MappedDotted[1]);
+      const v4MappedHex = h.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+      if (v4MappedHex) {
+        const hi = parseInt(v4MappedHex[1], 16);
+        const lo = parseInt(v4MappedHex[2], 16);
+        const dotted = [hi >> 8 & 255, hi & 255, lo >> 8 & 255, lo & 255].join(".");
+        return isInternalIPv4(dotted);
+      }
+      return false;
+    }
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) {
+      return isInternalIPv4(h);
+    }
+    return false;
+  }
+  function classifyFetchUrl(url, allowedSchemes = ["https:"]) {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { ok: false, reason: "malformed-url", url: null, message: "malformed URL" };
+    }
+    if (!allowedSchemes.includes(parsed.protocol)) {
+      return {
+        ok: false,
+        reason: "unsupported-scheme",
+        url: parsed,
+        message: `unsupported scheme ${parsed.protocol}`
+      };
+    }
+    const host = parsed.hostname || "";
+    if (!host) {
+      return { ok: false, reason: "empty-hostname", url: parsed, message: "empty hostname" };
+    }
+    if (isInternalHost(host)) {
+      let reason = "internal-host";
+      if (host === "localhost" || host.endsWith(".localdomain") || host === "ip6-localhost" || host === "ip6-loopback" || host.endsWith(".localhost")) {
+        reason = "localhost-alias";
+      } else if (host.includes(":")) {
+        reason = "ipv6-internal";
+      } else if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+        reason = "ipv4-internal";
+      }
+      return { ok: false, reason, url: parsed, message: `internal host (${reason})` };
+    }
+    return { ok: true, reason: null, url: parsed, message: "" };
+  }
+  function classifyResponseUrl(response, allowedSchemes = ["https:"]) {
+    const finalUrl = typeof response?.url === "string" ? response.url : "";
+    if (!finalUrl) {
+      return { ok: true, reason: null, url: null, message: "" };
+    }
+    return classifyFetchUrl(finalUrl, allowedSchemes);
+  }
+
+  // src/modules/sync-providers.ts
   async function getSettings() {
     return SettingsManager.get();
   }
@@ -2955,6 +3044,26 @@ const CloudSyncProviders = (() => {
     const baseUrl = settings.webdavUrl?.trim();
     if (!baseUrl) throw new Error("WebDAV URL is required");
     return baseUrl.replace(/\/$/, "");
+  }
+  function allowsInternalSyncEndpoints(settings) {
+    return settings.allowInternalSyncEndpoints === true;
+  }
+  function syncEndpointMessage(prefix, result) {
+    return `${prefix}: ${result.message || "rejected URL"}`;
+  }
+  function assertSyncEndpointAllowed(url, options) {
+    if (options.allowInternalEndpoint === true) return;
+    const preCheck = classifyFetchUrl(url, ["http:", "https:"]);
+    if (!preCheck.ok) {
+      throw new Error(syncEndpointMessage(`${options.label} URL rejected`, preCheck));
+    }
+  }
+  function assertSyncResponseAllowed(response, options) {
+    if (options.allowInternalEndpoint === true) return;
+    const postCheck = classifyResponseUrl(response, ["http:", "https:"]);
+    if (!postCheck.ok) {
+      throw new Error(syncEndpointMessage(`${options.label} redirected to internal host`, postCheck));
+    }
   }
   function getWebDavAuthHeader(settings) {
     const credentials = `${settings.webdavUsername}:${settings.webdavPassword}`;
@@ -3010,11 +3119,14 @@ const CloudSyncProviders = (() => {
       clearTimeout(timer);
     }
   }
-  async function fetchWithTimeout(url, options = {}, timeoutMs = 3e4) {
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 3e4, guardOptions = { label: "Cloud sync endpoint" }) {
+    assertSyncEndpointAllowed(url, guardOptions);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await fetch(url, { ...options, signal: controller.signal });
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      assertSyncResponseAllowed(response, guardOptions);
+      return response;
     } finally {
       clearTimeout(timeoutId);
     }
@@ -3039,6 +3151,10 @@ const CloudSyncProviders = (() => {
     async upload(data, settings) {
       const url = `${getRequiredWebDavBaseUrl(settings)}/scriptvault-backup.json`;
       const auth = getWebDavAuthHeader(settings);
+      const guardOptions = {
+        label: "WebDAV sync endpoint",
+        allowInternalEndpoint: allowsInternalSyncEndpoints(settings)
+      };
       const response = await fetchWithTimeout(url, {
         method: "PUT",
         headers: {
@@ -3046,17 +3162,21 @@ const CloudSyncProviders = (() => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify(data)
-      }, 6e4);
+      }, 6e4, guardOptions);
       if (!response.ok) throw new Error(`WebDAV upload failed: HTTP ${response.status}`);
       return { success: true, timestamp: Date.now() };
     },
     async download(settings) {
       const url = `${getRequiredWebDavBaseUrl(settings)}/scriptvault-backup.json`;
       const auth = getWebDavAuthHeader(settings);
+      const guardOptions = {
+        label: "WebDAV sync endpoint",
+        allowInternalEndpoint: allowsInternalSyncEndpoints(settings)
+      };
       const response = await fetchWithTimeout(url, {
         method: "GET",
         headers: { "Authorization": auth }
-      }, 6e4);
+      }, 6e4, guardOptions);
       if (response.status === 404) return null;
       if (!response.ok) throw new Error(`WebDAV download failed: HTTP ${response.status}`);
       return await response.json();
@@ -3065,10 +3185,14 @@ const CloudSyncProviders = (() => {
       try {
         const url = getRequiredWebDavBaseUrl(settings);
         const auth = getWebDavAuthHeader(settings);
+        const guardOptions = {
+          label: "WebDAV sync endpoint",
+          allowInternalEndpoint: allowsInternalSyncEndpoints(settings)
+        };
         const response = await fetchWithTimeout(url, {
           method: "PROPFIND",
           headers: { "Authorization": auth, "Depth": "0" }
-        }, 15e3);
+        }, 15e3, guardOptions);
         return { success: response.ok || response.status === 207 };
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -4003,6 +4127,11 @@ const CloudSyncProviders = (() => {
         throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(" ")}`);
       }
       const url = this._buildObjectUrl(settings, this._objectKey(settings));
+      const guardOptions = {
+        label: "S3 sync endpoint",
+        allowInternalEndpoint: allowsInternalSyncEndpoints(settings)
+      };
+      assertSyncEndpointAllowed(url, guardOptions);
       const body = JSON.stringify(data);
       const signed = await this._signRequest({
         method: "PUT",
@@ -4019,6 +4148,7 @@ const CloudSyncProviders = (() => {
         body,
         signal: opts.signal
       });
+      assertSyncResponseAllowed(response, guardOptions);
       if (!response.ok) {
         const text = await response.text().catch(() => "");
         throw new Error(`S3 upload failed: HTTP ${response.status}${text ? ` \u2014 ${text.slice(0, 200)}` : ""}`);
@@ -4031,6 +4161,11 @@ const CloudSyncProviders = (() => {
         throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(" ")}`);
       }
       const url = this._buildObjectUrl(settings, this._objectKey(settings));
+      const guardOptions = {
+        label: "S3 sync endpoint",
+        allowInternalEndpoint: allowsInternalSyncEndpoints(settings)
+      };
+      assertSyncEndpointAllowed(url, guardOptions);
       const signed = await this._signRequest({
         method: "GET",
         url,
@@ -4043,6 +4178,7 @@ const CloudSyncProviders = (() => {
         headers: signed.headers,
         signal: opts.signal
       });
+      assertSyncResponseAllowed(response, guardOptions);
       if (response.status === 404) return null;
       if (!response.ok) {
         const text = await response.text().catch(() => "");
@@ -4057,6 +4193,11 @@ const CloudSyncProviders = (() => {
       }
       try {
         const url = this._buildObjectUrl(settings, this._objectKey(settings));
+        const guardOptions = {
+          label: "S3 sync endpoint",
+          allowInternalEndpoint: allowsInternalSyncEndpoints(settings)
+        };
+        assertSyncEndpointAllowed(url, guardOptions);
         const signed = await this._signRequest({
           method: "HEAD",
           url,
@@ -4065,6 +4206,7 @@ const CloudSyncProviders = (() => {
           secretKey: settings.s3SecretKey
         });
         const response = await fetch(url, { method: "HEAD", headers: signed.headers });
+        assertSyncResponseAllowed(response, guardOptions);
         if (response.ok || response.status === 404) return { success: true };
         return { success: false, error: `HTTP ${response.status}` };
       } catch (e) {
@@ -4726,6 +4868,7 @@ const StorageModule = (() => {
     injectIntoFrames: true,
     xhrTimeout: 3e4,
     allowInternalXhr: false,
+    allowInternalSyncEndpoints: false,
     blacklist: [],
     badgeInfo: "running",
     autoReload: false,

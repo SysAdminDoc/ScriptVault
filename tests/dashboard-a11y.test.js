@@ -493,6 +493,15 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/tab\.type\s*=\s*'button'/);
   });
 
+  test("sync settings expose the internal endpoint opt-in as an explicit advanced control", () => {
+    const doc = parseDashboard();
+    expect(doc.getElementById("settingsAllowInternalSyncEndpoints")?.getAttribute("type")).toBe("checkbox");
+    expect(doc.getElementById("settingsAllowInternalSyncEndpoints")?.closest(".settings-section")?.dataset.configLevel).toBe("advanced");
+    expect(doc.body.textContent).toContain("Allow local/private sync endpoints");
+    expect(dashboardJs).toContain("settingsAllowInternalSyncEndpoints: ['allowInternalSyncEndpoints', 'checked']");
+    expect(dashboardJs).toContain("await saveSettingOrThrow('allowInternalSyncEndpoints'");
+  });
+
   test("command palette controller exposes active result semantics and item-only keyboard navigation", () => {
     expect(dashboardJs).toMatch(/function getCommandPaletteItems/);
     expect(dashboardJs).toMatch(/function setCommandPaletteActiveItem/);
