@@ -99,6 +99,13 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'EasyCloudSync',
   },
   {
+    id: 'script-config',
+    source: 'src/modules/script-config.ts',
+    output: 'modules/script-config.js',
+    exportName: 'ScriptConfig',
+    selfExportName: 'ScriptConfig',
+  },
+  {
     id: 'userstyles',
     source: 'src/modules/userstyles.ts',
     output: 'modules/userstyles.js',

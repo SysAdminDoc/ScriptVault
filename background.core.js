@@ -59,6 +59,7 @@ const SYNC_SAFE_SCRIPT_SETTING_KEYS = new Set([
   'userIncludes',
   'userMatches',
   'userExcludes',
+  'userConfig',
   'pinned',
   'perfBudget',
   'tags',
@@ -255,6 +256,7 @@ function parseUserscript(code) {
     compatible: [],
     incompatible: [],
     webRequest: null,
+    config: [],
     priority: 0,
     weight: 0,
     crontab: ''
@@ -417,6 +419,13 @@ function parseUserscript(code) {
           meta.webRequest = validated.length > 0 ? validated : null;
         } catch (e) {}
         break;
+      case 'var': {
+        const parsedConfig = typeof ScriptConfig !== 'undefined' && ScriptConfig.parseDirective
+          ? ScriptConfig.parseDirective(value)
+          : null;
+        if (parsedConfig) meta.config.push(parsedConfig);
+        break;
+      }
       default:
         // Handle localized metadata like @name:ja or @name:zh-Hans
         if (key.includes(':')) {
@@ -4693,7 +4702,7 @@ async function handleMessage(message, sender) {
         // re-register cycle every time any other setting is changed.
         const EXEC_KEYS = ['runAt', 'injectInto', 'useOriginalMatches', 'useOriginalIncludes',
                            'useOriginalExcludes', 'userMatches', 'userIncludes', 'userExcludes',
-                           'frameMode'];
+                           'frameMode', 'userConfig'];
         const needsReregister = EXEC_KEYS.some(k =>
           k in data.settings &&
           JSON.stringify(oldSettings[k]) !== JSON.stringify(data.settings[k])
@@ -9821,6 +9830,14 @@ async function unregisterScript(scriptId) {
 function buildWrappedScript(script, requireScripts = [], preloadedStorage = {}, regexIncludes = [], regexExcludes = []) {
   const meta = script.meta;
   const grants = meta.grant || ['none'];
+  const scriptConfigValues = typeof ScriptConfig !== 'undefined' && ScriptConfig.normalizeValues
+    ? ScriptConfig.normalizeValues(
+      Array.isArray(meta.config) ? meta.config : [],
+      script.settings?.userConfig && typeof script.settings.userConfig === 'object'
+        ? script.settings.userConfig
+        : {}
+    )
+    : {};
   
   // Build @require scripts section
   // Code runs INSIDE the main IIFE after GM APIs are available
@@ -9981,6 +9998,29 @@ ${req.code}
   const meta = ${JSON.stringify(meta)};
   const grants = ${JSON.stringify(grants)};
   const grantSet = new Set(grants);
+  const __scriptConfigValues = Object.freeze(${JSON.stringify(scriptConfigValues)});
+  const CAT_userConfig = Object.freeze({
+    ...__scriptConfigValues,
+    get(name, defaultValue) {
+      return Object.prototype.hasOwnProperty.call(__scriptConfigValues, name)
+        ? __scriptConfigValues[name]
+        : defaultValue;
+    },
+    getAll() {
+      return { ...__scriptConfigValues };
+    }
+  });
+  const GM_configShim = Object.freeze({
+    get(name, defaultValue) { return CAT_userConfig.get(name, defaultValue); },
+    getValue(name, defaultValue) { return CAT_userConfig.get(name, defaultValue); },
+    getAll() { return CAT_userConfig.getAll(); },
+    set() { return false; },
+    setValue() { return false; },
+    save() { return false; },
+    open() { return false; },
+    close() { return false; },
+    fields: Object.freeze({})
+  });
   
   // Channel ID for communication with content script bridge
   // Extension ID is injected at build time since chrome.runtime isn't available in USER_SCRIPT world
@@ -10023,6 +10063,8 @@ ${req.code}
       updateURL: meta.updateURL || '',
       downloadURL: meta.downloadURL || '',
       supportURL: meta.supportURL || '',
+      config: CAT_userConfig.getAll(),
+      configVars: meta.config || [],
       // Phase 11.7 — Userscripts (Safari) injection priority.
       weight: meta.weight || 0,
       priority: meta.priority || 0,
@@ -11670,8 +11712,14 @@ ${req.code}
 
   // ============ @require Scripts ============
   // These run after GM APIs are available on window
+  const __svPreRequireGMConfig = window.GM_config;
 ${requireCode}
 ${libraryExports}
+  const __svRequireGMConfig = (typeof GM_config !== 'undefined' && GM_config !== __svPreRequireGMConfig)
+    ? GM_config
+    : null;
+  window.CAT_userConfig = CAT_userConfig;
+  window.GM_config = __svRequireGMConfig || GM_configShim;
   // ============ End @require Scripts ============
 
   // Wait for storage to be refreshed, then execute the userscript

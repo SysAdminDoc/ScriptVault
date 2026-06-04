@@ -1,4 +1,5 @@
 import type { ScriptMeta, RunAt, WebRequestRule } from '../types/script';
+import { ScriptConfig } from '../modules/script-config';
 
 /** Result returned on successful parse */
 export interface ParseSuccess {
@@ -181,6 +182,7 @@ export function parseUserscript(code: string): ParseResult {
     compatible: [],
     incompatible: [],
     webRequest: null,
+    config: [],
     priority: 0,
     weight: 0,
   };
@@ -315,6 +317,11 @@ export function parseUserscript(code: string): ParseResult {
             // Malformed JSON — leave as null
           }
           break;
+        case 'var': {
+          const parsedConfig = ScriptConfig.parseDirective(value);
+          if (parsedConfig) meta.config.push(parsedConfig);
+          break;
+        }
         default:
           // Handle localized metadata like @name:ja or @name:zh-Hans.
           // Use indexOf/slice to preserve multi-segment locale tags — split(':')

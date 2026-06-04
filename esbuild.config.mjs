@@ -109,7 +109,7 @@ async function buildBackground() {
 
     // v2.0 modules (conditionally included if they exist)
     ...["npm-resolve", "error-log", "notifications", "sync-crypto", "sync-easycloud",
-        "backup-scheduler", "userstyles", "public-api", "migration", "quota-manager",
+        "script-config", "backup-scheduler", "userstyles", "public-api", "migration", "quota-manager",
         "subscriptions", "sigstore-bundle-parser", "sigstore-bundle-verifier"]
       .map(m => { try { return readFile(`modules/${m}.js`); } catch { return ""; } })
       .filter(Boolean),

@@ -102,6 +102,13 @@ describe('TS runtime module generator', () => {
         exportName: 'EasyCloudSync',
       }),
       expect.objectContaining({
+        id: 'script-config',
+        source: 'src/modules/script-config.ts',
+        output: 'modules/script-config.js',
+        exportName: 'ScriptConfig',
+        selfExportName: 'ScriptConfig',
+      }),
+      expect.objectContaining({
         id: 'userstyles',
         source: 'src/modules/userstyles.ts',
         output: 'modules/userstyles.js',
