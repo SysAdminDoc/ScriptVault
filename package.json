@@ -24,6 +24,8 @@
     "ts-source:report": "node scripts/check-ts-source-drift.mjs --report",
     "ts-runtime:generate": "node scripts/generate-ts-runtime-modules.mjs",
     "ts-runtime:check": "node scripts/generate-ts-runtime-modules.mjs --check",
+    "gm-types:generate": "node scripts/generate-gm-types.mjs",
+    "gm-types:check": "node scripts/generate-gm-types.mjs --check",
     "store-copy:check": "node scripts/check-permission-copy.mjs",
     "readme:check": "node scripts/check-readme-claims.mjs",
     "support:matrix": "node scripts/generate-browser-support-matrix.mjs",
