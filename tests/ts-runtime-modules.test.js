@@ -68,6 +68,12 @@ describe('TS runtime module generator', () => {
         exportName: 'BackupScheduler',
       }),
       expect.objectContaining({
+        id: 'sync-easycloud',
+        source: 'src/modules/sync-easycloud.ts',
+        output: 'modules/sync-easycloud.js',
+        exportName: 'EasyCloudSync',
+      }),
+      expect.objectContaining({
         id: 'userstyles',
         source: 'src/modules/userstyles.ts',
         output: 'modules/userstyles.js',

@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — EasyCloud sync TypeScript promotion
+
+- **EasyCloud sync runtime is now generated from TypeScript.**
+  `modules/sync-easycloud.js` is produced from
+  `src/modules/sync-easycloud.ts`, with the source updated to rely on runtime
+  storage globals while preserving alarm-backed debounce sync, Drive request
+  timeouts, offline queue handling, runtime script refresh hooks, and
+  chrome.identity token-cache behavior.
+
 ### 2026-06-04 — Backup scheduler TypeScript promotion
 
 - **Backup scheduler runtime is now generated from TypeScript.**

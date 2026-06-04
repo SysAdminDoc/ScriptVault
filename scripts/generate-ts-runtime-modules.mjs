@@ -68,6 +68,12 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'BackupScheduler',
   },
   {
+    id: 'sync-easycloud',
+    source: 'src/modules/sync-easycloud.ts',
+    output: 'modules/sync-easycloud.js',
+    exportName: 'EasyCloudSync',
+  },
+  {
     id: 'userstyles',
     source: 'src/modules/userstyles.ts',
     output: 'modules/userstyles.js',
