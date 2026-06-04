@@ -6,6 +6,8 @@
 // Designed for service worker context (no DOM, fetch API only).
 // ============================================================================
 
+import { classifyFetchUrl, classifyResponseUrl } from '../background/internal-host-guard';
+
 interface PopularPackageEntry {
   cdn: string;
   file: string;
@@ -21,10 +23,15 @@ interface ResolveError {
   error: string;
 }
 
+interface ResolveWithCodeResult extends ResolveResult {
+  code: string;
+}
+
 interface CacheEntry {
   url: string;
   integrity: string;
   version: string;
+  code?: string;
   timestamp: number;
 }
 
@@ -146,6 +153,20 @@ const NpmResolver = {
    * Resolve a single npm require spec to a CDN URL.
    */
   async resolve(requireSpec: string): Promise<ResolveResult> {
+    const resolved: ResolveWithCodeResult = await this.resolveWithCode(requireSpec);
+    return {
+      url: resolved.url,
+      integrity: resolved.integrity,
+      version: resolved.version,
+    };
+  },
+
+  /**
+   * Resolve a single npm require spec and return the exact bytes used for SRI.
+   * The @require loader uses this path to avoid computing integrity over one
+   * CDN response and then executing a later, possibly different, response.
+   */
+  async resolveWithCode(requireSpec: string): Promise<ResolveWithCodeResult> {
     if (!this.isNpmRequire(requireSpec)) {
       throw new Error(`Not an npm require: ${requireSpec}`);
     }
@@ -154,7 +175,7 @@ const NpmResolver = {
     const cacheKey: string = `${name}@${requestedVersion || 'latest'}`;
 
     // Check cache first
-    const cached: ResolveResult | null = await this._getCache(cacheKey);
+    const cached: ResolveWithCodeResult | null = await this._getCache(cacheKey, true);
     if (cached) return cached;
 
     // Resolve version if not pinned (treat 'latest' as unresolved)
@@ -173,7 +194,7 @@ const NpmResolver = {
       try {
         const content: string = await this._fetchWithTimeout(url);
         const integrity: string = await this._computeSriHash(content);
-        const result: ResolveResult = { url, integrity, version };
+        const result: ResolveWithCodeResult = { url, integrity, version, code: content };
         await this._setCache(cacheKey, result);
         return result;
       } catch (err) {
@@ -348,6 +369,11 @@ const NpmResolver = {
    * Fetch a URL with a timeout. Returns the response body as text.
    */
   async _fetchWithTimeout(url: string, options: FetchOptions = {}): Promise<string> {
+    const preCheck = classifyFetchUrl(url, ['https:']);
+    if (!preCheck.ok) {
+      throw new Error(`NPM URL rejected: ${preCheck.message}`);
+    }
+
     const controller: AbortController = new AbortController();
     const timer: ReturnType<typeof setTimeout> = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT);
 
@@ -359,6 +385,12 @@ const NpmResolver = {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status} for ${url}`);
       }
+
+      const postCheck = classifyResponseUrl(response, ['https:']);
+      if (!postCheck.ok) {
+        throw new Error(`NPM URL redirected to ${postCheck.message}`);
+      }
+
       return await readTextBounded(response, MAX_NPM_FETCH_BYTES);
     } finally {
       clearTimeout(timer);
@@ -385,7 +417,7 @@ const NpmResolver = {
   /**
    * Read a single entry from the npm cache.
    */
-  async _getCache(key: string): Promise<ResolveResult | null> {
+  async _getCache(key: string, requireCode = false): Promise<ResolveWithCodeResult | null> {
     try {
       const stored: Record<string, unknown> = await chrome.storage.local.get(this.CACHE_KEY);
       const cache: unknown = stored[this.CACHE_KEY];
@@ -394,6 +426,7 @@ const NpmResolver = {
       const cacheObj: NpmCache = cache as NpmCache;
       const entry: CacheEntry | undefined = cacheObj[key];
       if (!entry) return null;
+      if (requireCode && typeof entry.code !== 'string') return null;
 
       // Check TTL
       if (Date.now() - entry.timestamp > this.CACHE_TTL) {
@@ -403,7 +436,12 @@ const NpmResolver = {
         return null;
       }
 
-      return { url: entry.url, integrity: entry.integrity, version: entry.version };
+      return {
+        url: entry.url,
+        integrity: entry.integrity,
+        version: entry.version,
+        code: entry.code ?? '',
+      };
     } catch (_e) {
       return null;
     }
@@ -424,6 +462,9 @@ const NpmResolver = {
         url: result.url,
         integrity: result.integrity,
         version: result.version,
+        ...(typeof (result as ResolveWithCodeResult).code === 'string'
+          ? { code: (result as ResolveWithCodeResult).code }
+          : {}),
         timestamp: Date.now()
       };
 
@@ -436,4 +477,4 @@ const NpmResolver = {
 
 export default NpmResolver;
 export { NpmResolver };
-export type { ResolveResult, ResolveError, PackageInfo, PopularPackageEntry, CacheEntry };
+export type { ResolveResult, ResolveWithCodeResult, ResolveError, PackageInfo, PopularPackageEntry, CacheEntry };
