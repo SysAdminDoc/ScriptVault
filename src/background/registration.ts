@@ -382,6 +382,7 @@ export async function registerScript(script: Script, options: { useUpdate?: bool
     const requires: string[] = Array.isArray(meta.require) ? meta.require : (meta.require ? [meta.require] : []);
 
     const failedRequires: string[] = [];
+    const failedRequireErrors: Array<{ url: string; message: string }> = [];
     for (const url of requires) {
       try {
         const code: string | null = await fetchRequireScript(url);
@@ -389,11 +390,13 @@ export async function registerScript(script: Script, options: { useUpdate?: bool
           requireScripts.push({ url, code });
         } else {
           failedRequires.push(url);
+          failedRequireErrors.push({ url, message: 'empty response' });
         }
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e);
         console.warn(`[ScriptVault] Failed to fetch @require ${url}:`, message);
         failedRequires.push(url);
+        failedRequireErrors.push({ url, message });
       }
     }
 
@@ -401,11 +404,13 @@ export async function registerScript(script: Script, options: { useUpdate?: bool
     if (failedRequires.length > 0) {
       script.settings = script.settings || {};
       script.settings._failedRequires = failedRequires;
+      script.settings._failedRequireErrors = failedRequireErrors;
       await ScriptStorage.set(script.id, script);
       debugWarn(`${meta.name}: ${failedRequires.length} @require dependency(s) failed to load`);
-    } else if (script.settings?._failedRequires) {
+    } else if (script.settings?._failedRequires || script.settings?._failedRequireErrors) {
       // Clear previous failures
       delete script.settings._failedRequires;
+      delete script.settings._failedRequireErrors;
       await ScriptStorage.set(script.id, script);
     }
 

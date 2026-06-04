@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
 import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
@@ -215,6 +216,65 @@ async function webDavSmokeServer() {
     requests,
     get remoteData() {
       return remoteData;
+    },
+    close: () => new Promise(resolveClose => server.close(resolveClose)),
+  };
+}
+
+async function sriRequireSmokeServer(dependencyCode) {
+  let dependencyHits = 0;
+  const requests = [];
+  const server = createServer((request, response) => {
+    requests.push({
+      method: request.method,
+      url: request.url,
+      host: request.headers.host || '',
+      accessControlRequestHeaders: request.headers['access-control-request-headers'] || '',
+    });
+    if (request.method === 'OPTIONS') {
+      response.writeHead(204, {
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'GET, OPTIONS',
+        'access-control-allow-headers': request.headers['access-control-request-headers'] || 'accept, cache-control, pragma',
+        'access-control-allow-private-network': 'true',
+      });
+      response.end();
+      return;
+    }
+
+    if (request.url === '/dependency.js') {
+      dependencyHits += 1;
+      response.writeHead(200, {
+        'access-control-allow-origin': '*',
+        'cache-control': 'no-store',
+        'content-type': 'application/javascript; charset=utf-8',
+      });
+      response.end(dependencyCode);
+      return;
+    }
+
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    response.end(`<!doctype html>
+      <html>
+        <head><title>ScriptVault Firefox SRI Target</title></head>
+        <body><main id="target">Firefox SRI target</main></body>
+      </html>`);
+  });
+  await new Promise((resolveServer, reject) => {
+    server.on('error', reject);
+    server.listen(0, '::', resolveServer);
+  });
+  const address = server.address();
+  const port = address && typeof address === 'object' ? address.port : null;
+  if (!port) {
+    server.close();
+    fail('Could not start local Firefox SRI smoke server');
+  }
+  return {
+    urlForHost: (host) => `http://${host}:${port}`,
+    requests,
+    get dependencyHits() {
+      return dependencyHits;
     },
     close: () => new Promise(resolveClose => server.close(resolveClose)),
   };
@@ -800,6 +860,234 @@ async function webDavSyncSmoke(baseUrl, sessionId, dashboardUrl) {
   }
 }
 
+async function dnrDynamicRuleSmoke(baseUrl, sessionId, dashboardUrl) {
+  await navigate(baseUrl, sessionId, dashboardUrl);
+  const result = await executeAsync(baseUrl, sessionId, `
+    const done = arguments[arguments.length - 1];
+    (async () => {
+      const api = chrome.declarativeNetRequest;
+      if (!api?.updateDynamicRules || !api?.getDynamicRules) {
+        done({ error: 'declarativeNetRequest dynamic rule API unavailable' });
+        return;
+      }
+
+      const ruleId = 20460401;
+      let cleanupError = '';
+      await api.updateDynamicRules({ removeRuleIds: [ruleId] }).catch(() => {});
+      try {
+        await api.updateDynamicRules({
+          addRules: [{
+            id: ruleId,
+            priority: 1,
+            action: { type: 'block' },
+            condition: {
+              urlFilter: 'firefox-dnr-smoke.invalid',
+              resourceTypes: ['xmlhttprequest']
+            }
+          }]
+        });
+        const afterAdd = await api.getDynamicRules();
+        const addedRule = afterAdd.find(rule => rule.id === ruleId);
+        await api.updateDynamicRules({ removeRuleIds: [ruleId] });
+        const afterRemove = await api.getDynamicRules();
+        done({
+          ok: !!addedRule && !afterRemove.some(rule => rule.id === ruleId),
+          added: !!addedRule,
+          removed: !afterRemove.some(rule => rule.id === ruleId),
+          actionType: addedRule?.action?.type || '',
+          rulesAfterAdd: afterAdd.length,
+          rulesAfterRemove: afterRemove.length,
+          cleanupError
+        });
+      } catch (error) {
+        try {
+          await api.updateDynamicRules({ removeRuleIds: [ruleId] });
+        } catch (cleanup) {
+          cleanupError = String(cleanup);
+        }
+        done({ error: String(error), cleanupError });
+      }
+    })().catch(error => done({ error: String(error), stack: error.stack }));
+  `, [], 60000);
+  if (result?.error || !result?.ok) {
+    fail(`Firefox DNR dynamic-rule smoke failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
+async function sriRequireSmoke(baseUrl, sessionId, dashboardUrl) {
+  const dependencyCode = [
+    'globalThis.__scriptvaultFirefoxRequireCount = (globalThis.__scriptvaultFirefoxRequireCount || 0) + 1;',
+  ].join('\n');
+  const integrity = `sha256-${createHash('sha256').update(dependencyCode).digest('base64')}`;
+  const server = await sriRequireSmokeServer(dependencyCode);
+  const attempts = [];
+  try {
+    await navigate(baseUrl, sessionId, dashboardUrl);
+    for (const host of ['lvh.me', 'localtest.me']) {
+      const scriptId = `script_firefox_sri_require_${host.replace(/[^a-z0-9]+/gi, '_')}`;
+      const dependencyHitsBefore = server.dependencyHits;
+      const serverUrl = server.urlForHost(host);
+      const code = [
+        '// ==UserScript==',
+        '// @name ScriptVault Firefox SRI Require Smoke',
+        '// @namespace scriptvault/firefox-sri',
+        '// @version 1.0.0',
+        `// @match http://${host}/*`,
+        `// @require ${serverUrl}/dependency.js#${integrity}`,
+        '// @grant none',
+        '// ==/UserScript==',
+        '',
+        "document.documentElement.dataset.scriptvaultFirefoxSri = String(globalThis.__scriptvaultFirefoxRequireCount || 0);",
+      ].join('\n');
+
+      const save = await runtimeMessage(baseUrl, sessionId, {
+        action: 'saveScript',
+        id: scriptId,
+        code,
+        enabled: true,
+      }, 60000);
+      const failedRequires = save?.script?.settings?._failedRequires || [];
+      const failedRequireErrors = save?.script?.settings?._failedRequireErrors || [];
+      const registrationError = save?.script?.settings?._registrationError || '';
+      const dependencyHits = server.dependencyHits - dependencyHitsBefore;
+      if (!save?.success || registrationError || failedRequires.length || dependencyHits < 1) {
+        attempts.push({
+          host,
+          success: !!save?.success,
+          registrationError,
+          failedRequires,
+          failedRequireErrors,
+          dependencyHits,
+          requests: server.requests.slice(-8),
+        });
+        await runtimeMessage(baseUrl, sessionId, { action: 'deleteScript', scriptId }, 60000).catch(() => {});
+        continue;
+      }
+
+      await navigate(baseUrl, sessionId, `${serverUrl}/sri-target`);
+      const runResult = await waitFor(baseUrl, sessionId, 'SRI @require userscript run on target page', `
+        return {
+          ok: document.documentElement.dataset.scriptvaultFirefoxSri === '1',
+          marker: document.documentElement.dataset.scriptvaultFirefoxSri || '',
+          title: document.title,
+          url: location.href
+        };
+      `, 15000);
+      await navigate(baseUrl, sessionId, dashboardUrl).catch(() => {});
+      await runtimeMessage(baseUrl, sessionId, { action: 'deleteScript', scriptId }, 60000).catch(() => {});
+
+      return {
+        host,
+        integrity,
+        dependencyHits,
+        ranOnTargetPage: runResult.ok,
+        marker: runResult.marker,
+      };
+    }
+
+    const remoteDependency = 'https://code.jquery.com/jquery-3.7.1.min.js';
+    const remoteIntegrity = 'sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=';
+    const remoteScriptId = 'script_firefox_sri_require_https';
+    try {
+      await navigate(baseUrl, sessionId, dashboardUrl);
+      const code = [
+        '// ==UserScript==',
+        '// @name ScriptVault Firefox HTTPS SRI Require Smoke',
+        '// @namespace scriptvault/firefox-sri',
+        '// @version 1.0.0',
+        '// @match http://127.0.0.1/*',
+        `// @require ${remoteDependency}#${remoteIntegrity}`,
+        '// @grant none',
+        '// ==/UserScript==',
+        '',
+        "document.documentElement.dataset.scriptvaultFirefoxSri = 'registered';",
+      ].join('\n');
+      const save = await runtimeMessage(baseUrl, sessionId, {
+        action: 'saveScript',
+        id: remoteScriptId,
+        code,
+        enabled: true,
+      }, 60000);
+      const failedRequires = save?.script?.settings?._failedRequires || [];
+      const failedRequireErrors = save?.script?.settings?._failedRequireErrors || [];
+      const registrationError = save?.script?.settings?._registrationError || '';
+      if (!save?.success || registrationError || failedRequires.length) {
+        fail(`Firefox HTTPS SRI @require fallback failed to save/register after local attempts ${JSON.stringify(attempts)}: ${JSON.stringify({
+          success: !!save?.success,
+          registrationError,
+          failedRequires,
+          failedRequireErrors,
+        })}`);
+      }
+
+      return {
+        host: 'code.jquery.com',
+        integrity: remoteIntegrity,
+        dependencyHits: 'remote',
+        verifiedAtRegistration: true,
+        marker: 'registered',
+        localAttempts: attempts,
+      };
+    } finally {
+      await navigate(baseUrl, sessionId, dashboardUrl).catch(() => {});
+      await runtimeMessage(baseUrl, sessionId, { action: 'deleteScript', scriptId: remoteScriptId }, 60000).catch(() => {});
+    }
+  } finally {
+    await navigate(baseUrl, sessionId, dashboardUrl).catch(() => {});
+    await server.close().catch(() => {});
+  }
+}
+
+async function ed25519SigningSmoke(baseUrl, sessionId, dashboardUrl) {
+  await navigate(baseUrl, sessionId, dashboardUrl);
+  const keypair = await runtimeMessage(baseUrl, sessionId, { action: 'signing_generateNewKeypair' }, 60000);
+  if (keypair?.publicKeyJwk?.crv !== 'Ed25519' || keypair?.privateKeyJwk?.crv !== 'Ed25519') {
+    fail(`Firefox Ed25519 key generation failed: ${JSON.stringify(keypair)}`);
+  }
+
+  const code = [
+    '// ==UserScript==',
+    '// @name ScriptVault Firefox Signing Smoke',
+    '// @namespace scriptvault/firefox-signing',
+    '// @version 1.0.0',
+    '// @match https://example.com/*',
+    '// @grant none',
+    '// ==/UserScript==',
+    '',
+    "console.log('firefox ed25519 smoke');",
+  ].join('\n');
+  const signedCode = await runtimeMessage(baseUrl, sessionId, { action: 'signing_sign', code }, 60000);
+  if (typeof signedCode !== 'string' || !signedCode.includes('@signature ')) {
+    fail(`Firefox Ed25519 signing did not embed a signature: ${JSON.stringify(signedCode)}`);
+  }
+  const verified = await runtimeMessage(baseUrl, sessionId, { action: 'signing_verify', code: signedCode }, 60000);
+  if (!verified?.valid) {
+    fail(`Firefox Ed25519 signature did not verify: ${JSON.stringify(verified)}`);
+  }
+
+  const tamperedCode = signedCode.replace("console.log('firefox ed25519 smoke');", "console.log('tampered firefox ed25519 smoke');");
+  const tampered = await runtimeMessage(baseUrl, sessionId, { action: 'signing_verify', code: tamperedCode }, 60000);
+  if (tampered?.valid) {
+    fail(`Firefox Ed25519 signature verified after tampering: ${JSON.stringify(tampered)}`);
+  }
+
+  return {
+    publicKeyCurve: keypair.publicKeyJwk.crv,
+    signed: true,
+    verified: verified.valid,
+    tamperRejected: tampered?.valid === false,
+  };
+}
+
+async function runtimeParitySmoke(baseUrl, sessionId, dashboardUrl) {
+  return {
+    dnr: await dnrDynamicRuleSmoke(baseUrl, sessionId, dashboardUrl),
+    sri: await sriRequireSmoke(baseUrl, sessionId, dashboardUrl),
+    signing: await ed25519SigningSmoke(baseUrl, sessionId, dashboardUrl),
+  };
+}
+
 async function storageAndTrashSmoke(baseUrl, sessionId, dashboardUrl, firefox, packagePath, profileDir) {
   await navigate(baseUrl, sessionId, dashboardUrl);
   const bulkScripts = Array.from({ length: 26 }, (_, index) => {
@@ -958,6 +1246,7 @@ async function main() {
     const dashboardResult = await dashboardSmoke(baseUrl, sessionId, dashboard.uri);
     const popupResult = await popupSmoke(baseUrl, sessionId, popup.uri);
     const scriptResult = await scriptRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
+    const parityResult = await runtimeParitySmoke(baseUrl, sessionId, dashboard.uri);
     const webDavResult = await webDavSyncSmoke(baseUrl, sessionId, dashboard.uri);
     const backupResult = await backupRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
     const storageSmoke = await storageAndTrashSmoke(baseUrl, sessionId, dashboard.uri, firefox, packagePath, profileDir);
@@ -971,6 +1260,7 @@ async function main() {
       dashboard: dashboardResult,
       popup: popupResult,
       script: scriptResult,
+      parity: parityResult,
       webdav: webDavResult,
       backup: backupResult,
       storage: storageResult,

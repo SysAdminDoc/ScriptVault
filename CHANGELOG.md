@@ -50,6 +50,12 @@ All notable changes to ScriptVault will be documented in this file.
   the uploaded JSON backup, and confirms Basic Auth reached the configured
   endpoint. OAuth sync providers remain deferred because the Firefox package
   omits `identity`.
+- **Validated Firefox DNR, `@require` SRI, and Ed25519 parity.** The Firefox
+  smoke now adds/removes a dynamic DNR rule, verifies `@require` SRI during
+  packaged-runtime registration with a pinned HTTPS dependency, and exercises
+  Ed25519 key generation, signing, verification, and tamper rejection. Failed
+  dependency registration now records `_failedRequireErrors`, and `@require` /
+  provenance fetches no longer force `mode: 'cors'`.
 - **Cleared the high-severity `web-ext` audit path.** `web-ext` now resolves to
   the `10.3.0` line with fixed `tmp@0.2.6`, restoring the high-level npm audit
   gate.
