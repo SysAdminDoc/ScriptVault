@@ -39,12 +39,16 @@ the `vendored:provenance:check` gate.
 
 Current top priorities:
 
-1. Add a real coverage gate for source/runtime code and automate dependency
+1. Quarantine imported/restored executable scripts before first run so archive
+   restore remains a data operation until the user explicitly trusts the
+   restored code.
+2. Add a real coverage gate for source/runtime code and automate dependency
    freshness so CI catches drift before advisories or store-review failures.
-2. Pin release workflow actions and dependency-refresh automation so the store
+3. Pin release workflow actions and dependency-refresh automation so the store
    artifact path is less exposed to supply-chain drift.
-3. Clean up dashboard reachability and stale affordances so documented features
-   match what a user can actually reach.
+4. Keep settings schema validation, dashboard affordance cleanup, and stale
+   documentation aligned with the roadmap so documented features match what a
+   user can actually reach.
 
 ## Evidence Reviewed
 
@@ -88,6 +92,12 @@ Local repository evidence:
   paths; cloud-sync and export/import paths serialize script/settings data.
 - `src/modules/backup-scheduler.ts`: scheduled backup, restore, inspect, and
   import paths decode ZIP data and include global settings.
+- `src/background/import-export.ts`: JSON and ZIP imports currently persist
+  imported executable script bodies as enabled unless disabled metadata says
+  otherwise, then re-register scripts.
+- `pages/dashboard.js`: import and backup-restore confirmations cover overwrite,
+  settings, stored values, and credentials, but not default quarantine or
+  first-run review for restored script code.
 - `src/types/settings.ts`: sync credentials and provider secrets, including
   WebDAV, OAuth, and S3 fields.
 - `src/types/script.ts`: open-ended per-script `settings` shape, including
@@ -742,6 +752,25 @@ non-authoritative research snapshot kept for context; update completion state in
   - Acceptance: compressed-size, decompressed-size, entry-count, entry-size,
     nested archive, and script-code limits are enforced.
   - Verify: malicious archive fixtures and valid backup regression fixtures.
+
+- **P1 - Quarantine imported/restored executable scripts before first run**
+  - Priority: P1.
+  - Why: JSON/ZIP/raw-JS imports and selected/full backup restores can persist
+    enabled script bodies and re-register immediately after import.
+  - Evidence: `src/background/import-export.ts:538-568,697-825`;
+    `src/modules/backup-scheduler.ts:1321-1345`;
+    `pages/dashboard.js:1336-1365,8278-8289,12248-12535`; Chrome Web Store
+    remote-code policy, Chrome `userScripts`, OWASP File Upload, CWE-494, and
+    CWE-829.
+  - Touches: import/export helpers, backup scheduler, dashboard import/restore
+    UI, receipts, runtime registration, tests, store-review copy.
+  - Acceptance: imported/restored executable scripts default to disabled or
+    quarantined unless the user explicitly chooses a trusted-archive override;
+    receipts record quarantined and preserved-enabled counts; dashboard offers a
+    later review/enable path.
+  - Verify: JSON import, ZIP import, raw-JS fallback, selected restore, full
+    restore, overwrite receipt, rollback, disabled-state preservation, dashboard
+    confirmation, a11y, and runtime/source parity tests.
 
 - **P1 - Partition sync-safe and device-local per-script settings**
   - Priority: P1.
