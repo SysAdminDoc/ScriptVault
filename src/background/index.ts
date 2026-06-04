@@ -58,6 +58,7 @@ export {
   isUnfetchableUrl,
   verifySRI,
   fetchRequireScript,
+  fetchProvenanceBundle,
   fetchWithRetry,
 } from './resource-loader';
 

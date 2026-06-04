@@ -8,7 +8,7 @@ Status update, 2026-06-04: the staged promotion is complete for current
 runtime artifacts. `background.core.js` is now generated from the raw bridge
 source `src/background/core.ts`, preserving top-level helper visibility for
 existing runtime tests while making the core worker output non-human-edited.
-`npm run ts-source:check` reports 24 promoted entries, 0 mirrored entries,
+`npm run ts-source:check` reports 25 promoted entries, 0 mirrored entries,
 and 0 intentionally divergent runtime files.
 
 Status update, 2026-05-24: the promotion map and first CI drift gate now

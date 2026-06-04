@@ -69,6 +69,12 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'SigstoreBundleParser',
   },
   {
+    id: 'sigstore-bundle-verifier',
+    source: 'src/modules/sigstore-bundle-verifier.ts',
+    output: 'modules/sigstore-bundle-verifier.js',
+    exportName: 'SigstoreBundleVerifier',
+  },
+  {
     id: 'public-api',
     source: 'src/modules/public-api.ts',
     output: 'modules/public-api.js',

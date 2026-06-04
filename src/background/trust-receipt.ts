@@ -6,6 +6,7 @@ import type {
   ScriptTrustReceiptDependencyChange,
   ScriptTrustReceiptPermissionChangeSet,
 } from '../types/script';
+import { verifySigstoreMessageSignature } from '../modules/sigstore-bundle-verifier';
 
 function asArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string' && item.length > 0);
@@ -73,9 +74,14 @@ function errorMessage(error: unknown): string {
   return typeof error === 'string' ? error : 'Dependency body unavailable';
 }
 
-function buildDependencyProvenance(bundleUrl = '', identity = ''): ScriptTrustReceiptDependency['provenance'] | undefined {
+async function buildDependencyProvenance(
+  bundleUrl = '',
+  identity = '',
+  body = '',
+  fetchProvenanceBundle?: (url: string) => Promise<string | null | undefined>,
+): Promise<ScriptTrustReceiptDependency['provenance'] | undefined> {
   if (!bundleUrl && !identity) return undefined;
-  return {
+  const base: ScriptTrustReceiptDependency['provenance'] = {
     bundleUrl,
     identity,
     status: bundleUrl && identity
@@ -85,6 +91,31 @@ function buildDependencyProvenance(bundleUrl = '', identity = ''): ScriptTrustRe
         : 'missing-bundle',
     verification: 'not-yet-implemented',
   };
+  if (!bundleUrl || !identity || !body || !fetchProvenanceBundle) return base;
+
+  try {
+    const bundle = await fetchProvenanceBundle(bundleUrl);
+    if (typeof bundle !== 'string' || bundle.length === 0) {
+      return { ...base, verification: 'bundle-unavailable', error: 'Provenance bundle unavailable' };
+    }
+    const result = await verifySigstoreMessageSignature({ bundle, artifact: body, expectedIdentity: identity });
+    return {
+      ...base,
+      verification: result.success
+        ? 'signature-verified'
+        : result.verification === 'unsupported-bundle'
+          ? 'unsupported-bundle'
+          : 'signature-failed',
+      error: result.error,
+      certificateIdentity: result.certificateIdentity,
+      certificateIssuer: result.certificateIssuer,
+      digestVerified: result.digestVerified,
+      signatureVerified: result.signatureVerified,
+      rootVerified: result.rootVerified,
+    };
+  } catch (error) {
+    return { ...base, verification: 'signature-failed', error: errorMessage(error) };
+  }
 }
 
 async function snapshotDependency(
@@ -93,10 +124,12 @@ async function snapshotDependency(
   known?: ScriptTrustReceiptDependency,
   bundleUrl = '',
   identity = '',
+  fetchProvenanceBundle?: (url: string) => Promise<string | null | undefined>,
 ): Promise<ScriptTrustReceiptDependency> {
-  const provenance = buildDependencyProvenance(bundleUrl, identity);
-  const withProvenance = (dependency: ScriptTrustReceiptDependency): ScriptTrustReceiptDependency =>
-    provenance ? { ...dependency, provenance } : dependency;
+  const withProvenance = async (dependency: ScriptTrustReceiptDependency, body = ''): Promise<ScriptTrustReceiptDependency> => {
+    const provenance = await buildDependencyProvenance(bundleUrl, identity, body, fetchProvenanceBundle);
+    return provenance ? { ...dependency, provenance } : dependency;
+  };
 
   if (known?.sha256) return withProvenance(known);
   if (!fetchDependencyBody) return withProvenance(known || { url });
@@ -108,7 +141,7 @@ async function snapshotDependency(
       url,
       sha256: await sha256Hex(body),
       bytes: new TextEncoder().encode(body).length,
-    });
+    }, body);
   } catch (error) {
     return withProvenance({ url, error: errorMessage(error) });
   }
@@ -120,10 +153,18 @@ async function snapshotDependencies(
   known: Map<string, ScriptTrustReceiptDependency>,
   bundleUrls: string[] = [],
   identities: string[] = [],
+  fetchProvenanceBundle?: (url: string) => Promise<string | null | undefined>,
 ): Promise<ScriptTrustReceiptDependency[]> {
   const snapshots: ScriptTrustReceiptDependency[] = [];
   for (const [index, url] of urls.entries()) {
-    snapshots.push(await snapshotDependency(url, fetchDependencyBody, known.get(url), bundleUrls[index] || '', identities[index] || ''));
+    snapshots.push(await snapshotDependency(
+      url,
+      fetchDependencyBody,
+      known.get(url),
+      bundleUrls[index] || '',
+      identities[index] || '',
+      fetchProvenanceBundle,
+    ));
   }
   return snapshots;
 }
@@ -170,6 +211,7 @@ export async function createScriptTrustReceipt(options: {
   previousScript?: Script | null;
   rollbackIndex?: number;
   fetchDependencyBody?: (url: string) => Promise<string | null | undefined>;
+  fetchProvenanceBundle?: (url: string) => Promise<string | null | undefined>;
   /**
    * Outcome of optional-permission prompts surfaced by the install page
    * (e.g. `chrome.permissions.request({permissions:['cookies']})` for a
@@ -201,8 +243,16 @@ export async function createScriptTrustReceipt(options: {
     knownDependencySnapshots,
     previousRequireProvenance,
     previousRequireIdentity,
+    options.fetchProvenanceBundle,
   );
-  const requireSnapshots = await snapshotDependencies(requires, options.fetchDependencyBody, new Map(), requireProvenance, requireIdentity);
+  const requireSnapshots = await snapshotDependencies(
+    requires,
+    options.fetchDependencyBody,
+    new Map(),
+    requireProvenance,
+    requireIdentity,
+    options.fetchProvenanceBundle,
+  );
   const resources = meta.resource && typeof meta.resource === 'object'
     ? Object.entries(meta.resource)
         .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0)

@@ -406,9 +406,9 @@ function _receiptErrorMessage(error) {
   return error?.message || (typeof error === 'string' ? error : 'Dependency body unavailable');
 }
 
-function _receiptDependencyProvenance(bundleUrl = '', identity = '') {
+async function _receiptDependencyProvenance(bundleUrl = '', identity = '', body = '', fetchProvenanceBundle = null) {
   if (!bundleUrl && !identity) return undefined;
-  return {
+  const base = {
     bundleUrl,
     identity,
     status: bundleUrl && identity
@@ -418,11 +418,42 @@ function _receiptDependencyProvenance(bundleUrl = '', identity = '') {
         : 'missing-bundle',
     verification: 'not-yet-implemented'
   };
+  if (!bundleUrl || !identity || !body || typeof fetchProvenanceBundle !== 'function') return base;
+  if (!self.SigstoreBundleVerifier?.verifyMessageSignature && typeof SigstoreBundleVerifier === 'undefined') {
+    return { ...base, verification: 'signature-failed', error: 'Sigstore verifier unavailable' };
+  }
+
+  try {
+    const bundle = await fetchProvenanceBundle(bundleUrl);
+    if (typeof bundle !== 'string' || bundle.length === 0) {
+      return { ...base, verification: 'bundle-unavailable', error: 'Provenance bundle unavailable' };
+    }
+    const verifier = self.SigstoreBundleVerifier || SigstoreBundleVerifier;
+    const result = await verifier.verifyMessageSignature({ bundle, artifact: body, expectedIdentity: identity });
+    return {
+      ...base,
+      verification: result.success
+        ? 'signature-verified'
+        : result.verification === 'unsupported-bundle'
+          ? 'unsupported-bundle'
+          : 'signature-failed',
+      error: result.error,
+      certificateIdentity: result.certificateIdentity,
+      certificateIssuer: result.certificateIssuer,
+      digestVerified: result.digestVerified,
+      signatureVerified: result.signatureVerified,
+      rootVerified: result.rootVerified
+    };
+  } catch (error) {
+    return { ...base, verification: 'signature-failed', error: _receiptErrorMessage(error) };
+  }
 }
 
-async function _snapshotDependency(url, fetchDependencyBody, known, bundleUrl = '', identity = '') {
-  const provenance = _receiptDependencyProvenance(bundleUrl, identity);
-  const withProvenance = dependency => provenance ? { ...dependency, provenance } : dependency;
+async function _snapshotDependency(url, fetchDependencyBody, known, bundleUrl = '', identity = '', fetchProvenanceBundle = null) {
+  const withProvenance = async (dependency, body = '') => {
+    const provenance = await _receiptDependencyProvenance(bundleUrl, identity, body, fetchProvenanceBundle);
+    return provenance ? { ...dependency, provenance } : dependency;
+  };
   if (known?.sha256) return withProvenance(known);
   if (typeof fetchDependencyBody !== 'function') return withProvenance(known || { url });
   try {
@@ -432,16 +463,23 @@ async function _snapshotDependency(url, fetchDependencyBody, known, bundleUrl = 
       url,
       sha256: await _sha256Hex(body),
       bytes: new TextEncoder().encode(body).length
-    });
+    }, body);
   } catch (error) {
     return withProvenance({ url, error: _receiptErrorMessage(error) });
   }
 }
 
-async function _snapshotDependencies(urls, fetchDependencyBody, known, bundleUrls = [], identities = []) {
+async function _snapshotDependencies(urls, fetchDependencyBody, known, bundleUrls = [], identities = [], fetchProvenanceBundle = null) {
   const snapshots = [];
   for (const [index, url] of urls.entries()) {
-    snapshots.push(await _snapshotDependency(url, fetchDependencyBody, known.get(url), bundleUrls[index] || '', identities[index] || ''));
+    snapshots.push(await _snapshotDependency(
+      url,
+      fetchDependencyBody,
+      known.get(url),
+      bundleUrls[index] || '',
+      identities[index] || '',
+      fetchProvenanceBundle
+    ));
   }
   return snapshots;
 }
@@ -475,7 +513,7 @@ async function _sha256Hex(text) {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '', previousScript = null, rollbackIndex = -1, fetchDependencyBody = null, optionalPermissions = null }) {
+async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '', previousScript = null, rollbackIndex = -1, fetchDependencyBody = null, fetchProvenanceBundle = null, optionalPermissions = null }) {
   const installUrl = sourceUrl || meta.source || meta.downloadURL || meta.updateURL || '';
   const previousCode = previousScript?.code || '';
   const nextHash = await _sha256Hex(code);
@@ -486,8 +524,8 @@ async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '',
   const previousRequireUrls = _receiptArray(previousScript?.meta?.require);
   const previousRequireProvenance = _receiptArray(previousScript?.meta?.requireProvenance);
   const previousRequireIdentity = _receiptArray(previousScript?.meta?.requireIdentity);
-  const previousRequireSnapshots = await _snapshotDependencies(previousRequireUrls, fetchDependencyBody, _knownDependencySnapshots(previousScript), previousRequireProvenance, previousRequireIdentity);
-  const requireSnapshots = await _snapshotDependencies(requireUrls, fetchDependencyBody, new Map(), requireProvenance, requireIdentity);
+  const previousRequireSnapshots = await _snapshotDependencies(previousRequireUrls, fetchDependencyBody, _knownDependencySnapshots(previousScript), previousRequireProvenance, previousRequireIdentity, fetchProvenanceBundle);
+  const requireSnapshots = await _snapshotDependencies(requireUrls, fetchDependencyBody, new Map(), requireProvenance, requireIdentity, fetchProvenanceBundle);
   const resources = meta.resource && typeof meta.resource === 'object'
     ? Object.entries(meta.resource)
         .filter(([, url]) => typeof url === 'string' && url.length > 0)
@@ -745,7 +783,7 @@ const UpdateSystem = {
     return 0;
   },
   
-  async applyUpdate(scriptId, newCode, { force = false, sourceUrl = '', fetchDependencyBody = null } = {}) {
+  async applyUpdate(scriptId, newCode, { force = false, sourceUrl = '', fetchDependencyBody = null, fetchProvenanceBundle: fetchProvenanceBundleOption = null } = {}) {
     const script = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
     // Don't auto-update scripts the user has locally edited (unless force=true from forceUpdate)
@@ -792,7 +830,8 @@ const UpdateSystem = {
       sourceUrl: sourceUrl || script.meta.downloadURL || script.meta.updateURL,
       previousScript,
       rollbackIndex,
-      fetchDependencyBody: fetchDependencyBody || fetchRequireScript
+      fetchDependencyBody: fetchDependencyBody || fetchRequireScript,
+      fetchProvenanceBundle: fetchProvenanceBundleOption || fetchProvenanceBundle
     });
     historyEntry.trustReceipt = previousScript.trustReceipt || await createScriptTrustReceipt({
       operation: 'rollback-point',
@@ -919,7 +958,8 @@ const UpdateSystem = {
       meta: parsed.meta,
       sourceUrl,
       previousScript: script,
-      fetchDependencyBody: fetchRequireScript
+      fetchDependencyBody: fetchRequireScript,
+      fetchProvenanceBundle
     });
     const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged);
     const now = Date.now();
@@ -966,7 +1006,8 @@ const UpdateSystem = {
       code: update.code,
       meta: parsed.meta,
       sourceUrl,
-      fetchDependencyBody: fetchRequireScript
+      fetchDependencyBody: fetchRequireScript,
+      fetchProvenanceBundle
     });
     const now = Date.now();
 
@@ -8235,6 +8276,43 @@ async function fetchRequireScript(url) {
   
   console.error(`[ScriptVault] Failed to fetch ${url} (tried ${urlsToTry.length} URLs)`);
   return null;
+}
+
+async function fetchProvenanceBundle(url) {
+  const preCheck = InternalHostGuard.classifyFetchUrl(url, ['http:', 'https:']);
+  if (!preCheck.ok) {
+    throw new Error('@require-provenance URL rejected: ' + preCheck.message);
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/vnd.dev.sigstore.bundle.v0.3+json, application/json, text/plain, */*',
+        'Cache-Control': 'no-cache'
+      },
+      mode: 'cors',
+      credentials: 'omit',
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) {
+      throw new Error('@require-provenance URL redirected to ' + postCheck.message);
+    }
+
+    const MAX_PROVENANCE_BUNDLE_BYTES = 256 * 1024;
+    const text = await _fetchTextBounded(response, MAX_PROVENANCE_BUNDLE_BYTES, 'Provenance bundle');
+    return text && text.trim().length > 0 ? text : null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 // Fetch with retry and proper options
