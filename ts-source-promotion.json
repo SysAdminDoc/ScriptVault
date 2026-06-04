@@ -132,7 +132,8 @@
     {
       "runtime": "bg/workspaces.js",
       "sources": ["src/bg/workspaces.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "background.core.js",

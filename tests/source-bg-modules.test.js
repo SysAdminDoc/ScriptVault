@@ -10,6 +10,10 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  delete globalThis.ScriptStorage;
+  delete globalThis.registerAllScripts;
+  delete globalThis.updateBadge;
+  delete globalThis.generateId;
 });
 
 async function loadFreshWorkspaceManager(scripts) {
@@ -29,17 +33,17 @@ async function loadFreshWorkspaceManager(scripts) {
   });
   const registerAllScripts = vi.fn().mockResolvedValue();
   const updateBadge = vi.fn().mockResolvedValue();
+  const generateId = vi.fn(() => `ws_${Math.random().toString(36).slice(2, 10)}`);
 
-  vi.doMock('../src/modules/storage.ts', () => ({
-    ScriptStorage: {
-      cache: scriptCache,
-      getAll,
-      save,
-      set,
-    },
-  }));
-  vi.doMock('../src/background/registration.ts', () => ({ registerAllScripts }));
-  vi.doMock('../src/background/badge.ts', () => ({ updateBadge }));
+  globalThis.ScriptStorage = {
+    cache: scriptCache,
+    getAll,
+    save,
+    set,
+  };
+  globalThis.registerAllScripts = registerAllScripts;
+  globalThis.updateBadge = updateBadge;
+  globalThis.generateId = generateId;
 
   const mod = await import('../src/bg/workspaces.ts');
   return {
@@ -50,6 +54,7 @@ async function loadFreshWorkspaceManager(scripts) {
     set,
     registerAllScripts,
     updateBadge,
+    generateId,
   };
 }
 
@@ -177,6 +182,26 @@ describe('source workspace manager module', () => {
     expect(set).toHaveBeenCalledWith('beta', expect.objectContaining({ id: 'beta', enabled: true, updatedAt: 1 }));
     expect(registerAllScripts).not.toHaveBeenCalled();
     expect(updateBadge).not.toHaveBeenCalled();
+  });
+
+  it('clears _initPromise after success, failure, and forced reload', async () => {
+    const { WorkspaceManager } = await loadFreshWorkspaceManager([]);
+
+    chrome.storage.local.set({ workspaces: { active: null, list: [{ id: 'ws1', name: 'First' }] } });
+    const first = await WorkspaceManager.getAll();
+    expect(first.list[0].name).toBe('First');
+    expect(WorkspaceManager._initPromise).toBeNull();
+
+    chrome.storage.local.set({ workspaces: { active: null, list: [{ id: 'ws2', name: 'Second' }] } });
+    WorkspaceManager._cache = null;
+    const second = await WorkspaceManager.getAll();
+    expect(second.list[0].name).toBe('Second');
+    expect(WorkspaceManager._initPromise).toBeNull();
+
+    WorkspaceManager._cache = null;
+    chrome.storage.local.get.mockRejectedValueOnce(new Error('STORAGE_FAIL'));
+    await expect(WorkspaceManager.getAll()).rejects.toThrow('STORAGE_FAIL');
+    expect(WorkspaceManager._initPromise).toBeNull();
   });
 });
 

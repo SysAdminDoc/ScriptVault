@@ -33,8 +33,9 @@ priority section below.
 ### TypeScript source-of-truth and release trust (larger bets)
 
 - [ ] P1 — Continue TypeScript authoritative-source promotion until `background.core.js` is generated from TS
-  - Why: collapse runtime/TS mirror drift (15 promoted entries, 6 still mirrored).
+  - Why: collapse runtime/TS mirror drift (16 promoted entries, 5 still mirrored).
   - Acceptance: `ts-source-promotion.json` reaches 0 mirrored; `background.core.js` is generated from TS source.
+  - Progress: 2026-06-03 promoted `bg/workspaces.js` from `src/bg/workspaces.ts`, preserving the `_initPromise` cold-start guard.
   - Source: docs/archive/TODO.md F-1 (ROADMAP Larger Bets).
 - [ ] P1 — Complete release trust pipeline (rollback rehearsal automation, CWS/AMO status checks)
   - Why: partial — signatures/SBOM/source ZIP/package diff done; rollback rehearsal + store status checks remain.

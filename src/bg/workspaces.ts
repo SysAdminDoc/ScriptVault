@@ -2,10 +2,15 @@
 // Named sets of enabled/disabled script states for quick context switching
 
 import type { Script } from '../types/script';
-import { generateId } from '../shared/utils';
-import { ScriptStorage } from '../modules/storage';
-import { registerAllScripts } from '../background/registration';
-import { updateBadge } from '../background/badge';
+
+declare function generateId(): string;
+declare function registerAllScripts(): Promise<void>;
+declare function updateBadge(): Promise<void>;
+
+declare const ScriptStorage: {
+  getAll(): Promise<Script[]>;
+  set(id: string, script: Script): Promise<void>;
+};
 
 interface Workspace {
   id: string;
@@ -26,11 +31,23 @@ interface WorkspaceUpdates {
 
 export const WorkspaceManager = {
   _cache: null as WorkspacesData | null,
+  _initPromise: null as Promise<void> | null,
 
   async _init(): Promise<void> {
     if (this._cache !== null) return;
-    const data = await chrome.storage.local.get('workspaces');
-    this._cache = (data['workspaces'] as WorkspacesData | undefined) || { active: null, list: [] };
+    if (!this._initPromise) {
+      this._initPromise = (async () => {
+        const data = await chrome.storage.local.get('workspaces');
+        if (this._cache === null) {
+          this._cache = (data['workspaces'] as WorkspacesData | undefined) || { active: null, list: [] };
+        }
+      })();
+    }
+    try {
+      return await this._initPromise;
+    } finally {
+      this._initPromise = null;
+    }
   },
 
   async _save(): Promise<void> {
