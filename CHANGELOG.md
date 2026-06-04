@@ -4,6 +4,13 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Require provenance author guide
+
+- **Added `docs/provenance-author-guide.md`.** The guide documents Cosign
+  blob signing, ordered `@require-provenance` / `@require-identity`
+  declarations, GitHub Actions OIDC identity shape, verification statuses,
+  common failure modes, and dependency rotation.
+
 ### 2026-06-04 — Require provenance review UI
 
 - **Pending updates now treat provenance failures as review-required.**

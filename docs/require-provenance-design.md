@@ -1,7 +1,7 @@
 # `@require-provenance` Design — Sigstore-Style Verification for `@require`
 
 **Phase:** 39.5 (extends Phase 11.8 SRI).
-**Status:** Phase A parser + storage foundation, Phase B bundle parser, Phase C message-signature verifier, Phase D Fulcio root/validity checks, and dashboard/update review surfacing shipped 2026-06-04; install dialog verified-author badge and author guide remain open. RFC3161/Rekor timestamp proof remains Phase 2 defense-in-depth.
+**Status:** Phase A parser + storage foundation, Phase B bundle parser, Phase C message-signature verifier, Phase D Fulcio root/validity checks, dashboard/update review surfacing, and `docs/provenance-author-guide.md` shipped 2026-06-04; install dialog verified-author badge remains open. RFC3161/Rekor timestamp proof remains Phase 2 defense-in-depth.
 **Owner:** Phase 17 (Security Round 2) follow-up.
 **Last reviewed:** 2026-05-17.
 
@@ -165,7 +165,7 @@ Sigstore wins on three axes: (1) keyless flow that authors won't ditch after one
 - Identity mismatch fails verification.
 - Install dialog shows the verified-author badge.
 - Error path surfaces a clear, actionable message.
-- Documentation page at `docs/provenance-author-guide.md` explains how authors sign their artifacts.
+- Documentation page at `docs/provenance-author-guide.md` explains how authors sign their artifacts. *(Shipped 2026-06-04.)*
 
 ## Source citations
 
