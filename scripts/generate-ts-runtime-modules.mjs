@@ -62,6 +62,12 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'PublicAPI',
   },
   {
+    id: 'backup-scheduler',
+    source: 'src/modules/backup-scheduler.ts',
+    output: 'modules/backup-scheduler.js',
+    exportName: 'BackupScheduler',
+  },
+  {
     id: 'userstyles',
     source: 'src/modules/userstyles.ts',
     output: 'modules/userstyles.js',

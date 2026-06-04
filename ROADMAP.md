@@ -14,6 +14,7 @@
 >
 > **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, and `main` now has additional unreleased 2026-05-24 hardening/release commits including release artifact reconciliation, CWS runbook/audit-gate alignment, Chrome userScripts diagnostics, Firefox AMO validation packaging, and permission/store-copy drift checks. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
 > **2026-05-24 state:** 821 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; Firefox AMO package/source ZIP generation now passes `web-ext lint` with 0 errors and 0 notices; `npm run store-copy:check` covers 30 manifest permission/privacy/store surfaces; no GitHub issues or PRs are currently open.
+> **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. `npm audit --audit-level=high --omit=optional` now fails on `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65, `web-ext@10.3.0` carries fixed `tmp@0.2.6`, `npm run typecheck`, `npm run ts-runtime:check`, and `npm run readme:check` pass when run via `cmd /c pushd` from the UNC checkout, `npm run firefox:lint` passes with 0 errors / 0 notices / 140 warnings, and `npm run support:matrix:check` fails because `README.md` and `docs/cross-browser-pipeline.md` are stale. F-1 continuation has now taken ownership of the backup-scheduler TS promotion path; `ts-source:check` reports 20 promoted entries and 1 mirrored entry (`modules/sync-easycloud.js`).
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
 ---
@@ -33,9 +34,9 @@ priority section below.
 ### TypeScript source-of-truth and release trust (larger bets)
 
 - [ ] P1 — Continue TypeScript authoritative-source promotion until `background.core.js` is generated from TS
-  - Why: collapse runtime/TS mirror drift (19 promoted entries, 2 still mirrored).
+  - Why: collapse runtime/TS mirror drift (20 promoted entries, 1 still mirrored).
   - Acceptance: `ts-source-promotion.json` reaches 0 mirrored; `background.core.js` is generated from TS source.
-  - Progress: 2026-06-03 promoted `bg/workspaces.js` from `src/bg/workspaces.ts`, preserving the `_initPromise` cold-start guard. Promoted `bg/signing.js` from `src/bg/signing.ts`, preserving the null signature guard and runtime `SettingsManager` global contract. Promoted `bg/esm-bundler.js` from `src/bg/esm-bundler.ts`, preserving the runtime `fetchRequireScript` global and `self.ESMUserscriptBundler` alias. Promoted `modules/public-api.js` from `src/modules/public-api.ts`, preserving generated IDs, permissions access, bounded web installs, and webhook guards.
+  - Progress: 2026-06-03 promoted `bg/workspaces.js` from `src/bg/workspaces.ts`, preserving the `_initPromise` cold-start guard. Promoted `bg/signing.js` from `src/bg/signing.ts`, preserving the null signature guard and runtime `SettingsManager` global contract. Promoted `bg/esm-bundler.js` from `src/bg/esm-bundler.ts`, preserving the runtime `fetchRequireScript` global and `self.ESMUserscriptBundler` alias. Promoted `modules/public-api.js` from `src/modules/public-api.ts`, preserving generated IDs, permissions access, bounded web installs, and webhook guards. Promoted `modules/backup-scheduler.js` from `src/modules/backup-scheduler.ts`, preserving backup verification, restore receipts, rollback receipts, retention caps, and runtime-global storage contracts.
   - Source: docs/archive/TODO.md F-1 (ROADMAP Larger Bets).
 - [ ] P1 — Complete release trust pipeline (rollback rehearsal automation, CWS/AMO status checks)
   - Why: partial — signatures/SBOM/source ZIP/package diff done; rollback rehearsal + store status checks remain.
@@ -77,6 +78,11 @@ priority section below.
 
 ### Documentation hygiene
 
+- [ ] P2 — Refresh generated browser support matrix after current Firefox lint drift
+  - Why: `npm run support:matrix:check` now fails on `README.md`, while a fresh `npm run firefox:lint` reports 0 errors / 0 notices / 140 warnings. The shipped H021 generator is doing its job, but the generated docs are stale against the current lint output.
+  - Touches: `README.md`, `docs/cross-browser-pipeline.md` if the generator updates it, and any checked lint artifact inputs.
+  - Acceptance: `npm run support:matrix:check` passes without hand-editing generated blocks; matrix warning count and last-verification date match the latest Firefox lint artifact.
+  - Source: 2026-06-04 research refresh.
 - [ ] P3 — Add CONTRIBUTING.md note explaining `.factory/` directory purpose
   - Source: docs/archive/TODO.md I-1 (PASS2 Architecture #8).
 - [ ] P3 — Expand `docs/readme-feature-claim-checklist.md` rows for ESM bundler, trust receipts, install-source badges, internal-host guard, sync cockpit, virtualized dashboard
