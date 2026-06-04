@@ -42,8 +42,9 @@ priority section below.
   - Why: complete for the current credential model — rollback drill, signatures/SBOM/source ZIP/package diff, Firefox AMO artifact checks, and optional credentialed CWS API v2 `fetchStatus` checks are wired.
   - Progress: 2026-06-04 added `npm run release:store-status`, CI wiring after `npm run firefox:package`, and runbook coverage. The gate checks Firefox `web-ext` lint/package/source artifacts, validates release trust/rollback/status wiring, and calls CWS `publishers/PUBLISHER_ID/items/EXTENSION_ID:fetchStatus` when `CWS_ACCESS_TOKEN` is provided.
   - Source: docs/archive/TODO.md F-2 (ROADMAP Larger Bets).
-- [ ] P2 — Local health diagnostics (other half of large-library bet)
-  - Why: perf harness + virtualization shipped; diagnostics half remains.
+- [x] P2 — Local health diagnostics (other half of large-library bet)
+  - Why: perf harness + virtualization shipped; diagnostics now summarize runtime, storage, queue, callback, and script-health signals locally.
+  - Progress: 2026-06-04 added `getLocalHealthReport`, typed message coverage, and support snapshot inclusion. The report is aggregate-only and explicitly marks that it includes no script source, script names, URLs, or external usage beacons.
   - Source: docs/archive/TODO.md F-3 (ROADMAP Larger Bets).
 - [ ] P2 — Sigstore `@require-provenance` implementation
   - Why: design-complete supply-chain provenance for `@require`.
@@ -702,7 +703,7 @@ Scale: Fit `Y/M/N`, impact and effort `1-5`, novelty `P` parity or `L` leapfrog.
 - Replace the legacy XHR bridge with dedicated user-script messaging while keeping tested fallback behavior.
 - [x] Add per-script trust receipts with provenance, dependency hashes, permission changes, and rollback. — Completed 2026-05-24. Existing trust-receipt scaffolding and restore/import ledgers were extended so `applyUpdate` hashes `@require` bodies through the existing require fetch path, records added/removed/changed dependency changes, diffs `@grant`/`@connect`/`@match`, and surfaces reviewable update deltas from the dashboard recent-update banner.
 - ~~Add sync cockpit and user-owned S3-compatible sync provider.~~ — Sync cockpit shipped 2026-05-23 (sync safety cockpit); S3-compatible provider shipped 2026-05-24. **Done.**
-- Add measured large-library virtualization and local health diagnostics. (Partial: large-library perf harness + threshold gate shipped 2026-05-24 via `scripts/smoke-large-library.mjs` + `tests/large-library-perf.test.js`; dashboard table virtualization shipped 2026-05-24 via `pages/dashboard-virtual-rows.js`, `dashboardVirtualizationThreshold`, and 1k/10k render p99 gates. Local health diagnostics still open.)
+- [x] Add measured large-library virtualization and local health diagnostics. Completed 2026-06-04: large-library perf harness + threshold gate shipped 2026-05-24 via `scripts/smoke-large-library.mjs` + `tests/large-library-perf.test.js`; dashboard table virtualization shipped 2026-05-24 via `pages/dashboard-virtual-rows.js`, `dashboardVirtualizationThreshold`, and 1k/10k render p99 gates; local-only diagnostics now ship through `getLocalHealthReport` and support snapshots with aggregate runtime/storage/queue/callback warnings and no script source, script names, URLs, or external beacons.
 
 ### Explicit Non-Goals
 

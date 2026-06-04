@@ -115,8 +115,9 @@
 - [x] **F-2** Complete release trust pipeline (rollback rehearsal automation, CWS/AMO status checks)
   - Evidence: ROADMAP Larger Bets; rollback drill, signatures/SBOM/source ZIP/package diff, Firefox AMO artifact checks, and optional credentialed CWS API v2 `fetchStatus` checks are wired.
   - Verification: `npm test -- tests/store-status-check.test.js tests/firefox-package.test.js`; `BASH_PATH="C:\Program Files\Git\bin\bash.exe" npm run firefox:package`; `npm run release:store-status`.
-- [ ] **F-3** Local health diagnostics (other half of large-library bet)
-  - Evidence: ROADMAP Larger Bets; perf harness + virtualization shipped, diagnostics half remains.
+- [x] **F-3** Local health diagnostics (other half of large-library bet)
+  - Evidence: ROADMAP Larger Bets; perf harness + virtualization shipped; local diagnostics now report aggregate runtime, storage, update queue, callback, and script-health warnings without script source, script names, URLs, or external beacons.
+  - Verification: `npm test -- tests/local-health-report.test.js tests/support-snapshot-redaction.test.js tests/user-scripts-onboarding.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`.
 - [ ] **F-4** Sigstore `@require-provenance` implementation
   - Evidence: `docs/require-provenance-design.md`; design-complete.
 - [ ] **F-5** Module-mode service worker (Chrome 124+ `"type":"module"` background)
@@ -181,5 +182,6 @@
 | 2026-06-04 | F | F-1 partial: `modules/sync-providers.js` TS promotion | feat: promote cloud sync providers runtime |
 | 2026-06-04 | F | F-1 complete: `background.core.js` TS bridge promotion | feat: promote background core runtime |
 | 2026-06-04 | F | F-2 release trust store-status gate | feat: add release store status gate |
+| 2026-06-04 | F | F-3 local health diagnostics | feat: add local health diagnostics |
 
 (Append a row each time work lands.)

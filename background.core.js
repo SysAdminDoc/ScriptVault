@@ -1169,6 +1169,262 @@ const UpdateSystem = {
   }
 };
 
+const LOCAL_HEALTH_SCHEMA = 'scriptvault-local-health/v1';
+const LOCAL_HEALTH_STALE_REMOTE_MS = 180 * 24 * 60 * 60 * 1000;
+const LOCAL_HEALTH_SLOW_SCRIPT_MS = 200;
+const LOCAL_HEALTH_STORAGE_WARNING_PERCENT = 85;
+const LOCAL_HEALTH_STORAGE_CRITICAL_PERCENT = 95;
+const LOCAL_HEALTH_CALLBACK_WARNING_PERCENT = 80;
+
+function _localHealthRoundPercent(value) {
+  return Math.round(value * 10) / 10;
+}
+
+function _localHealthSanitizeError(error) {
+  return error?.message || String(error || 'unknown error');
+}
+
+async function buildLocalHealthStorageSummary() {
+  if (typeof navigator === 'undefined' || !navigator.storage || typeof navigator.storage.estimate !== 'function') {
+    return {
+      available: false,
+      usageBytes: 0,
+      quotaBytes: 0,
+      usagePercent: 0,
+      usageFormatted: '0 B',
+      quotaFormatted: '0 B',
+      level: 'unavailable'
+    };
+  }
+
+  try {
+    const estimate = await navigator.storage.estimate();
+    const usageBytes = Math.max(0, Number(estimate?.usage || 0));
+    const quotaBytes = Math.max(0, Number(estimate?.quota || 0));
+    const usagePercent = quotaBytes > 0 ? _localHealthRoundPercent((usageBytes / quotaBytes) * 100) : 0;
+    const level = usagePercent >= LOCAL_HEALTH_STORAGE_CRITICAL_PERCENT
+      ? 'critical'
+      : usagePercent >= LOCAL_HEALTH_STORAGE_WARNING_PERCENT
+        ? 'warning'
+        : 'ok';
+
+    return {
+      available: true,
+      usageBytes,
+      quotaBytes,
+      usagePercent,
+      usageFormatted: formatBytes(usageBytes),
+      quotaFormatted: formatBytes(quotaBytes),
+      level
+    };
+  } catch (error) {
+    return {
+      available: false,
+      usageBytes: 0,
+      quotaBytes: 0,
+      usagePercent: 0,
+      usageFormatted: '0 B',
+      quotaFormatted: '0 B',
+      level: 'error',
+      error: _localHealthSanitizeError(error)
+    };
+  }
+}
+
+function buildLocalHealthScriptSummary(scripts = []) {
+  const now = Date.now();
+  const summary = {
+    total: scripts.length,
+    enabled: 0,
+    disabled: 0,
+    registrationErrors: 0,
+    scriptsWithExecutionErrors: 0,
+    slowScripts: 0,
+    staleRemoteScripts: 0,
+    sourceIdentityChanged: 0,
+    userModified: 0,
+    syncLocked: 0,
+    slowScriptThresholdMs: LOCAL_HEALTH_SLOW_SCRIPT_MS,
+    staleRemoteThresholdDays: Math.round(LOCAL_HEALTH_STALE_REMOTE_MS / (24 * 60 * 60 * 1000))
+  };
+
+  for (const script of scripts) {
+    if (script?.enabled === false) summary.disabled++;
+    else summary.enabled++;
+
+    if (script?.settings?._registrationError) summary.registrationErrors++;
+    if ((script?.stats?.errors || 0) > 0) summary.scriptsWithExecutionErrors++;
+    if ((script?.stats?.avgTime || 0) >= LOCAL_HEALTH_SLOW_SCRIPT_MS) summary.slowScripts++;
+    if (script?.settings?.sourceIdentityChanged) summary.sourceIdentityChanged++;
+    if (script?.settings?.userModified) summary.userModified++;
+    if (script?.settings?.syncLock) summary.syncLocked++;
+
+    const hasRemoteUpdateSource = !!(script?.meta?.updateURL || script?.meta?.downloadURL);
+    if (hasRemoteUpdateSource && script?.updatedAt && now - script.updatedAt >= LOCAL_HEALTH_STALE_REMOTE_MS) {
+      summary.staleRemoteScripts++;
+    }
+  }
+
+  return summary;
+}
+
+function buildLocalHealthCallbackSummary() {
+  const capSummary = (size, cap) => {
+    const percentOfCap = cap > 0 ? _localHealthRoundPercent((size / cap) * 100) : 0;
+    return {
+      size,
+      cap,
+      percentOfCap,
+      level: percentOfCap >= 100
+        ? 'critical'
+        : percentOfCap >= LOCAL_HEALTH_CALLBACK_WARNING_PERCENT
+          ? 'warning'
+          : 'ok'
+    };
+  };
+
+  return {
+    notificationCallbacks: capSummary(self._notifCallbacks?.size || 0, 500),
+    openTabTrackers: capSummary(self._openTabTrackers?.size || 0, 1000),
+    audioWatchedTabs: {
+      size: self._audioWatchedTabs?.size || 0,
+      level: 'ok'
+    }
+  };
+}
+
+function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, collectionErrors }) {
+  const warnings = [];
+  const push = (id, level, message) => warnings.push({ id, level, message });
+
+  if (runtime?.setupRequired) {
+    push('userScriptsSetup', 'warning', runtime.setupMessage || 'UserScripts API setup requires attention');
+  }
+  if (storage?.level === 'warning' || storage?.level === 'critical') {
+    push('storagePressure', storage.level, `Extension storage is ${storage.usagePercent}% full`);
+  }
+  if (scripts?.registrationErrors > 0) {
+    push('registrationErrors', 'warning', `${scripts.registrationErrors} script registration error${scripts.registrationErrors === 1 ? '' : 's'} recorded`);
+  }
+  if (scripts?.scriptsWithExecutionErrors > 0) {
+    push('executionErrors', 'warning', `${scripts.scriptsWithExecutionErrors} script${scripts.scriptsWithExecutionErrors === 1 ? '' : 's'} have recorded execution errors`);
+  }
+  if (scripts?.slowScripts > 0) {
+    push('slowScripts', 'warning', `${scripts.slowScripts} script${scripts.slowScripts === 1 ? '' : 's'} average at least ${scripts.slowScriptThresholdMs}ms per run`);
+  }
+  if (scripts?.staleRemoteScripts > 0) {
+    push('staleRemoteScripts', 'info', `${scripts.staleRemoteScripts} remote-backed script${scripts.staleRemoteScripts === 1 ? '' : 's'} have not been updated in ${scripts.staleRemoteThresholdDays}+ days`);
+  }
+  if (scripts?.sourceIdentityChanged > 0) {
+    push('sourceIdentityChanged', 'warning', `${scripts.sourceIdentityChanged} script${scripts.sourceIdentityChanged === 1 ? '' : 's'} changed install source identity`);
+  }
+  if (updates?.reviewPendingUpdates > 0) {
+    push('pendingUpdateReview', 'info', `${updates.reviewPendingUpdates} queued update${updates.reviewPendingUpdates === 1 ? '' : 's'} need review`);
+  }
+  for (const [id, block] of Object.entries(callbacks || {})) {
+    if (block?.level === 'warning' || block?.level === 'critical') {
+      push(id, block.level, `${id} is at ${block.percentOfCap}% of its cap`);
+    }
+  }
+  for (const entry of collectionErrors || []) {
+    push(entry.id, 'warning', entry.message);
+  }
+
+  return warnings;
+}
+
+async function buildLocalHealthReport() {
+  const collectionErrors = [];
+  const [runtimeResult, scriptsResult, pendingResult, recentResult, storageResult] = await Promise.allSettled([
+    probeUserScriptsAvailability(),
+    ScriptStorage.getAll(),
+    UpdateSystem.getPendingUpdates(),
+    Promise.resolve(UpdateSystem.getRecentUpdates()),
+    buildLocalHealthStorageSummary()
+  ]);
+
+  const runtime = runtimeResult.status === 'fulfilled'
+    ? runtimeResult.value
+    : buildUserScriptsStatus({
+        userScriptsAvailable: false,
+        chromeVersion: _getChromeVersion(),
+        probeError: _localHealthSanitizeError(runtimeResult.reason)
+      });
+  if (runtimeResult.status === 'rejected') {
+    collectionErrors.push({ id: 'runtimeProbeFailed', message: 'Runtime setup probe failed' });
+  }
+
+  const scripts = scriptsResult.status === 'fulfilled' && Array.isArray(scriptsResult.value)
+    ? buildLocalHealthScriptSummary(scriptsResult.value)
+    : buildLocalHealthScriptSummary([]);
+  if (scriptsResult.status === 'rejected') {
+    collectionErrors.push({ id: 'scriptSummaryFailed', message: 'Script inventory health summary failed' });
+  }
+
+  const pendingUpdates = pendingResult.status === 'fulfilled' && Array.isArray(pendingResult.value)
+    ? pendingResult.value
+    : [];
+  if (pendingResult.status === 'rejected') {
+    collectionErrors.push({ id: 'pendingUpdatesFailed', message: 'Pending update queue health summary failed' });
+  }
+  const recentUpdates = recentResult.status === 'fulfilled' && Array.isArray(recentResult.value)
+    ? recentResult.value
+    : [];
+  const updates = {
+    pendingUpdates: pendingUpdates.length,
+    safePendingUpdates: pendingUpdates.filter(item => item?.safeToApply).length,
+    reviewPendingUpdates: pendingUpdates.filter(item => !item?.safeToApply).length,
+    recentUpdates: recentUpdates.length,
+    pendingCap: UpdateSystem._MAX_PENDING_UPDATES
+  };
+
+  const storage = storageResult.status === 'fulfilled'
+    ? storageResult.value
+    : {
+        available: false,
+        usageBytes: 0,
+        quotaBytes: 0,
+        usagePercent: 0,
+        usageFormatted: '0 B',
+        quotaFormatted: '0 B',
+        level: 'error',
+        error: _localHealthSanitizeError(storageResult.reason)
+      };
+  if (storageResult.status === 'rejected') {
+    collectionErrors.push({ id: 'storageEstimateFailed', message: 'Storage estimate health summary failed' });
+  }
+
+  const callbacks = buildLocalHealthCallbackSummary();
+  const warnings = buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, collectionErrors });
+
+  return {
+    schema: LOCAL_HEALTH_SCHEMA,
+    generatedAt: new Date().toISOString(),
+    privacy: {
+      localOnly: true,
+      includesScriptSource: false,
+      includesScriptNames: false,
+      includesUrls: false,
+      includesExternalBeacons: false
+    },
+    runtime: {
+      userScriptsAvailable: !!runtime.userScriptsAvailable,
+      setupRequired: !!runtime.setupRequired,
+      setupState: runtime.setupState,
+      setupTitle: runtime.setupTitle,
+      setupAction: runtime.setupAction,
+      setupMessage: runtime.setupMessage,
+      chromeVersion: runtime.chromeVersion,
+      apiProbeError: runtime.apiProbeError || ''
+    },
+    storage,
+    scripts,
+    updates,
+    callbacks,
+    warnings
+  };
+}
+
 // ============================================================================
 // Script Subscriptions
 // ============================================================================
@@ -3116,6 +3372,9 @@ async function handleMessage(message, sender) {
         }
         return status;
       }
+
+      case 'getLocalHealthReport':
+        return await buildLocalHealthReport();
 
       case 'repairRuntimeState': {
         try {

@@ -53,6 +53,7 @@ phase.
 - [x] E-8 `navigator.storage.persist()` requested once before meaningful script-data writes, with status recorded and writes left non-blocking — *Source: docs/archive/TODO.md Phase E; commit feat: request persistent storage before script writes*
 - [x] F-1 TypeScript authoritative-source promotion complete for runtime artifacts: `background.core.js` is generated from `src/background/core.ts`, and the promotion gate reports 23 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files — *Source: docs/archive/TODO.md Phase F; commit feat: promote background core runtime*
 - [x] F-2 Release trust pipeline status gate: rollback/trust/status command wiring, Firefox AMO lint/package evidence, and optional credentialed CWS API v2 `fetchStatus` checks now run through `npm run release:store-status` — *Source: docs/archive/TODO.md Phase F; commit feat: add release store status gate*
+- [x] F-3 Local health diagnostics summarize runtime setup, storage pressure, pending update queues, callback-map pressure, and script health warnings for support snapshots without script source, script names, URLs, or external beacons — *Source: docs/archive/TODO.md Phase F; commit feat: add local health diagnostics*
 
 ## Stale / Obsolete Items
 
