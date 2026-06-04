@@ -254,6 +254,21 @@ Chrome Permissions API `request` / `addHostAccessRequest`
 MDN MV3 `optional_host_permissions`
 (`https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/optional_host_permissions`).
 
+2026-06-04 Cycle 13 coverage-source-glob refresh: the open P1 coverage gate
+still stands, but the precise failure mode changed after TypeScript promotion
+and dashboard-module wiring. `vitest.config.mjs` reports coverage only for
+`src/shared/**/*.ts`, `src/modules/**/*.ts`, and `src/bg/**/*.ts`, omitting the
+now-authoritative `src/background/**` sources. A mapped-drive coverage smoke of
+`tests/wrapper-dom-security.test.js` passed 9 tests while the report stayed at
+0% and listed only the configured globs, not the exercised
+`src/background/wrapper-builder.ts`. `ROADMAP.md` now sharpens the P1 item so
+the coverage include set follows the TypeScript promotion map and explicitly
+separates dashboard reachability checks from real coverage thresholds.
+External anchors: Vitest coverage config for `coverage.include` and
+thresholds (`https://vitest.dev/config/coverage.html`) and the Vitest coverage
+guide on including uncovered source files
+(`https://main.vitest.dev/guide/coverage`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
@@ -267,7 +282,7 @@ The dominant constraint remains runtime/TS mirror drift, already tracked under F
 
 The active queue (`ROADMAP.md` → Existing Planned Work) plus the PASS3 deep-audit block
 (`## Research-Driven Additions`) already cover the deepest *runtime* findings (GM_xhr SSRF,
-now-closed plaintext cloud sync, `@crontab` engine, unmounted dashboard modules,
+now-closed plaintext cloud sync, `@crontab` engine, dashboard-module reachability,
 dead What's New / i18n-v2). This 2026-06-03 pass therefore concentrated on the layers PASS3 did **not**
 touch — dependency health, CI/supply-chain, coverage gating, settings/UX, and competitive
 parity — and surfaced one then-breaking issue: a real CVE in a CI dependency.
@@ -276,7 +291,7 @@ That P0 dependency item is now closed in the build lane.
 Top opportunities (one line each):
 
 1. **[Closed 2026-06-04] CI was red on a real CVE** — `web-ext@10.2.0` → `tmp@0.2.5` → GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (CVSS 7.7). `web-ext@^10.3.0` now resolves fixed `tmp@0.2.6`, and the high audit gate exits 0. (P0)
-2. **[Verified] Coverage is blind** — `vitest.config.mjs` sets `all:false` with no thresholds, so the largest runtime files report no real coverage and CI has no floor. (P1)
+2. **[Verified] Coverage is blind** — `vitest.config.mjs` has no thresholds and omits `src/background/**` from coverage includes even though `background.core.js` is now generated from `src/background/core.ts`; a focused coverage smoke passed tests while reporting 0%. (P1)
 3. **[Verified] No dependency-update automation** — 10 devDeps behind latest; the audit gate is reactive only, which is exactly how the `tmp` CVE slipped in. Add Dependabot/Renovate. (P1)
 4. **[Likely] Floating Action tags in a signing/attestation pipeline** — `ci.yml` uses `@v4`/`@v1` tags while also doing SLSA attestation + SBOM; SHA-pin to protect the trusted artifact. (P1)
 5. **[Closed 2026-06-04] Sync envelopes mixed shared script data with device-local state** — CloudSync/EasyCloud now upload only allowlisted user-facing per-script settings and ignore legacy local-only remote keys. (P1)
@@ -311,6 +326,7 @@ Top opportunities (one line each):
 - **Edge artifact/support claims**: `scripts/build-edge.mjs` stages `build-edge/`, writes `edge-artifacts/scriptvault-edge-v<version>.zip`, and emits an `edge-build-<version>.json` release-readiness report; `tests/edge-build.test.js` covers the builder/report; CI now builds and uploads `edge-artifacts/*`; `scripts/generate-browser-support-matrix.mjs`, `README.md`, and `docs/cross-browser-pipeline.md` validate the current Edge report and state that Partner Center publication remains manual while REST update automation is deferred.
 - **Node/toolchain contract**: `package.json:6-8` declares `engines.node >=21.2.0`, `.github/workflows/ci.yml:25-29` still uses setup-node `node-version: 20`, `.nvmrc` / `.node-version` / `.npmrc` are absent, local `npm config get engine-strict` returns `false`, `tests/audit-hardening-2026-06-04*.test.js:12` uses `import.meta.dirname`, and `scripts/check-cws-publish-tooling.mjs:40-58` still checks CWS tooling against a hard-coded Node 20 lower bound.
 - **Host permission recovery**: `manifest.json:37-39` and `manifest-firefox.json:48-50` still require `<all_urls>`; `pages/dashboard.html:6598-6612` / `pages/dashboard.js:10066-10119` expose only a read-only denied-host list plus restore buttons; `pages/install.js:89-134` requests named optional permissions for grants but no optional origins; archived NF-7/NF-19 and Phase 12.12/13.9 hold the old Narrow Host Mode / host-access-request research without an active row.
+- **Coverage/source glob alignment**: `vitest.config.mjs:21-25` uses V8 coverage with `all:false`, no thresholds, and includes only `src/shared/**/*.ts`, `src/modules/**/*.ts`, and `src/bg/**/*.ts`; `ts-source-promotion.json:163-168` marks `background.core.js` as promoted from `src/background/core.ts`; `package.json:54` runs `vitest run --coverage`; a mapped-drive run of `npx vitest run tests/wrapper-dom-security.test.js --coverage --coverage.reporter=json-summary --coverage.reporter=text-summary` passed 9 tests but `coverage/coverage-summary.json` showed 0% total coverage and no `src/background/wrapper-builder.ts` entry.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -324,6 +340,7 @@ Top opportunities (one line each):
   - Microsoft Edge Chrome-port guidance, Add-ons publish flow, supported API table, and update REST API docs anchor the Edge artifact/support-matrix item: https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/port-chrome-extension, https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension, https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/api-support, https://learn.microsoft.com/en-us/microsoft-edge/extensions/update/api/using-addons-api
   - Node ESM, Node v21 package metadata/Corepack, npm engines/engine-strict, and setup-node version-file docs anchor the Node toolchain contract item: https://nodejs.org/api/esm.html#importmetadirname, https://nodejs.org/download/release/v21.1.0/docs/api/packages.html#packagemanager, https://docs.npmjs.com/files/package.json/#engines, https://docs.npmjs.com/cli/using-npm/config#engine-strict, https://github.com/actions/setup-node#usage
   - Chrome optional-permission / host-permission docs, Chrome Permissions API `request` / `addHostAccessRequest`, and MDN MV3 `optional_host_permissions` anchor the host-permission recovery item: https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions, https://developer.chrome.com/docs/extensions/reference/api/permissions, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/optional_host_permissions
+  - Vitest coverage config and guide anchor the coverage-source-glob refinement: https://vitest.dev/config/coverage.html and https://main.vitest.dev/guide/coverage
   - Userscript-manager landscape (Tampermonkey / Violentmonkey / ScriptCat sync, MV3, GitHub-Gist sync, granular execution control): comparison sources at extensionfixes.com and addons.mozilla.org Violentmonkey listing.
 - **Unverifiable here** [Needs validation]: live MV3 runtime behavior (cross-tab GM listener fan-out, omnibox UX, settings round-trips) — no browser run performed this pass; all runtime claims are static-read [Verified] or [Likely].
 
@@ -351,7 +368,7 @@ Top opportunities (one line each):
 
 - **Install**: URL, pasted code, dropped files, ZIP/JSON backup, store/discovery pages, import formats (`pages/install.*`, install-source classification, `InternalHostGuard`, bounded fetch).
 - **Run**: `chrome.userScripts` + wrapper-built GM/TM API, `@match`/`@include`/regex, metadata directives, in-place `userScripts.update`, popup/context-menu one-shot, `sv` omnibox search.
-- **Manage**: dashboard + popup — search, cards/table, collections, snippets, profiles, templates, scheduler, theme editor, dependency graph, heatmap, CSP/DNR helper, linter, debugger, Gist surface, side panel (note O-1: many of these dashboard modules are tested but not user-mounted).
+- **Manage**: dashboard + popup — search, cards/table, collections, snippets, profiles, templates, scheduler, theme editor, dependency graph, heatmap, CSP/DNR helper, linter, debugger, Gist surface, side panel. O-1 is now closed by dashboard-module wiring plus `npm run dashboard:modules:check`, but coverage thresholds remain separate.
 - **Sync/backup**: WebDAV, Google Drive, Dropbox, OneDrive, EasyCloud, browser sync, Gist, scheduled backups, manual import/export (`modules/sync-providers.js`, `modules/backup-scheduler.js`).
 - **Safety**: analyzer, signing/trust receipts, netlog/HAR, error log, DevTools panel, PRIVACY/CWS docs.
 - **Release**: `esbuild` concat build, `build.sh`/`publish.sh`/`cws-setup.sh`, `ci.yml` with audit + 12 custom gate scripts + SLSA attestation + SBOM + Firefox/Edge packaging.
@@ -369,7 +386,7 @@ Top opportunities (one line each):
 | Edge package evidence | Edge Add-ons package/release | `scripts/build-edge.mjs`, `edge-artifacts/edge-build-<version>.json`, support matrix | shipped | CI builds/uploads Edge artifacts; support matrix validates the Edge report |
 | Node toolchain contract | CI/contributor bootstrap/release scripts | `package.json`, `.github/workflows/ci.yml`, missing `.nvmrc` / `.node-version` / `.npmrc`, CWS tooling script | partial | `engines.node` exists, but CI/version files/package-manager pin/engine enforcement drift |
 | Host-permission recovery | Browser site access / runtime diagnostics | required `<all_urls>` manifests, dashboard denied-host list, popup/side panel | partial | runtime host-scope enforcement shipped; withheld-host recovery and optional-host prototype not active |
-| Coverage report | `npm run test:cov` | `vitest.config.mjs` | shipped | `all:false`, **no threshold** |
+| Coverage report | `npm run test:cov` | `vitest.config.mjs`, `coverage/coverage-summary.json` | partial | no threshold; include globs omit `src/background/**`; focused smoke passed tests with 0% reported coverage |
 | Dependency audit policy | manual | `docs/dependency-audit-policy.md` | doc only | **no bot automation** |
 | Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | actions **tag-pinned, not SHA** |
 
@@ -384,7 +401,7 @@ Top opportunities (one line each):
 ## Quality & Friction Findings
 
 - **Closed** — CI audit gate failure on `tmp` CVE-2026-44705 was resolved by the ROADMAP P0 `web-ext@^10.3.0` bump. [Verified]
-- **Major** — Coverage blind (`all:false`, no threshold): the largest runtime files have no enforced coverage. → ROADMAP P1 coverage gate. [Verified]
+- **Major** — Coverage blind: no threshold, `src/background/**` omitted from coverage includes, and a focused smoke can pass tests while reporting 0%. → ROADMAP P1 coverage gate. [Verified]
 - **Major** — No dependency-update automation; reactive audit only (root cause of the CVE slip). → ROADMAP P1 Dependabot/Renovate. [Verified]
 - **Major** — Floating Action tags in an attestation/SBOM pipeline. → ROADMAP P1 SHA-pin. [Likely]
 - **Closed** — AMO vendored-library provenance for minified Firefox-package libraries now has official package/source/hash inventory and a gate. [Verified]
@@ -400,7 +417,8 @@ Top opportunities (one line each):
 
 - Build authority is still concatenated runtime JS, not `src/**` (F-1 tracks convergence); this pass adds no new architectural item there — it is already the top Larger Bet.
 - `vitest` runs `pool: vmThreads, maxWorkers:1` to dodge an `@exodus/bytes` ESM-in-CJS crash under jsdom on the VMware share — a real environment fragility worth noting for contributors (documented in `vitest.config.mjs`, no action needed).
-- `error-log.js` and other `modules/*.js` are generated from `src/modules/*.ts` ("do not edit by hand") — confirms the TS-source direction; coverage gate (P1) should target `src/**`, consistent with that generation flow.
+- `error-log.js`, `background.core.js`, and other promoted runtime files are generated from TypeScript sources; coverage gate (P1) should follow `ts-source-promotion.json`, including `src/background/**`, not only the current `src/modules` / `src/bg` / `src/shared` globs.
+- The VMware-share runner needs a local or `pushd`-mapped path for coverage commands; direct UNC execution made `npx` fall back to `C:\Windows` and fail before Vitest loaded.
 - Toolchain authority is split between `package.json` (`>=21.2.0`), CI (`node-version: 20`), the release runbook's Node 20 CWS note, and a CWS helper script that hard-codes Node 20+. The P2 toolchain item should collapse those into one source of truth.
 - Dependency health: 10 devDeps were behind at research time. The `web-ext`/`tmp` security issue is closed; esbuild/monaco/puppeteer majors remain low-risk dev-only and should fold into the Dependabot grouped PRs rather than ad-hoc bumps.
 
@@ -420,7 +438,7 @@ Top opportunities (one line each):
 
 - **External usage telemetry / analytics beacon** — rejected; conflicts with the local-first privacy posture in `PRIVACY.md`.
 - **Auto-installing subscription members** — rejected; NF-6 deliberately routes new members to the pending-update inbox (consent-first), not silent install.
-- **Auto-wiring every unmounted dashboard module** — rejected as a blanket action; O-1 mandates per-module triage (wire *or* delete), and the "lightweight" competitive axis favors deletion where an inline equivalent already shadows the module.
+- **Reopening dashboard-module wiring as a blanket research item** — rejected; O-1 is closed by concrete reachability wiring and `npm run dashboard:modules:check`. Remaining risk is coverage/a11y depth for those mounted surfaces.
 - **Bumping esbuild/monaco/puppeteer majors ad-hoc this pass** — deferred into the Dependabot grouped-PR flow to avoid an unreviewed major-version churn.
 
 ## Open Questions (genuine blockers only)

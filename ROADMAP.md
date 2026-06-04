@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier and sync-crypto promotions, `ts-source:check` reports 26 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 12 - 2026-06-04.
+> Last researched: Cycle 13 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -309,6 +309,24 @@ Priorities/sizes preserve the source labels.
   later offer a lower-warning optional-host mode without breaking userScripts,
   DNR, cookies, downloads, or cross-origin fetch.
 
+### Researcher Queue (Cycle 13 - 2026-06-04)
+
+- [ ] 🔬 `coverage-source-glob-alignment-2026-06-04` - rechecked the open
+  coverage-gate item after the dashboard-module wiring landed. The risk is now
+  more specific than "all:false": `vitest.config.mjs` scopes coverage to
+  `src/shared/**/*.ts`, `src/modules/**/*.ts`, and `src/bg/**/*.ts`, with no
+  `src/background/**/*.ts` glob and no thresholds, while
+  `ts-source-promotion.json` makes `background.core.js` authoritative from
+  `src/background/core.ts`. A mapped-drive smoke run of
+  `npx vitest run tests/wrapper-dom-security.test.js --coverage
+  --coverage.reporter=json-summary --coverage.reporter=text-summary` passed 9
+  tests but reported 0% total coverage and listed only the configured
+  `src/bg`, `src/modules`, and `src/shared` files, not the exercised
+  `src/background/wrapper-builder.ts`. The promoted row below is still the same
+  P1 coverage gate, but its acceptance must follow the TypeScript promotion map
+  and the newly wired dashboard module surfaces instead of freezing the old
+  include globs.
+
 ### Firefox and mobile release quality
 
 - [x] 🤖 🔧 🔬 P2 — Add a Firefox for Android smoke gate or remove the Android compatibility claim before AMO listing
@@ -530,10 +548,10 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
   - Progress: 2026-06-04 bumped `web-ext` to `^10.3.0`; `npm audit --audit-level=high --omit=optional` reports 0 vulnerabilities, `npm ls tmp` resolves `tmp@0.2.6`, and `npm run firefox:package` remains clean with 0 errors / 0 notices / 139 warnings.
   - Complexity: S
 - [ ] P1 — Coverage measures only test-imported files (`all:false`, no threshold) — gate the runtime
-  - Why: `vitest.config.mjs` sets `coverage.all=false` and declares no `thresholds`, so the v8 report only reflects files a test already imports. Large runtime files (`background.core.js`, `modules/storage.js` 34 KB, `sync-providers.js` 47 KB, the ~760 KB unmounted dashboard modules from O-1) report as "covered" or simply absent, hiding real gaps. There is no coverage floor in CI.
-  - Touches: `vitest.config.mjs` (`all:true` for `src/**`, add `thresholds`), `ci.yml` (`test:cov` gate).
-  - Acceptance: `npm run test:cov` enforces a documented floor; uncovered `src/**` surfaces in the report.
-  - Verify: `npm run test:cov` fails when a `src/**` file drops below the floor.
+  - Why: `vitest.config.mjs` declares no `thresholds` and its `coverage.include` only covers `src/shared/**/*.ts`, `src/modules/**/*.ts`, and `src/bg/**/*.ts`. It omits `src/background/**/*.ts` even though `ts-source-promotion.json` marks `background.core.js` as generated from `src/background/core.ts` and many tests import `src/background/parser.ts`, `wrapper-builder.ts`, `registration.ts`, `resource-loader.ts`, `cloud-sync.ts`, and related files directly. A mapped-drive coverage smoke of `tests/wrapper-dom-security.test.js` passed 9 tests but reported 0% total coverage and listed only the configured `src/bg`, `src/modules`, and `src/shared` files, proving exercised `src/background/**` code can stay invisible. There is still no coverage floor in CI, and the dashboard-module wiring gate checks reachability tokens, not coverage for the newly mounted dashboard surfaces.
+  - Touches: `vitest.config.mjs` (`coverage.include` aligned to authoritative `src/**/*.{ts,tsx}` or generated-source map, exclusions for config/types/generated-only code, thresholds), `ci.yml` (`test:cov` gate), optional coverage summary docs for the UNC/mapped-drive runner quirk, and follow-up dashboard-page coverage strategy if page JS remains outside `src/**`.
+  - Acceptance: `npm run test:cov` enforces a documented floor; uncovered authoritative `src/background/**`, `src/modules/**`, `src/bg/**`, and `src/shared/**` sources appear in the report; a regression fixture fails if an imported `src/background/**` file is absent from `coverage-summary.json`; newly wired dashboard modules are either explicitly out-of-scope with a separate smoke/a11y gate or covered by a documented page-module coverage plan.
+  - Verify: run `npm run test:cov` from a local or `pushd`-mapped path so Node tooling does not inherit a UNC cwd; temporarily drop a covered `src/background/**` fixture below the floor and confirm the gate fails; inspect `coverage/coverage-summary.json` for `src/background/core.ts` and `src/background/wrapper-builder.ts`.
   - Complexity: M
 - [ ] P1 — Automate dependency freshness (Dependabot/Renovate) instead of reactive audit
   - Why: 10 devDeps are behind latest (esbuild 0.27→0.28, monaco 0.52→0.55, puppeteer-core 24→25, vitest/coverage 4.1.3→4.1.8, web-ext 10.2→10.3, etc.); `docs/dependency-audit-policy.md` documents a manual cadence and the CI gate is purely reactive (fails only after a CVE lands, as with `tmp`). A scheduled bot would have surfaced the web-ext bump before CI broke.
