@@ -62,6 +62,12 @@ describe('Firefox AMO validation gate', () => {
     expect(firefoxSmoke).toContain('Firefox userScripts permission button');
     expect(firefoxSmoke).toContain("action: 'saveScript'");
     expect(firefoxSmoke).toContain("action: 'toggleScript'");
+    expect(firefoxSmoke).toContain('async function backupRoundTripSmoke');
+    expect(firefoxSmoke).toContain("action: 'exportZip'");
+    expect(firefoxSmoke).toContain("action: 'importFromZip'");
+    expect(firefoxSmoke).toContain("action: 'importAll'");
+    expect(firefoxSmoke).toContain('timestampsPreserved');
+    expect(firefoxSmoke).toContain('jsonTimestampsPreserved');
     expect(firefoxSmoke).toContain('ranOnTargetPage: runResult.ok');
     expect(firefoxSmoke).toContain('scriptvault-firefox-v${version}.zip');
   });

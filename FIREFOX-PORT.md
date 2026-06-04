@@ -56,8 +56,10 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 **Goal:** existing-Chrome-user data import path + Firefox-specific storage behavior validated.
 
 - [ ] **`unlimitedStorage` + `storage.local` quota.** Firefox has different IDB quotas than Chrome. Validate the 26-script test fixture still fits.
-- [ ] **Import JSON/ZIP backups** from a Chrome export into the Firefox build. No data loss, metadata preserved, `updatedAt` intact.
-- [ ] **Cross-browser ID strategy.** Script IDs are generated via `generateId()` — confirm they're opaque and won't collide with Chrome IDs on re-import.
+- [x] **Import JSON/ZIP backups** from a Chrome export into the Firefox build. No data loss, metadata preserved, `updatedAt` intact.
+  - **Shipped 2026-06-04:** `npm run smoke:firefox` now imports Chrome-shaped ScriptVault JSON and ZIP fixtures into the Firefox package and verifies metadata, disabled state, GM storage values, `createdAt`, and `updatedAt`.
+- [x] **Cross-browser ID strategy.** Script IDs are generated via `generateId()` — confirm they're opaque and won't collide with Chrome IDs on re-import.
+  - **Shipped 2026-06-04:** ScriptVault ZIP exports include safe `scriptId` metadata plus `scriptVault` timestamp/position metadata. Import preserves safe `script_*` IDs and allocates generated IDs for unsafe/reserved IDs; source and runtime tests cover both paths.
 - [ ] **Migration logic** — `modules/migration.js` runs v1.x → v2.0 migration. Confirm it's idempotent so re-importing a migrated file doesn't double-migrate.
 - [ ] **Trash recovery + undo** still works after a Firefox restart (persistent background means state survives, unlike Chrome SW).
 
@@ -175,7 +177,14 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - Fixed smoke-discovered Firefox runtime gaps: `MAX_SCRIPT_SIZE` initialization before `SubscriptionSystem`, native Windows Git Bash preference before WSL bash in `scripts/run-bash.mjs`, Firefox `menus` aliasing to the shared `contextMenus` path, trusted own `moz-extension://` dashboard/popup message senders, and optional Firefox `userScripts` permission onboarding in popup/dashboard.
 - `web-ext` is now `^10.3.0`, clearing the `web-ext -> tmp` CVE path; the generated support matrix now includes both `npm run firefox:package` and `npm run smoke:firefox`.
 - Verification: `npm run firefox:package` (0 errors / 0 notices / 139 warnings), `npm run smoke:firefox` with Firefox Developer Edition 151.0b10, focused Firefox/package/onboarding tests, `npm audit --audit-level=high --omit=optional`, `npm ls tmp`, and `npm run support:matrix:check`.
-- Next Firefox-port session starts at **Phase 2 — Data safety + storage**, beginning with Chrome backup import round-trip validation.
+- Next Firefox-port session starts at **Phase 2 — Data safety + storage**, beginning with storage quota, migration-idempotence, and Firefox restart/trash validation.
+
+### 2026-06-04 — Phase 2 backup import round-trip
+
+- Closed the Phase 2 JSON/ZIP backup import and cross-browser ID strategy rows.
+- `exportToZip()` now writes a ScriptVault-specific `scriptVault` metadata object into each `.options.json` file with `schemaVersion`, `createdAt`, `updatedAt`, and `position`. `importFromZip()` reads that metadata, while still accepting older top-level timestamp fields and legacy Tampermonkey-compatible options.
+- `npm run smoke:firefox` now imports Chrome-shaped JSON and ZIP backup fixtures into Firefox, checks stable `script_*` IDs, restored metadata, disabled state, GM storage values, and preserved timestamps.
+- Focused verification: `npm test -- tests/runtime-import-export.test.js tests/source-backup-modules.test.js tests/firefox-package.test.js`, `node scripts/smoke-firefox-sideload.mjs --skip-package`.
 
 ---
 

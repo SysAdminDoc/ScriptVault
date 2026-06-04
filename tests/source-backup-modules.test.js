@@ -369,6 +369,12 @@ describe('source import/export module', () => {
     const options = JSON.parse(harness.fakeFflate.strFromU8(files['Exported Script.options.json']));
 
     expect(options.scriptId).toBe('script_exported');
+    expect(options.scriptVault).toEqual({
+      schemaVersion: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      position: 0,
+    });
   });
 
   it('preserves stored script ids when importing a ScriptVault zip', async () => {
@@ -376,6 +382,12 @@ describe('source import/export module', () => {
     const options = {
       scriptId: 'script_preserved',
       settings: { enabled: false },
+      scriptVault: {
+        schemaVersion: 1,
+        createdAt: 1700000000000,
+        updatedAt: 1700000004321,
+        position: 7,
+      },
     };
     const storage = { data: { draft: true } };
     const zipBytes = harness.fakeFflate.zipSync({
@@ -400,6 +412,9 @@ describe('source import/export module', () => {
       expect.objectContaining({
         id: 'script_preserved',
         enabled: false,
+        createdAt: 1700000000000,
+        updatedAt: 1700000004321,
+        position: 7,
       }),
     );
     expect(harness.ScriptValues.setAll).toHaveBeenCalledWith('script_preserved', { draft: true });

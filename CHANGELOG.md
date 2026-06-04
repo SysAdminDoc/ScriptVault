@@ -22,6 +22,11 @@ All notable changes to ScriptVault will be documented in this file.
 - **Added Firefox userScripts permission onboarding.** Popup and dashboard setup
   banners request the optional Firefox `userScripts` permission, then re-run the
   live runtime probe and registration repair path.
+- **Validated Chrome-style backups in the Firefox build.** `npm run
+  smoke:firefox` now imports JSON and ZIP backup fixtures into Firefox and
+  checks stable script IDs, metadata, disabled state, GM storage, and timestamps.
+  ScriptVault ZIP exports now include `scriptVault` timestamp metadata so
+  `createdAt`, `updatedAt`, and position survive cross-browser restore.
 - **Cleared the high-severity `web-ext` audit path.** `web-ext` now resolves to
   the `10.3.0` line with fixed `tmp@0.2.6`, restoring the high-level npm audit
   gate.

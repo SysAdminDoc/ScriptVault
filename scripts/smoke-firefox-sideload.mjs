@@ -274,6 +274,17 @@ async function executeAsync(baseUrl, sessionId, script, argsForScript = [], time
   return result.value;
 }
 
+async function runtimeMessage(baseUrl, sessionId, message, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  const result = await executeAsync(baseUrl, sessionId, `
+    const done = arguments[arguments.length - 1];
+    chrome.runtime.sendMessage(arguments[0])
+      .then(response => done(response))
+      .catch(error => done({ error: String(error) }));
+  `, [message], timeoutMs);
+  if (result?.error) fail(`${message.action || 'runtime message'} failed during Firefox smoke: ${result.error}`);
+  return result;
+}
+
 async function findElement(baseUrl, sessionId, selector) {
   const result = await request(baseUrl, 'POST', `/session/${sessionId}/element`, {
     using: 'css selector',
@@ -532,6 +543,133 @@ async function scriptRoundTripSmoke(baseUrl, sessionId, dashboardUrl) {
   };
 }
 
+async function backupRoundTripSmoke(baseUrl, sessionId, dashboardUrl) {
+  await navigate(baseUrl, sessionId, dashboardUrl);
+  const scriptId = 'script_firefox_backup_roundtrip';
+  const code = `// ==UserScript==\n// @name ScriptVault Chrome Backup Fixture\n// @namespace scriptvault/firefox-backup-smoke\n// @version 1.2.3\n// @match https://example.com/*\n// @grant GM_getValue\n// @grant GM_setValue\n// ==/UserScript==\n\nconsole.log('backup round-trip');\n`;
+
+  const save = await runtimeMessage(baseUrl, sessionId, {
+    action: 'saveScript',
+    id: scriptId,
+    code,
+    enabled: false,
+  }, 60000);
+  if (!save?.success || !save?.script?.updatedAt) {
+    fail(`saveScript failed for Firefox backup round-trip: ${JSON.stringify(save)}`);
+  }
+
+  await runtimeMessage(baseUrl, sessionId, {
+    action: 'GM_setValues',
+    scriptId,
+    values: {
+      counter: 42,
+      nested: { source: 'chrome-backup-fixture', ok: true },
+    },
+  }, 60000);
+
+  const exported = await runtimeMessage(baseUrl, sessionId, {
+    action: 'exportZip',
+    options: { includeStorage: true },
+  }, 60000);
+  if (!exported?.zipData) fail(`exportZip did not return zipData: ${JSON.stringify(exported)}`);
+
+  await runtimeMessage(baseUrl, sessionId, {
+    action: 'GM_deleteValues',
+    scriptId,
+    keys: ['counter', 'nested'],
+  }, 60000);
+  const deleted = await runtimeMessage(baseUrl, sessionId, { action: 'deleteScript', scriptId }, 60000);
+  if (!deleted?.success) fail(`deleteScript failed before backup import: ${JSON.stringify(deleted)}`);
+  await runtimeMessage(baseUrl, sessionId, { action: 'emptyTrash' }, 60000);
+
+  const importResult = await runtimeMessage(baseUrl, sessionId, {
+    action: 'importFromZip',
+    zipData: exported.zipData,
+    options: {
+      overwrite: true,
+      sourceLabel: 'Firefox smoke Chrome backup fixture',
+    },
+  }, 60000);
+  if (importResult?.imported < 1 || importResult?.errors?.length) {
+    fail(`importFromZip backup round-trip failed: ${JSON.stringify(importResult)}`);
+  }
+
+  const scriptsAfterImport = await runtimeMessage(baseUrl, sessionId, { action: 'getScripts' }, 60000);
+  const restored = (scriptsAfterImport?.scripts || []).find(script => script.id === scriptId);
+  if (!restored) fail('Backup round-trip script was not restored by importFromZip');
+
+  const storageAfterImport = await runtimeMessage(baseUrl, sessionId, {
+    action: 'getScriptValues',
+    scriptId,
+  }, 60000);
+  const restoredValues = storageAfterImport?.values || {};
+
+  if (restored.enabled !== false) fail('Backup round-trip did not preserve disabled state');
+  const restoredName = restored.metadata?.name || restored.meta?.name || '';
+  if (restoredName !== 'ScriptVault Chrome Backup Fixture') fail('Backup round-trip did not preserve metadata name');
+  if (restored.updatedAt !== save.script.updatedAt) {
+    fail(`Backup round-trip did not preserve updatedAt: before=${save.script.updatedAt} after=${restored.updatedAt}`);
+  }
+  if (restored.createdAt !== save.script.createdAt) {
+    fail(`Backup round-trip did not preserve createdAt: before=${save.script.createdAt} after=${restored.createdAt}`);
+  }
+  if (restoredValues.counter !== 42 || restoredValues.nested?.source !== 'chrome-backup-fixture') {
+    fail(`Backup round-trip did not restore script storage: ${JSON.stringify(restoredValues)}`);
+  }
+
+  const jsonScriptId = 'script_firefox_json_backup';
+  const jsonCreatedAt = 1700000010000;
+  const jsonUpdatedAt = 1700000014321;
+  const jsonCode = `// ==UserScript==\n// @name ScriptVault Chrome JSON Fixture\n// @namespace scriptvault/firefox-json-smoke\n// @version 2.0.0\n// @match https://example.org/*\n// @grant none\n// ==/UserScript==\n\nconsole.log('json backup round-trip');\n`;
+  const jsonImport = await runtimeMessage(baseUrl, sessionId, {
+    action: 'importAll',
+    data: {
+      data: {
+        version: 2,
+        exportedAt: '2026-06-04T00:00:00.000Z',
+        scripts: [{
+          id: jsonScriptId,
+          code: jsonCode,
+          enabled: false,
+          position: 3,
+          createdAt: jsonCreatedAt,
+          updatedAt: jsonUpdatedAt,
+        }],
+      },
+      options: {
+        overwrite: true,
+        importSettings: false,
+      },
+    },
+  }, 60000);
+  if (jsonImport?.imported !== 1 || jsonImport?.errors?.length) {
+    fail(`importAll JSON backup round-trip failed: ${JSON.stringify(jsonImport)}`);
+  }
+  const scriptsAfterJsonImport = await runtimeMessage(baseUrl, sessionId, { action: 'getScripts' }, 60000);
+  const jsonRestored = (scriptsAfterJsonImport?.scripts || []).find(script => script.id === jsonScriptId);
+  if (!jsonRestored) fail('JSON backup script was not restored by importAll');
+  const jsonRestoredName = jsonRestored.metadata?.name || jsonRestored.meta?.name || '';
+  if (
+    jsonRestoredName !== 'ScriptVault Chrome JSON Fixture' ||
+    jsonRestored.enabled !== false ||
+    jsonRestored.createdAt !== jsonCreatedAt ||
+    jsonRestored.updatedAt !== jsonUpdatedAt
+  ) {
+    fail(`JSON backup round-trip did not preserve metadata/state/timestamps: ${JSON.stringify(jsonRestored)}`);
+  }
+
+  return {
+    imported: importResult.imported,
+    restoredId: restored.id,
+    restoredName,
+    restoredEnabled: restored.enabled,
+    storageKeys: Object.keys(restoredValues).sort(),
+    timestampsPreserved: restored.updatedAt === save.script.updatedAt && restored.createdAt === save.script.createdAt,
+    jsonImported: jsonImport.imported,
+    jsonTimestampsPreserved: jsonRestored.updatedAt === jsonUpdatedAt && jsonRestored.createdAt === jsonCreatedAt,
+  };
+}
+
 async function main() {
   const packageJson = await readJsonFile(resolve(ROOT, 'package.json'));
   const firefoxManifest = await readJsonFile(resolve(ROOT, 'manifest-firefox.json'));
@@ -585,6 +723,7 @@ async function main() {
     const dashboardResult = await dashboardSmoke(baseUrl, sessionId, dashboard.uri);
     const popupResult = await popupSmoke(baseUrl, sessionId, popup.uri);
     const scriptResult = await scriptRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
+    const backupResult = await backupRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
 
     console.log('Firefox sideload smoke passed.');
     console.log(JSON.stringify({
@@ -593,6 +732,7 @@ async function main() {
       dashboard: dashboardResult,
       popup: popupResult,
       script: scriptResult,
+      backup: backupResult,
     }, null, 2));
   } catch (error) {
     const tail = geckoOutput.join('').split(/\r?\n/).filter(Boolean).slice(-25).join('\n');
