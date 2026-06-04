@@ -479,9 +479,11 @@ const googledrive = {
     try {
       const token = await this.getToken();
       if (token) {
-        fetchWithTimeout(`https://accounts.google.com/o/oauth2/revoke?token=${token}`, {}, 10_000).catch(
-          () => {},
-        );
+        fetchWithTimeout(`https://accounts.google.com/o/oauth2/revoke`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${encodeURIComponent(token)}`,
+        }, 10_000).catch(() => {});
       }
       await SettingsManager.set({
         googleDriveToken: '',
@@ -536,8 +538,9 @@ const googledrive = {
       `--${boundary}--`,
     ].join('\r\n');
 
+    const safeFileId = existingFile ? String(existingFile.id).replace(/[^a-zA-Z0-9_-]/g, '') : '';
     const url = existingFile
-      ? `https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=multipart`
+      ? `https://www.googleapis.com/upload/drive/v3/files/${safeFileId}?uploadType=multipart`
       : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
 
     const response = await fetchWithTimeout(url, {

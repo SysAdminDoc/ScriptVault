@@ -759,10 +759,10 @@ const BackupScheduler = (() => {
           sizeFormatted: _formatBytes(sizeBytes),
           data
         };
+        await BackupScheduler.pruneOldBackups();
         const backups = await _getBackupList();
         backups.unshift(backup);
         await _saveBackupList(backups);
-        await BackupScheduler.pruneOldBackups();
         return { success: true, backupId: backup.id };
       } catch (err) {
         console.error("[BackupScheduler] importBackup error:", err);

@@ -118,8 +118,8 @@ describe("popup UX controller", () => {
     expect(popupJs).toMatch(/function setUtilitiesSubmenuOpen\(isOpen, \{ restoreFocus = false \} = \{\}\)/);
     expect(popupJs).toMatch(/elements\.utilitiesSubmenu\.hidden = !isOpen;/);
     expect(popupJs).toMatch(/elements\.btnFindScripts\.hidden = !canFind;/);
-    expect(popupJs).toMatch(/if \(elements\.scriptList\) elements\.scriptList\.hidden = true;/);
-    expect(popupJs).toMatch(/if \(elements\.scriptList\) elements\.scriptList\.hidden = false;/);
+    expect(popupJs).toMatch(/if \(elements\.scriptList\)\s*\{[\s\S]*?elements\.scriptList\.hidden = true;/);
+    expect(popupJs).toMatch(/if \(elements\.scriptList\)\s*\{[\s\S]*?elements\.scriptList\.hidden = false;/);
     expect(popupJs).toMatch(/setUtilitiesSubmenuOpen\(false\);\s+await loadPageScripts\(\);/);
     expect(popupJs).toMatch(/if \(e\.key === 'Escape' && elements\.utilitiesSubmenu\?\.classList\.contains\('open'\)\)/);
     expect(popupJs).toMatch(/if \(e\.key === 'Escape' && document\.getElementById\('scriptDropdown'\)\?\.classList\.contains\('open'\)\)/);

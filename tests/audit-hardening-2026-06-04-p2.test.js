@@ -37,8 +37,7 @@ describe('cloud sync post-merge upload (2026-06-04 p2)', () => {
 describe('compareVersions pre-release (2026-06-04 p2)', () => {
   it('compares pre-release identifiers lexicographically', () => {
     const src = fs.readFileSync(path.join(ROOT, 'background.core.js'), 'utf8');
-    // Verify the pre-release comparison block exists
-    expect(src).toContain('Both have pre-release suffixes');
+    expect(src).toContain('if (preRelease1 && preRelease2)');
     expect(src).toContain("v1.replace(/^[^-]*-/, '')");
   });
 

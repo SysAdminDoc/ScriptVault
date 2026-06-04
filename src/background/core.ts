@@ -129,7 +129,7 @@ function parseUserscript(code) {
     require: [],
     requireProvenance: [],
     requireIdentity: [],
-    resource: {},
+    resource: Object.create(null),
     'run-at': 'document-idle',
     noframes: false,
     icon: '',
@@ -946,9 +946,27 @@ const UpdateSystem = {
     // Numeric parts are equal — a pre-release is less than a release of the same version
     if (preRelease1 && !preRelease2) return -1;
     if (!preRelease1 && preRelease2) return 1;
+    // Both have pre-release suffixes: compare lexicographically by dot-separated identifiers
+    if (preRelease1 && preRelease2) {
+      const pre1 = v1.replace(/^[^-]*-/, '').split('.');
+      const pre2 = v2.replace(/^[^-]*-/, '').split('.');
+      for (let i = 0; i < Math.max(pre1.length, pre2.length); i++) {
+        const a = pre1[i] ?? '';
+        const b = pre2[i] ?? '';
+        const aNum = /^\d+$/.test(a) ? parseInt(a, 10) : NaN;
+        const bNum = /^\d+$/.test(b) ? parseInt(b, 10) : NaN;
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          if (aNum > bNum) return 1;
+          if (aNum < bNum) return -1;
+        } else {
+          if (a > b) return 1;
+          if (a < b) return -1;
+        }
+      }
+    }
     return 0;
   },
-  
+
   async applyUpdate(scriptId, newCode, { force = false, sourceUrl = '', fetchDependencyBody = null, fetchProvenanceBundle: fetchProvenanceBundleOption = null } = {}) {
     const script = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
