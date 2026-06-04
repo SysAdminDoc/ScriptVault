@@ -14,8 +14,27 @@
 >
 > **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, and `main` now has additional unreleased 2026-05-24 hardening/release commits including release artifact reconciliation, CWS runbook/audit-gate alignment, Chrome userScripts diagnostics, Firefox AMO validation packaging, and permission/store-copy drift checks. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
 > **2026-05-24 state:** 821 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; Firefox AMO package/source ZIP generation now passes `web-ext lint` with 0 errors and 0 notices; `npm run store-copy:check` covers 30 manifest permission/privacy/store surfaces; no GitHub issues or PRs are currently open.
-> **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. `npm audit --audit-level=high --omit=optional` now fails on `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65, `web-ext@10.3.0` carries fixed `tmp@0.2.6`, `npm run typecheck`, `npm run ts-runtime:check`, and `npm run readme:check` pass when run via `cmd /c pushd` from the UNC checkout, `npm run firefox:lint` passes with 0 errors / 0 notices / 140 warnings, and `npm run support:matrix:check` fails because `README.md` and `docs/cross-browser-pipeline.md` are stale. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser promotion, `ts-source:check` reports 24 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
+> **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. `npm audit --audit-level=high --omit=optional` now fails on `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65, `web-ext@10.3.0` carries fixed `tmp@0.2.6`, `npm run typecheck`, `npm run ts-runtime:check`, and `npm run readme:check` pass when run via `cmd /c pushd` from the UNC checkout, `npm run firefox:lint` passes with 0 errors / 0 notices / 139 warnings, and `npm run support:matrix:check` fails because `README.md` and `docs/cross-browser-pipeline.md` are stale. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser promotion, `ts-source:check` reports 24 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files. Active Sigstore provenance-verifier source/test/generated changes are present in the worktree and must be preserved outside this docs-only research commit.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
+
+> Last researched: Cycle 1 - 2026-06-04.
+
+## Implementer Instructions
+
+- Treat this roadmap as the active build queue. Use `COMPLETED.md` for shipped
+  work, `RESEARCH_REPORT.md` for evidence, and `FIREFOX-PORT.md` for the active
+  Firefox-port phase log.
+- Edit TypeScript source under `src/**`; do not hand-edit `background.js` or
+  generated runtime artifacts. Regenerate/check with the TS runtime scripts.
+- Use `cmd /c pushd` or another UNC-safe route for npm verification from the
+  VMware shared checkout. Shared-drive Vitest instability is known; use focused
+  checks or a local verification copy for broad test runs.
+- Preserve in-flight implementation diffs. The research lane can update
+  planning docs, but package bumps, generated support-matrix docs, and TS
+  promotion artifacts belong to the build lane.
+- Researcher-queue ownership tags: `🤖` means implementer-actionable, `🔧`
+  means user/external/manual gated, `🔬` means researcher-added this cycle, and
+  `✅` means implemented/closed by the build lane.
 
 ---
 
@@ -82,7 +101,7 @@ priority section below.
 ### Documentation hygiene
 
 - [ ] P2 — Refresh generated browser support matrix after current Firefox lint drift
-  - Why: `npm run support:matrix:check` now fails on `README.md`, while a fresh `npm run firefox:lint` reports 0 errors / 0 notices / 140 warnings. The shipped H021 generator is doing its job, but the generated docs are stale against the current lint output.
+  - Why: `npm run support:matrix:check` now fails on `README.md`, while a fresh `npm run firefox:lint` reports 0 errors / 0 notices / 139 warnings. The shipped H021 generator is doing its job, but the generated docs are stale against the current lint output.
   - Touches: `README.md`, `docs/cross-browser-pipeline.md` if the generator updates it, and any checked lint artifact inputs.
   - Acceptance: `npm run support:matrix:check` passes without hand-editing generated blocks; matrix warning count and last-verification date match the latest Firefox lint artifact.
   - Source: 2026-06-04 research refresh.
@@ -100,6 +119,18 @@ priority section below.
 Net-new findings from the third-pass deep audit of the live runtime
 (2026-06-03), folded from `docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md`.
 Priorities/sizes preserve the source labels.
+
+### Researcher Queue (Cycle 1 - 2026-06-04)
+
+- [x] 🔬 `dependency-firefox-refresh-2026-06-04` - rechecked the current
+  dependency and Firefox-port state. `npm audit --audit-level=high
+  --omit=optional` fails on `web-ext@10.2.0 -> tmp@0.2.5` /
+  GHSA-ph9p-34f9-6g65; `web-ext@10.3.0` depends on fixed `tmp@0.2.6`.
+  `npm run typecheck` and `npm run ts-runtime:check` pass through the UNC-safe
+  `cmd /c pushd` route; `npm run support:matrix:check` fails because
+  `README.md` and `docs/cross-browser-pipeline.md` are stale generated docs.
+  No duplicate rows were promoted: the existing P0 web-ext bump and P2 support
+  matrix refresh rows are the correct build-lane handoff.
 
 ### Security and data safety
 

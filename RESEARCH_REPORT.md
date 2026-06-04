@@ -2,6 +2,24 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-04 freshness refresh: the 2026-06-03 findings still stand, and the
+currently-breaking dependency item is sharper. At HEAD `04087ed`,
+`npm audit --audit-level=high --omit=optional` fails on
+`web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65, while `web-ext@10.3.0`
+depends on the fixed `tmp@0.2.6`. UNC-safe verification via
+`cmd /c pushd` showed `npm run typecheck`, `npm run ts-runtime:check`, and
+`npm run readme:check` passing; `npm run firefox:lint` passing with 0 errors,
+0 notices, and 139 warnings; and `npm run support:matrix:check` failing
+because `README.md` and `docs/cross-browser-pipeline.md` are stale against the
+generated support matrix. The live tree now contains active source/test/generated
+changes for a Sigstore provenance-verifier lane; this research pass preserved
+those non-doc changes and only reconciled the planning docs. Current external
+anchors: GitHub
+Advisory GHSA-ph9p-34f9-6g65 (`https://github.com/advisories/GHSA-ph9p-34f9-6g65`),
+the `web-ext` npm package (`https://www.npmjs.com/package/web-ext`), and the
+Chrome `userScripts` API reference
+(`https://developer.chrome.com/docs/extensions/reference/api/userScripts`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
