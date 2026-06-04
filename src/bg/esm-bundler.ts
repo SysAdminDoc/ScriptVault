@@ -3,7 +3,8 @@
 
 import type { ScriptMeta } from '../types/script';
 import type { Settings } from '../types/settings';
-import { fetchRequireScript } from '../background/resource-loader';
+
+declare function fetchRequireScript(url: string): Promise<string | null>;
 
 declare const ScriptAnalyzer: {
   _ensureOffscreen(): Promise<void>;
@@ -131,11 +132,11 @@ function exportReplacement(exp: ESMExportInfo, code: string): string {
   }
   const declaration = code.slice(exp.declarationStart, exp.declarationEnd);
   if (exp.kind === 'default') {
-    if (exp.localName) return `${declaration}\n__exports.default = ${exp.localName};`;
+    if (exp.localName) return [declaration, `__exports.default = ${exp.localName};`].join('\n');
     return `__exports.default = ${declaration};`;
   }
   const assignments = (exp.names || []).map((name) => `__exports.${name} = ${name};`).join('\n');
-  return `${declaration}\n${assignments}`;
+  return [declaration, assignments].join('\n');
 }
 
 export function rewriteModuleSyntax(code: string, analysis: ESMSyntaxInfo): string {
@@ -156,7 +157,11 @@ export function rewriteModuleSyntax(code: string, analysis: ESMSyntaxInfo): stri
 
 function buildBundle(entryCode: string, modules: BundleContext['modules']): string {
   const moduleDefs = [...modules.values()]
-    .map((mod) => `__modules[${JSON.stringify(mod.url)}] = function(__module, __exports, __require) {\n${mod.code}\n};`)
+    .map((mod) => [
+      `__modules[${JSON.stringify(mod.url)}] = function(__module, __exports, __require) {`,
+      mod.code,
+      '};',
+    ].join('\n'))
     .join('\n');
   return [
     '(function () {',

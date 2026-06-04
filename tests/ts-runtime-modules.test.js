@@ -119,6 +119,13 @@ describe('TS runtime module generator', () => {
         exportName: 'ScriptAnalyzer',
       }),
       expect.objectContaining({
+        id: 'esm-bundler',
+        source: 'src/bg/esm-bundler.ts',
+        output: 'bg/esm-bundler.js',
+        exportName: 'ESMUserscriptBundler',
+        selfExportName: 'ESMUserscriptBundler',
+      }),
+      expect.objectContaining({
         id: 'workspaces',
         source: 'src/bg/workspaces.ts',
         output: 'bg/workspaces.js',
