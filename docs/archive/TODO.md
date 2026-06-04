@@ -120,7 +120,7 @@
   - Verification: `npm test -- tests/local-health-report.test.js tests/support-snapshot-redaction.test.js tests/user-scripts-onboarding.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`.
 - [ ] **F-4** Sigstore `@require-provenance` implementation
   - Evidence: `docs/require-provenance-design.md`; design-complete.
-  - Progress: 2026-06-04 Phase A parser/storage foundation, Phase B bundle parser, and Phase C message-signature verifier shipped. `@require-provenance` and `@require-identity` persist through the main parser and public API install path; `modules/sigstore-bundle-parser.js` validates Sigstore v0.3 JSON; `modules/sigstore-bundle-verifier.js` verifies message-signature bundles and trust receipts opportunistically record signature/bundle outcomes. Fulcio root/expiry verification, UI, and author guide remain open.
+  - Progress: 2026-06-04 Phase A parser/storage foundation, Phase B bundle parser, Phase C message-signature verifier, and Phase D Fulcio root/validity checks shipped. `@require-provenance` and `@require-identity` persist through the main parser and public API install path; `modules/sigstore-bundle-parser.js` validates Sigstore v0.3 JSON; `modules/sigstore-bundle-verifier.js` verifies message-signature bundles, chains certificates to the bundled Fulcio v1 root, and trust receipts opportunistically record signature/bundle/root outcomes. UI and author guide remain open; RFC3161/Rekor timestamp proof remains Phase 2 defense-in-depth.
 - [ ] **F-5** Module-mode service worker (Chrome 124+ `"type":"module"` background)
   - Evidence: PASS2 NF-17.
 

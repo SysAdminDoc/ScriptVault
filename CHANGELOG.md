@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Fulcio root verification for require provenance
+
+- **Sigstore verifier now checks the certificate chain.** The verifier bundles
+  the official Fulcio v1 root certificate, supports injected roots for tests,
+  and verifies leaf/intermediate ECDSA certificate signatures through the
+  trusted root.
+- **Trust receipts now distinguish root failures.** Provenance receipts can
+  record `root-verification-failed`, `rootVerified: verified|failed`, and the
+  leaf certificate validity window. RFC3161/Rekor timestamp proof remains the
+  later defense-in-depth phase.
+
 ### 2026-06-04 — Sigstore message-signature verifier
 
 - **Sigstore message-signature verification now feeds trust receipts.**
@@ -14,7 +25,8 @@ All notable changes to ScriptVault will be documented in this file.
   For declared `@require-provenance` entries, receipts can now store
   `signature-verified`, `signature-failed`, `bundle-unavailable`, or
   `unsupported-bundle` alongside certificate identity, issuer, digest, and
-  signature flags. Fulcio root/expiry checks remain the next phase.
+  signature flags. Fulcio root/expiry checks are covered by the later root
+  verification entry.
 
 ### 2026-06-04 — Sigstore bundle parser
 
