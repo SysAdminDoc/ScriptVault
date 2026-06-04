@@ -43,6 +43,14 @@ passphrase. The dashboard exposes the opt-in, and
 `syncEncryptionPassphrase` is handled as a redacted sync credential in exports
 and backups.
 
+2026-06-04 build-lane privileged host-scope update: GM network, download,
+cookie, and DNR primitives now enforce the script's effective run-host scope
+before using ambient extension permissions. `@connect` explicitly widens
+network/download/DNR targets, cookie access stays run-host scoped unless the
+advanced cross-scope override is enabled, DNR rules carry initiator-domain
+constraints, and CSP header mutation is gated by Modify CSP / high-privilege
+override.
+
 2026-06-04 build-lane Firefox Android update: the unverified Android
 compatibility claim is deferred until a real device/emulator smoke exists.
 `manifest-firefox.json` no longer declares `gecko_android`, and the generated

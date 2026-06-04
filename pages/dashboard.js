@@ -1573,6 +1573,7 @@
         elements.settingsDefaultTabTypes = document.getElementById('settingsDefaultTabTypes');
         elements.settingsAllowLocalFiles = document.getElementById('settingsAllowLocalFiles');
         elements.settingsAllowCookies = document.getElementById('settingsAllowCookies');
+        elements.settingsAllowHighPrivilegeScriptApis = document.getElementById('settingsAllowHighPrivilegeScriptApis');
         elements.settingsAllowCommunication = document.getElementById('settingsAllowCommunication');
         elements.settingsSRI = document.getElementById('settingsSRI');
         elements.settingsIncludeMode = document.getElementById('settingsIncludeMode');
@@ -2786,6 +2787,7 @@
         if (elements.settingsDefaultTabTypes) elements.settingsDefaultTabTypes.value = s.defaultTabTypes || 'all';
         if (elements.settingsAllowLocalFiles) elements.settingsAllowLocalFiles.value = s.allowLocalFiles || 'all';
         if (elements.settingsAllowCookies) elements.settingsAllowCookies.value = s.allowCookies || 'all';
+        if (elements.settingsAllowHighPrivilegeScriptApis) elements.settingsAllowHighPrivilegeScriptApis.checked = s.allowHighPrivilegeScriptApis === true;
         if (elements.settingsAllowCommunication) elements.settingsAllowCommunication.value = s.allowCommunication || 'version';
         if (elements.settingsSRI) elements.settingsSRI.value = s.sri || 'validate';
         if (elements.settingsIncludeMode) elements.settingsIncludeMode.value = s.includeMode || 'default';
@@ -9812,6 +9814,7 @@
             settingsDefaultTabTypes: ['defaultTabTypes', 'value'],
             settingsAllowLocalFiles: ['allowLocalFiles', 'value'],
             settingsAllowCookies: ['allowCookies', 'value'],
+            settingsAllowHighPrivilegeScriptApis: ['allowHighPrivilegeScriptApis', 'checked'],
             settingsAllowCommunication: ['allowCommunication', 'value'],
             settingsSRI: ['sri', 'value'],
             settingsIncludeMode: ['includeMode', 'value'],

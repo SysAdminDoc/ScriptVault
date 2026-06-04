@@ -106,6 +106,8 @@ const StorageModule = (() => {
     xhrTimeout: 3e4,
     allowInternalXhr: false,
     allowInternalSyncEndpoints: false,
+    allowHighPrivilegeScriptApis: false,
+    modifyCSP: "auto",
     blacklist: [],
     badgeInfo: "running",
     autoReload: false,

@@ -92,7 +92,7 @@ function loadConnectPolicyHelpers() {
     throw new Error('Unable to locate @connect helper functions in background.core.js');
   }
   const helperCode = backgroundCoreCode.slice(start, end);
-  return new Function(`${helperCode}; return { evaluateConnectPolicy, normalizeConnectHost, shouldAllowInternalXhr };`)();
+  return new Function(`${helperCode}; return { evaluateConnectPolicy, normalizeConnectHost, shouldAllowInternalXhr, isScriptHostScopeAllowed, evaluateScriptHostScopePolicy };`)();
 }
 
 // Pull the user-script messaging gate (constants + helpers + onMessage/onUserScriptMessage
@@ -245,6 +245,53 @@ describe('content script bridge security boundary', () => {
       allowed: false,
       error: 'Invalid URL',
     });
+  });
+
+  it('limits privileged network calls to script host scope unless @connect widens it', () => {
+    const { evaluateConnectPolicy, isScriptHostScopeAllowed } = loadConnectPolicyHelpers();
+    const scopedScript = {
+      meta: {
+        name: 'Scoped',
+        match: ['https://example.com/*'],
+        include: [],
+        connect: [],
+      },
+      settings: {},
+    };
+
+    expect(isScriptHostScopeAllowed(scopedScript, 'https://example.com/api')).toBe(true);
+    expect(evaluateConnectPolicy(scopedScript, 'https://example.com/api')).toMatchObject({ allowed: true });
+    expect(evaluateConnectPolicy(scopedScript, 'https://other.com/api')).toMatchObject({
+      allowed: false,
+      error: 'Connection to other.com blocked by script host scope',
+    });
+
+    expect(evaluateConnectPolicy({
+      ...scopedScript,
+      meta: { ...scopedScript.meta, connect: ['other.com'] },
+    }, 'https://other.com/api')).toMatchObject({ allowed: true });
+  });
+
+  it('keeps cookie host scope separate from @connect unless the high-privilege override is enabled', () => {
+    const { evaluateScriptHostScopePolicy } = loadConnectPolicyHelpers();
+    const scopedScript = {
+      meta: {
+        name: 'Cookie Scope',
+        match: ['https://example.com/*'],
+        include: [],
+        connect: ['other.com'],
+      },
+      settings: {},
+    };
+
+    expect(evaluateScriptHostScopePolicy(scopedScript, 'https://example.com/', 'Cookie access', {})).toMatchObject({ allowed: true });
+    expect(evaluateScriptHostScopePolicy(scopedScript, 'https://other.com/', 'Cookie access', {})).toMatchObject({
+      allowed: false,
+      error: 'Cookie access to other.com blocked by script host scope',
+    });
+    expect(evaluateScriptHostScopePolicy(scopedScript, 'https://other.com/', 'Cookie access', {
+      allowHighPrivilegeScriptApis: true,
+    })).toMatchObject({ allowed: true });
   });
 
   it('keeps internal GM_xhr blocked unless explicitly opted in', () => {

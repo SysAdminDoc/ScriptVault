@@ -82,6 +82,23 @@ describe('source hardening parity guards', () => {
     expect(core).toContain("GM_xmlhttpRequest redirected to internal host");
   });
 
+  it('keeps privileged GM network, cookie, and DNR APIs behind script host-scope policy', () => {
+    const core = source('src/background/core.ts');
+    const dnr = source('src/background/dnr-rules.ts');
+    const wrapper = source('src/background/wrapper-builder.ts');
+
+    expect(core).toContain('function isScriptHostScopeAllowed(script, requestUrl)');
+    expect(core).toContain('Connection to ${hostname} blocked by script host scope');
+    expect(core).toContain("GM_download URL rejected");
+    expect(core).toContain('evaluateScriptHostScopePolicy(cookieScript, data.url,');
+    expect(core).toContain('_validateWebRequestRulesForScript(script, rules, settings)');
+    expect(core).toContain('GM_webRequest CSP header changes require Modify CSP = yes');
+    expect(dnr).toContain('function validateWebRequestRulesForScript(');
+    expect(dnr).toContain('condition.initiatorDomains = options.initiatorDomains;');
+    expect(wrapper).toContain("sendToBackground('GM_cookie_list', { ...(details || {}), scriptId })");
+    expect(wrapper).toContain("sendToBackground('GM_webRequest', { scriptId, rules: ruleArray })");
+  });
+
   it('keeps sync provider endpoints behind the internal-host preflight and redirect guard', () => {
     const providers = source('src/modules/sync-providers.ts');
     expect(providers).toContain("import {\n  classifyFetchUrl,\n  classifyResponseUrl,");

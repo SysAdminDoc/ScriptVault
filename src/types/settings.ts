@@ -86,6 +86,8 @@ export interface Settings {
   xhrTimeout: number;
   allowInternalXhr: boolean;
   allowInternalSyncEndpoints: boolean;
+  allowHighPrivilegeScriptApis: boolean;
+  modifyCSP: 'auto' | 'yes' | 'no';
 
   // Blacklist
   blacklist: string[];

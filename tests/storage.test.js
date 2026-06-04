@@ -96,6 +96,8 @@ describe('SettingsManager', () => {
     expect(settings.dashboardVirtualizationThreshold).toBe(500);
     expect(settings.allowInternalXhr).toBe(false);
     expect(settings.allowInternalSyncEndpoints).toBe(false);
+    expect(settings.allowHighPrivilegeScriptApis).toBe(false);
+    expect(settings.modifyCSP).toBe('auto');
   });
 
   it('merges stored settings with defaults', async () => {

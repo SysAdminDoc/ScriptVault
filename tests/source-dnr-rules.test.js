@@ -50,6 +50,22 @@ async function loadFreshDnrModule(scripts = []) {
   return { ...module, debugLog, getAll };
 }
 
+function scriptContext(overrides = {}) {
+  const { meta = {}, ...rest } = overrides;
+  return {
+    id: 'script-a',
+    meta: {
+      name: 'Scoped Script',
+      match: ['https://example.com/*'],
+      include: [],
+      connect: [],
+      ...meta,
+    },
+    settings: {},
+    ...rest,
+  };
+}
+
 beforeEach(() => {
   globalThis.__resetStorageMock();
   vi.restoreAllMocks();
@@ -60,12 +76,14 @@ describe('source DNR GM_webRequest rules', () => {
     const dnr = createDnrHarness();
     const first = await loadFreshDnrModule();
 
-    await first.applyWebRequestRules('script-a', [
+    const result = await first.applyWebRequestRules('script-a', [
       { selector: { url: '||example.com' }, action: { cancel: true } },
-    ]);
+    ], { script: scriptContext() });
 
     const ruleId = first._makeRuleId('script-a', 0);
+    expect(result).toMatchObject({ success: true, count: 1 });
     expect(dnr.liveRules().map((rule) => rule.id)).toEqual([ruleId]);
+    expect(dnr.liveRules()[0].condition.initiatorDomains).toEqual(['example.com']);
     expect(await readStoredMap()).toEqual({ 'script-a': [ruleId] });
 
     const afterRestart = await loadFreshDnrModule();
@@ -82,7 +100,7 @@ describe('source DNR GM_webRequest rules', () => {
 
     await module.applyWebRequestRules('script-b', [
       { selector: { url: '||rollback.example' }, action: { cancel: true } },
-    ]);
+    ], { script: scriptContext({ id: 'script-b', meta: { match: ['https://rollback.example/*'] } }) });
 
     expect(dnr.liveRules()).toEqual([]);
     expect(dnr.updateDynamicRules).toHaveBeenCalledWith(expect.objectContaining({
@@ -132,5 +150,73 @@ describe('source DNR GM_webRequest rules', () => {
 
     expect(dnr.liveRules().map((rule) => rule.id)).toEqual([liveRuleId]);
     expect(await readStoredMap()).toEqual({ live: [liveRuleId] });
+  });
+
+  it('rejects rules targeting hosts outside script scope without @connect', async () => {
+    const dnr = createDnrHarness();
+    const module = await loadFreshDnrModule();
+
+    const result = await module.applyWebRequestRules('script-scope', [
+      { selector: { url: '||other.com' }, action: { cancel: true } },
+    ], { script: scriptContext({ id: 'script-scope' }) });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: 'GM_webRequest target other.com blocked by script host scope',
+    });
+    expect(dnr.liveRules()).toEqual([]);
+  });
+
+  it('allows explicit @connect hosts while keeping DNR initiator scoped to run hosts', async () => {
+    const dnr = createDnrHarness();
+    const module = await loadFreshDnrModule();
+
+    const result = await module.applyWebRequestRules('script-connect', [
+      { selector: { include: ['||api.other.com'] }, action: 'cancel' },
+    ], {
+      script: scriptContext({
+        id: 'script-connect',
+        meta: {
+          match: ['https://example.com/*'],
+          connect: ['api.other.com'],
+        },
+      }),
+    });
+
+    expect(result).toMatchObject({ success: true, count: 1 });
+    expect(dnr.liveRules()).toHaveLength(1);
+    expect(dnr.liveRules()[0]).toMatchObject({
+      condition: {
+        urlFilter: '||api.other.com',
+        initiatorDomains: ['example.com'],
+      },
+      action: { type: 'block' },
+    });
+  });
+
+  it('rejects CSP header stripping unless Modify CSP is explicitly enabled', async () => {
+    const dnr = createDnrHarness();
+    const module = await loadFreshDnrModule();
+    const cspRule = {
+      selector: { url: '||example.com' },
+      action: { setResponseHeaders: { 'content-security-policy': null } },
+    };
+
+    const blocked = await module.applyWebRequestRules('script-csp', [cspRule], {
+      script: scriptContext({ id: 'script-csp' }),
+      settings: { modifyCSP: 'auto' },
+    });
+    expect(blocked).toMatchObject({
+      success: false,
+      error: 'GM_webRequest CSP header changes require Modify CSP = yes',
+    });
+    expect(dnr.liveRules()).toEqual([]);
+
+    const allowed = await module.applyWebRequestRules('script-csp', [cspRule], {
+      script: scriptContext({ id: 'script-csp' }),
+      settings: { modifyCSP: 'yes' },
+    });
+    expect(allowed).toMatchObject({ success: true, count: 1 });
+    expect(dnr.liveRules()).toHaveLength(1);
   });
 });

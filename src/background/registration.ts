@@ -508,7 +508,11 @@ export async function registerScript(script: Script, options: { useUpdate?: bool
       const rules: WebRequestRule[] = (
         Array.isArray(meta.webRequest) ? meta.webRequest : [meta.webRequest]
       ) as unknown as WebRequestRule[];
-      await applyWebRequestRules(script.id, rules);
+      const globalSettings = await SettingsManager.get() as unknown as Settings;
+      const ruleResult = await applyWebRequestRules(script.id, rules, { script, settings: globalSettings });
+      if (!ruleResult.success) {
+        throw new Error(ruleResult.error || 'GM_webRequest rule rejected');
+      }
     }
   } catch (e: unknown) {
     console.error(`[ScriptVault] Failed to register ${script.meta?.name || script.id}:`, e);
