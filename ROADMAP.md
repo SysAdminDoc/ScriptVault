@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier promotions, `ts-source:check` reports 25 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 3 - 2026-06-04.
+> Last researched: Cycle 4 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -194,6 +194,16 @@ Priorities/sizes preserve the source labels.
   The promoted row below completes the sync-provider portion of historical H073
   without duplicating the closed script-source / GM_xhr guard work.
 
+### Researcher Queue (Cycle 4 - 2026-06-04)
+
+- [x] 🔬 `backup-settings-credential-redaction-2026-06-04` - rechecked manual
+  export and scheduled-backup settings handling after the support snapshot
+  redaction work. The remaining gap is separate: JSON exports and ZIP backups
+  can serialize global settings wholesale, while those settings include OAuth
+  tokens, WebDAV passwords, and S3 access keys. The promoted row below avoids a
+  duplicate of support snapshot redaction and cloud-sync E2E encryption by
+  targeting backup/export credential inclusion and restore semantics.
+
 ### Security and data safety
 
 - [x] P0 — `GM_xmlhttpRequest` internal-host / SSRF guard
@@ -209,6 +219,13 @@ Priorities/sizes preserve the source labels.
   - Touches: `src/modules/sync-providers.ts`, generated `modules/sync-providers.js`, `src/background/core.ts`, `src/config/settings-defaults.json`, `src/types/settings.ts`, sync provider tests, settings/help copy.
   - Acceptance: WebDAV `test`/`upload`/`download` and S3 `test`/`upload`/`download` reject loopback, link-local, metadata, RFC1918, CGNAT, ULA, and blocked redirect targets by default; a per-provider explicit local/private endpoint opt-in permits intended LAN/self-hosted endpoints with visible risk copy; fixed-host OAuth providers keep their existing behavior.
   - Verify: provider unit tests for `http://169.254.169.254`, `http://127.0.0.1`, `http://192.168.1.20`, private IPv6/ULA, WebDAV redirect-to-internal, and S3 path-style/virtual-host URLs with and without the opt-in; `npm run ts-runtime:check`; focused sync provider tests.
+  - Complexity: M
+- [ ] 🤖 🔬 P1 — Redact or separately gate credential-bearing settings in vault exports and scheduled backups
+  - Why: `exportAllScripts()` and the backup scheduler treat "settings" as a single portable blob, but sync provider settings include long-lived OAuth access/refresh tokens, WebDAV passwords, and S3 access keys. A normal JSON/ZIP backup or cloud-stored scheduled backup can therefore copy credentials into ordinary archive files unless the user makes a separate, explicit credential export choice.
+  - Evidence: `src/background/import-export.ts:123-130,226-228`; `src/modules/backup-scheduler.ts:488-490,1028-1035,1602-1609,1862`; `modules/backup-scheduler.js:172-174,591-597,1048-1057`; `pages/dashboard.html:6764,6806`; `pages/dashboard.js:634,7839,10537,10816`; `tests/source-sync-providers.test.js:179-211`; `pages/dashboard.js:2716,2720-2721,9824,9867-9868`; OWASP Secrets Management identifies API keys, passwords, IAM permissions, certificates, and similar values as secrets (`https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html`); Google OAuth guidance requires secure storage for refresh/access tokens (`https://developers.google.com/identity/protocols/oauth2/resources/best-practices`); AWS treats access keys as long-term credentials and warns against placing access-key material in application/project files (`https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html`).
+  - Touches: `src/background/import-export.ts`, `src/modules/backup-scheduler.ts`, generated `modules/backup-scheduler.js`, dashboard export/restore UI, settings disclosure copy, import/export and backup scheduler tests.
+  - Acceptance: shared settings-serialization helper omits credential-bearing keys by default for JSON export, ZIP export, scheduled backups, and cloud backup payloads; a separate "Include sync credentials and tokens" opt-in shows risk copy and stamps archive metadata such as `settingsCredentialsIncluded: true`; restore/import preserves current credential fields by default and only overwrites them when archive metadata plus restore confirmation both opt in; legacy archives with credential keys list skipped credential fields in the restore receipt without printing values; backup verification reports credential presence as boolean/category counts only.
+  - Verify: focused tests prove sentinel OAuth/WebDAV/S3 secrets are absent from default JSON/ZIP/scheduled backups, present only under explicit opt-in metadata, and do not overwrite existing credentials on default restore; legacy archive restore receipt lists skipped credential keys; `npm run ts-runtime:check`; relevant import/export and backup scheduler tests.
   - Complexity: M
 - [ ] P1 — Optional client-side E2E encryption for cloud sync
   - Why: synced script source (often embedding API keys) uploads as plaintext `JSON.stringify` to every provider; a WebDAV operator or compromised Drive/Dropbox account reads the whole library.
