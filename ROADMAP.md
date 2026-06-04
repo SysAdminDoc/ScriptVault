@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier promotions, `ts-source:check` reports 25 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 2 - 2026-06-04.
+> Last researched: Cycle 3 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -174,6 +174,15 @@ Priorities/sizes preserve the source labels.
   prevents cross-device semantic drift from syncing local conflict/error/runtime
   flags as normal script settings.
 
+### Researcher Queue (Cycle 3 - 2026-06-04)
+
+- [x] 🔬 `sync-endpoint-egress-guard-2026-06-04` - rechecked the now-shipped
+  GM_xhr internal-host guard against the remaining network-egress theme. The
+  active GM_xhr row is closed, but WebDAV and S3 sync still build fetch URLs from
+  user-configured endpoints and do not share `InternalHostGuard` pre/post checks.
+  The promoted row below completes the sync-provider portion of historical H073
+  without duplicating the closed script-source / GM_xhr guard work.
+
 ### Security and data safety
 
 - [x] P0 — `GM_xmlhttpRequest` internal-host / SSRF guard
@@ -183,6 +192,13 @@ Priorities/sizes preserve the source labels.
   - Progress: 2026-06-04 GM_xhr now runs `InternalHostGuard.classifyFetchUrl()` after `@connect` passes and `classifyResponseUrl()` immediately after fetch resolves, before response bodies are read. Internal hosts are blocked by default even with empty/`*` `@connect`; loopback development URLs require explicit `@connect localhost`, while the new advanced `allowInternalXhr` setting remains a global escape hatch.
   - Verification: `npm test -- tests/content-bridge-security.test.js tests/storage.test.js tests/source-hardening-parity.test.js tests/xhr.test.js tests/internal-host-guard.test.js`; `npm run check`; `npm run ts-runtime:check`; `npm run support:matrix:check`; `npm audit --audit-level=high --omit=optional`; `npm run readme:check`; `npm run smoke:dashboard`; `npm run smoke:firefox`; `git diff --check`.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-1.
+- [ ] 🤖 🔬 P1 — Apply internal-host guard to user-configured sync provider endpoints
+  - Why: WebDAV and S3 sync endpoints are arbitrary URLs stored in settings, and the provider paths still fetch them directly. A restored/imported or mistaken endpoint can make the extension send Basic Auth or SigV4-signed sync requests to loopback, link-local metadata, or private-network hosts; legitimate local Nextcloud/MinIO users need an explicit opt-in rather than an implicit bypass.
+  - Evidence: `src/modules/sync-providers.ts:83-87,202-242,1205-1253,1372-1439`; `src/background/core.ts:2000,2130,2225,2229,4030,4049`; historical H073 at `ROADMAP.md:482` and network-egress theme at `ROADMAP.md:508`; OWASP SSRF prevention guidance (`https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html`); AWS IMDS endpoint risk (`https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html`); Chrome extension cross-origin fetch model (`https://developer.chrome.com/docs/extensions/develop/concepts/network-requests`).
+  - Touches: `src/modules/sync-providers.ts`, generated `modules/sync-providers.js`, `src/background/core.ts`, `src/config/settings-defaults.json`, `src/types/settings.ts`, sync provider tests, settings/help copy.
+  - Acceptance: WebDAV `test`/`upload`/`download` and S3 `test`/`upload`/`download` reject loopback, link-local, metadata, RFC1918, CGNAT, ULA, and blocked redirect targets by default; a per-provider explicit local/private endpoint opt-in permits intended LAN/self-hosted endpoints with visible risk copy; fixed-host OAuth providers keep their existing behavior.
+  - Verify: provider unit tests for `http://169.254.169.254`, `http://127.0.0.1`, `http://192.168.1.20`, private IPv6/ULA, WebDAV redirect-to-internal, and S3 path-style/virtual-host URLs with and without the opt-in; `npm run ts-runtime:check`; focused sync provider tests.
+  - Complexity: M
 - [ ] P1 — Optional client-side E2E encryption for cloud sync
   - Why: synced script source (often embedding API keys) uploads as plaintext `JSON.stringify` to every provider; a WebDAV operator or compromised Drive/Dropbox account reads the whole library.
   - Touches: new `modules/sync-crypto.js`, `cloud-sync.ts` `_performSync`, each provider `upload/download`.
