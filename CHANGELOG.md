@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-03 — Script subscriptions
+
+- **Subscription feeds can queue curated script installs.** The Utilities panel
+  now accepts a JSON feed URL, stores subscribed feeds, and refreshes them on
+  demand.
+- **New feed members require review.** Subscription scripts land in the
+  existing Updates inbox as review-only installs, so "apply safe" cannot
+  auto-install new scripts.
+- **Feed and script fetches use the hardened path.** Subscription fetches reuse
+  the internal-host guard plus stream-bounded body reader before queueing any
+  script source.
+
 ### 2026-06-03 — ESM dashboard badge
 
 - **ESM scripts are visible in the dashboard row.** Scripts parsed from

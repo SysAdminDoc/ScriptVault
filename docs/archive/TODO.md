@@ -97,9 +97,10 @@
   - Evidence: PASS2 NF-14.
   - Touches: `pages/dashboard.js` `renderScriptRow`, dashboard CSS in `pages/dashboard.html`.
   - Verification: `npm test -- tests/esm-dashboard-badge.test.js tests/esm-bundler.test.js`, `node --check pages/dashboard.js`, `npm run check`.
-- [ ] **E-7** ScriptCat-style script subscriptions (URL → JSON list)
+- [x] **E-7** ScriptCat-style script subscriptions (URL → JSON list) (2026-06-03)
   - Evidence: PASS2 ecosystem item 14.
   - Touches: `background.core.js`, new `modules/subscriptions.js`, dashboard import UI.
+  - Verification: `npm test -- tests/subscriptions.test.js tests/pending-update-queue.test.js tests/subscriptions-dashboard.test.js tests/ts-runtime-modules.test.js`, `node --check background.core.js`, `node --check pages/dashboard.js`, `npm run build:bg`, `npm run check` (93 files / 1140 tests), `npm run readme:check`, `npm run gm-types:check`, `npm run ts-runtime:check`, `npm run ts-source:check`, `npm run store-copy:check`, `git diff --check`.
 - [ ] **E-8** `navigator.storage.persist()` prompt on first non-trivial write
   - Evidence: PASS2 ecosystem item 17.
   - Touches: `modules/quota-manager.js`, `background.core.js`.
@@ -166,5 +167,6 @@
 | 2026-06-03 | E | E-4 | feat: generate GM ambient declarations |
 | 2026-06-03 | E | E-5 | test: add Playwright E2E flows |
 | 2026-06-03 | E | E-6 | feat: show ESM dashboard badges |
+| 2026-06-03 | E | E-7 | feat: queue script subscriptions for review |
 
 (Append a row each time work lands.)

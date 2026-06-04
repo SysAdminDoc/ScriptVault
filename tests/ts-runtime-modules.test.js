@@ -50,6 +50,12 @@ describe('TS runtime module generator', () => {
         exportName: 'QuotaManager',
       }),
       expect.objectContaining({
+        id: 'subscriptions',
+        source: 'src/modules/subscriptions.ts',
+        output: 'modules/subscriptions.js',
+        exportName: 'ScriptSubscriptions',
+      }),
+      expect.objectContaining({
         id: 'userstyles',
         source: 'src/modules/userstyles.ts',
         output: 'modules/userstyles.js',

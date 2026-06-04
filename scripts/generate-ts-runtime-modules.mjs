@@ -50,6 +50,12 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'QuotaManager',
   },
   {
+    id: 'subscriptions',
+    source: 'src/modules/subscriptions.ts',
+    output: 'modules/subscriptions.js',
+    exportName: 'ScriptSubscriptions',
+  },
+  {
     id: 'userstyles',
     source: 'src/modules/userstyles.ts',
     output: 'modules/userstyles.js',

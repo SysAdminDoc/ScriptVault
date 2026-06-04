@@ -109,6 +109,18 @@ beforeEach(() => {
   Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
   UpdateSystem._pendingUpdates = null;
   globalThis.parseUserscript = vi.fn(parseQueuedCode);
+  globalThis.installFromCode = vi.fn(async code => ({
+    success: true,
+    script: {
+      id: 'installed-from-subscription',
+      code,
+      meta: parseQueuedCode(code).meta,
+      trustReceipt: {
+        dependencyChanges: { require: [] },
+        permissionChanges: null,
+      },
+    },
+  }));
   globalThis.unregisterScript = vi.fn().mockResolvedValue();
   globalThis.registerScript = vi.fn().mockResolvedValue();
   globalThis.SettingsManager = {
@@ -121,6 +133,7 @@ afterEach(() => {
   Object.defineProperty(globalThis, 'crypto', { value: originalCrypto, configurable: true });
   UpdateSystem._pendingUpdates = null;
   delete globalThis.parseUserscript;
+  delete globalThis.installFromCode;
   delete globalThis.unregisterScript;
   delete globalThis.registerScript;
   delete globalThis.SettingsManager;
@@ -221,5 +234,56 @@ describe('pending update queue', () => {
 
     checkSpy.mockRestore();
     applySpy.mockRestore();
+  });
+
+  it('queues subscription installs for review and excludes them from apply-safe', async () => {
+    const scripts = new Map();
+    installStorage(scripts);
+
+    const queueResult = await UpdateSystem.queueSubscriptionInstalls([{
+      id: 'subscription_one',
+      name: 'New Script',
+      newVersion: '1.0.0',
+      code: makeCode('New Script', '1.0.0'),
+      sourceUrl: 'https://cdn.example.com/new.user.js',
+      subscriptionId: 'feed-1',
+      subscriptionName: 'Curated Feed',
+    }]);
+
+    expect(queueResult.queued).toBe(1);
+    expect(queueResult.pendingUpdates[0]).toMatchObject({
+      kind: 'subscription-install',
+      safeToApply: false,
+      reviewReasons: ['New script from subscription'],
+      subscriptionId: 'feed-1',
+      subscriptionName: 'Curated Feed',
+    });
+
+    const safeResult = await UpdateSystem.applySafePendingUpdates();
+    expect(safeResult.applied).toBe(0);
+    expect(safeResult.pendingUpdates).toHaveLength(1);
+    expect(globalThis.installFromCode).not.toHaveBeenCalled();
+  });
+
+  it('applies a reviewed subscription install through installFromCode', async () => {
+    const scripts = new Map();
+    installStorage(scripts);
+
+    await UpdateSystem.queueSubscriptionInstalls([{
+      id: 'subscription_one',
+      code: makeCode('New Script', '1.0.0'),
+      sourceUrl: 'https://cdn.example.com/new.user.js',
+      subscriptionId: 'feed-1',
+      subscriptionName: 'Curated Feed',
+    }]);
+
+    const result = await UpdateSystem.applyPendingUpdate('subscription_one', { force: true });
+
+    expect(result.success).toBe(true);
+    expect(globalThis.installFromCode).toHaveBeenCalledWith(makeCode('New Script', '1.0.0'), {
+      sourceUrl: 'https://cdn.example.com/new.user.js',
+      operation: 'subscription-install',
+    });
+    expect(await UpdateSystem.getPendingUpdates()).toEqual([]);
   });
 });

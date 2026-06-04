@@ -49,6 +49,7 @@ phase.
 - [x] E-4 Generate `gm-api.d.ts` ambient declarations built into the CWS ZIP — *Source: docs/archive/TODO.md Phase E; commit 4bf700e*
 - [x] E-5 Playwright E2E for install + update + restore + sync flows (4 specs) — *Source: docs/archive/TODO.md Phase E; commit 793c585*
 - [x] E-6 ESM badge in dashboard script rows for `@module 1`, `@inject-into module`, and stored ESM bundle metadata — *Source: docs/archive/TODO.md Phase E + PASS3 EI-5; commit feat: show ESM dashboard badges*
+- [x] E-7 Script subscriptions (URL -> JSON list) authored from TypeScript, fetched through InternalHostGuard/_fetchTextBounded, and queued as review-only pending installs — *Source: docs/archive/TODO.md Phase E + PASS3 NF-6; commit feat: queue script subscriptions for review*
 
 ## Stale / Obsolete Items
 

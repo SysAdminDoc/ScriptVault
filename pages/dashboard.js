@@ -35,6 +35,7 @@
             lastRuntimeRepairAt: 0
         },
         pendingUpdates: [],
+        subscriptions: [],
         backups: [],
         backupSettings: null
     };
@@ -156,6 +157,7 @@
         'tampermonkey import': 'import',
         textarea: 'import',
         'import from url': 'import',
+        'script subscriptions': 'import',
         'batch install from urls': 'import',
         workspaces: 'backup',
         'network request log': 'diagnostics',
@@ -1555,6 +1557,12 @@
         elements.importFileName = document.getElementById('importFileName');
         elements.importUrlInput = document.getElementById('importUrlInput');
         elements.btnInstallFromUrl = document.getElementById('btnInstallFromUrl');
+        elements.subscriptionUrlInput = document.getElementById('subscriptionUrlInput');
+        elements.subscriptionNameInput = document.getElementById('subscriptionNameInput');
+        elements.btnAddSubscription = document.getElementById('btnAddSubscription');
+        elements.btnRefreshSubscriptions = document.getElementById('btnRefreshSubscriptions');
+        elements.subscriptionList = document.getElementById('subscriptionList');
+        elements.subscriptionStatus = document.getElementById('subscriptionStatus');
         elements.installFileInput = document.getElementById('installFileInput');
         elements.btnInstallFromFile = document.getElementById('btnInstallFromFile');
         elements.installFileStatus = document.getElementById('installFileStatus');
@@ -2176,23 +2184,31 @@
 
     function renderPendingUpdateCard(update) {
         const safe = update.safeToApply === true;
+        const isSubscriptionInstall = update.kind === 'subscription-install';
         const reasons = Array.isArray(update.reviewReasons) && update.reviewReasons.length
             ? update.reviewReasons.join(', ')
             : 'No permission, source, or dependency expansion.';
         const diff = update.diff || {};
         const source = update.sourceInfo || update.trustReceipt?.source || {};
         const sourceHost = source.installHost || '';
+        const versionLabel = isSubscriptionInstall
+            ? `New script -> v${escapeHtml(update.newVersion || '?')}`
+            : `v${escapeHtml(update.currentVersion || '?')} -> v${escapeHtml(update.newVersion || '?')}`;
+        const sourceLabel = [
+            update.subscriptionName ? `Subscription: ${update.subscriptionName}` : '',
+            sourceHost ? `Source: ${sourceHost}` : ''
+        ].filter(Boolean).join(' · ');
         return `
             <article class="pending-update-card${safe ? '' : ' review-required'}" data-update-id="${escapeHtml(update.id)}">
                 <div class="pending-update-head">
                     <div class="pending-update-title">
                         <strong>${escapeHtml(update.name || update.id || 'Unnamed script')}</strong>
-                        <div class="pending-update-meta">v${escapeHtml(update.currentVersion || '?')} -> v${escapeHtml(update.newVersion || '?')}</div>
+                        <div class="pending-update-meta">${versionLabel}</div>
                     </div>
                     <span class="pending-update-status${safe ? '' : ' review'}">${safe ? 'Safe' : 'Review'}</span>
                 </div>
                 <div class="pending-update-reasons">${escapeHtml(reasons)}</div>
-                <div class="pending-update-source">${sourceHost ? `Source: ${escapeHtml(sourceHost)}` : 'Source unavailable'}</div>
+                <div class="pending-update-source">${sourceLabel ? escapeHtml(sourceLabel) : 'Source unavailable'}</div>
                 <div class="pending-update-diff" aria-label="Update diff summary">
                     <span>+${numberFormatter.format(diff.addedLines || 0)}</span>
                     <span>-${numberFormatter.format(diff.removedLines || 0)}</span>
@@ -2201,7 +2217,7 @@
                 <div class="pending-update-actions">
                     <button type="button" class="toolbar-btn" data-update-action="diff" data-update-id="${escapeHtml(update.id)}">Diff</button>
                     <button type="button" class="toolbar-btn primary" data-update-action="install" data-update-id="${escapeHtml(update.id)}">Install</button>
-                    <button type="button" class="toolbar-btn" data-update-action="rollback" data-update-id="${escapeHtml(update.id)}" ${update.rollback?.available ? '' : 'disabled'}>Rollback</button>
+                    <button type="button" class="toolbar-btn" data-update-action="rollback" data-update-id="${escapeHtml(update.id)}" ${!isSubscriptionInstall && update.rollback?.available ? '' : 'disabled'}>Rollback</button>
                     <button type="button" class="toolbar-btn" data-update-action="remove" data-update-id="${escapeHtml(update.id)}">Remove</button>
                 </div>
             </article>
@@ -2217,7 +2233,9 @@
         try {
             if (action === 'diff') {
                 const script = state.scripts.find(item => item.id === scriptId);
-                showDiffView(script?.code || '', update.code || '', `v${update.currentVersion || '?'}`, `v${update.newVersion || '?'}`);
+                const oldCode = update.kind === 'subscription-install' ? '' : script?.code || '';
+                const oldLabel = update.kind === 'subscription-install' ? 'New script' : `v${update.currentVersion || '?'}`;
+                showDiffView(oldCode, update.code || '', oldLabel, `v${update.newVersion || '?'}`);
                 return;
             }
             if (action === 'install') {
@@ -2226,7 +2244,12 @@
                 await Promise.all([loadScripts(), loadPendingUpdates({ render: false })]);
                 renderPendingUpdates();
                 updateStats();
-                showToast(`${update.name || 'Script'} updated to v${update.newVersion || '?'}`, 'success');
+                showToast(
+                    update.kind === 'subscription-install'
+                        ? `${update.name || 'Script'} installed from subscription`
+                        : `${update.name || 'Script'} updated to v${update.newVersion || '?'}`,
+                    'success'
+                );
                 return;
             }
             if (action === 'rollback') {
@@ -7776,6 +7799,139 @@
         }
     }
 
+    function setSubscriptionStatus(message) {
+        if (elements.subscriptionStatus) {
+            elements.subscriptionStatus.textContent = message;
+        }
+    }
+
+    function renderSubscriptions() {
+        if (!elements.subscriptionList) return;
+        const subscriptions = Array.isArray(state.subscriptions) ? state.subscriptions : [];
+        if (subscriptions.length === 0) {
+            elements.subscriptionList.innerHTML = '<div class="panel-empty-inline">No subscriptions saved.</div>';
+            setSubscriptionStatus('No feeds loaded');
+            return;
+        }
+
+        const totalScripts = subscriptions.reduce((sum, item) => sum + (Array.isArray(item.scripts) ? item.scripts.length : 0), 0);
+        setSubscriptionStatus(`${numberFormatter.format(subscriptions.length)} feed${subscriptions.length === 1 ? '' : 's'}, ${numberFormatter.format(totalScripts)} listed script${totalScripts === 1 ? '' : 's'}`);
+        elements.subscriptionList.innerHTML = subscriptions.map(subscription => {
+            const scripts = Array.isArray(subscription.scripts) ? subscription.scripts.length : 0;
+            const lastChecked = subscription.lastCheckedAt
+                ? formatSyncTimestamp(subscription.lastCheckedAt)
+                : 'Never';
+            const errors = Array.isArray(subscription.lastErrors) && subscription.lastErrors.length
+                ? `<span>${numberFormatter.format(subscription.lastErrors.length)} error${subscription.lastErrors.length === 1 ? '' : 's'}</span>`
+                : '';
+            return `
+                <article class="subscription-item" data-subscription-id="${escapeHtml(subscription.id || '')}">
+                    <div class="subscription-copy">
+                        <strong>${escapeHtml(subscription.name || 'Script subscription')}</strong>
+                        <span class="subscription-url">${escapeHtml(subscription.url || '')}</span>
+                        <div class="subscription-meta">
+                            <span>${numberFormatter.format(scripts)} script${scripts === 1 ? '' : 's'}</span>
+                            <span>Last checked: ${escapeHtml(lastChecked)}</span>
+                            <span>${numberFormatter.format(subscription.lastQueued || 0)} queued</span>
+                            <span>${numberFormatter.format(subscription.lastSkipped || 0)} skipped</span>
+                            ${errors}
+                        </div>
+                    </div>
+                    <div class="subscription-actions">
+                        <button type="button" class="toolbar-btn" data-subscription-action="refresh" data-subscription-id="${escapeHtml(subscription.id || '')}">Refresh</button>
+                        <button type="button" class="toolbar-btn" data-subscription-action="remove" data-subscription-id="${escapeHtml(subscription.id || '')}">Remove</button>
+                    </div>
+                </article>
+            `;
+        }).join('');
+        elements.subscriptionList.querySelectorAll('[data-subscription-action]').forEach(button => {
+            button.addEventListener('click', () => handleSubscriptionAction(button));
+        });
+    }
+
+    async function loadSubscriptions({ render = true } = {}) {
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'getSubscriptions' });
+            if (response?.error) throw new Error(response.error);
+            state.subscriptions = Array.isArray(response?.subscriptions) ? response.subscriptions : [];
+        } catch (error) {
+            state.subscriptions = [];
+            setSubscriptionStatus(error?.message || 'Failed to load feeds');
+        }
+        if (render) renderSubscriptions();
+        return state.subscriptions;
+    }
+
+    async function syncSubscriptionRefreshResult(response) {
+        if (response?.error) throw new Error(response.error);
+        if (Array.isArray(response?.pendingUpdates)) {
+            state.pendingUpdates = response.pendingUpdates;
+        } else {
+            await loadPendingUpdates({ render: false });
+        }
+        await loadSubscriptions({ render: false });
+        renderSubscriptions();
+        renderPendingUpdates();
+        const queued = response?.queued || 0;
+        const skipped = response?.skipped || 0;
+        showToast(
+            queued > 0
+                ? `${numberFormatter.format(queued)} script${queued === 1 ? '' : 's'} queued for review`
+                : `No new scripts${skipped ? `, ${numberFormatter.format(skipped)} skipped` : ''}`,
+            queued > 0 ? 'info' : 'success'
+        );
+    }
+
+    async function addSubscriptionFromInputs() {
+        const url = elements.subscriptionUrlInput?.value?.trim() || '';
+        const name = elements.subscriptionNameInput?.value?.trim() || '';
+        if (!url) {
+            showToast('Enter feed URL', 'error');
+            return;
+        }
+        const response = await chrome.runtime.sendMessage({ action: 'addSubscription', url, name });
+        await syncSubscriptionRefreshResult(response);
+        if (response?.success) {
+            if (elements.subscriptionUrlInput) elements.subscriptionUrlInput.value = '';
+            if (elements.subscriptionNameInput) elements.subscriptionNameInput.value = '';
+        }
+    }
+
+    async function refreshAllSubscriptions() {
+        const response = await chrome.runtime.sendMessage({ action: 'refreshSubscriptions' });
+        await syncSubscriptionRefreshResult(response);
+    }
+
+    async function refreshSubscription(subscriptionId) {
+        if (!subscriptionId) return;
+        const response = await chrome.runtime.sendMessage({ action: 'refreshSubscription', subscriptionId });
+        await syncSubscriptionRefreshResult(response);
+    }
+
+    async function removeSubscription(subscriptionId) {
+        if (!subscriptionId) return;
+        const subscription = state.subscriptions.find(item => item.id === subscriptionId);
+        const label = subscription?.name || 'this feed';
+        if (!await showConfirmModal('Remove Subscription', `Remove ${label}?`)) return;
+        const response = await chrome.runtime.sendMessage({ action: 'removeSubscription', subscriptionId });
+        if (response?.error) throw new Error(response.error);
+        state.subscriptions = Array.isArray(response?.subscriptions) ? response.subscriptions : [];
+        renderSubscriptions();
+        showToast('Subscription removed', 'success');
+    }
+
+    async function handleSubscriptionAction(button) {
+        const subscriptionId = button.dataset.subscriptionId;
+        const action = button.dataset.subscriptionAction;
+        await runButtonTask(button, async () => {
+            if (action === 'refresh') {
+                await refreshSubscription(subscriptionId);
+            } else if (action === 'remove') {
+                await removeSubscription(subscriptionId);
+            }
+        }, { busyLabel: action === 'remove' ? 'Removing…' : 'Refreshing…' });
+    }
+
     async function installFromCodeText(code, label) {
         if (typeof code !== 'string' || !code) {
             showToast('Empty file', 'error');
@@ -10278,6 +10434,21 @@
             await runButtonTask(event.currentTarget, installFromUrl, { busyLabel: 'Installing…' });
         });
 
+        elements.btnAddSubscription?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, addSubscriptionFromInputs, { busyLabel: 'Adding…' });
+        });
+
+        elements.subscriptionUrlInput?.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                elements.btnAddSubscription?.click();
+            }
+        });
+
+        elements.btnRefreshSubscriptions?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, refreshAllSubscriptions, { busyLabel: 'Refreshing…' });
+        });
+
         elements.btnInstallFromFile?.addEventListener('click', () => {
             elements.installFileInput?.click();
         });
@@ -11761,6 +11932,9 @@
             });
             loadBackupSettings().catch(error => {
                 console.warn('[ScriptVault] Backup schedule refresh failed:', error?.message || error);
+            });
+            loadSubscriptions().catch(error => {
+                console.warn('[ScriptVault] Subscription refresh failed:', error?.message || error);
             });
         }
 
