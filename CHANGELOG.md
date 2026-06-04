@@ -4,6 +4,13 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-03 — Sync tombstone resurrection drill
+
+- **Added a deletion-resurrection regression drill.** The cloud-sync source
+  test now covers install A, upload, delete A with a tombstone, upload the
+  tombstone, wipe local state, and resync from the remote tombstone without
+  resurrecting A.
+
 ### 2026-06-03 — Trash retention visibility
 
 - **Trash policy is now explicit in the recovery panel.** The Trash tab shows a

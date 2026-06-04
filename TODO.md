@@ -76,10 +76,11 @@
   - Evidence: PASS2 NF-1; [background.core.js:6647](background.core.js#L6647) and 7560.
   - Touches: `background.core.js`, `src/background/registration.ts`.
   - Acceptance: feature-detected; per-script edits use `update()` on Chrome 138+; fallback for Chrome 130-137 preserved.
-- [ ] **E-2** Sync tombstone resurrection drill test
+- [x] **E-2** Sync tombstone resurrection drill test (2026-06-03)
   - Evidence: PASS2 NF-20.
-  - Touches: `tests/sync-tombstone-resurrection.test.js`.
+  - Touches: `tests/source-cloud-sync.test.js`.
   - Acceptance: install A, delete A, sync (tombstone), wipe local, re-sync from remote → A is NOT resurrected.
+  - Verification: `npm run check` (89 files / 1128 tests), `npm test -- tests/source-cloud-sync.test.js`, `npm run readme:check`.
 - [ ] **E-3** Implement or remove README "Browser Sync" provider claim *(folded into A-1)*
 - [ ] **E-4** Generate `gm-api.d.ts` ambient declarations
   - Evidence: PASS2 NF-13.
@@ -156,5 +157,6 @@
 | 2026-05-24 | B | B-2 | 38a6b8f |
 | 2026-06-03 | C | C-1 | feat: queue script updates for review |
 | 2026-06-03 | D | D-5 | feat: show trash auto-purge dates |
+| 2026-06-03 | E | E-2 | test: cover sync tombstone resurrection |
 
 (Append a row each time work lands.)
