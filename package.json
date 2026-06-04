@@ -40,6 +40,7 @@
     "release:rollback-drill": "vitest run tests/storage-rollback-drill.test.js",
     "release:trust": "node scripts/release-trust-gate.mjs",
     "release:trust:strict": "node scripts/release-trust-gate.mjs --require-signature",
+    "release:store-status": "node scripts/check-store-status.mjs",
     "release:check": "node scripts/check-release-artifacts.mjs",
     "release:check:public": "node scripts/check-release-artifacts.mjs --public",
     "test:cov": "vitest run --coverage",

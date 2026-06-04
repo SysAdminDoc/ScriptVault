@@ -4,6 +4,13 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Release store status gate
+
+- **Release trust now includes store-status evidence.** Added
+  `npm run release:store-status` to verify rollback/trust/status wiring,
+  Firefox AMO lint/package artifacts, and optional credentialed CWS API v2
+  `fetchStatus` results before release publication.
+
 ### 2026-06-04 — Background core TypeScript bridge promotion
 
 - **The main background core is now generated from TypeScript.**

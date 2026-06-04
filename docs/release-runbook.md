@@ -2,7 +2,7 @@
 
 **Audience:** ScriptVault publishers and release engineers.
 **Owners:** Phase 39.1 (custody), 39.2 (CWS API v2), 39.4 (locale audit), 39.49 (backlog buffer).
-**Last reviewed:** 2026-05-24.
+**Last reviewed:** 2026-06-04.
 
 This runbook codifies the current ScriptVault release path: build and test locally/CI, publish GitHub artifacts, then use the Chrome Web Store API v2 tooling in `publish.sh` for Chrome submission. It also records the target security-custody model for replacing local long-lived OAuth credentials with short-lived GitHub Actions OIDC -> GCP credentials in a later hardening pass.
 
@@ -21,8 +21,9 @@ Before any release branch is created:
 7. **Version sources synced:** `manifest.json`, `manifest-firefox.json`, `package.json`, and `package-lock.json` all point to the same target version.
 8. **Rollback drill green:** `npm run release:rollback-drill` proves the previous public `chrome.storage.local` snapshot survives the current storage migration safety window.
 9. **Firefox AMO gate green:** `npm run firefox:package` exits with `web-ext lint: 0 errors, 0 notices` and writes `firefox-artifacts/scriptvault-firefox-vX.Y.Z.zip`, `firefox-artifacts/scriptvault-firefox-source-vX.Y.Z.zip`, and `firefox-artifacts/web-ext-lint.json`.
-10. **Release artifact parity green:** `npm run release:check` passes locally; after the tag and GitHub Release are created, `npm run release:check:public` must pass.
-11. **CHANGELOG entry drafted:** one paragraph per shipped roadmap item, with `Phase X.Y` cross-references.
+10. **Store status gate green:** `npm run release:store-status` validates rollback/trust/status command wiring, checks Firefox AMO lint/package evidence when present, and queries CWS API v2 `:fetchStatus` when `PUBLISHER_ID` plus `CWS_ACCESS_TOKEN` are provided.
+11. **Release artifact parity green:** `npm run release:check` passes locally; after the tag and GitHub Release are created, `npm run release:check:public` must pass.
+12. **CHANGELOG entry drafted:** one paragraph per shipped roadmap item, with `Phase X.Y` cross-references.
 
 If any gate fails, stop. Do not patch the test to make it green.
 
@@ -76,7 +77,19 @@ Credentialed upload-only validation, for maintainers with `.env`:
 bash publish.sh --draft
 ```
 
-The CLI has no standalone status subcommand; for post-upload status checks use the CWS Developer Dashboard until a future direct API status probe is added. Chrome's API v2 supports `publishers/PUBLISHER_ID/items/EXTENSION_ID:fetchStatus`, pending a token-management wrapper.
+The CLI has no standalone status subcommand. For local/manual status evidence, run:
+
+```bash
+npm run release:store-status
+```
+
+Without credentials, the command verifies the CWS listing ID from README and records that the live CWS query was skipped. With a maintainer-provided short-lived bearer token, it calls Chrome's API v2 `publishers/PUBLISHER_ID/items/EXTENSION_ID:fetchStatus` endpoint:
+
+```bash
+PUBLISHER_ID=... EXTENSION_ID=... CWS_ACCESS_TOKEN=... npm run release:store-status
+```
+
+Use `npm run release:store-status -- --require-live` for a credentialed release machine that must fail if the CWS live status cannot be queried. The command fails if CWS reports `takenDown`, warns on `warned`, and logs version drift between the local package and published/submitted CWS revisions.
 
 References: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/fregante/chrome-webstore-upload-cli/releases/tag/v4.0.0), [CWS API v2 announcement](https://developer.chrome.com/blog/cws-api-v2).
 
@@ -85,7 +98,7 @@ References: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/frega
 1. **Cut release branch** off `main`: `git checkout -b release/vX.Y.Z`.
 2. **Bump versions** in `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`. Use semver - patch for fixes, minor for additive features, major only for breaking changes.
 3. **Finalize CHANGELOG.md** entry for vX.Y.Z. Match the prose style of recent entries.
-4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run cws:check`, `npm run store-copy:check`, `npm run firefox:package`, `npm run release:rollback-drill`, and `npm run release:check`.
+4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run cws:check`, `npm run store-copy:check`, `npm run firefox:package`, `npm run release:rollback-drill`, `npm run release:store-status`, and `npm run release:check`.
 5. **Build:** `npm run build:prod` then `bash build.sh`. Verify the produced ZIP loads in a clean Chrome profile. For Firefox validation, inspect the Firefox package/source ZIP under `firefox-artifacts/`.
 6. **Release trust gate:** `npm run release:trust`. For a public release with the maintainer signing key available, run `npm run release:trust:strict` with `RELEASE_SIGNING_PRIVATE_KEY_PATH` or `RELEASE_SIGNING_PRIVATE_KEY_PEM`.
 7. **Tag:** `git tag -a vX.Y.Z -m "Release vX.Y.Z - <one-line summary>"`.
@@ -96,6 +109,7 @@ References: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/frega
 12. **CWS draft upload:** `bash publish.sh --draft`; review the draft in the CWS Developer Dashboard.
 13. **CWS publish:** `bash publish.sh` when ready to submit/publish through CWS review.
 14. **Verify CWS listing:** open the public listing after approval; confirm version, screenshots, and store description rendered.
+15. **Record store status:** rerun `npm run release:store-status` with `CWS_ACCESS_TOKEN` when available and attach the output to release notes or the release checklist.
 
 ## 5. CWS review backlog buffer (Phase 39.49)
 
@@ -115,8 +129,9 @@ Within 24 hours of CWS listing update:
    - No console errors on service worker boot.
 2. Check the `chrome.runtime.onInstalled` handler fires with `reason: 'update'` and `previousVersion` populated.
 3. Run `npm run release:check:public` against the published tag.
-4. Update [ROADMAP.md](../ROADMAP.md): mark shipped phase items with `Status: Shipped in vX.Y.Z`.
-5. Close any GitHub issues that this release resolves; cross-link the tag.
+4. Run `npm run release:store-status -- --require-live` from a maintainer machine with CWS status credentials.
+5. Update [ROADMAP.md](../ROADMAP.md): mark shipped phase items with `Status: Shipped in vX.Y.Z`.
+6. Close any GitHub issues that this release resolves; cross-link the tag.
 
 ## 7. Storage rollback drill
 
@@ -155,6 +170,18 @@ RELEASE_SIGNING_PRIVATE_KEY_PATH=scriptvault-release-ed25519.pem npm run release
 
 References: [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations), [CycloneDX 1.6 JSON](https://cyclonedx.org/docs/1.6/json/), [SLSA provenance v1](https://slsa.dev/spec/v1.0/provenance).
 
+## 8.1 Store status gate
+
+Run this after `npm run firefox:package` and before public release publication:
+
+```bash
+npm run release:store-status
+```
+
+The gate verifies that rollback, trust, Firefox packaging, and store-status commands are wired in CI and this runbook. When Firefox artifacts exist, it reads `firefox-artifacts/web-ext-lint.json`, fails on any lint error or notice, and confirms both the AMO package ZIP and source-review ZIP exist for the current version. When CWS credentials are available, it calls `:fetchStatus` and fails on takedown state.
+
+This command is safe in CI without secrets: it warns when the CWS live query is skipped and still checks all credential-free release evidence. Public release operators should rerun it with `--require-live` on a credentialed machine before or after CWS submission.
+
 ## 9. Rollback procedure
 
 If a critical regression surfaces post-release:
@@ -167,7 +194,7 @@ If a critical regression surfaces post-release:
 ## 10. Open items (post-runbook)
 
 - [ ] GCP Secret Manager -> GitHub Actions OIDC bridge: implementation pending Phase 39.1. Current CWS publishing is local/manual.
-- [ ] Direct CWS API v2 status probe: wrap `publishers/PUBLISHER_ID/items/EXTENSION_ID:fetchStatus` once token custody is settled.
+- [x] Direct CWS API v2 status probe: `npm run release:store-status` wraps `publishers/PUBLISHER_ID/items/EXTENSION_ID:fetchStatus` when `CWS_ACCESS_TOKEN` is provided; OIDC token custody remains separate.
 - [ ] Codeberg mirror workflow: Phase 39.48; pending Codeberg account provision + deploy key.
 - [ ] Hardware-key MFA migration: requires acquiring a second YubiKey for the publisher account.
 - [ ] Durable public release signing key custody: `release:trust:strict` is wired, but the maintainer-owned Ed25519 key must remain outside the repo and be backed up separately.
