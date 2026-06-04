@@ -299,6 +299,22 @@ anchors: GitHub's secure-use reference on full-length SHA pinning
 GitHub's action release-management docs for full commit SHA references
 (`https://docs.github.com/en/actions/how-tos/create-and-publish-actions/manage-custom-actions`).
 
+2026-06-04 Cycle 16 dependency-freshness refresh: after the `web-ext@^10.3.0`
+fix, a mapped-checkout `npm outdated --json` run still reports nine direct
+devDependencies behind latest or wanted versions: `@vitest/coverage-v8`,
+`vitest`, `chrome-types`, `chrome-webstore-upload-cli`, `esbuild`, `jsdom`,
+`monaco-editor`, `puppeteer-core`, and `typescript`. `.github/` still has only
+`workflows/ci.yml`; no checked-in Dependabot or Renovate config watches npm
+manifests or workflow action references. `ROADMAP.md` now sharpens the P1 item
+to require npm plus GitHub Actions updater coverage, grouped patch/minor
+development-tool PRs, isolated major updates, and no broad ignores that would
+hide security updates. External anchors: Dependabot version-update setup
+(`https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/configuring-dependabot-version-updates`),
+action update setup
+(`https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/keeping-your-actions-up-to-date-with-dependabot`),
+and Dependabot grouping/options reference
+(`https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
@@ -322,7 +338,7 @@ Top opportunities (one line each):
 
 1. **[Closed 2026-06-04] CI was red on a real CVE** — `web-ext@10.2.0` → `tmp@0.2.5` → GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (CVSS 7.7). `web-ext@^10.3.0` now resolves fixed `tmp@0.2.6`, and the high audit gate exits 0. (P0)
 2. **[Verified] Coverage is blind** — `vitest.config.mjs` has no thresholds and omits `src/background/**` from coverage includes even though `background.core.js` is now generated from `src/background/core.ts`; a focused coverage smoke passed tests while reporting 0%. (P1)
-3. **[Verified] No dependency-update automation** — 10 devDeps behind latest; the audit gate is reactive only, which is exactly how the `tmp` CVE slipped in. Add Dependabot/Renovate. (P1)
+3. **[Verified] No dependency-update automation** — nine direct devDeps are still behind and no checked-in updater config watches npm or workflow actions; the audit gate remains reactive only. Add Dependabot/Renovate. (P1)
 4. **[Verified] Floating Action tags in a signing/attestation pipeline** — `ci.yml` has eight tag-based `uses:` references, including attestation and artifact-upload steps, while the same job grants `id-token: write` / `attestations: write` and publishes trusted artifacts; SHA-pin and keep those pins fresh. (P1)
 5. **[Closed 2026-06-04] Sync envelopes mixed shared script data with device-local state** — CloudSync/EasyCloud now upload only allowlisted user-facing per-script settings and ignore legacy local-only remote keys. (P1)
 6. **[Closed 2026-06-04] Cloud sync uploaded plaintext script source** — CloudSync/EasyCloud now support optional local-passphrase v2 sync-envelope encryption while still reading legacy v1 plaintext envelopes. (P1)
@@ -345,7 +361,7 @@ Top opportunities (one line each):
 - **CI / release**: `.github/workflows/ci.yml` (full read), `scripts/*` (16 gate/generator scripts), `docs/dependency-audit-policy.md`, `docs/release-runbook.md`.
 - **Runtime**: `background.core.js` (omnibox handler ~L5682, GM_xhr path), `modules/` (15 files incl. `internal-host-guard.js`, `storage.js`, `sync-providers.js`, `error-log.js`, `npm-resolve.js`, `quota-manager.js`), `content.js`, `pages/dashboard-*.js` (29 modules).
 - **Git range**: `git log -30 --oneline` from `8526792` (planning consolidation) back through the TS-promotion and hardening waves; HEAD advanced to `4db9624 feat: show ESM dashboard badges` during this pass via concurrent work in the same tree.
-- **Dependency state**: original research found `npm outdated` (10 behind), `npm audit --audit-level=moderate --omit=optional` (2 high — both `tmp` via `web-ext`), and `npm ls tmp` (→ `tmp@0.2.5`). The 2026-06-04 build-lane fix now resolves `tmp@0.2.6` through `web-ext@^10.3.0` and the high audit gate exits 0.
+- **Dependency state**: original research found `npm audit --audit-level=moderate --omit=optional` (2 high — both `tmp` via `web-ext`) and `npm ls tmp` (→ `tmp@0.2.5`). The 2026-06-04 build-lane fix now resolves `tmp@0.2.6` through `web-ext@^10.3.0` and the high audit gate exits 0. A Cycle 16 `npm outdated --json` run still shows nine direct devDeps behind: `@vitest/coverage-v8`, `vitest`, `chrome-types`, `chrome-webstore-upload-cli`, `esbuild`, `jsdom`, `monaco-editor`, `puppeteer-core`, and `typescript`.
 - **Sync state**: `src/types/script.ts` defines open-ended per-script `settings`; `src/background/cloud-sync.ts`, `src/background/core.ts`, and `src/modules/sync-easycloud.ts` serialize those settings wholesale into cloud-sync data and merge remote settings back into local scripts.
 - **Sync endpoint egress**: WebDAV `test`/`upload`/`download` and S3 `test`/`upload`/`download` build URLs from `webdavUrl`/`s3Endpoint` and call `fetch`/`fetchWithTimeout`; existing `InternalHostGuard` pre/post checks are present in script-source, `@require`, provenance, GM_loadScript, and GM_xhr paths but not these provider endpoints.
 - **Backup/export settings**: `exportAllScripts()` reads `SettingsManager.get()` into export data; `BackupScheduler.createBackup()` writes `global-settings.json` from `SettingsManager.get()`; backup restore and import paths call `SettingsManager.set(...)`; dashboard copy exposes an "Include ScriptVault settings" checkbox and says cloud backups can restore settings when enabled, but credential-bearing settings are not split from ordinary preferences.
@@ -359,6 +375,7 @@ Top opportunities (one line each):
 - **Coverage/source glob alignment**: `vitest.config.mjs:21-25` uses V8 coverage with `all:false`, no thresholds, and includes only `src/shared/**/*.ts`, `src/modules/**/*.ts`, and `src/bg/**/*.ts`; `ts-source-promotion.json:163-168` marks `background.core.js` as promoted from `src/background/core.ts`; `package.json:54` runs `vitest run --coverage`; a mapped-drive run of `npx vitest run tests/wrapper-dom-security.test.js --coverage --coverage.reporter=json-summary --coverage.reporter=text-summary` passed 9 tests but `coverage/coverage-summary.json` showed 0% total coverage and no `src/background/wrapper-builder.ts` entry.
 - **Optional dependency reach**: `.github/workflows/ci.yml:44-50` and `docs/dependency-audit-policy.md:3-31` intentionally use `npm audit --audit-level=high --omit=optional`; `package.json` has no direct `optionalDependencies`; `package-lock.json` currently has 60 optional package records and 43 peer-optional edges; a lockfile-derived import/require scan over 116 shipped extension files found zero hits; loose `canvas` matches in dashboard files were DOM canvas strings only.
 - **Action pinning state**: `.github/workflows/ci.yml:9-12` grants `id-token: write` and `attestations: write`; `.github/workflows/ci.yml:21`, `:26`, `:87`, `:120`, `:126`, `:132`, `:141`, and `:148` use movable major tags for checkout, setup-node, setup-chrome, attest, and upload-artifact in the same trusted artifact job.
+- **Dependency updater state**: `.github/` contains only `workflows/ci.yml`; no `.github/dependabot.yml`, `renovate.json`, or equivalent updater config is present for npm or workflow action references.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -375,6 +392,7 @@ Top opportunities (one line each):
   - Vitest coverage config and guide anchor the coverage-source-glob refinement: https://vitest.dev/config/coverage.html and https://main.vitest.dev/guide/coverage
   - npm audit omit config and package metadata docs anchor the optional-dependency reach item: https://docs.npmjs.com/cli/v11/commands/npm-audit/ and https://docs.npmjs.com/cli/v11/configuring-npm/package-json/
   - GitHub Actions secure-use and action release-management docs anchor the action SHA-pinning item: https://docs.github.com/en/actions/reference/security/secure-use and https://docs.github.com/en/actions/how-tos/create-and-publish-actions/manage-custom-actions
+  - GitHub Dependabot version-update, action-update, and options docs anchor the dependency-freshness item: https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/configuring-dependabot-version-updates, https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/keeping-your-actions-up-to-date-with-dependabot, and https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
   - Userscript-manager landscape (Tampermonkey / Violentmonkey / ScriptCat sync, MV3, GitHub-Gist sync, granular execution control): comparison sources at extensionfixes.com and addons.mozilla.org Violentmonkey listing.
 - **Unverifiable here** [Needs validation]: live MV3 runtime behavior (cross-tab GM listener fan-out, omnibox UX, settings round-trips) — no browser run performed this pass; all runtime claims are static-read [Verified] or [Likely].
 
