@@ -203,14 +203,14 @@ Platform state:
 | Script execution | `chrome.userScripts`, GM/TM wrapper, commands, omnibox, popup run surfaces | `manifest.json`, `src/background/core.ts` | Mature | Complete GM namespace parity and cross-tab listener semantics |
 | Editor | Monaco on Chromium, textarea fallback for Firefox AMO package | `CHANGELOG.md`, editor adapter files | Mature | Improve author config and metadata-assisted editing |
 | Dashboard | Scripts, updates, settings, utilities, trash, store, help, many module files | `pages/dashboard.js`, dashboard modules | Mixed | Triage unreachable/duplicated modules and stale tabs |
-| Popup/side panel | Quick control, Firefox permission onboarding, side-panel feature detection | popup/side-panel files, Firefox tests | Mature | Help links and settings discoverability |
+| Popup/side panel | Quick control, Firefox permission onboarding, side-panel feature detection, dashboard Help deep-link | popup/side-panel files, Firefox tests | Mature | Settings discoverability |
 | Sync | WebDAV, EasyCloud, browser/Gist surfaces, deferred OAuth in Firefox | `src/modules/sync-providers.ts`, `FIREFOX-PORT.md` | Strong but high risk | Endpoint egress guard, E2E encryption, settings partition |
 | Backup/export | Manual and scheduled ZIP/JSON, selective restore, settings restore | `src/modules/backup-scheduler.ts` | Useful but high risk | Credential redaction and bounded intake |
 | Trust/provenance | Signing, analyzer, SRI, source-review ZIP, store-copy gates | AMO docs, trust scripts | Strong | Reviewer-facing minified-library provenance gate |
 | Release/CI | Build, web-ext lint, Firefox smoke, support matrix, attestations, SBOM | `.github/workflows/ci.yml`, scripts | Strong | Coverage floor, dependency automation, action SHA pinning |
 | Cross-browser | Chrome primary, Firefox package/smoke, Edge artifact path | `FIREFOX-PORT.md`, manifests | Strong desktop | Android claim requires device smoke or deferral |
-| Docs/help | README, ROADMAP, CHANGELOG, completed work, privacy/store copy | root docs | Strong | Reconcile in-app help and stale roadmap doc rows |
-| Accessibility | WCAG planning, help consistency item, command docs | `docs/wcag3-gap-analysis.md`, README | Developing | Plain-language audit and per-page help affordances |
+| Docs/help | README, ROADMAP, CHANGELOG, completed work, privacy/store copy | root docs | Strong | Keep in-app help aligned and prune stale roadmap doc rows |
+| Accessibility | WCAG planning, per-page Help affordances, command docs | `docs/wcag3-gap-analysis.md`, README | Developing | Plain-language audit |
 
 ## Competitive and Ecosystem Research
 
@@ -593,10 +593,11 @@ i18n-v2:
 
 Help consistency and plain language:
 
-- README documents the `sv` omnibox and keyboard shortcuts, but roadmap items
-  still mention documentation gaps. In-app help may still be incomplete.
-- Reconcile roadmap wording, add help links to popup/side-panel/install pages,
-  and run the planned plain-language pass.
+- README documents the `sv` omnibox and keyboard shortcuts, and the dashboard
+  Help tab is now reachable from dashboard, popup, side-panel, and install
+  surfaces through a consistent `[data-help]` control.
+- Run the planned plain-language pass and keep dashboard Help aligned with
+  README feature claims.
 
 Settings discoverability:
 

@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Cross-surface Help links
+
+- **Added consistent Help entry points across extension pages.** Dashboard,
+  popup, side panel, and install now expose a `[data-help]` control with the
+  accessible name `Help`.
+- **Deep-linked every Help action to the dashboard Help tab.** Popup and side
+  panel use the existing dashboard-opening runtime route with `tab: 'help'`
+  and all surfaces retain a `pages/dashboard.html#tab=help` fallback.
+
 ### 2026-06-04 — AMO vendored library provenance
 
 - **Added reviewer-reproducible vendored library provenance.** Firefox package

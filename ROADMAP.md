@@ -136,8 +136,11 @@ priority section below.
 
 ### Accessibility (WCAG3 gap matrix open rows)
 
-- [ ] P2 — Help link consistency across pages
+- [x] P2 — Help link consistency across pages
   - Why: centralized Help entry in dashboard header, consistent link from popup / sidepanel / install.
+  - Acceptance: dashboard, popup, side panel, and install each expose a `[data-help]` control with accessible name `Help`; popup/sidepanel route through `openDashboard` with `tab: 'help'` and all surfaces fall back to `pages/dashboard.html#tab=help`.
+  - Progress: 2026-06-04 added the shared Help controls to popup footer, side-panel header, install header, and dashboard header metadata; dashboard already owned the `#tab=help` route and now has an explicit `data-help` contract.
+  - Verification: `node --check pages\popup.js`; `node --check pages\sidepanel.js`; `node --check pages\install.js`; `npm test -- tests/accessibility-surface-pass.test.js tests/dashboard-a11y.test.js tests/popup-a11y.test.js -- --pool=vmThreads --maxWorkers=1`.
   - Source: docs/archive/TODO.md H-1 (`docs/wcag3-gap-analysis.md`).
 - [ ] P2 — Plain-language audit (Flesch ≥ 60) per Phase 34.6
   - Source: docs/archive/TODO.md H-2 (`docs/wcag3-gap-analysis.md`).

@@ -56,6 +56,7 @@
         btnCheckUpdates: document.getElementById('btnCheckUpdates'),
         btnBlacklistDomain: document.getElementById('btnBlacklistDomain'),
         btnWhitelistDomain: document.getElementById('btnWhitelistDomain'),
+        btnHelp: document.getElementById('btnHelp'),
         btnDashboard: document.getElementById('btnDashboard'),
         setupWarning: document.getElementById('setupWarning'),
         btnOpenExtSettings: document.getElementById('btnOpenExtSettings'),
@@ -1301,6 +1302,18 @@
         window.close();
     }
 
+    async function openHelpDashboard() {
+        try {
+            await chrome.runtime.sendMessage({
+                action: 'openDashboard',
+                data: { tab: 'help' }
+            });
+        } catch (error) {
+            await chrome.tabs.create({ url: chrome.runtime.getURL('pages/dashboard.html#tab=help') });
+        }
+        window.close();
+    }
+
     // Create new script - opens dashboard new script editor
     async function createNewScript() {
         try {
@@ -1658,6 +1671,7 @@
         });
 
         // Dashboard
+        elements.btnHelp?.addEventListener('click', () => openHelpDashboard());
         elements.btnDashboard?.addEventListener('click', () => openDashboard());
         
         // Setup warning - Open extension settings

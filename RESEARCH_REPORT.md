@@ -51,6 +51,12 @@ third-party libraries. `acorn@8.16.0` and `diff@9.0.0` are exact npm dev pins,
 the package URLs, tarball integrity, source hashes, packaged hashes, licenses,
 and Firefox package includes.
 
+2026-06-04 build-lane Help-link update: dashboard, popup, side panel, and
+install now expose a consistent `[data-help]` control with accessible name
+`Help`. Popup and side-panel actions route through the existing dashboard
+runtime opener with `tab: 'help'`, while every surface has a
+`pages/dashboard.html#tab=help` fallback.
+
 2026-06-04 implementation refresh: the 2026-06-03 findings still stand, but the
 currently-breaking dependency item is now closed. `web-ext` was bumped to
 `^10.3.0`, `npm ls tmp` resolves `tmp@0.2.6`, and
