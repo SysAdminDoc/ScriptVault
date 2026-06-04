@@ -89,8 +89,14 @@ priority section below.
   - Progress: 2026-06-04 added `npm run smoke:firefox`, a geckodriver temporary-sideload smoke that packages the Firefox build, installs `scriptvault-firefox-v3.11.0.zip`, opens dashboard/popup extension pages, verifies Firefox optional `userScripts` permission onboarding, saves/toggles `ScriptVault Firefox Smoke`, and confirms it runs on a local `http://127.0.0.1` target page. The smoke exposed and fixed Firefox startup/runtime gaps: `MAX_SCRIPT_SIZE` initialization order, native Git Bash preference over WSL for packaging, `chrome.menus` -> `chrome.contextMenus` aliasing, and trusted own `moz-extension://` dashboard/popup senders.
   - Verification: `npm run firefox:package` (0 errors / 0 notices / 139 warnings) and `npm run smoke:firefox` with Firefox Developer Edition 151.0b10.
   - Source: docs/archive/TODO.md G-4.
-- [ ] P2 — Phase 2: import-from-Chrome backup round-trip
+- [x] P2 — Phase 2: import-from-Chrome backup round-trip
+  - Progress: 2026-06-04 extended `npm run smoke:firefox` to import Chrome-shaped ScriptVault JSON and ZIP backup fixtures into the Firefox package. The ZIP path now exports/imports `scriptVault` metadata for `createdAt`, `updatedAt`, and position; the live Firefox smoke verifies safe script ID preservation, metadata, disabled state, GM storage values, and timestamps after import. Source and runtime import/export tests pin the metadata format.
+  - Verification: `npm test -- tests/runtime-import-export.test.js tests/source-backup-modules.test.js tests/firefox-package.test.js`; `node scripts/smoke-firefox-sideload.mjs --skip-package`; full `npm run smoke:firefox` pending final package verification for this batch.
   - Source: docs/archive/TODO.md G-5.
+- [ ] P2 — Phase 2: Firefox storage quota, migration, and restart data-safety validation
+  - Why: the remaining Firefox Phase 2 data-safety checks still need explicit build-lane evidence after the Chrome backup import path: 26-script storage quota fit, v1.x -> v2.0 migration idempotence, and trash recovery after Firefox restart/persistent background behavior.
+  - Acceptance: Firefox validation fixture covers a 26-script import without quota errors; migration re-run is idempotent; trash restore/undo still works after a Firefox restart.
+  - Source: FIREFOX-PORT.md Phase 2 remaining storage/data-safety rows.
 - [ ] P2 — Phase 3: per-provider WebDAV-only baseline + later OAuth/identity decision
   - Source: docs/archive/TODO.md G-6.
 - [ ] P2 — Phase 5: AMO submission (unlisted then listed)

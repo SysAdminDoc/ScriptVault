@@ -17332,6 +17332,10 @@ function allocateImportedScriptId(preferredId, usedScriptIds) {
   return nextId;
 }
 
+function finiteBackupNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 async function importScripts(data, options = {}) {
   const {
     overwrite = false,
@@ -17559,6 +17563,12 @@ async function exportToZip(options = {}) {
         grant: script.meta.grant || [],
         require: script.meta.require || [],
         resource: script.meta.resource || {}
+      },
+      scriptVault: {
+        schemaVersion: 1,
+        createdAt: finiteBackupNumber(script.createdAt),
+        updatedAt: finiteBackupNumber(script.updatedAt),
+        position: finiteBackupNumber(script.position)
       }
     };
     files[`${safeName}.options.json`] = fflate.strToU8(JSON.stringify(scriptOptions, null, 2));
@@ -17644,6 +17654,9 @@ async function importFromZip(zipData, options = {}) {
         let enabled = true;
         let storedValues = {};
         let preferredScriptId = '';
+        let importedCreatedAt = null;
+        let importedUpdatedAt = null;
+        let importedPosition = null;
         
         // Parse options file if exists
         if (optionsFileData) {
@@ -17651,6 +17664,12 @@ async function importFromZip(zipData, options = {}) {
             const optionsData = JSON.parse(fflate.strFromU8(optionsFileData));
             enabled = optionsData.settings?.enabled !== false;
             preferredScriptId = isSafeImportedScriptId(optionsData.scriptId) ? optionsData.scriptId : '';
+            const scriptVault = optionsData.scriptVault && typeof optionsData.scriptVault === 'object'
+              ? optionsData.scriptVault
+              : {};
+            importedCreatedAt = finiteBackupNumber(scriptVault.createdAt ?? optionsData.createdAt);
+            importedUpdatedAt = finiteBackupNumber(scriptVault.updatedAt ?? optionsData.updatedAt);
+            importedPosition = finiteBackupNumber(scriptVault.position ?? optionsData.position);
           } catch (e) {
             console.warn('Failed to parse options file:', e);
           }
@@ -17690,14 +17709,15 @@ async function importFromZip(zipData, options = {}) {
           scriptId = allocateImportedScriptId(preferredScriptId, usedScriptIds);
         }
         usedScriptIds.add(scriptId);
+        const now = Date.now();
         const script = {
           id: scriptId,
           code: code,
           meta: parsed.meta,
           enabled: enabled,
-          position: existing?.position ?? _importPosition++,
-          createdAt: existing?.createdAt || Date.now(),
-          updatedAt: Date.now()
+          position: existing?.position ?? (importedPosition ?? _importPosition++),
+          createdAt: finiteBackupNumber(existing?.createdAt) ?? importedCreatedAt ?? now,
+          updatedAt: importedUpdatedAt ?? now
         };
 
         // Snapshot before overwrite — feeds both versionHistory and the

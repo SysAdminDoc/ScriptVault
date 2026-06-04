@@ -150,6 +150,12 @@ describe('runtime import/export archive identity', () => {
     const options = JSON.parse(harness.fakeFflate.strFromU8(files['Exported Script.options.json']));
 
     expect(options.scriptId).toBe('script_exported');
+    expect(options.scriptVault).toEqual({
+      schemaVersion: 1,
+      createdAt: 1,
+      updatedAt: 2,
+      position: 0,
+    });
   });
 
   it('preserves ScriptVault ZIP script IDs when no existing script owns the name', async () => {
@@ -167,6 +173,12 @@ describe('runtime import/export archive identity', () => {
       'Preserved.options.json': harness.fakeFflate.strToU8(JSON.stringify({
         scriptId: 'script_preserved',
         settings: { enabled: false },
+        scriptVault: {
+          schemaVersion: 1,
+          createdAt: 1700000000000,
+          updatedAt: 1700000004321,
+          position: 7,
+        },
       })),
       'Preserved.storage.json': harness.fakeFflate.strToU8(JSON.stringify({ data: { draft: true } })),
     });
@@ -176,7 +188,13 @@ describe('runtime import/export archive identity', () => {
     expect(result).toMatchObject({ imported: 1, skipped: 0 });
     expect(harness.ScriptStorage.set).toHaveBeenCalledWith(
       'script_preserved',
-      expect.objectContaining({ id: 'script_preserved', enabled: false }),
+      expect.objectContaining({
+        id: 'script_preserved',
+        enabled: false,
+        createdAt: 1700000000000,
+        updatedAt: 1700000004321,
+        position: 7,
+      }),
     );
     expect(harness.ScriptValues.setAll).toHaveBeenCalledWith('script_preserved', { draft: true });
     expect(harness.generateId).not.toHaveBeenCalled();

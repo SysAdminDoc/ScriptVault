@@ -108,6 +108,12 @@ interface TampermonkeyOptions {
     require: string[];
     resource: Record<string, string>;
   };
+  scriptVault?: {
+    schemaVersion: number;
+    createdAt: number | null;
+    updatedAt: number | null;
+    position: number | null;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +158,10 @@ function allocateImportedScriptId(preferredId: unknown, usedScriptIds: Set<strin
     nextId = generateId();
   } while (usedScriptIds.has(nextId));
   return nextId;
+}
+
+function finiteBackupNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 export async function importScripts(
@@ -278,6 +288,12 @@ export async function exportToZip(): Promise<ZipExportResult> {
         grant: script.meta.grant || [],
         require: script.meta.require || [],
         resource: script.meta.resource || {}
+      },
+      scriptVault: {
+        schemaVersion: 1,
+        createdAt: finiteBackupNumber(script.createdAt),
+        updatedAt: finiteBackupNumber(script.updatedAt),
+        position: finiteBackupNumber(script.position)
       }
     };
     files[`${safeName}.options.json`] = fflate.strToU8(JSON.stringify(tmOptions, null, 2));
@@ -361,16 +377,30 @@ export async function importFromZip(
         let enabled = true;
         let storedValues: Record<string, unknown> = {};
         let preferredScriptId = '';
+        let importedCreatedAt: number | null = null;
+        let importedUpdatedAt: number | null = null;
+        let importedPosition: number | null = null;
 
         // Parse options file if exists
         if (optionsFileData) {
           try {
             const optionsData = JSON.parse(fflate.strFromU8(optionsFileData)) as {
               scriptId?: string;
+              createdAt?: number;
+              updatedAt?: number;
+              position?: number;
               settings?: { enabled?: boolean };
+              scriptVault?: {
+                createdAt?: number;
+                updatedAt?: number;
+                position?: number;
+              };
             };
             enabled = optionsData.settings?.enabled !== false;
             preferredScriptId = isSafeImportedScriptId(optionsData.scriptId) ? optionsData.scriptId : '';
+            importedCreatedAt = finiteBackupNumber(optionsData.scriptVault?.createdAt ?? optionsData.createdAt);
+            importedUpdatedAt = finiteBackupNumber(optionsData.scriptVault?.updatedAt ?? optionsData.updatedAt);
+            importedPosition = finiteBackupNumber(optionsData.scriptVault?.position ?? optionsData.position);
           } catch (e: unknown) {
             console.warn('Failed to parse options file:', e);
           }
@@ -412,14 +442,15 @@ export async function importFromZip(
           scriptId = allocateImportedScriptId(preferredScriptId, usedScriptIds);
         }
         usedScriptIds.add(scriptId);
+        const now = Date.now();
         const script: Script = {
           id: scriptId,
           code: code,
           meta: parsedMeta,
           enabled: enabled,
-          position: existing?.position ?? _importPosition++,
-          createdAt: existing?.createdAt || Date.now(),
-          updatedAt: Date.now()
+          position: existing?.position ?? (importedPosition ?? _importPosition++),
+          createdAt: finiteBackupNumber(existing?.createdAt) ?? importedCreatedAt ?? now,
+          updatedAt: importedUpdatedAt ?? now
         };
 
         await ScriptStorage.set(scriptId, script);
