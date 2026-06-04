@@ -4,6 +4,20 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Dashboard module reachability
+
+- **Mounted the formerly unreachable dashboard modules.** Scripts, settings,
+  utilities, and editor actions now initialize their lazy dashboard modules
+  through concrete containers or toolbar triggers instead of discarding loaded
+  module results.
+- **Added a dashboard module reachability gate.** `npm run
+  dashboard:modules:check` verifies triage metadata, lazy-loader and HTML
+  references, and UI wiring tokens for every `pages/dashboard-*.js` module, and
+  now runs inside `npm run check`.
+- **Removed the profile module's hidden Alt+number switcher.** Profile
+  switching stays on visible dashboard controls without registering a global
+  keyboard shortcut path.
+
 ### 2026-06-04 — TOFU SRI for unpinned `@require`
 
 - **Blocked previously trusted unpinned dependency swaps.** Trust receipts now

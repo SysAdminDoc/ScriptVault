@@ -1,7 +1,7 @@
 // ScriptVault — Multi-Profile Support
 // Different script configurations for different contexts: work, personal, dev, etc.
 // Provides profile creation, switching, auto-activation via URL rules,
-// keyboard shortcuts, and a dashboard UI with profile bar + editor modal.
+// and a dashboard UI with profile bar + editor modal.
 
 const ProfileManager = (() => {
   'use strict';
@@ -36,7 +36,6 @@ const ProfileManager = (() => {
   let _profiles = [];
   let _activeProfileId = null;
   let _initialized = false;
-  let _keydownHandler = null;
   let _comparisonEl = null;
   let _onActivatedListener = null;
   let _onUpdatedListener = null;
@@ -94,11 +93,6 @@ const ProfileManager = (() => {
 }
 .sv-profile-chip .sv-chip-emoji {
   font-size: 14px;
-}
-.sv-profile-chip .sv-chip-shortcut {
-  color: var(--text-muted, #707070);
-  font-size: 10px;
-  margin-left: 2px;
 }
 .sv-profile-add-btn {
   appearance: none;
@@ -637,33 +631,6 @@ const ProfileManager = (() => {
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Keyboard shortcuts (Alt+1 through Alt+9)                           */
-  /* ------------------------------------------------------------------ */
-
-  function _setupKeyboardShortcuts() {
-    if (_keydownHandler) return;
-    _keydownHandler = (e) => {
-      if (!e.altKey) return;
-      const num = parseInt(e.key, 10);
-      if (num >= 1 && num <= 9) {
-        const idx = num - 1;
-        if (idx < _profiles.length) {
-          e.preventDefault();
-          _applyProfile(_profiles[idx]);
-        }
-      }
-    };
-    document.addEventListener('keydown', _keydownHandler);
-  }
-
-  function _teardownKeyboardShortcuts() {
-    if (_keydownHandler) {
-      document.removeEventListener('keydown', _keydownHandler);
-      _keydownHandler = null;
-    }
-  }
-
-  /* ------------------------------------------------------------------ */
   /*  Profile Bar UI                                                     */
   /* ------------------------------------------------------------------ */
 
@@ -671,9 +638,8 @@ const ProfileManager = (() => {
     if (!_profileBar) return;
 
     let html = '<span class="sv-profile-bar-label">Profiles</span>';
-    _profiles.forEach((p, idx) => {
+    _profiles.forEach((p) => {
       const isActive = p.id === _activeProfileId;
-      const shortcut = idx < 9 ? `Alt+${idx + 1}` : '';
       // Validate color against a hex/named-color pattern to prevent style-attr breakout
       const safeColor = _safeColor(p.color);
       html += `
@@ -683,10 +649,9 @@ const ProfileManager = (() => {
               data-profile-id="${_escapeHtml(p.id)}"
               aria-pressed="${isActive ? 'true' : 'false'}"
               aria-current="${isActive ? 'true' : 'false'}"
-              title="${_escapeHtml(p.name)}${shortcut ? ' (' + shortcut + ')' : ''}">
+              title="${_escapeHtml(p.name)}">
           <span class="sv-chip-emoji">${_escapeHtml(p.emoji || '')}</span>
           <span>${_escapeHtml(p.name)}</span>
-          ${shortcut ? `<span class="sv-chip-shortcut">${shortcut}</span>` : ''}
         </button>`;
     });
 
@@ -1126,7 +1091,6 @@ const ProfileManager = (() => {
       _loadProfiles().then(() => {
         _renderProfileBar();
         _createHeaderIndicator(containerEl?.querySelector('.sv-profile-header-anchor'));
-        _setupKeyboardShortcuts();
         _startUrlWatcher();
       });
     },
@@ -1286,7 +1250,6 @@ const ProfileManager = (() => {
      * Tear down the profile manager (remove UI, event listeners).
      */
     destroy() {
-      _teardownKeyboardShortcuts();
       if (_onActivatedListener) {
         chrome.tabs.onActivated?.removeListener(_onActivatedListener);
         _onActivatedListener = null;
