@@ -66,6 +66,7 @@ phase.
 - [x] 2026-06-04 web-ext audit fix: `web-ext@^10.3.0` resolves to fixed `tmp@0.2.6`, restoring `npm audit --audit-level=high --omit=optional` — *Source: ROADMAP.md 2026-06-03 deep research pass; commit feat: add firefox sideload smoke*
 - [x] 2026-06-04 generated support matrix refresh: README and cross-browser pipeline matrix blocks now show 2026-06-04 Firefox evidence with `npm run firefox:package`, `npm run smoke:firefox`, and 139 `web-ext` warnings — *Source: ROADMAP.md documentation hygiene; commit feat: add firefox sideload smoke*
 - [x] G-5 Firefox Chrome-backup import round-trip: Firefox smoke imports Chrome-shaped ScriptVault JSON and ZIP fixtures, preserving safe script IDs, metadata, disabled state, GM storage values, `createdAt`, and `updatedAt`; ZIP exports now carry ScriptVault timestamp metadata — *Source: docs/archive/TODO.md Phase G; commit feat: preserve firefox backup imports*
+- [x] G-5 Firefox storage quota, migration, and restart data-safety validation: Firefox smoke imports a 26-script quota fixture, checks storage usage, restarts Firefox with a persistent temporary profile, verifies trash persistence, and restores the deleted script; migration tests now prove v1.x -> v2.0 re-runs are idempotent — *Source: FIREFOX-PORT.md Phase 2; commit test: cover firefox storage persistence*
 
 ## Stale / Obsolete Items
 

@@ -17,24 +17,37 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier promotions, `ts-source:check` reports 25 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 1 - 2026-06-04.
+> Last researched: Cycle 2 - 2026-06-04.
 
-## Implementer Instructions
+## ▶ Implementer Instructions (for the build machine)
 
-- Treat this roadmap as the active build queue. Use `COMPLETED.md` for shipped
-  work, `RESEARCH_REPORT.md` for evidence, and `FIREFOX-PORT.md` for the active
-  Firefox-port phase log.
-- Edit TypeScript source under `src/**`; do not hand-edit `background.js` or
-  generated runtime artifacts. Regenerate/check with the TS runtime scripts.
-- Use `cmd /c pushd` or another UNC-safe route for npm verification from the
-  VMware shared checkout. Shared-drive Vitest instability is known; use focused
-  checks or a local verification copy for broad test runs.
-- Preserve in-flight implementation diffs. The research lane can update
-  planning docs, but package bumps, generated support-matrix docs, and TS
-  promotion artifacts belong to the build lane.
-- Researcher-queue ownership tags: `🤖` means implementer-actionable, `🔧`
-  means user/external/manual gated, `🔬` means researcher-added this cycle, and
-  `✅` means implemented/closed by the build lane.
+This roadmap is fed continuously by the research machine. On every pass, the
+build machine should:
+
+1. `git pull --rebase` to get the latest researched items before starting.
+2. Work the open 🤖 items top-down by priority (P0 → P3). Build them properly:
+   multi-file structure, real error handling, no runtime auto-install hacks,
+   version strings synced, docs/CHANGELOG updated in the same commit.
+3. In addition to building items, run a full UX/accessibility audit each pass.
+   Walk every screen, page, dialog, form, and state touched by the change; check
+   responsive layout, keyboard access, focus order, loading/empty/error states,
+   copy clarity, and trust/safety cues.
+4. Edit TypeScript source under `src/**`; do not hand-edit `background.js` or
+   generated runtime artifacts. Regenerate/check with the TS runtime scripts.
+5. Use `cmd /c pushd` or another UNC-safe route for npm verification from the
+   VMware shared checkout. Shared-drive Vitest instability is known; use focused
+   checks or a local verification copy for broad test runs.
+6. Preserve in-flight implementation diffs. The research lane updates planning
+   docs; package bumps, generated support-matrix docs, source/test/build changes,
+   and TS promotion artifacts belong to the build lane.
+7. Check off ✅ each item completed, leave it in place with the checkmark, commit
+   per logical change with a why-focused message, and push.
+8. Never edit this Implementer Instructions block or the 🔬 Researcher Queue
+   headings; the research machine owns those. Never force-push.
+
+Researcher-queue ownership tags: `🤖` means implementer-actionable now, `🔧`
+means user/external/manual gated, `🔬` means researcher-added this cycle, and
+`✅` means implemented/closed by the build lane.
 
 ---
 
@@ -93,9 +106,11 @@ priority section below.
   - Progress: 2026-06-04 extended `npm run smoke:firefox` to import Chrome-shaped ScriptVault JSON and ZIP backup fixtures into the Firefox package. The ZIP path now exports/imports `scriptVault` metadata for `createdAt`, `updatedAt`, and position; the live Firefox smoke verifies safe script ID preservation, metadata, disabled state, GM storage values, and timestamps after import. Source and runtime import/export tests pin the metadata format.
   - Verification: `npm test -- tests/runtime-import-export.test.js tests/source-backup-modules.test.js tests/firefox-package.test.js`; `node scripts/smoke-firefox-sideload.mjs --skip-package`; full `npm run smoke:firefox` pending final package verification for this batch.
   - Source: docs/archive/TODO.md G-5.
-- [ ] P2 — Phase 2: Firefox storage quota, migration, and restart data-safety validation
+- [x] P2 — Phase 2: Firefox storage quota, migration, and restart data-safety validation
   - Why: the remaining Firefox Phase 2 data-safety checks still need explicit build-lane evidence after the Chrome backup import path: 26-script storage quota fit, v1.x -> v2.0 migration idempotence, and trash recovery after Firefox restart/persistent background behavior.
   - Acceptance: Firefox validation fixture covers a 26-script import without quota errors; migration re-run is idempotent; trash restore/undo still works after a Firefox restart.
+  - Progress: 2026-06-04 extended `npm run smoke:firefox` with a 26-script Firefox import fixture, post-import `getStorageUsage`, and a persistent-profile Firefox restart that reinstalls the temporary package and verifies trash persistence plus `restoreFromTrash`. Added a migration idempotence regression so re-running the v1.x -> v2.0 migration does not mutate storage.
+  - Verification: `node --check scripts/smoke-firefox-sideload.mjs`; `npm test -- tests/firefox-package.test.js tests/migration.test.js`; `node scripts/smoke-firefox-sideload.mjs --skip-package` with Firefox Developer Edition 151.0b10.
   - Source: FIREFOX-PORT.md Phase 2 remaining storage/data-safety rows.
 - [ ] P2 — Phase 3: per-provider WebDAV-only baseline + later OAuth/identity decision
   - Source: docs/archive/TODO.md G-6.
@@ -143,6 +158,16 @@ Priorities/sizes preserve the source labels.
   path. No duplicate rows were promoted: the existing P0 web-ext bump and P2
   support matrix refresh rows were the correct build-lane handoff.
 
+### Researcher Queue (Cycle 2 - 2026-06-04)
+
+- [x] 🔬 `sync-envelope-state-partition-2026-06-04` - rechecked the post-Firefox
+  smoke baseline, compared the cloud-sync envelope builders against the loose
+  per-script `ScriptSettings` shape, and mined ScriptCat's March 2026
+  device-local sync fix. The net-new lane below is not a duplicate of the E2E
+  encryption row: encryption protects provider confidentiality, while this item
+  prevents cross-device semantic drift from syncing local conflict/error/runtime
+  flags as normal script settings.
+
 ### Security and data safety
 
 - [ ] P0 — `GM_xmlhttpRequest` internal-host / SSRF guard
@@ -155,6 +180,13 @@ Priorities/sizes preserve the source labels.
   - Touches: new `modules/sync-crypto.js`, `cloud-sync.ts` `_performSync`, each provider `upload/download`.
   - Acceptance: PBKDF2→AES-256-GCM round-trip identity; wrong-passphrase rejection; mixed v1/v2 envelope handling.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-2.
+- [ ] 🤖 🔬 P1 — Partition sync-safe vs device-local per-script settings in cloud sync envelopes
+  - Why: `ScriptSettings` is intentionally open-ended (`userModified`, `mergeConflict`, `_failedRequires`, `_registrationError`, plus arbitrary keys), while the cloud-sync builders serialize `settings` wholesale into provider envelopes. That can propagate local conflict markers, registration failures, stale diagnostics, or device-specific execution/UI preferences across machines as if they were shared script data.
+  - Evidence: `src/types/script.ts:94-99`; `src/background/cloud-sync.ts:232-249,390-411`; `src/background/core.ts:1961-1975,2100-2123`; `src/modules/sync-easycloud.ts:685-725,760-773`; ScriptCat PR #1309 moved device-related cloud/sync config to `chrome.storage.local` after cross-device sync forced OneDrive state and OAuth prompts onto other machines (`https://github.com/scriptscat/scriptcat/pull/1309`, also summarized in `https://docs.scriptcat.org/docs/change/` v0.16.14).
+  - Touches: `src/background/cloud-sync.ts`, `src/background/core.ts`, `src/modules/sync-easycloud.ts`, `src/types/script.ts`, sync/import/export tests.
+  - Acceptance: add a sync schema/helper that whitelists sync-safe per-script settings and strips local-only flags before upload; remote envelopes containing local-only keys are ignored on import/merge; old envelopes remain backward-compatible through read-time filtering; local-only flags survive on the originating device.
+  - Verify: focused sync-envelope tests with `userModified`, `mergeConflict`, `_registrationError`, and at least one allowed shared setting; `npm run ts-runtime:check`; relevant sync/import/export tests.
+  - Complexity: M
 - [ ] P1 — Per-script host scope for GM network/cookie/DNR primitives
   - Why: injection is `@match`-scoped but background GM_xhr/GM_cookie/GM_download/GM_webRequest run with the extension's ambient `<all_urls>`; umbrella for NF-1/B-1/H-1.
   - Touches: GM_xhr/GM_cookie/GM_download cases, `dnr-rules.ts`, install card.
