@@ -105,10 +105,14 @@ async function buildDependencyProvenance(
         ? 'signature-verified'
         : result.verification === 'unsupported-bundle'
           ? 'unsupported-bundle'
+          : result.verification === 'root-verification-failed'
+            ? 'root-verification-failed'
           : 'signature-failed',
       error: result.error,
       certificateIdentity: result.certificateIdentity,
       certificateIssuer: result.certificateIssuer,
+      certificateNotBefore: result.certificateNotBefore,
+      certificateNotAfter: result.certificateNotAfter,
       digestVerified: result.digestVerified,
       signatureVerified: result.signatureVerified,
       rootVerified: result.rootVerified,

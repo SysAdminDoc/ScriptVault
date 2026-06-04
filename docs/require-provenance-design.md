@@ -1,7 +1,7 @@
 # `@require-provenance` Design — Sigstore-Style Verification for `@require`
 
 **Phase:** 39.5 (extends Phase 11.8 SRI).
-**Status:** Phase A parser + storage foundation, Phase B bundle parser, and Phase C message-signature verifier shipped 2026-06-04; Fulcio root/expiry verification, UI, and author guide remain open.
+**Status:** Phase A parser + storage foundation, Phase B bundle parser, Phase C message-signature verifier, and Phase D Fulcio root/validity checks shipped 2026-06-04; UI and author guide remain open. RFC3161/Rekor timestamp proof remains Phase 2 defense-in-depth.
 **Owner:** Phase 17 (Security Round 2) follow-up.
 **Last reviewed:** 2026-05-17.
 
@@ -113,15 +113,18 @@ Got author:      https://github.com/attacker
 - Add `src/modules/sigstore-bundle-verifier.ts` and generated `modules/sigstore-bundle-verifier.js`.
 - Compute the SHA-256 digest of the `@require` body, validate the bundle `messageDigest`, extract the leaf certificate's P-256 `SubjectPublicKeyInfo`, and verify DER/raw ECDSA signatures against the artifact digest.
 - Match the certificate URI/e-mail SAN and Fulcio OIDC issuer extension against the `@require-identity` declaration.
-- Wire `fetchProvenanceBundle()` through update, pending-update, and subscription-install trust receipts. Receipts record `signature-verified`, `signature-failed`, `bundle-unavailable`, or `unsupported-bundle`; root verification remains `not-checked`.
+- Wire `fetchProvenanceBundle()` through update, pending-update, and subscription-install trust receipts. Receipts record `signature-verified`, `signature-failed`, `bundle-unavailable`, or `unsupported-bundle`; Phase D adds Fulcio root verification.
 - **No new deps:** uses Web Crypto for SHA-256 and a local P-256 ECDSA verifier because Sigstore message signatures are over the artifact digest.
 - **Tests:** golden-path verification, tampered body, mismatched identity, mismatched issuer, first-certificate chain handling, DSSE unsupported status, generated runtime export, and receipt bundle-unavailable wiring.
 
-### Phase D — Fulcio root verification
+### Phase D — Fulcio root verification — shipped 2026-06-04
 
-- Bundle the [Fulcio v1 root certificate](https://github.com/sigstore/root-signing) at build time.
-- Verify the leaf cert chains to the root.
-- Verify the cert's notBefore/notAfter is satisfied (Fulcio certs are valid for ~10 minutes; the bundle must include a signed timestamp).
+- Bundle the [Fulcio v1 root certificate](https://github.com/sigstore/root-signing) in `src/modules/sigstore-bundle-verifier.ts`, with injectable trusted roots for tests and future rotation.
+- Verify leaf/intermediate certificate signatures up to the trusted root using local P-256/P-384 ECDSA and the certificate signature algorithm hash.
+- Verify leaf, intermediate, and root `notBefore`/`notAfter` at verifier time.
+- Receipts now carry `rootVerified: verified|failed` plus `root-verification-failed` when the chain or validity window is rejected.
+- **Tests:** trusted-root success, untrusted-root failure, expired-leaf failure, and generated runtime coverage.
+- **Deferred:** RFC3161 signed timestamp parsing/verification and Rekor inclusion proof remain Phase E defense-in-depth work.
 
 ### Phase E — Rekor inclusion proof (defense-in-depth, Phase 2)
 

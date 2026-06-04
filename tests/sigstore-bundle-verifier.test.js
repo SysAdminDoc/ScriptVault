@@ -90,14 +90,25 @@ function extension(extensionOid, value) {
   return sequence([oid(extensionOid), octetString(value)]);
 }
 
-function buildCertificate(spki, subject = SUBJECT, issuer = ISSUER) {
+function pemFromDer(derBytes) {
+  const base64 = derBytes.toString('base64').match(/.{1,64}/g).join('\n');
+  return `-----BEGIN CERTIFICATE-----\n${base64}\n-----END CERTIFICATE-----`;
+}
+
+function buildSignedCertificate({
+  publicKey,
+  signerPrivateKey,
+  subject = '',
+  issuer = '',
+  notBefore = '250101000000Z',
+  notAfter = '300101000000Z',
+}) {
   const ecdsaWithSha256 = sequence([oid('1.2.840.10045.4.3.2')]);
   const emptyName = sequence([]);
-  const validity = sequence([utcTime('250101000000Z'), utcTime('300101000000Z')]);
-  const extensions = explicit(3, sequence([
-    extension('2.5.29.17', sequence([contextPrimitive(6, Buffer.from(subject, 'ascii'))])),
-    extension('1.3.6.1.4.1.57264.1.8', utf8(issuer)),
-  ]));
+  const validity = sequence([utcTime(notBefore), utcTime(notAfter)]);
+  const extensionList = [];
+  if (subject) extensionList.push(extension('2.5.29.17', sequence([contextPrimitive(6, Buffer.from(subject, 'ascii'))])));
+  if (issuer) extensionList.push(extension('1.3.6.1.4.1.57264.1.8', utf8(issuer)));
   const tbs = sequence([
     explicit(0, integer(2)),
     integer(1),
@@ -105,16 +116,32 @@ function buildCertificate(spki, subject = SUBJECT, issuer = ISSUER) {
     emptyName,
     validity,
     emptyName,
-    spki,
-    extensions,
+    publicKey.export({ type: 'spki', format: 'der' }),
+    explicit(3, sequence(extensionList)),
   ]);
-  return sequence([tbs, ecdsaWithSha256, bitString(Buffer.from([0]))]);
+  const signer = createSign('sha256');
+  signer.update(tbs);
+  signer.end();
+  return sequence([tbs, ecdsaWithSha256, bitString(signer.sign(signerPrivateKey))]);
 }
 
 function makeSignedBundle(artifact = 'console.log("signed");', options = {}) {
-  const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
-  const spki = publicKey.export({ type: 'spki', format: 'der' });
-  const certificate = buildCertificate(spki, options.subject || SUBJECT, options.issuer || ISSUER);
+  const root = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const leaf = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const rootCertificate = buildSignedCertificate({
+    publicKey: root.publicKey,
+    signerPrivateKey: root.privateKey,
+    notBefore: '250101000000Z',
+    notAfter: '300101000000Z',
+  });
+  const certificate = buildSignedCertificate({
+    publicKey: leaf.publicKey,
+    signerPrivateKey: root.privateKey,
+    subject: options.subject || SUBJECT,
+    issuer: options.issuer || ISSUER,
+    notBefore: options.notBefore || '250101000000Z',
+    notAfter: options.notAfter || '300101000000Z',
+  });
   const signer = createSign('sha256');
   signer.update(artifact);
   signer.end();
@@ -130,9 +157,17 @@ function makeSignedBundle(artifact = 'console.log("signed");', options = {}) {
           algorithm: 'SHA2_256',
           digest: createHash('sha256').update(artifact).digest('base64'),
         },
-        signature: signer.sign(privateKey).toString('base64'),
+        signature: signer.sign(leaf.privateKey).toString('base64'),
       },
     },
+    rootPem: pemFromDer(rootCertificate),
+  };
+}
+
+function verificationOptions(fixture) {
+  return {
+    trustedRootCertificates: [fixture.rootPem],
+    verificationTime: Date.UTC(2026, 0, 1),
   };
 }
 
@@ -143,6 +178,7 @@ describe('Sigstore bundle verifier', () => {
       bundle: fixture.bundle,
       artifact: fixture.artifact,
       expectedIdentity: `${SUBJECT} (issuer: ${ISSUER})`,
+      ...verificationOptions(fixture),
     });
 
     expect(result).toMatchObject({
@@ -153,7 +189,7 @@ describe('Sigstore bundle verifier', () => {
       certificateIssuer: ISSUER,
       digestVerified: true,
       signatureVerified: true,
-      rootVerified: 'not-checked',
+      rootVerified: 'verified',
     });
   });
 
@@ -163,6 +199,7 @@ describe('Sigstore bundle verifier', () => {
       bundle: fixture.bundle,
       artifact: `${fixture.artifact}\nalert("tampered");`,
       expectedIdentity: `${SUBJECT} (issuer: ${ISSUER})`,
+      ...verificationOptions(fixture),
     });
 
     expect(result).toMatchObject({
@@ -180,11 +217,13 @@ describe('Sigstore bundle verifier', () => {
       bundle: fixture.bundle,
       artifact: fixture.artifact,
       expectedIdentity: `https://github.com/attacker/repo/.github/workflows/release.yml@refs/heads/main (issuer: ${ISSUER})`,
+      ...verificationOptions(fixture),
     });
     const wrongIssuer = await verifySigstoreMessageSignature({
       bundle: fixture.bundle,
       artifact: fixture.artifact,
       expectedIdentity: `${SUBJECT} (issuer: https://issuer.example.invalid)`,
+      ...verificationOptions(fixture),
     });
 
     expect(wrongSubject).toMatchObject({
@@ -212,7 +251,44 @@ describe('Sigstore bundle verifier', () => {
       bundle: fixture.bundle,
       artifact: fixture.artifact,
       expectedIdentity: `${SUBJECT} (issuer: ${ISSUER})`,
+      ...verificationOptions(fixture),
     })).resolves.toMatchObject({ success: true, signatureVerified: true });
+  });
+
+  it('rejects certificates that do not chain to the trusted root', async () => {
+    const fixture = makeSignedBundle();
+    const unrelated = makeSignedBundle('other');
+    const result = await verifySigstoreMessageSignature({
+      bundle: fixture.bundle,
+      artifact: fixture.artifact,
+      expectedIdentity: `${SUBJECT} (issuer: ${ISSUER})`,
+      trustedRootCertificates: [unrelated.rootPem],
+      verificationTime: Date.UTC(2026, 0, 1),
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      verification: 'root-verification-failed',
+      rootVerified: 'failed',
+      error: 'Certificate chain does not terminate at a trusted Fulcio root',
+    });
+  });
+
+  it('rejects certificates outside their validity window', async () => {
+    const fixture = makeSignedBundle('console.log("expired");', { notAfter: '250101000000Z' });
+    const result = await verifySigstoreMessageSignature({
+      bundle: fixture.bundle,
+      artifact: fixture.artifact,
+      expectedIdentity: `${SUBJECT} (issuer: ${ISSUER})`,
+      ...verificationOptions(fixture),
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      verification: 'root-verification-failed',
+      rootVerified: 'failed',
+      error: 'Leaf certificate is not valid at verification time',
+    });
   });
 
   it('reports DSSE bundles as unsupported for the message-signature verifier phase', async () => {
@@ -249,6 +325,7 @@ describe('Sigstore bundle verifier', () => {
       bundle: fixture.bundle,
       artifact: fixture.artifact,
       expectedIdentity: `${SUBJECT} (issuer: ${ISSUER})`,
+      ...verificationOptions(fixture),
     })).resolves.toMatchObject({ success: true, verification: 'signature-verified' });
   });
 });
