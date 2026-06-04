@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier and sync-crypto promotions, `ts-source:check` reports 26 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 11 - 2026-06-04.
+> Last researched: Cycle 12 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -294,6 +294,21 @@ Priorities/sizes preserve the source labels.
   than duplicated: this is now a CI/release-quality contract item, not just
   local metadata polish.
 
+### Researcher Queue (Cycle 12 - 2026-06-04)
+
+- [ ] 🔬 `host-permission-recovery-narrow-mode-2026-06-04` - rechecked the
+  new per-script host-scope enforcement against browser host-access controls.
+  Chrome and MDN both support optional host permission requests, Chrome 133+
+  adds a non-modal `permissions.addHostAccessRequest()` surface, and Firefox
+  exposes optional host grants/revocations through the permissions API. The
+  repo still declares required `<all_urls>` in Chrome and Firefox manifests,
+  has a read-only denied-host list, and historical Narrow Host Mode /
+  permission-recovery notes remain in archived sections only. The promoted row
+  below is not a duplicate of the shipped runtime host-scope guard; it is the
+  user-facing recovery/prototype layer that determines whether ScriptVault can
+  later offer a lower-warning optional-host mode without breaking userScripts,
+  DNR, cookies, downloads, or cross-origin fetch.
+
 ### Firefox and mobile release quality
 
 - [x] 🤖 🔧 🔬 P2 — Add a Firefox for Android smoke gate or remove the Android compatibility claim before AMO listing
@@ -402,6 +417,13 @@ Priorities/sizes preserve the source labels.
   - Verification: `npm run build:bg`; `npm test -- tests/content-bridge-security.test.js tests/background-cookie-url.test.js tests/source-dnr-rules.test.js tests/install-optional-permissions.test.js tests/storage.test.js -- --pool=vmThreads --maxWorkers=1`; `npm run typecheck`; `npm run ts-runtime:check`; `npm run ts-source:check`; `npm test -- tests/source-hardening-parity.test.js tests/dashboard-a11y.test.js -- --pool=vmThreads --maxWorkers=1`; `npm run check`; `npm run store-copy:check`; `npm run readme:check`; `npm run smoke:dashboard`; `npm run cws:remote-code:check`; `npm run test:a11y`; `git diff --check`.
   - Complexity: M
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-4.
+- [ ] 🤖 🔬 P2 — Add host-permission recovery prompts and an optional narrow-host prototype
+  - Why: ScriptVault now limits privileged GM network/cookie/DNR calls to script run hosts, but browser-level host access can still be withheld or overbroad. The manifest still requires `<all_urls>` for Chrome and Firefox, the runtime-host-permissions UI only shows a saved denied-host list, and archived host-access-request / Narrow Host Mode research has not been turned into an active implementation row. Chrome's Permissions API supports optional origin requests and Chrome 133+ host-access requests, while MDN documents MV3 `optional_host_permissions` plus grant/revoke events for Firefox. A staged recovery/prototype keeps users from seeing empty permission failures now and supplies the evidence needed before any lower-warning optional-host manifest mode.
+  - Evidence: `manifest.json:37-39`; `manifest-firefox.json:48-50`; `pages/dashboard.html:6598-6612`; `pages/dashboard.js:10066-10119`; `pages/install.js:89-134`; `pages/popup.js:459-477`; `docs/archive/RESEARCH_FEATURE_PLAN_PASS2.md:173-177,245-249`; `ROADMAP.md:1955-1964,2105-2113`; Chrome declare-permissions docs (`https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions`); Chrome Permissions API `addHostAccessRequest` / `request` docs (`https://developer.chrome.com/docs/extensions/reference/api/permissions`); MDN `optional_host_permissions` docs (`https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/optional_host_permissions`).
+  - Touches: `manifest.json` / generated Firefox and Edge manifest transforms for optional-host prototype only, popup/sidepanel/dashboard active-site permission probes, install review copy, background permission diagnostics for GM_xhr/GM_download/GM_cookie/GM_webRequest failures, settings for any opt-in mode, support matrix docs, and browser smoke fixtures.
+  - Acceptance: with normal required-host manifests, withheld current-site access is detected and the popup/side panel/dashboard show which scripts are blocked plus a Chrome `addHostAccessRequest` or `permissions.request({origins:[...]})` recovery path when available; Firefox falls back to documented optional-permission/request guidance and listens for host grant/removal events where supported; a gated prototype proves whether moving `http://*/*` / `https://*/*` into `optional_host_permissions` can still register user scripts, fetch `@require`, run DNR/cookie/download flows, and preserve reviewer copy before any default-manifest change.
+  - Verify: Chrome real-profile smoke with extension site access set to "on click" or a withheld host; Firefox temporary-sideload smoke for optional host grant/revoke; unit tests for origin pattern derivation and permission-denied diagnostics; `npm run support:matrix:check`; `npm run store-copy:check`; `npm run cws:remote-code:check`.
+  - Complexity: L
 - [x] P1 — TOFU SRI for unpinned `@require`
   - Why: SRI enforced only when an author hand-pins `#sha256=`; a compromised CDN silently swaps `@require` bytes. `trust-receipt.ts` already computes per-`@require` SHA-256 and diffs across updates but only displays, never enforces.
   - Touches: `resource-loader.ts`; wire existing trust-receipt diff to fail-closed on update.

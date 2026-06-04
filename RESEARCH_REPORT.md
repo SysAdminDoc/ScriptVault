@@ -238,6 +238,22 @@ npm `engines` / `engine-strict` docs
 `https://docs.npmjs.com/cli/using-npm/config#engine-strict`), and setup-node
 `node-version-file` docs (`https://github.com/actions/setup-node#usage`).
 
+2026-06-04 Cycle 12 host-permission recovery refresh: the build lane closed
+per-script privileged host scoping, but browser-level host access still has no
+active recovery/prototype row. Chrome and Firefox manifests still require
+`<all_urls>`, the dashboard runtime-host-permissions surface is a read-only
+denied-host list with restore buttons, and optional-host / host-access-request
+work only exists in archived notes. `ROADMAP.md` now promotes a P2 staged item:
+first detect and recover user-withheld host access through popup/side-panel /
+dashboard diagnostics, then run a gated optional-host-permission prototype before
+any default-manifest change.
+External anchors: Chrome optional-permission and host-permission guidance
+(`https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions`),
+Chrome Permissions API `request` / `addHostAccessRequest`
+(`https://developer.chrome.com/docs/extensions/reference/api/permissions`), and
+MDN MV3 `optional_host_permissions`
+(`https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/optional_host_permissions`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
@@ -273,9 +289,10 @@ Top opportunities (one line each):
 12. **[Closed 2026-06-04] CWS remote-hosted-code review packet was missing** — `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check` now separate allowed User Scripts/sandbox flows from forbidden extension remote logic and scan source/package inputs plus the built Chrome ZIP in CI. (P1)
 13. **[Closed 2026-06-04] Edge artifact evidence was not wired into CI or support claims** — CI now builds/uploads `edge-artifacts/*`, and the support matrix validates the current Edge ZIP/report instead of claiming the Chrome ZIP is the Edge package. (P2)
 14. **[Verified] Node toolchain contract drift** — `package.json` declares `engines.node >=21.2.0`, CI still runs setup-node `20`, there is no Node version file / package-manager pin / engine-strict gate, and npm treats `engines` as advisory by default. (P2)
-15. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
-16. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
-17. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
+15. **[Verified] Host-permission recovery/narrow mode is not active** — per-script host scope is enforced, but required `<all_urls>` remains and withheld-host recovery / optional-host prototype work is only archived. (P2)
+16. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
+17. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
+18. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
 
 ## Evidence Reviewed
 
@@ -293,6 +310,7 @@ Top opportunities (one line each):
 - **CWS remote-code review**: `manifest.json` declares `userScripts` and limits extension-page CSP to `script-src 'self'` while sandboxing `pages/editor-sandbox.html`; `PRIVACY.md` explains externally sourced userscript execution; `docs/cws-remote-code-compliance.md` maps policy buckets; `scripts/check-cws-remote-code.mjs` scans source/package inputs and the built Chrome ZIP for forbidden remote-code execution patterns.
 - **Edge artifact/support claims**: `scripts/build-edge.mjs` stages `build-edge/`, writes `edge-artifacts/scriptvault-edge-v<version>.zip`, and emits an `edge-build-<version>.json` release-readiness report; `tests/edge-build.test.js` covers the builder/report; CI now builds and uploads `edge-artifacts/*`; `scripts/generate-browser-support-matrix.mjs`, `README.md`, and `docs/cross-browser-pipeline.md` validate the current Edge report and state that Partner Center publication remains manual while REST update automation is deferred.
 - **Node/toolchain contract**: `package.json:6-8` declares `engines.node >=21.2.0`, `.github/workflows/ci.yml:25-29` still uses setup-node `node-version: 20`, `.nvmrc` / `.node-version` / `.npmrc` are absent, local `npm config get engine-strict` returns `false`, `tests/audit-hardening-2026-06-04*.test.js:12` uses `import.meta.dirname`, and `scripts/check-cws-publish-tooling.mjs:40-58` still checks CWS tooling against a hard-coded Node 20 lower bound.
+- **Host permission recovery**: `manifest.json:37-39` and `manifest-firefox.json:48-50` still require `<all_urls>`; `pages/dashboard.html:6598-6612` / `pages/dashboard.js:10066-10119` expose only a read-only denied-host list plus restore buttons; `pages/install.js:89-134` requests named optional permissions for grants but no optional origins; archived NF-7/NF-19 and Phase 12.12/13.9 hold the old Narrow Host Mode / host-access-request research without an active row.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -305,6 +323,7 @@ Top opportunities (one line each):
   - Chrome Web Store program policies, Chrome remote-hosted-code violation guidance, and the Chrome `userScripts` API reference anchor the CWS remote-code review packet item: https://developer.chrome.com/docs/webstore/program-policies/policies, https://developer.chrome.com/docs/extensions/develop/migrate/remote-hosted-code, https://developer.chrome.com/docs/extensions/reference/api/userScripts
   - Microsoft Edge Chrome-port guidance, Add-ons publish flow, supported API table, and update REST API docs anchor the Edge artifact/support-matrix item: https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/port-chrome-extension, https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension, https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/api-support, https://learn.microsoft.com/en-us/microsoft-edge/extensions/update/api/using-addons-api
   - Node ESM, Node v21 package metadata/Corepack, npm engines/engine-strict, and setup-node version-file docs anchor the Node toolchain contract item: https://nodejs.org/api/esm.html#importmetadirname, https://nodejs.org/download/release/v21.1.0/docs/api/packages.html#packagemanager, https://docs.npmjs.com/files/package.json/#engines, https://docs.npmjs.com/cli/using-npm/config#engine-strict, https://github.com/actions/setup-node#usage
+  - Chrome optional-permission / host-permission docs, Chrome Permissions API `request` / `addHostAccessRequest`, and MDN MV3 `optional_host_permissions` anchor the host-permission recovery item: https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions, https://developer.chrome.com/docs/extensions/reference/api/permissions, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/optional_host_permissions
   - Userscript-manager landscape (Tampermonkey / Violentmonkey / ScriptCat sync, MV3, GitHub-Gist sync, granular execution control): comparison sources at extensionfixes.com and addons.mozilla.org Violentmonkey listing.
 - **Unverifiable here** [Needs validation]: live MV3 runtime behavior (cross-tab GM listener fan-out, omnibox UX, settings round-trips) — no browser run performed this pass; all runtime claims are static-read [Verified] or [Likely].
 
@@ -349,6 +368,7 @@ Top opportunities (one line each):
 | CWS remote-code review packet | Chrome Web Store review | `PRIVACY.md`, `docs/store-listing-copy.md`, `docs/cws-remote-code-compliance.md`, `manifest.json`, package ZIP | shipped 2026-06-04 | reviewer memo plus source/package and built-artifact remote-code scan |
 | Edge package evidence | Edge Add-ons package/release | `scripts/build-edge.mjs`, `edge-artifacts/edge-build-<version>.json`, support matrix | shipped | CI builds/uploads Edge artifacts; support matrix validates the Edge report |
 | Node toolchain contract | CI/contributor bootstrap/release scripts | `package.json`, `.github/workflows/ci.yml`, missing `.nvmrc` / `.node-version` / `.npmrc`, CWS tooling script | partial | `engines.node` exists, but CI/version files/package-manager pin/engine enforcement drift |
+| Host-permission recovery | Browser site access / runtime diagnostics | required `<all_urls>` manifests, dashboard denied-host list, popup/side panel | partial | runtime host-scope enforcement shipped; withheld-host recovery and optional-host prototype not active |
 | Coverage report | `npm run test:cov` | `vitest.config.mjs` | shipped | `all:false`, **no threshold** |
 | Dependency audit policy | manual | `docs/dependency-audit-policy.md` | doc only | **no bot automation** |
 | Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | actions **tag-pinned, not SHA** |
@@ -374,6 +394,7 @@ Top opportunities (one line each):
 - **Major** — No consolidated/validated Settings surface for operator knobs. → ROADMAP P2 settings audit. [Likely]
 - **Minor** — `sv` omnibox + keyboard commands undocumented. → ROADMAP P3 doc items. [Verified]
 - **Major** — Node/toolchain contract drift: `engines.node >=21.2.0` is advisory under default npm config, CI still sets up Node 20, and the repo lacks a version file/package-manager pin/engine-strict gate. → ROADMAP P2 toolchain alignment. [Verified]
+- **Major** — Host-permission recovery/narrow mode is archived but not active: users who withhold site access need clear repair paths, and any future optional-host manifest needs a gated browser prototype before lowering required `<all_urls>`. → ROADMAP P2 host-permission recovery. [Verified]
 
 ## Architecture & Technical Findings
 
@@ -385,14 +406,15 @@ Top opportunities (one line each):
 
 ## Security / Privacy / Data Safety
 
-- The deepest runtime risks (GM_xhr SSRF NF-1, plaintext cloud sync NF-2, per-script scope NF-4, TOFU SRI NF-5) are already roadmapped — not re-listed.
+- The deepest runtime risks (GM_xhr SSRF NF-1, plaintext cloud sync NF-2, per-script scope NF-4, TOFU SRI NF-5) are already roadmapped or closed — not re-listed.
+- New Cycle 12 trust item: now that privileged GM host scope is enforced, the remaining browser-permission trust gap is recovering from user-withheld host access and proving whether a future optional-host-permission mode can keep ScriptVault functional with lower default warnings.
 - New: the **supply-chain/review** layer is the gap this pass surfaces — a CVE reached CI via an unpinned, un-bot-tracked dev dependency, the release pipeline that signs/attests artifacts uses floating action tags, and Chrome submissions needed a remote-hosted-code review packet plus package scan that separates allowed User Scripts/sandbox flows from forbidden extension remote logic. The P0 web-ext bump, AMO library provenance, and CWS remote-code review packet are closed; P1 Dependabot + P1 SHA-pin remain to harden the path from source to reviewed artifact.
 - Privacy posture remains local-first with no usage beacon; external telemetry stays a non-goal.
 
 ## UX & Accessibility
 
 - WCAG 2.2 AA tracking lives in `docs/wcag3-gap-analysis.md`; H-1 (help-link consistency) and H-2 (plain-language Flesch ≥60) remain open in Existing Planned Work — not duplicated.
-- New UX items are discoverability (omnibox/commands docs, P3) and a validated Settings surface (P2); both complement, not duplicate, the accessibility rows.
+- New UX items are discoverability (omnibox/commands docs, P3), host-permission recovery diagnostics (P2), and a validated Settings surface (P2); all complement, not duplicate, the accessibility rows.
 
 ## Explicit Non-Goals
 
