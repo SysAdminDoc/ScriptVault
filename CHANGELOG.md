@@ -4,6 +4,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-03 — Signing runtime TypeScript promotion
+
+- **Signing runtime is now generated from TypeScript.** `bg/signing.js` is
+  produced from `src/bg/signing.ts`, preserving the null signature guard,
+  trust-store own-property check, and runtime `SettingsManager` global contract.
+
 ### 2026-06-03 — Workspace manager TypeScript promotion
 
 - **Workspace runtime is now generated from TypeScript.** `bg/workspaces.js`

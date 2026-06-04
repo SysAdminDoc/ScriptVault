@@ -109,9 +109,9 @@
 ## Phase F — Larger Bets carried over
 
 - [ ] **F-1** Continue TypeScript authoritative-source promotion until `background.core.js` is generated from TS
-  - Evidence: ROADMAP Larger Bets; CLAUDE.md "TS Source Promotion" entries; 16 promoted entries, 5 still mirrored.
+  - Evidence: ROADMAP Larger Bets; CLAUDE.md "TS Source Promotion" entries; 17 promoted entries, 4 still mirrored.
   - Acceptance: `ts-source-promotion.json` reaches 0 mirrored; `background.core.js` is generated from TS source.
-  - Progress: 2026-06-03 promoted `bg/workspaces.js` from `src/bg/workspaces.ts`; focused verification `npm test -- tests/workspaces.test.js tests/source-bg-modules.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`, `node --check bg/workspaces.js`, `node --check background.js`.
+  - Progress: 2026-06-03 promoted `bg/workspaces.js` from `src/bg/workspaces.ts`; focused verification `npm test -- tests/workspaces.test.js tests/source-bg-modules.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`, `node --check bg/workspaces.js`, `node --check background.js`. Promoted `bg/signing.js` from `src/bg/signing.ts`; focused verification `npm test -- tests/signing.test.js tests/source-bg-modules.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`, `node --check bg/signing.js`, `node --check background.js`.
 - [ ] **F-2** Complete release trust pipeline (rollback rehearsal automation, CWS/AMO status checks)
   - Evidence: ROADMAP Larger Bets; partial — signatures/SBOM/source ZIP/package diff are done.
 - [ ] **F-3** Local health diagnostics (other half of large-library bet)
@@ -172,5 +172,6 @@
 | 2026-06-03 | E | E-7 | feat: queue script subscriptions for review |
 | 2026-06-03 | E | E-8 | feat: request persistent storage before script writes |
 | 2026-06-03 | F | F-1 partial: `bg/workspaces.js` TS promotion | feat: promote workspace manager runtime |
+| 2026-06-03 | F | F-1 partial: `bg/signing.js` TS promotion | feat: promote signing runtime |
 
 (Append a row each time work lands.)
