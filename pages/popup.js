@@ -834,19 +834,23 @@
 
         const emptyState = document.getElementById('emptyState');
         if (displayScripts.length === 0) {
-            if (elements.scriptList) elements.scriptList.hidden = true;
-            elements.scriptList.classList.remove('loading');
-            elements.scriptList.setAttribute('aria-busy', 'false');
-            elements.scriptList.innerHTML = '';
+            if (elements.scriptList) {
+                elements.scriptList.hidden = true;
+                elements.scriptList.classList.remove('loading');
+                elements.scriptList.setAttribute('aria-busy', 'false');
+                elements.scriptList.innerHTML = '';
+            }
             if (emptyState) emptyState.style.display = 'block';
             updateEmptyStateHint();
             updatePrimaryActionMenuVisibility();
             return;
         }
         if (emptyState) emptyState.style.display = 'none';
-        if (elements.scriptList) elements.scriptList.hidden = false;
-        elements.scriptList.classList.remove('loading');
-        elements.scriptList.setAttribute('aria-busy', 'false');
+        if (elements.scriptList) {
+            elements.scriptList.hidden = false;
+            elements.scriptList.classList.remove('loading');
+            elements.scriptList.setAttribute('aria-busy', 'false');
+        }
         updatePrimaryActionMenuVisibility();
 
         elements.scriptList.innerHTML = displayScripts.map((script, i) => {

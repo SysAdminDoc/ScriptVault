@@ -5501,7 +5501,7 @@
                 const folderIdAttr = escapeHtml(folder.id);
                 folderTr.innerHTML = `<td colspan="13">
                     <span class="folder-icon">\u25BC</span>
-                    <span class="folder-color" style="background:${escapeHtml(folder.color)}"></span>
+                    <span class="folder-color" style="background:${/^(#[0-9a-f]{3,8}|[a-z]+)$/i.test(String(folder.color || '')) ? escapeHtml(folder.color) : '#6b7280'}"></span>
                     ${escapeHtml(folder.name)} <span class="folder-count">(${folderScripts.length})</span>
                     <span class="folder-actions">
                         <button type="button" data-folder-delete="${folderIdAttr}" title="Delete folder" aria-label="Delete folder ${escapeHtml(folder.name)}">Delete</button>
@@ -6751,7 +6751,7 @@
         } else {
             // Build LCS table
             const dp = [];
-            for (let i = 0; i <= n; i++) { dp[i] = new Uint16Array(m + 1); }
+            for (let i = 0; i <= n; i++) { dp[i] = new Uint32Array(m + 1); }
             for (let i = 1; i <= n; i++) {
                 for (let j = 1; j <= m; j++) {
                     dp[i][j] = oldLines[i - 1] === newLines[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);

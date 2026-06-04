@@ -3485,6 +3485,13 @@ async function handleMessage(message, sender) {
         delete script.trashedAt;
         trash.splice(idx, 1);
         await chrome.storage.local.set({ trash });
+        // Clear sync tombstone so the restored script isn't re-deleted on next sync
+        const _tombstoneData = await chrome.storage.local.get('syncTombstones');
+        const _tombstones = _tombstoneData.syncTombstones || {};
+        if (_tombstones[scriptId]) {
+          delete _tombstones[scriptId];
+          await chrome.storage.local.set({ syncTombstones: _tombstones });
+        }
         await ScriptStorage.set(script.id, script);
         if (script.enabled !== false) await registerScript(script);
         await updateBadge();
@@ -5900,15 +5907,23 @@ async function handleMessage(message, sender) {
       }
 
       case 'factoryReset': {
-        // Clear all scripts through the storage abstraction so per-script
-        // values, IDB rows, and in-memory caches stay consistent.
         const allScripts = await ScriptStorage.getAll();
         for (const s of allScripts) {
           await unregisterScript(s.id);
         }
         await ScriptStorage.clear();
-        // Reset settings
         await SettingsManager.reset();
+        // Clear ghost state that would otherwise survive the reset
+        await chrome.storage.local.remove([
+          'syncTombstones', 'trash', 'pendingUpdates', 'scriptFolders',
+          'cspReports', 'gistSettings', 'lastSyncResult', 'liveReloadScripts',
+          'restoreReceipts'
+        ]).catch(() => {});
+        // Clear all alarms (crontab, autoUpdate, autoSync, backup, etc.)
+        await chrome.alarms.clearAll().catch(() => {});
+        if (typeof FolderStorage !== 'undefined' && FolderStorage.cache) {
+          FolderStorage.cache = null;
+        }
         await updateBadge();
         return { success: true };
       }

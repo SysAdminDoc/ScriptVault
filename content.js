@@ -57,10 +57,21 @@
     }
 
     try {
-      // Forward to background script and wait for response
+      // Sanitize telemetry data: only forward expected scalar/object fields,
+      // truncate strings to prevent oversized payloads from page scripts.
+      let safeData = msg.data;
+      if (safeData && typeof safeData === 'object') {
+        const raw = safeData;
+        safeData = {};
+        for (const k of Object.keys(raw)) {
+          const v = raw[k];
+          if (typeof v === 'string') safeData[k] = v.slice(0, 2048);
+          else if (typeof v === 'number' || typeof v === 'boolean') safeData[k] = v;
+        }
+      }
       const result = await chrome.runtime.sendMessage({
         action: action,
-        data: msg.data
+        data: safeData
       });
       
       // Send response back to userscript world

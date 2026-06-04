@@ -103,26 +103,34 @@ async function ensureOptionalPermissions(tokens) {
     result.unavailable = tokens.slice();
     return result;
   }
+  // Check which tokens are already granted
+  const needed = [];
   for (const token of tokens) {
     let already = false;
     try {
       already = !!(await chrome.permissions.contains({ permissions: [token] }));
     } catch {
-      // Treat lookup failure as "not granted" so we'll attempt the prompt.
       already = false;
     }
     if (already) {
       result.granted.push(token);
-      continue;
+    } else {
+      needed.push(token);
     }
+  }
+  // Batch all needed permissions into a single request to preserve user gesture
+  if (needed.length > 0) {
     let approved = false;
     try {
-      approved = !!(await chrome.permissions.request({ permissions: [token] }));
+      approved = !!(await chrome.permissions.request({ permissions: needed }));
     } catch {
       approved = false;
     }
-    if (approved) result.granted.push(token);
-    else result.denied.push(token);
+    if (approved) {
+      result.granted.push(...needed);
+    } else {
+      result.denied.push(...needed);
+    }
   }
   return result;
 }
