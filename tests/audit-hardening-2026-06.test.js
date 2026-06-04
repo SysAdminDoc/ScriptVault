@@ -5,7 +5,7 @@ import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { webcrypto } from 'node:crypto';
-import { verifySRI } from '../src/background/resource-loader.ts';
+import { fetchRequireScript, requireCache, verifySRI } from '../src/background/resource-loader.ts';
 import { matchPattern } from '../src/background/url-matcher.ts';
 
 const read = (p) => readFileSync(resolve(process.cwd(), p), 'utf8');
@@ -58,6 +58,37 @@ describe('SRI verification — fail closed', () => {
       expect(await verifySRI(code, `sha256-${b64}`)).toBe(false);
     } finally {
       globalThis.crypto.subtle.digest = orig;
+    }
+  });
+});
+
+describe('@require trust-receipt fetch mode', () => {
+  it('bypasses existing caches without storing probe bytes', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalDebugLog = globalThis.debugLog;
+    const url = 'https://cdn.example.com/tofu-lib.js';
+    try {
+      globalThis.__resetStorageMock?.();
+      globalThis.debugLog = vi.fn();
+      requireCache.clear();
+      globalThis.fetch = vi.fn(async () => new Response('remote-v1', { status: 200 }));
+
+      expect(await fetchRequireScript(url)).toBe('remote-v1');
+      expect(requireCache.get(url)).toBe('remote-v1');
+
+      chrome.storage.local.get.mockClear();
+      chrome.storage.local.set.mockClear();
+      globalThis.fetch = vi.fn(async () => new Response('remote-v2', { status: 200 }));
+
+      expect(await fetchRequireScript(url, { bypassCache: true, cacheResult: false })).toBe('remote-v2');
+      expect(chrome.storage.local.get).not.toHaveBeenCalled();
+      expect(chrome.storage.local.set).not.toHaveBeenCalled();
+      expect(requireCache.get(url)).toBe('remote-v1');
+    } finally {
+      requireCache.clear();
+      globalThis.fetch = originalFetch;
+      if (originalDebugLog) globalThis.debugLog = originalDebugLog;
+      else delete globalThis.debugLog;
     }
   });
 });
