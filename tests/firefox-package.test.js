@@ -29,7 +29,7 @@ describe('Firefox AMO validation gate', () => {
 
     expect(gecko?.id).toBe('ScriptVault@sysadmindoc.dev');
     expect(gecko?.strict_min_version).toBe('140.0');
-    expect(firefoxManifest.browser_specific_settings?.gecko_android?.strict_min_version).toBe('142.0');
+    expect(firefoxManifest.browser_specific_settings).not.toHaveProperty('gecko_android');
     expect(gecko?.data_collection_permissions).toEqual({
       required: ['none'],
       optional: [

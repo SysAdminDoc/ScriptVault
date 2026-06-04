@@ -36,6 +36,12 @@ allowlisted user-facing preferences, while local-only state such as
 errors, and source-identity warnings remains on the originating device and is
 ignored when found in legacy remote envelopes.
 
+2026-06-04 build-lane Firefox Android update: the unverified Android
+compatibility claim is deferred until a real device/emulator smoke exists.
+`manifest-firefox.json` no longer declares `gecko_android`, and the generated
+support matrix now labels Firefox for Android as deferred instead of an AMO
+compatibility target.
+
 2026-06-04 implementation refresh: the 2026-06-03 findings still stand, but the
 currently-breaking dependency item is now closed. `web-ext` was bumped to
 `^10.3.0`, `npm ls tmp` resolves `tmp@0.2.6`, and

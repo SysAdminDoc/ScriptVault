@@ -57,8 +57,11 @@ function matrixMarkdown(date) {
   const version = chromeManifest.version;
   const chromeMin = chromeManifest.minimum_chrome_version || 'unknown';
   const firefoxMin = firefoxManifest.browser_specific_settings?.gecko?.strict_min_version || 'unknown';
-  const firefoxAndroidMin = firefoxManifest.browser_specific_settings?.gecko_android?.strict_min_version || 'unknown';
+  const hasFirefoxAndroidTarget = !!firefoxManifest.browser_specific_settings?.gecko_android?.strict_min_version;
   const firefoxEvidence = firefoxLintSummary();
+  const firefoxAndroidRow = hasFirefoxAndroidTarget
+    ? `| Firefox for Android | Manifest validation target | Firefox for Android ${firefoxManifest.browser_specific_settings.gecko_android.strict_min_version}+ | ${date} package/manifests; no Android device smoke yet | \`manifest-firefox.json\` \`gecko_android\` target plus Firefox source/package ZIP | Same Firefox API deferrals; no side panel; Android device smoke is not wired |`
+    : `| Firefox for Android | Deferred; not an AMO compatibility target | No current \`gecko_android\` manifest target | ${date} | \`manifest-firefox.json\` intentionally omits \`gecko_android\` until an Android smoke gate exists | Android UI/runtime, extension-action overlay, host-permission, import/export, and WebDAV paths are unverified |`;
 
   return `<!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:START -->
 _Last generated: ${date} with \`npm run support:matrix\`. Version source: \`manifest.json\` / \`manifest-firefox.json\` ${version}._
@@ -68,7 +71,7 @@ _Last generated: ${date} with \`npm run support:matrix\`. Version source: \`mani
 | Chrome / Chromium | Tier 1 published target | Chrome ${chromeMin}+ MV3 | ${date} | \`npm run smoke:dashboard\`, \`npm run cws:check\`, Chrome ZIP packaging in CI | Chrome 138+ requires per-extension Allow User Scripts; per-script \`worldId\` is Chrome 133+ and feature-gated |
 | Microsoft Edge | Tier 1 compatible package; separate store automation pending | Edge ${chromeMin}+ Chromium MV3 package | ${date} package/manifests; no separate Edge CI smoke yet | Same ZIP as Chrome; smoke harness can run with Edge via \`SCRIPT_VAULT_CHROME_PATH\` | Edge Add-ons package/publish path is not automated yet |
 | Firefox Desktop | AMO validation target, not a published listing | Firefox ${firefoxMin}+ MV3 | ${date} | ${firefoxEvidence} | \`sidePanel\`, \`offscreen\`, \`identity\` OAuth, and some \`userScripts.execute\` flows are unsupported/deferred; Firefox package omits Monaco until the Firefox editor-loading pass |
-| Firefox for Android | Manifest validation target | Firefox for Android ${firefoxAndroidMin}+ | ${date} package/manifests; no Android device smoke yet | \`manifest-firefox.json\` \`gecko_android\` target plus Firefox source/package ZIP | Same Firefox API deferrals; no side panel; Android device smoke is not wired |
+${firefoxAndroidRow}
 | Brave / Vivaldi / Opera / Arc | Chromium derivative watchlist | Chrome ${chromeMin}+ package may load | Not release-verified | No CI smoke or store package for these browsers | Store policy, shields/sidebar behavior, and extension UI chrome are unverified |
 | Orion / Safari | Not supported | Not a current target | Not verified | No build, smoke, or package path | Requires separate WebKit/Orion validation and likely native Safari extension work |
 <!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:END -->`;

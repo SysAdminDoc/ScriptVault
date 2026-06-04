@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Firefox Android compatibility deferred
+
+- **Removed the unverified Android AMO compatibility claim.** The Firefox
+  manifest no longer declares `gecko_android`, so the package does not advertise
+  Firefox for Android support before a device/emulator smoke gate exists.
+- **Regenerated support docs with Android deferred.** README and
+  cross-browser pipeline docs now describe Firefox for Android as deferred, not
+  a manifest validation target.
+
 ### 2026-06-04 — Sync-safe script settings partition
 
 - **Stopped syncing local-only per-script diagnostics.** CloudSync and

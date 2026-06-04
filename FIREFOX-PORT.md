@@ -5,7 +5,7 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 ## Target
 
 - **Firefox 140+ desktop** — matches the `strict_min_version` declared in `manifest-firefox.json`; this is the first supported baseline for the current AMO data-collection declaration plus Firefox MV3 `userScripts` optional-permission model.
-- **Firefox for Android 142+** — declared only as a manifest compatibility floor. Android UI/runtime smoke is not yet part of the release gate.
+- **Firefox for Android** — deferred until an Android UI/runtime smoke exists. `manifest-firefox.json` intentionally omits `gecko_android`, so the AMO package does not claim Android compatibility.
 - **Manifest V3** — Firefox's MV3 is persistent background scripts, not service workers
 - **Distribution**: eventual AMO listing, interim self-signed XPI via `about:debugging` for dev
 
@@ -151,7 +151,7 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 ### 2026-05-24 — AMO validation gate
 
 - Added AMO `browser_specific_settings.gecko.data_collection_permissions` with required `none` and optional data types for opt-in cloud/sync/export flows.
-- Moved Firefox `userScripts` to `optional_permissions` and raised the Firefox baseline to 140.0 desktop / 142.0 Android to match current AMO and `userScripts` manifest-key support.
+- Moved Firefox `userScripts` to `optional_permissions` and raised the Firefox desktop baseline to 140.0 to match current AMO and `userScripts` manifest-key support. Android compatibility is deferred until a real device/emulator smoke gate exists.
 - Reworked `build-firefox.sh` around `web-ext lint` and `web-ext build`; `npm run firefox:lint` leaves a lintable build directory, and `npm run firefox:package` emits both a Firefox package and AMO source-review ZIP under `firefox-artifacts/`.
 - Guarded Chrome-only per-script `worldId` in both runtime JS and the TypeScript mirror so Firefox never receives the unsupported field.
 - `web-ext lint` now exits with 0 errors and 0 notices. It still reports existing dynamic-HTML warnings; those are recorded in `firefox-artifacts/web-ext-lint.json` and should be handled in a separate AMO hardening pass.
@@ -188,7 +188,7 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - Closed the Phase 1 Build + temporary install checkbox with `npm run smoke:firefox`.
 - Added `scripts/smoke-firefox-sideload.mjs`, wired as `npm run smoke:firefox`, to build/package the Firefox artifact, launch geckodriver, temporary-install `scriptvault-firefox-v3.11.0.zip`, resolve `moz-extension://` dashboard/popup URLs, and exercise dashboard, popup, save, toggle, and target-page userscript execution.
 - Fixed smoke-discovered Firefox runtime gaps: `MAX_SCRIPT_SIZE` initialization before `SubscriptionSystem`, native Windows Git Bash preference before WSL bash in `scripts/run-bash.mjs`, Firefox `menus` aliasing to the shared `contextMenus` path, trusted own `moz-extension://` dashboard/popup message senders, and optional Firefox `userScripts` permission onboarding in popup/dashboard.
-- `web-ext` is now `^10.3.0`, clearing the `web-ext -> tmp` CVE path; the generated support matrix now includes both `npm run firefox:package` and `npm run smoke:firefox`.
+- `web-ext` is now `^10.3.0`, clearing the `web-ext -> tmp` CVE path; the generated support matrix now includes both `npm run firefox:package` and `npm run smoke:firefox`, and lists Firefox for Android as deferred rather than a manifest target.
 - Verification: `npm run firefox:package` (0 errors / 0 notices / 139 warnings), `npm run smoke:firefox` with Firefox Developer Edition 151.0b10, focused Firefox/package/onboarding tests, `npm audit --audit-level=high --omit=optional`, `npm ls tmp`, and `npm run support:matrix:check`.
 - Next Firefox-port session starts at **Phase 2 — Data safety + storage**, beginning with storage quota, migration-idempotence, and Firefox restart/trash validation.
 

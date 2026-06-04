@@ -27,9 +27,6 @@
                 ]
               },
               "strict_min_version": "140.0"
-            },
-            "gecko_android": {
-              "strict_min_version": "142.0"
             }
           }
         },
@@ -82,9 +79,9 @@
       "format": {
         "lineEnding": "crlf",
         "lfLineNumbers": [
-          8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
-          37,
-          45, 46, 47, 48, 49, 50
+          8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+          34,
+          42, 43, 44, 45, 46, 47
         ],
         "compactArrays": [
           "browser_specific_settings.gecko.data_collection_permissions.required",
