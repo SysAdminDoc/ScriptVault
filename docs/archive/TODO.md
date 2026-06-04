@@ -93,9 +93,10 @@
   - Touches: `tests/e2e/`, `package.json`, `.github/workflows/ci.yml`.
   - Acceptance: one Playwright spec per critical flow runs locally.
   - Verification: `npm run test:e2e` (4 specs passed: install, update, restore/rollback, WebDAV sync preview/upload).
-- [ ] **E-6** ESM badge in script row (R-2 from ESM roadmap)
+- [x] **E-6** ESM badge in script row (R-2 from ESM roadmap) (2026-06-03)
   - Evidence: PASS2 NF-14.
   - Touches: `pages/dashboard.js` `renderScriptRow`, `pages/dashboard.css`.
+  - Verification: `npm test -- tests/esm-dashboard-badge.test.js tests/esm-bundler.test.js`, `node --check pages/dashboard.js`, `npm run check`.
 - [ ] **E-7** ScriptCat-style script subscriptions (URL → JSON list)
   - Evidence: PASS2 ecosystem item 14.
   - Touches: `background.core.js`, new `modules/subscriptions.js`, dashboard import UI.
@@ -164,5 +165,6 @@
 | 2026-06-03 | E | E-3 | docs: close folded browser sync TODO |
 | 2026-06-03 | E | E-4 | feat: generate GM ambient declarations |
 | 2026-06-03 | E | E-5 | test: add Playwright E2E flows |
+| 2026-06-03 | E | E-6 | feat: show ESM dashboard badges |
 
 (Append a row each time work lands.)
