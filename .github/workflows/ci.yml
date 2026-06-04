@@ -97,6 +97,9 @@ jobs:
       - name: Package Chrome extension
         run: bash build.sh
 
+      - name: CWS remote-code package scan
+        run: npm run cws:remote-code:check -- --target ScriptVault-v${{ steps.package.outputs.version }}.zip
+
       - name: Firefox lint and package
         run: npm run firefox:package
 

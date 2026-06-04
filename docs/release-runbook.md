@@ -16,14 +16,15 @@ Before any release branch is created:
 2. **Smoke test green:** `npm run smoke:dashboard` passes locally on Linux + Windows.
 3. **Dependency audit green:** `npm audit --audit-level=high --omit=optional` exits 0. High and critical advisories are blocking unless the release notes document a temporary false-positive exception.
 4. **CWS tooling green:** `npm run cws:check` confirms the installed `chrome-webstore-upload-cli` major, Node engine, removed flag usage, and credential names.
-5. **Store permission copy green:** `npm run store-copy:check` confirms `manifest.json` and `manifest-firefox.json` permissions, host matches, web-accessible resources, sandbox pages, and AMO data-collection declarations are covered by `PRIVACY.md`, `docs/store-listing-copy.md`, and `AMO-SOURCE-README.md`.
-6. **Locale lint green:** `tests/manifest-locales.test.js` passes - no locale's `extName` exceeds 75 chars, no `extDescription` exceeds 132 chars, all locales share the `en` key set.
-7. **Version sources synced:** `manifest.json`, `manifest-firefox.json`, `package.json`, and `package-lock.json` all point to the same target version.
-8. **Rollback drill green:** `npm run release:rollback-drill` proves the previous public `chrome.storage.local` snapshot survives the current storage migration safety window.
-9. **Firefox AMO gate green:** `npm run firefox:package` exits with `web-ext lint: 0 errors, 0 notices` and writes `firefox-artifacts/scriptvault-firefox-vX.Y.Z.zip`, `firefox-artifacts/scriptvault-firefox-source-vX.Y.Z.zip`, and `firefox-artifacts/web-ext-lint.json`.
-10. **Store status gate green:** `npm run release:store-status` validates rollback/trust/status command wiring, checks Firefox AMO lint/package evidence when present, and queries CWS API v2 `:fetchStatus` when `PUBLISHER_ID` plus `CWS_ACCESS_TOKEN` are provided.
-11. **Release artifact parity green:** `npm run release:check` passes locally; after the tag and GitHub Release are created, `npm run release:check:public` must pass.
-12. **CHANGELOG entry drafted:** one paragraph per shipped roadmap item, with `Phase X.Y` cross-references.
+5. **CWS remote-code evidence green:** `npm run cws:remote-code:check` confirms `docs/cws-remote-code-compliance.md`, release/store-copy references, package script wiring, CI wiring, and source/package inputs do not contain forbidden remote-code execution patterns.
+6. **Store permission copy green:** `npm run store-copy:check` confirms `manifest.json` and `manifest-firefox.json` permissions, host matches, web-accessible resources, sandbox pages, and AMO data-collection declarations are covered by `PRIVACY.md`, `docs/store-listing-copy.md`, and `AMO-SOURCE-README.md`.
+7. **Locale lint green:** `tests/manifest-locales.test.js` passes - no locale's `extName` exceeds 75 chars, no `extDescription` exceeds 132 chars, all locales share the `en` key set.
+8. **Version sources synced:** `manifest.json`, `manifest-firefox.json`, `package.json`, and `package-lock.json` all point to the same target version.
+9. **Rollback drill green:** `npm run release:rollback-drill` proves the previous public `chrome.storage.local` snapshot survives the current storage migration safety window.
+10. **Firefox AMO gate green:** `npm run firefox:package` exits with `web-ext lint: 0 errors, 0 notices` and writes `firefox-artifacts/scriptvault-firefox-vX.Y.Z.zip`, `firefox-artifacts/scriptvault-firefox-source-vX.Y.Z.zip`, and `firefox-artifacts/web-ext-lint.json`.
+11. **Store status gate green:** `npm run release:store-status` validates rollback/trust/status command wiring, checks Firefox AMO lint/package evidence when present, and queries CWS API v2 `:fetchStatus` when `PUBLISHER_ID` plus `CWS_ACCESS_TOKEN` are provided.
+12. **Release artifact parity green:** `npm run release:check` passes locally; after the tag and GitHub Release are created, `npm run release:check:public` must pass.
+13. **CHANGELOG entry drafted:** one paragraph per shipped roadmap item, with `Phase X.Y` cross-references.
 
 If any gate fails, stop. Do not patch the test to make it green.
 
@@ -98,21 +99,22 @@ References: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/frega
 1. **Cut release branch** off `main`: `git checkout -b release/vX.Y.Z`.
 2. **Bump versions** in `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`. Use semver - patch for fixes, minor for additive features, major only for breaking changes.
 3. **Finalize CHANGELOG.md** entry for vX.Y.Z. Match the prose style of recent entries.
-4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run cws:check`, `npm run store-copy:check`, `npm run firefox:package`, `npm run release:rollback-drill`, `npm run release:store-status`, and `npm run release:check`.
+4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run cws:check`, `npm run cws:remote-code:check`, `npm run store-copy:check`, `npm run firefox:package`, `npm run release:rollback-drill`, `npm run release:store-status`, and `npm run release:check`.
 5. **Build:** `npm run build:prod` then `bash build.sh`. Verify the produced ZIP loads in a clean Chrome profile. For Firefox validation, inspect the Firefox package/source ZIP under `firefox-artifacts/`.
-6. **Release trust gate:** `npm run release:trust`. For a public release with the maintainer signing key available, run `npm run release:trust:strict` with `RELEASE_SIGNING_PRIVATE_KEY_PATH` or `RELEASE_SIGNING_PRIVATE_KEY_PEM`.
-7. **Tag:** `git tag -a vX.Y.Z -m "Release vX.Y.Z - <one-line summary>"`.
-8. **Push commit and tag to GitHub.**
-9. **Verify local artifact parity:** rerun `npm run release:check`; the missing-tag warning must be gone.
-10. **Create or update GitHub Release:** attach `ScriptVault-vX.Y.Z.zip`, `firefox-artifacts/*`, `release-artifacts/*`, and the GitHub Actions attestation links; mark it as latest for normal production releases.
-11. **Verify public artifact parity:** `npm run release:check:public`.
-12. **CWS draft upload:** `bash publish.sh --draft`; review the draft in the CWS Developer Dashboard.
-13. **CWS publish:** `bash publish.sh` when ready to submit/publish through CWS review.
-14. **Verify CWS listing:** open the public listing after approval; confirm version, screenshots, and store description rendered.
-15. **AMO unlisted upload:** upload `firefox-artifacts/scriptvault-firefox-vX.Y.Z.zip` and attach `firefox-artifacts/scriptvault-firefox-source-vX.Y.Z.zip`. Use `AMO-SOURCE-README.md` for reviewer build instructions and privacy/permission rationale. Start unlisted for internal signing/smoke validation.
-16. **Record AMO review feedback:** copy any reviewer notes into `FIREFOX-PORT.md` before changing code. Resolve all review findings before requesting listed publication.
-17. **AMO listed publication:** move from unlisted to listed only after the unlisted build is signed, installed, smoked, and any review feedback is resolved.
-18. **Record store status:** rerun `npm run release:store-status` with `CWS_ACCESS_TOKEN` when available and attach the output to release notes or the release checklist.
+6. **CWS remote-code package scan:** `npm run cws:remote-code:check -- --target ScriptVault-vX.Y.Z.zip`; keep the output beside `docs/cws-remote-code-compliance.md` before CWS draft upload.
+7. **Release trust gate:** `npm run release:trust`. For a public release with the maintainer signing key available, run `npm run release:trust:strict` with `RELEASE_SIGNING_PRIVATE_KEY_PATH` or `RELEASE_SIGNING_PRIVATE_KEY_PEM`.
+8. **Tag:** `git tag -a vX.Y.Z -m "Release vX.Y.Z - <one-line summary>"`.
+9. **Push commit and tag to GitHub.**
+10. **Verify local artifact parity:** rerun `npm run release:check`; the missing-tag warning must be gone.
+11. **Create or update GitHub Release:** attach `ScriptVault-vX.Y.Z.zip`, `firefox-artifacts/*`, `release-artifacts/*`, and the GitHub Actions attestation links; mark it as latest for normal production releases.
+12. **Verify public artifact parity:** `npm run release:check:public`.
+13. **CWS draft upload:** `bash publish.sh --draft`; review the draft in the CWS Developer Dashboard.
+14. **CWS publish:** `bash publish.sh` when ready to submit/publish through CWS review.
+15. **Verify CWS listing:** open the public listing after approval; confirm version, screenshots, and store description rendered.
+16. **AMO unlisted upload:** upload `firefox-artifacts/scriptvault-firefox-vX.Y.Z.zip` and attach `firefox-artifacts/scriptvault-firefox-source-vX.Y.Z.zip`. Use `AMO-SOURCE-README.md` for reviewer build instructions and privacy/permission rationale. Start unlisted for internal signing/smoke validation.
+17. **Record AMO review feedback:** copy any reviewer notes into `FIREFOX-PORT.md` before changing code. Resolve all review findings before requesting listed publication.
+18. **AMO listed publication:** move from unlisted to listed only after the unlisted build is signed, installed, smoked, and any review feedback is resolved.
+19. **Record store status:** rerun `npm run release:store-status` with `CWS_ACCESS_TOKEN` when available and attach the output to release notes or the release checklist.
 
 ## 5. CWS review backlog buffer (Phase 39.49)
 

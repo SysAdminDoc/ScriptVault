@@ -122,7 +122,9 @@ for (const entry of manifestEntries.values()) {
 const readmeNeedles = [
   'Permission and Privacy Review',
   'docs/store-listing-copy.md',
+  'docs/cws-remote-code-compliance.md',
   'npm run store-copy:check',
+  'npm run cws:remote-code:check',
 ];
 for (const needle of readmeNeedles) {
   if (!readme.includes(needle)) {
@@ -156,6 +158,12 @@ for (const needle of amoSourceReadmeNeedles) {
 const releaseRunbook = readText('docs/release-runbook.md');
 if (!releaseRunbook.includes('npm run store-copy:check')) {
   failures.push('docs/release-runbook.md does not include npm run store-copy:check in the release gate');
+}
+if (!releaseRunbook.includes('npm run cws:remote-code:check')) {
+  failures.push('docs/release-runbook.md does not include npm run cws:remote-code:check in the release gate');
+}
+if (!releaseRunbook.includes('docs/cws-remote-code-compliance.md')) {
+  failures.push('docs/release-runbook.md does not reference docs/cws-remote-code-compliance.md');
 }
 if (!releaseRunbook.includes(amoSourceReadmePath)) {
   failures.push(`docs/release-runbook.md does not reference ${amoSourceReadmePath}`);

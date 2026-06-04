@@ -321,15 +321,16 @@ _Last generated: 2026-06-04 with `npm run support:matrix`. Version source: `mani
 
 ## Permission and Privacy Review
 
-ScriptVault has broad extension permissions because it is a userscript manager: users can install scripts for user-chosen sites, run them in the browser `USER_SCRIPT` world, sync backups through configured providers, and expose script APIs such as `GM_download`, `GM_xmlhttpRequest`, clipboard, and tab helpers. The reviewer-facing permission justifications live in [docs/store-listing-copy.md](docs/store-listing-copy.md) and the privacy policy keeps the same manifest inventory in [PRIVACY.md](PRIVACY.md).
+ScriptVault has broad extension permissions because it is a userscript manager: users can install scripts for user-chosen sites, run them in the browser `USER_SCRIPT` world, sync backups through configured providers, and expose script APIs such as `GM_download`, `GM_xmlhttpRequest`, clipboard, and tab helpers. The reviewer-facing permission justifications live in [docs/store-listing-copy.md](docs/store-listing-copy.md), the CWS remote-code review memo lives in [docs/cws-remote-code-compliance.md](docs/cws-remote-code-compliance.md), and the privacy policy keeps the same manifest inventory in [PRIVACY.md](PRIVACY.md).
 
 Before release, run:
 
 ```bash
 npm run store-copy:check
+npm run cws:remote-code:check
 ```
 
-The check compares `manifest.json` and `manifest-firefox.json` against the privacy policy, store copy, release runbook, package scripts, and CI so a new permission cannot ship without matching user-facing explanation.
+These checks compare `manifest.json` and `manifest-firefox.json` against the privacy policy, store copy, release runbook, package scripts, CI, and the CWS remote-code scanner so a new permission or remote-code-capable path cannot ship without matching reviewer evidence.
 
 ---
 

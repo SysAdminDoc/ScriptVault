@@ -167,12 +167,12 @@ policy permits remote logic only through documented APIs such as User Scripts
 and treats the exemption as scoped to the covered code. ScriptVault has the
 right architecture markers (`manifest.json` uses `userScripts`, extension pages
 forbid `unsafe-eval`, and the editor uses a sandboxed page), and `PRIVACY.md`
-explains externally sourced userscript execution. The remaining release-review
-gap is that `docs/store-listing-copy.md`/`scripts/check-permission-copy.mjs`
-only gate permission/privacy copy and do not produce a CWS remote-hosted-code
-memo or scan the packaged Chrome artifact for remote script tags, remote
-workers/imports, or fetched strings executed outside `chrome.userScripts` and
-sandboxed-page paths. `ROADMAP.md` now promotes a P1 CWS review-quality item.
+explains externally sourced userscript execution. The build lane closed the
+remaining release-review gap with `docs/cws-remote-code-compliance.md`,
+`scripts/check-cws-remote-code.mjs`, release/store-copy references, and a CI
+step that scans the packaged Chrome artifact for remote script tags, remote
+workers/imports, and fetched strings executed outside `chrome.userScripts` and
+sandboxed-page paths.
 External anchors: Chrome Web Store program policies
 (`https://developer.chrome.com/docs/webstore/program-policies/policies`), Chrome
 remote-hosted-code violation guidance
@@ -211,7 +211,7 @@ Top opportunities (one line each):
 8. **[Closed 2026-06-04] Backup ZIP/JSON intake was not resource-bounded** — import/inspect/verify/restore now use bounded archive intake before decode, parse, or registration. (P1)
 9. **[Closed 2026-06-04] Firefox for Android was claimed but not smoke-tested** — `gecko_android` and Android support-matrix claims are deferred until a real device/emulator smoke exists. (P2)
 10. **[Closed 2026-06-04] AMO vendored-library provenance was incomplete** — Firefox package libraries now have exact npm pins, official source/package hashes, and a provenance check. (P2)
-11. **[Verified] CWS remote-hosted-code review packet is missing** — current docs explain remote userscript execution, but there is no CWS memo/package scan separating allowed User Scripts/sandbox flows from forbidden extension remote logic. (P1)
+11. **[Closed 2026-06-04] CWS remote-hosted-code review packet was missing** — `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check` now separate allowed User Scripts/sandbox flows from forbidden extension remote logic and scan source/package inputs plus the built Chrome ZIP in CI. (P1)
 12. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
 13. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
 14. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
@@ -229,7 +229,7 @@ Top opportunities (one line each):
 - **Backup archive intake**: `importFromZip`, `BackupScheduler.importBackup`, `BackupScheduler.inspectBackup`, `BackupScheduler.verifyBackup`, and restore paths call `fflate.unzipSync(...)` on decoded archive bytes; code then converts `.user.js`, options, storage, settings, folders, and workspace entries with `strFromU8`/`JSON.parse`. Existing tests cover identity, selective restore, and metadata preservation, but not decompression amplification, file-count limits, oversized per-entry JSON, nested archives, or the install path's 5 MB code cap on backup imports.
 - **Firefox Android target**: `manifest-firefox.json` declares `gecko_android.strict_min_version: 142.0`; `FIREFOX-PORT.md`, `README.md`, `docs/cross-browser-pipeline.md`, and `scripts/generate-browser-support-matrix.mjs` state Android is only a manifest validation target and that no Android device smoke is wired; `scripts/smoke-firefox-sideload.mjs` targets desktop Firefox/geckodriver only.
 - **AMO vendored libraries**: `build-firefox.sh` includes `lib/acorn.min.js` and `lib/diff.min.js`; `AMO-SOURCE-README.md` describes only local library paths and generic source ZIP contents; tests pin those library inclusions but not reviewer provenance; `lib/acorn.min.js` says it was minified by jsDelivr from `acorn@8.14.1`, while `package-lock.json` currently resolves npm `acorn@8.16.0`.
-- **CWS remote-code review**: `manifest.json` declares `userScripts` and limits extension-page CSP to `script-src 'self'` while sandboxing `pages/editor-sandbox.html`; `PRIVACY.md` explains externally sourced userscript execution; `docs/store-listing-copy.md` covers permission/privacy copy but not remote-hosted-code policy; `scripts/check-permission-copy.mjs` checks manifest copy coverage but not packaged remote-execution patterns.
+- **CWS remote-code review**: `manifest.json` declares `userScripts` and limits extension-page CSP to `script-src 'self'` while sandboxing `pages/editor-sandbox.html`; `PRIVACY.md` explains externally sourced userscript execution; `docs/cws-remote-code-compliance.md` maps policy buckets; `scripts/check-cws-remote-code.mjs` scans source/package inputs and the built Chrome ZIP for forbidden remote-code execution patterns.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -281,7 +281,7 @@ Top opportunities (one line each):
 | CI audit gate | CI | `ci.yml` `npm audit --audit-level=high` | shipped | clean after `web-ext@^10.3.0` |
 | Firefox Android compatibility claim | AMO / Android listing via `gecko_android` | `manifest-firefox.json`, generated support matrix | deferred | no Android claim until ADB/device smoke exists |
 | AMO vendored library provenance | AMO source review | `AMO-SOURCE-README.md`, `docs/amo-vendored-libraries.md`, `build-firefox.sh`, `lib/acorn.min.js`, `lib/diff.min.js` | shipped | exact package/source/hash inventory gated |
-| CWS remote-code review packet | Chrome Web Store review | `PRIVACY.md`, `docs/store-listing-copy.md`, `manifest.json`, package ZIP | missing | no reviewer memo or built-artifact remote-code scan |
+| CWS remote-code review packet | Chrome Web Store review | `PRIVACY.md`, `docs/store-listing-copy.md`, `docs/cws-remote-code-compliance.md`, `manifest.json`, package ZIP | shipped 2026-06-04 | reviewer memo plus source/package and built-artifact remote-code scan |
 | Coverage report | `npm run test:cov` | `vitest.config.mjs` | shipped | `all:false`, **no threshold** |
 | Dependency audit policy | manual | `docs/dependency-audit-policy.md` | doc only | **no bot automation** |
 | Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | actions **tag-pinned, not SHA** |
@@ -301,7 +301,7 @@ Top opportunities (one line each):
 - **Major** — No dependency-update automation; reactive audit only (root cause of the CVE slip). → ROADMAP P1 Dependabot/Renovate. [Verified]
 - **Major** — Floating Action tags in an attestation/SBOM pipeline. → ROADMAP P1 SHA-pin. [Likely]
 - **Closed** — AMO vendored-library provenance for minified Firefox-package libraries now has official package/source/hash inventory and a gate. [Verified]
-- **Major** — CWS remote-hosted-code policy evidence is not packaged or scanned for Chrome submissions. → ROADMAP P1 CWS review packet. [Verified]
+- **Closed 2026-06-04** — CWS remote-hosted-code policy evidence is now packaged and scanned for Chrome submissions through `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check`.
 - **Major** — `--omit=optional` audit exemption is unguarded against shipped optional deps. → ROADMAP P2 reach check. [Likely]
 - **Major** — No consolidated/validated Settings surface for operator knobs. → ROADMAP P2 settings audit. [Likely]
 - **Minor** — `sv` omnibox + keyboard commands undocumented. → ROADMAP P3 doc items. [Verified]
@@ -317,7 +317,7 @@ Top opportunities (one line each):
 ## Security / Privacy / Data Safety
 
 - The deepest runtime risks (GM_xhr SSRF NF-1, plaintext cloud sync NF-2, per-script scope NF-4, TOFU SRI NF-5) are already roadmapped — not re-listed.
-- New: the **supply-chain/review** layer is the gap this pass surfaces — a CVE reached CI via an unpinned, un-bot-tracked dev dependency, the release pipeline that signs/attests artifacts uses floating action tags, and Chrome submissions need a remote-hosted-code review packet plus package scan that separates allowed User Scripts/sandbox flows from forbidden extension remote logic. The P0 web-ext bump and AMO library provenance are closed; P1 Dependabot + P1 SHA-pin + P1 CWS remote-code review remain to harden the path from source to reviewed artifact.
+- New: the **supply-chain/review** layer is the gap this pass surfaces — a CVE reached CI via an unpinned, un-bot-tracked dev dependency, the release pipeline that signs/attests artifacts uses floating action tags, and Chrome submissions needed a remote-hosted-code review packet plus package scan that separates allowed User Scripts/sandbox flows from forbidden extension remote logic. The P0 web-ext bump, AMO library provenance, and CWS remote-code review packet are closed; P1 Dependabot + P1 SHA-pin remain to harden the path from source to reviewed artifact.
 - Privacy posture remains local-first with no usage beacon; external telemetry stays a non-goal.
 
 ## UX & Accessibility
