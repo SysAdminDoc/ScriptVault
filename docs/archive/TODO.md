@@ -109,9 +109,9 @@
 ## Phase F — Larger Bets carried over
 
 - [ ] **F-1** Continue TypeScript authoritative-source promotion until `background.core.js` is generated from TS
-  - Evidence: ROADMAP Larger Bets; CLAUDE.md "TS Source Promotion" entries; 18 promoted entries, 3 still mirrored.
+  - Evidence: ROADMAP Larger Bets; CLAUDE.md "TS Source Promotion" entries; 19 promoted entries, 2 still mirrored.
   - Acceptance: `ts-source-promotion.json` reaches 0 mirrored; `background.core.js` is generated from TS source.
-  - Progress: 2026-06-03 promoted `bg/workspaces.js` from `src/bg/workspaces.ts`; focused verification `npm test -- tests/workspaces.test.js tests/source-bg-modules.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`, `node --check bg/workspaces.js`, `node --check background.js`. Promoted `bg/signing.js` from `src/bg/signing.ts`; focused verification `npm test -- tests/signing.test.js tests/source-bg-modules.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`, `node --check bg/signing.js`, `node --check background.js`. Promoted `bg/esm-bundler.js` from `src/bg/esm-bundler.ts`; focused verification `npm test -- tests/esm-bundler.test.js tests/esm-csp.test.js tests/esm-bundler-generated.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`, `node --check bg/esm-bundler.js`, `node --check background.js`.
+  - Progress: 2026-06-03 promoted `bg/workspaces.js` from `src/bg/workspaces.ts`; focused verification `npm test -- tests/workspaces.test.js tests/source-bg-modules.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`, `node --check bg/workspaces.js`, `node --check background.js`. Promoted `bg/signing.js` from `src/bg/signing.ts`; focused verification `npm test -- tests/signing.test.js tests/source-bg-modules.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`, `node --check bg/signing.js`, `node --check background.js`. Promoted `bg/esm-bundler.js` from `src/bg/esm-bundler.ts`; focused verification `npm test -- tests/esm-bundler.test.js tests/esm-csp.test.js tests/esm-bundler-generated.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`, `node --check bg/esm-bundler.js`, `node --check background.js`. Promoted `modules/public-api.js` from `src/modules/public-api.ts`; focused verification `npm test -- tests/public-api.test.js tests/source-modules.test.js tests/ts-runtime-modules.test.js tests/ts-source-drift-gate.test.js`, `node --check modules/public-api.js`, `node --check background.js`.
 - [ ] **F-2** Complete release trust pipeline (rollback rehearsal automation, CWS/AMO status checks)
   - Evidence: ROADMAP Larger Bets; partial — signatures/SBOM/source ZIP/package diff are done.
 - [ ] **F-3** Local health diagnostics (other half of large-library bet)
@@ -174,5 +174,6 @@
 | 2026-06-03 | F | F-1 partial: `bg/workspaces.js` TS promotion | feat: promote workspace manager runtime |
 | 2026-06-03 | F | F-1 partial: `bg/signing.js` TS promotion | feat: promote signing runtime |
 | 2026-06-03 | F | F-1 partial: `bg/esm-bundler.js` TS promotion | feat: promote esm bundler runtime |
+| 2026-06-03 | F | F-1 partial: `modules/public-api.js` TS promotion | feat: promote public api runtime |
 
 (Append a row each time work lands.)

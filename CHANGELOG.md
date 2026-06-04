@@ -4,6 +4,13 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-03 — Public API TypeScript promotion
+
+- **Public API runtime is now generated from TypeScript.** `modules/public-api.js`
+  is produced from `src/modules/public-api.ts`, with the source mirror updated
+  for generated script IDs, permissions access, bounded web installs, and
+  webhook defense-in-depth.
+
 ### 2026-06-03 — ESM bundler TypeScript promotion
 
 - **ESM bundler runtime is now generated from TypeScript.** `bg/esm-bundler.js`

@@ -33,9 +33,9 @@ priority section below.
 ### TypeScript source-of-truth and release trust (larger bets)
 
 - [ ] P1 — Continue TypeScript authoritative-source promotion until `background.core.js` is generated from TS
-  - Why: collapse runtime/TS mirror drift (18 promoted entries, 3 still mirrored).
+  - Why: collapse runtime/TS mirror drift (19 promoted entries, 2 still mirrored).
   - Acceptance: `ts-source-promotion.json` reaches 0 mirrored; `background.core.js` is generated from TS source.
-  - Progress: 2026-06-03 promoted `bg/workspaces.js` from `src/bg/workspaces.ts`, preserving the `_initPromise` cold-start guard. Promoted `bg/signing.js` from `src/bg/signing.ts`, preserving the null signature guard and runtime `SettingsManager` global contract. Promoted `bg/esm-bundler.js` from `src/bg/esm-bundler.ts`, preserving the runtime `fetchRequireScript` global and `self.ESMUserscriptBundler` alias.
+  - Progress: 2026-06-03 promoted `bg/workspaces.js` from `src/bg/workspaces.ts`, preserving the `_initPromise` cold-start guard. Promoted `bg/signing.js` from `src/bg/signing.ts`, preserving the null signature guard and runtime `SettingsManager` global contract. Promoted `bg/esm-bundler.js` from `src/bg/esm-bundler.ts`, preserving the runtime `fetchRequireScript` global and `self.ESMUserscriptBundler` alias. Promoted `modules/public-api.js` from `src/modules/public-api.ts`, preserving generated IDs, permissions access, bounded web installs, and webhook guards.
   - Source: docs/archive/TODO.md F-1 (ROADMAP Larger Bets).
 - [ ] P1 — Complete release trust pipeline (rollback rehearsal automation, CWS/AMO status checks)
   - Why: partial — signatures/SBOM/source ZIP/package diff done; rollback rehearsal + store status checks remain.

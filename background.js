@@ -10562,166 +10562,130 @@ const UserStylesEngine = (() => {
   return module.exports.default || module.exports.UserStylesEngine || module.exports;
 })();
 
-// ScriptVault — Public Extension API
-// Allows other extensions and web pages to interact with ScriptVault.
-// Designed for service worker (no DOM dependencies).
+// ============================================================================
+// Generated from src/modules/public-api.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
 
 const PublicAPI = (() => {
-  'use strict';
-
-  /* ------------------------------------------------------------------ */
-  /*  Constants                                                          */
-  /* ------------------------------------------------------------------ */
-
-  const API_VERSION = '1.0.0';
-  const STORAGE_KEY_PERMS = 'publicapi_permissions';
-  const STORAGE_KEY_AUDIT = 'publicapi_audit';
-  const STORAGE_KEY_WEBHOOKS = 'publicapi_webhooks';
-  const STORAGE_KEY_ORIGINS = 'publicapi_trusted_origins';
-  const MAX_AUDIT_ENTRIES = 500;
-  const RATE_LIMIT_WINDOW = 1000; // ms
-  const RATE_LIMIT_MAX = 10;      // requests per window
-  const RATE_LIMIT_SENDER_CAP = 200;
-  const MAX_TRUSTED_ORIGINS = 128;
-  const MAX_TRUSTED_ORIGIN_LENGTH = 256;
-  const MAX_CODE_SIZE = 5 * 1024 * 1024; // 5 MB externally supplied source limit
-  const MAX_FETCH_SIZE = 5 * 1024 * 1024; // 5 MB fetched source limit
-  const FETCH_TIMEOUT_MS = 15000;
-  const WEBHOOK_TIMEOUT_MS = 10000;
-  const SCRIPT_SIZE_ERROR = 'Script file exceeds maximum allowed size (5 MB)';
-
-  /* ------------------------------------------------------------------ */
-  /*  State                                                              */
-  /* ------------------------------------------------------------------ */
-
-  let _permissions = null;    // { [apiName]: 'allow' | 'deny' | 'prompt' }
-  let _auditLog = [];
-  let _webhooks = {};         // { [eventType]: { url, enabled } }
-  let _trustedOrigins = [];
-  let _initialized = false;
-  let _initPromise = null;
-  let _rateLimitMap = new Map(); // senderId -> [timestamps]
-
-  /* ------------------------------------------------------------------ */
-  /*  SSRF guard — internal/private/link-local/CGNAT host detection      */
-  /* ------------------------------------------------------------------ */
-
-  // Returns true if the given hostname resolves to (or is) an address we
-  // refuse to fetch from the web-install handler. Covers IPv4 private ranges,
-  // IPv4 link-local (incl. AWS/GCP metadata), IPv4 loopback/unspecified,
-  // CGNAT (100.64.0.0/10), IPv6 loopback/unspecified, IPv6 ULA (fc00::/7),
-  // and IPv6 link-local (fe80::/10).
-  function _isInternalHost(rawHost) {
-    if (!rawHost || typeof rawHost !== 'string') return true;
-    // Normalize: lowercase, strip IPv6 brackets
-    let h = rawHost.toLowerCase();
-    if (h.startsWith('[') && h.endsWith(']')) h = h.slice(1, -1);
-
-    // Hostname aliases
-    if (h === 'localhost' || h === 'localhost.localdomain' || h === 'ip6-localhost' || h === 'ip6-loopback') return true;
-
-    // IPv6 — hex + colons (possibly with trailing :port not expected here since
-    // URL.hostname strips the port, but be defensive).
-    if (h.includes(':')) {
-      // Canonical loopback / unspecified
-      if (h === '::1' || h === '::' || h === '::0' || h === '0:0:0:0:0:0:0:0' || h === '0:0:0:0:0:0:0:1') return true;
-      // fe80::/10 link-local — any address whose first 10 bits are 1111111010
-      // In textual form this is fe80..febf (first hextet high byte 0xfe, low-nibble 8-b)
-      if (/^fe[89ab][0-9a-f]?:/.test(h)) return true;
-      // fc00::/7 ULA — first 7 bits 1111110, textual first byte is fc or fd
-      if (/^f[cd][0-9a-f]{0,2}:/.test(h)) return true;
-      // IPv4-mapped IPv6: ::ffff:a.b.c.d — extract the trailing v4 literal
-      const v4Mapped = h.match(/^::ffff:([0-9.]+)$/);
-      if (v4Mapped) return _isInternalIPv4(v4Mapped[1]);
-      // Any other IPv6 literal — treat any `0:0:...` as unspecified-ish, otherwise allow
-      return false;
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
     }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-    // IPv4 literal: 4 dot-decimal octets
-    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) {
-      return _isInternalIPv4(h);
-    }
-
-    // Hostname is a regular DNS name — let DNS resolve it. We can't block
-    // by resolution here without an extra round-trip; the explicit blocklist
-    // of aliases above catches the obvious cases.
-    return false;
+  // src/modules/public-api.ts
+  var public_api_exports = {};
+  __export(public_api_exports, {
+    PublicAPI: () => PublicAPI,
+    default: () => public_api_default
+  });
+  module.exports = __toCommonJS(public_api_exports);
+  var API_VERSION = "1.0.0";
+  var STORAGE_KEY_PERMS = "publicapi_permissions";
+  var STORAGE_KEY_AUDIT = "publicapi_audit";
+  var STORAGE_KEY_WEBHOOKS = "publicapi_webhooks";
+  var STORAGE_KEY_ORIGINS = "publicapi_trusted_origins";
+  var MAX_AUDIT_ENTRIES = 500;
+  var RATE_LIMIT_WINDOW = 1e3;
+  var RATE_LIMIT_MAX = 10;
+  var RATE_LIMIT_SENDER_CAP = 200;
+  var MAX_TRUSTED_ORIGINS = 128;
+  var MAX_TRUSTED_ORIGIN_LENGTH = 256;
+  var _permissions = null;
+  var _auditLog = [];
+  var _webhooks = {};
+  var _trustedOrigins = [];
+  var _initialized = false;
+  var _initPromise = null;
+  var _rateLimitMap = /* @__PURE__ */ new Map();
+  var MAX_CODE_SIZE = 5 * 1024 * 1024;
+  var MAX_FETCH_SIZE = 5 * 1024 * 1024;
+  var FETCH_TIMEOUT_MS = 15e3;
+  var WEBHOOK_TIMEOUT_MS = 1e4;
+  var SCRIPT_SIZE_ERROR = "Script file exceeds maximum allowed size (5 MB)";
+  function getRuntimeHooks() {
+    return globalThis;
   }
-
-  function _isInternalIPv4(ip) {
-    const parts = ip.split('.').map(p => parseInt(p, 10));
-    if (parts.length !== 4 || parts.some(p => !Number.isFinite(p) || p < 0 || p > 255)) return true;
+  function isInternalIPv4(ip) {
+    const parts = ip.split(".").map((part) => parseInt(part, 10));
+    if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part) || part < 0 || part > 255)) {
+      return true;
+    }
     const [a, b, c, d] = parts;
-    // 0.0.0.0/8 unspecified
     if (a === 0) return true;
-    // 10.0.0.0/8
     if (a === 10) return true;
-    // 127.0.0.0/8 loopback
     if (a === 127) return true;
-    // 169.254.0.0/16 link-local (AWS/GCP metadata 169.254.169.254)
     if (a === 169 && b === 254) return true;
-    // 172.16.0.0/12 — octets 172.16..172.31
     if (a === 172 && b >= 16 && b <= 31) return true;
-    // 192.168.0.0/16
     if (a === 192 && b === 168) return true;
-    // 100.64.0.0/10 CGNAT — 100.64..100.127
     if (a === 100 && b >= 64 && b <= 127) return true;
-    // 255.255.255.255 broadcast
     if (a === 255 && b === 255 && c === 255 && d === 255) return true;
     return false;
   }
-
-  /**
-   * Phase 5.5 — webhook URL guard. Wraps `_isInternalHost` with a string
-   * reason so the caller can surface a useful error message ("loopback",
-   * "RFC 1918", etc.) instead of a generic refusal.
-   *
-   * Returns null when the URL is safe to send a webhook to, otherwise a
-   * short reason string.
-   *
-   * @param {string} url
-   * @returns {string|null}
-   */
-  function isInternalWebhookUrl(url) {
-    let parsed;
-    try { parsed = new URL(url); } catch { return 'malformed URL'; }
-    const host = parsed.hostname || '';
-    if (!host) return 'empty hostname';
-    if (_isInternalHost(host)) {
-      // Surface the most useful reason — IPv4 vs IPv6 vs alias — without
-      // duplicating the classification code.
-      if (host === 'localhost' || host.endsWith('.localdomain')) return 'localhost alias';
-      if (host.includes(':')) return 'IPv6 loopback/internal';
-      if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return 'IPv4 private/loopback/CGNAT';
-      return 'internal host';
+  function isInternalHost(rawHost) {
+    if (!rawHost || typeof rawHost !== "string") return true;
+    let host = rawHost.toLowerCase();
+    if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
+    if (host === "localhost" || host === "localhost.localdomain" || host === "ip6-localhost" || host === "ip6-loopback") {
+      return true;
     }
-    return null;
+    if (host.includes(":")) {
+      if (host === "::1" || host === "::" || host === "::0" || host === "0:0:0:0:0:0:0:0" || host === "0:0:0:0:0:0:0:1") {
+        return true;
+      }
+      if (/^fe[89ab][0-9a-f]?:/.test(host)) return true;
+      if (/^f[cd][0-9a-f]{0,2}:/.test(host)) return true;
+      const v4Mapped = host.match(/^::ffff:([0-9.]+)$/);
+      return v4Mapped ? isInternalIPv4(v4Mapped[1]) : false;
+    }
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+      return isInternalIPv4(host);
+    }
+    return false;
   }
-
   function normalizeTrustedOrigin(origin) {
-    if (typeof origin !== 'string') throw new Error('Trusted origin must be a string');
+    if (typeof origin !== "string") throw new Error("Trusted origin must be a string");
     const trimmed = origin.trim();
-    if (!trimmed) throw new Error('Trusted origin cannot be empty');
-    if (trimmed === '*') throw new Error('Wildcard trusted origins are not allowed');
-    if (trimmed.length > MAX_TRUSTED_ORIGIN_LENGTH) throw new Error('Trusted origin is too long');
-
+    if (!trimmed) throw new Error("Trusted origin cannot be empty");
+    if (trimmed === "*") throw new Error("Wildcard trusted origins are not allowed");
+    if (trimmed.length > MAX_TRUSTED_ORIGIN_LENGTH) throw new Error("Trusted origin is too long");
     let parsed;
-    try { parsed = new URL(trimmed); } catch { throw new Error('Trusted origin is malformed'); }
-    if (parsed.protocol !== 'https:') throw new Error('Trusted origin must use https://');
-    if (!parsed.hostname || _isInternalHost(parsed.hostname)) {
-      throw new Error('Trusted origin points at an internal/loopback host');
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      throw new Error("Trusted origin is malformed");
+    }
+    if (parsed.protocol !== "https:") {
+      throw new Error("Trusted origin must use https://");
+    }
+    if (!parsed.hostname || isInternalHost(parsed.hostname)) {
+      throw new Error("Trusted origin points at an internal/loopback host");
     }
     return parsed.origin;
   }
-
   function normalizeTrustedOrigins(origins) {
     if (!Array.isArray(origins)) return [];
     if (origins.length > MAX_TRUSTED_ORIGINS) {
       throw new Error(`Too many trusted origins; maximum is ${MAX_TRUSTED_ORIGINS}`);
     }
-
     const normalized = [];
-    const seen = new Set();
+    const seen = /* @__PURE__ */ new Set();
     for (const origin of origins) {
       const value = normalizeTrustedOrigin(origin);
       if (!seen.has(value)) {
@@ -10731,11 +10695,10 @@ const PublicAPI = (() => {
     }
     return normalized;
   }
-
   function normalizeStoredTrustedOrigins(origins) {
     if (!Array.isArray(origins)) return [];
     const normalized = [];
-    const seen = new Set();
+    const seen = /* @__PURE__ */ new Set();
     for (const origin of origins.slice(0, MAX_TRUSTED_ORIGINS)) {
       try {
         const value = normalizeTrustedOrigin(origin);
@@ -10744,13 +10707,10 @@ const PublicAPI = (() => {
           normalized.push(value);
         }
       } catch {
-        // Ignore legacy or corrupted origins on load; setTrustedOrigins surfaces
-        // validation errors for new writes.
       }
     }
     return normalized;
   }
-
   function normalizeIncomingOrigin(origin) {
     try {
       return normalizeTrustedOrigin(origin);
@@ -10758,34 +10718,55 @@ const PublicAPI = (() => {
       return null;
     }
   }
-
   function validateWebInstallUrl(url) {
     let parsedUrl;
-    try { parsedUrl = new URL(url); } catch { return 'Invalid URL'; }
-    if (parsedUrl.protocol !== 'https:') {
-      return 'Only https:// URLs are allowed for script installation';
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return "Invalid URL";
     }
-    if (_isInternalHost(parsedUrl.hostname)) {
-      return 'Internal URLs are not allowed';
+    if (parsedUrl.protocol !== "https:") {
+      return "Only https:// URLs are allowed for script installation";
+    }
+    if (isInternalHost(parsedUrl.hostname)) {
+      return "Internal URLs are not allowed";
     }
     return null;
   }
-
+  function isInternalWebhookUrl(url) {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return "malformed URL";
+    }
+    const host = parsed.hostname || "";
+    if (!host) return "empty hostname";
+    if (!isInternalHost(host)) return null;
+    if (host === "localhost" || host.endsWith(".localdomain")) return "localhost alias";
+    if (host.includes(":")) return "IPv6 loopback/internal";
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return "IPv4 private/loopback/CGNAT";
+    return "internal host";
+  }
+  function generateExternalScriptId() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `ext_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  }
   function measuredUtf8Length(text) {
     return new TextEncoder().encode(text).byteLength;
   }
-
   async function readResponseTextBounded(resp, maxBytes) {
-    const contentLength = resp.headers?.get?.('content-length');
+    const contentLength = resp.headers?.get?.("content-length");
     if (contentLength) {
       const declaredBytes = Number.parseInt(contentLength, 10);
       if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
         throw new Error(SCRIPT_SIZE_ERROR);
       }
     }
-
     const body = resp.body;
-    if (body && typeof body.getReader === 'function') {
+    if (body && typeof body.getReader === "function") {
       const reader = body.getReader();
       const chunks = [];
       let totalBytes = 0;
@@ -10797,162 +10778,127 @@ const PublicAPI = (() => {
           const chunk = value instanceof Uint8Array ? value : new Uint8Array(value);
           totalBytes += chunk.byteLength;
           if (totalBytes > maxBytes) {
-            try { await reader.cancel(); } catch { /* ignore cancel errors */ }
+            try {
+              await reader.cancel();
+            } catch {
+            }
             throw new Error(SCRIPT_SIZE_ERROR);
           }
           chunks.push(chunk);
         }
       } finally {
-        try { reader.releaseLock(); } catch { /* ignore release errors */ }
+        try {
+          reader.releaseLock();
+        } catch {
+        }
       }
-
       const decoder = new TextDecoder();
-      let text = '';
+      let text2 = "";
       for (let i = 0; i < chunks.length; i++) {
-        text += decoder.decode(chunks[i], { stream: i < chunks.length - 1 });
+        text2 += decoder.decode(chunks[i], { stream: i < chunks.length - 1 });
       }
-      text += decoder.decode();
-      return text;
+      text2 += decoder.decode();
+      return text2;
     }
-
     const text = await resp.text();
     if (measuredUtf8Length(text) > maxBytes) {
       throw new Error(SCRIPT_SIZE_ERROR);
     }
     return text;
   }
-
-  const ARRAY_META_KEYS = {
-    match: 'match',
-    include: 'include',
-    exclude: 'exclude',
-    'exclude-match': 'excludeMatch',
-    grant: 'grant',
-    require: 'require',
-    connect: 'connect',
-    tag: 'tag',
-    compatible: 'compatible',
-    incompatible: 'incompatible',
-    antifeature: 'antifeature'
+  var ARRAY_META_KEYS = {
+    match: "match",
+    include: "include",
+    exclude: "exclude",
+    "exclude-match": "excludeMatch",
+    grant: "grant",
+    require: "require",
+    connect: "connect",
+    tag: "tag",
+    compatible: "compatible",
+    incompatible: "incompatible",
+    antifeature: "antifeature"
   };
-  const BOOLEAN_META_KEYS = new Set(['noframes', 'unwrap', 'top-level-await']);
-
+  var BOOLEAN_META_KEYS = /* @__PURE__ */ new Set(["noframes", "unwrap", "top-level-await"]);
   function appendMetaValue(meta, key, value) {
-    if (!meta[key]) meta[key] = [];
-    meta[key].push(value);
+    const current = meta[key];
+    if (Array.isArray(current)) {
+      current.push(value);
+    } else {
+      meta[key] = [value];
+    }
   }
-
-  function buildStoredMeta(meta, scriptId) {
-    return {
-      name: meta.name || scriptId,
-      namespace: meta.namespace || '',
-      version: meta.version || '1.0',
-      description: meta.description || '',
-      author: meta.author || '',
-      match: meta.match || ['*://*/*'],
-      include: meta.include || [],
-      exclude: meta.exclude || [],
-      excludeMatch: meta.excludeMatch || [],
-      grant: meta.grant || ['none'],
-      require: meta.require || [],
-      resource: meta.resource || {},
-      connect: meta.connect || [],
-      'run-at': (meta.runAt || 'document_idle').replace(/_/g, '-'),
-      noframes: !!meta.noframes,
-      unwrap: !!meta.unwrap,
-      'top-level-await': !!meta['top-level-await'],
-      tag: meta.tag || [],
-      compatible: meta.compatible || [],
-      incompatible: meta.incompatible || [],
-      antifeature: meta.antifeature || []
-    };
-  }
-
-  /* ------------------------------------------------------------------ */
-  /*  Default Permissions                                                */
-  /* ------------------------------------------------------------------ */
-
-  const DEFAULT_PERMISSIONS = {
-    ping:                'allow',
-    getVersion:          'allow',
-    getAPISchema:        'allow',
-    getInstalledScripts: 'allow',
-    getScriptStatus:     'allow',
-    toggleScript:        'prompt',
-    installScript:       'prompt'
+  var DEFAULT_PERMISSIONS = {
+    ping: "allow",
+    getVersion: "allow",
+    getAPISchema: "allow",
+    getInstalledScripts: "allow",
+    getScriptStatus: "allow",
+    toggleScript: "prompt",
+    installScript: "prompt"
   };
-
-  /* ------------------------------------------------------------------ */
-  /*  API Schema (self-documenting)                                      */
-  /* ------------------------------------------------------------------ */
-
-  const API_SCHEMA = {
+  var API_SCHEMA = {
     version: API_VERSION,
     endpoints: {
       ping: {
-        description: 'Health check. Returns { ok: true, version }.',
+        description: "Health check. Returns { ok: true, version }.",
         params: null,
-        auth: 'none',
+        auth: "none",
         rateLimit: true
       },
       getVersion: {
-        description: 'Return the ScriptVault version string.',
+        description: "Return the ScriptVault version string.",
         params: null,
-        auth: 'none',
+        auth: "none",
         rateLimit: true
       },
       getInstalledScripts: {
-        description: 'List all installed scripts with name, version, and enabled status.',
+        description: "List all installed scripts with name, version, and enabled status.",
         params: null,
-        auth: 'basic',
+        auth: "basic",
         rateLimit: true
       },
       getScriptStatus: {
-        description: 'Get detailed status for a single script.',
-        params: { scriptId: 'string — the script ID' },
-        auth: 'basic',
+        description: "Get detailed status for a single script.",
+        params: { scriptId: "string \u2014 the script ID" },
+        auth: "basic",
         rateLimit: true
       },
       toggleScript: {
-        description: 'Enable or disable a script. Requires user approval.',
-        params: { scriptId: 'string', enabled: 'boolean' },
-        auth: 'prompt',
+        description: "Enable or disable a script. Requires user approval.",
+        params: { scriptId: "string", enabled: "boolean" },
+        auth: "prompt",
         rateLimit: true
       },
       installScript: {
-        description: 'Install a new userscript. Requires user approval.',
-        params: { code: 'string — full userscript source' },
-        auth: 'prompt',
+        description: "Install a new userscript. Requires user approval.",
+        params: { code: "string \u2014 full userscript source" },
+        auth: "prompt",
         rateLimit: true
       },
       getAPISchema: {
-        description: 'Return the full API schema (this document).',
+        description: "Return the full API schema (this document).",
         params: null,
-        auth: 'none',
+        auth: "none",
         rateLimit: false
       }
     },
     webPageEndpoints: {
-      'scriptvault:getScripts': {
-        description: 'Returns list of scripts matching the current page.',
+      "scriptvault:getScripts": {
+        description: "Returns list of scripts matching the current page.",
         params: null
       },
-      'scriptvault:isInstalled': {
-        description: 'Check if a script by name is installed.',
-        params: { name: 'string' }
+      "scriptvault:isInstalled": {
+        description: "Check if a script by name is installed.",
+        params: { name: "string" }
       },
-      'scriptvault:install': {
-        description: 'Trigger install flow for a script URL.',
-        params: { url: 'string' }
+      "scriptvault:install": {
+        description: "Trigger install flow for a script URL.",
+        params: { url: "string" }
       }
     },
-    webhookEvents: ['script.installed', 'script.updated', 'script.error', 'script.toggled']
+    webhookEvents: ["script.installed", "script.updated", "script.error", "script.toggled"]
   };
-
-  /* ------------------------------------------------------------------ */
-  /*  Storage Helpers                                                    */
-  /* ------------------------------------------------------------------ */
-
   async function loadState() {
     try {
       const result = await chrome.storage.local.get([
@@ -10961,9 +10907,12 @@ const PublicAPI = (() => {
         STORAGE_KEY_WEBHOOKS,
         STORAGE_KEY_ORIGINS
       ]);
-      _permissions = { ...DEFAULT_PERMISSIONS, ...(result[STORAGE_KEY_PERMS] || {}) };
-      _auditLog = result[STORAGE_KEY_AUDIT] || [];
-      _webhooks = result[STORAGE_KEY_WEBHOOKS] || {};
+      _permissions = {
+        ...DEFAULT_PERMISSIONS,
+        ...result[STORAGE_KEY_PERMS] ?? {}
+      };
+      _auditLog = result[STORAGE_KEY_AUDIT] ?? [];
+      _webhooks = result[STORAGE_KEY_WEBHOOKS] ?? {};
       _trustedOrigins = normalizeStoredTrustedOrigins(result[STORAGE_KEY_ORIGINS]);
     } catch {
       _permissions = { ...DEFAULT_PERMISSIONS };
@@ -10972,389 +10921,527 @@ const PublicAPI = (() => {
       _trustedOrigins = [];
     }
   }
-
   async function savePermissions() {
     try {
       await chrome.storage.local.set({ [STORAGE_KEY_PERMS]: _permissions });
     } catch (e) {
-      console.warn('[PublicAPI] save permissions failed:', e);
+      console.warn("[PublicAPI] save permissions failed:", e);
     }
   }
-
   async function saveAuditLog() {
     try {
-      // Trim to max entries
       if (_auditLog.length > MAX_AUDIT_ENTRIES) {
         _auditLog = _auditLog.slice(-MAX_AUDIT_ENTRIES);
       }
       await chrome.storage.local.set({ [STORAGE_KEY_AUDIT]: _auditLog });
     } catch (e) {
-      console.warn('[PublicAPI] save audit failed:', e);
+      console.warn("[PublicAPI] save audit failed:", e);
     }
   }
-
   async function saveWebhooks() {
     try {
       await chrome.storage.local.set({ [STORAGE_KEY_WEBHOOKS]: _webhooks });
     } catch (e) {
-      console.warn('[PublicAPI] save webhooks failed:', e);
+      console.warn("[PublicAPI] save webhooks failed:", e);
     }
   }
-
   async function saveTrustedOrigins() {
     try {
       await chrome.storage.local.set({ [STORAGE_KEY_ORIGINS]: _trustedOrigins });
     } catch (e) {
-      console.warn('[PublicAPI] save origins failed:', e);
+      console.warn("[PublicAPI] save origins failed:", e);
     }
   }
-
-  /* ------------------------------------------------------------------ */
-  /*  Audit Logging                                                      */
-  /* ------------------------------------------------------------------ */
-
   function audit(action, sender, details, result) {
     const entry = {
       timestamp: Date.now(),
       action,
       sender: describeSender(sender),
       details: details ?? null,
-      result: result || 'ok'
+      result: result || "ok"
     };
     _auditLog.push(entry);
-    // Async save, don't await in hot path
-    saveAuditLog();
+    void saveAuditLog();
     return entry;
   }
-
   function describeSender(sender) {
-    if (!sender) return 'unknown';
+    if (!sender) return "unknown";
     if (sender.id) return `extension:${sender.id}`;
     if (sender.origin) return `origin:${sender.origin}`;
     if (sender.url) return `url:${sender.url}`;
-    return 'unknown';
+    return "unknown";
   }
-
-  /* ------------------------------------------------------------------ */
-  /*  Rate Limiting                                                      */
-  /* ------------------------------------------------------------------ */
-
   function checkRateLimit(senderId) {
     const now = Date.now();
     let timestamps = _rateLimitMap.get(senderId);
-
     if (!timestamps) {
       timestamps = [];
       _rateLimitMap.set(senderId, timestamps);
     }
-
-    // Purge old timestamps outside the window
     const cutoff = now - RATE_LIMIT_WINDOW;
-    while (timestamps.length > 0 && timestamps[0] < cutoff) {
+    while (timestamps.length > 0 && (timestamps[0] ?? 0) < cutoff) {
       timestamps.shift();
     }
-
     if (timestamps.length >= RATE_LIMIT_MAX) {
-      return false; // rate limited
+      return false;
     }
-
     timestamps.push(now);
-
-    // Evict dead entries to prevent unbounded Map growth
     if (_rateLimitMap.size > RATE_LIMIT_SENDER_CAP) {
-      for (const [key, ts] of _rateLimitMap) {
-        if (ts.length === 0 || ts[ts.length - 1] < cutoff) _rateLimitMap.delete(key);
+      for (const [key, values] of _rateLimitMap) {
+        if (values.length === 0 || (values[values.length - 1] ?? 0) < cutoff) {
+          _rateLimitMap.delete(key);
+        }
       }
     }
-
     return true;
   }
-
-  /* ------------------------------------------------------------------ */
-  /*  Permission Checking                                                */
-  /* ------------------------------------------------------------------ */
-
   function getPermission(apiName) {
-    return _permissions[apiName] || 'deny';
+    return _permissions?.[apiName] ?? "deny";
   }
-
-  async function requestUserApproval(apiName, sender, details) {
-    // In a service worker we cannot show DOM prompts.
-    // Use chrome.notifications for approval, but for safety we deny by default
-    // and require pre-approval via setPermissions().
-    // If running in a context with chrome.notifications, send one.
+  async function requestUserApproval(apiName, sender, _details) {
     try {
       if (chrome.notifications) {
         const notifId = `sv-api-approval-${Date.now()}`;
         await chrome.notifications.create(notifId, {
-          type: 'basic',
-          iconUrl: chrome.runtime.getURL('images/icon128.png'),
-          title: 'ScriptVault API Request',
+          type: "basic",
+          iconUrl: chrome.runtime.getURL("images/icon128.png"),
+          title: "ScriptVault API Request",
           message: `External request: ${apiName} from ${describeSender(sender)}. Pre-approve via settings to allow.`,
           priority: 2
         });
       }
-    } catch { /* notifications not available */ }
-
-    // Default: deny unless explicitly allowed
+    } catch {
+    }
     return false;
   }
-
   async function authorize(apiName, sender) {
     const perm = getPermission(apiName);
-    if (perm === 'allow') return true;
-    if (perm === 'deny') return false;
-    if (perm === 'prompt') {
+    if (perm === "allow") return true;
+    if (perm === "deny") return false;
+    if (perm === "prompt") {
       return requestUserApproval(apiName, sender);
     }
     return false;
   }
-
-  /* ------------------------------------------------------------------ */
-  /*  Script Data Access                                                 */
-  /* ------------------------------------------------------------------ */
-
   async function getScripts() {
     try {
-      const result = await chrome.storage.local.get('userscripts');
-      const data = result.userscripts || {};
-      return Array.isArray(data) ? data : Object.values(data);
+      const store = await getScriptStore();
+      return store.scripts;
     } catch {
       return [];
     }
   }
-
   async function getScriptById(scriptId) {
     const scripts = await getScripts();
-    return scripts.find(s => s.id === scriptId || (s.meta?.name || s.name) === scriptId) || null;
+    return scripts.find((s) => s.id === scriptId || s.name === scriptId) ?? null;
   }
-
+  function asStringArray(value) {
+    return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+  }
+  function asNumber(value) {
+    return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function getMetaString(meta, existingMeta, key, fallback = "") {
+    const value = meta[key] ?? existingMeta[key];
+    return typeof value === "string" ? value : fallback;
+  }
+  function getMetaArray(meta, existingMeta, key) {
+    if (key === "tag") {
+      const fromSource = asStringArray(meta[key]);
+      const fromExisting = asStringArray(existingMeta[key]);
+      if (fromSource.length === 0) return fromExisting;
+      const seen = /* @__PURE__ */ new Set();
+      const merged = [];
+      for (const t of fromSource) {
+        if (!seen.has(t)) {
+          seen.add(t);
+          merged.push(t);
+        }
+      }
+      for (const t of fromExisting) {
+        if (!seen.has(t)) {
+          seen.add(t);
+          merged.push(t);
+        }
+      }
+      return merged;
+    }
+    return asStringArray(meta[key] ?? existingMeta[key]);
+  }
+  function getMetaBoolean(meta, existingMeta, key) {
+    const value = meta[key] ?? existingMeta[key];
+    return value === true;
+  }
+  function normalizeStoredScript(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const script = raw;
+    const meta = script.meta && typeof script.meta === "object" ? script.meta : null;
+    const id = typeof script.id === "string" ? script.id : "";
+    if (!id) return null;
+    const matches = asStringArray(script.matches ?? script.match ?? meta?.match ?? meta?.include);
+    const runAt = typeof script.runAt === "string" ? script.runAt : typeof meta?.["run-at"] === "string" ? String(meta["run-at"]).replace(/-/g, "_") : "document_idle";
+    return {
+      id,
+      name: typeof script.name === "string" ? script.name : typeof meta?.name === "string" ? String(meta.name) : id,
+      version: typeof script.version === "string" ? script.version : typeof meta?.version === "string" ? String(meta.version) : "1.0",
+      description: typeof script.description === "string" ? script.description : typeof meta?.description === "string" ? String(meta.description) : "",
+      enabled: script.enabled !== false,
+      matches,
+      match: matches,
+      code: typeof script.code === "string" ? script.code : void 0,
+      lastModified: asNumber(script.lastModified) ?? asNumber(script.updatedAt),
+      runAt,
+      installedAt: asNumber(script.installedAt) ?? asNumber(script.createdAt),
+      installedBy: typeof script.installedBy === "string" ? script.installedBy : void 0,
+      updatedAt: asNumber(script.updatedAt)
+    };
+  }
+  async function getScriptStore() {
+    const result = await chrome.storage.local.get("userscripts");
+    const raw = result["userscripts"];
+    if (Array.isArray(raw)) {
+      return {
+        mode: "array",
+        raw,
+        scripts: raw.map(normalizeStoredScript).filter((script) => script !== null)
+      };
+    }
+    if (raw && typeof raw === "object") {
+      const record = raw;
+      return {
+        mode: "record",
+        raw: record,
+        scripts: Object.values(record).map(normalizeStoredScript).filter((script) => script !== null)
+      };
+    }
+    return {
+      mode: "record",
+      raw: {},
+      scripts: []
+    };
+  }
+  function findArrayScriptIndex(scripts, scriptId) {
+    return scripts.findIndex((script) => script.id === scriptId || script.name === scriptId);
+  }
+  function findRecordScriptEntry(record, scriptId) {
+    for (const [key, value] of Object.entries(record)) {
+      const normalized = normalizeStoredScript(value);
+      if (normalized && (normalized.id === scriptId || normalized.name === scriptId) && value && typeof value === "object") {
+        return { key, value };
+      }
+    }
+    return null;
+  }
+  function createNestedStoredScript(newScript, meta, installedBy, position, existing = null) {
+    const existingRecord = existing ?? {};
+    const existingMeta = existingRecord.meta && typeof existingRecord.meta === "object" ? existingRecord.meta : {};
+    const matches = asStringArray(newScript.matches ?? newScript.match ?? meta.match ?? ["*://*/*"]);
+    const resources = meta.resource && typeof meta.resource === "object" ? meta.resource : existingMeta.resource && typeof existingMeta.resource === "object" ? existingMeta.resource : {};
+    return {
+      ...existingRecord,
+      id: newScript.id,
+      code: newScript.code ?? (typeof existingRecord.code === "string" ? existingRecord.code : ""),
+      enabled: newScript.enabled !== false,
+      position: asNumber(existingRecord.position) ?? position,
+      meta: {
+        ...existingMeta,
+        name: newScript.name ?? newScript.id,
+        namespace: getMetaString(meta, existingMeta, "namespace"),
+        version: newScript.version ?? "1.0",
+        description: newScript.description ?? "",
+        author: getMetaString(meta, existingMeta, "author"),
+        icon: getMetaString(meta, existingMeta, "icon"),
+        icon64: getMetaString(meta, existingMeta, "icon64"),
+        homepage: getMetaString(meta, existingMeta, "homepage"),
+        homepageURL: getMetaString(meta, existingMeta, "homepageURL"),
+        website: getMetaString(meta, existingMeta, "website"),
+        source: getMetaString(meta, existingMeta, "source"),
+        updateURL: getMetaString(meta, existingMeta, "updateURL"),
+        downloadURL: getMetaString(meta, existingMeta, "downloadURL"),
+        supportURL: getMetaString(meta, existingMeta, "supportURL"),
+        license: getMetaString(meta, existingMeta, "license"),
+        copyright: getMetaString(meta, existingMeta, "copyright"),
+        contributionURL: getMetaString(meta, existingMeta, "contributionURL"),
+        match: matches.length > 0 ? matches : ["*://*/*"],
+        include: getMetaArray(meta, existingMeta, "include"),
+        exclude: getMetaArray(meta, existingMeta, "exclude"),
+        excludeMatch: getMetaArray(meta, existingMeta, "excludeMatch"),
+        "run-at": (newScript.runAt ?? meta.runAt ?? "document_idle").replace(/_/g, "-"),
+        "inject-into": getMetaString(meta, existingMeta, "inject-into", "auto") || "auto",
+        noframes: getMetaBoolean(meta, existingMeta, "noframes"),
+        unwrap: getMetaBoolean(meta, existingMeta, "unwrap"),
+        sandbox: getMetaString(meta, existingMeta, "sandbox"),
+        "run-in": getMetaString(meta, existingMeta, "run-in"),
+        grant: (() => {
+          const grants = getMetaArray(meta, existingMeta, "grant");
+          return grants.length > 0 ? grants : ["none"];
+        })(),
+        require: getMetaArray(meta, existingMeta, "require"),
+        resource: resources,
+        connect: getMetaArray(meta, existingMeta, "connect"),
+        "top-level-await": getMetaBoolean(meta, existingMeta, "top-level-await"),
+        webRequest: existingMeta.webRequest ?? null,
+        priority: asNumber(existingMeta.priority) ?? 0,
+        antifeature: getMetaArray(meta, existingMeta, "antifeature"),
+        tag: getMetaArray(meta, existingMeta, "tag"),
+        compatible: getMetaArray(meta, existingMeta, "compatible"),
+        incompatible: getMetaArray(meta, existingMeta, "incompatible")
+      },
+      settings: existingRecord.settings && typeof existingRecord.settings === "object" ? existingRecord.settings : {},
+      stats: existingRecord.stats && typeof existingRecord.stats === "object" ? existingRecord.stats : { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 },
+      versionHistory: Array.isArray(existingRecord.versionHistory) ? existingRecord.versionHistory : [],
+      createdAt: asNumber(existingRecord.createdAt) ?? newScript.installedAt ?? Date.now(),
+      updatedAt: newScript.updatedAt ?? Date.now(),
+      installedBy
+    };
+  }
+  function upsertScriptStore(store, newScript, meta, installedBy) {
+    if (store.mode === "array") {
+      const scripts = Array.isArray(store.raw) ? [...store.raw] : [];
+      const idx = findArrayScriptIndex(scripts, newScript.id);
+      if (idx !== -1) {
+        scripts[idx] = { ...scripts[idx], ...newScript, updatedAt: Date.now(), installedBy };
+      } else {
+        scripts.push({ ...newScript, installedBy });
+      }
+      return scripts;
+    }
+    const record = !Array.isArray(store.raw) ? { ...store.raw } : {};
+    const existing = findRecordScriptEntry(record, newScript.id);
+    const key = existing?.key ?? newScript.id;
+    const position = existing ? asNumber(existing.value.position) ?? store.scripts.length : store.scripts.length;
+    record[key] = createNestedStoredScript(newScript, meta, installedBy, position, existing?.value ?? null);
+    return record;
+  }
+  function toRuntimeScriptShape(script, meta) {
+    return {
+      ...script,
+      meta: {
+        ...meta,
+        name: script.name ?? meta.name ?? script.id,
+        version: script.version ?? meta.version ?? "1.0",
+        description: script.description ?? meta.description ?? "",
+        match: Array.isArray(meta.match) && meta.match.length > 0 ? [...meta.match] : ["*://*/*"],
+        include: Array.isArray(meta.include) ? [...meta.include] : [],
+        exclude: Array.isArray(meta.exclude) ? [...meta.exclude] : [],
+        excludeMatch: Array.isArray(meta.excludeMatch) ? [...meta.excludeMatch] : [],
+        grant: Array.isArray(meta.grant) && meta.grant.length > 0 ? [...meta.grant] : ["none"],
+        require: Array.isArray(meta.require) ? [...meta.require] : [],
+        resource: meta.resource ?? {},
+        connect: Array.isArray(meta.connect) ? [...meta.connect] : [],
+        "run-at": script.runAt ?? meta.runAt ?? "document_idle"
+      },
+      settings: {}
+    };
+  }
+  async function refreshRuntimeAfterMutation(script, meta = {}) {
+    const hooks = getRuntimeHooks();
+    if (typeof hooks.registerAllScripts === "function") {
+      try {
+        await hooks.registerAllScripts();
+      } catch (e) {
+        console.warn("[PublicAPI] Failed to refresh registered scripts:", e);
+      }
+    }
+    if (typeof hooks.updateBadge === "function") {
+      try {
+        await hooks.updateBadge();
+      } catch (e) {
+        console.warn("[PublicAPI] Failed to refresh badge state:", e);
+      }
+    }
+    if (script && typeof hooks.autoReloadMatchingTabs === "function") {
+      try {
+        await hooks.autoReloadMatchingTabs(toRuntimeScriptShape(script, meta));
+      } catch (e) {
+        console.warn("[PublicAPI] Failed to auto-reload matching tabs:", e);
+      }
+    }
+  }
   async function getExtensionVersion() {
     try {
       const manifest = chrome.runtime.getManifest();
-      return manifest.version || '0.0.0';
+      return manifest.version || "0.0.0";
     } catch {
-      return '0.0.0';
+      return "0.0.0";
     }
   }
-
-  /* ------------------------------------------------------------------ */
-  /*  API Handlers (External Messages)                                   */
-  /* ------------------------------------------------------------------ */
-
-  const HANDLERS = {
+  var HANDLERS = {
     async ping(_msg, _sender) {
       return { ok: true, version: await getExtensionVersion(), api: API_VERSION };
     },
-
     async getVersion(_msg, _sender) {
       return { version: await getExtensionVersion(), api: API_VERSION };
     },
-
     async getInstalledScripts(_msg, _sender) {
       const scripts = await getScripts();
       return {
-        scripts: scripts.map(s => ({
+        scripts: scripts.map((s) => ({
           id: s.id,
-          name: s.meta?.name || s.name || s.id,
-          version: s.meta?.version || s.version || '1.0',
+          name: s.name ?? s.id,
+          version: s.version ?? "1.0",
           enabled: s.enabled !== false,
-          matchUrls: s.meta?.match || s.matches || s.match || []
+          matchUrls: s.matches ?? s.match ?? []
         }))
       };
     },
-
     async getScriptStatus(msg, _sender) {
-      const scriptId = msg.scriptId || msg.id;
-      if (!scriptId) return { error: 'Missing scriptId parameter' };
-
+      const scriptId = msg.scriptId ?? msg.id;
+      if (!scriptId) return { error: "Missing scriptId parameter" };
       const script = await getScriptById(scriptId);
-      if (!script) return { error: 'Script not found', scriptId };
-
+      if (!script) return { error: "Script not found", scriptId };
       return {
         id: script.id,
-        name: script.meta?.name || script.name || script.id,
-        version: script.meta?.version || script.version || '1.0',
+        name: script.name ?? script.id,
+        version: script.version ?? "1.0",
         enabled: script.enabled !== false,
-        matches: script.meta?.match || script.matches || [],
-        lastModified: script.updatedAt || null,
-        runAt: script.meta?.['run-at'] || 'document_idle'
+        matches: script.matches ?? script.match ?? [],
+        lastModified: script.lastModified ?? null,
+        runAt: script.runAt ?? "document_idle"
       };
     },
-
     async toggleScript(msg, sender) {
-      const scriptId = msg.scriptId || msg.id;
+      const scriptId = msg.scriptId ?? msg.id;
       const enabled = !!msg.enabled;
-      if (!scriptId) return { error: 'Missing scriptId parameter' };
-
-      const allowed = await authorize('toggleScript', sender);
-      if (!allowed) return { error: 'Permission denied', action: 'toggleScript' };
-
+      if (!scriptId) return { error: "Missing scriptId parameter" };
+      const allowed = await authorize("toggleScript", sender);
+      if (!allowed) return { error: "Permission denied", action: "toggleScript" };
       try {
-        // Route through ScriptStorage so the in-memory cache stays coherent.
-        // Previously the API wrote `userscripts` directly via chrome.storage.local.set,
-        // leaving ScriptStorage.cache (used by dashboard, popup, sidepanel, registration)
-        // pinned to the pre-toggle state until the next SW cold start.
-        if (typeof ScriptStorage === 'undefined') {
-          return { error: 'Script storage not available' };
+        const script = await ScriptStorage.get(scriptId);
+        if (!script) {
+          return { error: "Script not found", scriptId };
         }
-        const all = await ScriptStorage.getAll();
-        const target = all.find(s =>
-          s.id === scriptId ||
-          s.meta?.name === scriptId
-        );
-        if (!target) return { error: 'Script not found', scriptId };
-
-        target.enabled = enabled;
-        target.updatedAt = Date.now();
-        await ScriptStorage.set(target.id, target);
-
-        fireWebhook('script.toggled', { scriptId: target.id, enabled });
-        return { ok: true, scriptId: target.id, enabled };
+        await ScriptStorage.set(scriptId, { ...script, enabled, updatedAt: Date.now() });
+        await refreshRuntimeAfterMutation();
+        void fireWebhook("script.toggled", { scriptId, enabled });
+        return { ok: true, scriptId, enabled };
       } catch (e) {
-        return { error: 'Failed to toggle script', detail: e.message };
+        return { error: "Failed to toggle script", detail: e.message };
       }
     },
-
     async installScript(msg, sender) {
       const code = msg.code;
-      if (!code || typeof code !== 'string') return { error: 'Missing or invalid code parameter' };
-      if (code.length > MAX_CODE_SIZE) return { error: 'Script code exceeds maximum allowed size (5 MB)' };
-      if (!code.includes('==UserScript==')) return { error: 'Not a valid userscript (missing ==UserScript== header)' };
-
-      const allowed = await authorize('installScript', sender);
-      if (!allowed) return { error: 'Permission denied', action: 'installScript' };
-
+      if (!code || typeof code !== "string") return { error: "Missing or invalid code parameter" };
+      if (code.length > MAX_CODE_SIZE) return { error: "Script code exceeds maximum allowed size (5 MB)" };
+      if (!code.includes("==UserScript==")) return { error: "Not a valid userscript (missing ==UserScript== header)" };
+      const allowed = await authorize("installScript", sender);
+      if (!allowed) return { error: "Permission denied", action: "installScript" };
       try {
-        // Parse basic userscript metadata
         const meta = parseUserscriptMeta(code);
-        // Use a collision-free UUID instead of name-normalized ID (which collided on special chars)
-        const scriptId = (crypto.randomUUID && crypto.randomUUID()) || `ext_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-
+        const scriptId = generateExternalScriptId();
         const newScript = {
           id: scriptId,
+          name: meta.name ?? scriptId,
+          version: meta.version ?? "1.0",
+          description: meta.description ?? "",
+          matches: meta.match ?? ["*://*/*"],
           code,
-          meta: buildStoredMeta(meta, scriptId),
           enabled: true,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          installedBy: describeSender(sender)
+          installedAt: Date.now(),
+          installedBy: describeSender(sender),
+          runAt: meta.runAt ?? "document_idle"
         };
-
-        // Route through ScriptStorage so the in-memory cache stays coherent
-        // with chrome.storage.local. A direct chrome.storage.local.set leaves
-        // ScriptStorage.cache unaware of the new script until SW cold start,
-        // which breaks dashboard listing, registration, and badge counting.
-        if (typeof ScriptStorage === 'undefined') {
-          return { error: 'Script storage not available' };
+        const store = await getScriptStore();
+        const updatedStore = upsertScriptStore(store, newScript, meta, describeSender(sender));
+        if (Array.isArray(updatedStore)) {
+          await ScriptStorage.set(newScript.id, createNestedStoredScript(
+            newScript,
+            meta,
+            describeSender(sender),
+            store.scripts.length,
+            null
+          ));
+        } else {
+          const entry = updatedStore[newScript.id] ?? Object.values(updatedStore).find((v) => {
+            const n = normalizeStoredScript(v);
+            return n?.id === newScript.id;
+          });
+          if (entry) {
+            await ScriptStorage.set(newScript.id, entry);
+          }
         }
-        await ScriptStorage.set(scriptId, newScript);
-
-        fireWebhook('script.installed', { scriptId, name: newScript.meta.name, version: newScript.meta.version });
-        return { ok: true, scriptId, name: newScript.meta.name };
+        await refreshRuntimeAfterMutation(newScript, meta);
+        void fireWebhook("script.installed", { scriptId, name: newScript.name, version: newScript.version });
+        return { ok: true, scriptId, name: newScript.name };
       } catch (e) {
-        return { error: 'Failed to install script', detail: e.message };
+        return { error: "Failed to install script", detail: e.message };
       }
     },
-
     async getAPISchema(_msg, _sender) {
       return { schema: API_SCHEMA };
     }
   };
-
-  /* ------------------------------------------------------------------ */
-  /*  Userscript Metadata Parser (minimal)                               */
-  /* ------------------------------------------------------------------ */
-
   function parseUserscriptMeta(code) {
     const meta = {};
     const headerMatch = code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/);
-    if (!headerMatch) return meta;
-
-    const lines = headerMatch[1].split('\n');
+    if (!headerMatch?.[1]) return meta;
+    const lines = headerMatch[1].split("\n");
     for (const line of lines) {
       const m = line.match(/\/\/\s*@(\S+)(?:\s+(.*))?/);
-      if (!m) continue;
+      if (!m?.[1]) continue;
       const key = m[1].trim();
-      const val = (m[2] || '').trim();
-
+      const val = (m[2] || "").trim();
       if (BOOLEAN_META_KEYS.has(key)) {
         meta[key] = true;
       } else if (ARRAY_META_KEYS[key]) {
         if (val) appendMetaValue(meta, ARRAY_META_KEYS[key], val);
-      } else if (key === 'resource') {
+      } else if (key === "resource") {
         const resourceMatch = val.match(/^(\S+)\s+(.+)$/);
-        if (resourceMatch) {
-          if (!meta.resource) meta.resource = {};
+        if (resourceMatch?.[1] && resourceMatch[2]) {
+          meta.resource = meta.resource ?? {};
           meta.resource[resourceMatch[1]] = resourceMatch[2];
         }
-      } else if (key === 'run-at') {
-        if (val) meta.runAt = val.replace(/-/g, '_');
+      } else if (key === "run-at") {
+        if (val) meta.runAt = val.replace(/-/g, "_");
       } else {
         if (val) meta[key] = val;
       }
     }
     return meta;
   }
-
-  /* ------------------------------------------------------------------ */
-  /*  Web Page Message Handlers                                          */
-  /* ------------------------------------------------------------------ */
-
-  const WEB_HANDLERS = {
-    'scriptvault:getScripts': async (data, origin) => {
+  var WEB_HANDLERS = {
+    "scriptvault:getScripts": async (_data, _origin) => {
       const scripts = await getScripts();
       return {
-        type: 'scriptvault:getScripts:response',
-        scripts: scripts.map(s => ({
-          name: s.meta?.name || s.id,
-          version: s.meta?.version || '1.0',
+        type: "scriptvault:getScripts:response",
+        scripts: scripts.map((s) => ({
+          name: s.name ?? s.id,
+          version: s.version ?? "1.0",
           enabled: s.enabled !== false
         }))
       };
     },
-
-    'scriptvault:isInstalled': async (data, origin) => {
+    "scriptvault:isInstalled": async (data, _origin) => {
       const name = data.name;
-      if (!name || typeof name !== 'string') return { type: 'scriptvault:isInstalled:response', error: 'Missing name' };
-
+      if (!name) return { type: "scriptvault:isInstalled:response", error: "Missing name" };
       const scripts = await getScripts();
-      const found = scripts.find(s =>
-        (s.meta?.name || '').toLowerCase() === name.toLowerCase() ||
-        (s.id || '').toLowerCase() === name.toLowerCase()
+      const found = scripts.find(
+        (s) => (s.name ?? "").toLowerCase() === name.toLowerCase() || (s.id ?? "").toLowerCase() === name.toLowerCase()
       );
       return {
-        type: 'scriptvault:isInstalled:response',
+        type: "scriptvault:isInstalled:response",
         installed: !!found,
         name,
-        version: found ? (found.meta?.version || '1.0') : null
+        version: found ? found.version ?? "1.0" : null
       };
     },
-
-    'scriptvault:install': async (data, origin) => {
+    "scriptvault:install": async (data, origin) => {
       const url = data.url;
-      if (!url || typeof url !== 'string') {
-        return { type: 'scriptvault:install:response', error: 'Missing or invalid url' };
+      if (!url || typeof url !== "string") {
+        return { type: "scriptvault:install:response", error: "Missing or invalid url" };
       }
-
-      // Authorize before fetching to prevent SSRF
-      const allowed = await authorize('installScript', { origin });
-      if (!allowed) {
-        return { type: 'scriptvault:install:response', error: 'Permission denied', action: 'installScript' };
-      }
-
-      // Validate URL before fetching, then validate the final response URL
-      // again after redirects before reading script bytes.
       const urlError = validateWebInstallUrl(url);
       if (urlError) {
-        return { type: 'scriptvault:install:response', error: urlError };
+        return { type: "scriptvault:install:response", error: urlError };
       }
-
-      // Fetch the script only after authorization and URL validation
+      const allowed = await authorize("installScript", { origin });
+      if (!allowed) {
+        return { type: "scriptvault:install:response", error: "Permission denied", action: "installScript" };
+      }
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-        let code = '';
+        let code = "";
         try {
           const resp = await fetch(url, { signal: controller.signal });
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -11366,83 +11453,78 @@ const PublicAPI = (() => {
         } finally {
           clearTimeout(timeoutId);
         }
-
-        if (!code.includes('==UserScript==')) {
-          throw new Error('Not a valid userscript (missing ==UserScript== header)');
+        if (!code.includes("==UserScript==")) {
+          throw new Error("Not a valid userscript (missing ==UserScript== header)");
         }
-
-        // Parse and install directly (authorization already checked above)
         const meta = parseUserscriptMeta(code);
-        // Use a collision-free UUID (name-normalized IDs collide AND enable
-        // prototype pollution via reserved keys like __proto__/constructor).
-        const scriptId = (crypto.randomUUID && crypto.randomUUID()) || `ext_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-
+        const scriptId = generateExternalScriptId();
         const newScript = {
           id: scriptId,
+          name: meta.name ?? scriptId,
+          version: meta.version ?? "1.0",
+          description: meta.description ?? "",
+          matches: meta.match ?? ["*://*/*"],
           code,
-          meta: buildStoredMeta(meta, scriptId),
           enabled: true,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          installedBy: `origin:${origin}`
+          installedAt: Date.now(),
+          installedBy: `origin:${origin}`,
+          runAt: meta.runAt ?? "document_idle"
         };
-
-        // Route through ScriptStorage to keep the in-memory cache coherent
-        // (see comment on the companion `installScript` HANDLER above).
-        if (typeof ScriptStorage === 'undefined') {
-          return { type: 'scriptvault:install:response', error: 'Script storage not available' };
+        const store = await getScriptStore();
+        const updatedStore = upsertScriptStore(store, newScript, meta, `origin:${origin}`);
+        if (Array.isArray(updatedStore)) {
+          await ScriptStorage.set(newScript.id, createNestedStoredScript(
+            newScript,
+            meta,
+            `origin:${origin}`,
+            store.scripts.length,
+            null
+          ));
+        } else {
+          const entry = updatedStore[newScript.id] ?? Object.values(updatedStore).find((v) => {
+            const n = normalizeStoredScript(v);
+            return n?.id === newScript.id;
+          });
+          if (entry) {
+            await ScriptStorage.set(newScript.id, entry);
+          }
         }
-        await ScriptStorage.set(scriptId, newScript);
-
-        fireWebhook('script.installed', { scriptId, name: newScript.meta.name, version: newScript.meta.version });
-        return { type: 'scriptvault:install:response', ok: true, scriptId, name: newScript.meta.name };
+        await refreshRuntimeAfterMutation(newScript, meta);
+        void fireWebhook("script.installed", { scriptId, name: newScript.name, version: newScript.version });
+        return { type: "scriptvault:install:response", ok: true, scriptId, name: newScript.name };
       } catch (e) {
-        return { type: 'scriptvault:install:response', error: 'Fetch failed', detail: e.message };
+        return { type: "scriptvault:install:response", error: "Fetch failed", detail: e.message };
       }
     }
   };
-
-  /* ------------------------------------------------------------------ */
-  /*  Webhook Support                                                    */
-  /* ------------------------------------------------------------------ */
-
   async function fireWebhook(eventType, payload) {
     const hook = _webhooks[eventType];
-    if (!hook || !hook.enabled || !hook.url) return;
-
-    // Defense in depth: re-validate the persisted URL before each fire so
-    // that any bug allowing storage corruption (or a future migration that
-    // bypasses setWebhook validation) cannot silently turn webhooks into an
-    // SSRF vector. The same isInternalWebhookUrl check setWebhook uses.
+    if (!hook?.enabled || !hook.url) return;
     const guardReason = isInternalWebhookUrl(hook.url);
     if (guardReason) {
       console.warn(`[PublicAPI] webhook ${eventType} blocked at fire time: ${guardReason}`);
       return;
     }
-
-    // JSON.stringify will throw on circular payloads. Catch defensively so a
-    // pathological payload from a future caller can't surface as an
-    // unhandled promise rejection that the rest of the dispatch swallows.
-    let bodyString;
+    let body;
     try {
-      bodyString = JSON.stringify({
+      body = JSON.stringify({
         event: eventType,
         timestamp: Date.now(),
         version: API_VERSION,
         data: payload
       });
     } catch (e) {
-      console.warn(`[PublicAPI] webhook ${eventType} payload serialization failed:`, e?.message || e);
+      const message = e instanceof Error ? e.message : String(e);
+      console.warn(`[PublicAPI] webhook ${eventType} payload serialization failed:`, message);
       return;
     }
-
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
     try {
       await fetch(hook.url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: bodyString,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
         signal: controller.signal
       });
     } catch (e) {
@@ -11451,113 +11533,83 @@ const PublicAPI = (() => {
       clearTimeout(timeoutId);
     }
   }
-
-  /* ------------------------------------------------------------------ */
-  /*  Message Dispatchers                                                */
-  /* ------------------------------------------------------------------ */
-
   async function dispatchExternal(message, sender) {
-    const action = message && message.action;
-    if (!action || typeof action !== 'string') {
-      return { error: 'Missing action field' };
+    const action = message?.action;
+    if (!action || typeof action !== "string") {
+      return { error: "Missing action field" };
     }
-
     const handler = HANDLERS[action];
     if (!handler) {
       return { error: `Unknown action: ${action}`, availableActions: Object.keys(HANDLERS) };
     }
-
-    // Rate limit
     const senderId = describeSender(sender);
-    if (API_SCHEMA.endpoints[action]?.rateLimit !== false) {
+    const endpoint = API_SCHEMA.endpoints[action];
+    if (endpoint?.rateLimit !== false) {
       if (!checkRateLimit(senderId)) {
-        audit(action, sender, null, 'rate_limited');
-        return { error: 'Rate limited. Max 10 requests per second.' };
+        audit(action, sender, null, "rate_limited");
+        return { error: "Rate limited. Max 10 requests per second." };
       }
     }
-
-    // Permission check (ping, getVersion, getAPISchema are always allowed)
     const perm = getPermission(action);
-    if (perm === 'deny') {
-      audit(action, sender, null, 'denied');
-      return { error: 'Permission denied', action };
+    if (perm === "deny") {
+      audit(action, sender, null, "denied");
+      return { error: "Permission denied", action };
     }
-
-    // Execute
     try {
       const result = await handler(message, sender);
-      audit(action, sender, message, result?.error ? 'error' : 'ok');
+      audit(action, sender, message, result?.["error"] ? "error" : "ok");
       return result;
     } catch (e) {
-      audit(action, sender, message, 'exception');
-      // Don't leak internal error details to external callers — log
-      // server-side for the operator (in the audit log + console) and
-      // return a generic message so an external page can't probe for
-      // stack frames / file paths / token hints via error text.
-      console.warn('[PublicAPI] external handler exception:', action, e);
-      return { error: 'Internal error' };
+      audit(action, sender, message, "exception");
+      console.warn("[PublicAPI] external handler exception:", action, e);
+      return { error: "Internal error" };
     }
   }
-
   function dispatchWebMessage(event) {
-    // Validate origin — deny-by-default when no trusted origins are configured
     const origin = normalizeIncomingOrigin(event.origin);
     if (_trustedOrigins.length === 0 || !origin || !_trustedOrigins.includes(origin)) {
-      return; // ignore untrusted origins
-    }
-
-    const data = event.data;
-    if (!data || typeof data !== 'object') return;
-    // Type guard: postMessage payloads can be arbitrary structured-clone data.
-    // We must require `data.type` to be a string before calling `.startsWith`,
-    // otherwise a sender that passes `data.type = {}` triggers a TypeError that
-    // bubbles up to the window's 'message' listener (Chrome surfaces this as
-    // an unhandled error on chrome://extensions).
-    if (typeof data.type !== 'string') return;
-    if (!data.type.startsWith('scriptvault:')) return;
-
-    const senderId = `web:${origin}`;
-    if (!checkRateLimit(senderId)) {
-      // Silently drop rate-limited web messages
       return;
     }
-
-    const handler = WEB_HANDLERS[data.type];
+    const data = event.data;
+    if (!data || typeof data !== "object" || !("type" in data)) return;
+    const msg = data;
+    if (typeof msg.type !== "string") return;
+    if (!msg.type.startsWith("scriptvault:")) return;
+    const senderId = `web:${origin}`;
+    if (!checkRateLimit(senderId)) {
+      return;
+    }
+    const handler = WEB_HANDLERS[msg.type];
     if (!handler) return;
-
-    audit(data.type, { origin }, data, 'processing');
-
-    handler(data, origin).then(response => {
+    audit(msg.type, { origin }, msg, "processing");
+    handler(msg, origin).then((response) => {
       if (response && event.source) {
         try {
-          event.source.postMessage(response, origin);
-        } catch { /* cross-origin post failed */ }
+          event.source.postMessage(
+            response,
+            origin
+          );
+        } catch {
+        }
       }
-    }).catch(e => {
-      console.warn('[PublicAPI] web handler error:', e);
+    }).catch((e) => {
+      console.warn("[PublicAPI] web handler error:", e);
     });
   }
-
-  /* ------------------------------------------------------------------ */
-  /*  Listener Management                                                */
-  /* ------------------------------------------------------------------ */
-
   function onExternalMessage(message, sender, sendResponse) {
-    // chrome.runtime.onMessageExternal is async-capable via sendResponse
-    dispatchExternal(message, sender).then(result => {
-      try { sendResponse(result); } catch { /* port closed */ }
+    void dispatchExternal(message, sender).then((result) => {
+      try {
+        sendResponse(result);
+      } catch {
+      }
     });
-    return true; // keep message channel open for async response
+    return true;
   }
-
-  /* ------------------------------------------------------------------ */
-  /*  Public Interface                                                   */
-  /* ------------------------------------------------------------------ */
-
-  return {
+  var PublicAPI = {
     /**
      * Initialize the Public API: load state, register listeners.
      * Safe for service workers (no DOM).
+     * Concurrent callers share one init promise to prevent double-registration.
      */
     async init() {
       if (_initialized) return;
@@ -11565,19 +11617,14 @@ const PublicAPI = (() => {
         _initPromise = (async () => {
           try {
             await loadState();
-
-            // Register external message listener
             if (chrome.runtime.onMessageExternal) {
               chrome.runtime.onMessageExternal.addListener(onExternalMessage);
             }
-
-            // Register web page message listener (only in contexts that have window)
-            if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
-              self.addEventListener('message', dispatchWebMessage);
+            if (typeof self !== "undefined" && typeof self.addEventListener === "function") {
+              self.addEventListener("message", dispatchWebMessage);
             }
-
             _initialized = true;
-            console.log('[PublicAPI] initialized, version', API_VERSION);
+            console.log("[PublicAPI] initialized, version", API_VERSION);
           } catch (err) {
             _initPromise = null;
             throw err;
@@ -11586,104 +11633,75 @@ const PublicAPI = (() => {
       }
       return _initPromise;
     },
-
     /**
      * Handle an external message manually (if not using auto-listener).
-     * @param {object} message — { action, ...params }
-     * @param {object} sender  — chrome sender object
-     * @returns {Promise<object>} response
      */
     async handleExternalMessage(message, sender) {
       if (!_initialized) await this.init();
       return dispatchExternal(message, sender);
     },
-
     /**
      * Handle a web page message event manually.
-     * @param {MessageEvent} event
      */
     handleWebMessage(event) {
       dispatchWebMessage(event);
     },
-
     /**
      * Return the full API schema.
-     * @returns {object}
      */
     getAPISchema() {
       return { ...API_SCHEMA };
     },
-
     /**
      * Return the audit log (most recent entries).
-     * @param {number} [limit=50]
-     * @returns {Array}
      */
     getAuditLog(limit = 50) {
       const start = Math.max(0, _auditLog.length - limit);
       return _auditLog.slice(start);
     },
-
     /**
      * Set permissions for API actions.
-     * @param {object} perms — { [apiName]: 'allow' | 'deny' | 'prompt' }
      */
     async setPermissions(perms) {
       if (!_permissions) await loadState();
       for (const [key, val] of Object.entries(perms)) {
-        if (['allow', 'deny', 'prompt'].includes(val)) {
+        if (["allow", "deny", "prompt"].includes(val)) {
           _permissions[key] = val;
         }
       }
       await savePermissions();
     },
-
-    /**
-     * Get current API action permissions.
-     * @returns {object}
-     */
     getPermissions() {
-      return { ...(_permissions || DEFAULT_PERMISSIONS) };
+      return { ..._permissions || DEFAULT_PERMISSIONS };
     },
-
     /**
      * Set trusted web page origins.
-     * @param {string[]} origins — array of origin strings (e.g., 'https://example.com')
      */
     async setTrustedOrigins(origins) {
       _trustedOrigins = normalizeTrustedOrigins(origins);
       await saveTrustedOrigins();
     },
-
     /**
      * Get trusted web page origins.
-     * @returns {string[]}
      */
     getTrustedOrigins() {
       return _trustedOrigins.slice();
     },
-
     /**
      * Configure a webhook for an event type.
-     * @param {string} eventType — one of API_SCHEMA.webhookEvents
-     * @param {object} config — { url: string, enabled: boolean }
      */
     async setWebhook(eventType, config) {
       if (!API_SCHEMA.webhookEvents.includes(eventType)) {
         throw new Error(`Unknown event type: ${eventType}`);
       }
-      const url = config.url || '';
+      const url = config.url ?? "";
       if (url) {
-        if (!url.startsWith('https://')) {
-          throw new Error('Webhook URL must use https://');
+        if (!url.startsWith("https://")) {
+          throw new Error("Webhook URL must use https://");
         }
-        // Phase 5.5 — Reject RFC 1918 / loopback / link-local / IPv6 internal
-        // hosts. Webhooks fire from the extension's network context, so a URL
-        // pointing at the user's LAN is an SSRF vector for any web origin
-        // that obtains capability-token access via PublicAPI.
         const reason = isInternalWebhookUrl(url);
         if (reason) {
-          throw new Error('Webhook URL points at internal/loopback host: ' + reason);
+          throw new Error("Webhook URL points at internal/loopback host: " + reason);
         }
       }
       _webhooks[eventType] = {
@@ -11692,25 +11710,19 @@ const PublicAPI = (() => {
       };
       await saveWebhooks();
     },
-
     /**
      * Get all configured webhooks.
-     * @returns {object}
      */
     getWebhooks() {
       return { ..._webhooks };
     },
-
     /**
      * Fire a webhook event programmatically (used by other modules).
-     * @param {string} eventType
-     * @param {object} payload
      */
     async fireEvent(eventType, payload) {
-      audit('fireEvent', { id: 'internal' }, { eventType, payload }, 'ok');
+      audit("fireEvent", { id: "internal" }, { eventType, payload }, "ok");
       await fireWebhook(eventType, payload);
     },
-
     /**
      * Clear the audit log.
      */
@@ -11719,6 +11731,8 @@ const PublicAPI = (() => {
       await saveAuditLog();
     }
   };
+  var public_api_default = PublicAPI;
+  return module.exports.default || module.exports.PublicAPI || module.exports;
 })();
 
 // ============================================================================
