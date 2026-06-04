@@ -79,7 +79,8 @@ priority section below.
   - Why: `bg/analyzer.js` + `background.core.js` call `chrome.offscreen.createDocument(...)`.
   - Progress: 2026-06-04 `ScriptAnalyzer` now feature-detects `chrome.offscreen` before use. Chrome keeps the offscreen document path; Firefox loads local `lib/acorn.min.js` and `lib/diff.min.js` inline for AST analysis, ESM import parsing, and 3-way sync merges. The Firefox package includes only those two parser/merge libraries, not the full Monaco `lib/` tree.
   - Source: docs/archive/TODO.md G-1 (FIREFOX-PORT.md Phase 1).
-- [ ] P1 — Feature-flag `chrome.sidePanel` for Firefox MV3
+- [x] P1 — Feature-flag `chrome.sidePanel` for Firefox MV3
+  - Progress: 2026-06-04 `dashboard-firefox-compat.js` no longer installs a fake no-op `chrome.sidePanel` object when the API is missing. Native Chromium `chrome.sidePanel` support is preserved, while Firefox leaves `typeof chrome.sidePanel === 'undefined'` so dashboard feature-detects can hide side-panel entry points instead of seeing false support.
   - Source: docs/archive/TODO.md G-2 (FIREFOX-PORT.md Phase 1).
 - [ ] P1 — Monaco editor loading path on Firefox (decide A vs B)
   - Source: docs/archive/TODO.md G-3 (FIREFOX-PORT.md Phase 1).

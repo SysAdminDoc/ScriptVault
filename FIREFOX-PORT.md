@@ -34,7 +34,8 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
   - Provide a `loadAcornInline()` fallback that imports `lib/acorn.min.js` via `importScripts` (bg script) or a dynamic `<script>` inject (Firefox bg is a full document, not a worker)
   - Same treatment for `lib/diff.min.js` 3-way merge
   - **Shipped 2026-06-04:** `ScriptAnalyzer` now feature-detects offscreen support, keeps Chrome on the offscreen document path, and uses inline local Acorn/Diff for Firefox AST analysis, ESM import parsing, and sync merge. The Firefox package copies `lib/acorn.min.js` and `lib/diff.min.js` without copying the full Monaco `lib/` tree.
-- [ ] **Feature-flag `chrome.sidePanel`.** Dashboard has side-panel hooks. Firefox has no equivalent. Hide the toggle in `pages/dashboard.js` when `typeof chrome.sidePanel === 'undefined'`.
+- [x] **Feature-flag `chrome.sidePanel`.** Dashboard has side-panel hooks. Firefox has no equivalent. Hide the toggle in `pages/dashboard.js` when `typeof chrome.sidePanel === 'undefined'`.
+  - **Shipped 2026-06-04:** `dashboard-firefox-compat.js` no longer creates a no-op `chrome.sidePanel` on unsupported browsers. Firefox leaves the API absent so dashboard feature gates can hide side-panel entry points; native Chromium support is unchanged.
 - [x] **Strip `worldId` on Firefox.** `src/background/registration.ts` / `bg/*` may set `worldId` on `chrome.userScripts.register()`. Chrome 133+ only. Firefox rejects unknown fields. Guard with `if (USERSCRIPT_API_SUPPORTS_WORLD_ID)` after a runtime probe.
 - [ ] **Monaco editor loading path.** Firefox MV3 `extension_pages` CSP allows `'unsafe-eval'` by default, so Monaco can load directly in the dashboard extension origin with *no* sandboxed iframe at all. Two options:
   - **A (minimal):** keep the iframe, drop the manifest `sandbox` declaration, switch CSP to allow eval. `monaco-adapter.js` already posts with `'*'` targetOrigin.
@@ -108,7 +109,7 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 |---|-------|---------|----|
 | 1 | `chrome.offscreen` not in Firefox | `background.core.js`, `bg/analyzer.js`, `offscreen.html` / `.js` | **Mitigated** — offscreen calls are feature-detected; Firefox uses inline local Acorn/Diff fallbacks |
 | 2 | `manifest.sandbox.pages` not in Firefox | `manifest-firefox.json`, `pages/editor-sandbox.html` | **Mitigated** — Firefox manifest has no sandbox key; Monaco still needs a dedicated loading path |
-| 3 | `chrome.sidePanel` not in Firefox | `pages/dashboard.js`, `pages/sidepanel.html` | Medium — UI-only |
+| 3 | `chrome.sidePanel` not in Firefox | `pages/dashboard.js`, `pages/sidepanel.html` | **Mitigated** — Firefox no longer gets a fake sidePanel object; feature detects see the API as absent |
 | 4 | Per-script `worldId` is Chrome 133+ only | `background.core.js`, `src/background/registration.ts` | **Mitigated** — guarded behind Chromium 133+ detection |
 | 5 | Google / Dropbox / OneDrive PKCE redirect URI plus `identity` permission | `modules/sync-providers.js`, `modules/sync-easycloud.js`, `manifest-firefox.json` | Medium — deferred; WebDAV-only for validation gate |
 | 6 | Chrome CRX3 format irrelevant on Firefox | `build/pack-release.py` | Low — separate build path needed anyway |
@@ -152,6 +153,12 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - Firefox background runtime now loads local `lib/acorn.min.js` or `lib/diff.min.js` inline only when offscreen is absent. Chrome keeps using `offscreen.html` and `chrome.runtime.sendMessage(...)` for AST, ESM, and merge work.
 - `build-firefox.sh` now includes `lib/acorn.min.js` and `lib/diff.min.js`, while continuing to omit the full `lib/` directory and Monaco.
 - Focused verification: `npm test -- tests/source-modules.test.js tests/analyzer-generated.test.js tests/esm-bundler-generated.test.js tests/firefox-package.test.js tests/source-cloud-sync.test.js`, `npm run typecheck`, `node --check bg/analyzer.js`, and `node --check background.js`.
+
+### 2026-06-04 — Side panel feature flag
+
+- Closed the Phase 1 `chrome.sidePanel` checkbox. `FirefoxCompat.polyfill()` now preserves native side-panel APIs but leaves `chrome.sidePanel` undefined when unsupported instead of installing a no-op object.
+- Added `tests/dashboard-firefox-compat.test.js` to execute the compatibility layer in Firefox-like and Chromium-like VM contexts and pin both behaviors.
+- Focused verification: `npm test -- tests/dashboard-firefox-compat.test.js tests/firefox-package.test.js tests/manifest-generator.test.js`, `node --check tests/dashboard-firefox-compat.test.js pages/dashboard-firefox-compat.js`, and `node scripts/generate-manifest-firefox.mjs --profile firefox --check`.
 
 ---
 

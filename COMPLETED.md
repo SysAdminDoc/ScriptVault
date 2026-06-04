@@ -57,6 +57,7 @@ phase.
 - [x] F-4 Sigstore `@require-provenance` implementation: parser/storage, Sigstore bundle parser, message-signature verifier, Fulcio root/validity checks, install-dialog verified-author preview, dashboard/update review surfacing, fail-closed save/update enforcement for declared failures, and author guide — *Source: docs/archive/TODO.md Phase F; commit feat: preview require provenance on install*
 - [x] F-5 Chrome MV3 module-mode service worker: `manifest.json` declares `background.type: "module"` for the single-file worker, Firefox keeps the event-page background shape, and Chromium-derived Edge packages preserve module mode — *Source: docs/archive/TODO.md Phase F; commit feat: enable module service worker*
 - [x] G-1 Firefox offscreen feature flag: `ScriptAnalyzer` guards `chrome.offscreen`, keeps Chrome on the offscreen document path, and loads local Acorn/Diff inline on Firefox for AST analysis, ESM import parsing, and 3-way sync merge — *Source: docs/archive/TODO.md Phase G; commit feat: gate offscreen analysis on firefox*
+- [x] G-2 Firefox side-panel feature flag: `dashboard-firefox-compat.js` no longer stubs unsupported `chrome.sidePanel`, keeping Firefox feature detects honest while preserving native Chromium side-panel support — *Source: docs/archive/TODO.md Phase G; commit feat: gate side panel on firefox*
 
 ## Stale / Obsolete Items
 
