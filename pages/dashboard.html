@@ -5830,6 +5830,7 @@
                     </button>
                 </div>
             </div>
+            <div id="recommendationsContainer" class="dashboard-module-surface" aria-live="polite"></div>
             <div class="scripts-table-container">
                 <table class="scripts-table">
                     <thead>
@@ -6071,6 +6072,13 @@
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnSaveAppearance">Save</button>
                     </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Theme Editor</div>
+                <div class="section-content">
+                    <div id="themeEditorContainer" class="utility-surface dashboard-module-surface"></div>
                 </div>
             </div>
 
@@ -7063,6 +7071,80 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
 
             <div class="settings-section">
+                <div class="section-label">Collections</div>
+                <div class="section-content">
+                    <div id="collectionsContainer" class="utility-surface dashboard-module-surface"></div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Standalone Export</div>
+                <div class="section-content">
+                    <div class="setting-row standalone-export-row">
+                        <select class="select-field" id="standaloneScriptSelect" aria-label="Standalone export script"></select>
+                        <div class="btn-group">
+                            <button type="button" class="btn" id="btnStandaloneHtml">HTML</button>
+                            <button type="button" class="btn" id="btnStandaloneInstall">Install Page</button>
+                            <button type="button" class="btn" id="btnStandaloneBookmarklet">Bookmarklet</button>
+                            <button type="button" class="btn" id="btnStandalonePortfolio">Portfolio</button>
+                        </div>
+                    </div>
+                    <span class="utility-inline-status" id="standaloneExportStatus" role="status" aria-live="polite">Select a script or use the current selection.</span>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">GitHub Gist</div>
+                <div class="section-content">
+                    <div id="gistContainer" class="utility-surface dashboard-module-surface"></div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Profiles</div>
+                <div class="section-content">
+                    <div id="profilesContainer" class="utility-surface dashboard-module-surface">
+                        <div class="sv-profile-header-anchor"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Script Chains</div>
+                <div class="section-content">
+                    <div id="chainsContainer" class="utility-surface dashboard-module-surface"></div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Achievements</div>
+                <div class="section-content">
+                    <div id="gamificationContainer" class="utility-surface dashboard-module-surface"></div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">CSP Reporter</div>
+                <div class="section-content">
+                    <div id="cspContainer" class="utility-surface dashboard-module-surface"></div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Dependency Graph</div>
+                <div class="section-content">
+                    <div id="depGraphContainer" class="utility-surface dashboard-module-surface"></div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-label">Activity Heatmap</div>
+                <div class="section-content">
+                    <div id="heatmapContainer" class="utility-surface dashboard-module-surface"></div>
+                </div>
+            </div>
+
+            <div class="settings-section">
                 <div class="section-label">Network Request Log</div>
                 <div class="section-content">
                     <div id="networkLogContainer" class="utility-surface" style="max-height:250px;overflow-y:auto;font-size:12px">
@@ -7623,6 +7705,26 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <button type="button" class="toolbar-btn" id="tbtnSnippet" title="Insert Code Snippet">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                 Snippet
+            </button>
+            <button type="button" class="toolbar-btn" id="tbtnTemplate" title="Open Templates">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+                Template
+            </button>
+            <button type="button" class="toolbar-btn" id="tbtnPattern" title="Open Pattern Builder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M7 4v6M17 4v6"/><path d="M6 14h12M9 11v6M15 11v6"/></svg>
+                Pattern
+            </button>
+            <button type="button" class="toolbar-btn" id="tbtnDiff" title="Compare saved and current code">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v18M18 3v18"/><path d="M10 8h8M10 16h8"/></svg>
+                Diff
+            </button>
+            <button type="button" class="toolbar-btn" id="tbtnDebug" title="Open Script Debugger">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h8v8H8z"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+                Debug
+            </button>
+            <button type="button" class="toolbar-btn" id="tbtnShare" title="Share Script">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.6l6.8-4.2M8.6 13.4l6.8 4.2"/></svg>
+                Share
             </button>
         </div>
         <div class="editor-body">

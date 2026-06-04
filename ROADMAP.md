@@ -435,9 +435,11 @@ Priorities/sizes preserve the source labels.
 
 ### Correctness and reachability
 
-- [ ] P1 — Triage unreachable/duplicated dashboard modules (O-1)
+- [x] P1 — Triage unreachable/duplicated dashboard modules (O-1)
   - Why: ~760 KB of dashboard UI JS (snippets, templates, gist, collections, scheduler, depgraph, profiles, i18n-v2, linter, csp, debugger, standalone, gamification, diff, recommendations, pattern-builder, heatmap) is tested in CI but never mounted by any user (`initOnDemandModule`/`LazyLoader.loadForEditor()` discard results). Inline equivalents shadow most.
   - Acceptance: each module triaged wire-or-delete; add a CI reachability gate; README claims drop for removed modules.
+  - Progress: 2026-06-04 wired the dashboard modules instead of deleting them: scripts now mounts recommendations/card view/scheduler, settings mounts the theme editor, utilities mounts collections, standalone export, Gist, profiles, chains, gamification, CSP reporter, dependency graph, and activity heatmap, and editor toolbar actions load linter, snippets, templates, pattern builder, debugger, diff, and sharing. Removed the profile module's hidden Alt+number shortcut path. Added `DASHBOARD_MODULE_TRIAGE` metadata and `npm run dashboard:modules:check` to gate module file coverage, lazy-loader/HTML reachability, and concrete UI wiring tokens.
+  - Verification: `node --check pages/dashboard.js`; `node --check pages/dashboard-lazy-loader.js`; `node --check pages/dashboard-profiles.js`; `node --check scripts/check-dashboard-modules.mjs`; `npm run dashboard:modules:check`; `npm run test:a11y`; `npm run smoke:dashboard`; `npm run readme:check`; `npm run store-copy:check`; `npm run cws:remote-code:check`; `npm run check`; `git diff --check`.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md O-1 / EI-4.
 - [ ] P1 — Correct `@crontab` next-fire engine
   - Why: everything except `*/N * * * *`, `0 */N * * *`, `0 * * * *`, `0 0 * * *` silently falls back to 60 min — `30 9 * * 1` ("9:30am Mondays") runs hourly. A correctness/trust failure in an advertised feature.

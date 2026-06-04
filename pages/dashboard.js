@@ -161,6 +161,15 @@
         'script subscriptions': 'import',
         'batch install from urls': 'import',
         workspaces: 'backup',
+        collections: 'backup',
+        'standalone export': 'backup',
+        'github gist': 'cloud',
+        profiles: 'backup',
+        'script chains': 'automation',
+        achievements: 'diagnostics',
+        'csp reporter': 'diagnostics',
+        'dependency graph': 'diagnostics',
+        'activity heatmap': 'diagnostics',
         'network request log': 'diagnostics',
         'performance budgets': 'diagnostics',
         'runtime repair': 'diagnostics',
@@ -169,6 +178,37 @@
         'signing trust': 'diagnostics',
         'activity log': 'diagnostics'
     };
+    const DASHBOARD_MODULE_TRIAGE = Object.freeze({
+        'dashboard-a11y.js': { surface: 'eager', initializer: 'A11y.init' },
+        'dashboard-cardview.js': { surface: 'scripts', initializer: 'CardView.init', mount: 'cardViewContainer' },
+        'dashboard-chains.js': { surface: 'utilities', initializer: 'ScriptChains.init', mount: 'chainsContainer' },
+        'dashboard-collections.js': { surface: 'utilities', initializer: 'CollectionManager.init', mount: 'collectionsContainer' },
+        'dashboard-csp.js': { surface: 'utilities', initializer: 'CSPReporter.init', mount: 'cspContainer' },
+        'dashboard-debugger.js': { surface: 'editor', initializer: 'ScriptDebugger.init', trigger: 'tbtnDebug' },
+        'dashboard-depgraph.js': { surface: 'utilities', initializer: 'DependencyGraph.init', mount: 'depGraphContainer' },
+        'dashboard-diff.js': { surface: 'editor', initializer: 'DiffTool.init', trigger: 'tbtnDiff' },
+        'dashboard-firefox-compat.js': { surface: 'eager', initializer: 'FirefoxCompat.polyfill' },
+        'dashboard-gamification.js': { surface: 'utilities', initializer: 'Gamification.init', mount: 'gamificationContainer' },
+        'dashboard-gist.js': { surface: 'utilities', initializer: 'GistIntegration.init', mount: 'gistContainer' },
+        'dashboard-heatmap.js': { surface: 'utilities', initializer: 'ActivityHeatmap.init', mount: 'heatmapContainer' },
+        'dashboard-i18n-v2.js': { surface: 'eager-service', initializer: 'syncDashboardModuleLanguage' },
+        'dashboard-keyboard.js': { surface: 'eager', initializer: 'KeyboardNav.init' },
+        'dashboard-lazy-loader.js': { surface: 'html-loader', initializer: 'LazyLoader.markLoaded' },
+        'dashboard-linter.js': { surface: 'editor', initializer: 'AdvancedLinter.init', trigger: 'tbtnLint' },
+        'dashboard-pattern-builder.js': { surface: 'editor', initializer: 'PatternBuilder.init', trigger: 'tbtnPattern' },
+        'dashboard-profiles.js': { surface: 'utilities', initializer: 'ProfileManager.init', mount: 'profilesContainer' },
+        'dashboard-recommendations.js': { surface: 'scripts', initializer: 'Recommendations.init', mount: 'recommendationsContainer' },
+        'dashboard-scheduler.js': { surface: 'scripts', initializer: 'ScriptScheduler.init' },
+        'dashboard-sharing.js': { surface: 'editor', initializer: 'ScriptSharing.init', trigger: 'tbtnShare' },
+        'dashboard-snippets.js': { surface: 'editor', initializer: 'SnippetLibrary.init', trigger: 'tbtnSnippet' },
+        'dashboard-standalone.js': { surface: 'utilities-service', initializer: 'StandaloneExport.init', mount: 'standaloneScriptSelect' },
+        'dashboard-store.js': { surface: 'store', initializer: 'ScriptStore.init', mount: 'storeContainer' },
+        'dashboard-templates.js': { surface: 'editor', initializer: 'TemplateManager.init', trigger: 'tbtnTemplate' },
+        'dashboard-theme-editor.js': { surface: 'settings', initializer: 'ThemeEditor.init', mount: 'themeEditorContainer' },
+        'dashboard-viewsettings.js': { surface: 'html-self-init', initializer: 'dashboard-viewsettings.js' },
+        'dashboard-virtual-rows.js': { surface: 'scripts-helper', initializer: 'DashboardVirtualRows.render' },
+        'dashboard-whatsnew.js': { surface: 'startup-on-demand', initializer: 'WhatsNew.show' },
+    });
     const SCRIPT_SEARCH_DEBOUNCE_MS = 90;
     const SCRIPT_TABLE_VIRTUAL_ROW_HEIGHT = 72;
     const SCRIPT_TABLE_VIRTUAL_MAX_ROWS = 60;
@@ -1311,6 +1351,7 @@
         elements.scriptSearch = document.getElementById('scriptSearch');
         elements.btnClearScriptSearch = document.getElementById('btnClearScriptSearch');
         elements.scriptTableBody = document.getElementById('scriptTableBody');
+        elements.recommendationsContainer = document.getElementById('recommendationsContainer');
         elements.emptyState = document.getElementById('emptyState');
         elements.emptyStateTitle = document.getElementById('emptyStateTitle');
         elements.emptyStateDescription = document.getElementById('emptyStateDescription');
@@ -1416,6 +1457,12 @@
         elements.tbtnFoldAll = document.getElementById('tbtnFoldAll');
         elements.tbtnUnfoldAll = document.getElementById('tbtnUnfoldAll');
         elements.tbtnJumpLine = document.getElementById('tbtnJumpLine');
+        elements.tbtnSnippet = document.getElementById('tbtnSnippet');
+        elements.tbtnTemplate = document.getElementById('tbtnTemplate');
+        elements.tbtnPattern = document.getElementById('tbtnPattern');
+        elements.tbtnDiff = document.getElementById('tbtnDiff');
+        elements.tbtnDebug = document.getElementById('tbtnDebug');
+        elements.tbtnShare = document.getElementById('tbtnShare');
 
         // Externals panel
         elements.externalRequireList = document.getElementById('externalRequireList');
@@ -1477,6 +1524,7 @@
         elements.settingsCustomCss = document.getElementById('settingsCustomCss');
         elements.settingsUpdateNotify = document.getElementById('settingsUpdateNotify');
         elements.settingsFaviconService = document.getElementById('settingsFaviconService');
+        elements.themeEditorContainer = document.getElementById('themeEditorContainer');
         elements.btnSaveAppearance = document.getElementById('btnSaveAppearance');
         
         // Settings - Tags
@@ -1683,6 +1731,20 @@
         elements.utilitiesEmptyState = document.getElementById('utilitiesEmptyState');
         elements.utilitiesFilterButtons = document.querySelectorAll('#utilitiesCategoryFilters .utilities-filter');
         elements.workspaceList = document.getElementById('workspaceList');
+        elements.collectionsContainer = document.getElementById('collectionsContainer');
+        elements.standaloneScriptSelect = document.getElementById('standaloneScriptSelect');
+        elements.btnStandaloneHtml = document.getElementById('btnStandaloneHtml');
+        elements.btnStandaloneInstall = document.getElementById('btnStandaloneInstall');
+        elements.btnStandaloneBookmarklet = document.getElementById('btnStandaloneBookmarklet');
+        elements.btnStandalonePortfolio = document.getElementById('btnStandalonePortfolio');
+        elements.standaloneExportStatus = document.getElementById('standaloneExportStatus');
+        elements.gistContainer = document.getElementById('gistContainer');
+        elements.profilesContainer = document.getElementById('profilesContainer');
+        elements.chainsContainer = document.getElementById('chainsContainer');
+        elements.gamificationContainer = document.getElementById('gamificationContainer');
+        elements.cspContainer = document.getElementById('cspContainer');
+        elements.depGraphContainer = document.getElementById('depGraphContainer');
+        elements.heatmapContainer = document.getElementById('heatmapContainer');
         elements.networkLogContainer = document.getElementById('networkLogContainer');
         elements.activityLog = document.getElementById('activityLog');
         elements.perfBudgetDefault = document.getElementById('perfBudgetDefault');
@@ -1886,19 +1948,162 @@
         'Store': 'storeContainer',
         'CardView': 'cardViewContainer', 'PatternBuilder': 'patternBuilderContainer',
         'ThemeEditor': 'themeEditorContainer', 'DepGraph': 'depGraphContainer',
+        'Recommendations': 'recommendationsContainer',
+        'Collections': 'collectionsContainer',
+        'Standalone': 'standaloneScriptSelect',
+        'Heatmap': 'heatmapContainer',
+        'Gist': 'gistContainer',
+        'Profiles': 'profilesContainer',
+        'Chains': 'chainsContainer',
+        'Gamification': 'gamificationContainer',
+        'CSP': 'cspContainer',
+        'Linter': 'advancedLinterContainer',
+        'Snippets': 'snippetLibraryContainer',
+        'Templates': 'templateManagerContainer',
+        'Sharing': 'sharingContainer',
+        'Debugger': 'scriptDebuggerContainer',
+        'Diff': 'diffToolContainer',
     };
-    function safeInit(name, fn) {
-        try { fn(); } catch (e) {
-            console.error(`[ScriptVault] Module ${name} init failed:`, e);
-            const containerId = _containerIds[name] || (name.toLowerCase() + 'Container');
-            const container = document.getElementById(containerId);
-            if (container) {
-                container.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted)">
-                    <div style="font-size:16px;margin-bottom:4px">Module Error</div>
-                    <div style="font-size:12px">${name} failed to load: ${escapeHtml(e.message)}</div>
-                </div>`;
-            }
+    const _moduleInitPromises = new Map();
+    const _dashboardModulesInited = new Set();
+    let _editorModuleLoadPromise = null;
+
+    function handleModuleInitError(name, e) {
+        console.error(`[ScriptVault] Module ${name} init failed:`, e);
+        const containerId = _containerIds[name] || (name.toLowerCase() + 'Container');
+        const container = document.getElementById(containerId);
+        if (container) {
+            container.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted)">
+                <div style="font-size:16px;margin-bottom:4px">Module Error</div>
+                <div style="font-size:12px">${name} failed to load: ${escapeHtml(e?.message || String(e))}</div>
+            </div>`;
         }
+    }
+
+    function safeInit(name, fn) {
+        try {
+            const result = fn();
+            if (result && typeof result.then === 'function') {
+                return result.catch(e => {
+                    handleModuleInitError(name, e);
+                    throw e;
+                });
+            }
+            return result;
+        } catch (e) {
+            handleModuleInitError(name, e);
+            return null;
+        }
+    }
+
+    function initDashboardModuleOnce(key, name, fn) {
+        if (_dashboardModulesInited.has(key)) return _moduleInitPromises.get(key) || Promise.resolve(true);
+        if (_moduleInitPromises.has(key)) return _moduleInitPromises.get(key);
+        const promise = Promise.resolve(safeInit(name, fn))
+            .then(() => {
+                _dashboardModulesInited.add(key);
+                return true;
+            })
+            .catch(() => false)
+            .finally(() => _moduleInitPromises.delete(key));
+        _moduleInitPromises.set(key, promise);
+        return promise;
+    }
+
+    function syncDashboardModuleLanguage(language = state.settings?.language) {
+        if (typeof I18nV2 === 'undefined') return;
+        const nextLanguage = !language || language === 'default'
+            ? (chrome.i18n?.getUILanguage?.() || 'en')
+            : language;
+        I18nV2.setLanguage(nextLanguage);
+    }
+
+    function getScriptById(scriptId) {
+        return scriptId ? state.scripts.find(s => s.id === scriptId) || null : null;
+    }
+
+    function getAllScriptsSnapshot() {
+        return Array.isArray(state.scripts) ? state.scripts.slice() : [];
+    }
+
+    function getSelectedScriptIds() {
+        return state.selectedScripts instanceof Set ? Array.from(state.selectedScripts) : [];
+    }
+
+    function getStandaloneTargetScriptId() {
+        return elements.standaloneScriptSelect?.value || state.currentScriptId || getSelectedScriptIds()[0] || state.scripts[0]?.id || '';
+    }
+
+    function refreshStandaloneScriptSelect() {
+        const select = elements.standaloneScriptSelect;
+        if (!select) return;
+        const current = select.value || state.currentScriptId || getSelectedScriptIds()[0] || '';
+        select.innerHTML = '';
+        for (const script of state.scripts) {
+            const option = document.createElement('option');
+            option.value = script.id;
+            option.textContent = script.metadata?.name || script.id;
+            select.appendChild(option);
+        }
+        if (current && state.scripts.some(script => script.id === current)) {
+            select.value = current;
+        } else if (state.scripts[0]) {
+            select.value = state.scripts[0].id;
+        }
+        if (elements.standaloneExportStatus) {
+            elements.standaloneExportStatus.textContent = state.scripts.length
+                ? `${numberFormatter.format(state.scripts.length)} script${state.scripts.length === 1 ? '' : 's'} available.`
+                : 'No scripts available.';
+        }
+    }
+
+    async function installCodeFromDashboardModule(code, label = 'module') {
+        if (!code) throw new Error('No script code provided');
+        await installFromCodeText(code, label);
+        await loadScripts();
+        return { success: true };
+    }
+
+    async function updateScriptFromDashboardModule(scriptId, changes = {}) {
+        const script = getScriptById(scriptId);
+        if (!script) return { success: false, error: 'Script not found' };
+        if (changes.code != null && changes.code !== script.code) {
+            const response = await chrome.runtime.sendMessage({
+                action: 'saveScript',
+                scriptId,
+                code: changes.code,
+                markModified: true
+            });
+            if (response?.error) return { success: false, error: response.error };
+        }
+        if (changes.settings) {
+            const response = await chrome.runtime.sendMessage({
+                action: 'setScriptSettings',
+                scriptId,
+                settings: { ...(script.settings || {}), ...changes.settings }
+            });
+            if (response?.error) return { success: false, error: response.error };
+        }
+        await loadScripts();
+        return { success: true };
+    }
+
+    async function ensureEditorModulesLoaded() {
+        if (typeof LazyLoader === 'undefined') return false;
+        if (!_editorModuleLoadPromise) {
+            _editorModuleLoadPromise = LazyLoader.loadForEditor()
+                .then(() => {
+                    _tabInited.add('_editor');
+                    return true;
+                })
+                .catch(e => {
+                    _editorModuleLoadPromise = null;
+                    console.error('[ScriptVault] Failed to load editor modules:', e);
+                    showToast('Some editor tools failed to load', 'error');
+                    return false;
+                });
+        }
+        return _editorModuleLoadPromise;
     }
 
     // Initialize all v2.0 modules with individual error boundaries
@@ -1909,6 +2114,7 @@
         safeInit('Keyboard', () => { if (typeof KeyboardNav !== 'undefined') KeyboardNav.init(); });
         safeInit('A11y', () => { if (typeof A11y !== 'undefined') A11y.init(); });
         safeInit('FirefoxCompat', () => { if (typeof FirefoxCompat !== 'undefined') FirefoxCompat.polyfill(); });
+        safeInit('I18n', () => syncDashboardModuleLanguage());
 
         // What's New modal — shows once per version
         safeInit('WhatsNew', () => {
@@ -1974,26 +2180,28 @@
                 }
                 break;
             case 'settings':
-                // Theme editor loads with settings tab
-                await LazyLoader.loadOnDemand('scheduler').catch(e => {
-                    console.error('[ScriptVault] Failed to load scheduler module:', e);
-                    showToast('Scheduling tools are unavailable right now', 'error');
+                await initDashboardModuleOnce('theme-editor', 'ThemeEditor', async () => {
+                    if (typeof ThemeEditor !== 'undefined' && elements.themeEditorContainer) {
+                        await ThemeEditor.init(elements.themeEditorContainer);
+                    }
                 });
                 break;
             case 'utilities':
-                // Collections, standalone, depgraph load with utilities tab
-                // (LazyLoader.loadForTab already called at line 438 above)
+                await initUtilitiesModules();
                 break;
             case 'scripts':
-                // Card view, linter, recommendations load with scripts tab
+                // Card view, recommendations, and scheduler load with scripts tab
                 // (LazyLoader.loadForTab already called at line 438 above)
-                safeInit('CardView', () => {
+                await initDashboardModuleOnce('cardview', 'CardView', () => {
                     if (typeof CardView !== 'undefined') {
-                        const cardContainer = document.createElement('div');
-                        cardContainer.id = 'cardViewContainer';
-                        cardContainer.style.display = 'none';
+                        let cardContainer = document.getElementById('cardViewContainer');
                         const tableContainer = document.querySelector('.scripts-table-container');
-                        if (tableContainer) tableContainer.parentNode.insertBefore(cardContainer, tableContainer.nextSibling);
+                        if (!cardContainer) {
+                            cardContainer = document.createElement('div');
+                            cardContainer.id = 'cardViewContainer';
+                            if (tableContainer) tableContainer.parentNode.insertBefore(cardContainer, tableContainer.nextSibling);
+                        }
+                        cardContainer.style.display = 'none';
                         CardView.init(cardContainer, {
                             tableContainer,
                             toggleButton: elements.btnViewToggle,
@@ -2039,7 +2247,156 @@
                         syncCardView(getFilteredScripts());
                     }
                 });
+                await initDashboardModuleOnce('recommendations', 'Recommendations', async () => {
+                    if (typeof Recommendations !== 'undefined' && elements.recommendationsContainer) {
+                        await Recommendations.init(elements.recommendationsContainer, {
+                            getScripts: getAllScriptsSnapshot,
+                            onInstall: () => {}
+                        });
+                    }
+                });
+                await initDashboardModuleOnce('scheduler', 'Scheduler', async () => {
+                    if (typeof ScriptScheduler !== 'undefined') {
+                        await ScriptScheduler.init();
+                    }
+                });
                 break;
+        }
+    }
+
+    async function initUtilitiesModules() {
+        await initDashboardModuleOnce('collections', 'Collections', async () => {
+            if (typeof CollectionManager !== 'undefined' && elements.collectionsContainer) {
+                await CollectionManager.init(elements.collectionsContainer, {
+                    getScripts: getAllScriptsSnapshot,
+                    onToggle: (scriptId, enabled, options = {}) => toggleScriptEnabled(scriptId, enabled, options),
+                    scripts: getAllScriptsSnapshot()
+                });
+            }
+        });
+        await initDashboardModuleOnce('standalone', 'Standalone', () => {
+            if (typeof StandaloneExport !== 'undefined') {
+                StandaloneExport.init({
+                    getScript: getScriptById,
+                    getAllScripts: getAllScriptsSnapshot
+                });
+                initStandaloneExportControls();
+                refreshStandaloneScriptSelect();
+            }
+        });
+        await initDashboardModuleOnce('gist', 'Gist', async () => {
+            if (typeof GistIntegration !== 'undefined' && elements.gistContainer) {
+                await GistIntegration.init(elements.gistContainer, {
+                    getScript: getScriptById,
+                    getAllScripts: getAllScriptsSnapshot,
+                    onInstallScript: (code, options = {}) => installCodeFromDashboardModule(code, options.label || 'gist'),
+                    updateScript: updateScriptFromDashboardModule
+                });
+            }
+        });
+        await initDashboardModuleOnce('profiles', 'Profiles', () => {
+            if (typeof ProfileManager !== 'undefined' && elements.profilesContainer) {
+                ProfileManager.init(elements.profilesContainer);
+            }
+        });
+        await initDashboardModuleOnce('chains', 'Chains', async () => {
+            if (typeof ScriptChains !== 'undefined' && elements.chainsContainer) {
+                await ScriptChains.init(elements.chainsContainer);
+            }
+        });
+        await initDashboardModuleOnce('gamification', 'Gamification', async () => {
+            if (typeof Gamification !== 'undefined' && elements.gamificationContainer) {
+                await Gamification.init(elements.gamificationContainer);
+            }
+        });
+        await initDashboardModuleOnce('csp', 'CSP', async () => {
+            if (typeof CSPReporter !== 'undefined' && elements.cspContainer) {
+                await CSPReporter.init(elements.cspContainer);
+            }
+        });
+        await initDashboardModuleOnce('depgraph', 'DepGraph', () => {
+            if (typeof DependencyGraph !== 'undefined' && elements.depGraphContainer) {
+                DependencyGraph.init(elements.depGraphContainer, {
+                    onOpenEditor: (scriptId) => openEditorForScript(scriptId)
+                });
+                DependencyGraph.refresh(getAllScriptsSnapshot());
+            }
+        });
+        await initDashboardModuleOnce('heatmap', 'Heatmap', async () => {
+            if (typeof ActivityHeatmap !== 'undefined' && elements.heatmapContainer) {
+                await ActivityHeatmap.init(elements.heatmapContainer);
+            }
+        });
+    }
+
+    function initStandaloneExportControls() {
+        const controls = [
+            elements.btnStandaloneHtml,
+            elements.btnStandaloneInstall,
+            elements.btnStandaloneBookmarklet,
+            elements.btnStandalonePortfolio
+        ].filter(Boolean);
+        if (controls.every(control => control.dataset.boundStandalone === 'true')) return;
+
+        elements.btnStandaloneHtml?.addEventListener('click', () => runStandaloneExport('html'));
+        elements.btnStandaloneInstall?.addEventListener('click', () => runStandaloneExport('install'));
+        elements.btnStandaloneBookmarklet?.addEventListener('click', () => runStandaloneExport('bookmarklet'));
+        elements.btnStandalonePortfolio?.addEventListener('click', () => runStandaloneExport('portfolio'));
+        controls.forEach(control => {
+            control.dataset.boundStandalone = 'true';
+        });
+    }
+
+    function runStandaloneExport(kind) {
+        if (typeof StandaloneExport === 'undefined') {
+            showToast('Standalone export tools are unavailable', 'error');
+            return;
+        }
+        try {
+            const scriptId = getStandaloneTargetScriptId();
+            if (!scriptId && kind !== 'portfolio') {
+                showToast('Select a script first', 'error');
+                return;
+            }
+            if (kind === 'html') {
+                StandaloneExport.exportAsHTML(scriptId);
+                showToast('HTML export ready', 'success');
+            } else if (kind === 'install') {
+                StandaloneExport.generateInstallPage(scriptId);
+                showToast('Install page ready', 'success');
+            } else if (kind === 'bookmarklet') {
+                StandaloneExport.showBookmarkletDialog(scriptId);
+            } else if (kind === 'portfolio') {
+                const selectedIds = getSelectedScriptIds();
+                const ids = selectedIds.length ? selectedIds : state.scripts.map(script => script.id);
+                StandaloneExport.exportPortfolio(ids);
+                showToast('Portfolio export ready', 'success');
+            }
+        } catch (error) {
+            showToast(error?.message || 'Standalone export failed', 'error');
+        }
+    }
+
+    function refreshDashboardModuleSurfaces() {
+        refreshStandaloneScriptSelect();
+        if (typeof CardView !== 'undefined' && _dashboardModulesInited.has('cardview')) {
+            syncCardView(getFilteredScripts());
+        }
+        if (typeof Recommendations !== 'undefined' && _dashboardModulesInited.has('recommendations')) {
+            Recommendations.refresh?.().catch?.(error => {
+                console.warn('[ScriptVault] Recommendations refresh failed:', error?.message || error);
+            });
+        }
+        if (typeof DependencyGraph !== 'undefined' && _dashboardModulesInited.has('depgraph')) {
+            DependencyGraph.refresh(getAllScriptsSnapshot());
+        }
+        if (typeof ActivityHeatmap !== 'undefined' && _dashboardModulesInited.has('heatmap')) {
+            ActivityHeatmap.refresh?.().catch?.(error => {
+                console.warn('[ScriptVault] Activity heatmap refresh failed:', error?.message || error);
+            });
+        }
+        if (typeof GistIntegration !== 'undefined' && _dashboardModulesInited.has('gist')) {
+            GistIntegration.refresh?.();
         }
     }
 
@@ -2853,6 +3210,7 @@
                 }
             }
             if (key === 'layout') document.documentElement.setAttribute('data-theme', value);
+            if (key === 'language') syncDashboardModuleLanguage(value);
             if (key === 'configMode') applyConfigMode();
             if (key === 'customCss') applySettingsToUI();
             if (key === 'layout') updateHelpOverview();
@@ -4764,6 +5122,8 @@
                 state.scripts = response.scripts;
                 updateTagFilterOptions();
                 renderScriptTable();
+                refreshStandaloneScriptSelect();
+                refreshDashboardModuleSurfaces();
                 updateSupportSnapshotSummary();
             }
         } catch (e) {
@@ -5006,6 +5366,10 @@
                 matchesStatus = !!(m.updateURL || m.downloadURL);
             } else if (statusFilter === 'no-url') {
                 matchesStatus = !(m.updateURL || m.downloadURL);
+            } else if (statusFilter === 'scheduled') {
+                matchesStatus = typeof ScriptScheduler !== 'undefined'
+                    && typeof ScriptScheduler.matchesScheduleFilter === 'function'
+                    && ScriptScheduler.matchesScheduleFilter(s.id);
             } else if (statusFilter === 'grant:xhr') {
                 matchesStatus = grants.includes('GM_xmlhttpRequest') || grants.includes('GM.xmlHttpRequest');
             } else if (statusFilter === 'grant:storage') {
@@ -6134,11 +6498,7 @@
         const script = state.scripts.find(s => s.id === scriptId);
         if (!script) return;
 
-        // Lazy-load editor modules (pattern builder, debugger, diff, snippets) on first editor open
-        if (typeof LazyLoader !== 'undefined' && !_tabInited.has('_editor')) {
-            _tabInited.add('_editor');
-            LazyLoader.loadForEditor();
-        }
+        ensureEditorModulesLoaded();
 
         // Save current editor state before switching
         if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
@@ -7110,6 +7470,9 @@
                 }
             }
             markScriptSaved(savingScriptId, Date.now());
+            if (typeof ScriptDebugger !== 'undefined' && typeof ScriptDebugger.onScriptSaved === 'function') {
+                ScriptDebugger.onScriptSaved(savingScriptId);
+            }
             showToast('Saved', 'success');
         } catch (e) {
             markScriptSaveFailed(savingScriptId, e?.message || 'Failed to save');
@@ -9058,13 +9421,319 @@
 
     async function goToEditorLine(editor = state.editor) {
         const lineNumber = await promptForLineNumber(editor);
+        focusEditorLine(lineNumber, editor);
+    }
+
+    function focusEditorLine(lineNumber, editor = state.editor) {
         if (!editor || !lineNumber) return;
+        const targetLine = Math.max(1, parseInt(lineNumber, 10) || 1);
         if (typeof editor.setCursor === 'function') {
-            editor.setCursor(lineNumber - 1, 0);
+            editor.setCursor(targetLine - 1, 0);
         }
         if (typeof editor.scrollIntoView === 'function' && typeof editor.getScrollerElement === 'function') {
             editor.scrollIntoView(null, editor.getScrollerElement().offsetHeight / 2);
         }
+        editor.focus?.();
+        updateCursorPos();
+    }
+
+    function setCurrentEditorCode(code) {
+        if (!state.editor || typeof code !== 'string') return false;
+        state.editor.setValue(code);
+        updateLineCount();
+        updateCursorPos();
+        markCurrentEditorDirty();
+        return true;
+    }
+
+    function insertTextAtEditor(text) {
+        if (!state.editor || typeof text !== 'string') return false;
+        if (typeof state.editor.replaceSelection === 'function') {
+            state.editor.replaceSelection(text);
+        } else {
+            const currentCode = typeof state.editor.getValue === 'function' ? state.editor.getValue() : '';
+            state.editor.setValue(currentCode + text);
+        }
+        updateLineCount();
+        updateCursorPos();
+        markCurrentEditorDirty();
+        return true;
+    }
+
+    function getEditorOffsetForPosition(code, position) {
+        const targetLine = Math.max(1, position?.lineNumber || 1);
+        const targetColumn = Math.max(1, position?.column || 1);
+        const lines = String(code || '').split('\n');
+        let offset = 0;
+        for (let i = 0; i < Math.min(targetLine - 1, lines.length); i++) {
+            offset += lines[i].length + 1;
+        }
+        return Math.min(String(code || '').length, offset + targetColumn - 1);
+    }
+
+    function getEditorPositionForOffset(code, offset) {
+        const safeOffset = Math.max(0, Math.min(String(code || '').length, offset || 0));
+        const before = String(code || '').slice(0, safeOffset).split('\n');
+        return {
+            lineNumber: before.length,
+            column: before[before.length - 1].length + 1
+        };
+    }
+
+    function createDashboardSnippetEditorAdapter() {
+        const getSelectionText = () => {
+            try {
+                return typeof state.editor?.getSelection === 'function' ? state.editor.getSelection() : '';
+            } catch (_) {
+                return '';
+            }
+        };
+        const getCursorPosition = () => {
+            try {
+                const cursor = state.editor?.getCursor?.() || { line: 0, ch: 0 };
+                return { lineNumber: (cursor.line || 0) + 1, column: (cursor.ch || 0) + 1 };
+            } catch (_) {
+                return { lineNumber: 1, column: 1 };
+            }
+        };
+        return {
+            getSelection() {
+                const startPosition = getCursorPosition();
+                return {
+                    getStartPosition: () => startPosition
+                };
+            },
+            getModel() {
+                return {
+                    getValueInRange: () => getSelectionText(),
+                    getOffsetAt: position => getEditorOffsetForPosition(state.editor?.getValue?.() || '', position),
+                    getPositionAt: offset => getEditorPositionForOffset(state.editor?.getValue?.() || '', offset)
+                };
+            },
+            executeEdits(_source, edits = []) {
+                const text = edits.find(edit => typeof edit?.text === 'string')?.text || '';
+                if (text) insertTextAtEditor(text);
+            },
+            setPosition(position) {
+                focusEditorLine(position?.lineNumber || 1);
+            },
+            focus() {
+                state.editor?.focus?.();
+            }
+        };
+    }
+
+    function showDashboardModuleModal(title, containerId, options = {}) {
+        showModal(
+            title,
+            `<div id="${containerId}" class="dashboard-module-modal" role="region" aria-label="${escapeHtml(title)}"></div>`,
+            [{ label: 'Close', callback: () => hideModal() }],
+            options
+        );
+        return document.getElementById(containerId);
+    }
+
+    function fallbackEditorLint() {
+        if (!state.editor) return;
+        if (state.editor.isMonaco) {
+            showToast('Monaco editor handles diagnostics automatically', 'info');
+        } else if (typeof state.editor.performLint === 'function') {
+            state.editor.performLint();
+            showToast('Lint check complete', 'info');
+        }
+    }
+
+    function showInlineSnippetPicker() {
+        if (!state.editor) return;
+        const snippets = {
+            'GM_xmlhttpRequest': "GM_xmlhttpRequest({\n    method: 'GET',\n    url: '',\n    onload: function(response) {\n        console.log(response.responseText);\n    },\n    onerror: function(err) {\n        console.error(err);\n    }\n});",
+            'GM_notification': "GM_notification({\n    text: '',\n    title: 'Notification',\n    timeout: 5000\n});",
+            'GM_addStyle': "GM_addStyle(`\n    /* CSS here */\n`);",
+            'GM_setValue / getValue': "const val = GM_getValue('key', 'default');\nGM_setValue('key', val);",
+            'waitForElement': "function waitForElement(sel, cb) {\n    const el = document.querySelector(sel);\n    if (el) return cb(el);\n    new MutationObserver((_, obs) => {\n        const el = document.querySelector(sel);\n        if (el) { obs.disconnect(); cb(el); }\n    }).observe(document.body, { childList: true, subtree: true });\n}",
+            'IIFE wrapper': "(function() {\n    'use strict';\n    \n})();",
+            'addEventListener': "document.addEventListener('DOMContentLoaded', () => {\n    \n});"
+        };
+        const html = Object.entries(snippets).map(([name]) =>
+            `<div class="snippet-item" data-snippet="${escapeHtml(name)}">${escapeHtml(name)}</div>`
+        ).join('');
+        showModal('Insert Snippet', `<div class="snippet-list">${html}</div>`, [
+            { label: 'Cancel', callback: () => hideModal() }
+        ]);
+        document.querySelectorAll('.snippet-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const name = item.dataset.snippet;
+                const code = snippets[name];
+                if (code) insertTextAtEditor(code);
+                hideModal();
+            });
+        });
+    }
+
+    async function openAdvancedLinter() {
+        if (!state.editor) return;
+        await ensureEditorModulesLoaded();
+        if (typeof AdvancedLinter === 'undefined') {
+            fallbackEditorLint();
+            return;
+        }
+        AdvancedLinter.destroy?.();
+        const container = showDashboardModuleModal('Advanced Linter', 'advancedLinterContainer', {
+            onDismiss: () => AdvancedLinter.destroy?.()
+        });
+        if (!container) return;
+        AdvancedLinter.init(container, {
+            onJumpToLine: line => {
+                hideModal();
+                focusEditorLine(line);
+            },
+            onApplyFix: fixed => {
+                setCurrentEditorCode(fixed);
+                showToast('Fix applied', 'success');
+            }
+        });
+        AdvancedLinter.lintAndRender(state.editor.getValue());
+    }
+
+    async function openSnippetLibrary() {
+        if (!state.editor) return;
+        await ensureEditorModulesLoaded();
+        if (typeof SnippetLibrary === 'undefined') {
+            showInlineSnippetPicker();
+            return;
+        }
+        SnippetLibrary.destroy?.();
+        const container = showDashboardModuleModal('Snippet Library', 'snippetLibraryContainer', {
+            onDismiss: () => SnippetLibrary.destroy?.()
+        });
+        if (!container) return;
+        await SnippetLibrary.init(container, { editor: createDashboardSnippetEditorAdapter() });
+    }
+
+    async function getCurrentTabUrlForTemplate() {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            return tab?.url || '';
+        } catch (_) {
+            return '';
+        }
+    }
+
+    async function openTemplateManager() {
+        await ensureEditorModulesLoaded();
+        if (typeof TemplateManager === 'undefined') {
+            showToast('Template tools are unavailable', 'error');
+            return;
+        }
+        const container = showDashboardModuleModal('Templates', 'templateManagerContainer');
+        if (!container) return;
+        await TemplateManager.init(container, {
+            getScript: getScriptById,
+            onCreateScript: code => installCodeFromDashboardModule(code, 'template'),
+            getCurrentTabUrl: getCurrentTabUrlForTemplate
+        });
+    }
+
+    function insertMetadataLine(line) {
+        if (!state.editor || !line) return false;
+        const code = state.editor.getValue();
+        const metadataEnd = '// ==/UserScript==';
+        const cleanLine = String(line).trimEnd();
+        const markerIndex = code.indexOf(metadataEnd);
+        const nextCode = markerIndex >= 0
+            ? `${code.slice(0, markerIndex)}${cleanLine}\n${code.slice(markerIndex)}`
+            : `${cleanLine}\n${code}`;
+        return setCurrentEditorCode(nextCode);
+    }
+
+    async function openPatternBuilder() {
+        if (!state.editor) return;
+        await ensureEditorModulesLoaded();
+        if (typeof PatternBuilder === 'undefined') {
+            showToast('Pattern builder is unavailable', 'error');
+            return;
+        }
+        PatternBuilder.destroy?.();
+        const container = showDashboardModuleModal('Pattern Builder', 'patternBuilderContainer', {
+            onDismiss: () => PatternBuilder.destroy?.()
+        });
+        if (!container) return;
+        PatternBuilder.init(container, {
+            onInsert: pattern => {
+                if (insertMetadataLine(`// @match        ${pattern}`)) {
+                    showToast('Match pattern inserted', 'success');
+                    hideModal();
+                }
+            }
+        });
+        const currentUrl = await getCurrentTabUrlForTemplate();
+        if (currentUrl) PatternBuilder.fromUrl?.(currentUrl);
+    }
+
+    async function openScriptDebugger() {
+        if (!state.editor) return;
+        await ensureEditorModulesLoaded();
+        if (typeof ScriptDebugger === 'undefined') {
+            showToast('Debugger tools are unavailable', 'error');
+            return;
+        }
+        const container = showDashboardModuleModal('Script Debugger', 'scriptDebuggerContainer');
+        if (!container) return;
+        ScriptDebugger.init(container, {
+            onJumpToLine: (scriptId, lineNumber) => {
+                hideModal();
+                if (scriptId && scriptId !== state.currentScriptId) {
+                    openEditorForScript(scriptId);
+                    setTimeout(() => focusEditorLine(lineNumber), 0);
+                    return;
+                }
+                focusEditorLine(lineNumber);
+            }
+        });
+        const script = getCurrentScript();
+        if (script?.id) ScriptDebugger.captureConsole(script.id);
+    }
+
+    async function openDiffTool() {
+        if (!state.editor) return;
+        await ensureEditorModulesLoaded();
+        if (typeof DiffTool === 'undefined') {
+            showToast('Diff tools are unavailable', 'error');
+            return;
+        }
+        DiffTool.destroy?.();
+        const container = showDashboardModuleModal('Saved vs Editor Diff', 'diffToolContainer', {
+            onDismiss: () => DiffTool.destroy?.()
+        });
+        if (!container) return;
+        const script = getCurrentScript();
+        DiffTool.init(container);
+        DiffTool.compare(script?.code || '', state.editor.getValue(), {
+            labelA: 'Saved',
+            labelB: 'Editor'
+        });
+    }
+
+    async function shareCurrentScript() {
+        const script = getCurrentScript();
+        if (!script?.id) {
+            showToast('Open a script before sharing', 'error');
+            return;
+        }
+        await ensureEditorModulesLoaded();
+        if (typeof ScriptSharing === 'undefined') {
+            showToast('Sharing tools are unavailable', 'error');
+            return;
+        }
+        await initDashboardModuleOnce('sharing', 'Sharing', () => {
+            ScriptSharing.init({
+                getScript: getScriptById,
+                getAllScripts: getAllScriptsSnapshot,
+                onInstallScript: code => installCodeFromDashboardModule(code, 'shared script'),
+                updateScript: updateScriptFromDashboardModule
+            });
+        });
+        ScriptSharing.showShareModal(script.id);
     }
 
     // Event listeners
@@ -9466,16 +10135,7 @@
             }
         });
         elements.tbtnBeautify?.addEventListener('click', beautifyCode);
-        elements.tbtnLint?.addEventListener('click', () => {
-            if (state.editor) {
-                if (state.editor.isMonaco) {
-                    showToast('Monaco editor handles diagnostics automatically', 'info');
-                } else {
-                    state.editor.performLint();
-                    showToast('Lint check complete', 'info');
-                }
-            }
-        });
+        elements.tbtnLint?.addEventListener('click', openAdvancedLinter);
         elements.tbtnFoldAll?.addEventListener('click', () => {
             if (state.editor?.isMonaco) {
                 state.editor.foldAll();
@@ -9538,35 +10198,12 @@
         });
 
         // Insert snippet dropdown
-        document.getElementById('tbtnSnippet')?.addEventListener('click', () => {
-            if (!state.editor) return;
-            const snippets = {
-                'GM_xmlhttpRequest': "GM_xmlhttpRequest({\n    method: 'GET',\n    url: '',\n    onload: function(response) {\n        console.log(response.responseText);\n    },\n    onerror: function(err) {\n        console.error(err);\n    }\n});",
-                'GM_notification': "GM_notification({\n    text: '',\n    title: 'Notification',\n    timeout: 5000\n});",
-                'GM_addStyle': "GM_addStyle(`\n    /* CSS here */\n`);",
-                'GM_setValue / getValue': "const val = GM_getValue('key', 'default');\nGM_setValue('key', val);",
-                'waitForElement': "function waitForElement(sel, cb) {\n    const el = document.querySelector(sel);\n    if (el) return cb(el);\n    new MutationObserver((_, obs) => {\n        const el = document.querySelector(sel);\n        if (el) { obs.disconnect(); cb(el); }\n    }).observe(document.body, { childList: true, subtree: true });\n}",
-                'IIFE wrapper': "(function() {\n    'use strict';\n    \n})();",
-                'addEventListener': "document.addEventListener('DOMContentLoaded', () => {\n    \n});"
-            };
-            const html = Object.entries(snippets).map(([name]) =>
-                `<div class="snippet-item" data-snippet="${escapeHtml(name)}">${escapeHtml(name)}</div>`
-            ).join('');
-            showModal('Insert Snippet', `<div class="snippet-list">${html}</div>`, [
-                { label: 'Cancel', callback: () => hideModal() }
-            ]);
-            document.querySelectorAll('.snippet-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const name = item.dataset.snippet;
-                    const code = snippets[name];
-                    if (code && state.editor) {
-                        state.editor.replaceSelection(code);
-                        markCurrentEditorDirty();
-                    }
-                    hideModal();
-                });
-            });
-        });
+        elements.tbtnSnippet?.addEventListener('click', openSnippetLibrary);
+        elements.tbtnTemplate?.addEventListener('click', openTemplateManager);
+        elements.tbtnPattern?.addEventListener('click', openPatternBuilder);
+        elements.tbtnDiff?.addEventListener('click', openDiffTool);
+        elements.tbtnDebug?.addEventListener('click', openScriptDebugger);
+        elements.tbtnShare?.addEventListener('click', shareCurrentScript);
 
         // Editor tabs
         elements.editorTabs.forEach(tab => {

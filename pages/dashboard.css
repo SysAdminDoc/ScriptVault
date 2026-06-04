@@ -1157,6 +1157,19 @@ input[type="checkbox"] {
   overflow-y: auto;
 }
 
+.dashboard-module-modal {
+  min-height: 420px;
+  max-height: min(70vh, 760px);
+  overflow: auto;
+}
+
+.dashboard-module-modal .sv-lint-panel,
+.dashboard-module-modal .sv-diff-root,
+.dashboard-module-modal .dbg-root,
+.dashboard-module-modal .snip-panel {
+  min-height: 420px;
+}
+
 .modal-footer {
   display: flex;
   justify-content: flex-end;

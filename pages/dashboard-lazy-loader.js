@@ -23,19 +23,32 @@ const LazyLoader = (() => {
   // Map: tab name → modules to load when that tab is activated
   const TAB_MODULES = {
     store: ['dashboard-store.js'],
-    scripts: ['dashboard-cardview.js', 'dashboard-linter.js', 'dashboard-recommendations.js'],
+    scripts: ['dashboard-cardview.js', 'dashboard-recommendations.js', 'dashboard-scheduler.js'],
     settings: ['dashboard-theme-editor.js'],
-    utilities: ['dashboard-collections.js', 'dashboard-standalone.js', 'dashboard-depgraph.js', 'dashboard-heatmap.js'],
+    utilities: [
+      'dashboard-collections.js',
+      'dashboard-standalone.js',
+      'dashboard-depgraph.js',
+      'dashboard-heatmap.js',
+      'dashboard-gist.js',
+      'dashboard-profiles.js',
+      'dashboard-chains.js',
+      'dashboard-gamification.js',
+      'dashboard-csp.js',
+    ],
     help: [],
     trash: [],
   };
 
   // Modules loaded on first editor open
   const EDITOR_MODULES = [
+    'dashboard-linter.js',
     'dashboard-pattern-builder.js',
     'dashboard-debugger.js',
     'dashboard-diff.js',
     'dashboard-snippets.js',
+    'dashboard-templates.js',
+    'dashboard-sharing.js',
   ];
 
   // Modules loaded on demand (user action triggers).
@@ -45,14 +58,6 @@ const LazyLoader = (() => {
   // was orphaned (no caller, file removed in the repo-hygiene cleanup).
   const ON_DEMAND_MODULES = {
     whatsnew: 'dashboard-whatsnew.js',
-    sharing: 'dashboard-sharing.js',
-    gist: 'dashboard-gist.js',
-    templates: 'dashboard-templates.js',
-    profiles: 'dashboard-profiles.js',
-    scheduler: 'dashboard-scheduler.js',
-    chains: 'dashboard-chains.js',
-    gamification: 'dashboard-gamification.js',
-    csp: 'dashboard-csp.js',
   };
 
   /**
