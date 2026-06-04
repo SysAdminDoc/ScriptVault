@@ -16,6 +16,7 @@ async function loadFreshCloudSync(initialScripts, remoteData) {
   vi.resetModules();
 
   const scriptState = initialScripts.map((script) => structuredClone(script));
+  let remoteStore = remoteData == null ? null : structuredClone(remoteData);
   const ScriptStorage = {
     getAll: vi.fn(async () => structuredClone(scriptState)),
     get: vi.fn(async (id) => scriptState.find((script) => script.id === id) ?? null),
@@ -47,8 +48,10 @@ async function loadFreshCloudSync(initialScripts, remoteData) {
   const provider = {
     name: 'Google Drive',
     supportsDryRun: true,
-    download: vi.fn(async () => structuredClone(remoteData)),
-    upload: vi.fn(async () => {}),
+    download: vi.fn(async () => structuredClone(remoteStore)),
+    upload: vi.fn(async (data) => {
+      remoteStore = structuredClone(data);
+    }),
   };
 
   const registerScript = vi.fn().mockResolvedValue();
@@ -79,6 +82,7 @@ async function loadFreshCloudSync(initialScripts, remoteData) {
     unregisterScript,
     updateBadge,
     scriptState,
+    getRemoteData: () => structuredClone(remoteStore),
   };
 }
 
@@ -94,6 +98,60 @@ afterEach(() => {
 });
 
 describe('source cloud sync module', () => {
+  it('does not resurrect a deleted script after local state is wiped and resynced from a remote tombstone', async () => {
+    await chrome.storage.local.set({ syncTombstones: {} });
+
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_alpha',
+          code: '// ==UserScript==\n// @name Alpha\n// ==/UserScript==\nconsole.log("alpha");',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Alpha' },
+          settings: {},
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      null,
+    );
+    const { CloudSync, ScriptStorage, provider, scriptState, getRemoteData } = harness;
+
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+    expect(getRemoteData().scripts.map((script) => script.id)).toEqual(['script_alpha']);
+
+    await ScriptStorage.delete('script_alpha');
+    await chrome.storage.local.set({ syncTombstones: { script_alpha: 2222 } });
+    vi.clearAllMocks();
+
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+    expect(scriptState).toEqual([]);
+    expect(getRemoteData()).toEqual(
+      expect.objectContaining({
+        scripts: [],
+        tombstones: { script_alpha: 2222 },
+      }),
+    );
+
+    await chrome.storage.local.set({ syncTombstones: {} });
+    vi.clearAllMocks();
+
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+    expect(scriptState).toEqual([]);
+    expect(ScriptStorage.set).not.toHaveBeenCalledWith('script_alpha', expect.anything());
+    expect(provider.upload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scripts: [],
+        tombstones: { script_alpha: 2222 },
+      }),
+      expect.objectContaining({ syncProvider: 'googledrive' }),
+    );
+    await expect(chrome.storage.local.get('syncTombstones')).resolves.toEqual({
+      syncTombstones: { script_alpha: 2222 },
+    });
+  });
+
   it('deletes tombstoned local scripts and refreshes runtime registration for synced changes', async () => {
     await chrome.storage.local.set({
       syncTombstones: {},
