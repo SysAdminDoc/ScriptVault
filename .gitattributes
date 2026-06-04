@@ -4,6 +4,7 @@
 # source ZIP that ships to AMO reviewers and release consumers. These are not
 # build inputs for the extension and must not leak development workflow notes.
 docs/research/ export-ignore
+.factory/** export-ignore
 ROADMAP.md export-ignore
 TODO.md export-ignore
 COMPLETED.md export-ignore
