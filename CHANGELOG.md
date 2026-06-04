@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Background core TypeScript bridge promotion
+
+- **The main background core is now generated from TypeScript.**
+  `background.core.js` is produced from `src/background/core.ts` as a raw
+  bridge source, preserving top-level runtime helpers while closing the final
+  TS promotion gap. `ts-source:check` now reports 23 promoted entries, 0
+  mirrored entries, and 0 intentionally divergent runtime files.
+
 ### 2026-06-04 — Cloud sync providers TypeScript promotion
 
 - **Cloud sync providers runtime is now generated from TypeScript.**

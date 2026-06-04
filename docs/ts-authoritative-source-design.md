@@ -1,8 +1,15 @@
 # TypeScript authoritative source — design evaluation
 
-Last reviewed: 2026-05-24. Decision: **stage TypeScript as the
+Last reviewed: 2026-06-04. Decision: **stage TypeScript as the
 authoritative source one runtime module at a time**. Do not replace the
 whole concatenated service-worker pipeline in one commit.
+
+Status update, 2026-06-04: the staged promotion is complete for current
+runtime artifacts. `background.core.js` is now generated from the raw bridge
+source `src/background/core.ts`, preserving top-level helper visibility for
+existing runtime tests while making the core worker output non-human-edited.
+`npm run ts-source:check` reports 23 promoted entries, 0 mirrored entries,
+and 0 intentionally divergent runtime files.
 
 Status update, 2026-05-24: the promotion map and first CI drift gate now
 ship as `ts-source-promotion.json` and
@@ -75,7 +82,7 @@ in several modules.
 | Storage/resource modules | `modules/storage.js`, `modules/xhr.js`, `modules/internal-host-guard.js`, `modules/resources.js` | TS mirrors exist; `internal-host-guard` lives under `src/background/` |
 | Optional modules | `modules/npm-resolve.js`, `error-log.js`, `notifications.js`, `sync-easycloud.js`, `backup-scheduler.js`, `userstyles.js`, `public-api.js`, `migration.js`, `quota-manager.js` | TS mirrors exist for all |
 | Background helpers | `bg/*.js` | TS mirrors exist for analyzer, ESM bundler, netlog, signing, workspaces |
-| Main service worker | `background.core.js` | Split across `src/background/*`; no one-file TS source exists |
+| Main service worker | `background.core.js` | Promoted via raw bridge source `src/background/core.ts`; focused typed modules under `src/background/*` remain the extraction targets |
 
 ### Drift found during this review
 
@@ -216,8 +223,9 @@ Pilot exit criteria:
 8. **Main worker leaves.** Promote parser, matcher, registration,
    wrapper-builder, update/install/import, cloud sync, DNR, badge, tab
    reload, and context menu modules.
-9. **Final orchestrator.** Replace `background.core.js` only after message
-   dispatch and initialization are the last remaining JS-owned surfaces.
+9. **Final orchestrator.** Shipped 2026-06-04 via the raw bridge source
+   `src/background/core.ts`; follow-up work should type and split the bridge
+   rather than edit `background.core.js` directly.
 
 ## 7. Proposed CI gate
 
@@ -268,11 +276,18 @@ This keeps the surrounding concatenation pipeline stable. A future final
 phase can replace that wrapper with an actual bundled TS entrypoint, but the
 pilot should avoid that broader build-system change.
 
+For `background.core.js`, the generator intentionally uses a raw source bridge
+instead of a wrapper. Existing tests extract top-level helpers from the core
+runtime, so wrapping it in an IIFE would hide those functions and change the
+debug/test surface. The bridge is a temporary source-ownership step; follow-up
+work should type and split `src/background/core.ts`.
+
 ## 9. Non-goals
 
 - Do not switch the whole extension to an ES module service worker in this
   phase.
-- Do not remove `background.core.js` until the leaf modules are promoted.
+- Do not edit `background.core.js` directly; it is generated from
+  `src/background/core.ts`.
 - Do not rewrite tests solely for naming/style. Change tests only where they
   currently duplicate runtime logic or need to assert the promoted source.
 
@@ -297,9 +312,14 @@ pilot should avoid that broader build-system change.
    followed by the sync/import tranche starting with `modules/migration.js`.
 8. Continue the sync/import tranche with `backup-scheduler`,
    `sync-easycloud`, or `public-api`, leaving `sync-providers` until the TS
-   source owns the full runtime implementation. Where sync/import modules
-   still import storage directly, first teach the generator to externalize
-   promoted runtime globals instead of bundling duplicate storage code.
+   source owns the full runtime implementation. Shipped through
+   `backup-scheduler`, `sync-easycloud`, `public-api`, and `sync-providers`
+   by 2026-06-04.
 9. Continue the background-helper tranche after `bg/netlog.js` and
    `bg/analyzer.js` with the smallest self-contained helper before touching
-   helpers that import storage or Web Crypto-heavy paths.
+   helpers that import storage or Web Crypto-heavy paths. Shipped through
+   `esm-bundler`, `signing`, and `workspaces` by 2026-06-03.
+10. Promote the final core runtime. Shipped 2026-06-04 via
+    `src/background/core.ts` -> `background.core.js` raw bridge generation.
+11. Follow-up: type and split `src/background/core.ts` into the focused
+    modules already listed above, keeping `background.core.js` generated.
