@@ -5,6 +5,7 @@
 
 import type { Script, ScriptMeta, ScriptSettings } from '../types/index';
 import type { Settings, SyncProvider } from '../types/settings';
+import { SyncCrypto, type RemoteSyncEnvelope } from '../modules/sync-crypto';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -46,8 +47,8 @@ declare const ScriptAnalyzer: {
 // ---------------------------------------------------------------------------
 
 interface CloudSyncProvider {
-  download(settings: Settings): Promise<SyncEnvelope | null>;
-  upload(data: SyncEnvelope, settings: Settings): Promise<void>;
+  download(settings: Settings): Promise<RemoteSyncEnvelope | null>;
+  upload(data: SyncEnvelope | RemoteSyncEnvelope, settings: Settings): Promise<void>;
   name?: string;
   supportsDryRun?: boolean;
 }
@@ -278,6 +279,23 @@ function sanitizeSyncEnvelopeForUpload(envelope: SyncEnvelope): SyncEnvelope {
   };
 }
 
+async function readSyncEnvelopeFromRemote(
+  remoteEnvelope: RemoteSyncEnvelope | null,
+  settings: Settings,
+): Promise<SyncEnvelope | null> {
+  return SyncCrypto.decryptSyncEnvelope(remoteEnvelope, settings) as Promise<SyncEnvelope | null>;
+}
+
+async function prepareSyncEnvelopeForRemoteUpload(
+  envelope: SyncEnvelope,
+  settings: Settings,
+): Promise<SyncEnvelope | RemoteSyncEnvelope> {
+  return SyncCrypto.prepareSyncEnvelopeForUpload(
+    sanitizeSyncEnvelopeForUpload(envelope),
+    settings,
+  ) as Promise<SyncEnvelope | RemoteSyncEnvelope>;
+}
+
 // ---------------------------------------------------------------------------
 // CloudSync object
 // ---------------------------------------------------------------------------
@@ -362,7 +380,8 @@ export const CloudSync = {
 
     let remoteData: SyncEnvelope | null = null;
     try {
-      remoteData = await provider.download(settings);
+      const remoteEnvelope = await provider.download(settings);
+      remoteData = await readSyncEnvelopeFromRemote(remoteEnvelope, settings);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return {
@@ -500,7 +519,8 @@ export const CloudSync = {
     };
 
     // Get remote data
-    const remoteData = await provider.download(settings);
+    const remoteEnvelope = await provider.download(settings);
+    const remoteData = await readSyncEnvelopeFromRemote(remoteEnvelope, settings);
 
     if (remoteData) {
       // Merge tombstones from remote so deletions propagate across devices
@@ -589,10 +609,10 @@ export const CloudSync = {
       // Upload merged data (includes tombstones)
       merged.timestamp = Date.now();
       merged.tombstones = mergedTombstones;
-      await provider.upload(sanitizeSyncEnvelopeForUpload(merged), settings);
+      await provider.upload(await prepareSyncEnvelopeForRemoteUpload(merged, settings), settings);
     } else {
       // First sync, just upload (include tombstones so remote gets deletion info)
-      await provider.upload(sanitizeSyncEnvelopeForUpload(localData), settings);
+      await provider.upload(await prepareSyncEnvelopeForRemoteUpload(localData, settings), settings);
     }
 
     await SettingsManager.set('lastSync', Date.now());

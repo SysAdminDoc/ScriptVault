@@ -6231,6 +6231,14 @@
                         <label><input type="checkbox" id="settingsAllowInternalSyncEndpoints"> Allow local/private sync endpoints</label>
                         <span class="help-icon" title="Advanced: permits WebDAV/S3 sync to localhost, LAN, link-local, or private IPv6 endpoints. Leave off unless you operate the server.">!</span>
                     </div>
+                    <div class="setting-row">
+                        <label><input type="checkbox" id="settingsSyncEncryptionEnabled"> Encrypt sync payloads</label>
+                        <span class="help-icon" title="Encrypts uploaded sync JSON with AES-256-GCM before it leaves this device. Existing plaintext sync files remain readable.">?</span>
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Encryption passphrase:</span>
+                        <input type="password" class="input-field" id="settingsSyncEncryptionPassphrase" style="width:260px" aria-label="Sync encryption passphrase" autocomplete="new-password">
+                    </div>
 
                     <!-- S3-compatible Settings (hidden by default) -->
                     <div id="syncS3Settings" class="sync-provider-settings" style="display:none; margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 4px;">

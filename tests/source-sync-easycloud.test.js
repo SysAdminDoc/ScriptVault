@@ -1,11 +1,13 @@
+import { webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const originalCrypto = globalThis.crypto;
 const originalFetch = globalThis.fetch;
 const originalRegisterScript = globalThis.registerScript;
 const originalUnregisterScript = globalThis.unregisterScript;
 const originalUpdateBadge = globalThis.updateBadge;
 
-async function loadFreshEasyCloud(initialScripts = []) {
+async function loadFreshEasyCloud(initialScripts = [], settingsOverride = {}) {
   vi.resetModules();
 
   const scriptState = initialScripts.map((script) => structuredClone(script));
@@ -29,6 +31,11 @@ async function loadFreshEasyCloud(initialScripts = []) {
   };
 
   const SettingsManager = {
+    get: vi.fn(async () => ({
+      syncEncryptionEnabled: false,
+      syncEncryptionPassphrase: '',
+      ...settingsOverride,
+    })),
     set: vi.fn(async () => {}),
   };
 
@@ -62,10 +69,12 @@ async function loadFreshEasyCloud(initialScripts = []) {
 beforeEach(() => {
   globalThis.__resetStorageMock();
   vi.clearAllMocks();
+  Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
   globalThis.fetch = originalFetch;
 });
 
 afterEach(() => {
+  Object.defineProperty(globalThis, 'crypto', { value: originalCrypto, configurable: true });
   globalThis.fetch = originalFetch;
   globalThis.registerScript = originalRegisterScript;
   globalThis.unregisterScript = originalUnregisterScript;
@@ -285,5 +294,66 @@ describe('source easycloud sync module', () => {
     expect(body).not.toContain('userModified');
     expect(body).not.toContain('mergeConflict');
     expect(body).not.toContain('_registrationError');
+  });
+
+  it('encrypts EasyCloud Drive uploads when sync encryption is enabled', async () => {
+    await chrome.storage.local.set({
+      easycloud_connected: true,
+      syncTombstones: {},
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ files: [] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ files: [] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: 'drive-file-id' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    globalThis.fetch = fetchMock;
+
+    const { EasyCloudSync } = await loadFreshEasyCloud(
+      [
+        {
+          id: 'script_secret',
+          code: '// ==UserScript==\n// @name Secret\n// ==/UserScript==\nconst token = "easycloud-secret";',
+          meta: { name: 'Secret' },
+          enabled: true,
+          position: 0,
+          settings: {},
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      {
+        syncEncryptionEnabled: true,
+        syncEncryptionPassphrase: 'easycloud passphrase',
+        syncEncryptionKdfIterations: 2,
+      },
+    );
+
+    const result = await EasyCloudSync.sync();
+    const uploadCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes('/upload/drive/v3/files?uploadType=multipart'),
+    );
+
+    expect(result.success).toBe(true);
+    expect(uploadCall).toBeTruthy();
+    const body = uploadCall[1].body;
+    expect(body).toContain('"encrypted":true');
+    expect(body).toContain('"algorithm":"AES-256-GCM"');
+    expect(body).not.toContain('easycloud-secret');
   });
 });

@@ -37,6 +37,9 @@ export interface Settings {
   syncProvider: SyncProvider;
   syncInterval: number;
   lastSync: number;
+  syncEncryptionEnabled: boolean;
+  syncEncryptionPassphrase: string;
+  syncEncryptionKdfIterations: number;
 
   // WebDAV
   webdavUrl: string;

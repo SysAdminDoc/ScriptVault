@@ -4,6 +4,7 @@
 // ============================================================================
 
 import type { Script, ScriptMeta, ScriptSettings } from '../types/index';
+import { SyncCrypto, type RemoteSyncEnvelope } from './sync-crypto';
 
 // ============================================================================
 // External globals (not yet migrated to TS modules)
@@ -19,6 +20,7 @@ declare const ScriptStorage: {
 };
 
 declare const SettingsManager: {
+  get?(): Promise<Record<string, unknown>>;
   set(key: string, value: unknown): Promise<unknown>;
   set(settings: Record<string, unknown>): Promise<unknown>;
 };
@@ -384,6 +386,30 @@ function sanitizeSyncEnvelopeForUpload(envelope: SyncEnvelope): SyncEnvelope {
   };
 }
 
+async function getSyncCryptoSettings(): Promise<Record<string, unknown>> {
+  try {
+    return typeof SettingsManager.get === 'function'
+      ? await SettingsManager.get()
+      : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+async function readSyncEnvelopeFromRemote(remoteEnvelope: RemoteSyncEnvelope | null): Promise<SyncEnvelope | null> {
+  return SyncCrypto.decryptSyncEnvelope(
+    remoteEnvelope,
+    await getSyncCryptoSettings(),
+  ) as Promise<SyncEnvelope | null>;
+}
+
+async function prepareSyncEnvelopeForRemoteUpload(envelope: SyncEnvelope): Promise<RemoteSyncEnvelope> {
+  return SyncCrypto.prepareSyncEnvelopeForUpload(
+    sanitizeSyncEnvelopeForUpload(envelope),
+    await getSyncCryptoSettings(),
+  );
+}
+
 function setStatus(newStatus: string): void {
   if (_status === newStatus) return;
   _status = newStatus;
@@ -559,7 +585,7 @@ async function _findSyncFile(token: string): Promise<string | null> {
 /**
  * Download sync data from Drive appDataFolder.
  */
-async function _downloadFromDrive(token: string): Promise<SyncEnvelope | null> {
+async function _downloadFromDrive(token: string): Promise<RemoteSyncEnvelope | null> {
   const fileId = await _findSyncFile(token);
   if (!fileId) return null;
 
@@ -577,13 +603,13 @@ async function _downloadFromDrive(token: string): Promise<SyncEnvelope | null> {
     throw new Error(`Drive download failed: ${resp.status}`);
   }
 
-  return resp.json() as Promise<SyncEnvelope>;
+  return resp.json() as Promise<RemoteSyncEnvelope>;
 }
 
 /**
  * Upload sync data to Drive appDataFolder.
  */
-async function _uploadToDrive(token: string, data: SyncEnvelope): Promise<void> {
+async function _uploadToDrive(token: string, data: RemoteSyncEnvelope): Promise<void> {
   const fileId = await _findSyncFile(token);
 
   const metadata: { name: string; mimeType: string; parents?: string[] } = {
@@ -815,7 +841,8 @@ async function _performSync(): Promise<SyncResult> {
     };
 
     // Download remote
-    const remoteData = await _downloadFromDrive(token);
+    const remoteEnvelope = await _downloadFromDrive(token);
+    const remoteData = await readSyncEnvelopeFromRemote(remoteEnvelope);
 
     if (remoteData) {
       // Merge
@@ -873,10 +900,10 @@ async function _performSync(): Promise<SyncResult> {
 
       // Upload merged data
       merged.timestamp = Date.now();
-      await _uploadToDrive(token, sanitizeSyncEnvelopeForUpload(merged));
+      await _uploadToDrive(token, await prepareSyncEnvelopeForRemoteUpload(merged));
     } else {
       // First sync — upload local data
-      await _uploadToDrive(token, sanitizeSyncEnvelopeForUpload(localData));
+      await _uploadToDrive(token, await prepareSyncEnvelopeForRemoteUpload(localData));
     }
 
     const now = Date.now();

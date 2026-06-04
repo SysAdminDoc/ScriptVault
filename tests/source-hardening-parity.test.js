@@ -103,6 +103,7 @@ describe('source hardening parity guards', () => {
       expect(text).toContain('googleDriveToken');
       expect(text).toContain('dropboxToken');
       expect(text).toContain('onedriveToken');
+      expect(text).toContain('syncEncryptionPassphrase');
       expect(text).toContain('s3AccessKeyId');
       expect(text).toContain('s3SecretKey');
       expect(text).toContain('settingsCredentialsIncluded');
@@ -164,9 +165,12 @@ describe('source hardening parity guards', () => {
       expect(text).toContain('userMatches');
     }
     expect(scriptTypes).toContain('Cloud sync helpers must not upload these.');
-    expect(core).toContain('provider.upload(sanitizeSyncEnvelopeForUpload');
-    expect(cloudSync).toContain('provider.upload(sanitizeSyncEnvelopeForUpload');
-    expect(easyCloud).toContain('_uploadToDrive(token, sanitizeSyncEnvelopeForUpload');
+    expect(core).toContain('prepareSyncEnvelopeForRemoteUpload');
+    expect(cloudSync).toContain('prepareSyncEnvelopeForRemoteUpload');
+    expect(easyCloud).toContain('prepareSyncEnvelopeForRemoteUpload');
+    expect(core).toContain('SyncCrypto.prepareSyncEnvelopeForUpload');
+    expect(cloudSync).toContain('SyncCrypto.prepareSyncEnvelopeForUpload');
+    expect(easyCloud).toContain('SyncCrypto.prepareSyncEnvelopeForUpload');
   });
 
   it('keeps @require fetches on extension host-permission fetch semantics', () => {
