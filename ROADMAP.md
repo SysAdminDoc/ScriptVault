@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier promotions, `ts-source:check` reports 25 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 9 - 2026-06-04.
+> Last researched: Cycle 10 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -264,6 +264,20 @@ Priorities/sizes preserve the source labels.
   per-script SRI, provenance, or host-scope controls; it is a release-review
   packet and guardrail for CWS submissions.
 
+### Researcher Queue (Cycle 10 - 2026-06-04)
+
+- [x] 🔬 `edge-artifact-support-matrix-drift-2026-06-04` - rechecked
+  Microsoft Edge Add-ons publishing guidance against the current Edge build
+  path. Microsoft requires an Edge ZIP package, manifest/listing review,
+  privacy and remote-code declarations, and local Edge sideload testing before
+  submission; the repo already has `build:edge`, an Edge staging ZIP report,
+  and builder tests. The gap is that CI does not run/upload the Edge artifact
+  and the generated support matrix still says Edge uses the same ZIP as Chrome
+  and that the Edge package path is not automated. The promoted row below is
+  not a duplicate of the shipped Edge package builder or manual Partner Center
+  checklist; it is the release-evidence and public-claim gate that keeps Edge
+  status tied to the actual artifact.
+
 ### Firefox and mobile release quality
 
 - [x] 🤖 🔧 🔬 P2 — Add a Firefox for Android smoke gate or remove the Android compatibility claim before AMO listing
@@ -299,6 +313,16 @@ Priorities/sizes preserve the source labels.
   - Progress: 2026-06-04 added `docs/cws-remote-code-compliance.md`, `scripts/check-cws-remote-code.mjs`, package/CI wiring, release-runbook evidence steps, store-copy/README references, and scanner tests. CI now scans the generated `ScriptVault-vX.Y.Z.zip` immediately after `bash build.sh`.
   - Verification: `node --check scripts/check-cws-remote-code.mjs`; `npm run cws:remote-code:check`; `npm test -- tests/cws-remote-code-check.test.js`; `npm run store-copy:check`; `npm run readme:check`; `npm run check`; `node scripts/run-bash.mjs build.sh`; `npm run cws:remote-code:check -- --target ScriptVault-v3.11.0.zip`.
   - Complexity: M
+
+### Microsoft Edge release quality
+
+- [ ] 🤖 🔬 P2 — Tie Edge support claims to the generated Edge artifact and CI evidence
+  - Why: the Edge package builder is shipped, but the generated support matrix still says Edge uses the same ZIP as Chrome and that the Edge package/publish path is not automated. Microsoft Edge guidance says Chrome extensions are largely code-compatible but still require unsupported-API review, `update_url` removal, Edge sideload testing, a ZIP upload through Partner Center, accurate privacy/permission/remote-code declarations, and, after initial publication, optional update automation through the Edge Add-ons REST API. Without a CI artifact/report gate, the README can overstate or understate Edge readiness while the real `edge-artifacts/edge-build-<version>.json` evidence is ignored.
+  - Evidence: `package.json:45-47`; `scripts/build-edge.mjs:1-23,117-170`; `tests/edge-build.test.js:1-51`; `.github/workflows/ci.yml:97-142`; `scripts/generate-browser-support-matrix.mjs:66-76`; `README.md:312-313`; `docs/cross-browser-pipeline.md:80-101,103-116,143-157`; `docs/edge-submission.md:1-85`; Microsoft Edge Chrome-port guidance (`https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/port-chrome-extension`); Microsoft Edge Add-ons publish flow (`https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension`); Microsoft Edge supported extension APIs (`https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/api-support`); Microsoft Edge Add-ons update REST API (`https://learn.microsoft.com/en-us/microsoft-edge/extensions/update/api/using-addons-api`).
+  - Touches: `.github/workflows/ci.yml`, `scripts/generate-browser-support-matrix.mjs`, `docs/cross-browser-pipeline.md`, `README.md`, `docs/edge-submission.md`, `docs/release-runbook.md`, and optionally `scripts/smoke-dashboard.mjs`/`package.json` if an Edge-specific smoke alias is added.
+  - Acceptance: CI runs `npm run build:edge:check`, uploads `edge-artifacts/*`, and fails if the Edge ZIP or summary report is missing; the generated support matrix reads or validates the current Edge report and no longer says "same ZIP as Chrome" when an Edge-transformed artifact exists; release docs distinguish package automation, manual initial Partner Center publication, optional REST update automation, and no-live-Edge-browser-smoke status; Edge submission docs include the latest privacy/remote-code declaration evidence.
+  - Verify: `npm run build:edge:check`; `npm test -- tests/edge-build.test.js`; `npm run support:matrix`; `npm run support:matrix:check`; CI artifact upload fails closed when `edge-artifacts/edge-build-<version>.json` is absent.
+  - Complexity: S
 
 ### Security and data safety
 
