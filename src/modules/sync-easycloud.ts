@@ -4,13 +4,24 @@
 // ============================================================================
 
 import type { Script, ScriptMeta, ScriptSettings } from '../types/index';
-import { ScriptStorage, SettingsManager } from './storage';
 
 // ============================================================================
 // External globals (not yet migrated to TS modules)
 // ============================================================================
 
 declare function parseUserscript(code: string): { meta: ScriptMeta; error: string | null };
+
+declare const ScriptStorage: {
+  getAll(): Promise<Script[]>;
+  get(id: string): Promise<Script | null>;
+  set(id: string, script: Script): Promise<unknown>;
+  delete(id: string): Promise<unknown>;
+};
+
+declare const SettingsManager: {
+  set(key: string, value: unknown): Promise<unknown>;
+  set(settings: Record<string, unknown>): Promise<unknown>;
+};
 
 declare const ScriptAnalyzer: {
   _ensureOffscreen(): Promise<void>;

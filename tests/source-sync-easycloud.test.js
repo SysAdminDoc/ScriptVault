@@ -39,6 +39,8 @@ async function loadFreshEasyCloud(initialScripts = []) {
   globalThis.registerScript = registerScript;
   globalThis.unregisterScript = unregisterScript;
   globalThis.updateBadge = updateBadge;
+  globalThis.ScriptStorage = ScriptStorage;
+  globalThis.SettingsManager = SettingsManager;
 
   vi.doMock('../src/modules/storage.ts', () => ({
     ScriptStorage,
@@ -68,6 +70,8 @@ afterEach(() => {
   globalThis.registerScript = originalRegisterScript;
   globalThis.unregisterScript = originalUnregisterScript;
   globalThis.updateBadge = originalUpdateBadge;
+  Reflect.deleteProperty(globalThis, 'ScriptStorage');
+  Reflect.deleteProperty(globalThis, 'SettingsManager');
 });
 
 describe('source easycloud sync module', () => {

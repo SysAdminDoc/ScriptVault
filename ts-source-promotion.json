@@ -71,7 +71,8 @@
     {
       "runtime": "modules/sync-easycloud.js",
       "sources": ["src/modules/sync-easycloud.ts"],
-      "status": "mirrored"
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
       "runtime": "modules/backup-scheduler.js",
