@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier and sync-crypto promotions, `ts-source:check` reports 26 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 13 - 2026-06-04.
+> Last researched: Cycle 14 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -327,6 +327,21 @@ Priorities/sizes preserve the source labels.
   and the newly wired dashboard module surfaces instead of freezing the old
   include globs.
 
+### Researcher Queue (Cycle 14 - 2026-06-04)
+
+- [ ] 🔬 `optional-dependency-reach-gate-2026-06-04` - rechecked the
+  `npm audit --omit=optional` exemption against the current lockfile and shipped
+  source. `package.json` has no direct `optionalDependencies`, but
+  `package-lock.json` now contains 60 optional package records plus 43
+  peer-optional edges from toolchain/browser-test packages. A static
+  import/require scan over 116 shipped extension files found zero imports of
+  those optional-like package names; the only loose string hits were DOM
+  `<canvas>` usage in dashboard modules, not the npm `canvas` package. That
+  makes the exemption plausible today, but npm documents that omitted optional
+  dependencies are still resolved into the lockfile and simply not installed on
+  disk, so the repo needs a gate that proves future shipped code or bundles do
+  not start depending on an omitted package.
+
 ### Firefox and mobile release quality
 
 - [x] 🤖 🔧 🔬 P2 — Add a Firefox for Android smoke gate or remove the Android compatibility claim before AMO listing
@@ -568,10 +583,10 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
   - Verify: CI run on PR; grep for `@v` in `uses:` returns only comments.
   - Complexity: S
 - [ ] P2 — `dependency-audit-policy.md` exempts `optional` deps via `--omit=optional`; verify no optional dep ships in the bundle
-  - Why: the CI audit uses `--omit=optional` to keep the noise floor down (documented in `ci.yml`). That is safe only if optional deps never reach the packaged extension. Add a guard that fails if an `optional`/`peerOptional` dep is referenced from `src/**`/`modules/**` so the audit exemption can't silently mask a shipped-code CVE.
-  - Touches: new `scripts/check-optional-dep-reach.mjs`, `ci.yml` step.
-  - Acceptance: gate fails if any optional dep is imported by shipped code; passes today.
-  - Verify: run the new script locally.
+  - Why: the CI audit and dependency policy use `npm audit --audit-level=high --omit=optional` because optional deps are assumed not to ship. Current static evidence supports that assumption but does not enforce it: `package-lock.json` has 60 optional package records and 43 peer-optional edges, while a one-off scan over 116 shipped extension files found zero import/require hits for those optional-like package names. npm documents that omitted optional dependencies are still resolved into the lockfile and simply not installed on disk, and optional dependencies must be handled as absent by the program. Add a guard so a future dashboard/runtime import, generated bundle, or package change cannot silently make an omitted package part of shipped behavior.
+  - Touches: new `scripts/check-optional-dep-reach.mjs`, `ci.yml` step, `docs/dependency-audit-policy.md`, package/source allowlist only for intentional tool-only false positives.
+  - Acceptance: gate parses `package-lock.json` for `optional: true`, `optionalDependencies`, and `peerDependenciesMeta.*.optional`; scans shipped source and generated package inputs for static `import`, dynamic `import()`, and `require()` of those package specifiers or their scoped roots; fails with file/specifier evidence if a hit appears; passes today with zero import/require hits; documents any deliberately ignored DOM words such as `canvas` as non-package string matches, not allowlisted imports.
+  - Verify: run the new script locally; add a fixture import of an optional package and confirm the gate fails; keep `npm audit --audit-level=high --omit=optional` green.
   - Complexity: M
 - [ ] P2 — Settings discoverability/validation audit for the dashboard options surface
   - Why: `options_ui` points at the full dashboard (`open_in_tab`), but there is no consolidated, validated Settings panel — toggles like `allowInternalXhr`, `maxBackups`, sync provider config, and `experimentalBackgroundScripts` (NF-8) are scattered. No documented defaults table or range validation surface for operator-facing knobs. Pairs with the NF-3 script-config work but targets *app* settings, not per-script `@var`.

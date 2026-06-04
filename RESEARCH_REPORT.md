@@ -269,6 +269,21 @@ thresholds (`https://vitest.dev/config/coverage.html`) and the Vitest coverage
 guide on including uncovered source files
 (`https://main.vitest.dev/guide/coverage`).
 
+2026-06-04 Cycle 14 optional-dependency reach refresh: the CI audit exemption
+for optional deps is still not guarded, but the current tree does not show a
+shipped-code dependency on those packages. `package.json` has no direct
+`optionalDependencies`; `package-lock.json` has 60 optional package records and
+43 peer-optional edges; an exact import/require scan over 116 shipped extension
+files found zero imports of those optional-like package names. Loose `canvas`
+string hits in dashboard modules were DOM canvas usage, not the npm `canvas`
+package. `ROADMAP.md` now sharpens the P2 row into a guard that parses the
+lockfile, scans shipped source/package inputs for static and dynamic imports,
+and keeps `npm audit --omit=optional` from hiding a future shipped-code CVE.
+External anchors: npm audit `omit` config docs
+(`https://docs.npmjs.com/cli/v11/commands/npm-audit/`) and npm package metadata
+docs for `peerDependenciesMeta` / `optionalDependencies`
+(`https://docs.npmjs.com/cli/v11/configuring-npm/package-json/`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
@@ -307,7 +322,7 @@ Top opportunities (one line each):
 15. **[Verified] Host-permission recovery/narrow mode is not active** — per-script host scope is enforced, but required `<all_urls>` remains and withheld-host recovery / optional-host prototype work is only archived. (P2)
 16. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
 17. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
-18. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
+18. **[Verified] `--omit=optional` audit exemption is unguarded** — current static scan found zero shipped import/require hits, but package-lock contains optional/peer-optional entries and no CI guard proves they stay unreachable. (P2)
 
 ## Evidence Reviewed
 
@@ -327,6 +342,7 @@ Top opportunities (one line each):
 - **Node/toolchain contract**: `package.json:6-8` declares `engines.node >=21.2.0`, `.github/workflows/ci.yml:25-29` still uses setup-node `node-version: 20`, `.nvmrc` / `.node-version` / `.npmrc` are absent, local `npm config get engine-strict` returns `false`, `tests/audit-hardening-2026-06-04*.test.js:12` uses `import.meta.dirname`, and `scripts/check-cws-publish-tooling.mjs:40-58` still checks CWS tooling against a hard-coded Node 20 lower bound.
 - **Host permission recovery**: `manifest.json:37-39` and `manifest-firefox.json:48-50` still require `<all_urls>`; `pages/dashboard.html:6598-6612` / `pages/dashboard.js:10066-10119` expose only a read-only denied-host list plus restore buttons; `pages/install.js:89-134` requests named optional permissions for grants but no optional origins; archived NF-7/NF-19 and Phase 12.12/13.9 hold the old Narrow Host Mode / host-access-request research without an active row.
 - **Coverage/source glob alignment**: `vitest.config.mjs:21-25` uses V8 coverage with `all:false`, no thresholds, and includes only `src/shared/**/*.ts`, `src/modules/**/*.ts`, and `src/bg/**/*.ts`; `ts-source-promotion.json:163-168` marks `background.core.js` as promoted from `src/background/core.ts`; `package.json:54` runs `vitest run --coverage`; a mapped-drive run of `npx vitest run tests/wrapper-dom-security.test.js --coverage --coverage.reporter=json-summary --coverage.reporter=text-summary` passed 9 tests but `coverage/coverage-summary.json` showed 0% total coverage and no `src/background/wrapper-builder.ts` entry.
+- **Optional dependency reach**: `.github/workflows/ci.yml:44-50` and `docs/dependency-audit-policy.md:3-31` intentionally use `npm audit --audit-level=high --omit=optional`; `package.json` has no direct `optionalDependencies`; `package-lock.json` currently has 60 optional package records and 43 peer-optional edges; a lockfile-derived import/require scan over 116 shipped extension files found zero hits; loose `canvas` matches in dashboard files were DOM canvas strings only.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -341,6 +357,7 @@ Top opportunities (one line each):
   - Node ESM, Node v21 package metadata/Corepack, npm engines/engine-strict, and setup-node version-file docs anchor the Node toolchain contract item: https://nodejs.org/api/esm.html#importmetadirname, https://nodejs.org/download/release/v21.1.0/docs/api/packages.html#packagemanager, https://docs.npmjs.com/files/package.json/#engines, https://docs.npmjs.com/cli/using-npm/config#engine-strict, https://github.com/actions/setup-node#usage
   - Chrome optional-permission / host-permission docs, Chrome Permissions API `request` / `addHostAccessRequest`, and MDN MV3 `optional_host_permissions` anchor the host-permission recovery item: https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions, https://developer.chrome.com/docs/extensions/reference/api/permissions, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/optional_host_permissions
   - Vitest coverage config and guide anchor the coverage-source-glob refinement: https://vitest.dev/config/coverage.html and https://main.vitest.dev/guide/coverage
+  - npm audit omit config and package metadata docs anchor the optional-dependency reach item: https://docs.npmjs.com/cli/v11/commands/npm-audit/ and https://docs.npmjs.com/cli/v11/configuring-npm/package-json/
   - Userscript-manager landscape (Tampermonkey / Violentmonkey / ScriptCat sync, MV3, GitHub-Gist sync, granular execution control): comparison sources at extensionfixes.com and addons.mozilla.org Violentmonkey listing.
 - **Unverifiable here** [Needs validation]: live MV3 runtime behavior (cross-tab GM listener fan-out, omnibox UX, settings round-trips) — no browser run performed this pass; all runtime claims are static-read [Verified] or [Likely].
 
@@ -387,7 +404,7 @@ Top opportunities (one line each):
 | Node toolchain contract | CI/contributor bootstrap/release scripts | `package.json`, `.github/workflows/ci.yml`, missing `.nvmrc` / `.node-version` / `.npmrc`, CWS tooling script | partial | `engines.node` exists, but CI/version files/package-manager pin/engine enforcement drift |
 | Host-permission recovery | Browser site access / runtime diagnostics | required `<all_urls>` manifests, dashboard denied-host list, popup/side panel | partial | runtime host-scope enforcement shipped; withheld-host recovery and optional-host prototype not active |
 | Coverage report | `npm run test:cov` | `vitest.config.mjs`, `coverage/coverage-summary.json` | partial | no threshold; include globs omit `src/background/**`; focused smoke passed tests with 0% reported coverage |
-| Dependency audit policy | manual | `docs/dependency-audit-policy.md` | doc only | **no bot automation** |
+| Dependency audit policy | manual / CI | `docs/dependency-audit-policy.md`, `.github/workflows/ci.yml`, `package-lock.json` | partial | high+ audit gate exists; optional-dep reach is manually verified but not gated |
 | Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | actions **tag-pinned, not SHA** |
 
 ## Competitive Landscape
@@ -407,7 +424,7 @@ Top opportunities (one line each):
 - **Closed** — AMO vendored-library provenance for minified Firefox-package libraries now has official package/source/hash inventory and a gate. [Verified]
 - **Closed 2026-06-04** — CWS remote-hosted-code policy evidence is now packaged and scanned for Chrome submissions through `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check`.
 - **Moderate, closed 2026-06-04** — Edge package evidence is now wired into CI artifacts and generated support claims. → ROADMAP P2 Edge artifact/support-matrix gate. [Closed]
-- **Major** — `--omit=optional` audit exemption is unguarded against shipped optional deps. → ROADMAP P2 reach check. [Likely]
+- **Major** — `--omit=optional` audit exemption is unguarded against shipped optional deps. Current scan found zero shipped import/require hits, but this is not automated. → ROADMAP P2 reach check. [Verified]
 - **Major** — No consolidated/validated Settings surface for operator knobs. → ROADMAP P2 settings audit. [Likely]
 - **Minor** — `sv` omnibox + keyboard commands undocumented. → ROADMAP P3 doc items. [Verified]
 - **Major** — Node/toolchain contract drift: `engines.node >=21.2.0` is advisory under default npm config, CI still sets up Node 20, and the repo lacks a version file/package-manager pin/engine-strict gate. → ROADMAP P2 toolchain alignment. [Verified]
@@ -421,6 +438,7 @@ Top opportunities (one line each):
 - The VMware-share runner needs a local or `pushd`-mapped path for coverage commands; direct UNC execution made `npx` fall back to `C:\Windows` and fail before Vitest loaded.
 - Toolchain authority is split between `package.json` (`>=21.2.0`), CI (`node-version: 20`), the release runbook's Node 20 CWS note, and a CWS helper script that hard-codes Node 20+. The P2 toolchain item should collapse those into one source of truth.
 - Dependency health: 10 devDeps were behind at research time. The `web-ext`/`tmp` security issue is closed; esbuild/monaco/puppeteer majors remain low-risk dev-only and should fold into the Dependabot grouped PRs rather than ad-hoc bumps.
+- Optional dependency reach is clean by one-off static scan today: no exact import/require hits across shipped extension files. The risk is regression, because the audit exemption is only justified if that property is continuously checked.
 
 ## Security / Privacy / Data Safety
 
@@ -443,7 +461,7 @@ Top opportunities (one line each):
 
 ## Open Questions (genuine blockers only)
 
-- Does any optional/peerOptional dep currently reach shipped `src/**`/`modules/**` code? The P2 reach-check assumes "no" today; this must be confirmed by the new script before relying on the `--omit=optional` exemption. [Needs validation]
+_None this pass._ The optional-dependency reach question has current static evidence; the remaining work is turning that evidence into a gate.
 
 ## Maintenance Rule
 
