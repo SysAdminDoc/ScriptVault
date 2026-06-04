@@ -1,7 +1,7 @@
 # `@require-provenance` Design — Sigstore-Style Verification for `@require`
 
 **Phase:** 39.5 (extends Phase 11.8 SRI).
-**Status:** Phase A parser + storage foundation, Phase B bundle parser, Phase C message-signature verifier, and Phase D Fulcio root/validity checks shipped 2026-06-04; UI and author guide remain open. RFC3161/Rekor timestamp proof remains Phase 2 defense-in-depth.
+**Status:** Phase A parser + storage foundation, Phase B bundle parser, Phase C message-signature verifier, Phase D Fulcio root/validity checks, and dashboard/update review surfacing shipped 2026-06-04; install dialog verified-author badge and author guide remain open. RFC3161/Rekor timestamp proof remains Phase 2 defense-in-depth.
 **Owner:** Phase 17 (Security Round 2) follow-up.
 **Last reviewed:** 2026-05-17.
 
@@ -134,9 +134,10 @@ Got author:      https://github.com/attacker
 
 ### Phase F — UI surface
 
-- Install dialog displays a green checkmark + identity ("Verified author: github.com/exampleuser") for provenance-verified `@require` URLs.
-- Script details panel shows per-`@require` provenance status.
-- Errors surface in the existing error log (Phase 20.4).
+- Install dialog displays a verified-author badge for provenance-verified `@require` URLs. *(Open.)*
+- Script details panel shows per-`@require` provenance status. *(Dashboard receipt view shipped 2026-06-04.)*
+- Pending-update review marks provenance failures as review-required and the recent-update review modal shows per-`@require` provenance rows. *(Shipped 2026-06-04.)*
+- Errors surface in the existing error log (Phase 20.4). *(Open.)*
 
 ## Open questions
 

@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Require provenance review UI
+
+- **Pending updates now treat provenance failures as review-required.**
+  Failed signatures, failed Fulcio roots, unavailable bundles, unsupported
+  bundles, and incomplete declarations add a review reason instead of leaving
+  the update in the safe-to-apply bucket.
+- **Dashboard trust surfaces show per-dependency provenance.** Recent-update
+  review modals and script trust receipts now list declared `@require`
+  provenance with status, identity, certificate identity, root state, and
+  verification errors.
+
 ### 2026-06-04 — Fulcio root verification for require provenance
 
 - **Sigstore verifier now checks the certificate chain.** The verifier bundles

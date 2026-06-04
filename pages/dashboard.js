@@ -2051,10 +2051,69 @@
         const deps = update?.dependencyChanges?.require || [];
         const perms = update?.permissionChanges || {};
         return deps.some(change => change.change && change.change !== 'unchanged')
+            || hasProvenanceTrustChanges(update?.trustReceipt)
             || ['grant', 'connect', 'match'].some(key => {
                 const set = perms[key] || {};
                 return (set.added || []).length > 0 || (set.removed || []).length > 0;
             });
+    }
+
+    function provenanceNeedsReview(provenance) {
+        if (!provenance) return false;
+        if (provenance.status && provenance.status !== 'declared') return true;
+        return ['signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
+            .includes(provenance.verification || '');
+    }
+
+    function hasProvenanceTrustChanges(receipt) {
+        return (receipt?.dependencies?.require || []).some(dep => provenanceNeedsReview(dep.provenance));
+    }
+
+    function provenanceTone(provenance) {
+        if (!provenance) return 'info-tag';
+        if (provenance.verification === 'signature-verified' && provenance.rootVerified === 'verified') return 'info-tag success';
+        if (provenanceNeedsReview(provenance)) return 'info-tag error';
+        return 'info-tag';
+    }
+
+    function provenanceLabel(provenance) {
+        if (!provenance) return 'No provenance';
+        if (provenance.verification === 'signature-verified') return 'Verified';
+        if (provenance.verification === 'root-verification-failed') return 'Root failed';
+        if (provenance.verification === 'signature-failed') return 'Signature failed';
+        if (provenance.verification === 'bundle-unavailable') return 'Bundle unavailable';
+        if (provenance.verification === 'unsupported-bundle') return 'Unsupported bundle';
+        if (provenance.status === 'missing-identity') return 'Missing identity';
+        if (provenance.status === 'missing-bundle') return 'Missing bundle';
+        return 'Declared';
+    }
+
+    function renderProvenanceRows(dependencies = []) {
+        const rows = dependencies.filter(dep => dep?.provenance);
+        if (!rows.length) return '';
+        return `
+            <div><strong>@require provenance:</strong></div>
+            <div class="conflict-list" style="margin-top:6px">
+                ${rows.map(dep => {
+                    const provenance = dep.provenance || {};
+                    const detail = [
+                        provenance.identity,
+                        provenance.certificateIdentity && provenance.certificateIdentity !== provenance.identity ? `cert ${provenance.certificateIdentity}` : '',
+                        provenance.error,
+                    ].filter(Boolean).join(' - ');
+                    return `
+                        <div class="conflict-list-item">
+                            <span style="min-width:0">
+                                <strong>${escapeHtml(provenanceLabel(provenance))}</strong>
+                                <div class="panel-empty-inline" style="margin-top:4px;word-break:break-all">${escapeHtml(dep.url || '')}</div>
+                                ${detail ? `<div class="panel-empty-inline" style="margin-top:4px;word-break:break-all">${escapeHtml(detail)}</div>` : ''}
+                            </span>
+                            <span class="${provenanceTone(provenance)}">${escapeHtml(provenance.rootVerified ? `root ${provenance.rootVerified}` : provenance.status || '')}</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
     }
 
     function renderPermissionChangeGroup(label, changes = {}) {
@@ -2097,13 +2156,15 @@
     function renderRecentUpdateTrustChanges(update) {
         const permissionChanges = update?.permissionChanges || {};
         const dependencyChanges = update?.dependencyChanges?.require || [];
+        const provenanceDependencies = update?.trustReceipt?.dependencies?.require || [];
         const permissionHtml = [
             renderPermissionChangeGroup('@grant', permissionChanges.grant),
             renderPermissionChangeGroup('@connect', permissionChanges.connect),
             renderPermissionChangeGroup('@match', permissionChanges.match),
         ].filter(Boolean).join('');
         const dependencyHtml = renderDependencyChangeRows(dependencyChanges);
-        const body = [permissionHtml, dependencyHtml].filter(Boolean).join('<div style="height:8px"></div>');
+        const provenanceHtml = renderProvenanceRows(provenanceDependencies);
+        const body = [permissionHtml, dependencyHtml, provenanceHtml].filter(Boolean).join('<div style="height:8px"></div>');
         return `
             <div class="conflict-list-item" style="align-items:flex-start">
                 <span style="width:100%">
@@ -6318,6 +6379,7 @@
         const source = receipt.source?.installHost || receipt.source?.installUrl || 'local';
         const diff = receipt.diff || {};
         const deps = receipt.dependencies || {};
+        const provenanceHtml = renderProvenanceRows(deps.require || []);
         const rollback = receipt.rollback?.available
             ? `Rollback action saved for v${receipt.rollback.version || '?'}`
             : 'No previous-version rollback point';
@@ -6338,6 +6400,7 @@
                     <span>Dependencies <span class="panel-empty-inline">${numberFormatter.format(deps.requireCount || 0)} require, ${numberFormatter.format(deps.resourceCount || 0)} resource</span></span>
                     <span class="info-tag">${numberFormatter.format((receipt.grants || []).length)} grants</span>
                 </div>
+                ${provenanceHtml}
                 <div class="conflict-list-item">
                     <span>${escapeHtml(rollback)}</span>
                     <span class="info-tag">${receipt.rollback?.available ? 'Restorable' : 'Snapshot only'}</span>
