@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Module-mode service worker
+
+- **Chrome now loads the MV3 background as a module service worker.**
+  `manifest.json` declares `"background.type": "module"` for the existing
+  single-file `background.js` bundle, while Firefox remains on its generated
+  event-page background shape.
+- **Module compatibility is pinned in tests.** The new manifest gate verifies
+  the Chrome floor, the Firefox transform, the absence of global
+  `importScripts()` loader calls / static imports / exports in `background.js`,
+  and Edge manifest preservation.
+
 ### 2026-06-04 — Require provenance install preview
 
 - **Install review now previews `@require` provenance.** The dependency card

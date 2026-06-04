@@ -32,6 +32,7 @@ describe('scripts/build-edge.mjs', () => {
     const manifest = JSON.parse(readFileSync(join(BUILD_DIR, 'manifest.json'), 'utf8'));
     expect(manifest.manifest_version).toBe(3);
     expect(manifest.background?.service_worker).toBe('background.js');
+    expect(manifest.background?.type).toBe('module');
     expect(Array.isArray(manifest.permissions)).toBe(true);
   });
 
