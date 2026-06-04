@@ -193,6 +193,91 @@ async function mergeScriptText(base: string, local: string, remote: string): Pro
   throw new Error('No script merge engine available');
 }
 
+const SYNC_SAFE_SCRIPT_SETTING_KEYS = new Set<string>([
+  'autoUpdate',
+  'notifyUpdates',
+  'runAt',
+  'injectInto',
+  'frameMode',
+  'notifyErrors',
+  'notes',
+  'useOriginalIncludes',
+  'useOriginalMatches',
+  'useOriginalExcludes',
+  'userIncludes',
+  'userMatches',
+  'userExcludes',
+  'pinned',
+  'perfBudget',
+  'tags',
+]);
+
+const LOCAL_ONLY_SCRIPT_SETTING_KEYS = new Set<string>([
+  'userModified',
+  'mergeConflict',
+  'syncLock',
+  'sourceIdentityChanged',
+  '_failedRequires',
+  '_failedRequireErrors',
+  '_registrationError',
+]);
+
+function cloneScriptSettingValue(value: unknown): unknown {
+  if (value == null || typeof value !== 'object') return value;
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value);
+    } catch (_) {
+      // Fall through to JSON clone.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as unknown;
+  } catch (_) {
+    return undefined;
+  }
+}
+
+function cloneSyncSafeScriptSettings(settings: unknown): ScriptSettings {
+  if (!settings || typeof settings !== 'object') return {};
+  const result: ScriptSettings = {};
+  for (const [key, value] of Object.entries(settings as Record<string, unknown>)) {
+    if (!SYNC_SAFE_SCRIPT_SETTING_KEYS.has(key) || LOCAL_ONLY_SCRIPT_SETTING_KEYS.has(key)) {
+      continue;
+    }
+    result[key] = cloneScriptSettingValue(value);
+  }
+  return result;
+}
+
+function mergeSyncedScriptSettings(
+  localSettings: unknown,
+  remoteSettings: unknown,
+  options: { mergeConflict?: boolean } = {},
+): ScriptSettings {
+  return {
+    ...((localSettings && typeof localSettings === 'object')
+      ? localSettings as ScriptSettings
+      : {}),
+    ...cloneSyncSafeScriptSettings(remoteSettings),
+    ...(options.mergeConflict ? { mergeConflict: true } : {}),
+  };
+}
+
+function sanitizeSyncScriptForEnvelope(script: SyncScript): SyncScript {
+  return {
+    ...script,
+    settings: cloneSyncSafeScriptSettings(script.settings),
+  };
+}
+
+function sanitizeSyncEnvelopeForUpload(envelope: SyncEnvelope): SyncEnvelope {
+  return {
+    ...envelope,
+    scripts: (envelope.scripts || []).map((script) => sanitizeSyncScriptForEnvelope(script)),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // CloudSync object
 // ---------------------------------------------------------------------------
@@ -244,7 +329,7 @@ export const CloudSync = {
           code: s.code,
           enabled: s.enabled,
           position: s.position,
-          settings: s.settings ?? {},
+          settings: cloneSyncSafeScriptSettings(s.settings),
           updatedAt: s.updatedAt,
           syncBaseCode: s.syncBaseCode ?? null,
           name: s.meta?.name || s.id,
@@ -408,7 +493,7 @@ export const CloudSync = {
         code: s.code,
         enabled: s.enabled,
         position: s.position,
-        settings: s.settings ?? {},
+        settings: cloneSyncSafeScriptSettings(s.settings),
         updatedAt: s.updatedAt
       })),
       tombstones
@@ -478,10 +563,9 @@ export const CloudSync = {
               meta: parsed.meta,
               enabled: script.enabled,
               position: script.position,
-              settings: {
-                ...(existing?.settings ?? {}),
-                ...(mergeConflict ? { mergeConflict: true } : {})
-              },
+              settings: mergeSyncedScriptSettings(existing?.settings, script.settings, {
+                mergeConflict,
+              }),
               updatedAt: Math.max(script.updatedAt, existing?.updatedAt ?? 0),
               createdAt: existing?.createdAt ?? script.updatedAt,
               syncBaseCode: codeToSave // record merged result as new base for future syncs
@@ -505,10 +589,10 @@ export const CloudSync = {
       // Upload merged data (includes tombstones)
       merged.timestamp = Date.now();
       merged.tombstones = mergedTombstones;
-      await provider.upload(merged, settings);
+      await provider.upload(sanitizeSyncEnvelopeForUpload(merged), settings);
     } else {
       // First sync, just upload (include tombstones so remote gets deletion info)
-      await provider.upload(localData, settings);
+      await provider.upload(sanitizeSyncEnvelopeForUpload(localData), settings);
     }
 
     await SettingsManager.set('lastSync', Date.now());
@@ -520,14 +604,14 @@ export const CloudSync = {
 
     // Add all local scripts (guard against malformed envelopes)
     for (const script of (local.scripts || [])) {
-      scriptsMap.set(script.id, script);
+      scriptsMap.set(script.id, sanitizeSyncScriptForEnvelope(script));
     }
 
     // Merge remote scripts (prefer newer)
     for (const script of (remote.scripts || [])) {
       const existing = scriptsMap.get(script.id);
       if (!existing || script.updatedAt > existing.updatedAt) {
-        scriptsMap.set(script.id, script);
+        scriptsMap.set(script.id, sanitizeSyncScriptForEnvelope(script));
       }
     }
 

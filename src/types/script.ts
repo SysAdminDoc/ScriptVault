@@ -92,11 +92,14 @@ export interface WebRequestRule {
 
 /** Per-script user settings */
 export interface ScriptSettings {
+  // Local-only sync/editing state. Cloud sync helpers must not upload these.
   userModified?: boolean;
   mergeConflict?: boolean;
   _failedRequires?: string[];
   _failedRequireErrors?: Array<{ url: string; message: string }>;
   _registrationError?: string;
+  // User-facing preferences such as runAt, URL overrides, notes, tags, and
+  // pinned state are synced only when explicitly allowlisted by the sync helper.
   [key: string]: unknown;
 }
 

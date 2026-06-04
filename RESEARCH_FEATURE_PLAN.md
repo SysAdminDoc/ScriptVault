@@ -30,17 +30,17 @@ Recently completed hardening now reflected in `ROADMAP.md`: WebDAV/S3 sync
 endpoints use the internal-host guard, credential-bearing settings are redacted
 or separately gated for JSON/cloud exports and managed backups, and JSON/ZIP
 backup intake is bounded before text decode, JSON parse, or registration.
+Per-script cloud-sync settings are now partitioned so local-only diagnostics
+stay on the originating device.
 
 Current top priorities:
 
-1. Partition sync-safe script settings from device-local state before cloud
-   upload and merge.
-2. Add a real coverage gate for source/runtime code and automate dependency
+1. Add a real coverage gate for source/runtime code and automate dependency
    freshness so CI catches drift before advisories or store-review failures.
-3. Finish AMO readiness gaps: source-review provenance for packaged minified
+2. Finish AMO readiness gaps: source-review provenance for packaged minified
    libraries and a clear decision on Firefox for Android claims versus smoke
    coverage.
-4. Clean up dashboard reachability and stale affordances so documented features
+3. Clean up dashboard reachability and stale affordances so documented features
    match what a user can actually reach.
 
 ## Evidence Reviewed

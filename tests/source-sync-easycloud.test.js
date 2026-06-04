@@ -109,6 +109,18 @@ describe('source easycloud sync module', () => {
       )
       .mockResolvedValueOnce(
         new Response(
+          JSON.stringify({ files: [] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ files: [] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
           JSON.stringify({ id: 'drive-file-id' }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         ),
@@ -211,5 +223,67 @@ describe('source easycloud sync module', () => {
     expect(unregisterScript).toHaveBeenCalledWith('script_alpha');
     expect(updateBadge).toHaveBeenCalledTimes(1);
     expect(scriptState).toEqual([]);
+  });
+
+  it('uploads only sync-safe per-script settings to EasyCloud', async () => {
+    await chrome.storage.local.set({
+      easycloud_connected: true,
+      syncTombstones: {},
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ files: [] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ files: [] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: 'drive-file-id' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    globalThis.fetch = fetchMock;
+
+    const { EasyCloudSync } = await loadFreshEasyCloud([
+      {
+        id: 'script_settings',
+        code: '// ==UserScript==\n// @name Settings\n// ==/UserScript==',
+        meta: { name: 'Settings' },
+        enabled: true,
+        position: 0,
+        settings: {
+          runAt: 'document-start',
+          notes: 'portable note',
+          userModified: true,
+          mergeConflict: true,
+          _registrationError: 'local registration failed',
+        },
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]);
+
+    const result = await EasyCloudSync.sync();
+    const uploadCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes('/upload/drive/v3/files?uploadType=multipart'),
+    );
+
+    expect(result.success).toBe(true);
+    expect(uploadCall).toBeTruthy();
+    const body = uploadCall[1].body;
+    expect(body).toContain('"runAt":"document-start"');
+    expect(body).toContain('"notes":"portable note"');
+    expect(body).not.toContain('userModified');
+    expect(body).not.toContain('mergeConflict');
+    expect(body).not.toContain('_registrationError');
   });
 });
