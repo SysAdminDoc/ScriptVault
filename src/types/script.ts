@@ -4,6 +4,13 @@
 
 import type { ScriptConfigVariable } from '../modules/script-config';
 
+/** Parsed userscript `@antifeature` metadata entry. */
+export interface ScriptAntifeature {
+  type: string;
+  description: string;
+  locale: string;
+}
+
 /** Parsed userscript metadata from ==UserScript== block */
 export interface ScriptMeta {
   name: string;
@@ -71,7 +78,7 @@ export interface ScriptMeta {
   weight: number;
 
   // Tags & compat
-  antifeature: string[];
+  antifeature: ScriptAntifeature[];
   tag: string[];
   compatible: string[];
   incompatible: string[];

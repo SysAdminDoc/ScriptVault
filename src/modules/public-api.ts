@@ -65,6 +65,12 @@ interface APISchemaType {
   webhookEvents: string[];
 }
 
+interface ParsedAntifeature {
+  type: string;
+  description: string;
+  locale: string;
+}
+
 /** Partial chrome MessageSender-like shape used by this module. */
 interface SenderLike {
   id?: string;
@@ -115,7 +121,7 @@ interface ParsedMeta {
   tag?: string[];
   compatible?: string[];
   incompatible?: string[];
-  antifeature?: string[];
+  antifeature?: ParsedAntifeature[];
   resource?: Record<string, string>;
   runAt?: string;
   noframes?: boolean;
@@ -406,9 +412,22 @@ const ARRAY_META_KEYS: Record<string, keyof ParsedMeta> = {
   tag: 'tag',
   compatible: 'compatible',
   incompatible: 'incompatible',
-  antifeature: 'antifeature',
 };
 const BOOLEAN_META_KEYS = new Set(['noframes', 'unwrap', 'top-level-await']);
+
+function parseAntifeatureDirective(value: string, locale = ''): ParsedAntifeature | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/^(\S+)(?:\s+([\s\S]*))?$/);
+  if (!match?.[1]) return null;
+
+  return {
+    type: match[1].toLowerCase(),
+    description: (match[2] ?? '').trim(),
+    locale,
+  };
+}
 
 function appendMetaValue(meta: ParsedMeta, key: keyof ParsedMeta, value: string): void {
   const values = (key === 'requireProvenance' || key === 'requireIdentity') && value.includes(',')
@@ -420,6 +439,28 @@ function appendMetaValue(meta: ParsedMeta, key: keyof ParsedMeta, value: string)
   } else {
     (meta as Record<string, unknown>)[key] = values;
   }
+}
+
+function normalizeAntifeatureEntry(entry: unknown): ParsedAntifeature | null {
+  if (typeof entry === 'string') return parseAntifeatureDirective(entry);
+  if (!entry || typeof entry !== 'object') return null;
+
+  const obj = entry as Record<string, unknown>;
+  const type = typeof obj.type === 'string' ? obj.type.trim().toLowerCase() : '';
+  if (!type) return null;
+
+  return {
+    type,
+    description: typeof obj.description === 'string' ? obj.description.trim() : '',
+    locale: typeof obj.locale === 'string' ? obj.locale.trim() : '',
+  };
+}
+
+function asAntifeatureArray(value: unknown): ParsedAntifeature[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(normalizeAntifeatureEntry)
+    .filter((entry): entry is ParsedAntifeature => entry !== null);
 }
 
 /* ------------------------------------------------------------------ */
@@ -738,6 +779,12 @@ function getMetaArray(
   return asStringArray(meta[key] ?? existingMeta[key]);
 }
 
+function getMetaAntifeatureArray(meta: ParsedMeta, existingMeta: Record<string, unknown>): ParsedAntifeature[] {
+  const fromSource = asAntifeatureArray(meta.antifeature);
+  if (fromSource.length > 0) return fromSource;
+  return asAntifeatureArray(existingMeta.antifeature);
+}
+
 function getMetaBoolean(
   meta: ParsedMeta,
   existingMeta: Record<string, unknown>,
@@ -908,7 +955,7 @@ function createNestedStoredScript(
       'top-level-await': getMetaBoolean(meta, existingMeta, 'top-level-await'),
       webRequest: existingMeta.webRequest ?? null,
       priority: asNumber(existingMeta.priority) ?? 0,
-      antifeature: getMetaArray(meta, existingMeta, 'antifeature'),
+      antifeature: getMetaAntifeatureArray(meta, existingMeta),
       tag: getMetaArray(meta, existingMeta, 'tag'),
       compatible: getMetaArray(meta, existingMeta, 'compatible'),
       incompatible: getMetaArray(meta, existingMeta, 'incompatible')
@@ -1171,7 +1218,14 @@ function parseUserscriptMeta(code: string): ParsedMeta {
     const key = m[1].trim();
     const val = (m[2] || '').trim();
 
-    if (BOOLEAN_META_KEYS.has(key)) {
+    if (key === 'antifeature' || key.startsWith('antifeature:')) {
+      const locale = key.startsWith('antifeature:') ? key.slice('antifeature:'.length) : '';
+      const parsedAntifeature = parseAntifeatureDirective(val, locale);
+      if (parsedAntifeature) {
+        meta.antifeature = meta.antifeature ?? [];
+        meta.antifeature.push(parsedAntifeature);
+      }
+    } else if (BOOLEAN_META_KEYS.has(key)) {
       (meta as Record<string, unknown>)[key] = true;
     } else if (ARRAY_META_KEYS[key]) {
       if (val) appendMetaValue(meta, ARRAY_META_KEYS[key], val);

@@ -1,4 +1,4 @@
-import type { ScriptMeta, RunAt, WebRequestRule } from '../types/script';
+import type { ScriptMeta, RunAt, ScriptAntifeature, WebRequestRule } from '../types/script';
 import { ScriptConfig } from '../modules/script-config';
 
 /** Result returned on successful parse */
@@ -84,7 +84,6 @@ type ArrayMetaKey =
   | 'requireProvenance'
   | 'requireIdentity'
   | 'connect'
-  | 'antifeature'
   | 'tag'
   | 'compatible'
   | 'incompatible';
@@ -116,11 +115,24 @@ const ARRAY_KEYS: ReadonlySet<string> = new Set<string>([
   'require-identity',
   'requireIdentity',
   'connect',
-  'antifeature',
   'tag',
   'compatible',
   'incompatible',
 ]);
+
+function parseAntifeatureDirective(value: string, locale = ''): ScriptAntifeature | null {
+  const trimmed: string = value.trim();
+  if (!trimmed) return null;
+
+  const match: RegExpMatchArray | null = trimmed.match(/^(\S+)(?:\s+([\s\S]*))?$/);
+  if (!match) return null;
+
+  return {
+    type: match[1]!.toLowerCase(),
+    description: (match[2] ?? '').trim(),
+    locale,
+  };
+}
 
 /**
  * Parse a userscript's metadata block and extract all supported directives.
@@ -201,6 +213,9 @@ export function parseUserscript(code: string): ParseResult {
       // Type assertion is safe: we only enter this branch for keys that are
       // known to be string‐valued properties of ScriptMeta.
       (meta as unknown as Record<string, unknown>)[key] = key === 'run-at' ? (value as RunAt) : value;
+    } else if (key === 'antifeature') {
+      const parsedAntifeature: ScriptAntifeature | null = parseAntifeatureDirective(value);
+      if (parsedAntifeature) meta.antifeature.push(parsedAntifeature);
     } else if (ARRAY_KEYS.has(key)) {
       const arrayKey: ArrayMetaKey = (ARRAY_ALIASES[key] ?? key) as ArrayMetaKey;
       if (value) {
@@ -342,11 +357,16 @@ export function parseUserscript(code: string): ParseResult {
               const locale: string = key.slice(colonIdx + 1);
               const POLLUTED = ['__proto__', 'constructor', 'prototype'];
               if (!POLLUTED.includes(baseKey) && !POLLUTED.includes(locale)) {
-                if (!meta.localized) meta.localized = Object.create(null) as Record<string, Record<string, string>>;
-                if (!Object.hasOwn(meta.localized, locale)) {
-                  meta.localized[locale] = Object.create(null) as Record<string, string>;
+                if (baseKey === 'antifeature') {
+                  const parsedAntifeature: ScriptAntifeature | null = parseAntifeatureDirective(value, locale);
+                  if (parsedAntifeature) meta.antifeature.push(parsedAntifeature);
+                } else {
+                  if (!meta.localized) meta.localized = Object.create(null) as Record<string, Record<string, string>>;
+                  if (!Object.hasOwn(meta.localized, locale)) {
+                    meta.localized[locale] = Object.create(null) as Record<string, string>;
+                  }
+                  meta.localized[locale]![baseKey] = value;
                 }
-                meta.localized[locale]![baseKey] = value;
               }
             }
           }

@@ -1,5 +1,6 @@
 export type {
   Script,
+  ScriptAntifeature,
   ScriptMeta,
   ScriptSettings,
   ScriptStats,
