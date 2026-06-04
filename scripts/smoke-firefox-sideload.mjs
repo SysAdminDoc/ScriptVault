@@ -157,6 +157,69 @@ async function smokePageServer() {
   };
 }
 
+async function webDavSmokeServer() {
+  let remoteData = null;
+  const requests = [];
+  const server = createServer((request, response) => {
+    requests.push({
+      method: request.method,
+      url: request.url,
+      authorization: request.headers.authorization || '',
+    });
+    const chunks = [];
+    request.on('data', chunk => chunks.push(chunk));
+    request.on('end', () => {
+      if (request.method === 'PROPFIND') {
+        response.writeHead(207, { 'content-type': 'text/xml; charset=utf-8' });
+        response.end('<multistatus />');
+        return;
+      }
+      if (request.url !== '/scriptvault-backup.json') {
+        response.writeHead(404);
+        response.end();
+        return;
+      }
+      if (request.method === 'GET') {
+        if (!remoteData) {
+          response.writeHead(404);
+          response.end();
+          return;
+        }
+        response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+        response.end(JSON.stringify(remoteData));
+        return;
+      }
+      if (request.method === 'PUT') {
+        remoteData = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+        response.end(JSON.stringify({ success: true }));
+        return;
+      }
+      response.writeHead(405);
+      response.end();
+    });
+  });
+
+  await new Promise((resolveServer, reject) => {
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', resolveServer);
+  });
+  const address = server.address();
+  const port = address && typeof address === 'object' ? address.port : null;
+  if (!port) {
+    server.close();
+    fail('Could not start local Firefox WebDAV smoke server');
+  }
+  return {
+    url: `http://127.0.0.1:${port}`,
+    requests,
+    get remoteData() {
+      return remoteData;
+    },
+    close: () => new Promise(resolveClose => server.close(resolveClose)),
+  };
+}
+
 async function latestFirefoxPackage(version) {
   const artifactDir = resolve(ROOT, 'firefox-artifacts');
   const expected = join(artifactDir, `scriptvault-firefox-v${version}.zip`);
@@ -684,6 +747,59 @@ async function backupRoundTripSmoke(baseUrl, sessionId, dashboardUrl) {
   };
 }
 
+async function webDavSyncSmoke(baseUrl, sessionId, dashboardUrl) {
+  const server = await webDavSmokeServer();
+  const username = 'firefox-webdav';
+  const password = 'secret';
+  try {
+    await navigate(baseUrl, sessionId, dashboardUrl);
+    const settings = await runtimeMessage(baseUrl, sessionId, {
+      action: 'setSettings',
+      settings: {
+        syncEnabled: true,
+        syncProvider: 'webdav',
+        webdavUrl: server.url,
+        webdavUsername: username,
+        webdavPassword: password,
+      },
+    }, 60000);
+    if (settings?.syncProvider !== 'webdav' || settings?.webdavUrl !== server.url) {
+      fail(`Firefox WebDAV smoke failed to persist sync settings: ${JSON.stringify(settings)}`);
+    }
+
+    const health = await runtimeMessage(baseUrl, sessionId, { action: 'syncProviderHealth', provider: 'webdav' }, 60000);
+    if (!health?.connected || health?.status !== 'ok' || !String(health?.endpointHost || '').startsWith('127.0.0.1')) {
+      fail(`Firefox WebDAV health check failed: ${JSON.stringify(health)}`);
+    }
+
+    const preview = await runtimeMessage(baseUrl, sessionId, { action: 'syncDryRunPreview', provider: 'webdav' }, 60000);
+    if (!preview?.success || !preview?.dryRun || !preview?.noWrites || !preview?.summary?.wouldUpload || server.remoteData) {
+      fail(`Firefox WebDAV dry-run preview failed or wrote data: ${JSON.stringify(preview)}`);
+    }
+
+    const sync = await runtimeMessage(baseUrl, sessionId, { action: 'syncNow' }, 60000);
+    if (!sync?.success) fail(`Firefox WebDAV sync failed: ${JSON.stringify(sync)}`);
+    if (!server.remoteData?.scripts?.length) {
+      fail(`Firefox WebDAV sync did not upload scripts: ${JSON.stringify(server.remoteData)}`);
+    }
+    const expectedAuth = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
+    const basicAuthSeen = server.requests.some(request => request.authorization === expectedAuth);
+    if (!basicAuthSeen) {
+      fail(`Firefox WebDAV sync did not send expected Basic Auth header: ${JSON.stringify(server.requests)}`);
+    }
+
+    return {
+      connected: health.connected,
+      endpointHost: health.endpointHost,
+      previewWouldUpload: preview.summary.wouldUpload,
+      uploadedScripts: server.remoteData.scripts.length,
+      basicAuthSeen,
+    };
+  } finally {
+    await server.close().catch(() => {});
+  }
+}
+
 async function storageAndTrashSmoke(baseUrl, sessionId, dashboardUrl, firefox, packagePath, profileDir) {
   await navigate(baseUrl, sessionId, dashboardUrl);
   const bulkScripts = Array.from({ length: 26 }, (_, index) => {
@@ -842,6 +958,7 @@ async function main() {
     const dashboardResult = await dashboardSmoke(baseUrl, sessionId, dashboard.uri);
     const popupResult = await popupSmoke(baseUrl, sessionId, popup.uri);
     const scriptResult = await scriptRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
+    const webDavResult = await webDavSyncSmoke(baseUrl, sessionId, dashboard.uri);
     const backupResult = await backupRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
     const storageSmoke = await storageAndTrashSmoke(baseUrl, sessionId, dashboard.uri, firefox, packagePath, profileDir);
     sessionId = storageSmoke.sessionId;
@@ -854,6 +971,7 @@ async function main() {
       dashboard: dashboardResult,
       popup: popupResult,
       script: scriptResult,
+      webdav: webDavResult,
       backup: backupResult,
       storage: storageResult,
     }, null, 2));

@@ -68,6 +68,7 @@ phase.
 - [x] G-5 Firefox Chrome-backup import round-trip: Firefox smoke imports Chrome-shaped ScriptVault JSON and ZIP fixtures, preserving safe script IDs, metadata, disabled state, GM storage values, `createdAt`, and `updatedAt`; ZIP exports now carry ScriptVault timestamp metadata — *Source: docs/archive/TODO.md Phase G; commit feat: preserve firefox backup imports*
 - [x] G-5 Firefox storage quota, migration, and restart data-safety validation: Firefox smoke imports a 26-script quota fixture, checks storage usage, restarts Firefox with a persistent temporary profile, verifies trash persistence, and restores the deleted script; migration tests now prove v1.x -> v2.0 re-runs are idempotent — *Source: FIREFOX-PORT.md Phase 2; commit test: cover firefox storage persistence*
 - [x] NF-1 GM_xmlhttpRequest internal-host / SSRF guard: GM_xhr now applies `InternalHostGuard` preflight and redirect-final-URL checks, blocks internal hosts by default, preserves explicit localhost development opt-in, and adds `allowInternalXhr` as an advanced global escape hatch — *Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-1; commit fix: guard gm xhr internal hosts*
+- [x] G-6 Firefox WebDAV-only sync baseline: Firefox smoke configures WebDAV sync against a local fixture, checks provider health and dry-run preview, uploads via `syncNow`, and keeps OAuth providers deferred because the Firefox package omits `identity` — *Source: docs/archive/TODO.md Phase G; commit test: cover firefox webdav sync*
 
 ## Stale / Obsolete Items
 
