@@ -66,7 +66,7 @@ describe('manifest generator', () => {
     const { manifest } = await generateManifestForProfile({ profile: 'edge', rootDir: ROOT });
 
     expect(manifest.manifest_version).toBe(3);
-    expect(manifest.background).toEqual({ service_worker: 'background.js' });
+    expect(manifest.background).toEqual({ service_worker: 'background.js', type: 'module' });
     expect(manifest.permissions).toContain('contextMenus');
     expect(manifest.permissions).toContain('sidePanel');
     expect(manifest).not.toHaveProperty('browser_specific_settings');

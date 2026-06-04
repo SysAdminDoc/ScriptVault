@@ -55,6 +55,7 @@ phase.
 - [x] F-2 Release trust pipeline status gate: rollback/trust/status command wiring, Firefox AMO lint/package evidence, and optional credentialed CWS API v2 `fetchStatus` checks now run through `npm run release:store-status` — *Source: docs/archive/TODO.md Phase F; commit feat: add release store status gate*
 - [x] F-3 Local health diagnostics summarize runtime setup, storage pressure, pending update queues, callback-map pressure, and script health warnings for support snapshots without script source, script names, URLs, or external beacons — *Source: docs/archive/TODO.md Phase F; commit feat: add local health diagnostics*
 - [x] F-4 Sigstore `@require-provenance` implementation: parser/storage, Sigstore bundle parser, message-signature verifier, Fulcio root/validity checks, install-dialog verified-author preview, dashboard/update review surfacing, fail-closed save/update enforcement for declared failures, and author guide — *Source: docs/archive/TODO.md Phase F; commit feat: preview require provenance on install*
+- [x] F-5 Chrome MV3 module-mode service worker: `manifest.json` declares `background.type: "module"` for the single-file worker, Firefox keeps the event-page background shape, and Chromium-derived Edge packages preserve module mode — *Source: docs/archive/TODO.md Phase F; commit feat: enable module service worker*
 
 ## Stale / Obsolete Items
 
