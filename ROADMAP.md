@@ -82,7 +82,8 @@ priority section below.
 - [x] P1 — Feature-flag `chrome.sidePanel` for Firefox MV3
   - Progress: 2026-06-04 `dashboard-firefox-compat.js` no longer installs a fake no-op `chrome.sidePanel` object when the API is missing. Native Chromium `chrome.sidePanel` support is preserved, while Firefox leaves `typeof chrome.sidePanel === 'undefined'` so dashboard feature-detects can hide side-panel entry points instead of seeing false support.
   - Source: docs/archive/TODO.md G-2 (FIREFOX-PORT.md Phase 1).
-- [ ] P1 — Monaco editor loading path on Firefox (decide A vs B)
+- [x] P1 — Monaco editor loading path on Firefox (decide A vs B)
+  - Progress: 2026-06-04 Phase 1 keeps the existing Monaco iframe adapter for Chromium/local builds and treats Firefox AMO packages as a deterministic textarea-editor fallback because `build-firefox.sh` still omits `lib/monaco/`. `editor-sandbox.html` now reports missing Monaco bundles to the parent, and `monaco-adapter.js` immediately hides the iframe, preserves pending code, binds textarea input events, and exposes `isMonaco: false` when fallback is active.
   - Source: docs/archive/TODO.md G-3 (FIREFOX-PORT.md Phase 1).
 - [ ] P1 — Build + Firefox sideload smoke (Phase 1 completion)
   - Source: docs/archive/TODO.md G-4.

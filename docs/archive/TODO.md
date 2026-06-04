@@ -133,8 +133,9 @@
 - [x] **G-2** Feature-flag `chrome.sidePanel` for Firefox MV3
   - Evidence: FIREFOX-PORT.md Phase 1, fourth checkbox.
   - Progress: 2026-06-04 the dashboard Firefox compatibility layer stopped stubbing `chrome.sidePanel` when unsupported. Firefox now leaves the API absent for `typeof chrome.sidePanel === 'undefined'` feature gates, while native Chromium side-panel support is preserved.
-- [ ] **G-3** Monaco editor loading path on Firefox (decide A vs B)
+- [x] **G-3** Monaco editor loading path on Firefox (decide A vs B)
   - Evidence: FIREFOX-PORT.md Phase 1.
+  - Progress: 2026-06-04 Phase 1 keeps Chromium/local builds on the existing Monaco iframe adapter and keeps Firefox AMO builds Monaco-free. The sandbox now posts `monaco-load-error` when the local bundle is missing, and the parent adapter switches immediately to an editable textarea fallback that preserves value, dirty-state change events, focus, and `isMonaco: false`.
 - [ ] **G-4** Build + Firefox sideload smoke (Phase 1 completion)
 - [ ] **G-5** Phase 2: import-from-Chrome backup round-trip
 - [ ] **G-6** Phase 3: per-provider WebDAV-only baseline + later OAuth/identity decision

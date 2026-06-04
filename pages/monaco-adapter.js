@@ -19,6 +19,7 @@
   let _cursorListeners = [];
   let _useFallback = false;
   let _lastScriptId = null;
+  let _fallbackInputBound = false;
 
   // Editor find-widget search history. Persisted to chrome.storage.local
   // under `editorFindHistory` as a FIFO list (newest first), capped at 20.
@@ -85,22 +86,40 @@
         // Sandbox forwards each find-widget searchString change. Persist.
         recordFindTerm(msg.value);
         break;
+      case 'monaco-load-error':
+        activateFallback(msg.reason || 'load-error');
+        break;
     }
   });
 
   // Fallback if Monaco iframe fails to load
   if (frame) {
-    frame.addEventListener('error', () => { activateFallback(); });
+    frame.addEventListener('error', () => { activateFallback('frame-error'); });
     // If not ready within 15 seconds, activate fallback
-    setTimeout(() => { if (!_isReady) activateFallback(); }, 15000);
+    setTimeout(() => { if (!_isReady) activateFallback('timeout'); }, 15000);
   }
 
-  function activateFallback() {
+  function bindFallbackTextarea() {
+    if (_fallbackInputBound || !fallbackTextarea) return;
+    _fallbackInputBound = true;
+    fallbackTextarea.addEventListener('input', () => {
+      _value = fallbackTextarea.value || '';
+      _changeListeners.forEach(fn => { try { fn(_monacoEditor, { origin: 'input' }); } catch {} });
+    });
+  }
+
+  function activateFallback(reason = 'load-failed') {
     if (_useFallback) return;
     _useFallback = true;
+    _pendingReady = [];
     if (frame) frame.style.display = 'none';
-    if (fallbackTextarea) fallbackTextarea.style.display = '';
-    console.warn('[ScriptVault] Monaco failed to load, using textarea fallback');
+    if (fallbackTextarea) {
+      fallbackTextarea.value = _value;
+      fallbackTextarea.style.display = '';
+      fallbackTextarea.dataset.editorFallback = reason;
+      bindFallbackTextarea();
+    }
+    console.warn(`[ScriptVault] Monaco failed to load (${reason}), using textarea fallback`);
   }
 
   function sendToFrame(msg) {
@@ -182,6 +201,10 @@
     },
 
     focus() {
+      if (_useFallback && fallbackTextarea) {
+        fallbackTextarea.focus();
+        return;
+      }
       sendToFrame({ type: 'focus' });
     },
 
@@ -309,7 +332,7 @@
     },
 
     // isMonaco flag for feature detection in dashboard.js
-    isMonaco: true
+    get isMonaco() { return !_useFallback; }
   };
 
   // ── Patch dashboard.js init ──────────────────────────────────────────────
