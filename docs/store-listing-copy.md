@@ -1,6 +1,6 @@
 # Store Permission and Privacy Copy
 
-**Last reviewed:** 2026-05-24
+**Last reviewed:** 2026-06-04
 
 This is the reviewer-facing copy source for Chrome Web Store, AMO, and release notes when manifest permissions change. Keep it synchronized with `manifest.json`, `manifest-firefox.json`, `PRIVACY.md`, and `AMO-SOURCE-README.md`; `npm run store-copy:check` fails when a manifest permission, host match, web-accessible exposure, sandbox page, or AMO data-collection declaration is no longer covered here.
 
@@ -9,7 +9,26 @@ Primary policy references:
 - Chrome Web Store Program Policies require narrow permissions, transparent handling of user data, and disclosure of data use in the store page, UI, or privacy policy.
 - Chrome's user-data FAQ says extensions should include the permissions used and why they are required in the store listing or extension about page, and that dashboard disclosures, privacy policy, and product behavior must stay consistent.
 - Chrome extension permission docs note that `permissions`, `optional_permissions`, `host_permissions`, `content_scripts.matches`, and optional host permissions can affect user warnings.
+- Chrome remote-hosted-code guidance requires extension logic to be reviewable from the submitted package and forbids extension pages or service workers from loading remote application code.
 - Firefox requires `browser_specific_settings.gecko.data_collection_permissions` for new AMO submissions and signing from November 3, 2025.
+
+## Remote-hosted code reviewer note
+
+ScriptVault does not load remote application code into extension pages or the
+extension service worker. The Chrome ZIP packages extension UI, service worker,
+content bridge, offscreen code, shared utilities, and editor assets locally.
+User-installed script source, `@require` dependencies, script-search results,
+OAuth responses, and sync payloads are user-selected data/configuration flows.
+Installed script bodies are registered through `chrome.userScripts` and run in
+the browser userscript world, not as extension-page or service-worker logic.
+
+The full CWS review memo lives in
+`docs/cws-remote-code-compliance.md`. Before Chrome Web Store upload, run:
+
+```bash
+npm run cws:remote-code:check
+npm run cws:remote-code:check -- --target ScriptVault-vX.Y.Z.zip
+```
 
 ## Store listing permission justifications
 

@@ -71,6 +71,7 @@ and the regression test that pins it.
 | Release artifact parity gate                          | `scripts/check-release-artifacts.mjs`                                             | `npm run release:check` / `:public`                |
 | Storage rollback drill                                | `tests/storage-rollback-drill.test.js`                                            | `npm run release:rollback-drill`                   |
 | CWS publish tooling gate                              | `scripts/check-cws-publish-tooling.mjs`                                           | `npm run cws:check`                                |
+| CWS remote-code compliance gate                       | `scripts/check-cws-remote-code.mjs`, `docs/cws-remote-code-compliance.md`         | `npm run cws:remote-code:check`                    |
 | Store permission-copy parity                          | `scripts/check-permission-copy.mjs`                                               | `npm run store-copy:check`                         |
 | README claim parity (no deleted modules, no missing providers/files) | `scripts/check-readme-claims.mjs`                                | `npm run readme:check`                             |
 | Userstyle parser baseline                             | `modules/userstyles.js` `parseUserCSS`                                            | `tests/userstyle-compat-fixtures.test.js`          |

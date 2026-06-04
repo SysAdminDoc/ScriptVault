@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — CWS remote-code compliance gate
+
+- **Added a Chrome Web Store remote-code compliance packet.**
+  `docs/cws-remote-code-compliance.md` maps user-installed scripts,
+  `@require`, sandboxed editor, OAuth, script-search, and sync flows to their
+  allowed review buckets and states that extension pages/service worker do not
+  execute remote logic directly.
+- **Added a package scanner for remote-code execution patterns.**
+  `npm run cws:remote-code:check` now validates docs, CI wiring, and source
+  package inputs, and CI scans the generated `ScriptVault-vX.Y.Z.zip` after
+  `bash build.sh` for remote script tags, remote workers, remote imports, and
+  fetched-string eval/new Function patterns.
+
 ### 2026-06-04 — Plain-language readability gate
 
 - **Added a Flesch 60+ readability gate for high-impact UI copy.**
