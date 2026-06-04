@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-03 — Storage persistence prompt
+
+- **Persistent storage is requested before meaningful script writes.** The
+  background worker now asks `navigator.storage.persist()` once before script
+  installs, saves, imports, and updates.
+- **Writes remain non-blocking.** The persistence request records granted,
+  denied, unsupported, or error outcomes in `chrome.storage.local` and never
+  prevents the script write from continuing.
+
 ### 2026-06-03 — Script subscriptions
 
 - **Subscription feeds can queue curated script installs.** The Utilities panel

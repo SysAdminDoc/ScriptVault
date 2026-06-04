@@ -136,4 +136,57 @@ describe('QuotaManager runtime module', () => {
     expect(stored.sv_analytics_daily).toBeUndefined();
     expect(stored.perfHistory).toBeUndefined();
   });
+
+  it('requests persistent storage once before meaningful writes', async () => {
+    const persist = vi.fn().mockResolvedValue(true);
+    const persisted = vi.fn().mockResolvedValue(false);
+    Object.defineProperty(globalThis.navigator, 'storage', {
+      configurable: true,
+      value: { persisted, persist },
+    });
+
+    const first = await QuotaManager.ensurePersistentStorageForWrite({
+      reason: 'script-install',
+      bytes: 4096,
+    });
+    const second = await QuotaManager.ensurePersistentStorageForWrite({
+      reason: 'script-update',
+      bytes: 8192,
+    });
+    const stored = await chrome.storage.local.get('sv_storage_persistence');
+
+    expect(first).toMatchObject({
+      supported: true,
+      requested: true,
+      persisted: true,
+      granted: true,
+      reason: 'script-install',
+      bytes: 4096,
+    });
+    expect(second.reason).toBe('script-install');
+    expect(persisted).toHaveBeenCalledTimes(1);
+    expect(persist).toHaveBeenCalledTimes(1);
+    expect(stored.sv_storage_persistence).toMatchObject({ granted: true });
+  });
+
+  it('records unsupported persistence APIs without blocking writes', async () => {
+    Object.defineProperty(globalThis.navigator, 'storage', {
+      configurable: true,
+      value: {},
+    });
+
+    const status = await QuotaManager.ensurePersistentStorageForWrite({
+      reason: 'script-import',
+      bytes: 2048,
+    });
+
+    expect(status).toMatchObject({
+      supported: false,
+      requested: true,
+      persisted: false,
+      granted: false,
+      reason: 'script-import',
+      error: 'navigator.storage.persist is unavailable',
+    });
+  });
 });

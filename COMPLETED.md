@@ -50,6 +50,7 @@ phase.
 - [x] E-5 Playwright E2E for install + update + restore + sync flows (4 specs) — *Source: docs/archive/TODO.md Phase E; commit 793c585*
 - [x] E-6 ESM badge in dashboard script rows for `@module 1`, `@inject-into module`, and stored ESM bundle metadata — *Source: docs/archive/TODO.md Phase E + PASS3 EI-5; commit feat: show ESM dashboard badges*
 - [x] E-7 Script subscriptions (URL -> JSON list) authored from TypeScript, fetched through InternalHostGuard/_fetchTextBounded, and queued as review-only pending installs — *Source: docs/archive/TODO.md Phase E + PASS3 NF-6; commit feat: queue script subscriptions for review*
+- [x] E-8 `navigator.storage.persist()` requested once before meaningful script-data writes, with status recorded and writes left non-blocking — *Source: docs/archive/TODO.md Phase E; commit feat: request persistent storage before script writes*
 
 ## Stale / Obsolete Items
 

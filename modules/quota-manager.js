@@ -35,6 +35,7 @@ const QuotaManager = (() => {
   var QUOTA_UNLIMITED = 500 * 1024 * 1024;
   var WARNING_THRESHOLD = 0.85;
   var CRITICAL_THRESHOLD = 0.95;
+  var PERSISTENCE_STATUS_KEY = "sv_storage_persistence";
   var _resolvedQuota = null;
   function measureStoredBytes(value) {
     const serialized = JSON.stringify(value);
@@ -74,6 +75,73 @@ const QuotaManager = (() => {
     const percentage = quotaLimit > 0 ? bytesUsed / quotaLimit : 0;
     const level = percentage >= CRITICAL_THRESHOLD ? "critical" : percentage >= WARNING_THRESHOLD ? "warning" : "ok";
     return { bytesUsed, quota: quotaLimit, percentage, level };
+  }
+  function normalizePersistenceStatus(value) {
+    if (!value || typeof value !== "object") return null;
+    const record = value;
+    return {
+      supported: record.supported === true,
+      requested: record.requested === true,
+      persisted: record.persisted === true,
+      granted: record.granted === true,
+      checkedAt: typeof record.checkedAt === "number" ? record.checkedAt : 0,
+      reason: typeof record.reason === "string" ? record.reason : "",
+      bytes: typeof record.bytes === "number" ? record.bytes : 0,
+      error: typeof record.error === "string" ? record.error : ""
+    };
+  }
+  async function getPersistenceStatus() {
+    const data = await chrome.storage.local.get(PERSISTENCE_STATUS_KEY);
+    return normalizePersistenceStatus(data[PERSISTENCE_STATUS_KEY]);
+  }
+  async function savePersistenceStatus(status) {
+    await chrome.storage.local.set({ [PERSISTENCE_STATUS_KEY]: status });
+    return status;
+  }
+  async function ensurePersistentStorageForWrite(options = {}) {
+    const existing = await getPersistenceStatus();
+    if (existing?.requested && !options.force) return existing;
+    const reason = typeof options.reason === "string" && options.reason.trim() ? options.reason.trim() : "script-write";
+    const bytes = Math.max(0, Number(options.bytes || 0) || 0);
+    const now = Date.now();
+    const storageApi = typeof navigator !== "undefined" ? navigator.storage : void 0;
+    if (!storageApi?.persist) {
+      return await savePersistenceStatus({
+        supported: false,
+        requested: true,
+        persisted: false,
+        granted: false,
+        checkedAt: now,
+        reason,
+        bytes,
+        error: "navigator.storage.persist is unavailable"
+      });
+    }
+    try {
+      const alreadyPersisted = typeof storageApi.persisted === "function" ? await storageApi.persisted() : false;
+      const granted = alreadyPersisted ? true : await storageApi.persist();
+      return await savePersistenceStatus({
+        supported: true,
+        requested: true,
+        persisted: granted === true,
+        granted: granted === true,
+        checkedAt: Date.now(),
+        reason,
+        bytes,
+        error: ""
+      });
+    } catch (error) {
+      return await savePersistenceStatus({
+        supported: true,
+        requested: true,
+        persisted: false,
+        granted: false,
+        checkedAt: Date.now(),
+        reason,
+        bytes,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
   }
   async function getBreakdown() {
     const all = await chrome.storage.local.get(void 0);
@@ -237,6 +305,6 @@ const QuotaManager = (() => {
     }
     return result;
   }
-  var QuotaManager = { getUsage, getBreakdown, cleanup, autoCleanup };
+  var QuotaManager = { getUsage, getBreakdown, getPersistenceStatus, ensurePersistentStorageForWrite, cleanup, autoCleanup };
   return module.exports.default || module.exports.QuotaManager || module.exports;
 })();

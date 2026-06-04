@@ -11915,6 +11915,7 @@ const QuotaManager = (() => {
   var QUOTA_UNLIMITED = 500 * 1024 * 1024;
   var WARNING_THRESHOLD = 0.85;
   var CRITICAL_THRESHOLD = 0.95;
+  var PERSISTENCE_STATUS_KEY = "sv_storage_persistence";
   var _resolvedQuota = null;
   function measureStoredBytes(value) {
     const serialized = JSON.stringify(value);
@@ -11954,6 +11955,73 @@ const QuotaManager = (() => {
     const percentage = quotaLimit > 0 ? bytesUsed / quotaLimit : 0;
     const level = percentage >= CRITICAL_THRESHOLD ? "critical" : percentage >= WARNING_THRESHOLD ? "warning" : "ok";
     return { bytesUsed, quota: quotaLimit, percentage, level };
+  }
+  function normalizePersistenceStatus(value) {
+    if (!value || typeof value !== "object") return null;
+    const record = value;
+    return {
+      supported: record.supported === true,
+      requested: record.requested === true,
+      persisted: record.persisted === true,
+      granted: record.granted === true,
+      checkedAt: typeof record.checkedAt === "number" ? record.checkedAt : 0,
+      reason: typeof record.reason === "string" ? record.reason : "",
+      bytes: typeof record.bytes === "number" ? record.bytes : 0,
+      error: typeof record.error === "string" ? record.error : ""
+    };
+  }
+  async function getPersistenceStatus() {
+    const data = await chrome.storage.local.get(PERSISTENCE_STATUS_KEY);
+    return normalizePersistenceStatus(data[PERSISTENCE_STATUS_KEY]);
+  }
+  async function savePersistenceStatus(status) {
+    await chrome.storage.local.set({ [PERSISTENCE_STATUS_KEY]: status });
+    return status;
+  }
+  async function ensurePersistentStorageForWrite(options = {}) {
+    const existing = await getPersistenceStatus();
+    if (existing?.requested && !options.force) return existing;
+    const reason = typeof options.reason === "string" && options.reason.trim() ? options.reason.trim() : "script-write";
+    const bytes = Math.max(0, Number(options.bytes || 0) || 0);
+    const now = Date.now();
+    const storageApi = typeof navigator !== "undefined" ? navigator.storage : void 0;
+    if (!storageApi?.persist) {
+      return await savePersistenceStatus({
+        supported: false,
+        requested: true,
+        persisted: false,
+        granted: false,
+        checkedAt: now,
+        reason,
+        bytes,
+        error: "navigator.storage.persist is unavailable"
+      });
+    }
+    try {
+      const alreadyPersisted = typeof storageApi.persisted === "function" ? await storageApi.persisted() : false;
+      const granted = alreadyPersisted ? true : await storageApi.persist();
+      return await savePersistenceStatus({
+        supported: true,
+        requested: true,
+        persisted: granted === true,
+        granted: granted === true,
+        checkedAt: Date.now(),
+        reason,
+        bytes,
+        error: ""
+      });
+    } catch (error) {
+      return await savePersistenceStatus({
+        supported: true,
+        requested: true,
+        persisted: false,
+        granted: false,
+        checkedAt: Date.now(),
+        reason,
+        bytes,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
   }
   async function getBreakdown() {
     const all = await chrome.storage.local.get(void 0);
@@ -12117,7 +12185,7 @@ const QuotaManager = (() => {
     }
     return result;
   }
-  var QuotaManager = { getUsage, getBreakdown, cleanup, autoCleanup };
+  var QuotaManager = { getUsage, getBreakdown, getPersistenceStatus, ensurePersistentStorageForWrite, cleanup, autoCleanup };
   return module.exports.default || module.exports.QuotaManager || module.exports;
 })();
 
@@ -14018,6 +14086,8 @@ const UpdateSystem = {
       script.settings._registrationError = regError.message || 'Registration failed after update';
     }
 
+    await ensurePersistentStorageForScriptWrite('script-update', newCode);
+
     // Persist to storage after registration attempt
     await ScriptStorage.set(scriptId, script);
 
@@ -15069,6 +15139,21 @@ async function exportAllScripts(options = {}) {
   };
 }
 
+async function ensurePersistentStorageForScriptWrite(reason, code = '') {
+  try {
+    if (typeof QuotaManager === 'undefined' || typeof QuotaManager.ensurePersistentStorageForWrite !== 'function') {
+      return null;
+    }
+    const bytes = typeof code === 'string'
+      ? new TextEncoder().encode(code).length
+      : 0;
+    return await QuotaManager.ensurePersistentStorageForWrite({ reason, bytes });
+  } catch (error) {
+    console.warn('[ScriptVault] Persistent storage request failed:', error?.message || error);
+    return null;
+  }
+}
+
 // Phase 39.31 — WECG #935 pre-emptive string clamping. Chrome's
 // chrome.notifications.create() silently truncates `title` past ~100 chars
 // and `message` past ~300 chars; chrome.contextMenus.create() truncates
@@ -15309,6 +15394,7 @@ async function importScripts(data, options = {}) {
       } else if (script.versionHistory && Array.isArray(script.versionHistory)) {
         importEntry.versionHistory = script.versionHistory;
       }
+      await ensurePersistentStorageForScriptWrite('script-import', importEntry.code);
       await ScriptStorage.set(scriptId, importEntry);
       if (importStorage) {
         const storedValues = script.storage && typeof script.storage === 'object' ? script.storage : {};
@@ -15602,6 +15688,7 @@ async function importFromZip(zipData, options = {}) {
           });
         }
 
+        await ensurePersistentStorageForScriptWrite(existing ? 'zip-import-update' : 'zip-import', script.code);
         await ScriptStorage.set(scriptId, script);
 
         // Import stored values
@@ -15630,6 +15717,7 @@ async function importFromZip(zipData, options = {}) {
           if (parsed.error) continue;
           
           const scriptId = generateId();
+          await ensurePersistentStorageForScriptWrite('zip-import', code);
           await ScriptStorage.set(scriptId, {
             id: scriptId,
             code: code,
@@ -15957,6 +16045,7 @@ async function handleMessage(message, sender) {
         };
         if (versionHistory.length > 0) script.versionHistory = versionHistory;
         
+        await ensurePersistentStorageForScriptWrite(existing ? 'script-save' : 'script-create', script.code);
         await ScriptStorage.set(id, script);
         await updateBadge();
 
@@ -16016,6 +16105,7 @@ async function handleMessage(message, sender) {
           updatedAt: Date.now()
         };
         
+        await ensurePersistentStorageForScriptWrite('script-create', script.code);
         await ScriptStorage.set(id, script);
         await updateBadge();
 
@@ -16827,6 +16917,7 @@ async function handleMessage(message, sender) {
             );
             if (existing && !data.overwrite) { results.skipped++; continue; }
             const id = existing?.id || generateId();
+            await ensurePersistentStorageForScriptWrite(existing ? 'tampermonkey-import-update' : 'tampermonkey-import', code);
             await ScriptStorage.set(id, {
               id, code, meta: parsed.meta,
               enabled: true,
@@ -19873,6 +19964,7 @@ async function installFromCode(code, receiptOptions = {}) {
     }
     if (versionHistory.length > 0) script.versionHistory = versionHistory;
 
+    await ensurePersistentStorageForScriptWrite(existing ? 'script-reinstall' : 'script-install', script.code);
     await ScriptStorage.set(id, script);
     await registerAllScripts(true);
     await updateBadge();
