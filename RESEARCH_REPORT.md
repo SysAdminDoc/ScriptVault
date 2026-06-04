@@ -16,6 +16,12 @@ share the internal-host preflight and redirect guard. `ROADMAP.md` remains the
 only active checkbox queue; `RESEARCH_FEATURE_PLAN.md` is a companion synthesis
 without an independent checklist.
 
+2026-06-04 build-lane credential-export update: vault JSON/cloud exports and
+managed backup ZIPs now redact sync credentials by default, expose separate
+credential opt-ins with risk copy, stamp settings credential metadata, and keep
+restore/import from overwriting live WebDAV/OAuth/S3 credentials unless archive
+metadata and user confirmation both opt in.
+
 2026-06-04 implementation refresh: the 2026-06-03 findings still stand, but the
 currently-breaking dependency item is now closed. `web-ext` was bumped to
 `^10.3.0`, `npm ls tmp` resolves `tmp@0.2.6`, and

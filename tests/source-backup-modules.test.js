@@ -104,7 +104,11 @@ function makeScript(id, name) {
   };
 }
 
-async function loadFreshBackupSchedulerHarness(scripts, valuesByScript = {}) {
+async function loadFreshBackupSchedulerHarness(
+  scripts,
+  valuesByScript = {},
+  settings = { enabled: true, layout: 'dark' },
+) {
   vi.resetModules();
 
   const fakeFflate = makeFakeFflate();
@@ -120,7 +124,8 @@ async function loadFreshBackupSchedulerHarness(scripts, valuesByScript = {}) {
     getAll: vi.fn(async (scriptId) => structuredClone(valuesByScript[scriptId] || {})),
   };
   const SettingsManager = {
-    get: vi.fn(async () => ({ enabled: true, layout: 'dark' })),
+    get: vi.fn(async () => structuredClone(settings)),
+    set: vi.fn(async () => structuredClone(settings)),
   };
   const FolderStorage = {
     cache: null,
@@ -148,10 +153,15 @@ async function loadFreshBackupSchedulerHarness(scripts, valuesByScript = {}) {
     BackupScheduler: mod.BackupScheduler,
     fakeFflate,
     importFromZip,
+    SettingsManager,
   };
 }
 
-async function loadFreshImportExportHarness(existingScripts = [], storedValuesByScript = {}) {
+async function loadFreshImportExportHarness(
+  existingScripts = [],
+  storedValuesByScript = {},
+  settings = { enabled: true },
+) {
   vi.resetModules();
 
   const fakeFflate = makeFakeFflate();
@@ -180,7 +190,7 @@ async function loadFreshImportExportHarness(existingScripts = [], storedValuesBy
     }),
   };
   const SettingsManager = {
-    get: vi.fn(async () => ({ enabled: true })),
+    get: vi.fn(async () => structuredClone(settings)),
     set: vi.fn(async () => ({ enabled: true })),
   };
 
@@ -196,6 +206,7 @@ async function loadFreshImportExportHarness(existingScripts = [], storedValuesBy
     fakeFflate,
     ScriptStorage,
     ScriptValues,
+    SettingsManager,
     scriptCache,
     valueCache,
   };
@@ -261,6 +272,112 @@ describe('source backup scheduler module', () => {
     expect(chrome.notifications.create).toHaveBeenCalledWith(
       expect.objectContaining({
         iconUrl: 'chrome-extension://test-extension-id/images/icon128.png',
+      }),
+    );
+  });
+
+  it('redacts credential-bearing global settings and stamps backup metadata', async () => {
+    const script = makeScript('script_alpha', 'Alpha Script');
+    const { BackupScheduler, fakeFflate } = await loadFreshBackupSchedulerHarness(
+      [script],
+      {},
+      {
+        enabled: true,
+        theme: 'dark',
+        webdavUsername: 'operator',
+        webdavPassword: 'secret',
+        dropboxToken: 'dropbox-access',
+        s3AccessKeyId: 'AKIA_TEST',
+        s3SecretKey: 's3-secret',
+      },
+    );
+
+    await chrome.storage.local.set({
+      backupSchedulerSettings: {
+        enabled: true,
+        scheduleType: 'manual',
+        hour: 3,
+        dayOfWeek: 0,
+        maxBackups: 5,
+        notifyOnSuccess: false,
+        notifyOnFailure: true,
+        warnOnStorageFull: false,
+      },
+    });
+
+    const result = await BackupScheduler.createBackup('manual');
+    const backups = await chrome.storage.local.get('autoBackups');
+    const [backup] = backups.autoBackups;
+    const archivedFiles = fakeFflate.unzipSync(base64ToBytes(backup.data));
+    const settings = JSON.parse(fakeFflate.strFromU8(archivedFiles['global-settings.json']));
+    const metadata = JSON.parse(fakeFflate.strFromU8(archivedFiles['global-settings.metadata.json']));
+    const inspected = await BackupScheduler.inspectBackup(result.backupId);
+
+    expect(settings).toMatchObject({ enabled: true, theme: 'dark' });
+    expect(settings).not.toHaveProperty('webdavPassword');
+    expect(settings).not.toHaveProperty('dropboxToken');
+    expect(settings).not.toHaveProperty('s3SecretKey');
+    expect(metadata.settingsCredentialsIncluded).toBe(false);
+    expect(metadata.redactedSettingsCredentialKeys).toEqual(
+      expect.arrayContaining(['webdavPassword', 'dropboxToken', 's3SecretKey']),
+    );
+    expect(inspected.settingsCredentialsIncluded).toBe(false);
+    expect(inspected.redactedSettingsCredentialKeys).toEqual(
+      expect.arrayContaining(['webdavPassword', 'dropboxToken', 's3SecretKey']),
+    );
+  });
+
+  it('requires backup metadata plus restore opt-in before replacing sync credentials', async () => {
+    const { BackupScheduler, SettingsManager } = await loadFreshBackupSchedulerHarness(
+      [makeScript('script_alpha', 'Alpha')],
+      {},
+      {
+        theme: 'dark',
+        webdavPassword: 'archive-secret',
+        s3SecretKey: 'archive-s3-secret',
+      },
+    );
+    await chrome.storage.local.set({
+      backupSchedulerSettings: {
+        enabled: true,
+        scheduleType: 'manual',
+        hour: 3,
+        dayOfWeek: 0,
+        maxBackups: 5,
+        includeSettingsCredentials: true,
+        notifyOnSuccess: false,
+        notifyOnFailure: true,
+        warnOnStorageFull: false,
+      },
+    });
+
+    const created = await BackupScheduler.createBackup('manual');
+    SettingsManager.set.mockClear();
+
+    const guarded = await BackupScheduler.restoreBackup(created.backupId, {
+      recordReceipt: false,
+    });
+    expect(guarded.settingsCredentialsRestored).toBe(false);
+    expect(guarded.skippedSettingsCredentialKeys).toEqual(
+      expect.arrayContaining(['webdavPassword', 's3SecretKey']),
+    );
+    expect(SettingsManager.set).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        webdavPassword: expect.anything(),
+        s3SecretKey: expect.anything(),
+      }),
+    );
+
+    SettingsManager.set.mockClear();
+    const restored = await BackupScheduler.restoreBackup(created.backupId, {
+      importSettingsCredentials: true,
+      recordReceipt: false,
+    });
+    expect(restored.settingsCredentialsRestored).toBe(true);
+    expect(SettingsManager.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webdavPassword: 'archive-secret',
+        s3SecretKey: 'archive-s3-secret',
       }),
     );
   });
@@ -357,6 +474,68 @@ describe('source backup scheduler module', () => {
 });
 
 describe('source import/export module', () => {
+  it('redacts credential-bearing settings from JSON exports by default', async () => {
+    const harness = await loadFreshImportExportHarness(
+      [makeScript('script_exported', 'Exported Script')],
+      {},
+      {
+        enabled: true,
+        theme: 'dark',
+        webdavPassword: 'secret',
+        googleDriveToken: 'oauth-access',
+        s3SecretKey: 's3-secret',
+      },
+    );
+
+    const exported = await harness.exportAllScripts({ includeSettings: true });
+
+    expect(exported.settings).toMatchObject({ enabled: true, theme: 'dark' });
+    expect(exported.settings).not.toHaveProperty('webdavPassword');
+    expect(exported.settings).not.toHaveProperty('googleDriveToken');
+    expect(exported.settings).not.toHaveProperty('s3SecretKey');
+    expect(exported.settingsCredentialsIncluded).toBe(false);
+    expect(exported.redactedSettingsCredentialKeys).toEqual(
+      expect.arrayContaining(['webdavPassword', 'googleDriveToken', 's3SecretKey']),
+    );
+  });
+
+  it('restores JSON settings credentials only with archive metadata and import opt-in', async () => {
+    const harness = await loadFreshImportExportHarness();
+    const data = {
+      scripts: [],
+      settings: {
+        theme: 'light',
+        webdavPassword: 'archive-secret',
+        s3SecretKey: 'archive-s3-secret',
+      },
+      settingsCredentialsIncluded: true,
+    };
+
+    const guarded = await harness.importScripts(data, { importSettings: true });
+    expect(guarded.settingsCredentialsImported).toBe(false);
+    expect(guarded.skippedSettingsCredentialKeys).toEqual(
+      expect.arrayContaining(['webdavPassword', 's3SecretKey']),
+    );
+    expect(harness.SettingsManager.set).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({
+        webdavPassword: expect.anything(),
+        s3SecretKey: expect.anything(),
+      }),
+    );
+
+    const restored = await harness.importScripts(data, {
+      importSettings: true,
+      importSettingsCredentials: true,
+    });
+    expect(restored.settingsCredentialsImported).toBe(true);
+    expect(harness.SettingsManager.set).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        webdavPassword: 'archive-secret',
+        s3SecretKey: 'archive-s3-secret',
+      }),
+    );
+  });
+
   it('exports script ids into ScriptVault zip metadata', async () => {
     const script = makeScript('script_exported', 'Exported Script');
     const harness = await loadFreshImportExportHarness(

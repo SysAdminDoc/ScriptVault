@@ -26,23 +26,22 @@ boundaries: sync endpoints, backup/export credentials, archive intake,
 per-script settings sync, and per-script network scope. Those items protect the
 product promise and reduce store-review risk.
 
+Recently completed hardening now reflected in `ROADMAP.md`: WebDAV/S3 sync
+endpoints use the internal-host guard, and credential-bearing settings are
+redacted or separately gated for JSON/cloud exports and managed backups.
+
 Current top priorities:
 
-1. Guard user-configured WebDAV/S3 sync endpoints with the same internal-host
-   policy used for GM_xhr and script-resource fetches, while preserving an
-   explicit opt-in for local/self-hosted endpoints.
-2. Redact credential-bearing settings from manual exports and scheduled backups
-   by default, then add a separate explicit credential-export path.
-3. Replace raw ZIP/JSON backup intake with a bounded archive helper that
+1. Replace raw ZIP/JSON backup intake with a bounded archive helper that
    enforces decompressed-size, entry-count, entry-size, and script-code caps.
-4. Partition sync-safe script settings from device-local state before cloud
+2. Partition sync-safe script settings from device-local state before cloud
    upload and merge.
-5. Add a real coverage gate for source/runtime code and automate dependency
+3. Add a real coverage gate for source/runtime code and automate dependency
    freshness so CI catches drift before advisories or store-review failures.
-6. Finish AMO readiness gaps: source-review provenance for packaged minified
+4. Finish AMO readiness gaps: source-review provenance for packaged minified
    libraries and a clear decision on Firefox for Android claims versus smoke
    coverage.
-7. Clean up dashboard reachability and stale affordances so documented features
+5. Clean up dashboard reachability and stale affordances so documented features
    match what a user can actually reach.
 
 ## Evidence Reviewed
@@ -298,6 +297,8 @@ Success criteria:
 ### 2. Credential-Safe Export And Backup
 
 Priority: P1.
+Status: implemented on 2026-06-04; `ROADMAP.md` and `CHANGELOG.md` are the
+authoritative completion records.
 
 Problem: manual export and scheduled backups can include global settings, while
 global settings include WebDAV passwords, OAuth tokens, refresh tokens, S3 keys,
@@ -716,6 +717,7 @@ non-authoritative research snapshot kept for context; update completion state in
     endpoint regression test.
 
 - **P1 - Redact credential-bearing settings from exports and backups**
+  - Status: completed in `ROADMAP.md` on 2026-06-04.
   - Priority: P1.
   - Why: current settings export/backup can include provider secrets and tokens.
   - Evidence: `src/types/settings.ts`, `src/background/core.ts`,

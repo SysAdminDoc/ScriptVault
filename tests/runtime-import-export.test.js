@@ -78,7 +78,7 @@ function makeScript(id, name) {
 function extractRuntimeImportExportCode() {
   const parserStart = backgroundCoreCode.indexOf('function parseUserscript');
   const parserEnd = backgroundCoreCode.indexOf('// URL Matching', parserStart);
-  const importStart = backgroundCoreCode.indexOf('async function exportAllScripts');
+  const importStart = backgroundCoreCode.indexOf('const SETTINGS_CREDENTIAL_KEYS');
   const importEnd = backgroundCoreCode.indexOf('// Message Handlers', importStart);
 
   if ([parserStart, parserEnd, importStart, importEnd].some(index => index === -1)) {
@@ -88,7 +88,7 @@ function extractRuntimeImportExportCode() {
   return `${backgroundCoreCode.slice(parserStart, parserEnd)}\n${backgroundCoreCode.slice(importStart, importEnd)}`;
 }
 
-function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}) {
+function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, settings = { enabled: true }) {
   const fakeFflate = makeFakeFflate();
   let generatedIdCounter = 1;
   const scriptCache = new Map(existingScripts.map(script => [script.id, structuredClone(script)]));
@@ -111,7 +111,7 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}) {
     }),
   };
   const SettingsManager = {
-    get: vi.fn(async () => ({ enabled: true })),
+    get: vi.fn(async () => structuredClone(settings)),
     set: vi.fn(),
   };
   const registerAllScripts = vi.fn().mockResolvedValue();
@@ -126,7 +126,7 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}) {
     'registerAllScripts',
     'updateBadge',
     'generateId',
-    `${extractRuntimeImportExportCode()}; return { exportToZip, importFromZip, importScripts };`,
+    `${extractRuntimeImportExportCode()}; return { exportAllScripts, exportToZip, importFromZip, importScripts };`,
   );
 
   return {
@@ -135,12 +135,86 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}) {
     generateId,
     ScriptStorage,
     ScriptValues,
+    SettingsManager,
     scriptCache,
     valueCache,
   };
 }
 
 describe('runtime import/export archive identity', () => {
+  it('redacts credential-bearing settings from JSON exports unless explicitly included', async () => {
+    const script = makeScript('script_exported', 'Exported Script');
+    const harness = createRuntimeHarness(
+      [script],
+      {},
+      {
+        enabled: true,
+        theme: 'dark',
+        webdavPassword: 'secret',
+        googleDriveToken: 'oauth-access',
+        s3SecretKey: 's3-secret',
+      },
+    );
+
+    const redacted = await harness.exportAllScripts({ includeSettings: true });
+    expect(redacted.settings).toMatchObject({ enabled: true, theme: 'dark' });
+    expect(redacted.settings).not.toHaveProperty('webdavPassword');
+    expect(redacted.settings).not.toHaveProperty('googleDriveToken');
+    expect(redacted.settings).not.toHaveProperty('s3SecretKey');
+    expect(redacted.settingsCredentialsIncluded).toBe(false);
+    expect(redacted.redactedSettingsCredentialKeys).toEqual(
+      expect.arrayContaining(['webdavPassword', 'googleDriveToken', 's3SecretKey']),
+    );
+
+    const included = await harness.exportAllScripts({
+      includeSettings: true,
+      includeSettingsCredentials: true,
+    });
+    expect(included.settingsCredentialsIncluded).toBe(true);
+    expect(included.settings).toMatchObject({
+      webdavPassword: 'secret',
+      googleDriveToken: 'oauth-access',
+      s3SecretKey: 's3-secret',
+    });
+  });
+
+  it('restores JSON settings credentials only when archive metadata and import option both opt in', async () => {
+    const harness = createRuntimeHarness();
+    const data = {
+      scripts: [],
+      settings: {
+        theme: 'light',
+        webdavPassword: 'archive-secret',
+        s3SecretKey: 'archive-s3-secret',
+      },
+      settingsCredentialsIncluded: true,
+    };
+
+    const guarded = await harness.importScripts(data, { importSettings: true });
+    expect(guarded.settingsCredentialsImported).toBe(false);
+    expect(guarded.skippedSettingsCredentialKeys).toEqual(
+      expect.arrayContaining(['webdavPassword', 's3SecretKey']),
+    );
+    expect(harness.SettingsManager.set).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({
+        webdavPassword: expect.anything(),
+        s3SecretKey: expect.anything(),
+      }),
+    );
+
+    const restored = await harness.importScripts(data, {
+      importSettings: true,
+      importSettingsCredentials: true,
+    });
+    expect(restored.settingsCredentialsImported).toBe(true);
+    expect(harness.SettingsManager.set).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        webdavPassword: 'archive-secret',
+        s3SecretKey: 'archive-s3-secret',
+      }),
+    );
+  });
+
   it('writes stable script IDs into runtime ZIP metadata', async () => {
     const script = makeScript('script_exported', 'Exported Script');
     const harness = createRuntimeHarness([script], { script_exported: { draft: true } });

@@ -433,11 +433,17 @@ interface RevokeSyncProvider {
 interface CloudExport {
   action: 'cloudExport';
   provider: string;
+  includeSettings?: boolean;
+  includeStorage?: boolean;
+  includeSettingsCredentials?: boolean;
 }
 
 interface CloudImport {
   action: 'cloudImport';
   provider: string;
+  importSettings?: boolean;
+  importStorage?: boolean;
+  importSettingsCredentials?: boolean;
 }
 
 interface CloudStatus {
@@ -467,6 +473,11 @@ interface EasyCloudStatus {
 
 interface ExportAll {
   action: 'exportAll';
+  options?: {
+    includeSettings?: boolean;
+    includeStorage?: boolean;
+    includeSettingsCredentials?: boolean;
+  };
 }
 
 interface ImportAll {

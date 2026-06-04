@@ -70,6 +70,7 @@ interface BackupSchedulerSettings {
   hour: number;
   dayOfWeek: number;
   maxBackups: number;
+  includeSettingsCredentials: boolean;
   notifyOnSuccess: boolean;
   notifyOnFailure: boolean;
   warnOnStorageFull: boolean;
@@ -89,6 +90,8 @@ interface BackupEntry {
   hasFolders?: boolean;
   hasWorkspaces?: boolean;
   hasScriptStorage?: boolean;
+  settingsCredentialsIncluded?: boolean;
+  redactedSettingsCredentialKeys?: string[];
   size: number;
   sizeFormatted: string;
   data: string;
@@ -109,6 +112,8 @@ interface RestoreResult {
   restoredSettings?: boolean;
   restoredFolders?: boolean;
   restoredWorkspaces?: boolean;
+  settingsCredentialsRestored?: boolean;
+  skippedSettingsCredentialKeys?: string[];
   errors?: Array<{ name: string; error: string }>;
   receiptId?: string;
   error?: string;
@@ -150,6 +155,8 @@ interface InspectedBackupManifest {
   scriptsWithStorageCount: number;
   hasGlobalSettings: boolean;
   settingsKeyCount: number;
+  settingsCredentialsIncluded: boolean;
+  redactedSettingsCredentialKeys: string[];
   hasFolders: boolean;
   folderCount: number;
   folders: InspectedFolder[];
@@ -162,6 +169,7 @@ interface InspectedBackupManifest {
 interface RestoreOptions {
   selective?: boolean;
   scriptIds?: string[];
+  importSettingsCredentials?: boolean;
   recordReceipt?: boolean;
   sourceLabel?: string;
 }
@@ -241,6 +249,8 @@ interface VerifyBackupResult {
     optionsParseErrors: number;
     storageParseErrors: number;
     globalSettingsValid: boolean;
+    settingsCredentialsIncluded: boolean;
+    redactedSettingsCredentialKeyCount: number;
     foldersValid: boolean;
     workspacesValid: boolean;
   };
@@ -294,10 +304,31 @@ const DEFAULT_SETTINGS: BackupSchedulerSettings = {
   hour: 3,
   dayOfWeek: 0,
   maxBackups: 5,
+  includeSettingsCredentials: false,
   notifyOnSuccess: true,
   notifyOnFailure: true,
   warnOnStorageFull: true,
 };
+
+const GLOBAL_SETTINGS_METADATA_FILE = 'global-settings.metadata.json';
+const SETTINGS_CREDENTIAL_KEYS = [
+  'webdavUsername',
+  'webdavPassword',
+  'googleDriveToken',
+  'googleDriveRefreshToken',
+  'dropboxToken',
+  'dropboxRefreshToken',
+  'onedriveToken',
+  'onedriveRefreshToken',
+  's3AccessKeyId',
+  's3SecretKey',
+] as const;
+
+interface GlobalSettingsMetadata {
+  schemaVersion: number;
+  settingsCredentialsIncluded: boolean;
+  redactedSettingsCredentialKeys: string[];
+}
 
 // ---------------------------------------------------------------------------
 // Internal state
@@ -322,6 +353,103 @@ function _formatBytes(bytes: number): string {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / 1048576).toFixed(2) + ' MB';
+}
+
+function _cloneSettingsForTransfer(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object') return {};
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value) as Record<string, unknown>;
+    } catch (_) {
+      // Fall through.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+  } catch (_) {
+    return { ...(value as Record<string, unknown>) };
+  }
+}
+
+function _redactSettingsCredentials(
+  settings: unknown,
+  options: { includeCredentials?: boolean } = {},
+): {
+  settings: Record<string, unknown>;
+  metadata: GlobalSettingsMetadata;
+} {
+  const includeCredentials = options.includeCredentials === true;
+  const sanitized = _cloneSettingsForTransfer(settings);
+  const redactedSettingsCredentialKeys: string[] = [];
+  if (!includeCredentials) {
+    for (const key of SETTINGS_CREDENTIAL_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(sanitized, key)) {
+        delete sanitized[key];
+        redactedSettingsCredentialKeys.push(key);
+      }
+    }
+  }
+  return {
+    settings: sanitized,
+    metadata: {
+      schemaVersion: 1,
+      settingsCredentialsIncluded: includeCredentials,
+      redactedSettingsCredentialKeys,
+    },
+  };
+}
+
+function _prepareSettingsForRestore(
+  settings: unknown,
+  options: { allowCredentials?: boolean } = {},
+): {
+  settings: Record<string, unknown>;
+  settingsCredentialsRestored: boolean;
+  skippedSettingsCredentialKeys: string[];
+} {
+  const allowCredentials = options.allowCredentials === true;
+  const sanitized = _cloneSettingsForTransfer(settings);
+  const skippedSettingsCredentialKeys: string[] = [];
+  if (!allowCredentials) {
+    for (const key of SETTINGS_CREDENTIAL_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(sanitized, key)) {
+        delete sanitized[key];
+        skippedSettingsCredentialKeys.push(key);
+      }
+    }
+  }
+  return {
+    settings: sanitized,
+    settingsCredentialsRestored: allowCredentials,
+    skippedSettingsCredentialKeys,
+  };
+}
+
+function _readSettingsMetadata(
+  unzipped: Record<string, Uint8Array>,
+  backup: Partial<BackupEntry> = {},
+): GlobalSettingsMetadata {
+  const fallback: GlobalSettingsMetadata = {
+    schemaVersion: 1,
+    settingsCredentialsIncluded: backup.settingsCredentialsIncluded === true,
+    redactedSettingsCredentialKeys: Array.isArray(backup.redactedSettingsCredentialKeys)
+      ? backup.redactedSettingsCredentialKeys.filter((key): key is string => typeof key === 'string')
+      : [],
+  };
+  const metadataFile = unzipped[GLOBAL_SETTINGS_METADATA_FILE];
+  if (!metadataFile) return fallback;
+  try {
+    const parsed = JSON.parse(fflate.strFromU8(metadataFile)) as Partial<GlobalSettingsMetadata>;
+    return {
+      schemaVersion: Number(parsed.schemaVersion || 1),
+      settingsCredentialsIncluded: parsed.settingsCredentialsIncluded === true,
+      redactedSettingsCredentialKeys: Array.isArray(parsed.redactedSettingsCredentialKeys)
+        ? parsed.redactedSettingsCredentialKeys.filter((key): key is string => typeof key === 'string')
+        : [],
+    };
+  } catch (_) {
+    return fallback;
+  }
 }
 
 function _zipBytesToBase64(zipData: Uint8Array): string {
@@ -410,13 +538,17 @@ async function _saveSettings(
  * Collect all data that should be in a backup and produce a base64 ZIP
  * by reusing the same fflate-based pattern as exportToZip.
  */
-async function _collectBackupData(): Promise<{
+async function _collectBackupData(
+  options: { includeSettingsCredentials?: boolean } = {},
+): Promise<{
   base64: string;
   scriptCount: number;
   hasGlobalSettings: boolean;
   hasFolders: boolean;
   hasWorkspaces: boolean;
   hasScriptStorage: boolean;
+  settingsCredentialsIncluded: boolean;
+  redactedSettingsCredentialKeys: string[];
 }> {
   // Scripts — code + metadata + settings
   const scripts: Script[] = await ScriptStorage.getAll();
@@ -484,10 +616,22 @@ async function _collectBackupData(): Promise<{
 
   // Global settings
   let hasGlobalSettings = false;
+  let settingsMetadata: GlobalSettingsMetadata = {
+    schemaVersion: 1,
+    settingsCredentialsIncluded: options.includeSettingsCredentials === true,
+    redactedSettingsCredentialKeys: [],
+  };
   try {
     const globalSettings = await SettingsManager.get();
+    const settingsExport = _redactSettingsCredentials(globalSettings, {
+      includeCredentials: options.includeSettingsCredentials === true,
+    });
+    settingsMetadata = settingsExport.metadata;
     files['global-settings.json'] = fflate.strToU8(
-      JSON.stringify(globalSettings, null, 2),
+      JSON.stringify(settingsExport.settings, null, 2),
+    );
+    files[GLOBAL_SETTINGS_METADATA_FILE] = fflate.strToU8(
+      JSON.stringify(settingsMetadata, null, 2),
     );
     hasGlobalSettings = true;
   } catch (_) {
@@ -531,6 +675,8 @@ async function _collectBackupData(): Promise<{
     hasFolders,
     hasWorkspaces,
     hasScriptStorage,
+    settingsCredentialsIncluded: settingsMetadata.settingsCredentialsIncluded,
+    redactedSettingsCredentialKeys: settingsMetadata.redactedSettingsCredentialKeys,
   };
 }
 
@@ -776,6 +922,7 @@ export const BackupScheduler = {
    */
   async createBackup(reason: BackupReason = 'manual'): Promise<BackupResult> {
     try {
+      const settings: BackupSchedulerSettings = await _loadSettings();
       const {
         base64,
         scriptCount,
@@ -783,9 +930,12 @@ export const BackupScheduler = {
         hasFolders,
         hasWorkspaces,
         hasScriptStorage,
-      } = await _collectBackupData();
+        settingsCredentialsIncluded,
+        redactedSettingsCredentialKeys,
+      } = await _collectBackupData({
+        includeSettingsCredentials: settings.includeSettingsCredentials === true,
+      });
       const sizeBytes: number = Math.round(base64.length * 0.75); // approximate binary size
-      const settings: BackupSchedulerSettings = await _loadSettings();
 
       const backup: BackupEntry = {
         id: _generateId(),
@@ -797,6 +947,8 @@ export const BackupScheduler = {
         hasFolders,
         hasWorkspaces,
         hasScriptStorage,
+        settingsCredentialsIncluded,
+        redactedSettingsCredentialKeys,
         size: sizeBytes,
         sizeFormatted: _formatBytes(sizeBytes),
         data: base64,
@@ -859,6 +1011,10 @@ export const BackupScheduler = {
         hasFolders: !!b.hasFolders,
         hasWorkspaces: !!b.hasWorkspaces,
         hasScriptStorage: !!b.hasScriptStorage,
+        settingsCredentialsIncluded: b.settingsCredentialsIncluded === true,
+        redactedSettingsCredentialKeys: Array.isArray(b.redactedSettingsCredentialKeys)
+          ? b.redactedSettingsCredentialKeys.slice()
+          : [],
         size: b.size,
         sizeFormatted: b.sizeFormatted,
       }),
@@ -909,7 +1065,10 @@ export const BackupScheduler = {
       let restoredSettings = false;
       let restoredFolders = false;
       let restoredWorkspaces = false;
+      let settingsCredentialsRestored = false;
+      let skippedSettingsCredentialKeys: string[] = [];
       const errors: Array<{ name: string; error: string }> = [];
+      const settingsMetadata = _readSettingsMetadata(unzipped, backup);
 
       // --- Restore scripts ---
       const userScripts: string[] = fileNames.filter((n: string) =>
@@ -1032,8 +1191,15 @@ export const BackupScheduler = {
             const restoredSettingsData = JSON.parse(
               fflate.strFromU8(globalSettingsFile),
             ) as Record<string, unknown>;
-            await SettingsManager.set(restoredSettingsData as never);
+            const settingsRestore = _prepareSettingsForRestore(restoredSettingsData, {
+              allowCredentials:
+                options.importSettingsCredentials === true &&
+                settingsMetadata.settingsCredentialsIncluded === true,
+            });
+            await SettingsManager.set(settingsRestore.settings as never);
             restoredSettings = true;
+            settingsCredentialsRestored = settingsRestore.settingsCredentialsRestored;
+            skippedSettingsCredentialKeys = settingsRestore.skippedSettingsCredentialKeys;
           } catch (settingsErr: unknown) {
             errors.push({
               name: 'global-settings.json',
@@ -1100,6 +1266,8 @@ export const BackupScheduler = {
         restoredSettings,
         restoredFolders,
         restoredWorkspaces,
+        settingsCredentialsRestored,
+        skippedSettingsCredentialKeys,
         errors,
       };
 
@@ -1213,6 +1381,7 @@ export const BackupScheduler = {
       const hasFolders = fileNames.includes('folders.json');
       const hasWorkspaces = fileNames.includes('workspaces.json');
       const hasScriptStorage = fileNames.some((name) => name.endsWith('.storage.json'));
+      const settingsMetadata = _readSettingsMetadata(unzipped);
       if (scriptFiles.length === 0 && !hasGlobalSettings && !hasFolders && !hasWorkspaces) {
         return {
           success: false,
@@ -1231,6 +1400,8 @@ export const BackupScheduler = {
         hasFolders,
         hasWorkspaces,
         hasScriptStorage,
+        settingsCredentialsIncluded: settingsMetadata.settingsCredentialsIncluded,
+        redactedSettingsCredentialKeys: settingsMetadata.redactedSettingsCredentialKeys,
         size: sizeBytes,
         sizeFormatted: _formatBytes(sizeBytes),
         data,
@@ -1343,6 +1514,7 @@ export const BackupScheduler = {
         return 0;
       };
       const globalSettings = parseJsonFile('global-settings.json');
+      const settingsMetadata = _readSettingsMetadata(unzipped, backup);
       const folderData = parseJsonFile('folders.json');
       const workspaceData = parseJsonFile('workspaces.json') as
         | { list?: unknown[]; active?: string }
@@ -1402,6 +1574,8 @@ export const BackupScheduler = {
         scriptsWithStorageCount,
         hasGlobalSettings: !!unzipped['global-settings.json'],
         settingsKeyCount: countEntries(globalSettings),
+        settingsCredentialsIncluded: settingsMetadata.settingsCredentialsIncluded,
+        redactedSettingsCredentialKeys: settingsMetadata.redactedSettingsCredentialKeys,
         hasFolders: !!unzipped['folders.json'],
         folderCount: countEntries(folderData),
         folders: folderList.map((folder): InspectedFolder => {
@@ -1602,6 +1776,7 @@ export const BackupScheduler = {
       let globalSettingsValid = true;
       let foldersValid = true;
       let workspacesValid = true;
+      const settingsMetadata = _readSettingsMetadata(unzipped, backup);
       if (unzipped['global-settings.json']) {
         try {
           JSON.parse(fflate.strFromU8(unzipped['global-settings.json']));
@@ -1655,6 +1830,8 @@ export const BackupScheduler = {
           optionsParseErrors,
           storageParseErrors,
           globalSettingsValid,
+          settingsCredentialsIncluded: settingsMetadata.settingsCredentialsIncluded,
+          redactedSettingsCredentialKeyCount: settingsMetadata.redactedSettingsCredentialKeys.length,
           foldersValid,
           workspacesValid,
         },
@@ -1676,6 +1853,8 @@ export const BackupScheduler = {
           optionsParseErrors: 0,
           storageParseErrors: 0,
           globalSettingsValid: false,
+          settingsCredentialsIncluded: false,
+          redactedSettingsCredentialKeyCount: 0,
           foldersValid: false,
           workspacesValid: false,
         },

@@ -4,6 +4,20 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Export and backup credential gating
+
+- **Redacted sync credentials from portable vault settings by default.** JSON
+  exports, cloud backups, and managed backup ZIPs now omit WebDAV credentials,
+  OAuth tokens, and S3 access keys unless the user enables a separate credential
+  opt-in.
+- **Stamped backup metadata for credential restore safety.** Managed backup ZIPs
+  now include `global-settings.metadata.json`, and JSON/cloud exports carry
+  `settingsCredentialsIncluded` plus redacted key names so restore can prove
+  whether credentials were intentionally archived.
+- **Kept live credentials local on restore by default.** JSON/cloud imports and
+  full backup restores preserve current credential settings unless archive
+  metadata and the explicit restore checkbox both opt in.
+
 ### 2026-06-04 — Sync endpoint internal-host guard
 
 - **Blocked WebDAV and S3 sync SSRF by default.** User-configured sync

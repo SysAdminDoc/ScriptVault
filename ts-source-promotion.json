@@ -29,6 +29,7 @@
     {
       "runtime": "modules/storage.js",
       "sources": ["src/modules/storage.ts"],
+      "generatedArtifacts": ["src/config/settings-defaults.json"],
       "status": "promoted",
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs; now uses the v3 IndexedDB storage engine."
     },

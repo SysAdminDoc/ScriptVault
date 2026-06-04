@@ -402,6 +402,11 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/elements\.btnCreateBackup\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnRefreshBackups\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnSaveBackupSettings\?\.\s*addEventListener\('click', async event =>/);
+    expect(dashboardHtml).toContain('id="exportIncludeSettingsCredentials"');
+    expect(dashboardHtml).toContain('id="backupIncludeSettingsCredentials"');
+    expect(dashboardJs).toMatch(/includeSettingsCredentials:\s*includeSettings && !!elements\.exportIncludeSettingsCredentials\?\.checked/);
+    expect(dashboardJs).toMatch(/importSettingsCredentials:\s*transfer\.includeSettingsCredentials/);
+    expect(dashboardJs).toMatch(/id="restoreSettingsCredentials"/);
     expect(dashboardJs).toMatch(/elements\.btnRepairRuntime\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnSavePublicApiOrigins\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnInstallFromUrl\?\.\s*addEventListener\('click', async event =>/);
