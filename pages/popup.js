@@ -59,7 +59,8 @@
         btnDashboard: document.getElementById('btnDashboard'),
         setupWarning: document.getElementById('setupWarning'),
         btnOpenExtSettings: document.getElementById('btnOpenExtSettings'),
-        headerCount: document.getElementById('headerCount')
+        headerCount: document.getElementById('headerCount'),
+        pendingUpdatesBadge: document.getElementById('pendingUpdatesBadge')
     };
 
     // Initialize
@@ -70,6 +71,7 @@
         await getCurrentTab();
         await loadAllScripts();
         await loadPageScripts();
+        await refreshPendingUpdatesBadge();
         setPopupListLoading(false);
         setupEventListeners();
         updateEnabledState();
@@ -1248,6 +1250,18 @@
         window.close();
     }
 
+    async function openUpdatesDashboard() {
+        try {
+            await chrome.runtime.sendMessage({
+                action: 'openDashboard',
+                data: { tab: 'updates' }
+            });
+        } catch (error) {
+            await chrome.tabs.create({ url: chrome.runtime.getURL('pages/dashboard.html#tab=updates') });
+        }
+        window.close();
+    }
+
     // Create new script - opens dashboard new script editor
     async function createNewScript() {
         try {
@@ -1369,20 +1383,35 @@
     // Check for updates
     async function checkForUpdates() {
         try {
-            const result = await chrome.runtime.sendMessage({ action: 'checkUpdates' });
+            const result = await chrome.runtime.sendMessage({ action: 'queueUpdates', source: 'popup' });
             const error = getRuntimeError(result, 'Update check failed');
             if (error) throw new Error(error);
-            const updateCount = Array.isArray(result)
-                ? result.length
-                : (Array.isArray(result?.updates) ? result.updates.length : 0);
+            const updateCount = Number(result?.queued || 0);
+            await refreshPendingUpdatesBadge(result?.pendingUpdates);
             showPopupToast(
                 updateCount > 0
-                    ? `Updates available for ${numberFormatter.format(updateCount)} script${updateCount === 1 ? '' : 's'}`
+                    ? `${numberFormatter.format(updateCount)} update${updateCount === 1 ? '' : 's'} queued`
                     : 'All scripts are up to date'
             );
         } catch (error) {
             console.error('Failed to check updates:', error);
             showPopupToast(error.message || 'Update check failed', 'error');
+        }
+    }
+
+    async function refreshPendingUpdatesBadge(existingUpdates = null) {
+        try {
+            const updates = Array.isArray(existingUpdates)
+                ? existingUpdates
+                : await chrome.runtime.sendMessage({ action: 'getPendingUpdates' });
+            const count = Array.isArray(updates) ? updates.length : 0;
+            if (elements.pendingUpdatesBadge) {
+                elements.pendingUpdatesBadge.hidden = count === 0;
+                elements.pendingUpdatesBadge.textContent = numberFormatter.format(count);
+                elements.pendingUpdatesBadge.setAttribute('aria-label', `${numberFormatter.format(count)} queued update${count === 1 ? '' : 's'}`);
+            }
+        } catch (_error) {
+            if (elements.pendingUpdatesBadge) elements.pendingUpdatesBadge.hidden = true;
         }
     }
 
@@ -1502,6 +1531,9 @@
             runBusyControl(elements.btnCheckUpdates, async () => {
                 showPopupToast('Checking for updates…');
                 await checkForUpdates();
+                if (!elements.pendingUpdatesBadge?.hidden) {
+                    await openUpdatesDashboard();
+                }
             });
         });
 

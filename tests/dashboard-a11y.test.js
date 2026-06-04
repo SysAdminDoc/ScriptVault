@@ -111,6 +111,7 @@ describe("dashboard accessibility markup", () => {
     expect(tablist).not.toBeNull();
     expect(tabs.map((tab) => tab.dataset.tab)).toEqual([
       "scripts",
+      "updates",
       "settings",
       "utilities",
       "trash",
@@ -130,6 +131,7 @@ describe("dashboard accessibility markup", () => {
     });
 
     expect(doc.getElementById("scriptsPanel")?.hasAttribute("hidden")).toBe(false);
+    expect(doc.getElementById("updatesPanel")?.hasAttribute("hidden")).toBe(true);
     expect(doc.getElementById("settingsPanel")?.hasAttribute("hidden")).toBe(true);
     expect(doc.getElementById("utilitiesPanel")?.hasAttribute("hidden")).toBe(true);
     expect(doc.getElementById("trashPanel")?.hasAttribute("hidden")).toBe(true);

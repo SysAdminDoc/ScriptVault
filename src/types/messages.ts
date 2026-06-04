@@ -254,6 +254,33 @@ interface ApplyUpdate {
   sourceUrl?: string;
 }
 
+interface QueueUpdates {
+  action: 'queueUpdates';
+  scriptId?: string;
+  updates?: Array<{ id: string; name?: string; currentVersion?: string; newVersion?: string; code: string; sourceUrl?: string }>;
+  source?: string;
+}
+
+interface GetPendingUpdates {
+  action: 'getPendingUpdates';
+}
+
+interface ClearPendingUpdates {
+  action: 'clearPendingUpdates';
+  scriptId?: string;
+}
+
+interface ApplyPendingUpdate {
+  action: 'applyPendingUpdate';
+  scriptId: string;
+  force?: boolean;
+}
+
+interface ApplySafePendingUpdates {
+  action: 'applySafePendingUpdates';
+  scriptIds?: string[];
+}
+
 interface GetVersionHistory {
   action: 'getVersionHistory';
   scriptId: string;
@@ -1009,7 +1036,9 @@ export type BackgroundMessage =
   // Per-script settings
   | GetScriptSettings | SetScriptSettings
   // Updates
-  | CheckUpdates | ForceUpdate | ApplyUpdate | GetVersionHistory | RollbackScript
+  | CheckUpdates | ForceUpdate | ApplyUpdate | QueueUpdates | GetPendingUpdates
+  | ClearPendingUpdates | ApplyPendingUpdate | ApplySafePendingUpdates
+  | GetVersionHistory | RollbackScript
   // Cloud sync
   | SyncNow | TestSync | ConnectSyncProvider | DisconnectSyncProvider
   | GetSyncProviderStatus | SyncProviderHealth | SyncDryRunPreview | RevokeSyncProvider
@@ -1101,6 +1130,16 @@ type SuccessOrError<T = Record<string, unknown>> =
   | ({ success: true } & T)
   | ErrorResponse;
 
+interface RecentUpdateResponseItem {
+  id: string;
+  name: string;
+  previousVersion: string;
+  newVersion: string;
+  dependencyChanges?: ScriptTrustReceipt['dependencyChanges'];
+  permissionChanges?: ScriptTrustReceipt['permissionChanges'];
+  appliedAt: number;
+}
+
 /**
  * Phase 40.13 — Maps message types to their response types.
  *
@@ -1137,7 +1176,12 @@ export interface ResponseMap {
   forceUpdate: SuccessOrError<{ updated: boolean }>;
   checkUpdates: SuccessOrError<{ updates: { id: string; name: string; newVersion: string }[] }>;
   applyUpdate: SuccessOrError<{ script?: Script }>;
-  getRecentUpdates: { id: string; name: string; previousVersion: string; newVersion: string; appliedAt: number }[];
+  queueUpdates: SuccessOrError<{ queued: number; pendingUpdates: unknown[]; safeCount: number; reviewCount: number }>;
+  getPendingUpdates: unknown[];
+  clearPendingUpdates: SuccessOrError<{ cleared?: number | 'all'; pendingUpdates?: unknown[] }>;
+  applyPendingUpdate: SuccessOrError<{ script?: Script }>;
+  applySafePendingUpdates: SuccessOrError<{ applied: number; skipped: number; failed: number; pendingUpdates: unknown[] }>;
+  getRecentUpdates: RecentUpdateResponseItem[];
   clearRecentUpdates: SuccessResponse;
 
   // ── Trash ──────────────────────────────────────────────────────────

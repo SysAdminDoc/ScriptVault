@@ -346,6 +346,7 @@
       pageScripts = Array.isArray(matchedRes) ? matchedRes : Array.from(matchedRes ?? []);
       renderPageScripts();
       renderAllScripts();
+      await refreshPendingUpdatesChip();
     } catch (e) {
       console.error('[SP] refresh error:', e);
       // Show error state instead of blank panel
@@ -774,9 +775,32 @@
     chrome.runtime.sendMessage({ action: 'openDashboard', scriptId: id }).catch(() => {});
   }
 
+  async function refreshPendingUpdatesChip(existingUpdates = null) {
+    const chip = $('btnPendingUpdates');
+    if (!chip) return;
+    try {
+      const updates = Array.isArray(existingUpdates)
+        ? existingUpdates
+        : await chrome.runtime.sendMessage({ action: 'getPendingUpdates' });
+      const count = Array.isArray(updates) ? updates.length : 0;
+      chip.hidden = count === 0;
+      chip.textContent = numberFormatter.format(count);
+      chip.setAttribute('aria-label', `${numberFormatter.format(count)} queued update${count === 1 ? '' : 's'}`);
+    } catch (_error) {
+      chip.hidden = true;
+    }
+  }
+
+  function openUpdatesDashboard() {
+    chrome.runtime.sendMessage({ action: 'openDashboard', data: { tab: 'updates' } }).catch(() => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('pages/dashboard.html#tab=updates') });
+    });
+  }
+
   // ── Event listeners ───────────────────────────────────────────────────────
   function setupEventListeners() {
     $('btnRefresh').addEventListener('click', refresh);
+    $('btnPendingUpdates')?.addEventListener('click', openUpdatesDashboard);
     $('btnDashboard').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }).catch(() => {}));
     $('btnNewScript').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard', data: { newScript: true } }).catch(() => {}));
     $('btnFindScripts').addEventListener('click', () => {

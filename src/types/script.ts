@@ -143,7 +143,7 @@ export interface ScriptTrustReceiptPermissionChangeSet {
 
 export interface ScriptTrustReceipt {
   schemaVersion: 1;
-  operation: 'install' | 'update' | 'manual-update' | 'auto-update' | 'reinstall' | 'downgrade' | 'local-save' | 'rollback-point';
+  operation: 'install' | 'update' | 'manual-update' | 'auto-update' | 'pending-update' | 'reinstall' | 'downgrade' | 'local-save' | 'rollback-point';
   createdAt: number;
   source: {
     installUrl: string;

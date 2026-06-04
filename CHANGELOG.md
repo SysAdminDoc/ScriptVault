@@ -4,6 +4,25 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-03 — Pending update inbox queue
+
+- **Auto-update now defaults to notify-only review.** Scheduled checks queue
+  available updates instead of applying them by default. A new
+  `autoUpdateMode` setting lets users opt into applying safe updates without
+  review.
+- **Updates tab added to the dashboard.** The queue shows pending update counts,
+  safe/review buckets, source host, line-diff summary, trust receipt changes,
+  install, remove, diff, and rollback actions.
+- **Popup and side panel surface queued updates.** Both entry points show a
+  queued-update badge/chip and open the dashboard Updates tab for review.
+- **Safe bulk updates are separated from review-required updates.** Bulk update
+  flows apply only safe queued updates when requested; updates that add
+  permissions, change source identity, or alter external dependencies stay in
+  the queue.
+- **Regression coverage added.** `tests/pending-update-queue.test.js` covers
+  notify-only default behavior, safe-only application, and review classification
+  for permission-expanding updates. The full suite is 1127 tests.
+
 ### 2026-06-02 — Deep audit hardening pass (wave 2)
 
 - **`@match` ReDoS fixed.** The `@match` path-glob → regex conversion did not

@@ -34,6 +34,7 @@
             signingKeys: {},
             lastRuntimeRepairAt: 0
         },
+        pendingUpdates: [],
         backups: [],
         backupSettings: null
     };
@@ -167,7 +168,7 @@
     const SCRIPT_SEARCH_DEBOUNCE_MS = 90;
     const SCRIPT_TABLE_VIRTUAL_ROW_HEIGHT = 72;
     const SCRIPT_TABLE_VIRTUAL_MAX_ROWS = 60;
-    const DASHBOARD_TABS = ['scripts', 'settings', 'utilities', 'trash', 'store', 'help'];
+    const DASHBOARD_TABS = ['scripts', 'updates', 'settings', 'utilities', 'trash', 'store', 'help'];
     const OAUTH_SYNC_PROVIDERS = ['googledrive', 'dropbox', 'onedrive'];
     let modalLastFocusedElement = null;
     let modalFocusManaged = false;
@@ -1206,6 +1207,7 @@
         elements.dashboardTabs = document.querySelectorAll('.tm-tab[role="tab"]');
         elements.mainPanels = {
             scripts: document.getElementById('scriptsPanel'),
+            updates: document.getElementById('updatesPanel'),
             settings: document.getElementById('settingsPanel'),
             utilities: document.getElementById('utilitiesPanel'),
             trash: document.getElementById('trashPanel'),
@@ -1232,6 +1234,15 @@
         elements.workspaceInstalledStat = document.getElementById('workspaceInstalledStat');
         elements.workspaceActiveStat = document.getElementById('workspaceActiveStat');
         elements.workspaceStorageStat = document.getElementById('workspaceStorageStat');
+        elements.dashboardUpdatesBadge = document.getElementById('dashboardUpdatesBadge');
+        elements.pendingUpdatesList = document.getElementById('pendingUpdatesList');
+        elements.pendingUpdatesCount = document.getElementById('pendingUpdatesCount');
+        elements.pendingUpdatesSafeCount = document.getElementById('pendingUpdatesSafeCount');
+        elements.pendingUpdatesReviewCount = document.getElementById('pendingUpdatesReviewCount');
+        elements.pendingUpdatesSummary = document.getElementById('pendingUpdatesSummary');
+        elements.btnRefreshPendingUpdates = document.getElementById('btnRefreshPendingUpdates');
+        elements.btnApplySafePendingUpdates = document.getElementById('btnApplySafePendingUpdates');
+        elements.btnClearPendingUpdates = document.getElementById('btnClearPendingUpdates');
         
         // Bulk Actions (Tampermonkey-style)
         elements.bulkSelectAll = document.getElementById('bulkSelectAll');
@@ -1732,6 +1743,7 @@
         loadWorkspaces();
         loadBackups();
         loadBackupSettings();
+        await loadPendingUpdates({ render: false });
         await checkUserScriptsAvailability();
 
         // v2.0 Module Initialization
@@ -1808,6 +1820,10 @@
 
     async function lazyInitTab(tabName) {
         if (_tabInited.has(tabName)) return;
+        if (tabName === 'updates') {
+            _tabInited.add(tabName);
+            return;
+        }
         if (typeof LazyLoader === 'undefined') return;
 
         // Mark as inited BEFORE the await to prevent duplicate concurrent inits
@@ -2098,6 +2114,176 @@
         );
     }
 
+    function setPendingUpdateBadge(count) {
+        if (!elements.dashboardUpdatesBadge) return;
+        const value = Number(count || 0);
+        elements.dashboardUpdatesBadge.hidden = value === 0;
+        elements.dashboardUpdatesBadge.textContent = numberFormatter.format(value);
+    }
+
+    function getPendingUpdateCounts() {
+        const queued = state.pendingUpdates.length;
+        const safe = state.pendingUpdates.filter(item => item.safeToApply).length;
+        return {
+            queued,
+            safe,
+            review: queued - safe
+        };
+    }
+
+    async function loadPendingUpdates({ render = true } = {}) {
+        try {
+            const updates = await chrome.runtime.sendMessage({ action: 'getPendingUpdates' });
+            state.pendingUpdates = Array.isArray(updates) ? updates : [];
+        } catch (_error) {
+            state.pendingUpdates = [];
+        }
+        if (render) renderPendingUpdates();
+        else setPendingUpdateBadge(state.pendingUpdates.length);
+        return state.pendingUpdates;
+    }
+
+    function renderPendingUpdates() {
+        const counts = getPendingUpdateCounts();
+        setPendingUpdateBadge(counts.queued);
+        if (elements.pendingUpdatesCount) elements.pendingUpdatesCount.textContent = numberFormatter.format(counts.queued);
+        if (elements.pendingUpdatesSafeCount) elements.pendingUpdatesSafeCount.textContent = numberFormatter.format(counts.safe);
+        if (elements.pendingUpdatesReviewCount) elements.pendingUpdatesReviewCount.textContent = numberFormatter.format(counts.review);
+        if (elements.pendingUpdatesSummary) {
+            elements.pendingUpdatesSummary.textContent = counts.queued === 0
+                ? 'No queued updates.'
+                : `${numberFormatter.format(counts.safe)} safe, ${numberFormatter.format(counts.review)} requiring review.`;
+        }
+        if (elements.btnApplySafePendingUpdates) {
+            elements.btnApplySafePendingUpdates.disabled = counts.safe === 0;
+        }
+        if (elements.btnClearPendingUpdates) {
+            elements.btnClearPendingUpdates.disabled = counts.queued === 0;
+        }
+        if (!elements.pendingUpdatesList) return;
+        if (counts.queued === 0) {
+            elements.pendingUpdatesList.innerHTML = '<div class="pending-updates-empty">No queued updates.</div>';
+            return;
+        }
+
+        elements.pendingUpdatesList.innerHTML = state.pendingUpdates.map(renderPendingUpdateCard).join('');
+        elements.pendingUpdatesList.querySelectorAll('[data-update-action]').forEach(button => {
+            button.addEventListener('click', () => handlePendingUpdateAction(button));
+        });
+    }
+
+    function renderPendingUpdateCard(update) {
+        const safe = update.safeToApply === true;
+        const reasons = Array.isArray(update.reviewReasons) && update.reviewReasons.length
+            ? update.reviewReasons.join(', ')
+            : 'No permission, source, or dependency expansion.';
+        const diff = update.diff || {};
+        const source = update.sourceInfo || update.trustReceipt?.source || {};
+        const sourceHost = source.installHost || '';
+        return `
+            <article class="pending-update-card${safe ? '' : ' review-required'}" data-update-id="${escapeHtml(update.id)}">
+                <div class="pending-update-head">
+                    <div class="pending-update-title">
+                        <strong>${escapeHtml(update.name || update.id || 'Unnamed script')}</strong>
+                        <div class="pending-update-meta">v${escapeHtml(update.currentVersion || '?')} -> v${escapeHtml(update.newVersion || '?')}</div>
+                    </div>
+                    <span class="pending-update-status${safe ? '' : ' review'}">${safe ? 'Safe' : 'Review'}</span>
+                </div>
+                <div class="pending-update-reasons">${escapeHtml(reasons)}</div>
+                <div class="pending-update-source">${sourceHost ? `Source: ${escapeHtml(sourceHost)}` : 'Source unavailable'}</div>
+                <div class="pending-update-diff" aria-label="Update diff summary">
+                    <span>+${numberFormatter.format(diff.addedLines || 0)}</span>
+                    <span>-${numberFormatter.format(diff.removedLines || 0)}</span>
+                    <span>${numberFormatter.format(diff.nextLines || 0)} lines</span>
+                </div>
+                <div class="pending-update-actions">
+                    <button type="button" class="toolbar-btn" data-update-action="diff" data-update-id="${escapeHtml(update.id)}">Diff</button>
+                    <button type="button" class="toolbar-btn primary" data-update-action="install" data-update-id="${escapeHtml(update.id)}">Install</button>
+                    <button type="button" class="toolbar-btn" data-update-action="rollback" data-update-id="${escapeHtml(update.id)}" ${update.rollback?.available ? '' : 'disabled'}>Rollback</button>
+                    <button type="button" class="toolbar-btn" data-update-action="remove" data-update-id="${escapeHtml(update.id)}">Remove</button>
+                </div>
+            </article>
+        `;
+    }
+
+    async function handlePendingUpdateAction(button) {
+        const scriptId = button.dataset.updateId;
+        const action = button.dataset.updateAction;
+        const update = state.pendingUpdates.find(item => item.id === scriptId);
+        if (!update) return;
+        button.disabled = true;
+        try {
+            if (action === 'diff') {
+                const script = state.scripts.find(item => item.id === scriptId);
+                showDiffView(script?.code || '', update.code || '', `v${update.currentVersion || '?'}`, `v${update.newVersion || '?'}`);
+                return;
+            }
+            if (action === 'install') {
+                const response = await chrome.runtime.sendMessage({ action: 'applyPendingUpdate', scriptId, force: true });
+                if (response?.error) throw new Error(response.error);
+                await Promise.all([loadScripts(), loadPendingUpdates({ render: false })]);
+                renderPendingUpdates();
+                updateStats();
+                showToast(`${update.name || 'Script'} updated to v${update.newVersion || '?'}`, 'success');
+                return;
+            }
+            if (action === 'rollback') {
+                if (!update.rollback?.available || !Number.isInteger(update.rollback.historyIndex)) return;
+                const response = await chrome.runtime.sendMessage({ action: 'rollbackScript', scriptId, index: update.rollback.historyIndex });
+                if (response?.error) throw new Error(response.error);
+                await loadScripts();
+                showToast('Rolled back', 'success');
+                return;
+            }
+            if (action === 'remove') {
+                const response = await chrome.runtime.sendMessage({ action: 'clearPendingUpdates', scriptId });
+                if (response?.error) throw new Error(response.error);
+                state.pendingUpdates = Array.isArray(response.pendingUpdates) ? response.pendingUpdates : [];
+                renderPendingUpdates();
+            }
+        } catch (error) {
+            showToast(error?.message || 'Update action failed', 'error');
+        } finally {
+            if (button.isConnected) button.disabled = false;
+        }
+    }
+
+    async function checkAndQueueUpdates(scriptIds = null, { applySafe = false } = {}) {
+        const ids = Array.isArray(scriptIds) ? scriptIds : null;
+        if (!ids) {
+            const queueResponse = await chrome.runtime.sendMessage({ action: 'queueUpdates', source: 'dashboard-check' });
+            if (queueResponse?.error) throw new Error(queueResponse.error);
+            state.pendingUpdates = Array.isArray(queueResponse.pendingUpdates) ? queueResponse.pendingUpdates : [];
+        } else {
+            for (const scriptId of ids) {
+                const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId });
+                if (updates?.error) throw new Error(updates.error);
+                if (Array.isArray(updates) && updates.length > 0) {
+                    const queueResponse = await chrome.runtime.sendMessage({ action: 'queueUpdates', updates, source: 'dashboard-bulk' });
+                    if (queueResponse?.error) throw new Error(queueResponse.error);
+                    state.pendingUpdates = Array.isArray(queueResponse.pendingUpdates) ? queueResponse.pendingUpdates : state.pendingUpdates;
+                }
+            }
+        }
+
+        let applyResult = null;
+        if (applySafe) {
+            applyResult = await chrome.runtime.sendMessage({ action: 'applySafePendingUpdates', scriptIds: ids });
+            if (applyResult?.error) throw new Error(applyResult.error);
+            if (Array.isArray(applyResult?.pendingUpdates)) {
+                state.pendingUpdates = applyResult.pendingUpdates;
+            }
+        }
+        await loadPendingUpdates({ render: false });
+        renderPendingUpdates();
+        return {
+            queued: state.pendingUpdates.length,
+            applied: applyResult?.applied || 0,
+            skipped: applyResult?.skipped || 0,
+            failed: applyResult?.failed || 0
+        };
+    }
+
     // Phase 39.10 — runtime "Allow User Scripts" self-diagnosis.
     // Ask the background worker for the canonical live probe so popup,
     // dashboard, support snapshots, and repair all agree on Chrome's current
@@ -2304,7 +2490,7 @@
         
         // Userscript Update
         if (elements.settingsUpdateDisabled) elements.settingsUpdateDisabled.checked = s.updateDisabled || false;
-        if (elements.settingsSilentUpdate) elements.settingsSilentUpdate.checked = s.silentUpdate !== false;
+        if (elements.settingsSilentUpdate) elements.settingsSilentUpdate.checked = s.autoUpdateMode === 'apply-safe';
         if (elements.settingsCheckInterval) elements.settingsCheckInterval.value = s.checkInterval || '24';
         if (elements.settingsNotifyHideAfter) elements.settingsNotifyHideAfter.value = s.notifyHideAfter || '15';
         
@@ -4811,19 +4997,23 @@
             }
 
             case 'update':
-                await runBulkScriptOperation(ids, {
-                    action,
-                    progressTitle: `Checking updates for ${ids.length} scripts…`,
-                    task: async scriptId => {
-                        const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId });
-                        if (updates?.error) throw new Error(updates.error);
-                        if (!Array.isArray(updates) || updates.length === 0) {
-                            return { skipped: true, reason: 'Already up to date' };
-                        }
-                        const response = await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId, code: updates[0].code, sourceUrl: updates[0].sourceUrl || '' });
-                        if (response?.error) throw new Error(response.error);
-                    }
-                });
+                showProgress(`Checking updates for ${ids.length} scripts...`);
+                updateProgress(0, ids.length, 'Scanning selected scripts...');
+                try {
+                    const result = await checkAndQueueUpdates(ids, { applySafe: true });
+                    await loadScripts();
+                    updateStats();
+                    updateProgress(ids.length, ids.length, 'Update queue refreshed');
+                    hideProgress();
+                    await switchTab('updates');
+                    showToast(
+                        `${numberFormatter.format(result.applied)} safe applied; ${numberFormatter.format(getPendingUpdateCounts().queued)} queued`,
+                        'success'
+                    );
+                } catch (error) {
+                    hideProgress();
+                    showToast(error?.message || 'Bulk update failed', 'error');
+                }
                 break;
 
             case 'reset':
@@ -8546,23 +8736,58 @@
         document.getElementById('btnNewFolder')?.addEventListener('click', createFolder);
         elements.btnImportScript?.addEventListener('click', importScript);
         elements.btnCheckUpdates?.addEventListener('click', async () => {
-            showProgress('Checking for updates…');
-            updateProgress(0, 1, 'Scanning all scripts…');
+            showProgress('Checking for updates...');
+            updateProgress(0, 1, 'Scanning all scripts...');
             try {
-                const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates' });
-                if (updates && updates.length > 0) {
-                    for (let i = 0; i < updates.length; i++) {
-                        updateProgress(i + 1, updates.length, `Updating ${updates[i].name || updates[i].id} (${i + 1}/${updates.length})`);
-                        await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId: updates[i].id, code: updates[i].code, sourceUrl: updates[i].sourceUrl || '' });
-                    }
-                    await loadScripts();
-                    hideProgress();
-                    showToast(`${updates.length} script${updates.length > 1 ? 's' : ''} updated`, 'success');
-                } else {
-                    hideProgress();
-                    showToast('All scripts up to date', 'success');
-                }
-            } catch (e) { hideProgress(); showToast('Update check failed', 'error'); }
+                await checkAndQueueUpdates();
+                hideProgress();
+                await switchTab('updates');
+                const counts = getPendingUpdateCounts();
+                showToast(
+                    counts.queued > 0
+                        ? `${numberFormatter.format(counts.queued)} update${counts.queued === 1 ? '' : 's'} queued`
+                        : 'All scripts up to date',
+                    counts.queued > 0 ? 'info' : 'success'
+                );
+            } catch (e) {
+                hideProgress();
+                showToast('Update check failed', 'error');
+            }
+        });
+
+        elements.btnRefreshPendingUpdates?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, async () => {
+                await checkAndQueueUpdates();
+                const counts = getPendingUpdateCounts();
+                showToast(
+                    counts.queued > 0
+                        ? `${numberFormatter.format(counts.queued)} update${counts.queued === 1 ? '' : 's'} queued`
+                        : 'All scripts up to date',
+                    counts.queued > 0 ? 'info' : 'success'
+                );
+            }, { busyLabel: 'Checking...' });
+        });
+
+        elements.btnApplySafePendingUpdates?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, async () => {
+                const result = await chrome.runtime.sendMessage({ action: 'applySafePendingUpdates' });
+                if (result?.error) throw new Error(result.error);
+                if (Array.isArray(result?.pendingUpdates)) state.pendingUpdates = result.pendingUpdates;
+                await loadScripts();
+                renderPendingUpdates();
+                updateStats();
+                showToast(`${numberFormatter.format(result?.applied || 0)} safe update${result?.applied === 1 ? '' : 's'} applied`, 'success');
+            }, { busyLabel: 'Applying...' });
+        });
+
+        elements.btnClearPendingUpdates?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, async () => {
+                const result = await chrome.runtime.sendMessage({ action: 'clearPendingUpdates' });
+                if (result?.error) throw new Error(result.error);
+                state.pendingUpdates = [];
+                renderPendingUpdates();
+                showToast('Update queue cleared', 'success');
+            }, { busyLabel: 'Clearing...' });
         });
 
         // Find Scripts
@@ -9089,7 +9314,7 @@
             
             // Userscript Update
             settingsUpdateDisabled: ['updateDisabled', 'checked'],
-            settingsSilentUpdate: ['silentUpdate', 'checked'],
+            settingsSilentUpdate: ['autoUpdateMode', 'checked', checked => checked ? 'apply-safe' : 'notify'],
             settingsCheckInterval: ['checkInterval', 'value', v => parseInt(v) || 24],
             settingsNotifyHideAfter: ['notifyHideAfter', 'value', v => parseInt(v) || 0],
 
@@ -10229,7 +10454,7 @@
                 importScript();
                 return;
             }
-            // Alt+1-6 — switch dashboard tabs
+            // Alt+1-7 — switch dashboard tabs
             if (e.altKey && !ctrl && e.key >= '1' && e.key <= String(DASHBOARD_TABS.length)) {
                 e.preventDefault();
                 const idx = parseInt(e.key) - 1;
@@ -11475,6 +11700,7 @@
         if (updateRoute) {
             setDashboardHash(nextTab === 'scripts' ? '' : `tab=${nextTab}`);
         }
+        if (nextTab === 'updates') loadPendingUpdates();
         if (nextTab === 'trash') loadTrash();
         if (nextTab === 'utilities') {
             refreshUtilitiesDiagnostics().catch(error => {
