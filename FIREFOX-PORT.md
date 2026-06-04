@@ -43,11 +43,11 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
   - **Decision:** Phase 1 keeps the existing iframe adapter for Chromium/local builds and ships Firefox AMO builds with a deterministic textarea fallback. Direct Monaco packaging remains a Phase 4 polish path after a pruned bundle can satisfy AMO lint.
   - **Shipped 2026-06-04:** `editor-sandbox.html` posts `monaco-load-error` when `lib/monaco/` is absent, and `monaco-adapter.js` immediately hides the iframe, preserves pending code, binds textarea input events, focuses the fallback, and reports `isMonaco: false`.
   - **Current gate:** `build-firefox.sh` intentionally omits `lib/monaco/` because AMO's linter rejects the bundled TypeScript worker as too large to parse. The dashboard now falls back immediately to the textarea adapter in Firefox AMO builds.
-- [ ] **Build + temporary install test.**
+- [x] **Build + temporary install test.**
   - `npm run firefox:lint` (builds a lintable `build-firefox/`, runs `web-ext lint`, and writes `firefox-artifacts/web-ext-lint.json`)
   - `npm run firefox:package` (builds, lints, writes `firefox-artifacts/scriptvault-firefox-v<version>.zip`, and writes `firefox-artifacts/scriptvault-firefox-source-v<version>.zip`)
-  - Load in Firefox Nightly: `about:debugging#/runtime/this-firefox → Load Temporary Add-on → select .xpi`
-  - Record the error console output. Each error becomes a Phase 1 checkbox.
+  - `npm run smoke:firefox` (geckodriver temporary sideload; opens dashboard/popup; saves, toggles, and runs a smoke userscript on a local HTTP target)
+  - **Shipped 2026-06-04:** Firefox Developer Edition 151.0b10 installed `firefox-artifacts/scriptvault-firefox-v3.11.0.zip`, opened dashboard and popup, saved/toggled `ScriptVault Firefox Smoke`, and verified `document.documentElement.dataset.scriptvaultFirefoxSmoke === 'ok'` on a local `http://127.0.0.1` target page. The smoke asserts the Firefox optional `userScripts` permission setup path; headless WebDriver grants the optional permission through Firefox chrome context after confirming the ScriptVault setup button is present.
 
 **Done-criteria:** dashboard opens, popup opens, a test userscript can be created, saved, toggled on, and runs on a target page. Cloud sync and side panel can be broken.
 
@@ -167,6 +167,15 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - `editor-sandbox.html` now posts `monaco-load-error` when the local Monaco loader is missing. `monaco-adapter.js` consumes that message and activates the textarea fallback immediately instead of waiting for the 15-second timeout.
 - The textarea fallback now preserves the cached value, binds `input` events back through the dashboard change listeners, supports focus, and reports `isMonaco: false`.
 - Focused verification: `npm test -- tests/monaco-firefox-fallback.test.js tests/search-corpus-history.test.js tests/firefox-package.test.js` and `node --check pages/monaco-adapter.js tests/monaco-firefox-fallback.test.js`.
+
+### 2026-06-04 — Phase 1 sideload smoke
+
+- Closed the Phase 1 Build + temporary install checkbox with `npm run smoke:firefox`.
+- Added `scripts/smoke-firefox-sideload.mjs`, wired as `npm run smoke:firefox`, to build/package the Firefox artifact, launch geckodriver, temporary-install `scriptvault-firefox-v3.11.0.zip`, resolve `moz-extension://` dashboard/popup URLs, and exercise dashboard, popup, save, toggle, and target-page userscript execution.
+- Fixed smoke-discovered Firefox runtime gaps: `MAX_SCRIPT_SIZE` initialization before `SubscriptionSystem`, native Windows Git Bash preference before WSL bash in `scripts/run-bash.mjs`, Firefox `menus` aliasing to the shared `contextMenus` path, trusted own `moz-extension://` dashboard/popup message senders, and optional Firefox `userScripts` permission onboarding in popup/dashboard.
+- `web-ext` is now `^10.3.0`, clearing the `web-ext -> tmp` CVE path; the generated support matrix now includes both `npm run firefox:package` and `npm run smoke:firefox`.
+- Verification: `npm run firefox:package` (0 errors / 0 notices / 139 warnings), `npm run smoke:firefox` with Firefox Developer Edition 151.0b10, focused Firefox/package/onboarding tests, `npm audit --audit-level=high --omit=optional`, `npm ls tmp`, and `npm run support:matrix:check`.
+- Next Firefox-port session starts at **Phase 2 — Data safety + storage**, beginning with Chrome backup import round-trip validation.
 
 ---
 

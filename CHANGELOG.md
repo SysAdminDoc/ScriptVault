@@ -4,6 +4,28 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Firefox sideload smoke and web-ext audit fix
+
+- **Firefox Phase 1 now has an automated temporary sideload smoke.**
+  `npm run smoke:firefox` packages the Firefox build, installs it temporarily
+  through geckodriver, opens the dashboard and popup, and saves/toggles a smoke
+  userscript through the extension message path before verifying it runs on a
+  local target page. Headless Firefox permission prompts are still surfaced in
+  the UI and then granted through Firefox chrome context for automation.
+- **Fixed a Firefox background boot error exposed by the smoke.**
+  `MAX_SCRIPT_SIZE` is initialized before `SubscriptionSystem` reads it, so the
+  Firefox event-page background no longer throws during add-on startup.
+- **Fixed Firefox runtime compatibility exposed by sideloading.** Native
+  Windows Git Bash is preferred over WSL for Firefox packaging, Firefox `menus`
+  is aliased to the shared `contextMenus` path, and own `moz-extension://`
+  dashboard/popup senders are trusted for extension-page messages.
+- **Added Firefox userScripts permission onboarding.** Popup and dashboard setup
+  banners request the optional Firefox `userScripts` permission, then re-run the
+  live runtime probe and registration repair path.
+- **Cleared the high-severity `web-ext` audit path.** `web-ext` now resolves to
+  the `10.3.0` line with fixed `tmp@0.2.6`, restoring the high-level npm audit
+  gate.
+
 ### 2026-06-04 — Firefox Monaco fallback path
 
 - **Firefox AMO builds now fall back to an editable textarea immediately when

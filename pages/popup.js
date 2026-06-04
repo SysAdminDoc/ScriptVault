@@ -379,8 +379,22 @@
         return match ? Number.parseInt(match[1], 10) : 0;
     }
 
+    function isPopupFirefox() {
+        return /Firefox\//.test(navigator.userAgent || '');
+    }
+
     function buildPopupSetupFallback(message = '') {
         const chromeVersion = getPopupChromeVersion();
+        if (isPopupFirefox()) {
+            return {
+                setupState: 'firefox-user-scripts-permission',
+                setupTitle: 'Firefox permission required',
+                setupMessage: message || 'Grant ScriptVault the optional Firefox userScripts permission, then reopen the popup.',
+                setupAction: 'Grant Permission',
+                setupUrl: '',
+                chromeVersion
+            };
+        }
         if (chromeVersion >= 138) {
             return {
                 setupState: 'allow-user-scripts-disabled',
@@ -439,6 +453,27 @@
                 }
             }
         }
+    }
+
+    async function requestFirefoxUserScriptsPermissionFromPopup() {
+        if (!chrome.permissions?.request) {
+            showPopupToast('Firefox permission request API is unavailable', 'error');
+            return false;
+        }
+        const granted = await chrome.permissions.request({ permissions: ['userScripts'] });
+        if (!granted) {
+            showPopupToast('Firefox userScripts permission was not granted', 'error');
+            return false;
+        }
+        const result = await chrome.runtime.sendMessage({ action: 'repairRuntimeState' });
+        if (result?.error || result?.success === false || result?.userScriptsAvailable === false) {
+            showPopupToast(result?.error || result?.setupMessage || 'Runtime still needs setup', 'error');
+            return false;
+        }
+        showPopupToast('Firefox userScripts permission granted');
+        await checkUserScriptsAvailability();
+        await loadPageScripts();
+        return true;
     }
 
     function showSetupWarning(statusOrMessage) {
@@ -1622,7 +1657,11 @@
         elements.btnDashboard?.addEventListener('click', () => openDashboard());
         
         // Setup warning - Open extension settings
-        elements.btnOpenExtSettings?.addEventListener('click', () => {
+        elements.btnOpenExtSettings?.addEventListener('click', async () => {
+            if (setupStatus?.setupState === 'firefox-user-scripts-permission') {
+                await requestFirefoxUserScriptsPermissionFromPopup();
+                return;
+            }
             const targetUrl = setupStatus?.setupUrl || `chrome://extensions/?id=${chrome.runtime.id}`;
             chrome.tabs.create({ url: targetUrl });
             window.close();

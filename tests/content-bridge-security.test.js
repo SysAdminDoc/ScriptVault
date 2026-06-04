@@ -295,6 +295,38 @@ describe('runtime.onMessage user-script gate (Chrome <131 / Firefox fallback)', 
     expect(handleMessageCalls).toHaveLength(1);
   });
 
+  it('allows Firefox moz-extension pages from this extension to call privileged actions', async () => {
+    const { onMessageListeners, handleMessageCalls } = loadUserScriptMessagingGate({ hasUserScriptMessage: true });
+    const dashboardSender = {
+      id: 'gate-extension-id',
+      url: 'moz-extension://12345678-1234-1234-1234-123456789abc/pages/dashboard.html',
+      tab: { id: 14 },
+    };
+    const response = await invokeListener(
+      onMessageListeners[0],
+      { action: 'saveScript', code: '// ==UserScript==\n// @name x\n// ==/UserScript==' },
+      dashboardSender
+    );
+    expect(response).toEqual({ handled: true, action: 'saveScript' });
+    expect(handleMessageCalls).toHaveLength(1);
+  });
+
+  it('does not trust moz-extension-looking URLs from other extension senders', async () => {
+    const { onMessageListeners, handleMessageCalls } = loadUserScriptMessagingGate({ hasUserScriptMessage: true });
+    const spoofed = {
+      id: 'other-extension-id',
+      url: 'moz-extension://12345678-1234-1234-1234-123456789abc/pages/dashboard.html',
+      tab: { id: 14 },
+    };
+    const response = await invokeListener(
+      onMessageListeners[0],
+      { action: 'factoryReset' },
+      spoofed
+    );
+    expect(response).toEqual({ error: 'Action not permitted from non-extension context' });
+    expect(handleMessageCalls).toHaveLength(0);
+  });
+
   it('rejects spoofed sender.url that does not match this extension origin', async () => {
     const { onMessageListeners, handleMessageCalls } = loadUserScriptMessagingGate({ hasUserScriptMessage: true });
     const spoofed = {

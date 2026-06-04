@@ -1,6 +1,6 @@
 # Completed Work
 
-Status: consolidated docs index refreshed on 2026-06-01.
+Status: consolidated docs index refreshed on 2026-06-04.
 
 Items consolidated from legacy planning documents on 2026-06-03.
 
@@ -15,6 +15,9 @@ root-level navigator for completed planning work.
   including release artifact reconciliation, CWS runbook and audit-gate
   alignment, Chrome userScripts diagnostics, Firefox AMO validation packaging,
   and permission/store-copy drift checks.
+- `main` also contains unreleased 2026-06-04 Firefox Phase 1 sideload-smoke
+  validation, the `web-ext@^10.3.0` audit fix, and regenerated browser support
+  matrix evidence.
 - Active open work is tracked in `ROADMAP.md` (single source of truth) and the
   Firefox port ledger in `FIREFOX-PORT.md`.
 
@@ -59,6 +62,9 @@ phase.
 - [x] G-1 Firefox offscreen feature flag: `ScriptAnalyzer` guards `chrome.offscreen`, keeps Chrome on the offscreen document path, and loads local Acorn/Diff inline on Firefox for AST analysis, ESM import parsing, and 3-way sync merge — *Source: docs/archive/TODO.md Phase G; commit feat: gate offscreen analysis on firefox*
 - [x] G-2 Firefox side-panel feature flag: `dashboard-firefox-compat.js` no longer stubs unsupported `chrome.sidePanel`, keeping Firefox feature detects honest while preserving native Chromium side-panel support — *Source: docs/archive/TODO.md Phase G; commit feat: gate side panel on firefox*
 - [x] G-3 Firefox Monaco fallback path: Firefox AMO builds remain Monaco-free, `editor-sandbox.html` reports missing bundles, and `monaco-adapter.js` immediately activates an editable textarea fallback with value/change/focus parity — *Source: docs/archive/TODO.md Phase G; commit feat: add firefox monaco fallback*
+- [x] G-4 Firefox build + temporary sideload smoke: `npm run smoke:firefox` packages the Firefox build, installs it through geckodriver, opens dashboard/popup, verifies optional `userScripts` permission onboarding, saves/toggles a smoke script, and confirms it runs on a local target page — *Source: docs/archive/TODO.md Phase G; commit feat: add firefox sideload smoke*
+- [x] 2026-06-04 web-ext audit fix: `web-ext@^10.3.0` resolves to fixed `tmp@0.2.6`, restoring `npm audit --audit-level=high --omit=optional` — *Source: ROADMAP.md 2026-06-03 deep research pass; commit feat: add firefox sideload smoke*
+- [x] 2026-06-04 generated support matrix refresh: README and cross-browser pipeline matrix blocks now show 2026-06-04 Firefox evidence with `npm run firefox:package`, `npm run smoke:firefox`, and 139 `web-ext` warnings — *Source: ROADMAP.md documentation hygiene; commit feat: add firefox sideload smoke*
 
 ## Stale / Obsolete Items
 

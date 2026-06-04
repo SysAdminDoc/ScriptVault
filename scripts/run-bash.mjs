@@ -8,15 +8,23 @@ if (args.length === 0) {
   process.exit(2);
 }
 
-const candidates = [
-  process.env.BASH_PATH,
-  process.env.SHELL && /bash(?:\.exe)?$/i.test(process.env.SHELL) ? process.env.SHELL : null,
-  'bash',
+const windowsBashCandidates = [
   'C:\\Program Files\\Git\\bin\\bash.exe',
   'C:\\Program Files\\Git\\usr\\bin\\bash.exe',
   'C:\\msys64\\usr\\bin\\bash.exe',
+];
+
+const posixBashCandidates = [
+  'bash',
   '/usr/bin/bash',
   '/bin/bash',
+];
+
+const candidates = [
+  process.env.BASH_PATH,
+  process.env.SHELL && /bash(?:\.exe)?$/i.test(process.env.SHELL) ? process.env.SHELL : null,
+  ...(process.platform === 'win32' ? windowsBashCandidates : posixBashCandidates),
+  ...(process.platform === 'win32' ? posixBashCandidates : []),
 ].filter(Boolean);
 
 function canUse(command) {

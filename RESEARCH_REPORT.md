@@ -2,19 +2,14 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
-2026-06-04 freshness refresh: the 2026-06-03 findings still stand, and the
-currently-breaking dependency item is sharper. At HEAD `04087ed`,
-`npm audit --audit-level=high --omit=optional` fails on
-`web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65, while `web-ext@10.3.0`
-depends on the fixed `tmp@0.2.6`. UNC-safe verification via
-`cmd /c pushd` showed `npm run typecheck`, `npm run ts-runtime:check`, and
-`npm run readme:check` passing; `npm run firefox:lint` passing with 0 errors,
-0 notices, and 139 warnings; and `npm run support:matrix:check` failing
-because `README.md` and `docs/cross-browser-pipeline.md` are stale against the
-generated support matrix. The live tree now contains active source/test/generated
-changes for a Sigstore provenance-verifier lane; this research pass preserved
-those non-doc changes and only reconciled the planning docs. Current external
-anchors: GitHub
+2026-06-04 implementation refresh: the 2026-06-03 findings still stand, but the
+currently-breaking dependency item is now closed. `web-ext` was bumped to
+`^10.3.0`, `npm ls tmp` resolves `tmp@0.2.6`, and
+`npm audit --audit-level=high --omit=optional` exits 0. Firefox validation also
+advanced: `npm run firefox:package` passes with 0 errors, 0 notices, and 139
+warnings; `npm run smoke:firefox` passes with Firefox Developer Edition
+151.0b10; and `npm run support:matrix:check` passes after regenerating the
+browser support matrix. Current external anchors: GitHub
 Advisory GHSA-ph9p-34f9-6g65 (`https://github.com/advisories/GHSA-ph9p-34f9-6g65`),
 the `web-ext` npm package (`https://www.npmjs.com/package/web-ext`), and the
 Chrome `userScripts` API reference
@@ -36,11 +31,12 @@ The active queue (`ROADMAP.md` → Existing Planned Work) plus the PASS3 deep-au
 plaintext cloud sync, `@crontab` engine, unmounted dashboard modules, dead What's New /
 i18n-v2). This 2026-06-03 pass therefore concentrated on the layers PASS3 did **not**
 touch — dependency health, CI/supply-chain, coverage gating, settings/UX, and competitive
-parity — and surfaced one currently-breaking issue: a real CVE in a CI dependency.
+parity — and surfaced one then-breaking issue: a real CVE in a CI dependency.
+That P0 dependency item is now closed in the build lane.
 
 Top opportunities (one line each):
 
-1. **[Verified] CI is red on a real CVE** — `web-ext@10.2.0` → `tmp@0.2.5` → GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (CVSS 7.7); the `npm audit --audit-level=high` CI gate fails today. Bump web-ext to ≥10.3.0. (P0)
+1. **[Closed 2026-06-04] CI was red on a real CVE** — `web-ext@10.2.0` → `tmp@0.2.5` → GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (CVSS 7.7). `web-ext@^10.3.0` now resolves fixed `tmp@0.2.6`, and the high audit gate exits 0. (P0)
 2. **[Verified] Coverage is blind** — `vitest.config.mjs` sets `all:false` with no thresholds, so the largest runtime files report no real coverage and CI has no floor. (P1)
 3. **[Verified] No dependency-update automation** — 10 devDeps behind latest; the audit gate is reactive only, which is exactly how the `tmp` CVE slipped in. Add Dependabot/Renovate. (P1)
 4. **[Likely] Floating Action tags in a signing/attestation pipeline** — `ci.yml` uses `@v4`/`@v1` tags while also doing SLSA attestation + SBOM; SHA-pin to protect the trusted artifact. (P1)
@@ -54,7 +50,7 @@ Top opportunities (one line each):
 - **CI / release**: `.github/workflows/ci.yml` (full read), `scripts/*` (16 gate/generator scripts), `docs/dependency-audit-policy.md`, `docs/release-runbook.md`.
 - **Runtime**: `background.core.js` (omnibox handler ~L5682, GM_xhr path), `modules/` (15 files incl. `internal-host-guard.js`, `storage.js`, `sync-providers.js`, `error-log.js`, `npm-resolve.js`, `quota-manager.js`), `content.js`, `pages/dashboard-*.js` (29 modules).
 - **Git range**: `git log -30 --oneline` from `8526792` (planning consolidation) back through the TS-promotion and hardening waves; HEAD advanced to `4db9624 feat: show ESM dashboard badges` during this pass via concurrent work in the same tree.
-- **Dependency state**: `npm outdated` (10 behind), `npm audit --audit-level=moderate --omit=optional` (2 high — both `tmp` via `web-ext`), `npm ls tmp` (→ `tmp@0.2.5`).
+- **Dependency state**: original research found `npm outdated` (10 behind), `npm audit --audit-level=moderate --omit=optional` (2 high — both `tmp` via `web-ext`), and `npm ls tmp` (→ `tmp@0.2.5`). The 2026-06-04 build-lane fix now resolves `tmp@0.2.6` through `web-ext@^10.3.0` and the high audit gate exits 0.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -94,7 +90,7 @@ Top opportunities (one line each):
 | --- | --- | --- | --- | --- |
 | `sv` omnibox search | address bar `sv ` | `background.core.js:5682` | shipped | code only — **undocumented** |
 | Keyboard commands | `Alt+Shift+S/D/E` | `manifest.json` commands | shipped | **undocumented**, no rebind note |
-| CI audit gate | CI | `ci.yml` `npm audit --audit-level=high` | shipped | **currently failing (tmp CVE)** |
+| CI audit gate | CI | `ci.yml` `npm audit --audit-level=high` | shipped | clean after `web-ext@^10.3.0` |
 | Coverage report | `npm run test:cov` | `vitest.config.mjs` | shipped | `all:false`, **no threshold** |
 | Dependency audit policy | manual | `docs/dependency-audit-policy.md` | doc only | **no bot automation** |
 | Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | actions **tag-pinned, not SHA** |
@@ -109,7 +105,7 @@ Top opportunities (one line each):
 
 ## Quality & Friction Findings
 
-- **Critical** — CI audit gate fails on `tmp` CVE-2026-44705 (every push/PR red until web-ext ≥10.3.0). → ROADMAP P0 web-ext bump. [Verified]
+- **Closed** — CI audit gate failure on `tmp` CVE-2026-44705 was resolved by the ROADMAP P0 `web-ext@^10.3.0` bump. [Verified]
 - **Major** — Coverage blind (`all:false`, no threshold): the largest runtime files have no enforced coverage. → ROADMAP P1 coverage gate. [Verified]
 - **Major** — No dependency-update automation; reactive audit only (root cause of the CVE slip). → ROADMAP P1 Dependabot/Renovate. [Verified]
 - **Major** — Floating Action tags in an attestation/SBOM pipeline. → ROADMAP P1 SHA-pin. [Likely]
@@ -123,12 +119,12 @@ Top opportunities (one line each):
 - Build authority is still concatenated runtime JS, not `src/**` (F-1 tracks convergence); this pass adds no new architectural item there — it is already the top Larger Bet.
 - `vitest` runs `pool: vmThreads, maxWorkers:1` to dodge an `@exodus/bytes` ESM-in-CJS crash under jsdom on the VMware share — a real environment fragility worth noting for contributors (documented in `vitest.config.mjs`, no action needed).
 - `error-log.js` and other `modules/*.js` are generated from `src/modules/*.ts` ("do not edit by hand") — confirms the TS-source direction; coverage gate (P1) should target `src/**`, consistent with that generation flow.
-- Dependency health: 10 devDeps behind; only `web-ext`/`tmp` is a security issue. esbuild/monaco/puppeteer majors are available but low-risk dev-only — fold into the Dependabot grouped PRs rather than ad-hoc bumps.
+- Dependency health: 10 devDeps were behind at research time. The `web-ext`/`tmp` security issue is closed; esbuild/monaco/puppeteer majors remain low-risk dev-only and should fold into the Dependabot grouped PRs rather than ad-hoc bumps.
 
 ## Security / Privacy / Data Safety
 
 - The deepest runtime risks (GM_xhr SSRF NF-1, plaintext cloud sync NF-2, per-script scope NF-4, TOFU SRI NF-5) are already roadmapped — not re-listed.
-- New: the **supply-chain** layer is the gap this pass surfaces — a CVE reached CI via an unpinned, un-bot-tracked dev dependency, and the release pipeline that signs/attests artifacts uses floating action tags. P0 web-ext bump + P1 Dappendabot + P1 SHA-pin together harden the path from source to attested artifact.
+- New: the **supply-chain** layer is the gap this pass surfaces — a CVE reached CI via an unpinned, un-bot-tracked dev dependency, and the release pipeline that signs/attests artifacts uses floating action tags. The P0 web-ext bump is closed; P1 Dependabot + P1 SHA-pin remain to harden the path from source to attested artifact.
 - Privacy posture remains local-first with no usage beacon; external telemetry stays a non-goal.
 
 ## UX & Accessibility
@@ -146,7 +142,6 @@ Top opportunities (one line each):
 ## Open Questions (genuine blockers only)
 
 - Does I-3 (`engines.node`) land independently? If so, the P3 `packageManager`/`.nvmrc` item should be merged into it rather than committed separately. [Needs validation]
-- Is the `web-ext` bump to 10.3.0 safe against the Firefox AMO lint pipeline (`firefox:package`)? Needs a green `npm run firefox:package` after the bump. [Needs validation]
 - Does any optional/peerOptional dep currently reach shipped `src/**`/`modules/**` code? The P2 reach-check assumes "no" today; this must be confirmed by the new script before relying on the `--omit=optional` exemption. [Needs validation]
 
 ## Maintenance Rule

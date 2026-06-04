@@ -14,7 +14,7 @@
 >
 > **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, and `main` now has additional unreleased 2026-05-24 hardening/release commits including release artifact reconciliation, CWS runbook/audit-gate alignment, Chrome userScripts diagnostics, Firefox AMO validation packaging, and permission/store-copy drift checks. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
 > **2026-05-24 state:** 821 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; Firefox AMO package/source ZIP generation now passes `web-ext lint` with 0 errors and 0 notices; `npm run store-copy:check` covers 30 manifest permission/privacy/store surfaces; no GitHub issues or PRs are currently open.
-> **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. `npm audit --audit-level=high --omit=optional` now fails on `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65, `web-ext@10.3.0` carries fixed `tmp@0.2.6`, `npm run typecheck`, `npm run ts-runtime:check`, and `npm run readme:check` pass when run via `cmd /c pushd` from the UNC checkout, `npm run firefox:lint` passes with 0 errors / 0 notices / 139 warnings, and `npm run support:matrix:check` fails because `README.md` and `docs/cross-browser-pipeline.md` are stale. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier promotions, `ts-source:check` reports 25 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
+> **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier promotions, `ts-source:check` reports 25 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
 > Last researched: Cycle 1 - 2026-06-04.
@@ -85,7 +85,9 @@ priority section below.
 - [x] P1 — Monaco editor loading path on Firefox (decide A vs B)
   - Progress: 2026-06-04 Phase 1 keeps the existing Monaco iframe adapter for Chromium/local builds and treats Firefox AMO packages as a deterministic textarea-editor fallback because `build-firefox.sh` still omits `lib/monaco/`. `editor-sandbox.html` now reports missing Monaco bundles to the parent, and `monaco-adapter.js` immediately hides the iframe, preserves pending code, binds textarea input events, and exposes `isMonaco: false` when fallback is active.
   - Source: docs/archive/TODO.md G-3 (FIREFOX-PORT.md Phase 1).
-- [ ] P1 — Build + Firefox sideload smoke (Phase 1 completion)
+- [x] P1 — Build + Firefox sideload smoke (Phase 1 completion)
+  - Progress: 2026-06-04 added `npm run smoke:firefox`, a geckodriver temporary-sideload smoke that packages the Firefox build, installs `scriptvault-firefox-v3.11.0.zip`, opens dashboard/popup extension pages, verifies Firefox optional `userScripts` permission onboarding, saves/toggles `ScriptVault Firefox Smoke`, and confirms it runs on a local `http://127.0.0.1` target page. The smoke exposed and fixed Firefox startup/runtime gaps: `MAX_SCRIPT_SIZE` initialization order, native Git Bash preference over WSL for packaging, `chrome.menus` -> `chrome.contextMenus` aliasing, and trusted own `moz-extension://` dashboard/popup senders.
+  - Verification: `npm run firefox:package` (0 errors / 0 notices / 139 warnings) and `npm run smoke:firefox` with Firefox Developer Edition 151.0b10.
   - Source: docs/archive/TODO.md G-4.
 - [ ] P2 — Phase 2: import-from-Chrome backup round-trip
   - Source: docs/archive/TODO.md G-5.
@@ -104,10 +106,11 @@ priority section below.
 
 ### Documentation hygiene
 
-- [ ] P2 — Refresh generated browser support matrix after current Firefox lint drift
-  - Why: `npm run support:matrix:check` now fails on `README.md`, while a fresh `npm run firefox:lint` reports 0 errors / 0 notices / 139 warnings. The shipped H021 generator is doing its job, but the generated docs are stale against the current lint output.
+- [x] P2 — Refresh generated browser support matrix after current Firefox lint drift
+  - Why: `npm run support:matrix:check` failed on `README.md` and `docs/cross-browser-pipeline.md` while a fresh Firefox lint artifact reported 0 errors / 0 notices / 139 warnings. The shipped H021 generator was doing its job, but the generated docs were stale against the current lint output.
   - Touches: `README.md`, `docs/cross-browser-pipeline.md` if the generator updates it, and any checked lint artifact inputs.
   - Acceptance: `npm run support:matrix:check` passes without hand-editing generated blocks; matrix warning count and last-verification date match the latest Firefox lint artifact.
+  - Progress: 2026-06-04 updated `scripts/generate-browser-support-matrix.mjs` so Firefox Desktop evidence includes both `npm run firefox:package` and `npm run smoke:firefox`, regenerated `README.md` and `docs/cross-browser-pipeline.md`, and verified `npm run support:matrix:check`.
   - Source: 2026-06-04 research refresh.
 - [ ] P3 — Add CONTRIBUTING.md note explaining `.factory/` directory purpose
   - Source: docs/archive/TODO.md I-1 (PASS2 Architecture #8).
@@ -127,14 +130,12 @@ Priorities/sizes preserve the source labels.
 ### Researcher Queue (Cycle 1 - 2026-06-04)
 
 - [x] 🔬 `dependency-firefox-refresh-2026-06-04` - rechecked the current
-  dependency and Firefox-port state. `npm audit --audit-level=high
-  --omit=optional` fails on `web-ext@10.2.0 -> tmp@0.2.5` /
-  GHSA-ph9p-34f9-6g65; `web-ext@10.3.0` depends on fixed `tmp@0.2.6`.
-  `npm run typecheck` and `npm run ts-runtime:check` pass through the UNC-safe
-  `cmd /c pushd` route; `npm run support:matrix:check` fails because
-  `README.md` and `docs/cross-browser-pipeline.md` are stale generated docs.
-  No duplicate rows were promoted: the existing P0 web-ext bump and P2 support
-  matrix refresh rows are the correct build-lane handoff.
+  dependency and Firefox-port state. The research pass found
+  `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 and stale generated
+  support docs; the build lane closed both by bumping to `web-ext@^10.3.0`,
+  regenerating the support matrix, and verifying the clean audit/package/smoke
+  path. No duplicate rows were promoted: the existing P0 web-ext bump and P2
+  support matrix refresh rows were the correct build-lane handoff.
 
 ### Security and data safety
 
@@ -239,11 +240,12 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
 
 #### Larger Bets (P1/P2, staged)
 
-- [ ] P0 — Bump `web-ext` to ≥10.3.0 to clear CVE-2026-44705 (`tmp` path traversal) and unblock CI
-  - Why: `web-ext@10.2.0` pulls `tmp@0.2.5`, which is vulnerable to GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (path traversal, CVSS 7.7 High). The CI `npm audit --audit-level=high --omit=optional` step is an early gate, so this advisory currently fails every push/PR build. `web-ext@10.3.0` bundles `tmp@0.2.6` (fixed).
+- [x] P0 — Bump `web-ext` to ≥10.3.0 to clear CVE-2026-44705 (`tmp` path traversal) and unblock CI
+  - Why: `web-ext@10.2.0` pulled `tmp@0.2.5`, which is vulnerable to GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (path traversal, CVSS 7.7 High). The CI `npm audit --audit-level=high --omit=optional` step is an early gate, so the advisory failed every push/PR build until `web-ext@10.3.0` brought fixed `tmp@0.2.6`.
   - Touches: `package.json` devDependencies, `package-lock.json`.
   - Acceptance: `npm audit --audit-level=high --omit=optional` reports 0; `npm run firefox:package` still lints clean.
   - Verify: `npm audit --audit-level=high --omit=optional`; `npm ls tmp` shows ≥0.2.6.
+  - Progress: 2026-06-04 bumped `web-ext` to `^10.3.0`; `npm audit --audit-level=high --omit=optional` reports 0 vulnerabilities, `npm ls tmp` resolves `tmp@0.2.6`, and `npm run firefox:package` remains clean with 0 errors / 0 notices / 139 warnings.
   - Complexity: S
 - [ ] P1 — Coverage measures only test-imported files (`all:false`, no threshold) — gate the runtime
   - Why: `vitest.config.mjs` sets `coverage.all=false` and declares no `thresholds`, so the v8 report only reflects files a test already imports. Large runtime files (`background.core.js`, `modules/storage.js` 34 KB, `sync-providers.js` 47 KB, the ~760 KB unmounted dashboard modules from O-1) report as "covered" or simply absent, hiding real gaps. There is no coverage floor in CI.
@@ -300,7 +302,7 @@ Local source and repo artifacts:
 Verified constraints:
 
 - Runtime target: Manifest V3, Chrome minimum 130, `chrome.userScripts`, `sidePanel`, `offscreen`, `declarativeNetRequest`, `declarativeNetRequestWithHostAccess`, `<all_urls>`.
-- Firefox target: separate `manifest-firefox.json` at version 3.11.0, Firefox 140+ desktop / Android 142+ validation target, with AMO package/source ZIP generation in place; manual Firefox sideload smoke remains open in `FIREFOX-PORT.md`.
+- Firefox target: separate `manifest-firefox.json` at version 3.11.0, Firefox 140+ desktop / Android 142+ validation target, with AMO package/source ZIP generation and automated Firefox sideload smoke in place.
 - Build: `npm run build` runs `node esbuild.config.mjs`; background output is concatenated JS, not emitted from `src/background/index.ts`.
 - Tests: `npm run check` is `tsc --noEmit && vitest run`; CI additionally runs Chrome dashboard smoke and builds a ZIP artifact.
 - Privacy philosophy: local-first storage, no external usage beacon in current docs/code; external telemetry ideas below stay rejected unless user-owned and local-only.

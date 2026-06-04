@@ -1,6 +1,12 @@
 // @ts-nocheck
 console.log('[ScriptVault] Service worker starting...');
 
+// Firefox exposes the same API surface as `menus`; keep the shared runtime
+// using Chrome's `contextMenus` name.
+if (typeof chrome !== 'undefined' && !chrome.contextMenus && chrome.menus) {
+  chrome.contextMenus = chrome.menus;
+}
+
 // ============================================================================
 // Debug Logger — conditional logging based on settings
 // ============================================================================
@@ -1674,6 +1680,8 @@ async function buildLocalHealthReport() {
 // Script Subscriptions
 // ============================================================================
 
+const MAX_SCRIPT_SIZE = 5 * 1024 * 1024; // 5MB limit
+
 const SubscriptionSystem = {
   _FETCH_TIMEOUT_MS: 15 * 1000,
   _MAX_FEED_BYTES: 512 * 1024,
@@ -3041,7 +3049,8 @@ function isExtensionSurfaceSender(sender) {
   if (!extensionId) return false;
   const ownExtensionPrefix = 'chrome-extension://' + extensionId + '/';
   const url = typeof sender.url === 'string' ? sender.url : '';
-  if (url.startsWith(ownExtensionPrefix)) return true;
+  const ownFirefoxExtensionPage = sender.id === extensionId && url.startsWith('moz-extension://');
+  if (url.startsWith(ownExtensionPrefix) || ownFirefoxExtensionPage) return true;
   // Service-worker → service-worker self-messages have no sender.tab/url; treat
   // them as trusted since only this extension's own code can originate them.
   if (sender.id === extensionId && !sender.tab && !url) return true;
@@ -6978,7 +6987,6 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
 // the raw script source (the dedup short-circuit returned before it could
 // redirect to install.html).
 const _pendingFetches = new Map();
-const MAX_SCRIPT_SIZE = 5 * 1024 * 1024; // 5MB limit
 
 async function _fetchPendingUserscript(url) {
   const controller = new AbortController();
@@ -7615,7 +7623,13 @@ function buildUserScriptsStatus({ userScriptsAvailable, chromeVersion = _getChro
   let setupUrl = '';
 
   if (!userScriptsAvailable) {
-    if (chromeVersion >= 138) {
+    if (_isFirefoxRuntime()) {
+      setupState = 'firefox-user-scripts-permission';
+      setupTitle = 'Firefox userScripts permission required';
+      setupMessage = 'Grant ScriptVault the optional Firefox userScripts permission, then refresh runtime status.';
+      setupAction = 'Grant Permission';
+      setupUrl = '';
+    } else if (chromeVersion >= 138) {
       setupState = 'allow-user-scripts-disabled';
       setupTitle = 'Allow User Scripts is off';
       setupMessage = 'Open Extension Details, enable "Allow User Scripts" for ScriptVault, then refresh status; reload the extension if this banner remains.';
