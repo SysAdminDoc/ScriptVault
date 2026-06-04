@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier and sync-crypto promotions, `ts-source:check` reports 26 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 10 - 2026-06-04.
+> Last researched: Cycle 11 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -278,6 +278,22 @@ Priorities/sizes preserve the source labels.
   checklist; it is the release-evidence and public-claim gate that keeps Edge
   status tied to the actual artifact.
 
+### Researcher Queue (Cycle 11 - 2026-06-04)
+
+- [ ] 🔬 `node-toolchain-contract-drift-2026-06-04` - rechecked the current
+  Node/npm/toolchain contract after the build lane raised `engines.node` to
+  `>=21.2.0`. The repo declares that floor and now has tests using
+  `import.meta.dirname`, but CI still pins `actions/setup-node` to Node 20,
+  there is no `.nvmrc`, `.node-version`, `.npmrc`, or `packageManager` field,
+  and local npm reports `engine-strict=false`. npm documents `engines` as
+  advisory unless `engine-strict` is set, while setup-node can read a version
+  file and package metadata can document the intended package manager. Because
+  Corepack's npm shim is not enabled by default, npm version enforcement needs
+  an explicit npm engine/dev-environment check rather than relying on
+  `packageManager` alone. The existing quick-win row below is sharpened rather
+  than duplicated: this is now a CI/release-quality contract item, not just
+  local metadata polish.
+
 ### Firefox and mobile release quality
 
 - [x] 🤖 🔧 🔬 P2 — Add a Firefox for Android smoke gate or remove the Android compatibility claim before AMO listing
@@ -448,11 +464,12 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
 
 #### Quick Wins (P2/P3, <1hr)
 
-- [ ] P3 — Add `packageManager` field + `.nvmrc` matching the Node 21.2.0 floor
-  - Why: `a9cb4ab` shipped `engines.node >=21.2.0`, but the repo still has no package-manager pin or shell-friendly Node version file. Add the matching `packageManager`/`.nvmrc` so local installs and CI-style verification do not drift from the documented runtime floor.
-  - Touches: `package.json` (`packageManager`), new `.nvmrc`.
-  - Acceptance: `corepack`/`nvm use` resolve the documented Node/npm floor; contributors on older Node get a clear local signal before running build scripts.
-  - Verify: `node -v` satisfies `.nvmrc`; package-manager metadata parses; `npm run check` still green.
+- [ ] P2 — Align CI Node setup, package-manager metadata, and engine enforcement with the Node 21.2.0 floor
+  - Why: `a9cb4ab` shipped `engines.node >=21.2.0`, but `.github/workflows/ci.yml` still runs setup-node with `node-version: 20`, the repo has no package-manager pin or Node version file, and `npm config get engine-strict` is `false`, so the declared floor can remain a warning while CI and contributor shells use a different contract.
+  - Evidence: `package.json:6-8`; `.github/workflows/ci.yml:25-29`; missing `.nvmrc` / `.node-version` / `.npmrc`; `tests/audit-hardening-2026-06-04.test.js:12`; `tests/audit-hardening-2026-06-04-p2.test.js:12`; `scripts/check-cws-publish-tooling.mjs:40-58`; `docs/release-runbook.md:63-64`; Node `import.meta.dirname` docs (`https://nodejs.org/api/esm.html#importmetadirname`); Node v21 `packageManager` / Corepack docs (`https://nodejs.org/download/release/v21.1.0/docs/api/packages.html#packagemanager`); npm `engines` / `engine-strict` docs (`https://docs.npmjs.com/files/package.json/#engines`, `https://docs.npmjs.com/cli/using-npm/config#engine-strict`); setup-node `node-version-file` docs (`https://github.com/actions/setup-node#usage`).
+  - Touches: `package.json` (`packageManager` plus npm engine/dev-environment metadata), new `.nvmrc` or `.node-version`, new `.npmrc` or CI preflight, `.github/workflows/ci.yml`, `scripts/check-cws-publish-tooling.mjs`, `docs/release-runbook.md`.
+  - Acceptance: CI consumes the same Node floor through `node-version-file` or an explicit semver that satisfies `package.json`; contributor metadata documents the package manager and enforces npm separately if npm remains the package manager; installs fail fast or CI preflight fails when Node is below the declared floor; CWS tooling checks compare against the repo floor instead of a hard-coded lower bound.
+  - Verify: `npm ci`/preflight fails under a mocked or actual too-old Node; `node -v` satisfies the version file; `npm run cws:check`; `npm run check`.
   - Complexity: S
 - [ ] P3 — Document the `sv` omnibox keyword in README/help
   - Why: `background.core.js:5682` registers `chrome.omnibox` (`sv ` address-bar search over scripts) but it is undocumented; users can't discover it. `readme:check` will not flag a missing feature claim, only an unsupported one.
