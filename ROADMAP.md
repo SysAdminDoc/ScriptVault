@@ -173,6 +173,74 @@ Priorities/sizes preserve the source labels.
 
 <!-- Append future research-driven items here, preserving Source pointers. -->
 
+### 2026-06-03 deep research pass (dependency, CI, release, UX)
+
+*Research conducted 2026-06-03. Items below are new — not duplicates of Existing Planned Work.*
+
+These were found by inspecting `package.json`/`package-lock.json`, `.github/workflows/ci.yml`,
+`vitest.config.mjs`, `manifest.json`, and the live runtime, then cross-checking advisories and the
+userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/O-1 block above.
+
+#### Quick Wins (P2/P3, <1hr)
+
+- [ ] P3 — Add `"engines": {"node": ">=20"}` companion: `packageManager` field + `.nvmrc`
+  - Why: CI pins Node 20 (`setup-node@v4`, `node-version: 20`) but the repo declares no Node floor for contributors; I-3 covers `engines.node` — this is the matching `packageManager`/`.nvmrc` so local installs and CI agree. Skip if I-3 already lands `engines`.
+  - Touches: `package.json` (`packageManager`), new `.nvmrc`.
+  - Acceptance: `corepack`/`nvm use` resolve the same Node/npm CI uses.
+  - Verify: `node -v` matches `.nvmrc`; `npm run check` still green.
+  - Complexity: S
+- [ ] P3 — Document the `sv` omnibox keyword in README/help
+  - Why: `background.core.js:5682` registers `chrome.omnibox` (`sv ` address-bar search over scripts) but it is undocumented; users can't discover it. `readme:check` will not flag a missing feature claim, only an unsupported one.
+  - Touches: `README.md` features section, dashboard Help.
+  - Acceptance: README documents `sv <query>`; `npm run readme:check` stays green.
+  - Verify: `npm run readme:check`.
+  - Complexity: S
+- [ ] P3 — Document keyboard commands (`Alt+Shift+S/D/E`) and that they are user-rebindable
+  - Why: `manifest.json` ships three `commands` with suggested keys; none are surfaced in docs/help, and there is no note pointing users at `chrome://extensions/shortcuts` to rebind/clear conflicts.
+  - Touches: `README.md`, dashboard Help/settings.
+  - Acceptance: each command + rebind path documented.
+  - Verify: manual doc read.
+  - Complexity: S
+
+#### Larger Bets (P1/P2, staged)
+
+- [ ] P0 — Bump `web-ext` to ≥10.3.0 to clear CVE-2026-44705 (`tmp` path traversal) and unblock CI
+  - Why: `web-ext@10.2.0` pulls `tmp@0.2.5`, which is vulnerable to GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (path traversal, CVSS 7.7 High). The CI `npm audit --audit-level=high --omit=optional` step is an early gate, so this advisory currently fails every push/PR build. `web-ext@10.3.0` bundles `tmp@0.2.6` (fixed).
+  - Touches: `package.json` devDependencies, `package-lock.json`.
+  - Acceptance: `npm audit --audit-level=high --omit=optional` reports 0; `npm run firefox:package` still lints clean.
+  - Verify: `npm audit --audit-level=high --omit=optional`; `npm ls tmp` shows ≥0.2.6.
+  - Complexity: S
+- [ ] P1 — Coverage measures only test-imported files (`all:false`, no threshold) — gate the runtime
+  - Why: `vitest.config.mjs` sets `coverage.all=false` and declares no `thresholds`, so the v8 report only reflects files a test already imports. Large runtime files (`background.core.js`, `modules/storage.js` 34 KB, `sync-providers.js` 47 KB, the ~760 KB unmounted dashboard modules from O-1) report as "covered" or simply absent, hiding real gaps. There is no coverage floor in CI.
+  - Touches: `vitest.config.mjs` (`all:true` for `src/**`, add `thresholds`), `ci.yml` (`test:cov` gate).
+  - Acceptance: `npm run test:cov` enforces a documented floor; uncovered `src/**` surfaces in the report.
+  - Verify: `npm run test:cov` fails when a `src/**` file drops below the floor.
+  - Complexity: M
+- [ ] P1 — Automate dependency freshness (Dependabot/Renovate) instead of reactive audit
+  - Why: 10 devDeps are behind latest (esbuild 0.27→0.28, monaco 0.52→0.55, puppeteer-core 24→25, vitest/coverage 4.1.3→4.1.8, web-ext 10.2→10.3, etc.); `docs/dependency-audit-policy.md` documents a manual cadence and the CI gate is purely reactive (fails only after a CVE lands, as with `tmp`). A scheduled bot would have surfaced the web-ext bump before CI broke.
+  - Touches: new `.github/dependabot.yml` (or `renovate.json`), grouped devDep PRs.
+  - Acceptance: weekly grouped update PRs open automatically against `main`.
+  - Verify: Dependabot config validates; first scheduled run opens a PR.
+  - Complexity: S
+- [ ] P1 — Pin GitHub Actions to commit SHAs (supply-chain hardening of the release pipeline)
+  - Why: `ci.yml` references actions by floating tag (`actions/checkout@v4`, `setup-node@v4`, `browser-actions/setup-chrome@v1`, `actions/attest@v4`, `upload-artifact@v4`). The pipeline also performs SLSA attestation (`id-token: write`, `attestations: write`) and signs/SBOM-attests the release ZIP, so a tag-move on any third-party action can tamper with a trusted artifact. SHA-pinning closes that gap and complements the existing F-2 release-trust work.
+  - Touches: `.github/workflows/ci.yml` (SHA-pin + version comment per action).
+  - Acceptance: every `uses:` references a 40-char SHA with a trailing version comment; build still green.
+  - Verify: CI run on PR; grep for `@v` in `uses:` returns only comments.
+  - Complexity: S
+- [ ] P2 — `dependency-audit-policy.md` exempts `optional` deps via `--omit=optional`; verify no optional dep ships in the bundle
+  - Why: the CI audit uses `--omit=optional` to keep the noise floor down (documented in `ci.yml`). That is safe only if optional deps never reach the packaged extension. Add a guard that fails if an `optional`/`peerOptional` dep is referenced from `src/**`/`modules/**` so the audit exemption can't silently mask a shipped-code CVE.
+  - Touches: new `scripts/check-optional-dep-reach.mjs`, `ci.yml` step.
+  - Acceptance: gate fails if any optional dep is imported by shipped code; passes today.
+  - Verify: run the new script locally.
+  - Complexity: M
+- [ ] P2 — Settings discoverability/validation audit for the dashboard options surface
+  - Why: `options_ui` points at the full dashboard (`open_in_tab`), but there is no consolidated, validated Settings panel — toggles like `allowInternalXhr`, `maxBackups`, sync provider config, and `experimentalBackgroundScripts` (NF-8) are scattered. No documented defaults table or range validation surface for operator-facing knobs. Pairs with the NF-3 script-config work but targets *app* settings, not per-script `@var`.
+  - Touches: `pages/dashboard*.js` settings section, a defaults/validation table doc.
+  - Acceptance: every persisted setting has a labelled control, a documented default, and input validation; invalid values are rejected with a visible message, not silently clamped.
+  - Verify: `npm run test:a11y` + manual settings walk-through.
+  - Complexity: L
+
 ---
 
 ## Round 14 - 2026-05-24 OSINT Roadmap Refresh
