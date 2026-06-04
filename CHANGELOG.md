@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — TOFU SRI for unpinned `@require`
+
+- **Blocked previously trusted unpinned dependency swaps.** Trust receipts now
+  fail save/update/install flows when the same unpinned `@require` URL resolves
+  to different bytes than the first trusted SHA-256 snapshot, or when those
+  bytes cannot be reverified.
+- **Made receipt probes cache-safe.** Receipt generation fetches dependency
+  bodies with a cache-bypassing, no-store mode so stale cache entries cannot
+  hide a CDN change and rejected bytes cannot replace the active cache.
+- **Surfaced TOFU review reasons in pending updates.** Queued updates now show
+  a specific "previously trusted unpinned @require bytes" reason before apply;
+  verifiable SHA-pinned URLs continue through normal SRI validation.
+
 ### 2026-06-04 — Per-script privileged host scope
 
 - **Scoped GM network, cookie, download, and DNR primitives to script hosts.**

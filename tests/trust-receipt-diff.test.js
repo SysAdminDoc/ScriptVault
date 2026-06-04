@@ -3,7 +3,7 @@ import { webcrypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { createScriptTrustReceipt, sha256Hex } from '../src/background/trust-receipt.ts';
+import { createScriptTrustReceipt, getRequireTofuSriFailure, sha256Hex } from '../src/background/trust-receipt.ts';
 import { UpdateSystem } from '../src/background/update-checker.ts';
 
 const originalCrypto = globalThis.crypto;
@@ -222,7 +222,7 @@ describe('trust receipt dependency and permission diffs', () => {
     });
   });
 
-  it('applyUpdate persists dependency and permission diffs on the latest receipt', async () => {
+  it('applyUpdate persists safe dependency and permission diffs on the latest receipt', async () => {
     const oldCode = '// ==UserScript==\n// @name Receipt Diff Demo\n// @version 1.0.0\n// ==/UserScript==\nconsole.log("old");';
     const oldHash = await sha256Hex(oldCode);
     const oldScript = makeScript({
@@ -270,7 +270,7 @@ describe('trust receipt dependency and permission diffs', () => {
       {
         force: true,
         fetchDependencyBody: makeDependencyFetcher({
-          'https://cdn.example.com/shared.js': 'shared-v2',
+          'https://cdn.example.com/shared.js': 'shared-v1',
           'https://cdn.example.com/old-lib.js': 'old-lib-v1',
           'https://cdn.example.com/new-lib.js': 'new-lib-v1',
         }),
@@ -279,7 +279,7 @@ describe('trust receipt dependency and permission diffs', () => {
 
     expect(result.success).toBe(true);
     expect(savedScript.trustReceipt.dependencyChanges.require.map(change => change.change)).toEqual([
-      'changed',
+      'unchanged',
       'removed',
       'added',
     ]);
@@ -287,6 +287,79 @@ describe('trust receipt dependency and permission diffs', () => {
     expect(savedScript.trustReceipt.permissionChanges.connect.removed).toEqual(['https://api.old.example/*']);
     expect(savedScript.versionHistory[0].trustReceipt.hashes.sha256).toBe(oldHash);
 
+  });
+
+  it('blocks updates when a previously trusted unpinned @require body changes', async () => {
+    const oldCode = '// ==UserScript==\n// @name Receipt Diff Demo\n// @version 1.0.0\n// ==/UserScript==\nconsole.log("old");';
+    const oldScript = makeScript({
+      code: oldCode,
+      meta: makeMeta({ require: ['https://cdn.example.com/shared.js'] }),
+      trustReceipt: {
+        schemaVersion: 1,
+        operation: 'install',
+        createdAt: 1000,
+        source: { installUrl: '', installHost: '', updateUrl: '', downloadUrl: '', homepageUrl: '' },
+        hashes: { sha256: await sha256Hex(oldCode) },
+        grants: [],
+        hostScope: { match: [], include: [], exclude: [], excludeMatch: [], connect: [] },
+        dependencies: {
+          require: [
+            { url: 'https://cdn.example.com/shared.js', sha256: await sha256Hex('shared-v1'), bytes: 9 },
+          ],
+          resource: [],
+          requireCount: 1,
+          resourceCount: 0,
+        },
+        diff: { previousVersion: '', nextVersion: '1.0.0', previousHash: '', nextHash: '', previousLines: 0, nextLines: 0, addedLines: 0, removedLines: 0 },
+        rollback: { available: false, action: 'rollbackScript', scriptId: '', version: '', updatedAt: null, historyIndex: null },
+        lineCount: 1,
+      },
+    });
+    globalThis.parseUserscript = vi.fn(code => ({
+      meta: makeMeta({ version: '2.0.0', require: ['https://cdn.example.com/shared.js'] }),
+      code,
+      metaBlock: '// ==UserScript==\n// ==/UserScript==',
+    }));
+    globalThis.unregisterScript = vi.fn().mockResolvedValue();
+    globalThis.registerScript = vi.fn().mockResolvedValue();
+    globalThis.SettingsManager = { get: vi.fn().mockResolvedValue({ notifyOnUpdate: false }) };
+    globalThis.ScriptStorage = {
+      get: vi.fn().mockResolvedValue(oldScript),
+      getAll: vi.fn().mockResolvedValue([oldScript]),
+      set: vi.fn(),
+    };
+
+    const result = await UpdateSystem.applyUpdate(
+      'script_diff',
+      '// ==UserScript==\n// @name Receipt Diff Demo\n// @version 2.0.0\n// ==/UserScript==\nconsole.log("new");',
+      {
+        force: true,
+        fetchDependencyBody: makeDependencyFetcher({
+          'https://cdn.example.com/shared.js': 'shared-v2',
+        }),
+      },
+    );
+
+    expect(result.error).toContain('@require TOFU integrity blocked for https://cdn.example.com/shared.js');
+    expect(result.error).toContain('Pin the dependency with #sha256=');
+    expect(globalThis.ScriptStorage.set).not.toHaveBeenCalled();
+    expect(globalThis.unregisterScript).not.toHaveBeenCalled();
+    expect(oldScript.versionHistory).toEqual([]);
+  });
+
+  it('does not treat verifiable SRI-pinned @require URLs as TOFU failures', () => {
+    const failure = getRequireTofuSriFailure({
+      dependencyChanges: {
+        require: [{
+          url: 'https://cdn.example.com/shared.js#sha256-abc123',
+          change: 'changed',
+          previousSha256: 'a'.repeat(64),
+          nextSha256: 'b'.repeat(64),
+        }],
+      },
+    });
+
+    expect(failure).toBeNull();
   });
 });
 

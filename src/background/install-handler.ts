@@ -8,7 +8,8 @@ import type { Script, ScriptMeta, VersionHistoryEntry } from '../types/script';
 import type { Settings } from '../types/settings';
 import { fetchTextBounded } from './fetch-bounded';
 import { assertExternalFetchUrl, classifyResponseUrl } from './internal-host-guard';
-import { createScriptTrustReceipt } from './trust-receipt';
+import { createScriptTrustReceipt, getRequireTofuSriFailure } from './trust-receipt';
+import { fetchRequireScript } from './resource-loader';
 import { bundleIfNeeded } from '../bg/esm-bundler';
 
 // ---------------------------------------------------------------------------
@@ -35,6 +36,10 @@ declare function autoReloadMatchingTabs(script: Script): Promise<void>;
 declare function formatBytes(bytes: number): string;
 declare function generateId(): string;
 declare function debugLog(...args: unknown[]): void;
+
+async function fetchRequireScriptForTrustReceipt(url: string): Promise<string | null> {
+  return await fetchRequireScript(url, { bypassCache: true, cacheResult: false });
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -229,7 +234,12 @@ export async function installFromCode(code: string, receiptOptions: InstallRecei
       sourceUrl: receiptOptions.sourceUrl,
       previousScript,
       rollbackIndex,
+      fetchDependencyBody: fetchRequireScriptForTrustReceipt,
     });
+    const tofuSriFailure = getRequireTofuSriFailure(trustReceipt);
+    if (tofuSriFailure) {
+      throw new Error(tofuSriFailure.message);
+    }
     if (historyEntry && previousScript) {
       const previousReceipt = previousScript.trustReceipt;
       const previousSourceUrl = previousReceipt

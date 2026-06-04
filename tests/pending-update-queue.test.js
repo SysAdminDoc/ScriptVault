@@ -179,6 +179,24 @@ describe('pending update queue', () => {
     expect(result.pendingUpdates[0].reviewReasons).toContain('Adds permissions or host scope');
   });
 
+  it('marks previously trusted unpinned @require byte changes for TOFU review', () => {
+    const reasons = UpdateSystem._getUpdateReviewReasons({
+      permissionChanges: null,
+      dependencyChanges: {
+        require: [{
+          url: 'https://cdn.example.com/lib.js',
+          change: 'changed',
+          previousSha256: 'a'.repeat(64),
+          nextSha256: 'b'.repeat(64),
+        }],
+      },
+      dependencies: { require: [] },
+    }, false);
+
+    expect(reasons).toContain('Changes previously trusted unpinned @require bytes');
+    expect(reasons).not.toContain('Changes external dependencies');
+  });
+
   it('marks provenance verification failures for review', () => {
     const reasons = UpdateSystem._getUpdateReviewReasons({
       permissionChanges: null,

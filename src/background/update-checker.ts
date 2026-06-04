@@ -6,7 +6,7 @@ import type { Script, ScriptMeta, ScriptTrustReceipt, VersionHistoryEntry } from
 import type { Settings } from '../types/settings';
 import { fetchTextBounded } from './fetch-bounded';
 import { classifyFetchUrl, classifyResponseUrl } from './internal-host-guard';
-import { createScriptTrustReceipt } from './trust-receipt';
+import { createScriptTrustReceipt, getRequireTofuSriFailure } from './trust-receipt';
 import { bundleIfNeeded } from '../bg/esm-bundler';
 import { fetchProvenanceBundle, fetchRequireScript } from './resource-loader';
 
@@ -116,6 +116,10 @@ export interface ApplyUpdateSkipped {
 }
 
 export type ApplyUpdateResult = ApplyUpdateSuccess | ApplyUpdateError | ApplyUpdateSkipped;
+
+async function fetchRequireScriptForTrustReceipt(url: string): Promise<string | null> {
+  return await fetchRequireScript(url, { bypassCache: true, cacheResult: false });
+}
 
 // ---------------------------------------------------------------------------
 // UpdateSystem
@@ -317,18 +321,20 @@ export const UpdateSystem = {
     };
 
     // Store previous version for rollback (keep last 3)
-    if (!script.versionHistory) script.versionHistory = [];
+    const versionHistory: VersionHistoryEntry[] = Array.isArray(script.versionHistory)
+      ? [...script.versionHistory]
+      : [];
     const historyEntry: VersionHistoryEntry = {
       version: script.meta.version,
       code: script.code,
       updatedAt: script.updatedAt || Date.now(),
     };
-    script.versionHistory.push(historyEntry);
+    versionHistory.push(historyEntry);
     // Trim to last 5 versions
-    if (script.versionHistory.length > 5) {
-      script.versionHistory = script.versionHistory.slice(-5);
+    if (versionHistory.length > 5) {
+      versionHistory.splice(0, versionHistory.length - 5);
     }
-    const rollbackIndex = script.versionHistory.indexOf(historyEntry);
+    const rollbackIndex = versionHistory.indexOf(historyEntry);
     const trustReceipt = await createScriptTrustReceipt({
       operation: options.force ? 'manual-update' : 'auto-update',
       code: newCode,
@@ -336,9 +342,13 @@ export const UpdateSystem = {
       sourceUrl: options.sourceUrl || script.meta.downloadURL || script.meta.updateURL,
       previousScript,
       rollbackIndex,
-      fetchDependencyBody: options.fetchDependencyBody || fetchRequireScript,
+      fetchDependencyBody: options.fetchDependencyBody || fetchRequireScriptForTrustReceipt,
       fetchProvenanceBundle: options.fetchProvenanceBundle || fetchProvenanceBundle,
     });
+    const tofuSriFailure = getRequireTofuSriFailure(trustReceipt);
+    if (tofuSriFailure) {
+      return { error: tofuSriFailure.message };
+    }
     const previousReceipt = previousScript.trustReceipt;
     const previousSourceUrl = previousReceipt
       ? previousReceipt.source.installUrl
@@ -354,6 +364,7 @@ export const UpdateSystem = {
     script.meta = parsedMeta;
     script.updatedAt = Date.now();
     script.trustReceipt = trustReceipt;
+    script.versionHistory = versionHistory;
 
     // Re-register the script after updating (persist happens below; registration errors
     // are recorded on the script so the UI can surface them, but don't block save)
@@ -434,12 +445,14 @@ export const UpdateSystem = {
     });
   },
 
-  _getUpdateReviewReasons(receipt: { permissionChanges?: Record<string, { added?: string[] }>; dependencyChanges?: { require?: Array<{ change?: string; nextError?: string }> }; dependencies?: { require?: Array<{ provenance?: { status?: string; verification?: string } }> } }, sourceIdentityChanged: boolean): string[] {
+  _getUpdateReviewReasons(receipt: { permissionChanges?: Record<string, { added?: string[] }>; dependencyChanges?: ScriptTrustReceipt['dependencyChanges']; dependencies?: { require?: Array<{ provenance?: { status?: string; verification?: string } }> } }, sourceIdentityChanged: boolean): string[] {
     const reasons: string[] = [];
     if (this._hasAddedPermission(receipt.permissionChanges)) {
       reasons.push('Adds permissions or host scope');
     }
-    if (this._hasRiskyDependencyChange(receipt.dependencyChanges)) {
+    if (getRequireTofuSriFailure(receipt)) {
+      reasons.push('Changes previously trusted unpinned @require bytes');
+    } else if (this._hasRiskyDependencyChange(receipt.dependencyChanges)) {
       reasons.push('Changes external dependencies');
     }
     if (this._hasProvenanceReviewFlag(receipt)) {
@@ -469,7 +482,7 @@ export const UpdateSystem = {
       meta: parsed.meta,
       sourceUrl,
       previousScript: script,
-      fetchDependencyBody: fetchRequireScript,
+      fetchDependencyBody: fetchRequireScriptForTrustReceipt,
       fetchProvenanceBundle,
     });
     const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged);
@@ -514,7 +527,7 @@ export const UpdateSystem = {
       code: update.code,
       meta: parsed.meta,
       sourceUrl,
-      fetchDependencyBody: fetchRequireScript,
+      fetchDependencyBody: fetchRequireScriptForTrustReceipt,
       fetchProvenanceBundle,
     });
     const now = Date.now();

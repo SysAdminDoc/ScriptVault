@@ -21,6 +21,11 @@ export const requireCache: Map<string, string> = new Map();
 const MAX_REQUIRE_BYTES = 5 * 1024 * 1024;
 const MAX_PROVENANCE_BUNDLE_BYTES = 256 * 1024;
 
+export interface FetchRequireScriptOptions {
+  bypassCache?: boolean;
+  cacheResult?: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Common library fallback URLs
 // ---------------------------------------------------------------------------
@@ -121,6 +126,25 @@ export function isUnfetchableUrl(url: string): boolean {
   return false;
 }
 
+function parseRequireIntegrity(url: string): { fetchUrl: string; sriHash: string | null } {
+  let fetchUrl = url;
+  let sriHash: string | null = null;
+  const hashIdx = url.indexOf('#');
+  if (hashIdx > 0) {
+    const fragment = url.slice(hashIdx + 1);
+    if (/^(sha256|sha384|sha512|md5)[-=]/i.test(fragment)) {
+      sriHash = fragment;
+      fetchUrl = url.slice(0, hashIdx);
+    }
+  }
+  return { fetchUrl, sriHash };
+}
+
+export function hasVerifiableRequireIntegrity(url: string): boolean {
+  const { sriHash } = parseRequireIntegrity(url);
+  return /^(sha256|sha384|sha512)[-=]/i.test(sriHash || '');
+}
+
 // ---------------------------------------------------------------------------
 // verifySRI — verify SubResource Integrity hash for fetched content
 // ---------------------------------------------------------------------------
@@ -166,18 +190,11 @@ export async function verifySRI(code: string, hashStr: string | null): Promise<b
 // fetchRequireScript — fetch a @require script with caching and fallbacks
 // ---------------------------------------------------------------------------
 
-export async function fetchRequireScript(url: string): Promise<string | null> {
+export async function fetchRequireScript(url: string, options: FetchRequireScriptOptions = {}): Promise<string | null> {
   // Extract SRI hash from URL fragment (e.g., url#sha256=abc123 or url#md5=abc123)
-  let sriHash: string | null = null;
-  let fetchUrl: string = url;
-  const hashIdx = url.indexOf('#');
-  if (hashIdx > 0) {
-    const fragment = url.slice(hashIdx + 1);
-    if (/^(sha256|sha384|sha512|md5)[-=]/i.test(fragment)) {
-      sriHash = fragment;
-      fetchUrl = url.slice(0, hashIdx);
-    }
-  }
+  const { fetchUrl, sriHash } = parseRequireIntegrity(url);
+  const bypassCache = options.bypassCache === true;
+  const cacheResult = options.cacheResult !== false;
 
   debugLog('Fetching @require:', fetchUrl);
 
@@ -188,35 +205,40 @@ export async function fetchRequireScript(url: string): Promise<string | null> {
   }
 
   // Check in-memory cache first
-  if (requireCache.has(fetchUrl)) {
+  if (!bypassCache && requireCache.has(fetchUrl)) {
     debugLog('Using cached @require:', fetchUrl);
     return requireCache.get(fetchUrl) ?? null;
   }
 
   // Check persistent cache in chrome.storage.local
   // Hash the URL to create a fixed-length collision-resistant cache key
-  const cacheKey = await (async (): Promise<string> => {
-    const data = new TextEncoder().encode(url);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-    return `require_cache_${hex}`;
-  })();
-  try {
-    const cached = await chrome.storage.local.get(cacheKey);
-    const entry = cached[cacheKey] as { code?: string; timestamp?: number } | undefined;
-    if (entry?.code) {
-      // Check if cache is less than 7 days old
-      const age = Date.now() - (entry.timestamp ?? 0);
-      if (age < 7 * 24 * 60 * 60 * 1000) {
-        debugLog('Using persistent cached @require:', url);
-        // Use fetchUrl (without SRI fragment) as the in-memory cache key so
-        // subsequent lookups at line `requireCache.has(fetchUrl)` hit.
-        requireCache.set(fetchUrl, entry.code);
-        return entry.code;
+  let cacheKey = '';
+  if (!bypassCache || cacheResult) {
+    cacheKey = await (async (): Promise<string> => {
+      const data = new TextEncoder().encode(url);
+      const hash = await crypto.subtle.digest('SHA-256', data);
+      const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+      return `require_cache_${hex}`;
+    })();
+  }
+  if (!bypassCache) {
+    try {
+      const cached = await chrome.storage.local.get(cacheKey);
+      const entry = cached[cacheKey] as { code?: string; timestamp?: number } | undefined;
+      if (entry?.code) {
+        // Check if cache is less than 7 days old
+        const age = Date.now() - (entry.timestamp ?? 0);
+        if (age < 7 * 24 * 60 * 60 * 1000) {
+          debugLog('Using persistent cached @require:', url);
+          // Use fetchUrl (without SRI fragment) as the in-memory cache key so
+          // subsequent lookups at line `requireCache.has(fetchUrl)` hit.
+          requireCache.set(fetchUrl, entry.code);
+          return entry.code;
+        }
       }
+    } catch (_e) {
+      // Ignore cache errors
     }
-  } catch (_e) {
-    // Ignore cache errors
   }
 
   // Build list of URLs to try (original + fallbacks)
@@ -237,16 +259,19 @@ export async function fetchRequireScript(url: string): Promise<string | null> {
             continue;
           }
         }
-        // Store in both caches
-        requireCache.set(fetchUrl, code);
+        // Store in both caches unless this is an integrity probe. TOFU receipt
+        // checks must not poison the active cache when they reject an update.
+        if (cacheResult) {
+          requireCache.set(fetchUrl, code);
 
-        // Store in persistent cache
-        try {
-          await chrome.storage.local.set({
-            [cacheKey]: { code, timestamp: Date.now(), url: tryUrl }
-          });
-        } catch (_e) {
-          // Ignore storage errors
+          // Store in persistent cache
+          try {
+            await chrome.storage.local.set({
+              [cacheKey]: { code, timestamp: Date.now(), url: tryUrl }
+            });
+          } catch (_e) {
+            // Ignore storage errors
+          }
         }
 
         if (tryUrl !== url) {

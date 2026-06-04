@@ -7,6 +7,7 @@ import type {
   ScriptTrustReceiptPermissionChangeSet,
 } from '../types/script';
 import { verifySigstoreMessageSignature } from '../modules/sigstore-bundle-verifier';
+import { hasVerifiableRequireIntegrity } from './resource-loader';
 
 function asArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string' && item.length > 0);
@@ -205,6 +206,43 @@ function buildDependencyChanges(
 export async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function shortHash(value?: string): string {
+  return value ? `${value.slice(0, 12)}...` : 'unavailable';
+}
+
+export function getRequireTofuSriFailure(receipt?: Pick<ScriptTrustReceipt, 'dependencyChanges'> | null): {
+  url: string;
+  message: string;
+  change: ScriptTrustReceiptDependencyChange;
+} | null {
+  const changes = receipt?.dependencyChanges?.require ?? [];
+  for (const change of changes) {
+    if (!change?.url || hasVerifiableRequireIntegrity(change.url)) continue;
+    const hadTrustedHash = typeof change.previousSha256 === 'string' && change.previousSha256.length > 0;
+    if (!hadTrustedHash) continue;
+
+    const nextHash = typeof change.nextSha256 === 'string' && change.nextSha256.length > 0
+      ? change.nextSha256
+      : '';
+    const changedHash = change.change === 'changed'
+      && !!nextHash
+      && nextHash !== change.previousSha256;
+    const unverifiable = ['changed', 'unverified'].includes(change.change)
+      && (!nextHash || !!change.nextError);
+    if (!changedHash && !unverifiable) continue;
+
+    const reason = changedHash
+      ? `hash changed from ${shortHash(change.previousSha256)} to ${shortHash(nextHash)}`
+      : `previously trusted hash ${shortHash(change.previousSha256)} could not be reverified`;
+    return {
+      url: change.url,
+      change,
+      message: `@require TOFU integrity blocked for ${change.url}: ${reason}. Pin the dependency with #sha256= or provide verified @require-provenance before updating.`,
+    };
+  }
+  return null;
 }
 
 export async function createScriptTrustReceipt(options: {

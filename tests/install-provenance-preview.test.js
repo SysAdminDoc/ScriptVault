@@ -21,8 +21,10 @@ describe('install @require provenance preview wiring', () => {
 
   it('uses the hardened background dependency and bundle fetchers for preview and saved receipts', () => {
     expect(backgroundCore).toContain('const body = await fetchRequireScript(url);');
+    expect(backgroundCore).toContain('async function fetchRequireScriptForTrustReceipt(url)');
+    expect(backgroundCore).toContain("fetchRequireScript(url, { bypassCache: true, cacheResult: false })");
     expect(backgroundCore).toContain('await _receiptDependencyProvenance(bundleUrl, identity, body, fetchProvenanceBundle)');
-    expect(backgroundCore).toMatch(/fetchDependencyBody:\s*fetchRequireScript,\s*fetchProvenanceBundle/s);
+    expect(backgroundCore).toMatch(/fetchDependencyBody:\s*fetchRequireScriptForTrustReceipt,\s*fetchProvenanceBundle/s);
   });
 
   it('rejects opted-in provenance failures before saving install or update state', () => {

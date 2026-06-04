@@ -402,10 +402,13 @@ Priorities/sizes preserve the source labels.
   - Verification: `npm run build:bg`; `npm test -- tests/content-bridge-security.test.js tests/background-cookie-url.test.js tests/source-dnr-rules.test.js tests/install-optional-permissions.test.js tests/storage.test.js -- --pool=vmThreads --maxWorkers=1`; `npm run typecheck`; `npm run ts-runtime:check`; `npm run ts-source:check`; `npm test -- tests/source-hardening-parity.test.js tests/dashboard-a11y.test.js -- --pool=vmThreads --maxWorkers=1`; `npm run check`; `npm run store-copy:check`; `npm run readme:check`; `npm run smoke:dashboard`; `npm run cws:remote-code:check`; `npm run test:a11y`; `git diff --check`.
   - Complexity: M
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-4.
-- [ ] P1 — TOFU SRI for unpinned `@require`
+- [x] P1 — TOFU SRI for unpinned `@require`
   - Why: SRI enforced only when an author hand-pins `#sha256=`; a compromised CDN silently swaps `@require` bytes. `trust-receipt.ts` already computes per-`@require` SHA-256 and diffs across updates but only displays, never enforces.
   - Touches: `resource-loader.ts`; wire existing trust-receipt diff to fail-closed on update.
   - Acceptance: changing a remote `@require` body on update is flagged/blocked.
+  - Progress: 2026-06-04 trust receipts now fetch `@require` bodies through a cache-bypassing, no-store probe before save/update/install review so stale cached dependency bytes cannot hide a CDN swap and rejected bytes cannot poison the active cache. Previously trusted unpinned same-URL dependencies now fail closed when their SHA-256 changes or cannot be reverified; pending updates show a specific TOFU review reason, while verifiable `#sha256`/`#sha384`/`#sha512` pinned requires remain governed by normal SRI.
+  - Verification: `npm run build:bg`; `npm test -- tests/trust-receipt-diff.test.js tests/pending-update-queue.test.js tests/audit-hardening-2026-06.test.js tests/install-provenance-preview.test.js -- --pool=vmThreads --maxWorkers=1`; `npm run typecheck`; `npm run ts-runtime:check`; `npm run ts-source:check`; `npm run check`; `npm run store-copy:check`; `npm run readme:check`; `npm run cws:remote-code:check`; `npm run test:a11y`; `git diff --check`.
+  - Complexity: S
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-5.
 
 ### Correctness and reachability

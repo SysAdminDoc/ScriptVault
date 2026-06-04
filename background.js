@@ -16462,6 +16462,43 @@ function _receiptDependencyChanges(previous, next) {
   });
 }
 
+function _shortReceiptHash(value = '') {
+  return value ? `${String(value).slice(0, 12)}...` : 'unavailable';
+}
+
+function _getRequireTofuSriFailure(receipt = {}) {
+  const changes = receipt?.dependencyChanges?.require || [];
+  for (const change of changes) {
+    if (!change?.url || hasVerifiableRequireIntegrity(change.url)) continue;
+    const hadTrustedHash = typeof change.previousSha256 === 'string' && change.previousSha256.length > 0;
+    if (!hadTrustedHash) continue;
+
+    const nextHash = typeof change.nextSha256 === 'string' && change.nextSha256.length > 0
+      ? change.nextSha256
+      : '';
+    const changedHash = change.change === 'changed'
+      && !!nextHash
+      && nextHash !== change.previousSha256;
+    const unverifiable = ['changed', 'unverified'].includes(change.change)
+      && (!nextHash || !!change.nextError);
+    if (!changedHash && !unverifiable) continue;
+
+    const reason = changedHash
+      ? `hash changed from ${_shortReceiptHash(change.previousSha256)} to ${_shortReceiptHash(nextHash)}`
+      : `previously trusted hash ${_shortReceiptHash(change.previousSha256)} could not be reverified`;
+    return {
+      url: change.url,
+      change,
+      message: `@require TOFU integrity blocked for ${change.url}: ${reason}. Pin the dependency with #sha256= or provide verified @require-provenance before updating.`
+    };
+  }
+  return null;
+}
+
+async function fetchRequireScriptForTrustReceipt(url) {
+  return fetchRequireScript(url, { bypassCache: true, cacheResult: false });
+}
+
 async function _sha256Hex(text) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text || ''));
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -16783,18 +16820,18 @@ const UpdateSystem = {
     };
 
     // Store previous version for rollback (keep last 3)
-    if (!script.versionHistory) script.versionHistory = [];
+    const versionHistory = Array.isArray(script.versionHistory) ? [...script.versionHistory] : [];
     const historyEntry = {
       version: script.meta.version,
       code: script.code,
       updatedAt: script.updatedAt || Date.now()
     };
-    script.versionHistory.push(historyEntry);
+    versionHistory.push(historyEntry);
     // Trim to last 5 versions
-    if (script.versionHistory.length > 5) {
-      script.versionHistory = script.versionHistory.slice(-5);
+    if (versionHistory.length > 5) {
+      versionHistory.splice(0, versionHistory.length - 5);
     }
-    const rollbackIndex = script.versionHistory.indexOf(historyEntry);
+    const rollbackIndex = versionHistory.indexOf(historyEntry);
     const trustReceipt = await createScriptTrustReceipt({
       operation: force ? 'manual-update' : 'auto-update',
       code: newCode,
@@ -16802,9 +16839,13 @@ const UpdateSystem = {
       sourceUrl: sourceUrl || script.meta.downloadURL || script.meta.updateURL,
       previousScript,
       rollbackIndex,
-      fetchDependencyBody: fetchDependencyBody || fetchRequireScript,
+      fetchDependencyBody: fetchDependencyBody || fetchRequireScriptForTrustReceipt,
       fetchProvenanceBundle: fetchProvenanceBundleOption || fetchProvenanceBundle
     });
+    const tofuSriFailure = _getRequireTofuSriFailure(trustReceipt);
+    if (tofuSriFailure) {
+      return { error: tofuSriFailure.message };
+    }
     const provenanceFailure = _getRequireProvenanceFailure(trustReceipt);
     if (provenanceFailure) {
       return { error: provenanceFailure.message };
@@ -16820,6 +16861,7 @@ const UpdateSystem = {
     script.meta = parsed.meta;
     script.updatedAt = Date.now();
     script.trustReceipt = trustReceipt;
+    script.versionHistory = versionHistory;
 
     // Re-classify the install source. If the update came from a different
     // registry than the install, flag it for the dashboard banner.
@@ -16917,7 +16959,9 @@ const UpdateSystem = {
     if (this._hasAddedPermission(receipt.permissionChanges)) {
       reasons.push('Adds permissions or host scope');
     }
-    if (this._hasRiskyDependencyChange(receipt.dependencyChanges)) {
+    if (_getRequireTofuSriFailure(receipt)) {
+      reasons.push('Changes previously trusted unpinned @require bytes');
+    } else if (this._hasRiskyDependencyChange(receipt.dependencyChanges)) {
       reasons.push('Changes external dependencies');
     }
     if (this._hasProvenanceReviewFlag(receipt)) {
@@ -16949,7 +16993,7 @@ const UpdateSystem = {
       meta: parsed.meta,
       sourceUrl,
       previousScript: script,
-      fetchDependencyBody: fetchRequireScript,
+      fetchDependencyBody: fetchRequireScriptForTrustReceipt,
       fetchProvenanceBundle
     });
     const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged);
@@ -16997,7 +17041,7 @@ const UpdateSystem = {
       code: update.code,
       meta: parsed.meta,
       sourceUrl,
-      fetchDependencyBody: fetchRequireScript,
+      fetchDependencyBody: fetchRequireScriptForTrustReceipt,
       fetchProvenanceBundle
     });
     const now = Date.now();
@@ -19460,11 +19504,15 @@ async function handleMessage(message, sender) {
               sourceUrl: receiptOptions?.sourceUrl || '',
               previousScript,
               rollbackIndex,
-              fetchDependencyBody: fetchRequireScript,
+              fetchDependencyBody: fetchRequireScriptForTrustReceipt,
               fetchProvenanceBundle,
               optionalPermissions: receiptOptions?.optionalPermissions || null
             })
           : existing?.trustReceipt;
+        const tofuSriFailure = shouldRecordReceipt ? _getRequireTofuSriFailure(trustReceipt) : null;
+        if (tofuSriFailure) {
+          return { error: tofuSriFailure.message };
+        }
         const provenanceFailure = shouldRecordReceipt ? _getRequireProvenanceFailure(trustReceipt) : null;
         if (provenanceFailure) {
           return { error: provenanceFailure.message };
@@ -23449,9 +23497,13 @@ async function installFromCode(code, receiptOptions = {}) {
       sourceUrl: receiptOptions.sourceUrl || '',
       previousScript,
       rollbackIndex,
-      fetchDependencyBody: fetchRequireScript,
+      fetchDependencyBody: fetchRequireScriptForTrustReceipt,
       fetchProvenanceBundle
     });
+    const tofuSriFailure = _getRequireTofuSriFailure(trustReceipt);
+    if (tofuSriFailure) {
+      throw new Error(tofuSriFailure.message);
+    }
     const provenanceFailure = _getRequireProvenanceFailure(trustReceipt);
     if (provenanceFailure) {
       throw new Error(provenanceFailure.message);
@@ -24680,7 +24732,7 @@ async function verifySRI(code, hashStr) {
   }
 }
 
-async function fetchRequireScript(url) {
+function parseRequireIntegrity(url) {
   // Extract SRI hash from URL fragment (e.g., url#sha256=abc123 or url#md5=abc123)
   let sriHash = null;
   let fetchUrl = url;
@@ -24692,6 +24744,18 @@ async function fetchRequireScript(url) {
       fetchUrl = url.slice(0, hashIdx);
     }
   }
+  return { fetchUrl, sriHash };
+}
+
+function hasVerifiableRequireIntegrity(url) {
+  const { sriHash } = parseRequireIntegrity(url);
+  return /^(sha256|sha384|sha512)[-=]/i.test(sriHash || '');
+}
+
+async function fetchRequireScript(url, options = {}) {
+  const { fetchUrl, sriHash } = parseRequireIntegrity(url);
+  const bypassCache = options.bypassCache === true;
+  const cacheResult = options.cacheResult !== false;
 
   debugLog('Fetching @require:', fetchUrl);
 
@@ -24702,32 +24766,37 @@ async function fetchRequireScript(url) {
   }
 
   // Check in-memory cache first
-  if (requireCache.has(fetchUrl)) {
+  if (!bypassCache && requireCache.has(fetchUrl)) {
     debugLog('Using cached @require:', fetchUrl);
     return requireCache.get(fetchUrl);
   }
   
   // Check persistent cache in chrome.storage.local
   // Hash the URL to create a fixed-length collision-resistant cache key
-  const cacheKey = await (async () => {
-    const data = new TextEncoder().encode(url);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-    return `require_cache_${hex}`;
-  })();
-  try {
-    const cached = await chrome.storage.local.get(cacheKey);
-    if (cached[cacheKey]?.code) {
-      // Check if cache is less than 7 days old
-      const age = Date.now() - (cached[cacheKey].timestamp || 0);
-      if (age < 7 * 24 * 60 * 60 * 1000) {
-        debugLog('Using persistent cached @require:', url);
-        requireCacheSet(fetchUrl, cached[cacheKey].code);
-        return cached[cacheKey].code;
+  let cacheKey = '';
+  if (!bypassCache || cacheResult) {
+    cacheKey = await (async () => {
+      const data = new TextEncoder().encode(url);
+      const hash = await crypto.subtle.digest('SHA-256', data);
+      const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+      return `require_cache_${hex}`;
+    })();
+  }
+  if (!bypassCache) {
+    try {
+      const cached = await chrome.storage.local.get(cacheKey);
+      if (cached[cacheKey]?.code) {
+        // Check if cache is less than 7 days old
+        const age = Date.now() - (cached[cacheKey].timestamp || 0);
+        if (age < 7 * 24 * 60 * 60 * 1000) {
+          debugLog('Using persistent cached @require:', url);
+          requireCacheSet(fetchUrl, cached[cacheKey].code);
+          return cached[cacheKey].code;
+        }
       }
+    } catch (e) {
+      // Ignore cache errors
     }
-  } catch (e) {
-    // Ignore cache errors
   }
   
   // Build list of URLs to try (original + fallbacks)
@@ -24748,16 +24817,19 @@ async function fetchRequireScript(url) {
             continue;
           }
         }
-        // Store in both caches
-        requireCacheSet(fetchUrl, code);
-        
-        // Store in persistent cache
-        try {
-          await chrome.storage.local.set({
-            [cacheKey]: { code, timestamp: Date.now(), url: tryUrl }
-          });
-        } catch (e) {
-          // Ignore storage errors
+        // Store in both caches unless this is an integrity probe. TOFU receipt
+        // checks must not poison the active cache when they reject an update.
+        if (cacheResult) {
+          requireCacheSet(fetchUrl, code);
+
+          // Store in persistent cache
+          try {
+            await chrome.storage.local.set({
+              [cacheKey]: { code, timestamp: Date.now(), url: tryUrl }
+            });
+          } catch (e) {
+            // Ignore storage errors
+          }
         }
         
         if (tryUrl !== url) {
