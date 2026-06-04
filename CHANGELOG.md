@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-03 — ESM dashboard badge
+
+- **ESM scripts are visible in the dashboard row.** Scripts parsed from
+  `@module 1`, `@inject-into module`, or stored ESM bundle metadata now show an
+  `ESM` badge beside the existing source and health badges.
+- **Badge styling is theme-aware.** The new badge uses the existing square
+  health-badge shape in both dark and light themes.
+
 ### 2026-06-03 — Playwright E2E critical flows
 
 - **Added Playwright E2E coverage for four critical flows.** New specs cover

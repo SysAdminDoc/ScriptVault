@@ -95,7 +95,7 @@
   - Verification: `npm run test:e2e` (4 specs passed: install, update, restore/rollback, WebDAV sync preview/upload).
 - [x] **E-6** ESM badge in script row (R-2 from ESM roadmap) (2026-06-03)
   - Evidence: PASS2 NF-14.
-  - Touches: `pages/dashboard.js` `renderScriptRow`, `pages/dashboard.css`.
+  - Touches: `pages/dashboard.js` `renderScriptRow`, dashboard CSS in `pages/dashboard.html`.
   - Verification: `npm test -- tests/esm-dashboard-badge.test.js tests/esm-bundler.test.js`, `node --check pages/dashboard.js`, `npm run check`.
 - [ ] **E-7** ScriptCat-style script subscriptions (URL → JSON list)
   - Evidence: PASS2 ecosystem item 14.
