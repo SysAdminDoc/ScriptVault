@@ -7,16 +7,17 @@ const DANGEROUS_PERMISSIONS = [
   'GM_download',
   'GM_setClipboard',
   'unsafeWindow',
-  'GM_cookie'
+  'GM_cookie',
+  'GM_webRequest'
 ];
 
 // Permission descriptions for install page tooltips
 const GRANT_DESCRIPTIONS = {
-  'GM_xmlhttpRequest': 'Can make network requests to any server (bypasses CORS)',
-  'GM.xmlHttpRequest': 'Can make network requests to any server (bypasses CORS)',
-  'GM_download': 'Can download files to your computer',
+  'GM_xmlhttpRequest': 'Can make network requests from declared run hosts or explicit @connect hosts',
+  'GM.xmlHttpRequest': 'Can make network requests from declared run hosts or explicit @connect hosts',
+  'GM_download': 'Can download files from declared run hosts or explicit @connect hosts',
   'GM_setClipboard': 'Can write to your clipboard',
-  'GM_cookie': 'Can read and modify browser cookies',
+  'GM_cookie': 'Can read and modify browser cookies for declared run hosts',
   'unsafeWindow': 'Direct access to the page\'s JavaScript environment',
   'GM_getValue': 'Can store and retrieve persistent data',
   'GM_setValue': 'Can store and retrieve persistent data',
@@ -29,7 +30,7 @@ const GRANT_DESCRIPTIONS = {
   'GM_getResourceText': 'Can access bundled text resources',
   'GM_getResourceURL': 'Can access bundled resource URLs',
   'GM_addValueChangeListener': 'Can listen for storage value changes',
-  'GM_webRequest': 'Can intercept and modify network requests',
+  'GM_webRequest': 'Can intercept and modify network requests within declared run hosts',
   'GM_head': 'Can make HEAD requests to any server',
   'window.close': 'Can close the current tab',
   'window.focus': 'Can focus the current tab',
@@ -1301,17 +1302,20 @@ function renderInstallUI(sourceUrl) {
         ` : ''}
       </div>
 
-      ${scriptMeta.connect.length > 0 ? `
-        <div class="section">
-          <div class="section-title">
-            <span>Network Access</span>
-            <span class="count">${scriptMeta.connect.length}</span>
-          </div>
-          <div class="tag-list">
-            ${scriptMeta.connect.map(d => `<span class="tag">${escapeHtml(d)}</span>`).join('')}
-          </div>
+      <div class="section">
+        <div class="section-title">
+          <span>Privileged Host Scope</span>
+          <span class="count">${scriptMeta.connect.length > 0 ? numberFormatter.format(scriptMeta.connect.length) : 'Run hosts'}</span>
         </div>
-      ` : ''}
+        <p class="optional-perm-note" style="margin-top:0;margin-bottom:8px;font-size:0.85em;color:var(--text-muted,#888);">
+          GM_xmlhttpRequest, GM_download, GM_cookie, and GM_webRequest are limited to the declared run hosts. @connect entries explicitly widen network/download/DNR targets; cookie access stays run-host scoped unless the advanced cross-scope override is enabled.
+        </p>
+        <div class="tag-list">
+          ${scriptMeta.connect.length > 0
+            ? scriptMeta.connect.map(d => `<span class="tag">${escapeHtml(d)}</span>`).join('')
+            : '<span class="tag safe">No extra @connect hosts</span>'}
+        </div>
+      </div>
 
       ${resourceCount > 0 ? `
         <div class="section">

@@ -78,5 +78,9 @@ describe('GM_cookie handlers wire the validator', () => {
     expect(setMatch?.[0]).toContain('isHttpCookieUrl');
     expect(delMatch?.[0]).toContain('isHttpCookieUrl');
     expect(listMatch?.[0]).toContain('isHttpCookieUrl');
+    expect(setMatch?.[0]).toContain('evaluateScriptHostScopePolicy');
+    expect(delMatch?.[0]).toContain('evaluateScriptHostScopePolicy');
+    expect(listMatch?.[0]).toContain('evaluateScriptHostScopePolicy');
+    expect(listMatch?.[0]).toContain('resolveCookiePolicyTarget');
   });
 });

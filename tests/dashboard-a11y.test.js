@@ -509,6 +509,14 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toContain("await saveSettingOrThrow('allowInternalSyncEndpoints'");
   });
 
+  test("security settings expose the cross-scope privileged API override as advanced", () => {
+    const doc = parseDashboard();
+    expect(doc.getElementById("settingsAllowHighPrivilegeScriptApis")?.getAttribute("type")).toBe("checkbox");
+    expect(doc.getElementById("settingsAllowHighPrivilegeScriptApis")?.closest(".settings-section")?.dataset.configLevel).toBe("advanced");
+    expect(doc.body.textContent).toContain("Allow cross-scope privileged script APIs");
+    expect(dashboardJs).toContain("settingsAllowHighPrivilegeScriptApis: ['allowHighPrivilegeScriptApis', 'checked']");
+  });
+
   test("command palette controller exposes active result semantics and item-only keyboard navigation", () => {
     expect(dashboardJs).toMatch(/function getCommandPaletteItems/);
     expect(dashboardJs).toMatch(/function setCommandPaletteActiveItem/);

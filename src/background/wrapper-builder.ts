@@ -1227,7 +1227,7 @@ ${req.code}
         if (callback) callback([], new Error('Permission denied'));
         return;
       }
-      sendToBackground('GM_cookie_list', details || {}).then(r => {
+      sendToBackground('GM_cookie_list', { ...(details || {}), scriptId }).then(r => {
         if (callback) callback(r.cookies || [], r.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback([], e); });
     },
@@ -1236,7 +1236,7 @@ ${req.code}
         if (callback) callback(new Error('Permission denied'));
         return;
       }
-      sendToBackground('GM_cookie_set', details || {}).then(r => {
+      sendToBackground('GM_cookie_set', { ...(details || {}), scriptId }).then(r => {
         if (callback) callback(r.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback(e); });
     },
@@ -1245,7 +1245,7 @@ ${req.code}
         if (callback) callback(new Error('Permission denied'));
         return;
       }
-      sendToBackground('GM_cookie_delete', details || {}).then(r => {
+      sendToBackground('GM_cookie_delete', { ...(details || {}), scriptId }).then(r => {
         if (callback) callback(r.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback(e); });
     }
@@ -1386,7 +1386,7 @@ ${req.code}
       return;
     }
     const ruleArray = Array.isArray(rules) ? rules : [rules];
-    sendToBackground('GM_webRequest', { rules: ruleArray }).catch(e =>
+    sendToBackground('GM_webRequest', { scriptId, rules: ruleArray }).catch(e =>
       console.warn('[ScriptVault] GM_webRequest failed:', e.message)
     );
     // listener is called with (info, message, details) when a rule matches;

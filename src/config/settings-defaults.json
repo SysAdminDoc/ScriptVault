@@ -59,6 +59,8 @@
   "xhrTimeout": 30000,
   "allowInternalXhr": false,
   "allowInternalSyncEndpoints": false,
+  "allowHighPrivilegeScriptApis": false,
+  "modifyCSP": "auto",
   "blacklist": [],
   "badgeInfo": "running",
   "autoReload": false,

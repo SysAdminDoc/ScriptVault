@@ -5,6 +5,8 @@
  * declarativeNetRequest dynamic rules.
  */
 
+import type { Script } from '../types/script';
+import type { Settings } from '../types/settings';
 import { debugLog, ScriptStorage } from '../modules/storage';
 
 // ---------------------------------------------------------------------------
@@ -20,6 +22,8 @@ interface UrlFilterEntry {
 /** GM_webRequest rule selector. */
 interface WebRequestSelector {
   url?: string | UrlFilterEntry[];
+  include?: string | string[];
+  exclude?: string | string[];
   tab?: number | number[];
   type?: chrome.declarativeNetRequest.ResourceType | chrome.declarativeNetRequest.ResourceType[];
 }
@@ -41,8 +45,19 @@ interface WebRequestAction {
 /** A single GM_webRequest rule as provided by userscript metadata / API. */
 export interface WebRequestRule {
   priority?: number;
-  selector?: WebRequestSelector;
-  action?: WebRequestAction;
+  selector?: string | WebRequestSelector;
+  action?: 'cancel' | 'block' | WebRequestAction;
+}
+
+export interface ApplyWebRequestRulesOptions {
+  script?: Script;
+  settings?: Partial<Settings> & { allowHighPrivilegeScriptApis?: boolean; modifyCSP?: 'auto' | 'yes' | 'no' };
+}
+
+export interface ApplyWebRequestRulesResult {
+  success: boolean;
+  count: number;
+  error?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +138,207 @@ async function persistWebRequestRuleMap(): Promise<boolean> {
   }
 }
 
+function normalizeHost(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  let pattern = value.trim().toLowerCase();
+  if (!pattern) return '';
+  if (pattern === '*' || pattern === '<all_urls>' || pattern === 'self') return pattern;
+  try {
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(pattern)) {
+      pattern = new URL(pattern.replace(/\*/g, 'x')).hostname.toLowerCase();
+    }
+  } catch {
+    // Fall through to best-effort host extraction below.
+  }
+  pattern = (((pattern.replace(/^\/\//, '').split('/')[0] ?? '').split('?')[0] ?? '').split('#')[0] ?? '');
+  if (pattern.startsWith('*.')) pattern = pattern.slice(2);
+  if (pattern.startsWith('x.')) pattern = pattern.slice(2);
+  if (pattern.startsWith('.')) pattern = pattern.slice(1);
+  if (pattern.startsWith('[') && pattern.includes(']')) {
+    pattern = pattern.slice(1, pattern.indexOf(']'));
+  } else {
+    pattern = pattern.split(':')[0] ?? '';
+  }
+  return pattern;
+}
+
+function hostMatches(hostname: string, pattern: string): boolean {
+  const host = normalizeHost(hostname);
+  const target = normalizeHost(pattern);
+  if (!host || !target) return false;
+  return host === target || host.endsWith(`.${target}`);
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!value) return [];
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : [String(value)];
+}
+
+function extractScopeHost(pattern: unknown): string {
+  if (typeof pattern !== 'string') return '';
+  const raw = pattern.trim();
+  if (!raw) return '';
+  if (raw === '*' || raw === '<all_urls>') return '*';
+  const match = raw.match(/^(?:\*|https?|file|ftp):\/\/([^/]+)/i);
+  if (!match) return '';
+  if (!match[1] || match[1] === '*') return '*';
+  return normalizeHost(match[1]);
+}
+
+function scriptHostScopeInfo(script?: Script): { universal: boolean; hosts: string[] } {
+  const meta = script?.meta;
+  const settings = script?.settings || {};
+  const patterns: string[] = [];
+  if (settings.useOriginalMatches !== false) patterns.push(...asStringArray(meta?.match));
+  if (Array.isArray(settings.userMatches)) patterns.push(...settings.userMatches.map(String));
+  if (settings.useOriginalIncludes !== false) patterns.push(...asStringArray(meta?.include));
+  if (Array.isArray(settings.userIncludes)) patterns.push(...settings.userIncludes.map(String));
+
+  const hosts = new Set<string>();
+  let universal = false;
+  for (const pattern of patterns) {
+    const host = extractScopeHost(pattern);
+    if (host === '*') universal = true;
+    else if (host) hosts.add(host);
+  }
+  return { universal, hosts: [...hosts] };
+}
+
+function dnrUrlFiltersForRule(rule: WebRequestRule): string[] {
+  const selector = rule.selector;
+  if (typeof selector === 'string') return [selector].filter(Boolean);
+  const filters: string[] = [];
+  const push = (value: unknown): void => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        if (typeof entry === 'string') filters.push(entry);
+        else if (entry && typeof entry === 'object' && 'include' in entry) {
+          filters.push(String((entry as UrlFilterEntry).include || ''));
+        }
+      }
+    } else if (typeof value === 'string') {
+      filters.push(value);
+    }
+  };
+  push(selector?.url);
+  push(selector?.include);
+  return filters.map((filter) => filter.trim()).filter(Boolean);
+}
+
+function extractDnrFilterHost(filter: unknown): string {
+  if (typeof filter !== 'string') return '';
+  const raw = filter.trim();
+  if (!raw) return '';
+  if (raw === '*' || raw === '<all_urls>') return '*';
+  if (raw.startsWith('||')) {
+    const host = raw.slice(2).split(/[\/^*?#]/)[0];
+    return host ? normalizeHost(host) : '';
+  }
+  const host = extractScopeHost(raw);
+  if (host) return host;
+  if (/^[a-z0-9.-]+(?::\d+)?$/i.test(raw)) return normalizeHost(raw);
+  return '';
+}
+
+function excludedRequestDomainsForRule(rule: WebRequestRule): string[] {
+  const selector = rule.selector;
+  if (!selector || typeof selector === 'string') return [];
+  const values: string[] = [];
+  const push = (value: unknown): void => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        if (typeof entry === 'string') values.push(entry);
+        else if (entry && typeof entry === 'object' && 'exclude' in entry) {
+          values.push(String((entry as UrlFilterEntry).exclude || ''));
+        }
+      }
+    } else if (typeof value === 'string') {
+      values.push(value);
+    }
+  };
+  push(selector.exclude);
+  if (Array.isArray(selector.url)) {
+    for (const entry of selector.url) {
+      if (entry.exclude) values.push(entry.exclude);
+    }
+  }
+  return values.map(extractDnrFilterHost).filter((host) => host && host !== '*');
+}
+
+function isCspHeaderName(name: string): boolean {
+  return [
+    'content-security-policy',
+    'content-security-policy-report-only',
+    'x-content-security-policy',
+    'x-webkit-csp',
+  ].includes(String(name || '').trim().toLowerCase());
+}
+
+function ruleMutatesCspHeaders(rule: WebRequestRule): boolean {
+  const action = typeof rule.action === 'object' ? rule.action : null;
+  const headers = action?.setResponseHeaders;
+  if (!headers || typeof headers !== 'object') return false;
+  return Object.keys(headers).some(isCspHeaderName);
+}
+
+function isHighPrivilegeOverride(settings?: ApplyWebRequestRulesOptions['settings']): boolean {
+  return settings?.allowHighPrivilegeScriptApis === true;
+}
+
+function isCspMutationAllowed(settings?: ApplyWebRequestRulesOptions['settings']): boolean {
+  return settings?.modifyCSP === 'yes' || isHighPrivilegeOverride(settings);
+}
+
+function dnrHostAllowedByScript(script: Script, host: string): boolean {
+  const scope = scriptHostScopeInfo(script);
+  if (scope.universal) return true;
+  if (scope.hosts.some((scopeHost) => hostMatches(host, scopeHost))) return true;
+  const connectList = Array.isArray(script.meta?.connect) ? script.meta.connect : [];
+  return connectList.some((pattern) => {
+    if (String(pattern).trim() === '*') return true;
+    const normalized = normalizeHost(pattern);
+    if (normalized === 'self') return scope.hosts.some((scopeHost) => hostMatches(host, scopeHost));
+    return hostMatches(host, normalized);
+  });
+}
+
+function validateWebRequestRulesForScript(
+  script: Script,
+  rules: WebRequestRule[],
+  settings?: ApplyWebRequestRulesOptions['settings'],
+): { allowed: boolean; initiatorDomains: string[]; error?: string } {
+  const scope = scriptHostScopeInfo(script);
+  const highPrivilege = isHighPrivilegeOverride(settings);
+  const initiatorDomains = scope.universal || highPrivilege ? [] : scope.hosts;
+  if (!scope.universal && !highPrivilege && initiatorDomains.length === 0) {
+    return { allowed: false, initiatorDomains: [], error: 'GM_webRequest requires concrete script host scope' };
+  }
+
+  for (const rule of rules) {
+    if (ruleMutatesCspHeaders(rule) && !isCspMutationAllowed(settings)) {
+      return { allowed: false, initiatorDomains, error: 'GM_webRequest CSP header changes require Modify CSP = yes' };
+    }
+    const filters = dnrUrlFiltersForRule(rule);
+    if (filters.length === 0) {
+      return { allowed: false, initiatorDomains, error: 'GM_webRequest rule requires a concrete target host' };
+    }
+    for (const filter of filters) {
+      const host = extractDnrFilterHost(filter);
+      if (!host) return { allowed: false, initiatorDomains, error: 'GM_webRequest rule requires a concrete target host' };
+      if (host === '*' && !highPrivilege) {
+        return { allowed: false, initiatorDomains, error: 'GM_webRequest wildcard target host requires high-privilege override' };
+      }
+      if (host !== '*' && !highPrivilege && !dnrHostAllowedByScript(script, host)) {
+        return { allowed: false, initiatorDomains, error: `GM_webRequest target ${host} blocked by script host scope` };
+      }
+    }
+  }
+
+  return { allowed: true, initiatorDomains };
+}
+
 /**
  * Translate a GM_webRequest rule selector/action into a
  * `chrome.declarativeNetRequest.Rule`, or `null` if the action is unsupported.
@@ -130,15 +346,18 @@ async function persistWebRequestRuleMap(): Promise<boolean> {
 export function _translateWebRequestRule(
   rule: WebRequestRule,
   ruleId: number,
+  options: { initiatorDomains?: string[] } = {},
 ): chrome.declarativeNetRequest.Rule | null {
   const condition: chrome.declarativeNetRequest.RuleCondition = {};
   let action: chrome.declarativeNetRequest.RuleAction;
 
   // -- Selector -> condition ------------------------------------------------
 
-  const sel: WebRequestSelector = rule.selector ?? {};
+  const sel = rule.selector ?? {};
 
-  if (sel.url !== undefined) {
+  if (typeof sel === 'string') {
+    condition.urlFilter = sel;
+  } else if (sel.url !== undefined) {
     const urlFilter = sel.url;
     if (Array.isArray(urlFilter)) {
       // Multiple URL patterns: pick first include (DNR only supports one urlFilter per rule)
@@ -148,34 +367,47 @@ export function _translateWebRequestRule(
       }
       const excl = urlFilter.find((u): u is UrlFilterEntry & { exclude: string } => u.exclude !== undefined);
       if (excl) {
-        condition.excludedInitiatorDomains = [excl.exclude.replace(/\*/g, '')].filter(Boolean);
+        condition.excludedRequestDomains = [extractDnrFilterHost(excl.exclude)].filter(Boolean);
       }
     } else {
       condition.urlFilter = urlFilter;
     }
+  } else if (sel.include !== undefined) {
+    const includes = Array.isArray(sel.include) ? sel.include : [sel.include];
+    const incl = includes.find(Boolean);
+    if (incl) condition.urlFilter = incl;
   }
 
-  if (sel.tab !== undefined) {
+  const excludedRequestDomains = excludedRequestDomainsForRule(rule);
+  if (excludedRequestDomains.length > 0) {
+    condition.excludedRequestDomains = excludedRequestDomains;
+  }
+
+  if (typeof sel !== 'string' && sel.tab !== undefined) {
     condition.tabIds = Array.isArray(sel.tab) ? sel.tab : [sel.tab];
   }
 
-  if (sel.type !== undefined) {
+  if (typeof sel !== 'string' && sel.type !== undefined) {
     condition.resourceTypes = Array.isArray(sel.type) ? sel.type : [sel.type];
+  }
+
+  if (Array.isArray(options.initiatorDomains) && options.initiatorDomains.length > 0) {
+    condition.initiatorDomains = options.initiatorDomains;
   }
 
   // -- Action ---------------------------------------------------------------
 
-  const act: WebRequestAction = rule.action ?? {};
+  const act = rule.action ?? {};
 
-  if (act.cancel) {
+  if (act === 'cancel' || act === 'block' || act.cancel) {
     action = { type: 'block' };
-  } else if (act.redirect !== undefined) {
+  } else if (typeof act === 'object' && act.redirect !== undefined) {
     const redirect: chrome.declarativeNetRequest.Redirect =
       typeof act.redirect === 'string'
         ? { url: act.redirect }
         : { url: act.redirect.url ?? act.redirect.regexSubstitution ?? '' };
     action = { type: 'redirect', redirect };
-  } else if (act.setRequestHeaders) {
+  } else if (typeof act === 'object' && act.setRequestHeaders) {
     action = {
       type: 'modifyHeaders',
       requestHeaders: Object.entries(act.setRequestHeaders).map(
@@ -185,7 +417,7 @@ export function _translateWebRequestRule(
             : { header: name, operation: 'set' as const, value },
       ),
     };
-  } else if (act.setResponseHeaders) {
+  } else if (typeof act === 'object' && act.setResponseHeaders) {
     action = {
       type: 'modifyHeaders',
       responseHeaders: Object.entries(act.setResponseHeaders).map(
@@ -215,10 +447,24 @@ export function _translateWebRequestRule(
  * Apply an array of GM_webRequest rules for a given script, translating them
  * into Chrome declarativeNetRequest dynamic rules.
  */
-export async function applyWebRequestRules(scriptId: string, rules: WebRequestRule[]): Promise<void> {
-  if (!chrome.declarativeNetRequest || !Array.isArray(rules) || rules.length === 0) return;
+export async function applyWebRequestRules(
+  scriptId: string,
+  rules: WebRequestRule[],
+  options: ApplyWebRequestRulesOptions = {},
+): Promise<ApplyWebRequestRulesResult> {
+  if (!chrome.declarativeNetRequest || !Array.isArray(rules) || rules.length === 0) {
+    return { success: true, count: 0 };
+  }
 
   try {
+    if (!options.script) {
+      return { success: false, count: 0, error: 'Script context not found' };
+    }
+    const policy = validateWebRequestRulesForScript(options.script, rules, options.settings);
+    if (!policy.allowed) {
+      return { success: false, count: 0, error: policy.error };
+    }
+
     await hydrateWebRequestRuleMap();
     // Remove any existing rules for this script first
     await removeWebRequestRules(scriptId);
@@ -228,7 +474,7 @@ export async function applyWebRequestRules(scriptId: string, rules: WebRequestRu
 
     rules.forEach((rule, idx) => {
       const ruleId = _makeRuleId(scriptId, idx);
-      const dnr = _translateWebRequestRule(rule, ruleId);
+      const dnr = _translateWebRequestRule(rule, ruleId, { initiatorDomains: policy.initiatorDomains });
       if (dnr) {
         dnrRules.push(dnr);
         ruleIds.push(ruleId);
@@ -242,7 +488,7 @@ export async function applyWebRequestRules(scriptId: string, rules: WebRequestRu
         console.warn(
           `[ScriptVault] DNR rule limit would be exceeded: ${existing.length} + ${dnrRules.length} > 30000`,
         );
-        return;
+        return { success: false, count: 0, error: 'DNR rule limit would be exceeded' };
       }
       await chrome.declarativeNetRequest.updateDynamicRules({ addRules: dnrRules });
       _webRequestRuleMap.set(scriptId, ruleIds);
@@ -255,13 +501,15 @@ export async function applyWebRequestRules(scriptId: string, rules: WebRequestRu
           const cleanupMessage = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
           console.warn('[ScriptVault] GM_webRequest rule rollback failed after map persist failure:', cleanupMessage);
         }
-        return;
+        return { success: false, count: 0, error: 'DNR rule ownership could not be persisted' };
       }
       debugLog(`[GM_webRequest] Applied ${dnrRules.length} rules for script ${scriptId}`);
     }
+    return { success: true, count: dnrRules.length };
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     console.warn('[ScriptVault] GM_webRequest rule apply failed:', message);
+    return { success: false, count: 0, error: message };
   }
 }
 

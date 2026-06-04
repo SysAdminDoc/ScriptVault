@@ -4,6 +4,24 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Per-script privileged host scope
+
+- **Scoped GM network, cookie, download, and DNR primitives to script hosts.**
+  `GM_xmlhttpRequest`, `GM_loadScript`, `GM_download`, `GM_cookie`, and
+  `GM_webRequest` now check a script's effective run-host scope before using
+  ambient extension host permissions; `@connect` explicitly widens
+  network/download/DNR targets, while cookie access stays run-host scoped
+  unless the advanced cross-scope override is enabled.
+- **Hardened DNR rule translation and CSP stripping.** DNR rules now require a
+  concrete target host, carry script initiator-domain constraints, support
+  accepted `selector.include` and string `cancel` shapes without becoming
+  global rules, and reject CSP header mutation unless Modify CSP is explicitly
+  set to `yes` or the high-privilege override is enabled.
+- **Surfaced the boundary in review/settings UI.** The install review shows a
+  privileged host-scope card, `GM_webRequest` is treated as elevated browser
+  access, and the dashboard exposes the cross-scope privileged API override as
+  an advanced security setting.
+
 ### 2026-06-04 — Edge package evidence gate
 
 - **Tied Edge support claims to generated artifacts.** `npm run

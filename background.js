@@ -188,6 +188,8 @@ const SCRIPTVAULT_SETTINGS_DEFAULTS = {
   "xhrTimeout": 30000,
   "allowInternalXhr": false,
   "allowInternalSyncEndpoints": false,
+  "allowHighPrivilegeScriptApis": false,
+  "modifyCSP": "auto",
   "blacklist": [],
   "badgeInfo": "running",
   "autoReload": false,
@@ -4875,6 +4877,8 @@ const StorageModule = (() => {
     xhrTimeout: 3e4,
     allowInternalXhr: false,
     allowInternalSyncEndpoints: false,
+    allowHighPrivilegeScriptApis: false,
+    modifyCSP: "auto",
     blacklist: [],
     badgeInfo: "running",
     autoReload: false,
@@ -19236,18 +19240,70 @@ function internalXhrError(prefix, guardResult) {
   return `${prefix}: internal host (${reason})`;
 }
 
-function selfConnectDomains(script) {
-  const patterns = [
-    ...(script?.meta?.match || []),
-    ...(script?.meta?.include || [])
-  ];
-  return patterns.map(pattern => {
-    try {
-      return normalizeConnectHost(new URL(String(pattern).replace(/\*/g, 'x')).hostname);
-    } catch (_) {
-      return '';
+function _scopeArray(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value.filter(Boolean) : [value];
+}
+
+function getEffectiveScriptScopePatterns(script) {
+  const meta = script?.meta || {};
+  const settings = script?.settings || {};
+  const matches = [];
+  const includes = [];
+
+  if (settings.useOriginalMatches !== false) matches.push(..._scopeArray(meta.match));
+  if (Array.isArray(settings.userMatches)) matches.push(...settings.userMatches.filter(Boolean));
+  if (settings.useOriginalIncludes !== false) includes.push(..._scopeArray(meta.include));
+  if (Array.isArray(settings.userIncludes)) includes.push(...settings.userIncludes.filter(Boolean));
+
+  return { matches, includes };
+}
+
+function _extractHostScopeHost(pattern) {
+  if (typeof pattern !== 'string') return '';
+  const raw = pattern.trim();
+  if (!raw) return '';
+  if (raw === '*' || raw === '<all_urls>') return '*';
+
+  const m = raw.match(/^(?:\*|https?|file|ftp):\/\/([^/]+)/i);
+  if (!m) return '';
+  const host = m[1];
+  if (!host || host === '*') return '*';
+  return normalizeConnectHost(host);
+}
+
+function getScriptHostScopeInfo(script) {
+  const { matches, includes } = getEffectiveScriptScopePatterns(script);
+  const hosts = new Set();
+  let universal = false;
+
+  for (const pattern of [...matches, ...includes]) {
+    const host = _extractHostScopeHost(String(pattern));
+    if (host === '*') {
+      universal = true;
+      continue;
     }
-  }).filter(Boolean);
+    if (host) hosts.add(host);
+  }
+
+  return { universal, hosts: [...hosts] };
+}
+
+function isScriptHostScopeAllowed(script, requestUrl) {
+  let urlObj;
+  try {
+    urlObj = new URL(requestUrl);
+  } catch (_) {
+    return false;
+  }
+
+  const scopeInfo = getScriptHostScopeInfo(script);
+  if (scopeInfo.universal) return true;
+  return scopeInfo.hosts.some(host => hostMatchesConnectPattern(urlObj.hostname, host));
+}
+
+function selfConnectDomains(script) {
+  return getScriptHostScopeInfo(script).hosts;
 }
 
 function evaluateConnectPolicy(script, requestUrl) {
@@ -19259,8 +19315,11 @@ function evaluateConnectPolicy(script, requestUrl) {
   }
 
   const connectList = Array.isArray(script?.meta?.connect) ? script.meta.connect : [];
-  if (connectList.length === 0 || connectList.some(pattern => String(pattern).trim() === '*')) {
+  if (isScriptHostScopeAllowed(script, requestUrl)) {
     return { allowed: true, hostname };
+  }
+  if (connectList.some(pattern => String(pattern).trim() === '*')) {
+    return { allowed: true, hostname, source: '@connect' };
   }
 
   const selfDomains = selfConnectDomains(script);
@@ -19275,8 +19334,40 @@ function evaluateConnectPolicy(script, requestUrl) {
   return {
     allowed,
     hostname,
-    error: allowed ? '' : `Connection to ${hostname} blocked by @connect policy`
+    error: allowed ? '' : (connectList.length > 0
+      ? `Connection to ${hostname} blocked by @connect policy`
+      : `Connection to ${hostname} blocked by script host scope`)
   };
+}
+
+function isHighPrivilegeScriptApiOverride(settings) {
+  return settings?.allowHighPrivilegeScriptApis === true;
+}
+
+function evaluateScriptHostScopePolicy(script, requestUrl, capability, settings = {}) {
+  let hostname;
+  try {
+    hostname = new URL(requestUrl).hostname;
+  } catch (_) {
+    return { allowed: false, hostname: '', error: 'Invalid URL' };
+  }
+  if (isHighPrivilegeScriptApiOverride(settings)) return { allowed: true, hostname };
+  const allowed = isScriptHostScopeAllowed(script, requestUrl);
+  return {
+    allowed,
+    hostname,
+    error: allowed ? '' : `${capability} to ${hostname} blocked by script host scope`
+  };
+}
+
+function resolveCookiePolicyTarget(data, sender) {
+  if (data?.url) return String(data.url);
+  if (data?.domain) {
+    const domain = String(data.domain).trim().replace(/^\./, '');
+    if (domain) return `https://${domain}/`;
+  }
+  const senderUrl = sender?.url || sender?.tab?.url || '';
+  return isHttpCookieUrl(senderUrl) ? senderUrl : '';
 }
 
 if (chrome.runtime.onUserScriptMessage) {
@@ -21213,6 +21304,21 @@ async function handleMessage(message, sender) {
       // Download (with callbacks: onload, onerror, onprogress, ontimeout)
       case 'GM_download': {
         try {
+          if (!data.url) return { error: 'url is required for download' };
+          if (!data.scriptId) return { error: 'Missing script context' };
+          const downloadScript = await ScriptStorage.get(data.scriptId);
+          if (!downloadScript) return { error: 'Script context not found' };
+          let downloadProtocol = '';
+          try { downloadProtocol = new URL(data.url).protocol; } catch (_) { return { error: 'Invalid URL' }; }
+          if (downloadProtocol === 'http:' || downloadProtocol === 'https:') {
+            const downloadPolicy = evaluateConnectPolicy(downloadScript, data.url);
+            if (!downloadPolicy.allowed) return { error: downloadPolicy.error };
+            const downloadSettings = await SettingsManager.get();
+            const downloadPreCheck = InternalHostGuard.classifyFetchUrl(data.url, ['http:', 'https:']);
+            if (!downloadPreCheck.ok && !shouldAllowInternalXhr(downloadScript, data.url, downloadSettings, downloadPreCheck)) {
+              return { error: internalXhrError('GM_download URL rejected', downloadPreCheck) };
+            }
+          }
           const downloadOpts = {
             url: data.url,
             filename: data.name,
@@ -21652,6 +21758,10 @@ async function handleMessage(message, sender) {
       // is more permissive about schemes).
       case 'GM_cookie_list': {
         try {
+          const cookieScriptId = sender.userScriptId || data.scriptId;
+          if (!cookieScriptId) return { error: 'Missing script context' };
+          const cookieScript = await ScriptStorage.get(cookieScriptId);
+          if (!cookieScript) return { error: 'Script context not found' };
           const details = {};
           if (data.url) {
             if (!isHttpCookieUrl(data.url)) return { error: 'url must be http(s)://' };
@@ -21660,6 +21770,13 @@ async function handleMessage(message, sender) {
           if (data.domain) details.domain = data.domain;
           if (data.name) details.name = data.name;
           if (data.path) details.path = data.path;
+          const cookieTargetUrl = resolveCookiePolicyTarget(data, sender);
+          if (!cookieTargetUrl) return { error: 'url or domain is required for cookie list' };
+          if (!isHttpCookieUrl(cookieTargetUrl)) return { error: 'url must be http(s)://' };
+          const cookieSettings = await SettingsManager.get();
+          const cookiePolicy = evaluateScriptHostScopePolicy(cookieScript, cookieTargetUrl, 'Cookie access', cookieSettings);
+          if (!cookiePolicy.allowed) return { error: cookiePolicy.error };
+          if (!details.url && !details.domain) details.url = cookieTargetUrl;
           const cookies = await chrome.cookies.getAll(details);
           return { success: true, cookies };
         } catch (e) {
@@ -21672,6 +21789,13 @@ async function handleMessage(message, sender) {
           if (!data.url) return { error: 'url is required for cookie set' };
           if (!data.name) return { error: 'name is required for cookie set' };
           if (!isHttpCookieUrl(data.url)) return { error: 'url must be http(s)://' };
+          const cookieScriptId = sender.userScriptId || data.scriptId;
+          if (!cookieScriptId) return { error: 'Missing script context' };
+          const cookieScript = await ScriptStorage.get(cookieScriptId);
+          if (!cookieScript) return { error: 'Script context not found' };
+          const cookieSettings = await SettingsManager.get();
+          const cookiePolicy = evaluateScriptHostScopePolicy(cookieScript, data.url, 'Cookie access', cookieSettings);
+          if (!cookiePolicy.allowed) return { error: cookiePolicy.error };
           const cookie = await chrome.cookies.set({
             url: data.url,
             name: data.name,
@@ -21693,6 +21817,13 @@ async function handleMessage(message, sender) {
         try {
           if (!data.url || !data.name) return { error: 'url and name are required for cookie delete' };
           if (!isHttpCookieUrl(data.url)) return { error: 'url must be http(s)://' };
+          const cookieScriptId = sender.userScriptId || data.scriptId;
+          if (!cookieScriptId) return { error: 'Missing script context' };
+          const cookieScript = await ScriptStorage.get(cookieScriptId);
+          if (!cookieScript) return { error: 'Script context not found' };
+          const cookieSettings = await SettingsManager.get();
+          const cookiePolicy = evaluateScriptHostScopePolicy(cookieScript, data.url, 'Cookie access', cookieSettings);
+          if (!cookiePolicy.allowed) return { error: cookiePolicy.error };
           await chrome.cookies.remove({
             url: data.url,
             name: data.name
@@ -21711,8 +21842,10 @@ async function handleMessage(message, sender) {
         const script = await ScriptStorage.get(scriptId);
         if (!script?.meta?.grant?.includes('GM_webRequest')) return { error: 'Not granted' };
         const rules = Array.isArray(data.rules) ? data.rules : (data.rules ? [data.rules] : []);
-        await applyWebRequestRules(scriptId, rules);
-        return { success: true, count: rules.length };
+        const settings = await SettingsManager.get();
+        const result = await applyWebRequestRules(scriptId, rules, { script, settings });
+        if (!result?.success) return { error: result?.error || 'GM_webRequest rule rejected' };
+        return { success: true, count: result.count ?? rules.length };
       }
 
       // Execution profiling - get stats for dashboard
@@ -24387,7 +24520,11 @@ async function registerScript(script, { useUpdate = false } = {}) {
     // Apply @webRequest declarativeNetRequest rules if defined
     if (meta.webRequest) {
       const rules = Array.isArray(meta.webRequest) ? meta.webRequest : [meta.webRequest];
-      await applyWebRequestRules(script.id, rules);
+      const settings = await SettingsManager.get();
+      const ruleResult = await applyWebRequestRules(script.id, rules, { script, settings });
+      if (!ruleResult?.success) {
+        throw new Error(ruleResult?.error || 'GM_webRequest rule rejected');
+      }
     }
   } catch (e) {
     console.error(`[ScriptVault] Failed to register ${script.meta?.name || script.id}:`, e);
@@ -24805,29 +24942,170 @@ function _makeRuleId(scriptId, index) {
 }
 
 // Translate GM_webRequest rule selector/action to declarativeNetRequest format
-function _translateWebRequestRule(rule, ruleId) {
+function _dnrUrlFiltersForRule(rule) {
+  const sel = rule?.selector || {};
+  if (typeof sel === 'string') return [sel].filter(Boolean);
+  const filters = [];
+  const pushFilter = value => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        if (typeof entry === 'string') filters.push(entry);
+        else if (entry?.include) filters.push(entry.include);
+      }
+    } else if (typeof value === 'string') {
+      filters.push(value);
+    }
+  };
+  pushFilter(sel.url);
+  pushFilter(sel.include);
+  return filters.map(filter => String(filter).trim()).filter(Boolean);
+}
+
+function _dnrExcludedRequestDomains(rule) {
+  const sel = rule?.selector || {};
+  if (!sel || typeof sel !== 'object') return [];
+  const values = [];
+  const pushExcluded = value => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        if (typeof entry === 'string') values.push(entry);
+        else if (entry?.exclude) values.push(entry.exclude);
+      }
+    } else if (typeof value === 'string') {
+      values.push(value);
+    }
+  };
+  pushExcluded(sel.exclude);
+  if (Array.isArray(sel.url)) {
+    for (const entry of sel.url) {
+      if (entry?.exclude) values.push(entry.exclude);
+    }
+  }
+  return values
+    .map(value => _extractDnrFilterHost(value))
+    .filter(host => host && host !== '*');
+}
+
+function _extractDnrFilterHost(filter) {
+  if (typeof filter !== 'string') return '';
+  const raw = filter.trim();
+  if (!raw) return '';
+  if (raw === '*' || raw === '<all_urls>') return '*';
+  if (raw.startsWith('||')) {
+    const host = raw.slice(2).split(/[\/^*?#]/)[0];
+    return host ? normalizeConnectHost(host) : '';
+  }
+  const host = _extractHostScopeHost(raw);
+  if (host) return host;
+  if (/^[a-z0-9.-]+(?::\d+)?$/i.test(raw)) return normalizeConnectHost(raw);
+  return '';
+}
+
+function _isCspHeaderName(name) {
+  return [
+    'content-security-policy',
+    'content-security-policy-report-only',
+    'x-content-security-policy',
+    'x-webkit-csp'
+  ].includes(String(name || '').trim().toLowerCase());
+}
+
+function _ruleMutatesCspHeaders(rule) {
+  const responseHeaders = rule?.action?.setResponseHeaders;
+  if (!responseHeaders || typeof responseHeaders !== 'object') return false;
+  return Object.keys(responseHeaders).some(_isCspHeaderName);
+}
+
+function _isCspMutationAllowed(settings) {
+  return settings?.modifyCSP === 'yes' || isHighPrivilegeScriptApiOverride(settings);
+}
+
+function _isDnrHostAllowedByScript(script, host) {
+  if (!host) return false;
+  const scopeInfo = getScriptHostScopeInfo(script);
+  if (scopeInfo.universal) return true;
+  if (scopeInfo.hosts.some(scopeHost => hostMatchesConnectPattern(host, scopeHost))) return true;
+  const connectList = Array.isArray(script?.meta?.connect) ? script.meta.connect : [];
+  return connectList.some(pattern => {
+    if (String(pattern).trim() === '*') return true;
+    const normalized = normalizeConnectHost(pattern);
+    if (normalized === 'self') return scopeInfo.hosts.some(scopeHost => hostMatchesConnectPattern(host, scopeHost));
+    return hostMatchesConnectPattern(host, normalized);
+  });
+}
+
+function _validateWebRequestRulesForScript(script, rules, settings = {}) {
+  const ruleList = Array.isArray(rules) ? rules : [];
+  const scopeInfo = getScriptHostScopeInfo(script);
+  const highPrivilegeOverride = isHighPrivilegeScriptApiOverride(settings);
+  const initiatorDomains = scopeInfo.universal || highPrivilegeOverride ? [] : scopeInfo.hosts;
+  if (!scopeInfo.universal && !highPrivilegeOverride && initiatorDomains.length === 0) {
+    return { allowed: false, error: 'GM_webRequest requires concrete script host scope' };
+  }
+
+  for (const rule of ruleList) {
+    if (_ruleMutatesCspHeaders(rule) && !_isCspMutationAllowed(settings)) {
+      return { allowed: false, error: 'GM_webRequest CSP header changes require Modify CSP = yes' };
+    }
+    const filters = _dnrUrlFiltersForRule(rule);
+    if (filters.length === 0) {
+      return { allowed: false, error: 'GM_webRequest rule requires a concrete target host' };
+    }
+    for (const filter of filters) {
+      const host = _extractDnrFilterHost(filter);
+      if (!host) {
+        return { allowed: false, error: 'GM_webRequest rule requires a concrete target host' };
+      }
+      if (host === '*' && !highPrivilegeOverride) {
+        return { allowed: false, error: 'GM_webRequest wildcard target host requires high-privilege override' };
+      }
+      if (host !== '*' && !highPrivilegeOverride && !_isDnrHostAllowedByScript(script, host)) {
+        return { allowed: false, error: `GM_webRequest target ${host} blocked by script host scope` };
+      }
+    }
+  }
+
+  return { allowed: true, initiatorDomains };
+}
+
+function _translateWebRequestRule(rule, ruleId, options = {}) {
   const dnr = { id: ruleId, priority: rule.priority || 1, condition: {}, action: {} };
 
   // Selector -> condition
   const sel = rule.selector || {};
-  if (sel.url) {
+  if (typeof sel === 'string') {
+    dnr.condition.urlFilter = sel;
+  } else if (sel.url) {
     const urlFilter = sel.url;
     if (Array.isArray(urlFilter)) {
       // Multiple URL patterns: pick first include (DNR only supports one urlFilter per rule)
       const incl = urlFilter.find(u => u.include);
       if (incl) dnr.condition.urlFilter = incl.include;
       const excl = urlFilter.find(u => u.exclude);
-      if (excl) dnr.condition.excludedInitiatorDomains = [excl.exclude.replace(/\*/g, '')].filter(Boolean);
+      if (excl) dnr.condition.excludedRequestDomains = [_extractDnrFilterHost(excl.exclude)].filter(Boolean);
     } else if (typeof urlFilter === 'string') {
       dnr.condition.urlFilter = urlFilter;
     }
+  } else if (sel.include) {
+    const includes = Array.isArray(sel.include) ? sel.include : [sel.include];
+    const incl = includes.find(Boolean);
+    if (incl) dnr.condition.urlFilter = incl;
+  }
+  const excludedRequestDomains = _dnrExcludedRequestDomains(rule);
+  if (excludedRequestDomains.length > 0) {
+    dnr.condition.excludedRequestDomains = excludedRequestDomains;
   }
   if (sel.tab) dnr.condition.tabIds = Array.isArray(sel.tab) ? sel.tab : [sel.tab];
   if (sel.type) dnr.condition.resourceTypes = Array.isArray(sel.type) ? sel.type : [sel.type];
+  if (Array.isArray(options.initiatorDomains) && options.initiatorDomains.length > 0) {
+    dnr.condition.initiatorDomains = options.initiatorDomains;
+  }
 
   // Action
   const act = rule.action || {};
-  if (act.cancel) {
+  if (act === 'cancel' || act === 'block' || act.cancel) {
     dnr.action.type = 'block';
   } else if (act.redirect) {
     dnr.action.type = 'redirect';
@@ -24851,9 +25129,17 @@ function _translateWebRequestRule(rule, ruleId) {
   return dnr;
 }
 
-async function applyWebRequestRules(scriptId, rules) {
-  if (!chrome.declarativeNetRequest || !Array.isArray(rules) || rules.length === 0) return;
+async function applyWebRequestRules(scriptId, rules, options = {}) {
+  if (!chrome.declarativeNetRequest || !Array.isArray(rules) || rules.length === 0) {
+    return { success: true, count: 0 };
+  }
   try {
+    const script = options.script || await ScriptStorage.get(scriptId);
+    if (!script) return { success: false, error: 'Script context not found' };
+    const settings = options.settings || await SettingsManager.get();
+    const policy = _validateWebRequestRulesForScript(script, rules, settings);
+    if (!policy.allowed) return { success: false, error: policy.error };
+
     // Round 11: Ensure map is rehydrated from storage before mutating (SW may have restarted)
     await _hydrateWebRequestRuleMap();
     // Remove any existing rules for this script first
@@ -24863,7 +25149,7 @@ async function applyWebRequestRules(scriptId, rules) {
     const ruleIds = [];
     rules.forEach((rule, idx) => {
       const ruleId = _makeRuleId(scriptId, idx);
-      const dnr = _translateWebRequestRule(rule, ruleId);
+      const dnr = _translateWebRequestRule(rule, ruleId, { initiatorDomains: policy.initiatorDomains });
       if (dnr) {
         dnrRules.push(dnr);
         ruleIds.push(ruleId);
@@ -24875,7 +25161,7 @@ async function applyWebRequestRules(scriptId, rules) {
       const existing = await chrome.declarativeNetRequest.getDynamicRules();
       if (existing.length + dnrRules.length > 30000) {
         console.warn(`[ScriptVault] DNR rule limit would be exceeded: ${existing.length} + ${dnrRules.length} > 30000`);
-        return;
+        return { success: false, error: 'DNR rule limit would be exceeded' };
       }
       await chrome.declarativeNetRequest.updateDynamicRules({ addRules: dnrRules });
       _webRequestRuleMap.set(scriptId, ruleIds);
@@ -24887,12 +25173,14 @@ async function applyWebRequestRules(scriptId, rules) {
         } catch (cleanupErr) {
           console.warn('[ScriptVault] GM_webRequest rule rollback failed after map persist failure:', cleanupErr?.message || cleanupErr);
         }
-        return;
+        return { success: false, error: 'DNR rule ownership could not be persisted' };
       }
       debugLog(`[GM_webRequest] Applied ${dnrRules.length} rules for script ${scriptId}`);
     }
+    return { success: true, count: dnrRules.length };
   } catch (e) {
     console.warn('[ScriptVault] GM_webRequest rule apply failed:', e.message);
+    return { success: false, error: e?.message || 'GM_webRequest rule apply failed' };
   }
 }
 
@@ -26313,7 +26601,7 @@ ${req.code}
         if (callback) callback([], new Error('Permission denied'));
         return;
       }
-      sendToBackground('GM_cookie_list', details || {}).then(r => {
+      sendToBackground('GM_cookie_list', { ...(details || {}), scriptId }).then(r => {
         if (callback) callback(r?.cookies || [], r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback([], e); });
     },
@@ -26322,7 +26610,7 @@ ${req.code}
         if (callback) callback(new Error('Permission denied'));
         return;
       }
-      sendToBackground('GM_cookie_set', details || {}).then(r => {
+      sendToBackground('GM_cookie_set', { ...(details || {}), scriptId }).then(r => {
         if (callback) callback(r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback(e); });
     },
@@ -26331,7 +26619,7 @@ ${req.code}
         if (callback) callback(new Error('Permission denied'));
         return;
       }
-      sendToBackground('GM_cookie_delete', details || {}).then(r => {
+      sendToBackground('GM_cookie_delete', { ...(details || {}), scriptId }).then(r => {
         if (callback) callback(r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback(e); });
     }
@@ -26478,7 +26766,7 @@ ${req.code}
       return;
     }
     const ruleArray = Array.isArray(rules) ? rules : [rules];
-    sendToBackground('GM_webRequest', { rules: ruleArray }).catch(e =>
+    sendToBackground('GM_webRequest', { scriptId, rules: ruleArray }).catch(e =>
       console.warn('[ScriptVault] GM_webRequest failed:', e.message)
     );
     // listener is called with (info, message, details) when a rule matches;

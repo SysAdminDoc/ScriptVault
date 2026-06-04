@@ -394,10 +394,13 @@ Priorities/sizes preserve the source labels.
   - Progress: 2026-06-04 CloudSync and EasyCloud now serialize only allowlisted user-facing per-script settings into sync envelopes, strip local-only flags such as `userModified`, `mergeConflict`, `_failedRequires`, and `_registrationError` from uploads, and ignore those remote legacy keys on merge while preserving local-only state already present on the device.
   - Verification: `npm run ts-runtime:generate`; `npm run build:bg`; `npm run typecheck`; `npm test -- tests/source-cloud-sync.test.js tests/source-sync-easycloud.test.js tests/source-hardening-parity.test.js`; `npm run ts-runtime:check`; `npm run ts-source:check`; `npm run store-copy:check`; `npm run readme:check`; `npm run test:a11y`; `npm run check`; `git diff --check`.
   - Complexity: M
-- [ ] P1 — Per-script host scope for GM network/cookie/DNR primitives
+- [x] 🤖 🔬 P1 — Per-script host scope for GM network/cookie/DNR primitives
   - Why: injection is `@match`-scoped but background GM_xhr/GM_cookie/GM_download/GM_webRequest run with the extension's ambient `<all_urls>`; umbrella for NF-1/B-1/H-1.
   - Touches: GM_xhr/GM_cookie/GM_download cases, `dnr-rules.ts`, install card.
   - Acceptance: `@match example.com`-only script blocked from `other.com` fetch/cookie/DNR unless overridden; CSP-strip rule rejected without high-privilege toggle.
+  - Progress: 2026-06-04 GM network, download, cookie, and DNR primitives now enforce the script's effective run-host scope before using ambient extension host permissions. `@connect` explicitly widens network/download/DNR targets, cookie access remains run-host scoped unless the advanced cross-scope override is enabled, DNR rules are bound to script initiator domains, and CSP header mutations are rejected unless Modify CSP is set to `yes` or the high-privilege override is enabled. The install review now shows a privileged host-scope card and marks `GM_webRequest` as elevated access.
+  - Verification: `npm run build:bg`; `npm test -- tests/content-bridge-security.test.js tests/background-cookie-url.test.js tests/source-dnr-rules.test.js tests/install-optional-permissions.test.js tests/storage.test.js -- --pool=vmThreads --maxWorkers=1`; `npm run typecheck`; `npm run ts-runtime:check`; `npm run ts-source:check`; `npm test -- tests/source-hardening-parity.test.js tests/dashboard-a11y.test.js -- --pool=vmThreads --maxWorkers=1`; `npm run check`; `npm run store-copy:check`; `npm run readme:check`; `npm run smoke:dashboard`; `npm run cws:remote-code:check`; `npm run test:a11y`; `git diff --check`.
+  - Complexity: M
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-4.
 - [ ] P1 — TOFU SRI for unpinned `@require`
   - Why: SRI enforced only when an author hand-pins `#sha256=`; a compromised CDN silently swaps `@require` bytes. `trust-receipt.ts` already computes per-`@require` SHA-256 and diffs across updates but only displays, never enforces.
