@@ -92,7 +92,7 @@ function loadConnectPolicyHelpers() {
     throw new Error('Unable to locate @connect helper functions in background.core.js');
   }
   const helperCode = backgroundCoreCode.slice(start, end);
-  return new Function(`${helperCode}; return { evaluateConnectPolicy, normalizeConnectHost };`)();
+  return new Function(`${helperCode}; return { evaluateConnectPolicy, normalizeConnectHost, shouldAllowInternalXhr };`)();
 }
 
 // Pull the user-script messaging gate (constants + helpers + onMessage/onUserScriptMessage
@@ -245,6 +245,28 @@ describe('content script bridge security boundary', () => {
       allowed: false,
       error: 'Invalid URL',
     });
+  });
+
+  it('keeps internal GM_xhr blocked unless explicitly opted in', () => {
+    const { shouldAllowInternalXhr } = loadConnectPolicyHelpers();
+    const internalCheck = { ok: false, reason: 'ipv4-internal' };
+    const wildcardScript = {
+      meta: {
+        name: 'Wildcard Connect',
+        connect: ['*'],
+      },
+    };
+    const localhostScript = {
+      meta: {
+        name: 'Local Dev',
+        connect: ['localhost'],
+      },
+    };
+
+    expect(shouldAllowInternalXhr(wildcardScript, 'http://127.0.0.1:8080/health', { allowInternalXhr: false }, internalCheck)).toBe(false);
+    expect(shouldAllowInternalXhr(localhostScript, 'http://127.0.0.1:8080/health', { allowInternalXhr: false }, internalCheck)).toBe(true);
+    expect(shouldAllowInternalXhr(wildcardScript, 'http://169.254.169.254/latest/meta-data/', { allowInternalXhr: false }, internalCheck)).toBe(false);
+    expect(shouldAllowInternalXhr(wildcardScript, 'http://169.254.169.254/latest/meta-data/', { allowInternalXhr: true }, internalCheck)).toBe(true);
   });
 });
 

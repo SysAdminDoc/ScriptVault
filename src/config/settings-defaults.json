@@ -54,6 +54,7 @@
   "dashboardVirtualizationThreshold": 500,
   "injectIntoFrames": true,
   "xhrTimeout": 30000,
+  "allowInternalXhr": false,
   "blacklist": [],
   "badgeInfo": "running",
   "autoReload": false,

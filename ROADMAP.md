@@ -170,10 +170,12 @@ Priorities/sizes preserve the source labels.
 
 ### Security and data safety
 
-- [ ] P0 — `GM_xmlhttpRequest` internal-host / SSRF guard
+- [x] P0 — `GM_xmlhttpRequest` internal-host / SSRF guard
   - Why: a script with `@grant GM_xmlhttpRequest` and empty/`@connect *` can fetch IMDS (`169.254.169.254`), localhost admin panels, or RFC1918 routers with `credentials:'include'` — a session-hijack/SSRF primitive. GM_xhr gates only on `evaluateConnectPolicy`; the raw `fetch` is never wrapped by `InternalHostGuard` (GM_loadScript does both pre/post checks).
   - Touches: `background.core.js:3832`, `modules/internal-host-guard.js`, `modules/xhr.js` redirect default.
   - Acceptance: `{url:'http://169.254.169.254/'}` and a redirect-to-private-IP both reject; explicit `allowInternalXhr`/`@connect localhost` opt-in preserved.
+  - Progress: 2026-06-04 GM_xhr now runs `InternalHostGuard.classifyFetchUrl()` after `@connect` passes and `classifyResponseUrl()` immediately after fetch resolves, before response bodies are read. Internal hosts are blocked by default even with empty/`*` `@connect`; loopback development URLs require explicit `@connect localhost`, while the new advanced `allowInternalXhr` setting remains a global escape hatch.
+  - Verification: `npm test -- tests/content-bridge-security.test.js tests/storage.test.js tests/source-hardening-parity.test.js tests/xhr.test.js tests/internal-host-guard.test.js`; `npm run check`; `npm run ts-runtime:check`; `npm run support:matrix:check`; `npm audit --audit-level=high --omit=optional`; `npm run readme:check`; `npm run smoke:dashboard`; `npm run smoke:firefox`; `git diff --check`.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-1.
 - [ ] P1 — Optional client-side E2E encryption for cloud sync
   - Why: synced script source (often embedding API keys) uploads as plaintext `JSON.stringify` to every provider; a WebDAV operator or compromised Drive/Dropbox account reads the whole library.

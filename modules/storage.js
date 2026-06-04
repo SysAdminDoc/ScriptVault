@@ -101,6 +101,7 @@ const StorageModule = (() => {
     dashboardVirtualizationThreshold: 500,
     injectIntoFrames: true,
     xhrTimeout: 3e4,
+    allowInternalXhr: false,
     blacklist: [],
     badgeInfo: "running",
     autoReload: false,

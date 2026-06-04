@@ -181,7 +181,7 @@ Two additional zero-config flows ship as separate modules: **Easy Cloud** for on
 - **Script signing** &mdash; Ed25519 cryptographic signatures with trust store
 - **Blacklist system** &mdash; Remote + manual blacklists
 - **Permission analysis** &mdash; Visual `@grant` permission breakdown on install
-- **`@connect` validation** &mdash; Restrict XHR domains
+- **`@connect` validation** &mdash; Restrict XHR domains and block internal-host requests by default
 - **SRI verification** &mdash; `@require` URLs with `#sha256=` hash are verified after fetch
 - **CSP handling** &mdash; Works on sites with strict Content Security Policies
 - **Zero telemetry** &mdash; No phone home, all data stays local
@@ -432,7 +432,7 @@ that script in the dashboard editor.
 |-------|------------|
 | Script isolation | Scripts run in isolated `USER_SCRIPT` world via `chrome.userScripts` API |
 | Permission transparency | Installation page shows all requested `@grant` permissions |
-| Network restrictions | `@connect` domains are validated before XHR requests |
+| Network restrictions | `@connect` domains and internal-host redirects are validated before XHR response bodies are read |
 | Blacklist protection | Remote + manual blacklists block known malicious scripts |
 | Zero telemetry | No data collection, no phone home &mdash; everything stays local |
 

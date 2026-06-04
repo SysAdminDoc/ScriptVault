@@ -73,4 +73,12 @@ describe('source hardening parity guards', () => {
     expect(gist).toContain("chrome.storage.local.set({ [STORAGE_KEY_AUTOSYNC]: val }).catch((e) => {");
     expect(gist).not.toMatch(/new Promise\s*\(\s*resolve\s*=>\s*\{[\s\S]*chrome\.storage\.local\.(set|remove)/);
   });
+
+  it('keeps GM_xmlhttpRequest behind the internal-host preflight and redirect guard', () => {
+    const core = source('src/background/core.ts');
+    expect(core).toContain("const xhrPreCheck = InternalHostGuard.classifyFetchUrl(data.url, ['http:', 'https:']);");
+    expect(core).toContain("GM_xmlhttpRequest URL rejected");
+    expect(core).toContain("const xhrPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);");
+    expect(core).toContain("GM_xmlhttpRequest redirected to internal host");
+  });
 });

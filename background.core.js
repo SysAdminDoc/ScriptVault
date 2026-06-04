@@ -3138,6 +3138,44 @@ function hostMatchesConnectPattern(hostname, pattern) {
   return host === target || host.endsWith('.' + target);
 }
 
+function isLocalhostConnectHost(hostname) {
+  const host = normalizeConnectHost(hostname);
+  if (host === 'localhost' || host === '::1') return true;
+  const parts = host.split('.');
+  return parts.length === 4 && parts.every(part => /^\d+$/.test(part)) && Number(parts[0]) === 127;
+}
+
+function hasExplicitLocalhostConnectOptIn(script, requestUrl) {
+  let hostname;
+  try {
+    hostname = new URL(requestUrl).hostname;
+  } catch (_) {
+    return false;
+  }
+  if (!isLocalhostConnectHost(hostname)) return false;
+
+  const connectList = Array.isArray(script?.meta?.connect) ? script.meta.connect : [];
+  return connectList.some(pattern => {
+    const rawPattern = String(pattern || '').trim();
+    const normalized = normalizeConnectHost(rawPattern);
+    if (!normalized || normalized === '*' || normalized === 'self') return false;
+    if (!isLocalhostConnectHost(normalized)) return false;
+    return hostMatchesConnectPattern(hostname, normalized);
+  });
+}
+
+function shouldAllowInternalXhr(script, requestUrl, settings, guardResult) {
+  if (!guardResult || guardResult.ok) return true;
+  if (!['localhost-alias', 'ipv4-internal', 'ipv6-internal'].includes(guardResult.reason)) return false;
+  if (settings?.allowInternalXhr === true) return true;
+  return hasExplicitLocalhostConnectOptIn(script, requestUrl);
+}
+
+function internalXhrError(prefix, guardResult) {
+  const reason = guardResult?.reason || 'internal-host';
+  return `${prefix}: internal host (${reason})`;
+}
+
 function selfConnectDomains(script) {
   const patterns = [
     ...(script?.meta?.match || []),
@@ -4766,6 +4804,12 @@ async function handleMessage(message, sender) {
             return { error: connectPolicy.error, type: 'error' };
           }
 
+          const settings = await SettingsManager.get();
+          const xhrPreCheck = InternalHostGuard.classifyFetchUrl(data.url, ['http:', 'https:']);
+          if (!xhrPreCheck.ok && !shouldAllowInternalXhr(xhrScript, data.url, settings, xhrPreCheck)) {
+            return { error: internalXhrError('GM_xmlhttpRequest URL rejected', xhrPreCheck), type: 'error' };
+          }
+
           const tabId = sender.tab?.id;
           const request = XhrManager.create(tabId, data.scriptId, data);
           const { id: requestId } = request;
@@ -4847,7 +4891,6 @@ async function handleMessage(message, sender) {
           }
           
           // Set timeout
-          const settings = await SettingsManager.get();
           const timeoutMs = data.timeout || settings.xhrTimeout || 30000;
           const timeoutId = setTimeout(() => {
             if (!request.aborted) {
@@ -4879,6 +4922,10 @@ async function handleMessage(message, sender) {
               const response = await fetch(data.url, fetchOptions);
               
               if (request.aborted) return;
+              const xhrPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+              if (!xhrPostCheck.ok && !shouldAllowInternalXhr(xhrScript, response.url || data.url, settings, xhrPostCheck)) {
+                throw new Error(internalXhrError('GM_xmlhttpRequest redirected to internal host', xhrPostCheck));
+              }
               
               // Get response headers as string
               const responseHeaders = [...response.headers.entries()]
