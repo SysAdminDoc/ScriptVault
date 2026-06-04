@@ -12,6 +12,8 @@ const registrationTs = readFileSync(resolve(process.cwd(), 'src/background/regis
 const dashboardHtml = readFileSync(resolve(process.cwd(), 'pages/dashboard.html'), 'utf8');
 const dashboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), 'utf8');
 const popupHtml = readFileSync(resolve(process.cwd(), 'pages/popup.html'), 'utf8');
+const amoSourceReadme = readFileSync(resolve(process.cwd(), 'AMO-SOURCE-README.md'), 'utf8');
+const storeCopyCheck = readFileSync(resolve(process.cwd(), 'scripts/check-permission-copy.mjs'), 'utf8');
 
 function readPngDimensions(file) {
   const png = readFileSync(resolve(process.cwd(), file));
@@ -56,6 +58,7 @@ describe('Firefox AMO validation gate', () => {
     expect(buildFirefox).toContain('npx web-ext lint');
     expect(buildFirefox).toContain('npx web-ext build');
     expect(buildFirefox).toContain('scriptvault-firefox-source-v${VERSION}.zip');
+    expect(buildFirefox).toContain('git -C "$SCRIPT_DIR" archive --format=zip');
     expect(buildFirefox).toContain('lib/acorn.min.js');
     expect(buildFirefox).toContain('lib/diff.min.js');
     expect(buildFirefox).not.toMatch(/^\s+lib\s*$/m);
@@ -154,5 +157,19 @@ describe('Firefox AMO validation gate', () => {
     });
     expect(popupHtml).toContain('width: 360px;');
     expect(popupHtml).toContain('html[data-theme="light"]');
+  });
+
+  it('includes AMO source-review instructions and privacy rationale', () => {
+    expect(amoSourceReadme).toContain('Reviewer Build Instructions');
+    expect(amoSourceReadme).toContain('npm run firefox:package');
+    expect(amoSourceReadme).toContain('scriptvault-firefox-v<version>.zip');
+    expect(amoSourceReadme).toContain('scriptvault-firefox-source-v<version>.zip');
+    expect(amoSourceReadme).toContain('AMO Data Collection Copy');
+    expect(amoSourceReadme).toContain('Required data collection: `none`');
+    expect(amoSourceReadme).toContain('Permission Rationale');
+    expect(amoSourceReadme).toContain('Manual Submission Steps');
+    expect(amoSourceReadme).toContain('unlisted');
+    expect(storeCopyCheck).toContain("const amoSourceReadmePath = 'AMO-SOURCE-README.md'");
+    expect(storeCopyCheck).toContain('amoSourceReadmeNeedles');
   });
 });

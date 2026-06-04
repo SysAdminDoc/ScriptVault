@@ -10,6 +10,7 @@ const manifestFiles = ['manifest.json', 'manifest-firefox.json'];
 const storeCopyPath = 'docs/store-listing-copy.md';
 const privacyPath = 'PRIVACY.md';
 const readmePath = 'README.md';
+const amoSourceReadmePath = 'AMO-SOURCE-README.md';
 
 function readText(path) {
   return readFileSync(join(projectRoot, path), 'utf8');
@@ -94,6 +95,7 @@ for (const manifestPath of manifestFiles) {
 const privacy = readText(privacyPath);
 const storeCopy = readText(storeCopyPath);
 const readme = readText(readmePath);
+const amoSourceReadme = readText(amoSourceReadmePath);
 const failures = [];
 
 for (const entry of manifestEntries.values()) {
@@ -128,9 +130,35 @@ for (const needle of readmeNeedles) {
   }
 }
 
+const amoSourceReadmeNeedles = [
+  'Reviewer Build Instructions',
+  'npm run firefox:package',
+  'scriptvault-firefox-v<version>.zip',
+  'scriptvault-firefox-source-v<version>.zip',
+  'AMO Data Collection Copy',
+  'Required data collection: `none`',
+  '`authenticationInfo`',
+  '`technicalAndInteraction`',
+  '`websiteActivity`',
+  '`websiteContent`',
+  'Permission Rationale',
+  'Manual Submission Steps',
+  'AMO developer account',
+  'unlisted',
+  'maintainer credentials',
+];
+for (const needle of amoSourceReadmeNeedles) {
+  if (!amoSourceReadme.includes(needle)) {
+    failures.push(`${amoSourceReadmePath} is missing "${needle}"`);
+  }
+}
+
 const releaseRunbook = readText('docs/release-runbook.md');
 if (!releaseRunbook.includes('npm run store-copy:check')) {
   failures.push('docs/release-runbook.md does not include npm run store-copy:check in the release gate');
+}
+if (!releaseRunbook.includes(amoSourceReadmePath)) {
+  failures.push(`docs/release-runbook.md does not reference ${amoSourceReadmePath}`);
 }
 
 const packageJson = readJson('package.json');

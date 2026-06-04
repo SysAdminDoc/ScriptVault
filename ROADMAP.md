@@ -129,6 +129,9 @@ priority section below.
   - Verification: `node --check pages/dashboard-firefox-compat.js`; `node --check pages/dashboard.js`; `node --check scripts/smoke-firefox-sideload.mjs`; `npm test -- tests/dashboard-firefox-compat.test.js tests/firefox-package.test.js`; `npm run smoke:firefox` with Firefox Developer Edition 151.0b10.
   - Source: FIREFOX-PORT.md Phase 4.
 - [ ] P2 — Phase 5: AMO submission (unlisted then listed)
+  - Progress: 2026-06-04 shipped AMO source-review and reviewer-rationale prep. `AMO-SOURCE-README.md` now gives source-build instructions, source/dependency notes, Firefox v1 listing scope, AMO data-collection copy, permission rationale, and manual unlisted-first submission steps. `npm run store-copy:check` now gates that file alongside `PRIVACY.md` and `docs/store-listing-copy.md`.
+  - Verification: `node --check scripts/check-permission-copy.mjs`; `npm run store-copy:check`; `npm test -- tests/firefox-package.test.js`.
+  - Remaining blocker: AMO developer account setup, initial unlisted upload/signing, review feedback handling, and listed publication require maintainer AMO credentials.
   - Source: docs/archive/TODO.md G-7.
 
 ### Accessibility (WCAG3 gap matrix open rows)
