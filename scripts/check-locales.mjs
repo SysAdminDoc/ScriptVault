@@ -3,13 +3,13 @@
 //
 // Locale coverage report and CI gate. Validates three things:
 //   1. _locales/* JSON: every locale carries the same key set as `en`.
-//   2. modules/i18n.js + pages/dashboard-i18n-v2.js inline translation
-//      dictionaries: each locale carries the same keys as `en`, and the
-//      locale list lines up with the on-disk _locales/ directories.
-//   3. Cross-source locale set: _locales/, the runtime i18n module, and the
-//      dashboard v2 module agree on which languages ScriptVault claims to
-//      ship. A directory without runtime support, or a runtime locale that
-//      has no _locales counterpart, is flagged.
+//   2. modules/i18n.js inline translation dictionary: each locale carries
+//      the same keys as `en`, and the locale list lines up with the on-disk
+//      _locales/ directories.
+//   3. Cross-source locale set: _locales/ and the runtime i18n module agree
+//      on which languages ScriptVault claims to ship. A directory without
+//      runtime support, or a runtime locale that has no _locales counterpart,
+//      is flagged.
 //
 // Usage:
 //   node scripts/check-locales.mjs            # report
@@ -29,8 +29,8 @@ const wantJson = args.has('--json');
 //   --check    => exits 1 on _locales/* key drift or cross-source locale set
 //                 mismatches (the externally-shipped manifests).
 //   --strict   => same as --check, plus fails on inline module-dict key drift
-//                 (modules/i18n.js + pages/dashboard-i18n-v2.js). Use after a
-//                 dedicated translation backfill.
+//                 (modules/i18n.js). Use after a dedicated translation
+//                 backfill.
 //
 // Translation-coverage shortfalls (value equals English) are always
 // informational — they're useful to surface but not a CI failure.
@@ -41,8 +41,7 @@ const FATAL_KINDS = new Set([
 ]);
 const STRICT_KINDS = new Set([
   ...FATAL_KINDS,
-  'runtime-key-drift',
-  'dashboard-key-drift'
+  'runtime-key-drift'
 ]);
 
 const REPO_ROOT = process.cwd();
@@ -69,9 +68,8 @@ async function loadLocalesDir() {
 }
 
 // --- Inline-translations extractor -----------------------------------------
-// Both modules/i18n.js and pages/dashboard-i18n-v2.js declare a
-// translations object (`const` in handwritten sources, `var` in generated
-// CommonJS wrappers).
+// modules/i18n.js declares a translations object (`const` in handwritten
+// sources, `var` in generated CommonJS wrappers).
 // We evaluate just that const in an isolated VM context so we can read the
 // resulting object without booting the full extension.
 async function extractInlineTranslations(filePath, varName = 'translations') {
@@ -123,7 +121,7 @@ function diffKeySets(canonical, other) {
 }
 
 function countTranslated(reference, other) {
-  // For modules/i18n.js + dashboard-i18n-v2.js dictionaries (string-keyed),
+  // For modules/i18n.js dictionaries (string-keyed),
   // count how many values are present and *differ from* the English version.
   // Equal-to-English strings are treated as untranslated.
   const enKeys = Object.keys(reference);
@@ -200,36 +198,12 @@ for (const name of runtimeLocaleNames) {
   }
 }
 
-let dashTranslations;
-try {
-  dashTranslations = await extractInlineTranslations(join(REPO_ROOT, 'pages/dashboard-i18n-v2.js'));
-} catch (err) {
-  console.error('[check-locales] pages/dashboard-i18n-v2.js extraction failed:', err.message);
-  process.exit(2);
-}
-const dashLocaleNames = Object.keys(dashTranslations).sort();
-report.sources.dashboardI18nV2 = dashLocaleNames;
-const dashEnKeys = buildKeySet(dashTranslations.en || {});
-for (const name of dashLocaleNames) {
-  if (name === 'en') continue;
-  const dictKeys = buildKeySet(dashTranslations[name] || {});
-  const { missing, orphaned } = diffKeySets(dashEnKeys, dictKeys);
-  if (missing.length || orphaned.length) {
-    report.drifts.push({ kind: 'dashboard-key-drift', locale: name, missing, orphaned });
-  }
-  const counts = countTranslated(dashTranslations.en, dashTranslations[name] || {});
-  if (counts.untranslatedCount > 0) {
-    report.warnings.push({ kind: 'dashboard-untranslated', locale: name, ...counts });
-  }
-}
-
 // Cross-source locale-set agreement.
 const allSets = {
   localesDir: new Set(localesDirNames),
-  runtimeI18n: new Set(runtimeLocaleNames),
-  dashboardI18nV2: new Set(dashLocaleNames)
+  runtimeI18n: new Set(runtimeLocaleNames)
 };
-const universe = new Set([...allSets.localesDir, ...allSets.runtimeI18n, ...allSets.dashboardI18nV2]);
+const universe = new Set([...allSets.localesDir, ...allSets.runtimeI18n]);
 for (const locale of universe) {
   const missingFrom = [];
   for (const [sourceName, set] of Object.entries(allSets)) {
@@ -246,7 +220,6 @@ if (wantJson) {
   console.log('ScriptVault — locale coverage report');
   console.log(`  _locales/      ${localesDirNames.join(', ')}`);
   console.log(`  modules/i18n   ${runtimeLocaleNames.join(', ')}`);
-  console.log(`  dashboard v2   ${dashLocaleNames.join(', ')}`);
   console.log('');
   if (report.drifts.length === 0) {
     console.log('  No drift detected.');
@@ -265,10 +238,6 @@ if (wantJson) {
           if (d.missing.length) console.log(`    [modules/i18n.${d.locale}] missing keys (${d.missing.length}): ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`);
           if (d.orphaned.length) console.log(`    [modules/i18n.${d.locale}] orphaned keys (${d.orphaned.length}): ${d.orphaned.slice(0, 6).join(', ')}${d.orphaned.length > 6 ? '…' : ''}`);
           break;
-        case 'dashboard-key-drift':
-          if (d.missing.length) console.log(`    [dashboard-i18n-v2.${d.locale}] missing keys (${d.missing.length}): ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`);
-          if (d.orphaned.length) console.log(`    [dashboard-i18n-v2.${d.locale}] orphaned keys (${d.orphaned.length}): ${d.orphaned.slice(0, 6).join(', ')}${d.orphaned.length > 6 ? '…' : ''}`);
-          break;
         case 'cross-source-locale-mismatch':
           console.log(`    locale ${d.locale} missing from: ${d.missingFrom.join(', ')}`);
           break;
@@ -279,8 +248,7 @@ if (wantJson) {
     console.log('');
     console.log(`  ${report.warnings.length} translation-coverage warning${report.warnings.length === 1 ? '' : 's'} (informational):`);
     for (const w of report.warnings) {
-      const tag = w.kind === 'runtime-untranslated' ? 'modules/i18n' : 'dashboard-i18n-v2';
-      console.log(`    [${tag}.${w.locale}] ${w.translated}/${w.total} translated, ${w.untranslatedCount} still match en`);
+      console.log(`    [modules/i18n.${w.locale}] ${w.translated}/${w.total} translated, ${w.untranslatedCount} still match en`);
     }
   }
 }

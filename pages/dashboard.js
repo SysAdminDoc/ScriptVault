@@ -191,7 +191,6 @@
         'dashboard-gamification.js': { surface: 'utilities', initializer: 'Gamification.init', mount: 'gamificationContainer' },
         'dashboard-gist.js': { surface: 'utilities', initializer: 'GistIntegration.init', mount: 'gistContainer' },
         'dashboard-heatmap.js': { surface: 'utilities', initializer: 'ActivityHeatmap.init', mount: 'heatmapContainer' },
-        'dashboard-i18n-v2.js': { surface: 'eager-service', initializer: 'syncDashboardModuleLanguage' },
         'dashboard-keyboard.js': { surface: 'eager', initializer: 'KeyboardNav.init' },
         'dashboard-lazy-loader.js': { surface: 'html-loader', initializer: 'LazyLoader.markLoaded' },
         'dashboard-linter.js': { surface: 'editor', initializer: 'AdvancedLinter.init', trigger: 'tbtnLint' },
@@ -1499,7 +1498,6 @@
 
         // Settings - General
         elements.settingsConfigMode = document.getElementById('settingsConfigMode');
-        elements.settingsLanguage = document.getElementById('settingsLanguage');
         elements.settingsAutoReload = document.getElementById('settingsAutoReload');
         elements.settingsAnonymousStats = document.getElementById('settingsAnonymousStats');
         elements.settingsDebugMode = document.getElementById('settingsDebugMode');
@@ -2010,14 +2008,6 @@
         return promise;
     }
 
-    function syncDashboardModuleLanguage(language = state.settings?.language) {
-        if (typeof I18nV2 === 'undefined') return;
-        const nextLanguage = !language || language === 'default'
-            ? (chrome.i18n?.getUILanguage?.() || 'en')
-            : language;
-        I18nV2.setLanguage(nextLanguage);
-    }
-
     function getScriptById(scriptId) {
         return scriptId ? state.scripts.find(s => s.id === scriptId) || null : null;
     }
@@ -2114,7 +2104,6 @@
         safeInit('Keyboard', () => { if (typeof KeyboardNav !== 'undefined') KeyboardNav.init(); });
         safeInit('A11y', () => { if (typeof A11y !== 'undefined') A11y.init(); });
         safeInit('FirefoxCompat', () => { if (typeof FirefoxCompat !== 'undefined') FirefoxCompat.polyfill(); });
-        safeInit('I18n', () => syncDashboardModuleLanguage());
 
         // What's New modal — shows once per version
         safeInit('WhatsNew', () => {
@@ -3039,7 +3028,6 @@
         
         // General settings
         if (elements.settingsConfigMode) elements.settingsConfigMode.value = s.configMode || 'advanced';
-        if (elements.settingsLanguage) elements.settingsLanguage.value = s.language || 'default';
         if (elements.settingsAutoReload) elements.settingsAutoReload.checked = s.autoReload !== false;
         if (elements.settingsAnonymousStats) elements.settingsAnonymousStats.checked = s.anonymousStats || false;
         if (elements.settingsDebugMode) elements.settingsDebugMode.checked = s.debugMode || false;
@@ -3210,7 +3198,6 @@
                 }
             }
             if (key === 'layout') document.documentElement.setAttribute('data-theme', value);
-            if (key === 'language') syncDashboardModuleLanguage(value);
             if (key === 'configMode') applyConfigMode();
             if (key === 'customCss') applySettingsToUI();
             if (key === 'layout') updateHelpOverview();
@@ -10386,7 +10373,6 @@
         const settingMap = {
             // General
             settingsConfigMode: ['configMode', 'value'],
-            settingsLanguage: ['language', 'value'],
             settingsAutoReload: ['autoReload', 'checked'],
             settingsAnonymousStats: ['anonymousStats', 'checked'],
             settingsDebugMode: ['debugMode', 'checked'],
