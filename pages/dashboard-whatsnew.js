@@ -9,6 +9,26 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.11.0': {
+      title: 'ScriptVault 3.11.0 — Storage & Runtime Hardening',
+      date: '2026-05-19',
+      highlights: [
+        { icon: '🧯', title: 'Rollback-Safe Storage', desc: 'Script, settings, folder, workspace, and GM-value writes now restore their prior state if persistence fails.' },
+        { icon: '🔎', title: 'Regex Dashboard Search', desc: 'Search supports re: patterns and slash-delimited regex, with invalid patterns surfaced instead of throwing.' },
+        { icon: '🧭', title: 'Context-Menu Scripts', desc: '@run-at context-menu scripts now appear as direct popup launchers when they match the active tab.' },
+        { icon: '🌐', title: 'SPA URL Change Events', desc: 'window.onurlchange now follows navigation events for single-page apps, with history/hash fallbacks preserved.' },
+        { icon: '🧱', title: 'Safer GM_addElement', desc: 'GM_addElement now returns null on failure paths instead of throwing through script execution.' },
+        { icon: '🛡️', title: 'Chrome 130 Baseline', desc: 'The Chrome floor now aligns with storage.session support and the current extension security baseline.' }
+      ],
+      improvements: [
+        'Added a GM_info.script.tag alias for older scripts that expect the singular form',
+        'Changed per-script update controls to a clearer check-first confirmation flow',
+        'Grouped storage-hardening fixes under the v3.11.0 release ledger',
+        'Pinned rollback regressions for script, settings, folder, workspace, and value writes',
+        'Kept Firefox runtime fallbacks for URL-change detection while preserving Chrome navigation events',
+        'Synced the Firefox manifest to the v3.11.0 release version'
+      ]
+    },
     '2.0.2': {
       title: 'ScriptVault 2.0.2 — Bug Fixes & Quality',
       date: '2026-03-27',
@@ -59,6 +79,14 @@ const WhatsNew = (() => {
     }
   };
 
+  function _hasChangelogEntry(version) {
+    return Object.prototype.hasOwnProperty.call(CHANGELOG, version);
+  }
+
+  function _getChangelogEntry(version = CURRENT_VERSION) {
+    return CHANGELOG[version] || null;
+  }
+
   function _injectStyles() {
     if (document.getElementById('sv-whatsnew-css')) return;
     const style = document.createElement('style');
@@ -101,14 +129,16 @@ const WhatsNew = (() => {
         // Only show for major/minor version changes (not patch bumps)
         const lastMajorMinor = lastSeen.split('.').slice(0, 2).join('.');
         const currentMajorMinor = CURRENT_VERSION.split('.').slice(0, 2).join('.');
-        // Also check if there's actually a changelog entry for the current major.minor
-        const hasEntry = Object.keys(CHANGELOG).some(v => v.startsWith(currentMajorMinor));
+        // Also check if there's actually a changelog entry for the exact
+        // packaged version. A major/minor match is not enough because show()
+        // renders by exact CURRENT_VERSION.
+        const hasEntry = _hasChangelogEntry(CURRENT_VERSION);
         return lastMajorMinor !== currentMajorMinor && hasEntry;
       } catch { return false; }
     },
 
     show() {
-      const entry = CHANGELOG[CURRENT_VERSION];
+      const entry = _getChangelogEntry(CURRENT_VERSION);
       if (!entry) {
         // Mark as seen even without a matching entry to prevent infinite re-check
         chrome.storage.local.set({ lastSeenVersion: CURRENT_VERSION });
@@ -167,6 +197,11 @@ const WhatsNew = (() => {
       overlay.querySelector('#svWnSkip').addEventListener('click', dismiss);
       overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
       document.addEventListener('keydown', escHandler);
-    }
+    },
+
+    getEntry: _getChangelogEntry,
+    getVersions() {
+      return Object.keys(CHANGELOG);
+    },
   };
 })();

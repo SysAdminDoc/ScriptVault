@@ -448,9 +448,11 @@ Priorities/sizes preserve the source labels.
   - Progress: 2026-06-04 replaced the period approximation with a five-field next-fire calculator that supports lists, ranges, steps, month/day names, and Sunday as `7`; @crontab alarms now re-arm as one-shot `when` alarms after every fire instead of using `periodInMinutes`, and the Advanced Linter surfaces invalid @crontab metadata as editor errors.
   - Verification: `npm run build:bg`; `node --check src/background/core.ts`; `node --check background.core.js`; `node --check background.js`; `node --check pages/dashboard-linter.js`; `node --check tests/crontab-next-fire.test.js`; `npm test -- tests/crontab-next-fire.test.js`; `npm run ts-runtime:check`; `npm run ts-source:check`; `npm run check`; `npm run readme:check`; `npm run store-copy:check`; `npm run cws:remote-code:check`; `npm run gm-types:check`; `git diff --check`.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-9.
-- [ ] P1 — Fix "What's New" dead for all v3.x users
+- [x] P1 — Fix "What's New" dead for all v3.x users
   - Why: `dashboard-whatsnew.js` CHANGELOG keys top out at 2.0.x while `CURRENT_VERSION` = 3.11.0, so `show()` resolves `undefined` and silently returns.
   - Acceptance: add `CHANGELOG['3.11.0']` + a CHANGELOG-freshness CI check tied to manifest version.
+  - Progress: 2026-06-04 added the exact `3.11.0` What's New entry, changed the show predicate to require an exact manifest-version entry, exposed entry lookup for validation, and added `npm run whatsnew:check` to fail when `manifest.json` and the dashboard modal drift.
+  - Verification: `node --check pages/dashboard-whatsnew.js`; `node --check scripts/check-whatsnew-changelog.mjs`; `node --check tests/whatsnew-changelog.test.js`; `npm run whatsnew:check`; `npm test -- tests/whatsnew-changelog.test.js`; `npm run check`; `npm run smoke:dashboard`; `npm run readme:check`; `npm run store-copy:check`; `npm run cws:remote-code:check`; `git diff --check`.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-1.
 - [ ] P1 — i18n-v2 table is 100% dead, eager-loaded
   - Why: `dashboard-i18n-v2.js` (600 keys / 8 langs, 39 KB) is referenced nowhere; `dashboard.html` has 0 `data-i18n`; eager-loaded for nothing; `npm run locale:check` audits a table no user sees.
