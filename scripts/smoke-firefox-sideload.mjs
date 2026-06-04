@@ -524,24 +524,52 @@ async function waitForAsync(baseUrl, sessionId, label, script, timeoutMs = DEFAU
 async function dashboardSmoke(baseUrl, sessionId, dashboardUrl) {
   await navigate(baseUrl, sessionId, dashboardUrl);
   await waitFor(baseUrl, sessionId, 'dashboard load', `
+    const unsupportedSyncOptions = Array.from(document.querySelectorAll('#settingsSyncType option, #cloudProvider option'))
+      .filter(option => ['googledrive', 'dropbox', 'onedrive', 's3'].includes(option.value))
+      .map(option => ({ value: option.value, hidden: option.hidden, disabled: option.disabled }));
+    const aboutBrowserBuild = document.querySelector('#aboutBrowserBuild')?.textContent || '';
     return {
       ok: document.readyState !== 'loading'
         && document.title === 'ScriptVault Dashboard'
         && !!document.querySelector('.tm-header')
         && !!document.querySelector('#scriptsPanel')
-        && !!document.querySelector('#btnNewScript'),
+        && !!document.querySelector('#btnNewScript')
+        && document.documentElement.dataset.browserBuild === 'firefox'
+        && aboutBrowserBuild.includes('Firefox build')
+        && unsupportedSyncOptions.length >= 4
+        && unsupportedSyncOptions.every(option => option.hidden && option.disabled),
       title: document.title,
+      aboutBrowserBuild,
+      unsupportedSyncOptions,
       text: document.body?.innerText?.slice(0, 300) || '',
       url: location.href
     };
   `);
   return await execute(baseUrl, sessionId, `
+    const originalTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const themeChecks = ['dark', 'light'].map(theme => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const style = getComputedStyle(document.documentElement);
+      return {
+        theme,
+        background: style.getPropertyValue('--bg-body').trim(),
+        text: style.getPropertyValue('--text-primary').trim(),
+        accent: style.getPropertyValue('--accent-primary').trim()
+      };
+    });
+    document.documentElement.setAttribute('data-theme', originalTheme);
     return {
       title: document.title,
       hasHeader: !!document.querySelector('.tm-header'),
       hasScriptsPanel: !!document.querySelector('#scriptsPanel'),
       hasNewScriptButton: !!document.querySelector('#btnNewScript'),
-      hasSearch: !!document.querySelector('#scriptSearch')
+      hasSearch: !!document.querySelector('#scriptSearch'),
+      aboutBrowserBuild: document.querySelector('#aboutBrowserBuild')?.textContent || '',
+      browserBuild: document.documentElement.dataset.browserBuild,
+      unsupportedSyncOptions: Array.from(document.querySelectorAll('#settingsSyncType option, #cloudProvider option'))
+        .filter(option => ['googledrive', 'dropbox', 'onedrive', 's3'].includes(option.value))
+        .map(option => ({ value: option.value, hidden: option.hidden, disabled: option.disabled })),
+      themeChecks
     };
   `);
 }
@@ -549,21 +577,49 @@ async function dashboardSmoke(baseUrl, sessionId, dashboardUrl) {
 async function popupSmoke(baseUrl, sessionId, popupUrl) {
   await navigate(baseUrl, sessionId, popupUrl);
   await waitFor(baseUrl, sessionId, 'popup load', `
+    const rect = document.body?.getBoundingClientRect?.();
+    const popupWidthOk = !!rect && Math.round(rect.width) === 360;
+    const popupOverflowOk = !!document.body && document.body.scrollWidth <= Math.ceil(rect?.width || 0);
     return {
       ok: document.readyState !== 'loading'
         && document.title.includes('ScriptVault')
         && !!document.body
-        && document.body.innerText.length > 0,
+        && document.body.innerText.length > 0
+        && popupWidthOk
+        && popupOverflowOk,
       title: document.title,
+      popupWidthOk,
+      popupOverflowOk,
+      bodyWidth: rect?.width || 0,
+      bodyScrollWidth: document.body?.scrollWidth || 0,
       text: document.body?.innerText?.slice(0, 300) || '',
       url: location.href
     };
   `);
   return await execute(baseUrl, sessionId, `
+    const originalTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const themeChecks = ['dark', 'light'].map(theme => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const style = getComputedStyle(document.documentElement);
+      return {
+        theme,
+        background: style.getPropertyValue('--popup-bg').trim(),
+        text: style.getPropertyValue('--popup-text').trim(),
+        accent: style.getPropertyValue('--popup-accent').trim()
+      };
+    });
+    document.documentElement.setAttribute('data-theme', originalTheme);
+    const rect = document.body.getBoundingClientRect();
+    const popupWidthOk = Math.round(rect.width) === 360;
     return {
       title: document.title,
       text: document.body.innerText.slice(0, 300),
-      hasActionButton: !!document.querySelector('button, [role="button"]')
+      hasActionButton: !!document.querySelector('button, [role="button"]'),
+      popupWidthOk,
+      popupOverflowOk: document.body.scrollWidth <= Math.ceil(rect.width),
+      bodyWidth: rect.width,
+      bodyScrollWidth: document.body.scrollWidth,
+      themeChecks
     };
   `);
 }

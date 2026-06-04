@@ -37,7 +37,8 @@
         pendingUpdates: [],
         subscriptions: [],
         backups: [],
-        backupSettings: null
+        backupSettings: null,
+        runtimeDescriptor: null
     };
 
     // DOM Elements
@@ -173,6 +174,7 @@
     const SCRIPT_TABLE_VIRTUAL_MAX_ROWS = 60;
     const DASHBOARD_TABS = ['scripts', 'updates', 'settings', 'utilities', 'trash', 'store', 'help'];
     const OAUTH_SYNC_PROVIDERS = ['googledrive', 'dropbox', 'onedrive'];
+    const ALL_SYNC_PROVIDERS = ['none', 'webdav', 'googledrive', 'dropbox', 'onedrive', 's3'];
     let modalLastFocusedElement = null;
     let modalFocusManaged = false;
     let progressLastFocusedElement = null;
@@ -193,6 +195,68 @@
         return provider === 'browser' ? 'none' : provider;
     }
 
+    function parseBrowserVersionFromUserAgent(browserName) {
+        const ua = navigator.userAgent || '';
+        const pattern = browserName === 'firefox' ? /Firefox\/([\d.]+)/ : /(?:Chrome|Chromium)\/([\d.]+)/;
+        return ua.match(pattern)?.[1] || '';
+    }
+
+    function getDashboardRuntimeDescriptor() {
+        const manifest = chrome.runtime?.getManifest?.() || {};
+        if (typeof FirefoxCompat !== 'undefined' && FirefoxCompat.getRuntimeDescriptor) {
+            return FirefoxCompat.getRuntimeDescriptor(manifest);
+        }
+        const isFirefox = /Firefox\//.test(navigator.userAgent || '');
+        const browserName = isFirefox ? 'firefox' : 'chrome';
+        const browserLabel = isFirefox ? 'Firefox' : 'Chrome';
+        const browserVersion = parseBrowserVersionFromUserAgent(browserName);
+        const buildLabel = isFirefox ? 'Firefox build' : 'Chrome build';
+        return {
+            browserName,
+            browserLabel,
+            browserVersion,
+            extensionVersion: manifest.version || '',
+            buildLabel,
+            buildIndicator: `${buildLabel}${browserVersion ? ` - ${browserLabel} ${browserVersion}` : ''}`,
+            supportedSyncProviders: isFirefox ? ['none', 'webdav'] : ALL_SYNC_PROVIDERS.slice(),
+        };
+    }
+
+    function getSupportedSyncProviderSet() {
+        const providers = state.runtimeDescriptor?.supportedSyncProviders;
+        return new Set(Array.isArray(providers) && providers.length ? providers : ALL_SYNC_PROVIDERS);
+    }
+
+    function coerceSyncProviderForRuntime(provider) {
+        const normalized = provider || 'none';
+        const supported = getSupportedSyncProviderSet();
+        if (supported.has(normalized)) return normalized;
+        return supported.has('webdav') ? 'webdav' : 'none';
+    }
+
+    function isSyncProviderSupported(provider) {
+        return getSupportedSyncProviderSet().has(provider || 'none');
+    }
+
+    function applyRuntimeProviderGate() {
+        const supported = getSupportedSyncProviderSet();
+        const isFirefox = state.runtimeDescriptor?.browserName === 'firefox';
+        const selects = [elements.settingsSyncType, elements.cloudProvider].filter(Boolean);
+        for (const select of selects) {
+            for (const option of Array.from(select.options || [])) {
+                const supportedOption = supported.has(option.value);
+                option.disabled = !supportedOption;
+                option.hidden = !supportedOption;
+                option.dataset.firefoxSupported = isFirefox ? String(supportedOption) : '';
+            }
+            if (!supported.has(select.value)) {
+                select.value = coerceSyncProviderForRuntime(select.value);
+            }
+        }
+        if (elements.firefoxSyncNote) elements.firefoxSyncNote.hidden = !isFirefox;
+        if (elements.firefoxCloudNote) elements.firefoxCloudNote.hidden = !isFirefox;
+    }
+
     function normalizeSyncEnabled(settings = {}) {
         return settings.syncEnabled ?? settings.enableSync ?? false;
     }
@@ -204,15 +268,19 @@
     function syncSettingsProviderSelection(provider) {
         if (!elements.settingsSyncType) return;
         const options = Array.from(elements.settingsSyncType.options || []);
-        const nextProvider = options.some(option => option.value === provider) ? provider : 'none';
+        const candidate = coerceSyncProviderForRuntime(provider);
+        const nextProvider = options.some(option => option.value === candidate) ? candidate : 'none';
         elements.settingsSyncType.value = nextProvider;
+        applyRuntimeProviderGate();
     }
 
     function syncCloudProviderSelection(provider, { triggerChange = true } = {}) {
         if (!elements.cloudProvider) return;
         const options = Array.from(elements.cloudProvider.options || []);
-        const nextProvider = options.some(option => option.value === provider) ? provider : 'none';
+        const candidate = coerceSyncProviderForRuntime(provider);
+        const nextProvider = options.some(option => option.value === candidate) ? candidate : 'none';
         elements.cloudProvider.value = nextProvider;
+        applyRuntimeProviderGate();
         if (triggerChange) {
             elements.cloudProvider.dispatchEvent(new Event('change', { bubbles: true }));
         }
@@ -1422,6 +1490,7 @@
         // Settings - Userscript Sync
         elements.settingsEnableSync = document.getElementById('settingsEnableSync');
         elements.settingsSyncType = document.getElementById('settingsSyncType');
+        elements.firefoxSyncNote = document.getElementById('firefoxSyncNote');
         elements.lastSyncTime = document.getElementById('lastSyncTime');
         elements.syncWebdavSettings = document.getElementById('syncWebdavSettings');
         elements.syncOAuthSettings = document.getElementById('syncOAuthSettings');
@@ -1570,6 +1639,7 @@
         elements.btnTextareaExport = document.getElementById('btnTextareaExport');
         elements.btnTextareaImport = document.getElementById('btnTextareaImport');
         elements.cloudProvider = document.getElementById('cloudProvider');
+        elements.firefoxCloudNote = document.getElementById('firefoxCloudNote');
         elements.cloudStatusText = document.getElementById('cloudStatusText');
         elements.cloudUserInfo = document.getElementById('cloudUserInfo');
         elements.btnCloudConnect = document.getElementById('btnCloudConnect');
@@ -1702,14 +1772,21 @@
 
     // Initialize
     async function init() {
-        // Set dynamic version from manifest
-        const extVersion = 'v' + chrome.runtime.getManifest().version;
+        state.runtimeDescriptor = getDashboardRuntimeDescriptor();
+        document.documentElement.dataset.browserBuild = state.runtimeDescriptor.browserName;
+
+        // Set dynamic version and browser build from manifest/runtime.
+        const manifestVersion = state.runtimeDescriptor.extensionVersion || chrome.runtime.getManifest().version;
+        const extVersion = 'v' + manifestVersion;
         const headerVer = document.getElementById('headerVersion');
         const aboutVer = document.getElementById('aboutVersion');
+        const aboutBrowserBuild = document.getElementById('aboutBrowserBuild');
         if (headerVer) headerVer.textContent = extVersion;
-        if (aboutVer) aboutVer.textContent = 'Version ' + chrome.runtime.getManifest().version;
+        if (aboutVer) aboutVer.textContent = 'Version ' + manifestVersion;
+        if (aboutBrowserBuild) aboutBrowserBuild.textContent = state.runtimeDescriptor.buildIndicator || state.runtimeDescriptor.buildLabel;
 
         cacheElements();
+        applyRuntimeProviderGate();
         initViewSettings();
         initializeSettingsPanelControls();
         initializeUtilitiesPanelControls();
@@ -2628,8 +2705,10 @@
         
         // Sync settings
         if (elements.settingsEnableSync) elements.settingsEnableSync.checked = normalizeSyncEnabled(s);
+        const runtimeSyncProvider = coerceSyncProviderForRuntime(normalizeSyncProvider(s));
         if (elements.settingsSyncType) {
-            elements.settingsSyncType.value = normalizeSyncProvider(s);
+            elements.settingsSyncType.value = runtimeSyncProvider;
+            applyRuntimeProviderGate();
             toggleSyncProviderSettings();
         }
         if (elements.settingsWebdavUrl) elements.settingsWebdavUrl.value = s.webdavUrl || '';
@@ -2642,7 +2721,7 @@
         if (elements.settingsS3SecretKey) elements.settingsS3SecretKey.value = s.s3SecretKey || '';
         if (elements.settingsS3ObjectKey) elements.settingsS3ObjectKey.value = s.s3ObjectKey || '';
         if (elements.syncLog) elements.syncLog.value = s.syncLog || '';
-        syncCloudProviderSelection(normalizeSyncProvider(s), { triggerChange: false });
+        syncCloudProviderSelection(runtimeSyncProvider, { triggerChange: false });
         
         // Editor settings
         if (elements.settingsEnableEditor) elements.settingsEnableEditor.checked = s.enableEditor !== false;
@@ -2762,7 +2841,11 @@
     }
 
     function toggleSyncProviderSettings() {
-        const syncType = elements.settingsSyncType?.value || normalizeSyncProvider(state.settings);
+        applyRuntimeProviderGate();
+        const syncType = coerceSyncProviderForRuntime(elements.settingsSyncType?.value || normalizeSyncProvider(state.settings));
+        if (elements.settingsSyncType && elements.settingsSyncType.value !== syncType) {
+            elements.settingsSyncType.value = syncType;
+        }
 
         // Hide all provider settings first
         if (elements.syncWebdavSettings) elements.syncWebdavSettings.style.display = 'none';
@@ -2898,7 +2981,7 @@
     
     // Load sync provider status for OAuth providers
     async function loadSyncProviderStatus() {
-        const provider = elements.settingsSyncType?.value || normalizeSyncProvider(state.settings);
+        const provider = coerceSyncProviderForRuntime(elements.settingsSyncType?.value || normalizeSyncProvider(state.settings));
         if (!provider || provider === 'none') {
             updateSyncProviderUI(provider, { connected: false });
             updateSyncCockpit(provider, { connected: false, canRevoke: false, canManualSync: false, canDryRun: false });
@@ -2916,6 +2999,10 @@
     }
 
     async function ensureSyncIdentityPermission(provider) {
+        if (!isSyncProviderSupported(provider)) {
+            showToast(`${state.runtimeDescriptor?.buildLabel || 'This build'} does not support ${capitalize(provider)} sync`, 'info');
+            return false;
+        }
         if (!['googledrive', 'dropbox'].includes(provider)) return true;
         try {
             const granted = await chrome.permissions.request({ permissions: ['identity'] });
@@ -2932,6 +3019,7 @@
     
     // Connect to cloud sync provider
     async function connectSyncProvider(provider) {
+        provider = provider || 'none';
         if (!(await ensureSyncIdentityPermission(provider))) return;
         showToast(`Connecting to ${capitalize(provider)}…`, 'info');
         try {
@@ -2955,6 +3043,11 @@
     
     // Disconnect from cloud sync provider
     async function disconnectSyncProvider(provider) {
+        provider = provider || 'none';
+        if (!isSyncProviderSupported(provider)) {
+            showToast(`${state.runtimeDescriptor?.buildLabel || 'This build'} does not support ${capitalize(provider)} sync`, 'info');
+            return;
+        }
         if (!await showConfirmModal('Disconnect', `Disconnect from ${capitalize(provider)}?`)) return;
         
         try {
@@ -2976,6 +3069,11 @@
     
     // Sync with provider
     async function syncWithProvider(provider) {
+        provider = provider || 'none';
+        if (!isSyncProviderSupported(provider)) {
+            showToast(`${state.runtimeDescriptor?.buildLabel || 'This build'} does not support ${capitalize(provider)} sync`, 'info');
+            return;
+        }
         showToast('Syncing…', 'info');
         try {
             const response = await chrome.runtime.sendMessage({ action: 'syncNow', provider });
@@ -9705,9 +9803,17 @@
 
         // Sync Type with provider toggle
         elements.settingsSyncType?.addEventListener('change', e => {
-            saveSetting('syncProvider', e.target.value);
-            if (elements.cloudProvider && e.target.value && e.target.value !== 'none') {
-                elements.cloudProvider.value = e.target.value;
+            const requestedProvider = e.target.value || 'none';
+            const provider = isSyncProviderSupported(requestedProvider)
+                ? requestedProvider
+                : coerceSyncProviderForRuntime(requestedProvider);
+            if (provider !== requestedProvider) {
+                e.target.value = provider;
+                showToast(`${state.runtimeDescriptor?.buildLabel || 'This build'} supports WebDAV sync only`, 'info');
+            }
+            saveSetting('syncProvider', provider);
+            if (elements.cloudProvider && provider && provider !== 'none') {
+                elements.cloudProvider.value = provider;
             }
             toggleSyncProviderSettings();
         });
@@ -9743,7 +9849,11 @@
         
         elements.btnSaveSync?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, async () => {
-                const provider = elements.settingsSyncType?.value || 'none';
+                const requestedProvider = elements.settingsSyncType?.value || 'none';
+                const provider = coerceSyncProviderForRuntime(requestedProvider);
+                if (elements.settingsSyncType && elements.settingsSyncType.value !== provider) {
+                    elements.settingsSyncType.value = provider;
+                }
                 await saveSettingOrThrow('syncEnabled', !!elements.settingsEnableSync?.checked);
                 await saveSettingOrThrow('syncProvider', provider);
                 if (provider === 'webdav') {
@@ -9881,6 +9991,10 @@
         // OAuth connection
         elements.btnConnectOAuth?.addEventListener('click', async () => {
             const syncType = elements.settingsSyncType?.value;
+            if (syncType && !isSyncProviderSupported(syncType)) {
+                showToast(`${state.runtimeDescriptor?.buildLabel || 'This build'} does not support ${capitalize(syncType)} sync`, 'info');
+                return;
+            }
             if (syncType && ['googledrive', 'dropbox', 'onedrive'].includes(syncType)) {
                 connectSyncProvider(syncType);
             }
@@ -10292,7 +10406,10 @@
 
         // Cloud
         async function updateCloudUI() {
-            const provider = elements.cloudProvider?.value || normalizeSyncProvider(state.settings);
+            const provider = coerceSyncProviderForRuntime(elements.cloudProvider?.value || normalizeSyncProvider(state.settings));
+            if (elements.cloudProvider && elements.cloudProvider.value !== provider) {
+                elements.cloudProvider.value = provider;
+            }
             const st = elements.cloudStatusText;
             const ui = elements.cloudUserInfo;
             const bc = elements.btnCloudConnect;
@@ -10329,7 +10446,14 @@
         }
 
         elements.cloudProvider?.addEventListener('change', async () => {
-            const provider = elements.cloudProvider?.value || 'none';
+            const requestedProvider = elements.cloudProvider?.value || 'none';
+            const provider = isSyncProviderSupported(requestedProvider)
+                ? requestedProvider
+                : coerceSyncProviderForRuntime(requestedProvider);
+            if (elements.cloudProvider.value !== provider) {
+                elements.cloudProvider.value = provider;
+                showToast(`${state.runtimeDescriptor?.buildLabel || 'This build'} supports WebDAV sync only`, 'info');
+            }
             state.settings.syncProvider = provider;
             syncSettingsProviderSelection(provider);
             toggleSyncProviderSettings();
@@ -10342,6 +10466,10 @@
                 const provider = elements.cloudProvider?.value || 'none';
                 if (provider === 'none') {
                     showToast('Choose a sync provider first', 'info');
+                    return;
+                }
+                if (!isSyncProviderSupported(provider)) {
+                    showToast(`${state.runtimeDescriptor?.buildLabel || 'This build'} does not support ${capitalize(provider)} sync`, 'info');
                     return;
                 }
                 // Request identity permission if needed for OAuth providers
@@ -10377,6 +10505,10 @@
                     showToast('Choose a sync provider first', 'info');
                     return;
                 }
+                if (!isSyncProviderSupported(provider)) {
+                    showToast(`${state.runtimeDescriptor?.buildLabel || 'This build'} does not support ${capitalize(provider)} sync`, 'info');
+                    return;
+                }
                 try {
                     await chrome.runtime.sendMessage({ action: 'disconnectSyncProvider', provider });
                     showToast('Disconnected', 'success');
@@ -10390,6 +10522,10 @@
                 const provider = elements.cloudProvider?.value || 'none';
                 if (provider === 'none') {
                     showToast('Choose a sync provider first', 'info');
+                    return;
+                }
+                if (!isSyncProviderSupported(provider)) {
+                    showToast(`${state.runtimeDescriptor?.buildLabel || 'This build'} does not support ${capitalize(provider)} sync`, 'info');
                     return;
                 }
                 const transfer = getTransferPreferences();
@@ -10418,6 +10554,10 @@
                 const provider = elements.cloudProvider?.value || 'none';
                 if (provider === 'none') {
                     showToast('Choose a sync provider first', 'info');
+                    return;
+                }
+                if (!isSyncProviderSupported(provider)) {
+                    showToast(`${state.runtimeDescriptor?.buildLabel || 'This build'} does not support ${capitalize(provider)} sync`, 'info');
                     return;
                 }
                 const transfer = getTransferPreferences();

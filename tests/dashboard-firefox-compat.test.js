@@ -69,4 +69,64 @@ describe('Firefox dashboard compatibility layer', () => {
       polyfilled: false,
     });
   });
+
+  it('reports Firefox build metadata and WebDAV-only sync support', () => {
+    const compat = loadFirefoxCompat({
+      chrome: {
+        runtime: {
+          id: 'scriptvault-test',
+          getManifest: () => ({ version: '3.11.0' }),
+        },
+      },
+      browser: { runtime: { id: 'firefox-test' } },
+      userAgent: 'Mozilla/5.0 Firefox/151.0',
+    });
+
+    const descriptor = compat.getRuntimeDescriptor();
+
+    expect(descriptor).toMatchObject({
+      browserName: 'firefox',
+      browserLabel: 'Firefox',
+      browserVersion: '151.0',
+      extensionVersion: '3.11.0',
+      buildLabel: 'Firefox build',
+      buildIndicator: 'Firefox build - Firefox 151.0',
+      supportedSyncProviders: ['none', 'webdav'],
+    });
+  });
+
+  it('reports full sync provider support on Chromium builds', () => {
+    const compat = loadFirefoxCompat({
+      chrome: {
+        runtime: {
+          id: 'scriptvault-test',
+          getManifest: () => ({ version: '3.11.0' }),
+        },
+        sidePanel: {
+          open() {
+            return Promise.resolve();
+          },
+        },
+      },
+      userAgent: 'Mozilla/5.0 Chrome/130.0.0.0 Safari/537.36',
+    });
+
+    const descriptor = compat.getRuntimeDescriptor();
+
+    expect(descriptor).toMatchObject({
+      browserName: 'chrome',
+      browserLabel: 'Chrome',
+      browserVersion: '130.0.0.0',
+      extensionVersion: '3.11.0',
+      buildLabel: 'Chrome build',
+    });
+    expect(descriptor.supportedSyncProviders).toEqual([
+      'none',
+      'webdav',
+      'googledrive',
+      'dropbox',
+      'onedrive',
+      's3',
+    ]);
+  });
 });

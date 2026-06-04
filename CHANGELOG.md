@@ -56,6 +56,12 @@ All notable changes to ScriptVault will be documented in this file.
   Ed25519 key generation, signing, verification, and tamper rejection. Failed
   dependency registration now records `_failedRequireErrors`, and `@require` /
   provenance fetches no longer force `mode: 'cors'`.
+- **Closed Firefox Phase 4 polish validation.** The dashboard now shows a
+  Firefox/Chrome build indicator with browser version, hides unsupported
+  Firefox sync/cloud providers behind a WebDAV-only gate, and the Firefox smoke
+  verifies hidden provider options, popup width, and dashboard/popup dark and
+  light theme tokens. Static Firefox package tests also pin command shortcuts
+  and action icon dimensions.
 - **Cleared the high-severity `web-ext` audit path.** `web-ext` now resolves to
   the `10.3.0` line with fixed `tmp@0.2.6`, restoring the high-level npm audit
   gate.
