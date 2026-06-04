@@ -27,10 +27,6 @@ P1 core workflow gaps, P2 polish, P3 nice-to-have.
 
 ### Ecosystem and modernization
 
-- [ ] P2 — ESM badge in script row (R-2 from ESM roadmap)
-  - Why: surface ES-module userscripts in the dashboard list.
-  - Touches: `pages/dashboard.js` `renderScriptRow`, `pages/dashboard.css`.
-  - Source: docs/archive/TODO.md E-6 (PASS2 NF-14).
 - [ ] P2 — ScriptCat-style script subscriptions (URL → JSON list)
   - Why: auto-updating curated bundle install.
   - Touches: `background.core.js`, new `modules/subscriptions.js`, dashboard import UI.
@@ -160,7 +156,7 @@ Priorities/sizes preserve the source labels.
   - Touches: new `src/modules/subscriptions.ts`; reuse `InternalHostGuard` + `_fetchTextBounded` + install-source classification.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-6.
 - [ ] P2 — Wire the built npm/ESM `@require` resolver
-  - Why: `modules/npm-resolve.js` (SRI + 5 MB cap) is built but unwired; fix the documented computed-integrity TOCTOU before wiring, or delete to shrink attack surface. Sharpens E-6.
+  - Why: `modules/npm-resolve.js` (SRI + 5 MB cap) is built but unwired; fix the documented computed-integrity TOCTOU before wiring, or delete to shrink attack surface.
   - Touches: `resource-loader.ts` `@require` fetch path.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-7.
 - [ ] P2 — True `@background` (DOM-less) scripts
@@ -171,9 +167,6 @@ Priorities/sizes preserve the source labels.
   - Why: listener exists but cross-tab firing and VM's 5th `remote` arg are unverified (needs live validation).
   - Acceptance: two-tab test — write in A, listener in B fires with `remote=true`.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-6.
-- [ ] P3 — ESM badge (10-line add)
-  - Why: `parser.ts` already sets `meta.esm`; dashboard already renders a badge cluster — insert one `.script-health-badge.neutral` span. Sharpens E-6.
-  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-5.
 - [ ] P3 — `GM.*` namespace completeness + `GM.fetch`
   - Why: generate the `GM.*` promise namespace mechanically from the `GM_*` table so coverage can't drift; add `GM.fetch` alias behind `@connect`+NF-1.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-7.

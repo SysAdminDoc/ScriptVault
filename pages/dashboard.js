@@ -5333,20 +5333,21 @@
 
     function createScriptRow(script, index) {
         const tr = document.createElement('tr');
-        const name = script.metadata?.name || 'Unnamed Script';
-        const version = script.metadata?.version || '1.0';
+        const metadata = script.metadata || {};
+        const name = metadata.name || 'Unnamed Script';
+        const version = metadata.version || '1.0';
         const enabled = script.enabled !== false;
         const size = formatBytes((script.code || '').length);
         const lineCount = (script.code || '').split('\n').length;
-        const matches = [...(script.metadata?.match || []), ...(script.metadata?.include || [])];
-        const grants = script.metadata?.grant || [];
+        const matches = [...(metadata.match || []), ...(metadata.include || [])];
+        const grants = metadata.grant || [];
         const updated = script.updatedAt ? formatTime(script.updatedAt) : '-';
-        const icon = script.metadata?.icon || script.metadata?.iconURL;
+        const icon = metadata.icon || metadata.iconURL;
 
         // Get homepage - fallback to derived URL from updateURL/downloadURL
-        const homepage = script.metadata?.homepage || script.metadata?.homepageURL || 
-                         deriveHomepageUrl(script.metadata?.updateURL) || 
-                         deriveHomepageUrl(script.metadata?.downloadURL);
+        const homepage = metadata.homepage || metadata.homepageURL ||
+                         deriveHomepageUrl(metadata.updateURL) ||
+                         deriveHomepageUrl(metadata.downloadURL);
 
         // Extract unique domains from matches/includes for site icons
         const domains = extractDomainsFromPatterns(matches);
@@ -5372,8 +5373,21 @@
           : '';
 
         // @tag badges
-        const tags = script.metadata?.tag || script.metadata?.tags || [];
+        const tags = metadata.tag || metadata.tags || [];
         const tagHtml = tags.map(t => `<span class="script-tag">${escapeHtml(t)}</span>`).join('');
+        const esmBundle = metadata.esmBundle || script.esmBundle;
+        const esmImportCount = Array.isArray(esmBundle?.imports) ? esmBundle.imports.length : 0;
+        const isESMScript = metadata.esm === true ||
+          metadata.esm === 'true' ||
+          metadata.module === '1' ||
+          metadata['inject-into'] === 'module' ||
+          !!esmBundle;
+        const esmBadgeTitle = esmBundle
+          ? `ES module userscript bundled with ${numberFormatter.format(esmImportCount)} static import${esmImportCount === 1 ? '' : 's'}.`
+          : 'ES module userscript metadata detected.';
+        const esmBadgeHtml = isESMScript
+          ? `<span class="script-health-badge esm" data-esm-badge="true" title="${escapeHtml(esmBadgeTitle)}">ESM</span>`
+          : '';
 
         // Health indicators
         const hasErrors = script.stats?.errors > 0;
@@ -5429,14 +5443,15 @@
                     ${faviconHtml}
                     <div class="script-name-stack">
                         <div class="script-name-row">
-                            <button type="button" class="script-name-button" data-id="${scriptIdAttr}" title="${escapeHtml(script.metadata?.description || '')}" aria-label="Open ${escapeHtml(name)} in the editor">
+                            <button type="button" class="script-name-button" data-id="${scriptIdAttr}" title="${escapeHtml(metadata.description || '')}" aria-label="Open ${escapeHtml(name)} in the editor">
                                 <span class="script-name-button-text">${escapeHtml(name)}${isBroadMatch(matches) ? ' <span title="Runs on all or most sites" style="opacity:0.58">🌐</span>' : ''}</span>
                             </button>
-                            ${script.metadata?.author ? `<span class="script-author">by ${escapeHtml(script.metadata.author)}</span>` : ''}
+                            ${metadata.author ? `<span class="script-author">by ${escapeHtml(metadata.author)}</span>` : ''}
                         </div>
                         <div class="script-name-badges">
                             ${sourceBadgeHtml}
                             ${sourceChangedHtml}
+                            ${esmBadgeHtml}
                             ${localEditsHtml}
                             ${errorHtml}
                             ${slowHtml}
@@ -5469,8 +5484,8 @@
                     </button>
                     <button type="button" class="action-icon" title="Export" aria-label="Export ${escapeHtml(name)}" data-action="exportScript" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    </button>${(script.metadata?.downloadURL || script.metadata?.updateURL) ? `
-                    <button type="button" class="action-icon" title="Copy install URL" aria-label="Copy install URL for ${escapeHtml(name)}" data-action="copyUrl" data-id="${scriptIdAttr}" data-url="${escapeHtml(script.metadata.downloadURL || script.metadata.updateURL)}">
+                    </button>${(metadata.downloadURL || metadata.updateURL) ? `
+                    <button type="button" class="action-icon" title="Copy install URL" aria-label="Copy install URL for ${escapeHtml(name)}" data-action="copyUrl" data-id="${scriptIdAttr}" data-url="${escapeHtml(metadata.downloadURL || metadata.updateURL)}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                     </button>` : ''}
                     <button type="button" class="action-icon" title="Move to folder" aria-label="Move ${escapeHtml(name)} to folder" data-action="moveFolder" data-id="${scriptIdAttr}">
