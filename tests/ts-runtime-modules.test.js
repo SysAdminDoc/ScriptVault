@@ -62,6 +62,12 @@ describe('TS runtime module generator', () => {
         exportName: 'PublicAPI',
       }),
       expect.objectContaining({
+        id: 'backup-scheduler',
+        source: 'src/modules/backup-scheduler.ts',
+        output: 'modules/backup-scheduler.js',
+        exportName: 'BackupScheduler',
+      }),
+      expect.objectContaining({
         id: 'userstyles',
         source: 'src/modules/userstyles.ts',
         output: 'modules/userstyles.js',

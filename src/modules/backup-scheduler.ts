@@ -5,7 +5,6 @@
 // ============================================================================
 
 import type { Script } from '../types/index';
-import { ScriptStorage, ScriptValues, SettingsManager, FolderStorage } from './storage';
 
 // ---------------------------------------------------------------------------
 // External globals available in the service-worker context
@@ -23,13 +22,40 @@ declare const fflate: {
 
 declare function importFromZip(
   zipData: string,
-  options?: { overwrite?: boolean },
+  options?: { overwrite?: boolean; recordReceipt?: boolean },
 ): Promise<{
   imported: number;
   skipped: number;
   errors: Array<{ name: string; error: string }>;
   error?: string;
 }>;
+
+declare const ScriptStorage: {
+  getAll(): Promise<Script[]>;
+  get(id: string): Promise<Script | null>;
+  set(id: string, script: Script): Promise<unknown>;
+  delete(id: string): Promise<unknown>;
+};
+
+declare const ScriptValues: {
+  getAll(scriptId: string): Promise<Record<string, unknown>>;
+  setAll(scriptId: string, values: Record<string, unknown>): Promise<unknown>;
+  deleteAll?(scriptId: string): Promise<unknown>;
+};
+
+declare const SettingsManager: {
+  get(): Promise<Record<string, unknown>>;
+  set(settings: Record<string, unknown>): Promise<unknown>;
+};
+
+declare const FolderStorage: {
+  cache: unknown;
+};
+
+declare const WorkspaceManager: {
+  _cache?: unknown;
+  _initPromise?: unknown;
+};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -84,6 +110,7 @@ interface RestoreResult {
   restoredFolders?: boolean;
   restoredWorkspaces?: boolean;
   errors?: Array<{ name: string; error: string }>;
+  receiptId?: string;
   error?: string;
 }
 
@@ -135,6 +162,116 @@ interface InspectedBackupManifest {
 interface RestoreOptions {
   selective?: boolean;
   scriptIds?: string[];
+  recordReceipt?: boolean;
+  sourceLabel?: string;
+}
+
+interface RestoreSnapshot {
+  scriptsBefore: Script[];
+  valuesBefore: Record<string, Record<string, unknown>>;
+  scriptIdsBefore: string[];
+  addedScriptIds?: string[];
+  settings?: Record<string, unknown>;
+  folders?: unknown;
+  workspaces?: unknown;
+}
+
+interface RestoreReceipt {
+  id: string;
+  timestamp: number;
+  type: string;
+  source: string;
+  sourceLabel?: string;
+  backupId?: string | null;
+  backupTimestamp?: number;
+  selective?: boolean;
+  result?: RestoreResult | Record<string, unknown> | null;
+  snapshot: RestoreSnapshot;
+  rolledBackAt?: number | null;
+  rollbackError?: string | null;
+  rollbackResult?: Record<string, unknown> | null;
+}
+
+interface RestoreReceiptMeta {
+  id: string;
+  type: string;
+  source: string;
+  sourceLabel: string;
+  timestamp: number;
+  backupId: string | null;
+  result: RestoreResult | Record<string, unknown> | null;
+  rolledBackAt: number | null;
+  rollbackError: string | null;
+  rollbackResult: Record<string, unknown> | null;
+  snapshotScriptCount: number;
+  snapshotIdSetSize: number;
+  hasGlobalSettings: boolean;
+  hasFolders: boolean;
+  hasWorkspaces: boolean;
+}
+
+interface VerifyIssue {
+  kind: string;
+  file?: string;
+  error: string;
+}
+
+interface VerifiedScript {
+  filename: string;
+  name: string;
+  namespace: string;
+  hasOptions: boolean;
+  hasStorage: boolean;
+  parseError?: string;
+  scriptId?: string;
+  conflictsWithId?: string;
+}
+
+interface VerifyBackupResult {
+  valid: boolean;
+  scripts: VerifiedScript[];
+  parseErrorCount: number;
+  missingOptionsCount: number;
+  missingStorageCount: number;
+  unreadableFileCount: number;
+  summary: {
+    scriptCount: number;
+    validScripts: number;
+    parseErrors: number;
+    optionsParseErrors: number;
+    storageParseErrors: number;
+    globalSettingsValid: boolean;
+    foldersValid: boolean;
+    workspacesValid: boolean;
+  };
+  issues: VerifyIssue[];
+}
+
+interface RollbackRestoreOptions {
+  restoreGlobals?: boolean;
+}
+
+interface RollbackRestoreError {
+  kind: string;
+  name?: string;
+  error: string;
+}
+
+interface RollbackRestoreResult {
+  success: boolean;
+  error?: string;
+  alreadyRolledBack?: boolean;
+  rolledBackAt?: number | null;
+  receiptId?: string;
+  restoredScripts?: number;
+  removedScripts?: number;
+  restoredValues?: number;
+  restoredSettings?: boolean;
+  restoredFolders?: boolean;
+  restoredWorkspaces?: boolean;
+  errors?: RollbackRestoreError[];
+  restoredScriptIds?: string[];
+  removedScriptIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +280,9 @@ interface RestoreOptions {
 
 const STORAGE_KEY_BACKUPS = 'autoBackups';
 const STORAGE_KEY_SETTINGS = 'backupSchedulerSettings';
+const STORAGE_KEY_RECEIPTS = 'restoreReceipts';
+const RECEIPT_RETENTION = 10;
+const RECEIPT_BYTE_BUDGET: number = 5 * 1024 * 1024; // ~5 MB across retained receipts
 const ALARM_NAME = 'sv_backup_scheduled';
 const DEBOUNCE_ALARM = 'sv_backup_debounce';
 const DEBOUNCE_MINUTES = 5;
@@ -172,7 +312,10 @@ let _settingsLoadPromise: Promise<BackupSchedulerSettings> | null = null;
 // ---------------------------------------------------------------------------
 
 function _generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
 }
 
 function _formatBytes(bytes: number): string {
@@ -404,6 +547,157 @@ async function _saveBackupList(list: BackupEntry[]): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEY_BACKUPS]: list });
 }
 
+// ---------------------------------------------------------------------------
+// Restore receipts
+// ---------------------------------------------------------------------------
+
+async function _getReceipts(): Promise<RestoreReceipt[]> {
+  const data = await chrome.storage.local.get(STORAGE_KEY_RECEIPTS);
+  const receipts = data[STORAGE_KEY_RECEIPTS];
+  return Array.isArray(receipts) ? (receipts as RestoreReceipt[]) : [];
+}
+
+async function _saveReceipts(list: RestoreReceipt[]): Promise<void> {
+  await chrome.storage.local.set({ [STORAGE_KEY_RECEIPTS]: list });
+}
+
+function _approxJsonBytes(value: unknown): number {
+  try {
+    return JSON.stringify(value).length;
+  } catch {
+    return 0;
+  }
+}
+
+async function _pushReceipt(receipt: RestoreReceipt): Promise<RestoreReceipt> {
+  const receipts = await _getReceipts();
+  receipts.unshift(receipt);
+  if (receipts.length > RECEIPT_RETENTION) {
+    receipts.length = RECEIPT_RETENTION;
+  }
+
+  let total = 0;
+  for (let i = 0; i < receipts.length; i++) {
+    total += _approxJsonBytes(receipts[i]);
+    if (i > 0 && total > RECEIPT_BYTE_BUDGET) {
+      receipts.length = i;
+      break;
+    }
+  }
+
+  await _saveReceipts(receipts);
+  return receipt;
+}
+
+async function _updateReceipt(
+  receiptId: string,
+  patch: Partial<RestoreReceipt>,
+): Promise<RestoreReceipt | null> {
+  const receipts = await _getReceipts();
+  const idx = receipts.findIndex((receipt) => receipt?.id === receiptId);
+  if (idx === -1) return null;
+  receipts[idx] = { ...receipts[idx]!, ...patch };
+  await _saveReceipts(receipts);
+  return receipts[idx] ?? null;
+}
+
+function _snapshotMeta(receipt: RestoreReceipt | null): RestoreReceiptMeta | null {
+  if (!receipt) return null;
+  const snapshot = receipt.snapshot ?? {
+    scriptsBefore: [],
+    valuesBefore: {},
+    scriptIdsBefore: [],
+  };
+  const scriptsBefore = Array.isArray(snapshot.scriptsBefore)
+    ? snapshot.scriptsBefore
+    : [];
+  return {
+    id: receipt.id,
+    type: receipt.type,
+    source: receipt.source,
+    sourceLabel: receipt.sourceLabel || '',
+    timestamp: receipt.timestamp,
+    backupId: receipt.backupId || null,
+    result: receipt.result || null,
+    rolledBackAt: receipt.rolledBackAt || null,
+    rollbackError: receipt.rollbackError || null,
+    rollbackResult: receipt.rollbackResult || null,
+    snapshotScriptCount: scriptsBefore.length,
+    snapshotIdSetSize: Array.isArray(snapshot.scriptIdsBefore)
+      ? snapshot.scriptIdsBefore.length
+      : 0,
+    hasGlobalSettings: snapshot.settings !== undefined,
+    hasFolders: snapshot.folders !== undefined,
+    hasWorkspaces: snapshot.workspaces !== undefined,
+  };
+}
+
+async function _captureSnapshot({
+  includeGlobals = false,
+}: { includeGlobals?: boolean } = {}): Promise<RestoreSnapshot> {
+  const scriptsBefore: Script[] = [];
+  const valuesBefore: Record<string, Record<string, unknown>> = {};
+  let scriptIdsBefore: string[] = [];
+
+  try {
+    const all = await ScriptStorage.getAll();
+    scriptIdsBefore = all
+      .map((script) => script.id)
+      .filter((id): id is string => typeof id === 'string');
+    for (const script of all) {
+      scriptsBefore.push(structuredClone(script));
+      if (
+        typeof ScriptValues !== 'undefined' &&
+        ScriptValues &&
+        typeof ScriptValues.getAll === 'function'
+      ) {
+        try {
+          const values = await ScriptValues.getAll(script.id);
+          if (values && Object.keys(values).length > 0) {
+            valuesBefore[script.id] = structuredClone(values);
+          }
+        } catch (_) {
+          /* ignore per-script value snapshot errors */
+        }
+      }
+    }
+  } catch (_) {
+    /* getAll may fail in degraded harnesses; receipt still useful */
+  }
+
+  const snapshot: RestoreSnapshot = {
+    scriptsBefore,
+    valuesBefore,
+    scriptIdsBefore,
+  };
+
+  if (includeGlobals) {
+    try {
+      snapshot.settings = structuredClone(await SettingsManager.get());
+    } catch (_) {
+      /* empty */
+    }
+    try {
+      const folderData = await chrome.storage.local.get('scriptFolders');
+      if (folderData && folderData['scriptFolders'] !== undefined) {
+        snapshot.folders = structuredClone(folderData['scriptFolders']);
+      }
+    } catch (_) {
+      /* empty */
+    }
+    try {
+      const wsData = await chrome.storage.local.get('workspaces');
+      if (wsData && wsData['workspaces'] !== undefined) {
+        snapshot.workspaces = structuredClone(wsData['workspaces']);
+      }
+    } catch (_) {
+      /* empty */
+    }
+  }
+
+  return snapshot;
+}
+
 /** Estimate combined size of all stored backups (bytes). */
 function _estimateBackupSize(backups: BackupEntry[]): number {
   let total = 0;
@@ -587,6 +881,20 @@ export const BackupScheduler = {
     );
     if (!backup) return { success: false, error: 'Backup not found' };
 
+    const recordReceipt = options.recordReceipt !== false;
+    const sourceLabel =
+      typeof options.sourceLabel === 'string' && options.sourceLabel.trim()
+        ? options.sourceLabel.trim()
+        : `Backup ${new Date(backup.timestamp).toISOString()}`;
+    let snapshot: RestoreSnapshot | null = null;
+    if (recordReceipt) {
+      try {
+        snapshot = await _captureSnapshot({ includeGlobals: !options.selective });
+      } catch (_) {
+        /* restore should still proceed if snapshot capture fails */
+      }
+    }
+
     try {
       const binaryString: string = atob(backup.data);
       const zipBytes = new Uint8Array(binaryString.length);
@@ -681,7 +989,7 @@ export const BackupScheduler = {
         const selectiveZip = fflate.zipSync(selectedFiles, { level: 6 });
         const importResult = await importFromZip(
           _zipBytesToBase64(selectiveZip),
-          { overwrite: true },
+          { overwrite: true, recordReceipt: false },
         );
         if (importResult.error) {
           errors.push({ name: 'archive', error: importResult.error });
@@ -694,7 +1002,10 @@ export const BackupScheduler = {
       } else {
         // Full restore: use importFromZip for all scripts at once
         try {
-          const importResult = await importFromZip(backup.data, { overwrite: true });
+          const importResult = await importFromZip(backup.data, {
+            overwrite: true,
+            recordReceipt: false,
+          });
           if (importResult.error) {
             errors.push({ name: 'archive', error: importResult.error });
           }
@@ -782,7 +1093,7 @@ export const BackupScheduler = {
         restoredSettings ||
         restoredFolders ||
         restoredWorkspaces;
-      return {
+      const result: RestoreResult = {
         success,
         restoredScripts,
         skippedScripts,
@@ -791,6 +1102,53 @@ export const BackupScheduler = {
         restoredWorkspaces,
         errors,
       };
+
+      if (
+        recordReceipt &&
+        snapshot &&
+        (restoredScripts > 0 ||
+          restoredSettings ||
+          restoredFolders ||
+          restoredWorkspaces)
+      ) {
+        try {
+          let scriptIdsAfter: string[] = [];
+          try {
+            const after = await ScriptStorage.getAll();
+            scriptIdsAfter = after
+              .map((script) => script.id)
+              .filter((id): id is string => typeof id === 'string');
+          } catch (_) {
+            /* empty */
+          }
+          const beforeSet = new Set(snapshot.scriptIdsBefore || []);
+          const addedScriptIds = scriptIdsAfter.filter((id) => !beforeSet.has(id));
+          const receipt: RestoreReceipt = {
+            id: _generateId(),
+            type: 'restore',
+            source: 'backup-restore',
+            sourceLabel,
+            timestamp: Date.now(),
+            backupId,
+            backupTimestamp: backup.timestamp,
+            selective: !!options.selective,
+            result,
+            snapshot: {
+              ...snapshot,
+              addedScriptIds,
+            },
+          };
+          await _pushReceipt(receipt);
+          result.receiptId = receipt.id;
+        } catch (receiptErr: unknown) {
+          console.warn(
+            '[BackupScheduler] restoreBackup failed to persist receipt:',
+            receiptErr,
+          );
+        }
+      }
+
+      return result;
     } catch (err: unknown) {
       console.error('[BackupScheduler] restoreBackup error:', err);
       const errMsg: string =
@@ -1075,6 +1433,504 @@ export const BackupScheduler = {
       console.error('[BackupScheduler] inspectBackup error:', err);
       return null;
     }
+  },
+
+  /**
+   * Verify a backup without mutating current scripts.
+   */
+  async verifyBackup(
+    backupId: string,
+    opts: {
+      parseUserscript?: (code: string) => {
+        error?: string;
+        meta?: Record<string, unknown>;
+      } | null;
+    } = {},
+  ): Promise<VerifyBackupResult | null> {
+    const backups: BackupEntry[] = await _getBackupList();
+    const backup: BackupEntry | undefined = backups.find(
+      (b: BackupEntry) => b.id === backupId,
+    );
+    if (!backup) return null;
+
+    const parseUserscript =
+      typeof opts.parseUserscript === 'function' ? opts.parseUserscript : null;
+
+    try {
+      const binaryString: string = atob(backup.data);
+      const zipBytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        zipBytes[i] = binaryString.charCodeAt(i);
+      }
+      const unzipped: Record<string, Uint8Array> =
+        fflate.unzipSync(zipBytes);
+      const fileNames: string[] = Object.keys(unzipped);
+
+      const installedIdSet = new Set<string>();
+      try {
+        const existing = await ScriptStorage.getAll();
+        for (const script of existing) {
+          if (script && typeof script.id === 'string') {
+            installedIdSet.add(script.id);
+          }
+        }
+      } catch (_) {
+        /* empty */
+      }
+
+      const issues: VerifyIssue[] = [];
+      let parseErrorCount = 0;
+      let optionsParseErrors = 0;
+      let storageParseErrors = 0;
+      let unreadableFileCount = 0;
+      let missingOptionsCount = 0;
+      const missingStorageCount = 0;
+
+      const scriptEntries: VerifiedScript[] = fileNames
+        .filter((n: string) => n.endsWith('.user.js'))
+        .map((filename: string): VerifiedScript => {
+          const baseName: string = filename.replace(/\.user\.js$/, '');
+          const displayName: string = baseName.replace(/^scripts\//, '');
+          const optionsKey = `${baseName}.options.json`;
+          const storageKey = `${baseName}.storage.json`;
+          const scriptData = unzipped[filename];
+          const optionsDataBytes = unzipped[optionsKey];
+          const storageDataBytes = unzipped[storageKey];
+          const hasOptions = !!optionsDataBytes;
+          const hasStorage = !!storageDataBytes;
+
+          let code = '';
+          try {
+            if (!scriptData) throw new Error('Missing script data');
+            code = fflate.strFromU8(scriptData);
+          } catch (readErr: unknown) {
+            unreadableFileCount++;
+            const error = readErr instanceof Error ? readErr.message : String(readErr);
+            issues.push({ kind: 'unreadable-script', file: filename, error });
+            return {
+              filename,
+              name: displayName,
+              namespace: '',
+              hasOptions,
+              hasStorage,
+              parseError: error,
+            };
+          }
+
+          let optionsData: Record<string, unknown> | null = null;
+          if (hasOptions && optionsDataBytes) {
+            try {
+              optionsData = JSON.parse(
+                fflate.strFromU8(optionsDataBytes),
+              ) as Record<string, unknown>;
+            } catch (optErr: unknown) {
+              optionsParseErrors++;
+              issues.push({
+                kind: 'options-parse',
+                file: optionsKey,
+                error: optErr instanceof Error ? optErr.message : String(optErr),
+              });
+            }
+          } else {
+            missingOptionsCount++;
+          }
+
+          if (hasStorage && storageDataBytes) {
+            try {
+              JSON.parse(fflate.strFromU8(storageDataBytes));
+            } catch (stErr: unknown) {
+              storageParseErrors++;
+              issues.push({
+                kind: 'storage-parse',
+                file: storageKey,
+                error: stErr instanceof Error ? stErr.message : String(stErr),
+              });
+            }
+          }
+
+          let parseError = '';
+          const rawMeta =
+            optionsData?.['meta'] &&
+            typeof optionsData['meta'] === 'object'
+              ? (optionsData['meta'] as Record<string, unknown>)
+              : {};
+          let parsedMeta: Record<string, unknown> = rawMeta;
+          if (parseUserscript) {
+            const parsed = parseUserscript(code);
+            if (parsed?.error) {
+              parseError = parsed.error;
+              parseErrorCount++;
+              issues.push({
+                kind: 'script-parse',
+                file: filename,
+                error: parsed.error,
+              });
+            } else if (parsed?.meta) {
+              parsedMeta = parsed.meta;
+            }
+          } else if (!/==UserScript==/.test(code)) {
+            parseError = 'Missing ==UserScript== header';
+            parseErrorCount++;
+            issues.push({ kind: 'script-parse', file: filename, error: parseError });
+          }
+
+          const scriptId =
+            typeof optionsData?.['scriptId'] === 'string'
+              ? optionsData['scriptId']
+              : '';
+          const name =
+            typeof parsedMeta['name'] === 'string'
+              ? parsedMeta['name']
+              : displayName;
+          const namespace =
+            typeof parsedMeta['namespace'] === 'string'
+              ? parsedMeta['namespace']
+              : '';
+          return {
+            filename,
+            name,
+            namespace,
+            hasOptions,
+            hasStorage,
+            parseError: parseError || undefined,
+            scriptId: scriptId || undefined,
+            conflictsWithId:
+              scriptId && installedIdSet.has(scriptId) ? scriptId : undefined,
+          };
+        });
+
+      let globalSettingsValid = true;
+      let foldersValid = true;
+      let workspacesValid = true;
+      if (unzipped['global-settings.json']) {
+        try {
+          JSON.parse(fflate.strFromU8(unzipped['global-settings.json']));
+        } catch (err: unknown) {
+          globalSettingsValid = false;
+          issues.push({
+            kind: 'global-settings-parse',
+            file: 'global-settings.json',
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+      if (unzipped['folders.json']) {
+        try {
+          JSON.parse(fflate.strFromU8(unzipped['folders.json']));
+        } catch (err: unknown) {
+          foldersValid = false;
+          issues.push({
+            kind: 'folders-parse',
+            file: 'folders.json',
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+      if (unzipped['workspaces.json']) {
+        try {
+          JSON.parse(fflate.strFromU8(unzipped['workspaces.json']));
+        } catch (err: unknown) {
+          workspacesValid = false;
+          issues.push({
+            kind: 'workspaces-parse',
+            file: 'workspaces.json',
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      const validScripts = scriptEntries.filter((s) => !s.parseError).length;
+      const valid = issues.length === 0;
+      return {
+        valid,
+        scripts: scriptEntries,
+        parseErrorCount,
+        missingOptionsCount,
+        missingStorageCount,
+        unreadableFileCount,
+        summary: {
+          scriptCount: scriptEntries.length,
+          validScripts,
+          parseErrors: parseErrorCount,
+          optionsParseErrors,
+          storageParseErrors,
+          globalSettingsValid,
+          foldersValid,
+          workspacesValid,
+        },
+        issues,
+      };
+    } catch (err: unknown) {
+      console.error('[BackupScheduler] verifyBackup error:', err);
+      return {
+        valid: false,
+        scripts: [],
+        parseErrorCount: 0,
+        missingOptionsCount: 0,
+        missingStorageCount: 0,
+        unreadableFileCount: 0,
+        summary: {
+          scriptCount: 0,
+          validScripts: 0,
+          parseErrors: 0,
+          optionsParseErrors: 0,
+          storageParseErrors: 0,
+          globalSettingsValid: false,
+          foldersValid: false,
+          workspacesValid: false,
+        },
+        issues: [{
+          kind: 'archive',
+          file: backupId,
+          error: err instanceof Error ? err.message : String(err),
+        }],
+      };
+    }
+  },
+
+  /**
+   * List persisted restore/import receipts (metadata only, no snapshot blob).
+   */
+  async listReceipts(): Promise<RestoreReceiptMeta[]> {
+    const receipts = await _getReceipts();
+    return receipts.map(_snapshotMeta).filter((meta): meta is RestoreReceiptMeta => !!meta);
+  },
+
+  /**
+   * Fetch a single receipt with its full snapshot blob.
+   */
+  async getReceipt(receiptId: string): Promise<RestoreReceipt | null> {
+    const receipts = await _getReceipts();
+    return receipts.find((receipt) => receipt?.id === receiptId) ?? null;
+  },
+
+  /**
+   * Record an import receipt in the same registry as restore receipts.
+   */
+  async recordReceipt(
+    receipt: Partial<RestoreReceipt> | null,
+  ): Promise<RestoreReceiptMeta | null> {
+    if (!receipt || typeof receipt !== 'object') return null;
+    const snapshot = receipt.snapshot ?? {
+      scriptsBefore: [],
+      valuesBefore: {},
+      scriptIdsBefore: [],
+    };
+    const next: RestoreReceipt = {
+      id: receipt.id || _generateId(),
+      timestamp: receipt.timestamp || Date.now(),
+      type: receipt.type || 'import',
+      source: receipt.source || 'import',
+      sourceLabel: receipt.sourceLabel || '',
+      backupId: receipt.backupId || null,
+      result: receipt.result || null,
+      snapshot,
+    };
+    await _pushReceipt(next);
+    return _snapshotMeta(next);
+  },
+
+  /**
+   * Roll a restore or import receipt back.
+   */
+  async rollbackRestoreReceipt(
+    receiptId: string,
+    opts: RollbackRestoreOptions = {},
+  ): Promise<RollbackRestoreResult> {
+    const receipts = await _getReceipts();
+    const receipt = receipts.find((r) => r?.id === receiptId);
+    if (!receipt) return { success: false, error: 'Receipt not found' };
+    if (receipt.rolledBackAt) {
+      return {
+        success: false,
+        error: 'Receipt already rolled back',
+        alreadyRolledBack: true,
+        rolledBackAt: receipt.rolledBackAt,
+      };
+    }
+
+    const snapshot = receipt.snapshot ?? {
+      scriptsBefore: [],
+      valuesBefore: {},
+      scriptIdsBefore: [],
+    };
+    const scriptsBefore = Array.isArray(snapshot.scriptsBefore)
+      ? snapshot.scriptsBefore
+      : [];
+    const valuesBefore =
+      snapshot.valuesBefore && typeof snapshot.valuesBefore === 'object'
+        ? snapshot.valuesBefore
+        : {};
+    const restoreGlobals = opts.restoreGlobals !== false;
+
+    const errors: RollbackRestoreError[] = [];
+    let restoredScripts = 0;
+    let removedScripts = 0;
+    let restoredValues = 0;
+    const restoredScriptIds: string[] = [];
+
+    for (const script of scriptsBefore) {
+      if (!script || typeof script.id !== 'string') continue;
+      try {
+        await ScriptStorage.set(script.id, structuredClone(script));
+        restoredScriptIds.push(script.id);
+        restoredScripts++;
+      } catch (err: unknown) {
+        errors.push({
+          kind: 'script',
+          name: script.meta?.name || script.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    for (const [scriptId, values] of Object.entries(valuesBefore)) {
+      if (
+        typeof ScriptValues === 'undefined' ||
+        !ScriptValues ||
+        typeof ScriptValues.setAll !== 'function'
+      ) {
+        break;
+      }
+      try {
+        if (typeof ScriptValues.deleteAll === 'function') {
+          await ScriptValues.deleteAll(scriptId);
+        }
+        await ScriptValues.setAll(scriptId, values);
+        restoredValues++;
+      } catch (err: unknown) {
+        errors.push({
+          kind: 'values',
+          name: scriptId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    const beforeIdSet = new Set(
+      Array.isArray(snapshot.scriptIdsBefore) ? snapshot.scriptIdsBefore : [],
+    );
+    let scriptIdsAfter: string[] = [];
+    try {
+      const after = await ScriptStorage.getAll();
+      scriptIdsAfter = after
+        .map((script) => script.id)
+        .filter((id): id is string => typeof id === 'string');
+    } catch (err: unknown) {
+      errors.push({
+        kind: 'getAll',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    const addedFromSnapshot = Array.isArray(snapshot.addedScriptIds)
+      ? snapshot.addedScriptIds
+      : null;
+    const toDelete = addedFromSnapshot
+      ? addedFromSnapshot.filter((id) => scriptIdsAfter.includes(id))
+      : scriptIdsAfter.filter((id) => !beforeIdSet.has(id));
+    for (const id of toDelete) {
+      try {
+        if (
+          typeof ScriptValues !== 'undefined' &&
+          ScriptValues &&
+          typeof ScriptValues.deleteAll === 'function'
+        ) {
+          try {
+            await ScriptValues.deleteAll(id);
+          } catch (_) {
+            /* empty */
+          }
+        }
+        await ScriptStorage.delete(id);
+        removedScripts++;
+      } catch (err: unknown) {
+        errors.push({
+          kind: 'script-delete',
+          name: id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    let restoredSettings = false;
+    let restoredFolders = false;
+    let restoredWorkspaces = false;
+    if (restoreGlobals) {
+      if (snapshot.settings !== undefined) {
+        try {
+          await SettingsManager.set(structuredClone(snapshot.settings));
+          restoredSettings = true;
+        } catch (err: unknown) {
+          errors.push({
+            kind: 'settings',
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+      if (snapshot.folders !== undefined) {
+        try {
+          await chrome.storage.local.set({
+            scriptFolders: structuredClone(snapshot.folders),
+          });
+          if (typeof FolderStorage !== 'undefined' && FolderStorage) {
+            FolderStorage.cache = null;
+          }
+          restoredFolders = true;
+        } catch (err: unknown) {
+          errors.push({
+            kind: 'folders',
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+      if (snapshot.workspaces !== undefined) {
+        try {
+          await chrome.storage.local.set({
+            workspaces: structuredClone(snapshot.workspaces),
+          });
+          if (typeof WorkspaceManager !== 'undefined' && WorkspaceManager) {
+            WorkspaceManager._cache = null;
+            WorkspaceManager._initPromise = null;
+          }
+          restoredWorkspaces = true;
+        } catch (err: unknown) {
+          errors.push({
+            kind: 'workspaces',
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
+
+    const rollbackResult = {
+      receiptId,
+      restoredScripts,
+      removedScripts,
+      restoredValues,
+      restoredSettings,
+      restoredFolders,
+      restoredWorkspaces,
+      errors,
+      restoredScriptIds,
+      removedScriptIds: toDelete,
+    };
+    const success = errors.length === 0;
+    await _updateReceipt(receiptId, {
+      rolledBackAt: Date.now(),
+      rollbackError: success
+        ? null
+        : errors.map((error) => `${error.kind}: ${error.error}`).join('; '),
+      rollbackResult: { ...rollbackResult, success },
+    });
+
+    return { success, ...rollbackResult };
+  },
+
+  /** Clear all persisted receipts. */
+  async clearReceipts(): Promise<{ success: true }> {
+    await _saveReceipts([]);
+    return { success: true };
   },
 };
 

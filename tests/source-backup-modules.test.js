@@ -125,6 +125,16 @@ async function loadFreshBackupSchedulerHarness(scripts, valuesByScript = {}) {
   const FolderStorage = {
     cache: null,
   };
+  const WorkspaceManager = {
+    _cache: null,
+    _initPromise: null,
+  };
+
+  globalThis.ScriptStorage = ScriptStorage;
+  globalThis.ScriptValues = ScriptValues;
+  globalThis.SettingsManager = SettingsManager;
+  globalThis.FolderStorage = FolderStorage;
+  globalThis.WorkspaceManager = WorkspaceManager;
 
   vi.doMock('../src/modules/storage.ts', () => ({
     ScriptStorage,
@@ -205,6 +215,11 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, 'generateId');
   Reflect.deleteProperty(globalThis, 'registerAllScripts');
   Reflect.deleteProperty(globalThis, 'updateBadge');
+  Reflect.deleteProperty(globalThis, 'ScriptStorage');
+  Reflect.deleteProperty(globalThis, 'ScriptValues');
+  Reflect.deleteProperty(globalThis, 'SettingsManager');
+  Reflect.deleteProperty(globalThis, 'FolderStorage');
+  Reflect.deleteProperty(globalThis, 'WorkspaceManager');
 });
 
 describe('source backup scheduler module', () => {

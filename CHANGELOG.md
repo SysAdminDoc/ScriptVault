@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Backup scheduler TypeScript promotion
+
+- **Backup scheduler runtime is now generated from TypeScript.**
+  `modules/backup-scheduler.js` is produced from
+  `src/modules/backup-scheduler.ts`, with the source updated for restore
+  receipts, rollback receipts, backup verification, receipt retention caps,
+  and runtime-global storage contracts.
+
 ### 2026-06-03 — Public API TypeScript promotion
 
 - **Public API runtime is now generated from TypeScript.** `modules/public-api.js`
