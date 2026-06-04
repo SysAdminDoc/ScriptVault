@@ -144,6 +144,7 @@ describe('source analyzer', () => {
     // offscreen document creation in production — good for runtime, bad for
     // isolated assertions).
     ScriptAnalyzer._offscreenPromise = null;
+    ScriptAnalyzer._inlineLibraryPromises = {};
   });
 
   it('analyzes code via regex fallback when offscreen dispatch fails', async () => {
@@ -191,6 +192,118 @@ describe('source analyzer', () => {
     });
     expect(result.astAnalyzed).toBe(true);
     expect(result.summary).toBe('AST analysis complete.');
+  });
+
+  it('runs inline Acorn AST analysis when chrome.offscreen is unavailable', async () => {
+    const originalOffscreen = chrome.offscreen;
+    const originalAcorn = globalThis.acorn;
+    delete chrome.offscreen;
+    globalThis.acorn = {
+      parse: vi.fn(() => ({
+        type: 'Program',
+        body: [{
+          type: 'ExpressionStatement',
+          expression: {
+            type: 'CallExpression',
+            callee: { type: 'Identifier', name: 'eval' },
+            arguments: [],
+            loc: { start: { line: 1, column: 0 } },
+          },
+        }],
+      })),
+    };
+
+    try {
+      const result = await ScriptAnalyzer.analyzeAsync('eval("x");');
+
+      expect(result.astAnalyzed).toBe(true);
+      expect(result.findings.some((finding) => finding.id === 'eval')).toBe(true);
+      expect(chrome.offscreen).toBeUndefined();
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+        type: 'offscreen_analyze',
+      }));
+    } finally {
+      chrome.offscreen = originalOffscreen;
+      globalThis.acorn = originalAcorn;
+    }
+  });
+
+  it('parses ESM imports inline when chrome.offscreen is unavailable', async () => {
+    const originalOffscreen = chrome.offscreen;
+    const originalAcorn = globalThis.acorn;
+    const source = 'import value from "https://cdn.example.com/value.js";\nexport default value;';
+    delete chrome.offscreen;
+    globalThis.acorn = {
+      parse: vi.fn(() => ({
+        type: 'Program',
+        body: [
+          {
+            type: 'ImportDeclaration',
+            start: 0,
+            end: source.indexOf('\n'),
+            source: { value: 'https://cdn.example.com/value.js' },
+            specifiers: [{
+              type: 'ImportDefaultSpecifier',
+              local: { name: 'value' },
+            }],
+          },
+          {
+            type: 'ExportDefaultDeclaration',
+            start: source.indexOf('\n') + 1,
+            end: source.length,
+            declaration: {
+              type: 'Identifier',
+              name: 'value',
+              start: source.lastIndexOf('value'),
+              end: source.length - 1,
+            },
+          },
+        ],
+      })),
+    };
+
+    try {
+      const result = await ScriptAnalyzer.analyzeESMImports(source);
+
+      expect(result.error).toBeUndefined();
+      expect(result.imports).toEqual([
+        expect.objectContaining({
+          source: 'https://cdn.example.com/value.js',
+          specifiers: [{ kind: 'default', local: 'value' }],
+        }),
+      ]);
+      expect(result.exports[0]).toEqual(expect.objectContaining({ kind: 'default' }));
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+        type: 'offscreen_esm_imports',
+      }));
+    } finally {
+      chrome.offscreen = originalOffscreen;
+      globalThis.acorn = originalAcorn;
+    }
+  });
+
+  it('merges text inline when chrome.offscreen is unavailable', async () => {
+    const originalOffscreen = chrome.offscreen;
+    const originalDiff = globalThis.Diff;
+    delete chrome.offscreen;
+    globalThis.Diff = {
+      merge: vi.fn(() => ({ hunks: [] })),
+      applyPatch: vi.fn(() => 'merged text'),
+      diffLines: vi.fn(() => []),
+    };
+
+    try {
+      const result = await ScriptAnalyzer.mergeText('base', 'local edit', 'remote edit');
+
+      expect(result).toEqual({ merged: 'merged text', conflicts: false });
+      expect(globalThis.Diff.merge).toHaveBeenCalledWith('local edit', 'remote edit', 'base');
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+        type: 'offscreen_merge',
+      }));
+    } finally {
+      chrome.offscreen = originalOffscreen;
+      globalThis.Diff = originalDiff;
+    }
   });
 });
 

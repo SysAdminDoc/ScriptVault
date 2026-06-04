@@ -119,6 +119,22 @@ const EasyCloudSync = (() => {
       }
     }
   }
+  async function _mergeScriptText(base, local, remote) {
+    if (typeof ScriptAnalyzer !== "undefined" && typeof ScriptAnalyzer.mergeText === "function") {
+      return ScriptAnalyzer.mergeText(base, local, remote);
+    }
+    if (typeof ScriptAnalyzer !== "undefined" && typeof ScriptAnalyzer._ensureOffscreen === "function") {
+      const ready = await ScriptAnalyzer._ensureOffscreen();
+      if (!ready) throw new Error("No script merge engine available");
+      return chrome.runtime.sendMessage({
+        type: "offscreen_merge",
+        base,
+        local,
+        remote
+      });
+    }
+    throw new Error("No script merge engine available");
+  }
   function setStatus(newStatus) {
     if (_status === newStatus) return;
     _status = newStatus;
@@ -348,23 +364,13 @@ const EasyCloudSync = (() => {
         const base = local.syncBaseCode || remote.syncBaseCode || null;
         if (base && base !== local.code && base !== remote.code) {
           try {
-            if (typeof ScriptAnalyzer !== "undefined" && ScriptAnalyzer._ensureOffscreen) {
-              await ScriptAnalyzer._ensureOffscreen();
-              const mergeResult = await chrome.runtime.sendMessage({
-                type: "offscreen_merge",
-                base,
-                local: local.code,
-                remote: remote.code
-              });
-              if (mergeResult && !mergeResult.error) {
-                merged.code = mergeResult.merged ?? merged.code;
-                if (mergeResult.conflicts) {
-                  merged.settings = { ...merged.settings || {}, mergeConflict: true };
-                }
-                log(`3-way merge for ${id}: conflicts=${String(mergeResult.conflicts || false)}`);
-              } else {
-                merged.code = localNewer ? local.code : remote.code;
+            const mergeResult = await _mergeScriptText(base, local.code, remote.code);
+            if (mergeResult && !mergeResult.error) {
+              merged.code = mergeResult.merged ?? merged.code;
+              if (mergeResult.conflicts) {
+                merged.settings = { ...merged.settings || {}, mergeConflict: true };
               }
+              log(`3-way merge for ${id}: conflicts=${String(mergeResult.conflicts || false)}`);
             } else {
               merged.code = localNewer ? local.code : remote.code;
             }

@@ -7,7 +7,8 @@ import type { Settings } from '../types/settings';
 declare function fetchRequireScript(url: string): Promise<string | null>;
 
 declare const ScriptAnalyzer: {
-  _ensureOffscreen(): Promise<void>;
+  _ensureOffscreen?(): Promise<boolean>;
+  analyzeESMImports?(code: string): Promise<ESMSyntaxInfo & { error?: string }>;
 };
 
 interface ImportSpecifierInfo {
@@ -78,10 +79,24 @@ export function resolveImportSpecifier(specifier: string, parentUrl?: string): s
 }
 
 async function collectSyntaxViaOffscreen(code: string): Promise<ESMSyntaxInfo> {
+  if (typeof ScriptAnalyzer !== 'undefined' && typeof ScriptAnalyzer.analyzeESMImports === 'function') {
+    const result = await ScriptAnalyzer.analyzeESMImports(code);
+    if (!result || result.error) throw new Error(result?.error || 'ESM parse failed');
+    if (Array.isArray(result.dynamicImports) && result.dynamicImports.length > 0) {
+      const first = result.dynamicImports[0];
+      const where = first?.line ? ` at line ${first.line}` : '';
+      throw new Error(`Dynamic import() is not supported by ScriptVault's ESM bundler${where}.`);
+    }
+    if (Array.isArray(result.unsupportedExports) && result.unsupportedExports.length > 0) {
+      throw new Error(`Unsupported ESM export syntax: ${result.unsupportedExports[0]?.type}`);
+    }
+    return result;
+  }
   if (typeof ScriptAnalyzer === 'undefined' || !ScriptAnalyzer?._ensureOffscreen) {
     throw new Error('ESM bundler requires the offscreen Acorn parser');
   }
-  await ScriptAnalyzer._ensureOffscreen();
+  const ready = await ScriptAnalyzer._ensureOffscreen();
+  if (!ready) throw new Error('ESM bundler requires an Acorn parser');
   const result = await chrome.runtime.sendMessage({ type: 'offscreen_esm_imports', code }) as ESMSyntaxInfo & { error?: string };
   if (!result || result.error) throw new Error(result?.error || 'ESM parse failed');
   if (Array.isArray(result.dynamicImports) && result.dynamicImports.length > 0) {
