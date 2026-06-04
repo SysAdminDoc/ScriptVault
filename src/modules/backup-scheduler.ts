@@ -18,6 +18,10 @@ declare const fflate: {
     opts?: { level?: number },
   ): Uint8Array;
   unzipSync(data: Uint8Array): Record<string, Uint8Array>;
+  unzipSync(
+    data: Uint8Array,
+    opts?: { filter?: (file: { name: string; size: number; originalSize: number; compression: number }) => boolean },
+  ): Record<string, Uint8Array>;
 };
 
 declare function importFromZip(
@@ -297,6 +301,14 @@ const ALARM_NAME = 'sv_backup_scheduled';
 const DEBOUNCE_ALARM = 'sv_backup_debounce';
 const DEBOUNCE_MINUTES = 5;
 const STORAGE_WARNING_BYTES: number = 8 * 1024 * 1024; // 8 MB
+const ARCHIVE_MAX_SCRIPT_BYTES: number = 5 * 1024 * 1024;
+const ARCHIVE_MAX_COMPRESSED_BYTES: number = 20 * 1024 * 1024;
+const ARCHIVE_MAX_ENTRIES: number = 300;
+const ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES: number = 60 * 1024 * 1024;
+const ARCHIVE_MAX_ENTRY_BYTES: number = 10 * 1024 * 1024;
+const ARCHIVE_MAX_JSON_ENTRY_BYTES: number = 5 * 1024 * 1024;
+const ARCHIVE_MAX_OPTIONS_BYTES: number = 512 * 1024;
+const ARCHIVE_MAX_COMPRESSION_RATIO: number = 100;
 
 const DEFAULT_SETTINGS: BackupSchedulerSettings = {
   enabled: false,
@@ -330,6 +342,18 @@ interface GlobalSettingsMetadata {
   redactedSettingsCredentialKeys: string[];
 }
 
+interface ArchiveEntryMeta {
+  name: string;
+  size?: number;
+  originalSize?: number;
+  compression?: number;
+}
+
+interface ArchiveValidationState {
+  entries: number;
+  totalUncompressedBytes: number;
+}
+
 // ---------------------------------------------------------------------------
 // Internal state
 // ---------------------------------------------------------------------------
@@ -353,6 +377,154 @@ function _formatBytes(bytes: number): string {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / 1048576).toFixed(2) + ' MB';
+}
+
+function archiveIntakeError(message: string): Error {
+  return new Error(`Backup archive rejected: ${message}`);
+}
+
+function normalizeArchiveEntryName(name: unknown): string {
+  return typeof name === 'string' ? name.replace(/\\/g, '/').trim() : '';
+}
+
+function archiveEntryLimit(name: string): number {
+  if (name.endsWith('.user.js') || (!name.includes('/') && name.endsWith('.js'))) {
+    return ARCHIVE_MAX_SCRIPT_BYTES;
+  }
+  if (name.endsWith('.options.json') || name === GLOBAL_SETTINGS_METADATA_FILE) {
+    return ARCHIVE_MAX_OPTIONS_BYTES;
+  }
+  if (
+    name.endsWith('.storage.json') ||
+    name === 'global-settings.json' ||
+    name === 'folders.json' ||
+    name === 'workspaces.json'
+  ) {
+    return ARCHIVE_MAX_JSON_ENTRY_BYTES;
+  }
+  return ARCHIVE_MAX_ENTRY_BYTES;
+}
+
+function validateArchiveEntryMeta(
+  rawEntry: ArchiveEntryMeta,
+  state: ArchiveValidationState,
+): boolean {
+  const name = normalizeArchiveEntryName(rawEntry.name);
+  if (!name) throw archiveIntakeError('entry name is missing.');
+  if (name.startsWith('/') || name.includes('../') || name.includes('/..')) {
+    throw archiveIntakeError(`entry ${name} uses an unsafe path.`);
+  }
+  if (/\.(zip|xpi|crx)$/i.test(name)) {
+    throw archiveIntakeError(`nested archive entry ${name} is not allowed.`);
+  }
+
+  state.entries++;
+  if (state.entries > ARCHIVE_MAX_ENTRIES) {
+    throw archiveIntakeError(`too many files (${state.entries}). Maximum is ${ARCHIVE_MAX_ENTRIES}.`);
+  }
+
+  const compressedBytes = Number(rawEntry.size ?? 0);
+  const uncompressedBytes = Number(rawEntry.originalSize ?? compressedBytes);
+  if (!Number.isFinite(uncompressedBytes) || uncompressedBytes < 0) {
+    throw archiveIntakeError(`entry ${name} has an invalid uncompressed size.`);
+  }
+  const entryLimit = archiveEntryLimit(name);
+  if (uncompressedBytes > entryLimit) {
+    throw archiveIntakeError(`${name} is too large (${_formatBytes(uncompressedBytes)}). Maximum is ${_formatBytes(entryLimit)}.`);
+  }
+  state.totalUncompressedBytes += uncompressedBytes;
+  if (state.totalUncompressedBytes > ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES) {
+    throw archiveIntakeError(`expanded data exceeds ${_formatBytes(ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES)}.`);
+  }
+  if (
+    Number.isFinite(compressedBytes) &&
+    compressedBytes > 0 &&
+    uncompressedBytes / compressedBytes > ARCHIVE_MAX_COMPRESSION_RATIO
+  ) {
+    throw archiveIntakeError(`${name} compression ratio is too high.`);
+  }
+  return true;
+}
+
+function archiveInputToBytes(input: string | ArrayBuffer | Uint8Array): Uint8Array {
+  let zipBytes: Uint8Array;
+  if (typeof input === 'string') {
+    const maxBase64Length = Math.ceil((ARCHIVE_MAX_COMPRESSED_BYTES * 4) / 3) + 8;
+    if (input.length > maxBase64Length) {
+      throw archiveIntakeError(`compressed payload exceeds ${_formatBytes(ARCHIVE_MAX_COMPRESSED_BYTES)}.`);
+    }
+    const binaryString = atob(input);
+    zipBytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      zipBytes[i] = binaryString.charCodeAt(i);
+    }
+  } else if (input instanceof ArrayBuffer) {
+    zipBytes = new Uint8Array(input);
+  } else {
+    zipBytes = input;
+  }
+  if (zipBytes.byteLength > ARCHIVE_MAX_COMPRESSED_BYTES) {
+    throw archiveIntakeError(`compressed payload exceeds ${_formatBytes(ARCHIVE_MAX_COMPRESSED_BYTES)}.`);
+  }
+  return zipBytes;
+}
+
+function validateUnzippedArchive(files: Record<string, Uint8Array>): void {
+  const state: ArchiveValidationState = { entries: 0, totalUncompressedBytes: 0 };
+  for (const [name, data] of Object.entries(files)) {
+    validateArchiveEntryMeta(
+      {
+        name,
+        size: data.byteLength,
+        originalSize: data.byteLength,
+        compression: 0,
+      },
+      state,
+    );
+  }
+}
+
+function unzipArchiveBounded(input: string | ArrayBuffer | Uint8Array): Record<string, Uint8Array> {
+  const zipBytes = archiveInputToBytes(input);
+  const state: ArchiveValidationState = { entries: 0, totalUncompressedBytes: 0 };
+  const files = fflate.unzipSync(zipBytes, {
+    filter(file) {
+      return validateArchiveEntryMeta(file, state);
+    },
+  });
+  validateUnzippedArchive(files);
+  return files;
+}
+
+function archiveEntryBytes(
+  files: Record<string, Uint8Array>,
+  name: string,
+  maxBytes = archiveEntryLimit(name),
+): Uint8Array | undefined {
+  const data = files[name];
+  if (!data) return undefined;
+  if (data.byteLength > maxBytes) {
+    throw archiveIntakeError(`${name} is too large (${_formatBytes(data.byteLength)}). Maximum is ${_formatBytes(maxBytes)}.`);
+  }
+  return data;
+}
+
+function archiveEntryText(
+  files: Record<string, Uint8Array>,
+  name: string,
+  maxBytes = archiveEntryLimit(name),
+): string {
+  const data = archiveEntryBytes(files, name, maxBytes);
+  if (!data) throw archiveIntakeError(`${name} is missing.`);
+  return fflate.strFromU8(data);
+}
+
+function parseArchiveJson<T>(
+  files: Record<string, Uint8Array>,
+  name: string,
+  maxBytes = archiveEntryLimit(name),
+): T {
+  return JSON.parse(archiveEntryText(files, name, maxBytes)) as T;
 }
 
 function _cloneSettingsForTransfer(value: unknown): Record<string, unknown> {
@@ -439,7 +611,11 @@ function _readSettingsMetadata(
   const metadataFile = unzipped[GLOBAL_SETTINGS_METADATA_FILE];
   if (!metadataFile) return fallback;
   try {
-    const parsed = JSON.parse(fflate.strFromU8(metadataFile)) as Partial<GlobalSettingsMetadata>;
+    const parsed = parseArchiveJson<Partial<GlobalSettingsMetadata>>(
+      unzipped,
+      GLOBAL_SETTINGS_METADATA_FILE,
+      ARCHIVE_MAX_OPTIONS_BYTES,
+    );
     return {
       schemaVersion: Number(parsed.schemaVersion || 1),
       settingsCredentialsIncluded: parsed.settingsCredentialsIncluded === true,
@@ -1052,13 +1228,7 @@ export const BackupScheduler = {
     }
 
     try {
-      const binaryString: string = atob(backup.data);
-      const zipBytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        zipBytes[i] = binaryString.charCodeAt(i);
-      }
-      const unzipped: Record<string, Uint8Array> =
-        fflate.unzipSync(zipBytes);
+      const unzipped: Record<string, Uint8Array> = unzipArchiveBounded(backup.data);
       const fileNames: string[] = Object.keys(unzipped);
       let restoredScripts = 0;
       let skippedScripts = 0;
@@ -1096,9 +1266,11 @@ export const BackupScheduler = {
             unzipped[optionsFile];
           if (optionsFileData) {
             try {
-              optionsMeta = JSON.parse(
-                fflate.strFromU8(optionsFileData),
-              ) as typeof optionsMeta;
+              optionsMeta = parseArchiveJson<typeof optionsMeta>(
+                unzipped,
+                optionsFile,
+                ARCHIVE_MAX_OPTIONS_BYTES,
+              );
               scriptId =
                 typeof optionsMeta.scriptId === 'string'
                   ? optionsMeta.scriptId
@@ -1188,9 +1360,11 @@ export const BackupScheduler = {
           unzipped['global-settings.json'];
         if (globalSettingsFile) {
           try {
-            const restoredSettingsData = JSON.parse(
-              fflate.strFromU8(globalSettingsFile),
-            ) as Record<string, unknown>;
+            const restoredSettingsData = parseArchiveJson<Record<string, unknown>>(
+              unzipped,
+              'global-settings.json',
+              ARCHIVE_MAX_JSON_ENTRY_BYTES,
+            );
             const settingsRestore = _prepareSettingsForRestore(restoredSettingsData, {
               allowCredentials:
                 options.importSettingsCredentials === true &&
@@ -1213,8 +1387,10 @@ export const BackupScheduler = {
           unzipped['folders.json'];
         if (foldersFile) {
           try {
-            const folders: unknown = JSON.parse(
-              fflate.strFromU8(foldersFile),
+            const folders: unknown = parseArchiveJson<unknown>(
+              unzipped,
+              'folders.json',
+              ARCHIVE_MAX_JSON_ENTRY_BYTES,
             );
             await chrome.storage.local.set({ scriptFolders: folders });
             FolderStorage.cache = null;
@@ -1232,8 +1408,10 @@ export const BackupScheduler = {
           unzipped['workspaces.json'];
         if (workspacesFile) {
           try {
-            const workspaces: unknown = JSON.parse(
-              fflate.strFromU8(workspacesFile),
+            const workspaces: unknown = parseArchiveJson<unknown>(
+              unzipped,
+              'workspaces.json',
+              ARCHIVE_MAX_JSON_ENTRY_BYTES,
             );
             await chrome.storage.local.set({ workspaces });
             const workspaceManager = (globalThis as {
@@ -1365,14 +1543,7 @@ export const BackupScheduler = {
    */
   async importBackup(data: string): Promise<BackupResult> {
     try {
-      // Validate that the data is a valid ZIP
-      const binaryString: string = atob(data);
-      const zipBytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        zipBytes[i] = binaryString.charCodeAt(i);
-      }
-      const unzipped: Record<string, Uint8Array> =
-        fflate.unzipSync(zipBytes);
+      const unzipped: Record<string, Uint8Array> = unzipArchiveBounded(data);
       const fileNames: string[] = Object.keys(unzipped);
       const scriptFiles: string[] = Object.keys(unzipped).filter(
         (n: string) => n.endsWith('.user.js'),
@@ -1491,19 +1662,13 @@ export const BackupScheduler = {
     if (!backup) return null;
 
     try {
-      const binaryString: string = atob(backup.data);
-      const zipBytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        zipBytes[i] = binaryString.charCodeAt(i);
-      }
-      const unzipped: Record<string, Uint8Array> =
-        fflate.unzipSync(zipBytes);
+      const unzipped: Record<string, Uint8Array> = unzipArchiveBounded(backup.data);
       const fileNames: string[] = Object.keys(unzipped);
       const parseJsonFile = (fileName: string): unknown => {
         const fileData = unzipped[fileName];
         if (!fileData) return null;
         try {
-          return JSON.parse(fflate.strFromU8(fileData));
+          return parseArchiveJson<unknown>(unzipped, fileName);
         } catch {
           return null;
         }
@@ -1539,9 +1704,10 @@ export const BackupScheduler = {
           const optionsFileData = unzipped[`${baseName}.options.json`];
           if (optionsFileData) {
             try {
-              const optionsData = JSON.parse(
-                fflate.strFromU8(optionsFileData),
-              ) as { scriptId?: string; meta?: { name?: string; namespace?: string } };
+              const optionsData = parseArchiveJson<{
+                scriptId?: string;
+                meta?: { name?: string; namespace?: string };
+              }>(unzipped, `${baseName}.options.json`, ARCHIVE_MAX_OPTIONS_BYTES);
               scriptId =
                 typeof optionsData.scriptId === 'string'
                   ? optionsData.scriptId
@@ -1631,13 +1797,7 @@ export const BackupScheduler = {
       typeof opts.parseUserscript === 'function' ? opts.parseUserscript : null;
 
     try {
-      const binaryString: string = atob(backup.data);
-      const zipBytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        zipBytes[i] = binaryString.charCodeAt(i);
-      }
-      const unzipped: Record<string, Uint8Array> =
-        fflate.unzipSync(zipBytes);
+      const unzipped: Record<string, Uint8Array> = unzipArchiveBounded(backup.data);
       const fileNames: string[] = Object.keys(unzipped);
 
       const installedIdSet = new Set<string>();
@@ -1676,7 +1836,7 @@ export const BackupScheduler = {
           let code = '';
           try {
             if (!scriptData) throw new Error('Missing script data');
-            code = fflate.strFromU8(scriptData);
+            code = archiveEntryText(unzipped, filename, ARCHIVE_MAX_SCRIPT_BYTES);
           } catch (readErr: unknown) {
             unreadableFileCount++;
             const error = readErr instanceof Error ? readErr.message : String(readErr);
@@ -1694,9 +1854,11 @@ export const BackupScheduler = {
           let optionsData: Record<string, unknown> | null = null;
           if (hasOptions && optionsDataBytes) {
             try {
-              optionsData = JSON.parse(
-                fflate.strFromU8(optionsDataBytes),
-              ) as Record<string, unknown>;
+              optionsData = parseArchiveJson<Record<string, unknown>>(
+                unzipped,
+                optionsKey,
+                ARCHIVE_MAX_OPTIONS_BYTES,
+              );
             } catch (optErr: unknown) {
               optionsParseErrors++;
               issues.push({
@@ -1711,7 +1873,11 @@ export const BackupScheduler = {
 
           if (hasStorage && storageDataBytes) {
             try {
-              JSON.parse(fflate.strFromU8(storageDataBytes));
+              parseArchiveJson<unknown>(
+                unzipped,
+                storageKey,
+                ARCHIVE_MAX_JSON_ENTRY_BYTES,
+              );
             } catch (stErr: unknown) {
               storageParseErrors++;
               issues.push({
@@ -1779,7 +1945,11 @@ export const BackupScheduler = {
       const settingsMetadata = _readSettingsMetadata(unzipped, backup);
       if (unzipped['global-settings.json']) {
         try {
-          JSON.parse(fflate.strFromU8(unzipped['global-settings.json']));
+          parseArchiveJson<unknown>(
+            unzipped,
+            'global-settings.json',
+            ARCHIVE_MAX_JSON_ENTRY_BYTES,
+          );
         } catch (err: unknown) {
           globalSettingsValid = false;
           issues.push({
@@ -1791,7 +1961,11 @@ export const BackupScheduler = {
       }
       if (unzipped['folders.json']) {
         try {
-          JSON.parse(fflate.strFromU8(unzipped['folders.json']));
+          parseArchiveJson<unknown>(
+            unzipped,
+            'folders.json',
+            ARCHIVE_MAX_JSON_ENTRY_BYTES,
+          );
         } catch (err: unknown) {
           foldersValid = false;
           issues.push({
@@ -1803,7 +1977,11 @@ export const BackupScheduler = {
       }
       if (unzipped['workspaces.json']) {
         try {
-          JSON.parse(fflate.strFromU8(unzipped['workspaces.json']));
+          parseArchiveJson<unknown>(
+            unzipped,
+            'workspaces.json',
+            ARCHIVE_MAX_JSON_ENTRY_BYTES,
+          );
         } catch (err: unknown) {
           workspacesValid = false;
           issues.push({

@@ -22,6 +22,13 @@ credential opt-ins with risk copy, stamp settings credential metadata, and keep
 restore/import from overwriting live WebDAV/OAuth/S3 credentials unless archive
 metadata and user confirmation both opt in.
 
+2026-06-04 build-lane archive-intake update: JSON imports, ZIP imports, backup
+import, inspect, verify, and restore now use bounded archive intake before text
+decode, JSON parse, or registration. The helper rejects oversized compressed
+payloads, excessive file counts, aggregate expanded data, oversized entries,
+nested archives, and high compression ratios; JSON imports also enforce the
+5 MB per-script code cap plus a total import budget.
+
 2026-06-04 implementation refresh: the 2026-06-03 findings still stand, but the
 currently-breaking dependency item is now closed. `web-ext` was bumped to
 `^10.3.0`, `npm ls tmp` resolves `tmp@0.2.6`, and

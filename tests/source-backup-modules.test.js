@@ -17,11 +17,22 @@ function makeFakeFflate() {
       );
       return encoder.encode(JSON.stringify(serialized));
     },
-    unzipSync(data) {
+    unzipSync(data, opts = {}) {
       const parsed = JSON.parse(decoder.decode(data));
-      return Object.fromEntries(
-        Object.entries(parsed).map(([name, bytes]) => [name, Uint8Array.from(bytes)]),
-      );
+      const files = {};
+      for (const [name, rawEntry] of Object.entries(parsed)) {
+        const bytes = Array.isArray(rawEntry) ? rawEntry : rawEntry.bytes || [];
+        const dataBytes = Uint8Array.from(bytes);
+        const meta = {
+          name,
+          size: Array.isArray(rawEntry) ? dataBytes.byteLength : rawEntry.size ?? dataBytes.byteLength,
+          originalSize: Array.isArray(rawEntry) ? dataBytes.byteLength : rawEntry.originalSize ?? dataBytes.byteLength,
+          compression: Array.isArray(rawEntry) ? 0 : rawEntry.compression ?? 0,
+        };
+        if (opts.filter && opts.filter(meta) === false) continue;
+        files[name] = dataBytes;
+      }
+      return files;
     },
   };
 }
@@ -41,6 +52,17 @@ function base64ToBytes(base64) {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes;
+}
+
+function fakeZipBytes(entries) {
+  return encoder.encode(JSON.stringify(entries));
+}
+
+function textEntry(text, meta = {}) {
+  return {
+    bytes: Array.from(encoder.encode(text)),
+    ...meta,
+  };
 }
 
 function makeScript(id, name) {
@@ -471,6 +493,21 @@ describe('source backup scheduler module', () => {
     expect(stored.autoBackups).toHaveLength(1);
     expect(stored.autoBackups[0].id).toBe('newer');
   });
+
+  it('rejects unsafe imported backup archives before persistence', async () => {
+    const { BackupScheduler } = await loadFreshBackupSchedulerHarness([]);
+
+    const result = await BackupScheduler.importBackup(
+      bytesToBase64(fakeZipBytes({
+        'payload.zip': textEntry('nested'),
+      })),
+    );
+    const stored = await chrome.storage.local.get('autoBackups');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/nested archive entry payload\.zip/);
+    expect(stored.autoBackups || []).toHaveLength(0);
+  });
 });
 
 describe('source import/export module', () => {
@@ -662,5 +699,43 @@ describe('source import/export module', () => {
     );
     expect(harness.ScriptStorage.get).not.toHaveBeenCalledWith('__proto__');
     expect(globalThis.generateId).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects oversized JSON import scripts before reading existing storage', async () => {
+    const harness = await loadFreshImportExportHarness();
+
+    const result = await harness.importScripts({
+      scripts: [{
+        id: 'script_too_large',
+        code: 'x'.repeat(5 * 1024 * 1024 + 1),
+      }],
+    }, { overwrite: true });
+
+    expect(result.error).toMatch(/too large/);
+    expect(harness.ScriptStorage.getAll).not.toHaveBeenCalled();
+  });
+
+  it('rejects high-expansion ZIP metadata before script writes', async () => {
+    const harness = await loadFreshImportExportHarness();
+    const result = await harness.importFromZip(
+      bytesToBase64(fakeZipBytes({
+        'Compressed.user.js': textEntry([
+          '// ==UserScript==',
+          '// @name Compressed',
+          '// @namespace scriptvault/source',
+          '// @version 1.0.0',
+          '// @match https://example.com/*',
+          '// ==/UserScript==',
+          'console.log("compressed");',
+        ].join('\n'), {
+          size: 1,
+          originalSize: 1024,
+        }),
+      })),
+      { overwrite: true },
+    );
+
+    expect(result.error).toMatch(/compression ratio is too high/);
+    expect(harness.ScriptStorage.set).not.toHaveBeenCalled();
   });
 });

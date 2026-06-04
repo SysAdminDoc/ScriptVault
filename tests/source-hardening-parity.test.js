@@ -117,6 +117,33 @@ describe('source hardening parity guards', () => {
     expect(dashboard).toContain('importSettingsCredentials: transfer.includeSettingsCredentials');
   });
 
+  it('keeps JSON and backup ZIP intake behind bounded archive guards', () => {
+    const core = source('src/background/core.ts');
+    const importExport = source('src/background/import-export.ts');
+    const backupScheduler = source('src/modules/backup-scheduler.ts');
+
+    for (const text of [core, importExport, backupScheduler]) {
+      expect(text).toContain('ARCHIVE_MAX_COMPRESSED_BYTES');
+      expect(text).toContain('ARCHIVE_MAX_ENTRIES');
+      expect(text).toContain('ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES');
+      expect(text).toContain('ARCHIVE_MAX_COMPRESSION_RATIO');
+      expect(text).toContain('function unzipArchiveBounded');
+      expect(text).toContain('validateArchiveEntryMeta(file, state)');
+      expect(text).toContain('parseArchiveJson');
+      expect(text).toContain('archiveEntryText');
+    }
+
+    for (const text of [core, importExport]) {
+      expect(text).toContain('function validateJsonImportBudget');
+      expect(text).toContain('const budgetError = validateJsonImportBudget(data);');
+      expect(text).toContain('const unzipped');
+      expect(text).toContain('= unzipArchiveBounded(zipData);');
+    }
+
+    expect(backupScheduler).toContain('= unzipArchiveBounded(backup.data);');
+    expect(backupScheduler).toContain('= unzipArchiveBounded(data);');
+  });
+
   it('keeps @require fetches on extension host-permission fetch semantics', () => {
     const loader = source('src/background/resource-loader.ts');
     const core = source('src/background/core.ts');

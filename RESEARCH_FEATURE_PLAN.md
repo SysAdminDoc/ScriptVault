@@ -27,21 +27,20 @@ per-script settings sync, and per-script network scope. Those items protect the
 product promise and reduce store-review risk.
 
 Recently completed hardening now reflected in `ROADMAP.md`: WebDAV/S3 sync
-endpoints use the internal-host guard, and credential-bearing settings are
-redacted or separately gated for JSON/cloud exports and managed backups.
+endpoints use the internal-host guard, credential-bearing settings are redacted
+or separately gated for JSON/cloud exports and managed backups, and JSON/ZIP
+backup intake is bounded before text decode, JSON parse, or registration.
 
 Current top priorities:
 
-1. Replace raw ZIP/JSON backup intake with a bounded archive helper that
-   enforces decompressed-size, entry-count, entry-size, and script-code caps.
-2. Partition sync-safe script settings from device-local state before cloud
+1. Partition sync-safe script settings from device-local state before cloud
    upload and merge.
-3. Add a real coverage gate for source/runtime code and automate dependency
+2. Add a real coverage gate for source/runtime code and automate dependency
    freshness so CI catches drift before advisories or store-review failures.
-4. Finish AMO readiness gaps: source-review provenance for packaged minified
+3. Finish AMO readiness gaps: source-review provenance for packaged minified
    libraries and a clear decision on Firefox for Android claims versus smoke
    coverage.
-5. Clean up dashboard reachability and stale affordances so documented features
+4. Clean up dashboard reachability and stale affordances so documented features
    match what a user can actually reach.
 
 ## Evidence Reviewed

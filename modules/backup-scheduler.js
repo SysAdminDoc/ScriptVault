@@ -41,6 +41,14 @@ const BackupScheduler = (() => {
   var DEBOUNCE_ALARM = "sv_backup_debounce";
   var DEBOUNCE_MINUTES = 5;
   var STORAGE_WARNING_BYTES = 8 * 1024 * 1024;
+  var ARCHIVE_MAX_SCRIPT_BYTES = 5 * 1024 * 1024;
+  var ARCHIVE_MAX_COMPRESSED_BYTES = 20 * 1024 * 1024;
+  var ARCHIVE_MAX_ENTRIES = 300;
+  var ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES = 60 * 1024 * 1024;
+  var ARCHIVE_MAX_ENTRY_BYTES = 10 * 1024 * 1024;
+  var ARCHIVE_MAX_JSON_ENTRY_BYTES = 5 * 1024 * 1024;
+  var ARCHIVE_MAX_OPTIONS_BYTES = 512 * 1024;
+  var ARCHIVE_MAX_COMPRESSION_RATIO = 100;
   var DEFAULT_SETTINGS = {
     enabled: false,
     scheduleType: "daily",
@@ -78,6 +86,118 @@ const BackupScheduler = (() => {
     if (bytes < 1024) return bytes + " B";
     if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
     return (bytes / 1048576).toFixed(2) + " MB";
+  }
+  function archiveIntakeError(message) {
+    return new Error(`Backup archive rejected: ${message}`);
+  }
+  function normalizeArchiveEntryName(name) {
+    return typeof name === "string" ? name.replace(/\\/g, "/").trim() : "";
+  }
+  function archiveEntryLimit(name) {
+    if (name.endsWith(".user.js") || !name.includes("/") && name.endsWith(".js")) {
+      return ARCHIVE_MAX_SCRIPT_BYTES;
+    }
+    if (name.endsWith(".options.json") || name === GLOBAL_SETTINGS_METADATA_FILE) {
+      return ARCHIVE_MAX_OPTIONS_BYTES;
+    }
+    if (name.endsWith(".storage.json") || name === "global-settings.json" || name === "folders.json" || name === "workspaces.json") {
+      return ARCHIVE_MAX_JSON_ENTRY_BYTES;
+    }
+    return ARCHIVE_MAX_ENTRY_BYTES;
+  }
+  function validateArchiveEntryMeta(rawEntry, state) {
+    const name = normalizeArchiveEntryName(rawEntry.name);
+    if (!name) throw archiveIntakeError("entry name is missing.");
+    if (name.startsWith("/") || name.includes("../") || name.includes("/..")) {
+      throw archiveIntakeError(`entry ${name} uses an unsafe path.`);
+    }
+    if (/\.(zip|xpi|crx)$/i.test(name)) {
+      throw archiveIntakeError(`nested archive entry ${name} is not allowed.`);
+    }
+    state.entries++;
+    if (state.entries > ARCHIVE_MAX_ENTRIES) {
+      throw archiveIntakeError(`too many files (${state.entries}). Maximum is ${ARCHIVE_MAX_ENTRIES}.`);
+    }
+    const compressedBytes = Number(rawEntry.size ?? 0);
+    const uncompressedBytes = Number(rawEntry.originalSize ?? compressedBytes);
+    if (!Number.isFinite(uncompressedBytes) || uncompressedBytes < 0) {
+      throw archiveIntakeError(`entry ${name} has an invalid uncompressed size.`);
+    }
+    const entryLimit = archiveEntryLimit(name);
+    if (uncompressedBytes > entryLimit) {
+      throw archiveIntakeError(`${name} is too large (${_formatBytes(uncompressedBytes)}). Maximum is ${_formatBytes(entryLimit)}.`);
+    }
+    state.totalUncompressedBytes += uncompressedBytes;
+    if (state.totalUncompressedBytes > ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES) {
+      throw archiveIntakeError(`expanded data exceeds ${_formatBytes(ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES)}.`);
+    }
+    if (Number.isFinite(compressedBytes) && compressedBytes > 0 && uncompressedBytes / compressedBytes > ARCHIVE_MAX_COMPRESSION_RATIO) {
+      throw archiveIntakeError(`${name} compression ratio is too high.`);
+    }
+    return true;
+  }
+  function archiveInputToBytes(input) {
+    let zipBytes;
+    if (typeof input === "string") {
+      const maxBase64Length = Math.ceil(ARCHIVE_MAX_COMPRESSED_BYTES * 4 / 3) + 8;
+      if (input.length > maxBase64Length) {
+        throw archiveIntakeError(`compressed payload exceeds ${_formatBytes(ARCHIVE_MAX_COMPRESSED_BYTES)}.`);
+      }
+      const binaryString = atob(input);
+      zipBytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        zipBytes[i] = binaryString.charCodeAt(i);
+      }
+    } else if (input instanceof ArrayBuffer) {
+      zipBytes = new Uint8Array(input);
+    } else {
+      zipBytes = input;
+    }
+    if (zipBytes.byteLength > ARCHIVE_MAX_COMPRESSED_BYTES) {
+      throw archiveIntakeError(`compressed payload exceeds ${_formatBytes(ARCHIVE_MAX_COMPRESSED_BYTES)}.`);
+    }
+    return zipBytes;
+  }
+  function validateUnzippedArchive(files) {
+    const state = { entries: 0, totalUncompressedBytes: 0 };
+    for (const [name, data] of Object.entries(files)) {
+      validateArchiveEntryMeta(
+        {
+          name,
+          size: data.byteLength,
+          originalSize: data.byteLength,
+          compression: 0
+        },
+        state
+      );
+    }
+  }
+  function unzipArchiveBounded(input) {
+    const zipBytes = archiveInputToBytes(input);
+    const state = { entries: 0, totalUncompressedBytes: 0 };
+    const files = fflate.unzipSync(zipBytes, {
+      filter(file) {
+        return validateArchiveEntryMeta(file, state);
+      }
+    });
+    validateUnzippedArchive(files);
+    return files;
+  }
+  function archiveEntryBytes(files, name, maxBytes = archiveEntryLimit(name)) {
+    const data = files[name];
+    if (!data) return void 0;
+    if (data.byteLength > maxBytes) {
+      throw archiveIntakeError(`${name} is too large (${_formatBytes(data.byteLength)}). Maximum is ${_formatBytes(maxBytes)}.`);
+    }
+    return data;
+  }
+  function archiveEntryText(files, name, maxBytes = archiveEntryLimit(name)) {
+    const data = archiveEntryBytes(files, name, maxBytes);
+    if (!data) throw archiveIntakeError(`${name} is missing.`);
+    return fflate.strFromU8(data);
+  }
+  function parseArchiveJson(files, name, maxBytes = archiveEntryLimit(name)) {
+    return JSON.parse(archiveEntryText(files, name, maxBytes));
   }
   function _cloneSettingsForTransfer(value) {
     if (!value || typeof value !== "object") return {};
@@ -141,7 +261,11 @@ const BackupScheduler = (() => {
     const metadataFile = unzipped[GLOBAL_SETTINGS_METADATA_FILE];
     if (!metadataFile) return fallback;
     try {
-      const parsed = JSON.parse(fflate.strFromU8(metadataFile));
+      const parsed = parseArchiveJson(
+        unzipped,
+        GLOBAL_SETTINGS_METADATA_FILE,
+        ARCHIVE_MAX_OPTIONS_BYTES
+      );
       return {
         schemaVersion: Number(parsed.schemaVersion || 1),
         settingsCredentialsIncluded: parsed.settingsCredentialsIncluded === true,
@@ -594,12 +718,7 @@ const BackupScheduler = (() => {
         }
       }
       try {
-        const binaryString = atob(backup.data);
-        const zipBytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          zipBytes[i] = binaryString.charCodeAt(i);
-        }
-        const unzipped = fflate.unzipSync(zipBytes);
+        const unzipped = unzipArchiveBounded(backup.data);
         const fileNames = Object.keys(unzipped);
         let restoredScripts = 0;
         let skippedScripts = 0;
@@ -627,8 +746,10 @@ const BackupScheduler = (() => {
             const optionsFileData = unzipped[optionsFile];
             if (optionsFileData) {
               try {
-                optionsMeta = JSON.parse(
-                  fflate.strFromU8(optionsFileData)
+                optionsMeta = parseArchiveJson(
+                  unzipped,
+                  optionsFile,
+                  ARCHIVE_MAX_OPTIONS_BYTES
                 );
                 scriptId = typeof optionsMeta.scriptId === "string" ? optionsMeta.scriptId : "";
                 scriptName = optionsMeta.meta?.name || displayName;
@@ -702,8 +823,10 @@ const BackupScheduler = (() => {
           const globalSettingsFile = unzipped["global-settings.json"];
           if (globalSettingsFile) {
             try {
-              const restoredSettingsData = JSON.parse(
-                fflate.strFromU8(globalSettingsFile)
+              const restoredSettingsData = parseArchiveJson(
+                unzipped,
+                "global-settings.json",
+                ARCHIVE_MAX_JSON_ENTRY_BYTES
               );
               const settingsRestore = _prepareSettingsForRestore(restoredSettingsData, {
                 allowCredentials: options.importSettingsCredentials === true && settingsMetadata.settingsCredentialsIncluded === true
@@ -722,8 +845,10 @@ const BackupScheduler = (() => {
           const foldersFile = unzipped["folders.json"];
           if (foldersFile) {
             try {
-              const folders = JSON.parse(
-                fflate.strFromU8(foldersFile)
+              const folders = parseArchiveJson(
+                unzipped,
+                "folders.json",
+                ARCHIVE_MAX_JSON_ENTRY_BYTES
               );
               await chrome.storage.local.set({ scriptFolders: folders });
               FolderStorage.cache = null;
@@ -738,8 +863,10 @@ const BackupScheduler = (() => {
           const workspacesFile = unzipped["workspaces.json"];
           if (workspacesFile) {
             try {
-              const workspaces = JSON.parse(
-                fflate.strFromU8(workspacesFile)
+              const workspaces = parseArchiveJson(
+                unzipped,
+                "workspaces.json",
+                ARCHIVE_MAX_JSON_ENTRY_BYTES
               );
               await chrome.storage.local.set({ workspaces });
               const workspaceManager = globalThis.WorkspaceManager;
@@ -842,12 +969,7 @@ const BackupScheduler = (() => {
      */
     async importBackup(data) {
       try {
-        const binaryString = atob(data);
-        const zipBytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          zipBytes[i] = binaryString.charCodeAt(i);
-        }
-        const unzipped = fflate.unzipSync(zipBytes);
+        const unzipped = unzipArchiveBounded(data);
         const fileNames = Object.keys(unzipped);
         const scriptFiles = Object.keys(unzipped).filter(
           (n) => n.endsWith(".user.js")
@@ -946,18 +1068,13 @@ const BackupScheduler = (() => {
       );
       if (!backup) return null;
       try {
-        const binaryString = atob(backup.data);
-        const zipBytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          zipBytes[i] = binaryString.charCodeAt(i);
-        }
-        const unzipped = fflate.unzipSync(zipBytes);
+        const unzipped = unzipArchiveBounded(backup.data);
         const fileNames = Object.keys(unzipped);
         const parseJsonFile = (fileName) => {
           const fileData = unzipped[fileName];
           if (!fileData) return null;
           try {
-            return JSON.parse(fflate.strFromU8(fileData));
+            return parseArchiveJson(unzipped, fileName);
           } catch {
             return null;
           }
@@ -983,9 +1100,7 @@ const BackupScheduler = (() => {
           const optionsFileData = unzipped[`${baseName}.options.json`];
           if (optionsFileData) {
             try {
-              const optionsData = JSON.parse(
-                fflate.strFromU8(optionsFileData)
-              );
+              const optionsData = parseArchiveJson(unzipped, `${baseName}.options.json`, ARCHIVE_MAX_OPTIONS_BYTES);
               scriptId = typeof optionsData.scriptId === "string" ? optionsData.scriptId : null;
               const name = optionsData.meta?.name || displayName;
               const namespace = optionsData.meta?.namespace || "";
@@ -1054,12 +1169,7 @@ const BackupScheduler = (() => {
       if (!backup) return null;
       const parseUserscript = typeof opts.parseUserscript === "function" ? opts.parseUserscript : null;
       try {
-        const binaryString = atob(backup.data);
-        const zipBytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          zipBytes[i] = binaryString.charCodeAt(i);
-        }
-        const unzipped = fflate.unzipSync(zipBytes);
+        const unzipped = unzipArchiveBounded(backup.data);
         const fileNames = Object.keys(unzipped);
         const installedIdSet = /* @__PURE__ */ new Set();
         try {
@@ -1091,7 +1201,7 @@ const BackupScheduler = (() => {
           let code = "";
           try {
             if (!scriptData) throw new Error("Missing script data");
-            code = fflate.strFromU8(scriptData);
+            code = archiveEntryText(unzipped, filename, ARCHIVE_MAX_SCRIPT_BYTES);
           } catch (readErr) {
             unreadableFileCount++;
             const error = readErr instanceof Error ? readErr.message : String(readErr);
@@ -1108,8 +1218,10 @@ const BackupScheduler = (() => {
           let optionsData = null;
           if (hasOptions && optionsDataBytes) {
             try {
-              optionsData = JSON.parse(
-                fflate.strFromU8(optionsDataBytes)
+              optionsData = parseArchiveJson(
+                unzipped,
+                optionsKey,
+                ARCHIVE_MAX_OPTIONS_BYTES
               );
             } catch (optErr) {
               optionsParseErrors++;
@@ -1124,7 +1236,11 @@ const BackupScheduler = (() => {
           }
           if (hasStorage && storageDataBytes) {
             try {
-              JSON.parse(fflate.strFromU8(storageDataBytes));
+              parseArchiveJson(
+                unzipped,
+                storageKey,
+                ARCHIVE_MAX_JSON_ENTRY_BYTES
+              );
             } catch (stErr) {
               storageParseErrors++;
               issues.push({
@@ -1175,7 +1291,11 @@ const BackupScheduler = (() => {
         const settingsMetadata = _readSettingsMetadata(unzipped, backup);
         if (unzipped["global-settings.json"]) {
           try {
-            JSON.parse(fflate.strFromU8(unzipped["global-settings.json"]));
+            parseArchiveJson(
+              unzipped,
+              "global-settings.json",
+              ARCHIVE_MAX_JSON_ENTRY_BYTES
+            );
           } catch (err) {
             globalSettingsValid = false;
             issues.push({
@@ -1187,7 +1307,11 @@ const BackupScheduler = (() => {
         }
         if (unzipped["folders.json"]) {
           try {
-            JSON.parse(fflate.strFromU8(unzipped["folders.json"]));
+            parseArchiveJson(
+              unzipped,
+              "folders.json",
+              ARCHIVE_MAX_JSON_ENTRY_BYTES
+            );
           } catch (err) {
             foldersValid = false;
             issues.push({
@@ -1199,7 +1323,11 @@ const BackupScheduler = (() => {
         }
         if (unzipped["workspaces.json"]) {
           try {
-            JSON.parse(fflate.strFromU8(unzipped["workspaces.json"]));
+            parseArchiveJson(
+              unzipped,
+              "workspaces.json",
+              ARCHIVE_MAX_JSON_ENTRY_BYTES
+            );
           } catch (err) {
             workspacesValid = false;
             issues.push({

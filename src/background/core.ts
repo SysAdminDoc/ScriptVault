@@ -2361,6 +2361,179 @@ async function buildSyncProviderHealth(providerName) {
 // Import/Export
 // ============================================================================
 
+const ARCHIVE_MAX_SCRIPT_BYTES = 5 * 1024 * 1024;
+const ARCHIVE_MAX_COMPRESSED_BYTES = 20 * 1024 * 1024;
+const ARCHIVE_MAX_ENTRIES = 300;
+const ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES = 60 * 1024 * 1024;
+const ARCHIVE_MAX_ENTRY_BYTES = 10 * 1024 * 1024;
+const ARCHIVE_MAX_JSON_ENTRY_BYTES = 5 * 1024 * 1024;
+const ARCHIVE_MAX_OPTIONS_BYTES = 512 * 1024;
+const ARCHIVE_MAX_COMPRESSION_RATIO = 100;
+
+function archiveIntakeError(message) {
+  return new Error(`Backup archive rejected: ${message}`);
+}
+
+function formatArchiveBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(2)} MB`;
+}
+
+function normalizeArchiveEntryName(name) {
+  return typeof name === 'string' ? name.replace(/\\/g, '/').trim() : '';
+}
+
+function archiveEntryLimit(name) {
+  if (name.endsWith('.user.js') || (!name.includes('/') && name.endsWith('.js'))) {
+    return ARCHIVE_MAX_SCRIPT_BYTES;
+  }
+  if (name.endsWith('.options.json') || name === 'global-settings.metadata.json') {
+    return ARCHIVE_MAX_OPTIONS_BYTES;
+  }
+  if (
+    name.endsWith('.storage.json') ||
+    name === 'global-settings.json' ||
+    name === 'folders.json' ||
+    name === 'workspaces.json'
+  ) {
+    return ARCHIVE_MAX_JSON_ENTRY_BYTES;
+  }
+  return ARCHIVE_MAX_ENTRY_BYTES;
+}
+
+function validateArchiveEntryMeta(rawEntry, state) {
+  const name = normalizeArchiveEntryName(rawEntry.name);
+  if (!name) throw archiveIntakeError('entry name is missing.');
+  if (name.startsWith('/') || name.includes('../') || name.includes('/..')) {
+    throw archiveIntakeError(`entry ${name} uses an unsafe path.`);
+  }
+  if (/\.(zip|xpi|crx)$/i.test(name)) {
+    throw archiveIntakeError(`nested archive entry ${name} is not allowed.`);
+  }
+  state.entries++;
+  if (state.entries > ARCHIVE_MAX_ENTRIES) {
+    throw archiveIntakeError(`too many files (${state.entries}). Maximum is ${ARCHIVE_MAX_ENTRIES}.`);
+  }
+  const compressedBytes = Number(rawEntry.size ?? 0);
+  const uncompressedBytes = Number(rawEntry.originalSize ?? compressedBytes);
+  if (!Number.isFinite(uncompressedBytes) || uncompressedBytes < 0) {
+    throw archiveIntakeError(`entry ${name} has an invalid uncompressed size.`);
+  }
+  const entryLimit = archiveEntryLimit(name);
+  if (uncompressedBytes > entryLimit) {
+    throw archiveIntakeError(`${name} is too large (${formatArchiveBytes(uncompressedBytes)}). Maximum is ${formatArchiveBytes(entryLimit)}.`);
+  }
+  state.totalUncompressedBytes += uncompressedBytes;
+  if (state.totalUncompressedBytes > ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES) {
+    throw archiveIntakeError(`expanded data exceeds ${formatArchiveBytes(ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES)}.`);
+  }
+  if (
+    Number.isFinite(compressedBytes) &&
+    compressedBytes > 0 &&
+    uncompressedBytes / compressedBytes > ARCHIVE_MAX_COMPRESSION_RATIO
+  ) {
+    throw archiveIntakeError(`${name} compression ratio is too high.`);
+  }
+  return true;
+}
+
+function archiveInputToBytes(input) {
+  let zipBytes;
+  if (typeof input === 'string') {
+    const maxBase64Length = Math.ceil((ARCHIVE_MAX_COMPRESSED_BYTES * 4) / 3) + 8;
+    if (input.length > maxBase64Length) {
+      throw archiveIntakeError(`compressed payload exceeds ${formatArchiveBytes(ARCHIVE_MAX_COMPRESSED_BYTES)}.`);
+    }
+    const binaryString = atob(input);
+    zipBytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      zipBytes[i] = binaryString.charCodeAt(i);
+    }
+  } else if (input instanceof ArrayBuffer) {
+    zipBytes = new Uint8Array(input);
+  } else {
+    zipBytes = input;
+  }
+  if (zipBytes.byteLength > ARCHIVE_MAX_COMPRESSED_BYTES) {
+    throw archiveIntakeError(`compressed payload exceeds ${formatArchiveBytes(ARCHIVE_MAX_COMPRESSED_BYTES)}.`);
+  }
+  return zipBytes;
+}
+
+function validateUnzippedArchive(files) {
+  const state = { entries: 0, totalUncompressedBytes: 0 };
+  for (const [name, data] of Object.entries(files)) {
+    validateArchiveEntryMeta({
+      name,
+      size: data.byteLength,
+      originalSize: data.byteLength,
+      compression: 0
+    }, state);
+  }
+}
+
+function unzipArchiveBounded(input) {
+  const zipBytes = archiveInputToBytes(input);
+  const state = { entries: 0, totalUncompressedBytes: 0 };
+  const files = fflate.unzipSync(zipBytes, {
+    filter(file) {
+      return validateArchiveEntryMeta(file, state);
+    }
+  });
+  validateUnzippedArchive(files);
+  return files;
+}
+
+function archiveEntryBytes(files, name, maxBytes = archiveEntryLimit(name)) {
+  const data = files[name];
+  if (!data) return undefined;
+  if (data.byteLength > maxBytes) {
+    throw archiveIntakeError(`${name} is too large (${formatArchiveBytes(data.byteLength)}). Maximum is ${formatArchiveBytes(maxBytes)}.`);
+  }
+  return data;
+}
+
+function archiveEntryText(files, name, maxBytes = archiveEntryLimit(name)) {
+  const data = archiveEntryBytes(files, name, maxBytes);
+  if (!data) throw archiveIntakeError(`${name} is missing.`);
+  return fflate.strFromU8(data);
+}
+
+function parseArchiveJson(files, name, maxBytes = archiveEntryLimit(name)) {
+  return JSON.parse(archiveEntryText(files, name, maxBytes));
+}
+
+function utf8ByteLength(value) {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+function validateJsonImportBudget(data) {
+  const scripts = Array.isArray(data.scripts) ? data.scripts : [];
+  if (scripts.length > ARCHIVE_MAX_ENTRIES) {
+    return {
+      error: `JSON import has too many scripts (${scripts.length}). Maximum is ${ARCHIVE_MAX_ENTRIES}.`
+    };
+  }
+  let totalBytes = 0;
+  for (const script of scripts) {
+    const code = typeof script?.code === 'string' ? script.code : '';
+    const bytes = utf8ByteLength(code);
+    if (bytes > ARCHIVE_MAX_SCRIPT_BYTES) {
+      return {
+        error: `Script ${script?.id || '<unknown>'} is too large (${formatArchiveBytes(bytes)}). Maximum is ${formatArchiveBytes(ARCHIVE_MAX_SCRIPT_BYTES)}.`
+      };
+    }
+    totalBytes += bytes;
+    if (totalBytes > ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES) {
+      return {
+        error: `JSON import exceeds ${formatArchiveBytes(ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES)}.`
+      };
+    }
+  }
+  return null;
+}
+
 const SETTINGS_CREDENTIAL_KEYS = [
   'webdavUsername',
   'webdavPassword',
@@ -2654,6 +2827,8 @@ async function importScripts(data, options = {}) {
   if (!data.scripts || !Array.isArray(data.scripts)) {
     return { error: 'Invalid import format' };
   }
+  const budgetError = validateJsonImportBudget(data);
+  if (budgetError) return budgetError;
 
   // Cache existing count once to avoid O(n²) getAll() inside the loop
   const allExistingScripts = await ScriptStorage.getAll();
@@ -2907,23 +3082,7 @@ async function importFromZip(zipData, options = {}) {
   const valuesSnapshots = {};
 
   try {
-    // Convert base64 to Uint8Array if needed
-    let zipBytes;
-    if (typeof zipData === 'string') {
-      // Base64 string
-      const binaryString = atob(zipData);
-      zipBytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        zipBytes[i] = binaryString.charCodeAt(i);
-      }
-    } else if (zipData instanceof ArrayBuffer) {
-      zipBytes = new Uint8Array(zipData);
-    } else {
-      zipBytes = zipData;
-    }
-
-    // Load the zip file using fflate
-    const unzipped = fflate.unzipSync(zipBytes);
+    const unzipped = unzipArchiveBounded(zipData);
     const fileNames = Object.keys(unzipped);
 
     // Find all .user.js files
@@ -2935,7 +3094,7 @@ async function importFromZip(zipData, options = {}) {
 
     for (const filename of userScripts) {
       try {
-        const code = fflate.strFromU8(unzipped[filename]);
+        const code = archiveEntryText(unzipped, filename, ARCHIVE_MAX_SCRIPT_BYTES);
 
         // Validate it's a userscript
         if (!code.includes('==UserScript==')) {
@@ -2964,7 +3123,7 @@ async function importFromZip(zipData, options = {}) {
         // Parse options file if exists
         if (optionsFileData) {
           try {
-            const optionsData = JSON.parse(fflate.strFromU8(optionsFileData));
+            const optionsData = parseArchiveJson(unzipped, `${baseName}.options.json`, ARCHIVE_MAX_OPTIONS_BYTES);
             enabled = optionsData.settings?.enabled !== false;
             preferredScriptId = isSafeImportedScriptId(optionsData.scriptId) ? optionsData.scriptId : '';
             const scriptVault = optionsData.scriptVault && typeof optionsData.scriptVault === 'object'
@@ -2981,7 +3140,7 @@ async function importFromZip(zipData, options = {}) {
         // Parse storage file if exists
         if (storageFileData) {
           try {
-            const storageData = JSON.parse(fflate.strFromU8(storageFileData));
+            const storageData = parseArchiveJson(unzipped, `${baseName}.storage.json`, ARCHIVE_MAX_JSON_ENTRY_BYTES);
             storedValues = storageData.data || storageData || {};
           } catch (e) {
             console.warn('Failed to parse storage file:', e);
@@ -3076,7 +3235,7 @@ async function importFromZip(zipData, options = {}) {
       
       for (const filename of jsFiles) {
         try {
-          const code = fflate.strFromU8(unzipped[filename]);
+          const code = archiveEntryText(unzipped, filename, ARCHIVE_MAX_SCRIPT_BYTES);
           if (!code.includes('==UserScript==')) continue;
           
           const parsed = parseUserscript(code);
