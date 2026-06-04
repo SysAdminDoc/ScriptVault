@@ -30,6 +30,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Read package version
         id: package
@@ -82,6 +87,9 @@ jobs:
         run: npm run smoke:dashboard
         env:
           SCRIPT_VAULT_CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+
+      - name: Playwright E2E flows
+        run: npm run test:e2e
 
       - name: Package Chrome extension
         run: bash build.sh

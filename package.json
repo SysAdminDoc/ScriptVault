@@ -15,6 +15,7 @@
     "watch": "node esbuild.config.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:a11y": "vitest run tests/dashboard-a11y.test.js tests/popup-a11y.test.js tests/gui-ux-audit.test.js tests/accessibility-surface-pass.test.js",
     "smoke:dashboard": "node scripts/smoke-dashboard.mjs",
     "smoke:large-library": "node scripts/smoke-large-library.mjs",
@@ -49,6 +50,7 @@
     "cws:setup": "bash cws-setup.sh"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@vitest/coverage-v8": "^4.1.3",
     "chrome-types": "^0.1.425",
     "chrome-webstore-upload-cli": "^4.0.0",

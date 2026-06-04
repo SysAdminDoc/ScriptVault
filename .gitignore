@@ -43,6 +43,8 @@ desktop.ini
 # Coverage
 coverage/
 .nyc_output/
+test-results/
+playwright-report/
 
 # Local-only agent / autonomous-loop runtime state
 CLAUDE.md

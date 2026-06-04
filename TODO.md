@@ -88,10 +88,11 @@
   - Touches: `scripts/generate-gm-types.mjs`, `lib/scriptvault.d.ts`, `build.sh`.
   - Acceptance: generated `.d.ts` is built into CWS ZIP; sample TS userscript typechecks.
   - Verification: `npm run gm-types:check`, `npm test -- tests/gm-types.test.js`, `npm run build:bg`, `npm run build`, `BASH_PATH="C:\Program Files\Git\bin\bash.exe" node scripts/run-bash.mjs build.sh`; `tar -tf ScriptVault-v3.11.0.zip` confirms `lib/scriptvault.d.ts`.
-- [ ] **E-5** Playwright E2E for install + update + restore + sync flows
+- [x] **E-5** Playwright E2E for install + update + restore + sync flows (2026-06-03)
   - Evidence: PASS2 NF-16; ROADMAP 10.3.
   - Touches: `tests/e2e/`, `package.json`, `.github/workflows/ci.yml`.
   - Acceptance: one Playwright spec per critical flow runs locally.
+  - Verification: `npm run test:e2e` (4 specs passed: install, update, restore/rollback, WebDAV sync preview/upload).
 - [ ] **E-6** ESM badge in script row (R-2 from ESM roadmap)
   - Evidence: PASS2 NF-14.
   - Touches: `pages/dashboard.js` `renderScriptRow`, `pages/dashboard.css`.
@@ -162,5 +163,6 @@
 | 2026-06-03 | E | E-2 | test: cover sync tombstone resurrection |
 | 2026-06-03 | E | E-3 | docs: close folded browser sync TODO |
 | 2026-06-03 | E | E-4 | feat: generate GM ambient declarations |
+| 2026-06-03 | E | E-5 | test: add Playwright E2E flows |
 
 (Append a row each time work lands.)
