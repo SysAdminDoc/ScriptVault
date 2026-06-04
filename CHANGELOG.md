@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — NPM/ESM `@require` resolver wiring
+
+- **Wired `npm:` specs into the real `@require` fetch path.**
+  `fetchRequireScript()` now resolves `@require npm:<package>` through the
+  promoted NpmResolver and caches the resolved package bytes under both the
+  original npm spec and the final CDN URL.
+- **Closed the computed-integrity TOCTOU gap.** `NpmResolver.resolveWithCode()`
+  returns the exact response body used to compute SRI, so the runtime no longer
+  hashes one CDN response and executes a later fetch of the same URL.
+- **Applied internal-host checks to npm CDN fetches.** NPM resolver fetches now
+  reject non-HTTPS URLs before network I/O and reject redirects into internal
+  hosts before reading or caching bytes.
+
 ### 2026-06-04 — Remove dead dashboard i18n-v2 table
 
 - **Removed the unused dashboard i18n-v2 dictionary.** The dashboard no longer

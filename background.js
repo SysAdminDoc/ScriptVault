@@ -6466,6 +6466,94 @@ const NpmResolver = (() => {
     default: () => npm_resolve_default
   });
   module.exports = __toCommonJS(npm_resolve_exports);
+
+  // src/background/internal-host-guard.ts
+  function isInternalIPv4(ip) {
+    const parts = ip.split(".").map((p) => parseInt(p, 10));
+    if (parts.length !== 4 || parts.some((p) => !Number.isFinite(p) || p < 0 || p > 255)) return true;
+    const [a, b, c, d] = parts;
+    if (a === 0) return true;
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a === 192 && b === 0 && c === 2) return true;
+    if (a === 198 && b === 51 && c === 100) return true;
+    if (a === 203 && b === 0 && c === 113) return true;
+    if (a === 198 && (b === 18 || b === 19)) return true;
+    if (a >= 240) return true;
+    return false;
+  }
+  function isInternalHost(rawHost) {
+    if (typeof rawHost !== "string" || !rawHost) return true;
+    let h = rawHost.toLowerCase();
+    if (h.startsWith("[") && h.endsWith("]")) h = h.slice(1, -1);
+    if (h === "localhost" || h === "localhost.localdomain" || h === "ip6-localhost" || h === "ip6-loopback" || h.endsWith(".localhost")) {
+      return true;
+    }
+    if (h.includes(":")) {
+      if (h === "::1" || h === "::" || h === "::0" || h === "0:0:0:0:0:0:0:0" || h === "0:0:0:0:0:0:0:1") return true;
+      if (/^fe[89ab][0-9a-f]?:/.test(h)) return true;
+      if (/^f[cd][0-9a-f]{0,2}:/.test(h)) return true;
+      const v4MappedDotted = h.match(/^::ffff:([0-9.]+)$/);
+      if (v4MappedDotted) return isInternalIPv4(v4MappedDotted[1]);
+      const v4MappedHex = h.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+      if (v4MappedHex) {
+        const hi = parseInt(v4MappedHex[1], 16);
+        const lo = parseInt(v4MappedHex[2], 16);
+        const dotted = [hi >> 8 & 255, hi & 255, lo >> 8 & 255, lo & 255].join(".");
+        return isInternalIPv4(dotted);
+      }
+      return false;
+    }
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) {
+      return isInternalIPv4(h);
+    }
+    return false;
+  }
+  function classifyFetchUrl(url, allowedSchemes = ["https:"]) {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { ok: false, reason: "malformed-url", url: null, message: "malformed URL" };
+    }
+    if (!allowedSchemes.includes(parsed.protocol)) {
+      return {
+        ok: false,
+        reason: "unsupported-scheme",
+        url: parsed,
+        message: `unsupported scheme ${parsed.protocol}`
+      };
+    }
+    const host = parsed.hostname || "";
+    if (!host) {
+      return { ok: false, reason: "empty-hostname", url: parsed, message: "empty hostname" };
+    }
+    if (isInternalHost(host)) {
+      let reason = "internal-host";
+      if (host === "localhost" || host.endsWith(".localdomain") || host === "ip6-localhost" || host === "ip6-loopback" || host.endsWith(".localhost")) {
+        reason = "localhost-alias";
+      } else if (host.includes(":")) {
+        reason = "ipv6-internal";
+      } else if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+        reason = "ipv4-internal";
+      }
+      return { ok: false, reason, url: parsed, message: `internal host (${reason})` };
+    }
+    return { ok: true, reason: null, url: parsed, message: "" };
+  }
+  function classifyResponseUrl(response, allowedSchemes = ["https:"]) {
+    const finalUrl = typeof response?.url === "string" ? response.url : "";
+    if (!finalUrl) {
+      return { ok: true, reason: null, url: null, message: "" };
+    }
+    return classifyFetchUrl(finalUrl, allowedSchemes);
+  }
+
+  // src/modules/npm-resolve.ts
   var MAX_NPM_FETCH_BYTES = 5 * 1024 * 1024;
   var NPM_FETCH_SIZE_ERROR = "NPM response exceeds maximum allowed size (5 MB)";
   function utf8Length(text) {
@@ -6560,12 +6648,25 @@ const NpmResolver = (() => {
      * Resolve a single npm require spec to a CDN URL.
      */
     async resolve(requireSpec) {
+      const resolved = await this.resolveWithCode(requireSpec);
+      return {
+        url: resolved.url,
+        integrity: resolved.integrity,
+        version: resolved.version
+      };
+    },
+    /**
+     * Resolve a single npm require spec and return the exact bytes used for SRI.
+     * The @require loader uses this path to avoid computing integrity over one
+     * CDN response and then executing a later, possibly different, response.
+     */
+    async resolveWithCode(requireSpec) {
       if (!this.isNpmRequire(requireSpec)) {
         throw new Error(`Not an npm require: ${requireSpec}`);
       }
       const { name, version: requestedVersion } = this._parseSpec(requireSpec);
       const cacheKey = `${name}@${requestedVersion || "latest"}`;
-      const cached = await this._getCache(cacheKey);
+      const cached = await this._getCache(cacheKey, true);
       if (cached) return cached;
       const version = requestedVersion && requestedVersion !== "latest" ? requestedVersion : await this._resolveLatestVersion(name);
       if (!version) {
@@ -6577,7 +6678,7 @@ const NpmResolver = (() => {
         try {
           const content = await this._fetchWithTimeout(url);
           const integrity = await this._computeSriHash(content);
-          const result = { url, integrity, version };
+          const result = { url, integrity, version, code: content };
           await this._setCache(cacheKey, result);
           return result;
         } catch (err) {
@@ -6721,6 +6822,10 @@ const NpmResolver = (() => {
      * Fetch a URL with a timeout. Returns the response body as text.
      */
     async _fetchWithTimeout(url, options = {}) {
+      const preCheck = classifyFetchUrl(url, ["https:"]);
+      if (!preCheck.ok) {
+        throw new Error(`NPM URL rejected: ${preCheck.message}`);
+      }
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT);
       try {
@@ -6730,6 +6835,10 @@ const NpmResolver = (() => {
         });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status} for ${url}`);
+        }
+        const postCheck = classifyResponseUrl(response, ["https:"]);
+        if (!postCheck.ok) {
+          throw new Error(`NPM URL redirected to ${postCheck.message}`);
         }
         return await readTextBounded(response, MAX_NPM_FETCH_BYTES);
       } finally {
@@ -6754,7 +6863,7 @@ const NpmResolver = (() => {
     /**
      * Read a single entry from the npm cache.
      */
-    async _getCache(key) {
+    async _getCache(key, requireCode = false) {
       try {
         const stored = await chrome.storage.local.get(this.CACHE_KEY);
         const cache = stored[this.CACHE_KEY];
@@ -6762,13 +6871,19 @@ const NpmResolver = (() => {
         const cacheObj = cache;
         const entry = cacheObj[key];
         if (!entry) return null;
+        if (requireCode && typeof entry.code !== "string") return null;
         if (Date.now() - entry.timestamp > this.CACHE_TTL) {
           delete cacheObj[key];
           chrome.storage.local.set({ [this.CACHE_KEY]: cacheObj }).catch(() => {
           });
           return null;
         }
-        return { url: entry.url, integrity: entry.integrity, version: entry.version };
+        return {
+          url: entry.url,
+          integrity: entry.integrity,
+          version: entry.version,
+          code: entry.code ?? ""
+        };
       } catch (_e) {
         return null;
       }
@@ -6785,6 +6900,7 @@ const NpmResolver = (() => {
           url: result.url,
           integrity: result.integrity,
           version: result.version,
+          ...typeof result.code === "string" ? { code: result.code } : {},
           timestamp: Date.now()
         };
         await chrome.storage.local.set({ [this.CACHE_KEY]: cache });
@@ -25213,10 +25329,102 @@ function hasVerifiableRequireIntegrity(url) {
   return /^(sha256|sha384|sha512)[-=]/i.test(sriHash || '');
 }
 
+async function buildRequireCacheKey(url) {
+  const data = new TextEncoder().encode(url);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `require_cache_${hex}`;
+}
+
+function isNpmRequireSpec(url) {
+  return typeof NpmResolver !== 'undefined' &&
+    typeof NpmResolver.isNpmRequire === 'function' &&
+    NpmResolver.isNpmRequire(url);
+}
+
 async function fetchRequireScript(url, options = {}) {
-  const { fetchUrl, sriHash } = parseRequireIntegrity(url);
   const bypassCache = options.bypassCache === true;
   const cacheResult = options.cacheResult !== false;
+
+  if (isNpmRequireSpec(url)) {
+    debugLog('Resolving npm @require:', url);
+
+    if (!bypassCache && requireCache.has(url)) {
+      debugLog('Using cached npm @require:', url);
+      return requireCache.get(url);
+    }
+
+    let cacheKey = '';
+    if (!bypassCache || cacheResult) {
+      cacheKey = await buildRequireCacheKey(url);
+    }
+
+    if (!bypassCache) {
+      try {
+        const cached = await chrome.storage.local.get(cacheKey);
+        if (cached[cacheKey]?.code) {
+          const age = Date.now() - (cached[cacheKey].timestamp || 0);
+          if (age < 7 * 24 * 60 * 60 * 1000) {
+            debugLog('Using persistent cached npm @require:', url);
+            requireCacheSet(url, cached[cacheKey].code);
+            if (cached[cacheKey].url) requireCacheSet(cached[cacheKey].url, cached[cacheKey].code);
+            return cached[cacheKey].code;
+          }
+        }
+      } catch (e) {
+        // Ignore cache errors
+      }
+    }
+
+    if (typeof NpmResolver?.resolveWithCode !== 'function') {
+      console.warn(`[ScriptVault] NPM @require resolver unavailable: ${url}`);
+      return null;
+    }
+
+    try {
+      const resolved = await NpmResolver.resolveWithCode(url);
+      if (!resolved || typeof resolved.code !== 'string' || !resolved.url || !resolved.integrity) {
+        throw new Error('NPM resolver returned an incomplete result');
+      }
+
+      const valid = await verifySRI(resolved.code, resolved.integrity);
+      if (!valid) {
+        throw new Error(`computed SRI verification failed for ${resolved.url}`);
+      }
+
+      if (cacheResult) {
+        requireCacheSet(url, resolved.code);
+        requireCacheSet(resolved.url, resolved.code);
+        try {
+          await chrome.storage.local.set({
+            [cacheKey]: {
+              code: resolved.code,
+              timestamp: Date.now(),
+              url: resolved.url,
+              integrity: resolved.integrity,
+              version: resolved.version,
+              spec: url
+            }
+          });
+        } catch (e) {
+          // Ignore storage errors
+        }
+      }
+
+      debugLog(`Resolved npm @require ${url} to ${resolved.url}`);
+      return resolved.code;
+    } catch (e) {
+      console.warn(`[ScriptVault] Failed to resolve npm @require ${url}: ${e.message}`);
+      return null;
+    }
+  }
+
+  if (typeof url === 'string' && url.startsWith('npm:')) {
+    console.warn(`[ScriptVault] NPM @require resolver unavailable: ${url}`);
+    return null;
+  }
+
+  const { fetchUrl, sriHash } = parseRequireIntegrity(url);
 
   debugLog('Fetching @require:', fetchUrl);
 
@@ -25236,12 +25444,7 @@ async function fetchRequireScript(url, options = {}) {
   // Hash the URL to create a fixed-length collision-resistant cache key
   let cacheKey = '';
   if (!bypassCache || cacheResult) {
-    cacheKey = await (async () => {
-      const data = new TextEncoder().encode(url);
-      const hash = await crypto.subtle.digest('SHA-256', data);
-      const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-      return `require_cache_${hex}`;
-    })();
+    cacheKey = await buildRequireCacheKey(url);
   }
   if (!bypassCache) {
     try {

@@ -748,6 +748,21 @@ describe('source npm resolver module', () => {
       version: '4.17.21',
     });
   });
+
+  it('resolveWithCode exposes the fetched bytes used for the computed SRI', async () => {
+    NpmResolver._buildCdnUrls = vi.fn().mockReturnValue(['https://cdn.example/lodash.js']);
+    NpmResolver._fetchWithTimeout = vi.fn().mockResolvedValue('console.log("same bytes");');
+    NpmResolver._computeSriHash = vi.fn().mockResolvedValue('sha256-same');
+
+    const result = await NpmResolver.resolveWithCode('npm:lodash@4.17.21');
+
+    expect(result).toEqual({
+      url: 'https://cdn.example/lodash.js',
+      integrity: 'sha256-same',
+      version: '4.17.21',
+      code: 'console.log("same bytes");',
+    });
+  });
 });
 
 describe('source public api module', () => {

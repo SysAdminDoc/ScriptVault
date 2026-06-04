@@ -12,6 +12,18 @@ import { classifyFetchUrl, classifyResponseUrl } from './internal-host-guard';
 
 declare function debugLog(...args: unknown[]): void;
 
+interface NpmResolvedRequire {
+  url: string;
+  integrity: string;
+  version: string;
+  code: string;
+}
+
+declare const NpmResolver: {
+  isNpmRequire?: (url: string) => boolean;
+  resolveWithCode?: (spec: string) => Promise<NpmResolvedRequire>;
+} | undefined;
+
 // ---------------------------------------------------------------------------
 // In-memory cache for @require scripts (current session only)
 // ---------------------------------------------------------------------------
@@ -145,6 +157,19 @@ export function hasVerifiableRequireIntegrity(url: string): boolean {
   return /^(sha256|sha384|sha512)[-=]/i.test(sriHash || '');
 }
 
+async function buildRequireCacheKey(url: string): Promise<string> {
+  const data = new TextEncoder().encode(url);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `require_cache_${hex}`;
+}
+
+function isNpmRequireSpec(url: string): boolean {
+  return typeof NpmResolver !== 'undefined' &&
+    typeof NpmResolver.isNpmRequire === 'function' &&
+    NpmResolver.isNpmRequire(url);
+}
+
 // ---------------------------------------------------------------------------
 // verifySRI — verify SubResource Integrity hash for fetched content
 // ---------------------------------------------------------------------------
@@ -191,10 +216,91 @@ export async function verifySRI(code: string, hashStr: string | null): Promise<b
 // ---------------------------------------------------------------------------
 
 export async function fetchRequireScript(url: string, options: FetchRequireScriptOptions = {}): Promise<string | null> {
-  // Extract SRI hash from URL fragment (e.g., url#sha256=abc123 or url#md5=abc123)
-  const { fetchUrl, sriHash } = parseRequireIntegrity(url);
   const bypassCache = options.bypassCache === true;
   const cacheResult = options.cacheResult !== false;
+
+  if (isNpmRequireSpec(url)) {
+    debugLog('Resolving npm @require:', url);
+
+    if (!bypassCache && requireCache.has(url)) {
+      debugLog('Using cached npm @require:', url);
+      return requireCache.get(url) ?? null;
+    }
+
+    let cacheKey = '';
+    if (!bypassCache || cacheResult) {
+      cacheKey = await buildRequireCacheKey(url);
+    }
+
+    if (!bypassCache) {
+      try {
+        const cached = await chrome.storage.local.get(cacheKey);
+        const entry = cached[cacheKey] as { code?: string; timestamp?: number; url?: string } | undefined;
+        if (entry?.code) {
+          const age = Date.now() - (entry.timestamp ?? 0);
+          if (age < 7 * 24 * 60 * 60 * 1000) {
+            debugLog('Using persistent cached npm @require:', url);
+            requireCache.set(url, entry.code);
+            if (entry.url) requireCache.set(entry.url, entry.code);
+            return entry.code;
+          }
+        }
+      } catch (_e) {
+        // Ignore cache errors.
+      }
+    }
+
+    if (typeof NpmResolver?.resolveWithCode !== 'function') {
+      console.warn(`[ScriptVault] NPM @require resolver unavailable: ${url}`);
+      return null;
+    }
+
+    try {
+      const resolved = await NpmResolver.resolveWithCode(url);
+      if (!resolved || typeof resolved.code !== 'string' || !resolved.url || !resolved.integrity) {
+        throw new Error('NPM resolver returned an incomplete result');
+      }
+
+      const valid = await verifySRI(resolved.code, resolved.integrity);
+      if (!valid) {
+        throw new Error(`computed SRI verification failed for ${resolved.url}`);
+      }
+
+      if (cacheResult) {
+        requireCache.set(url, resolved.code);
+        requireCache.set(resolved.url, resolved.code);
+        try {
+          await chrome.storage.local.set({
+            [cacheKey]: {
+              code: resolved.code,
+              timestamp: Date.now(),
+              url: resolved.url,
+              integrity: resolved.integrity,
+              version: resolved.version,
+              spec: url
+            }
+          });
+        } catch (_e) {
+          // Ignore storage errors.
+        }
+      }
+
+      debugLog(`Resolved npm @require ${url} to ${resolved.url}`);
+      return resolved.code;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[ScriptVault] Failed to resolve npm @require ${url}: ${msg}`);
+      return null;
+    }
+  }
+
+  if (typeof url === 'string' && url.startsWith('npm:')) {
+    console.warn(`[ScriptVault] NPM @require resolver unavailable: ${url}`);
+    return null;
+  }
+
+  // Extract SRI hash from URL fragment (e.g., url#sha256=abc123 or url#md5=abc123)
+  const { fetchUrl, sriHash } = parseRequireIntegrity(url);
 
   debugLog('Fetching @require:', fetchUrl);
 
@@ -214,12 +320,7 @@ export async function fetchRequireScript(url: string, options: FetchRequireScrip
   // Hash the URL to create a fixed-length collision-resistant cache key
   let cacheKey = '';
   if (!bypassCache || cacheResult) {
-    cacheKey = await (async (): Promise<string> => {
-      const data = new TextEncoder().encode(url);
-      const hash = await crypto.subtle.digest('SHA-256', data);
-      const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-      return `require_cache_${hex}`;
-    })();
+    cacheKey = await buildRequireCacheKey(url);
   }
   if (!bypassCache) {
     try {

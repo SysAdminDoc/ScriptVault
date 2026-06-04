@@ -116,9 +116,47 @@ describe('NpmResolver', () => {
         version: '4.17.21',
       });
     });
+
+    it('resolveWithCode returns the exact bytes used for SRI computation', async () => {
+      NpmResolver._buildCdnUrls = vi.fn().mockReturnValue(['https://cdn.example/lodash.js']);
+      NpmResolver._fetchWithTimeout = vi.fn().mockResolvedValue('console.log("same bytes");');
+      NpmResolver._computeSriHash = vi.fn().mockResolvedValue('sha256-same');
+
+      const result = await NpmResolver.resolveWithCode('npm:lodash@4.17.21');
+
+      expect(result).toEqual({
+        url: 'https://cdn.example/lodash.js',
+        integrity: 'sha256-same',
+        version: '4.17.21',
+        code: 'console.log("same bytes");',
+      });
+      expect(NpmResolver._computeSriHash).toHaveBeenCalledWith('console.log("same bytes");');
+    });
   });
 
   describe('_fetchWithTimeout', () => {
+    it('rejects non-HTTPS package fetches before network I/O', async () => {
+      const fetchMock = vi.fn();
+      NpmResolver = createFresh(fetchMock);
+
+      await expect(NpmResolver._fetchWithTimeout('http://cdn.example/pkg.js')).rejects.toThrow('NPM URL rejected');
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects redirects into internal hosts', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        url: 'https://127.0.0.1/pkg.js',
+        headers: { get: vi.fn(() => null) },
+        text: vi.fn().mockResolvedValue('console.log("bad");'),
+      });
+      NpmResolver = createFresh(fetchMock);
+
+      await expect(NpmResolver._fetchWithTimeout('https://cdn.example/pkg.js')).rejects.toThrow('redirected to internal host');
+    });
+
     it('rejects oversized responses before reading when content-length is available', async () => {
       const text = vi.fn();
       const fetchMock = vi.fn().mockResolvedValue({
