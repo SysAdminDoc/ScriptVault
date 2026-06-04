@@ -325,6 +325,7 @@
   }
 
   async function refresh() {
+    if (searchRenderTimer) { clearTimeout(searchRenderTimer); searchRenderTimer = null; }
     setListBusy(true);
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

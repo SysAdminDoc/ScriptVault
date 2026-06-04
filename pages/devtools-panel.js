@@ -4,7 +4,15 @@
 (function () {
   'use strict';
 
-  const $ = id => document.getElementById(id) || document.createElement('div'); // null-safe
+  const $ = id => {
+    const el = document.getElementById(id);
+    if (!el) {
+      const stub = document.createElement('div');
+      stub.dataset._dtStub = id;
+      return stub;
+    }
+    return el;
+  };
   const timeFormatter = new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
     minute: '2-digit',
@@ -198,6 +206,22 @@
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = setInterval(refreshAll, 3000);
   }
+
+  function stopAutoRefresh() {
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopAutoRefresh();
+    } else {
+      refreshAll();
+      startAutoRefresh();
+    }
+  });
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
   function setupTabs() {
@@ -545,7 +569,7 @@
   }
 
   function escapeHtml(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   init();

@@ -56,6 +56,10 @@ globalThis.chrome = {
         return Promise.resolve();
       }),
       getBytesInUse: vi.fn().mockResolvedValue(0),
+      clear: vi.fn(() => {
+        for (const key of Object.keys(storageMock)) delete storageMock[key];
+        return Promise.resolve();
+      }),
       onChanged: { addListener: vi.fn() },
     },
     session: {
@@ -95,6 +99,7 @@ globalThis.chrome = {
     create: vi.fn().mockResolvedValue({}),
     update: vi.fn().mockResolvedValue({}),
     reload: vi.fn().mockResolvedValue(),
+    remove: vi.fn().mockResolvedValue(),
     get: vi.fn().mockResolvedValue({ id: 1, url: 'https://example.com' }),
     sendMessage: vi.fn().mockResolvedValue({}),
     onActivated: { addListener: vi.fn(), removeListener: vi.fn() },
@@ -133,7 +138,9 @@ globalThis.chrome = {
   alarms: {
     create: vi.fn(),
     clear: vi.fn(),
+    clearAll: vi.fn().mockResolvedValue(),
     get: vi.fn().mockResolvedValue(null),
+    getAll: vi.fn().mockResolvedValue([]),
     onAlarm: { addListener: vi.fn() },
   },
   contextMenus: {

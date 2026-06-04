@@ -45,14 +45,18 @@ const InternalHostGuard = (() => {
     if (a === 172 && b >= 16 && b <= 31) return true;
     if (a === 192 && b === 168) return true;
     if (a === 100 && b >= 64 && b <= 127) return true;
-    if (a === 255 && b === 255 && c === 255 && d === 255) return true;
+    if (a === 192 && b === 0 && c === 2) return true;
+    if (a === 198 && b === 51 && c === 100) return true;
+    if (a === 203 && b === 0 && c === 113) return true;
+    if (a === 198 && (b === 18 || b === 19)) return true;
+    if (a >= 240) return true;
     return false;
   }
   function isInternalHost(rawHost) {
     if (typeof rawHost !== "string" || !rawHost) return true;
     let h = rawHost.toLowerCase();
     if (h.startsWith("[") && h.endsWith("]")) h = h.slice(1, -1);
-    if (h === "localhost" || h === "localhost.localdomain" || h === "ip6-localhost" || h === "ip6-loopback") {
+    if (h === "localhost" || h === "localhost.localdomain" || h === "ip6-localhost" || h === "ip6-loopback" || h.endsWith(".localhost")) {
       return true;
     }
     if (h.includes(":")) {
@@ -96,7 +100,7 @@ const InternalHostGuard = (() => {
     }
     if (isInternalHost(host)) {
       let reason = "internal-host";
-      if (host === "localhost" || host.endsWith(".localdomain") || host === "ip6-localhost" || host === "ip6-loopback") {
+      if (host === "localhost" || host.endsWith(".localdomain") || host === "ip6-localhost" || host === "ip6-loopback" || host.endsWith(".localhost")) {
         reason = "localhost-alias";
       } else if (host.includes(":")) {
         reason = "ipv6-internal";
