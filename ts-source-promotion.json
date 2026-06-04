@@ -17,8 +17,8 @@
     {
       "runtime": "modules/sync-providers.js",
       "sources": ["src/modules/sync-providers.ts"],
-      "status": "intentionally-divergent",
-      "notes": "Runtime owns full provider implementations, including S3 SigV4; TS currently acts as typed facade/validator."
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs; S3 SigV4 implementation now lives in TypeScript."
     },
     {
       "runtime": "modules/i18n.js",

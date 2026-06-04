@@ -93,10 +93,9 @@ function readReadme() {
 
 function extractRegistryProviders() {
   const src = readFileSync(SYNC_PROVIDERS_PATH, 'utf8');
-  // Match `name: 'WebDAV'`, `name: 'Google Drive'`, etc. inside a property
-  // block. The provider implementation file uses single-quoted name fields
-  // exclusively.
-  const matches = [...src.matchAll(/\bname:\s*'([^']+)'/g)];
+  // Match `name: 'WebDAV'`, `name: "Google Drive"`, etc. inside a property
+  // block. Generated TS runtime output uses double quotes.
+  const matches = [...src.matchAll(/\bname:\s*['"]([^'"]+)['"]/g)];
   const names = new Set();
   for (const m of matches) {
     names.add(m[1].toLowerCase());

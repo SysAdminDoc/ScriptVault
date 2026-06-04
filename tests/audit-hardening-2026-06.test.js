@@ -141,9 +141,9 @@ describe('Cloud token probe timeout', () => {
   it('routes all three provider getValidToken probes through the timeout wrapper', () => {
     const src = read('modules/sync-providers.js');
     // No raw fetch() probe should remain in a getValidToken body; all use the wrapper.
-    expect(src).toContain("_oauthFetchWithTimeout('https://www.googleapis.com/drive/v3/about");
-    expect(src).toContain("_oauthFetchWithTimeout('https://api.dropboxapi.com/2/users/get_current_account");
-    expect(src).toContain("_oauthFetchWithTimeout('https://graph.microsoft.com/v1.0/me");
+    expect(src).toMatch(/_oauthFetchWithTimeout\(\s*["']https:\/\/www\.googleapis\.com\/drive\/v3\/about/);
+    expect(src).toMatch(/_oauthFetchWithTimeout\(\s*["']https:\/\/api\.dropboxapi\.com\/2\/users\/get_current_account/);
+    expect(src).toMatch(/_oauthFetchWithTimeout\(\s*["']https:\/\/graph\.microsoft\.com\/v1\.0\/me/);
   });
 });
 

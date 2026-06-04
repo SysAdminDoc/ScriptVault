@@ -3,7 +3,11 @@
 // ============================================================================
 
 import type { Settings } from '../types/index';
-import { SettingsManager } from './storage';
+
+declare const SettingsManager: {
+  get(): Promise<Settings>;
+  set(key: keyof Settings | Partial<Settings>, value?: Settings[keyof Settings]): Promise<Settings>;
+};
 
 /** Helper to get full Settings object with correct type (works around conditional return). */
 async function getSettings(): Promise<Settings> {
@@ -125,6 +129,30 @@ function syncStorageDisclosure(
     revokeAction: config.revokeAction,
     notes: config.notes ?? '',
   };
+}
+
+async function _oauthFetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  providerLabel: string,
+  timeoutMs = 15_000,
+): Promise<Response | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (e: unknown) {
+    const name = e && typeof e === 'object' && 'name' in e ? String(e.name) : '';
+    const message = e instanceof Error ? e.message : String(e);
+    if (name === 'AbortError' || /aborted|timed?\s*out/i.test(message)) {
+      console.warn(`[CloudSync] ${providerLabel} token refresh timed out after ${timeoutMs}ms`);
+      return null;
+    }
+    console.warn(`[CloudSync] ${providerLabel} token refresh network error:`, message);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -296,7 +324,7 @@ const googledrive = {
     if (!refreshTok) return null;
 
     const clientId = currentSettings.googleClientId || this.clientId;
-    const resp = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
+    const resp = await _oauthFetchWithTimeout('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -304,7 +332,8 @@ const googledrive = {
         grant_type: 'refresh_token',
         refresh_token: refreshTok,
       }),
-    }, 15_000);
+    }, 'Google');
+    if (!resp) return null;
 
     if (!resp.ok) {
       console.warn('[CloudSync] Google token refresh failed:', resp.status);
@@ -333,10 +362,11 @@ const googledrive = {
 
     try {
       // Test if token is still valid
-      const test = await fetchWithTimeout('https://www.googleapis.com/drive/v3/about?fields=user', {
+      const test = await _oauthFetchWithTimeout('https://www.googleapis.com/drive/v3/about?fields=user', {
         headers: { 'Authorization': `Bearer ${token}` },
-      }, 10_000);
+      }, 'Google Drive', 10_000);
 
+      if (!test) return token;
       if (test.ok) return token;
       if (test.status === 401 || test.status === 403) {
         return await this.refreshToken(currentSettings);
@@ -698,7 +728,7 @@ const dropbox = {
     const clientId = settings.dropboxClientId;
     if (!refreshTok || !clientId) return null;
 
-    const resp = await fetchWithTimeout('https://api.dropboxapi.com/oauth2/token', {
+    const resp = await _oauthFetchWithTimeout('https://api.dropboxapi.com/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -706,7 +736,8 @@ const dropbox = {
         grant_type: 'refresh_token',
         refresh_token: refreshTok,
       }),
-    }, 15_000);
+    }, 'Dropbox');
+    if (!resp) return null;
 
     if (!resp.ok) {
       console.warn('[CloudSync] Dropbox token refresh failed:', resp.status);
@@ -723,14 +754,16 @@ const dropbox = {
   async getValidToken(settings: Settings): Promise<string | null> {
     if (settings.dropboxToken) {
       try {
-        const test = await fetchWithTimeout(
+        const test = await _oauthFetchWithTimeout(
           'https://api.dropboxapi.com/2/users/get_current_account',
           {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${settings.dropboxToken}` },
           },
+          'Dropbox',
           10_000,
         );
+        if (!test) return settings.dropboxToken;
         if (test.ok) return settings.dropboxToken;
         if (test.status !== 401 && test.status !== 403) return settings.dropboxToken;
       } catch (_e: unknown) {
@@ -991,7 +1024,7 @@ const onedrive = {
     const clientId = currentSettings.onedriveClientId;
     if (!refreshTok || !clientId) return null;
 
-    const resp = await fetchWithTimeout(
+    const resp = await _oauthFetchWithTimeout(
       'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
       {
         method: 'POST',
@@ -1003,8 +1036,10 @@ const onedrive = {
           scope: 'Files.ReadWrite.AppFolder User.Read offline_access',
         }),
       },
+      'OneDrive',
       15_000,
     );
+    if (!resp) return null;
 
     if (!resp.ok) return null;
     const data: { access_token?: string; refresh_token?: string } = await resp.json();
@@ -1027,9 +1062,10 @@ const onedrive = {
     }
 
     try {
-      const test = await fetchWithTimeout('https://graph.microsoft.com/v1.0/me', {
+      const test = await _oauthFetchWithTimeout('https://graph.microsoft.com/v1.0/me', {
         headers: { 'Authorization': `Bearer ${token}` },
-      }, 10_000);
+      }, 'OneDrive', 10_000);
+      if (!test) return token;
       if (test.ok) return token;
       if (test.status === 401 || test.status === 403) {
         return await this.refreshToken(currentSettings);
@@ -1169,26 +1205,243 @@ const s3 = {
   validate(settings: Partial<Settings> = {}): S3SettingsValidation {
     const errors: Array<{ field: string; error: string }> = [];
     const endpoint = (settings.s3Endpoint || '').trim();
-    if (!endpoint) errors.push({ field: 's3Endpoint', error: 'Endpoint URL is required.' });
+    if (!endpoint) {
+      errors.push({ field: 's3Endpoint', error: 'Endpoint URL is required.' });
+    } else {
+      try {
+        const url = new URL(endpoint);
+        if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+          errors.push({ field: 's3Endpoint', error: 'Endpoint must be http(s)://.' });
+        }
+        if (url.pathname && url.pathname !== '/' && url.pathname !== '') {
+          errors.push({
+            field: 's3Endpoint',
+            error: 'Endpoint URL must not include a path; bucket goes in its own field.',
+          });
+        }
+      } catch (_) {
+        errors.push({ field: 's3Endpoint', error: 'Endpoint URL is malformed.' });
+      }
+    }
     const region = (settings.s3Region || '').trim();
     if (!region) errors.push({ field: 's3Region', error: 'Region is required (use "auto" for Cloudflare R2).' });
     const bucket = (settings.s3Bucket || '').trim();
     if (!bucket) errors.push({ field: 's3Bucket', error: 'Bucket name is required.' });
+    else if (!/^[a-z0-9][a-z0-9.\-]{1,61}[a-z0-9]$/i.test(bucket)) {
+      errors.push({
+        field: 's3Bucket',
+        error: 'Bucket name must be 3-63 chars, alphanumeric/dash/dot only.',
+      });
+    }
     if (!settings.s3AccessKeyId) errors.push({ field: 's3AccessKeyId', error: 'Access key ID is required.' });
     if (!settings.s3SecretKey) errors.push({ field: 's3SecretKey', error: 'Secret access key is required.' });
     return { valid: errors.length === 0, errors };
   },
 
-  async upload(_data: unknown, _settings: Settings): Promise<SyncUploadResult> {
-    throw new Error('S3 upload routed through runtime modules/sync-providers.js');
+  _buildObjectUrl(settings: Settings, objectKey: string): string {
+    const endpoint = new URL(settings.s3Endpoint);
+    const isAws = /(^|\.)amazonaws\.com$/i.test(endpoint.hostname);
+    const usePathStyle = settings.s3PathStyle === true ||
+      (settings.s3PathStyle === undefined && !isAws) ||
+      (settings.s3PathStyle === false && false);
+    const encodedKey = objectKey.split('/').map(encodeURIComponent).join('/');
+    if (usePathStyle) {
+      return `${endpoint.origin}/${encodeURIComponent(settings.s3Bucket)}/${encodedKey}`;
+    }
+    const host = `${settings.s3Bucket}.${endpoint.hostname}`;
+    const port = endpoint.port ? `:${endpoint.port}` : '';
+    return `${endpoint.protocol}//${host}${port}/${encodedKey}`;
   },
 
-  async download(_settings: Settings): Promise<unknown | null> {
-    throw new Error('S3 download routed through runtime modules/sync-providers.js');
+  _objectKey(settings: Partial<Settings>): string {
+    return (settings.s3ObjectKey || 'scriptvault-backup.json').replace(/^\/+/, '');
   },
 
-  async test(_settings: Settings): Promise<SyncTestResult> {
-    return { success: false, error: 'S3 test routed through runtime modules/sync-providers.js' };
+  async _signRequest({
+    method,
+    url,
+    region,
+    accessKeyId,
+    secretKey,
+    body,
+    contentType,
+  }: {
+    method: string;
+    url: string;
+    region: string;
+    accessKeyId: string;
+    secretKey: string;
+    body?: string | Uint8Array | null;
+    contentType?: string;
+  }): Promise<{ headers: Record<string, string> }> {
+    const parsedUrl = new URL(url);
+    const now = new Date();
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    const dateStamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;
+    const amzDate = `${dateStamp}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+    const service = 's3';
+    const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+    const bodyBytes = body == null
+      ? new Uint8Array(0)
+      : (typeof body === 'string' ? new TextEncoder().encode(body) : body);
+    const payloadHash = await this._sha256Hex(bodyBytes);
+    const headers: Record<string, string> = {
+      host: parsedUrl.host,
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': amzDate,
+    };
+    if (contentType) headers['content-type'] = contentType;
+    const sortedHeaderNames = Object.keys(headers).sort();
+    const canonicalHeaders = sortedHeaderNames.map((key) => `${key}:${headers[key]}\n`).join('');
+    const signedHeaders = sortedHeaderNames.join(';');
+    const canonicalQuery = parsedUrl.searchParams.toString().split('&').filter(Boolean).sort().join('&');
+    const canonicalRequest = [
+      method,
+      parsedUrl.pathname || '/',
+      canonicalQuery,
+      canonicalHeaders,
+      signedHeaders,
+      payloadHash,
+    ].join('\n');
+    const stringToSign = [
+      'AWS4-HMAC-SHA256',
+      amzDate,
+      credentialScope,
+      await this._sha256Hex(canonicalRequest),
+    ].join('\n');
+    const kDate = await this._hmac(new TextEncoder().encode('AWS4' + secretKey), dateStamp);
+    const kRegion = await this._hmac(kDate, region);
+    const kService = await this._hmac(kRegion, service);
+    const kSigning = await this._hmac(kService, 'aws4_request');
+    const signature = this._toHex(await this._hmac(kSigning, stringToSign));
+    return {
+      headers: {
+        ...Object.fromEntries(
+          sortedHeaderNames
+            .filter((key) => key !== 'host')
+            .map((key) => [key, headers[key] as string]),
+        ),
+        Authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+      },
+    };
+  },
+
+  async _sha256Hex(input: string | Uint8Array): Promise<string> {
+    const bytes = typeof input === 'string' ? new TextEncoder().encode(input) : input;
+    const buffer = await crypto.subtle.digest('SHA-256', bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    ) as ArrayBuffer);
+    return this._toHex(new Uint8Array(buffer));
+  },
+
+  async _hmac(keyBytes: Uint8Array, message: string): Promise<Uint8Array> {
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyBytes.buffer.slice(
+        keyBytes.byteOffset,
+        keyBytes.byteOffset + keyBytes.byteLength,
+      ) as ArrayBuffer,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign'],
+    );
+    const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+    return new Uint8Array(signature);
+  },
+
+  _toHex(bytes: Uint8Array): string {
+    let value = '';
+    for (let i = 0; i < bytes.length; i++) {
+      const byte = bytes[i] ?? 0;
+      const hex = byte.toString(16);
+      value += hex.length === 1 ? '0' + hex : hex;
+    }
+    return value;
+  },
+
+  async upload(
+    data: unknown,
+    settings: Settings,
+    opts: { signal?: AbortSignal } = {},
+  ): Promise<SyncUploadResult> {
+    const check = this.validate(settings);
+    if (!check.valid) {
+      throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(' ')}`);
+    }
+    const url = this._buildObjectUrl(settings, this._objectKey(settings));
+    const body = JSON.stringify(data);
+    const signed = await this._signRequest({
+      method: 'PUT',
+      url,
+      region: settings.s3Region,
+      accessKeyId: settings.s3AccessKeyId,
+      secretKey: settings.s3SecretKey,
+      body,
+      contentType: 'application/json',
+    });
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: signed.headers,
+      body,
+      signal: opts.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`S3 upload failed: HTTP ${response.status}${text ? ` — ${text.slice(0, 200)}` : ''}`);
+    }
+    return { success: true, timestamp: Date.now() };
+  },
+
+  async download(
+    settings: Settings,
+    opts: { signal?: AbortSignal } = {},
+  ): Promise<unknown | null> {
+    const check = this.validate(settings);
+    if (!check.valid) {
+      throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(' ')}`);
+    }
+    const url = this._buildObjectUrl(settings, this._objectKey(settings));
+    const signed = await this._signRequest({
+      method: 'GET',
+      url,
+      region: settings.s3Region,
+      accessKeyId: settings.s3AccessKeyId,
+      secretKey: settings.s3SecretKey,
+    });
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: signed.headers,
+      signal: opts.signal,
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`S3 download failed: HTTP ${response.status}${text ? ` — ${text.slice(0, 200)}` : ''}`);
+    }
+    return await response.json() as unknown;
+  },
+
+  async test(settings: Settings): Promise<SyncTestResult> {
+    const check = this.validate(settings);
+    if (!check.valid) {
+      return { success: false, error: check.errors.map((e) => e.error).join(' ') };
+    }
+    try {
+      const url = this._buildObjectUrl(settings, this._objectKey(settings));
+      const signed = await this._signRequest({
+        method: 'HEAD',
+        url,
+        region: settings.s3Region,
+        accessKeyId: settings.s3AccessKeyId,
+        secretKey: settings.s3SecretKey,
+      });
+      const response = await fetch(url, { method: 'HEAD', headers: signed.headers });
+      if (response.ok || response.status === 404) return { success: true };
+      return { success: false, error: `HTTP ${response.status}` };
+    } catch (e: unknown) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) };
+    }
   },
 
   async getStatus(settings: Settings): Promise<SyncStatusResult> {
@@ -1202,10 +1455,11 @@ const s3 = {
     }
     let endpointHost = '';
     try { endpointHost = new URL(settings.s3Endpoint).host; } catch {}
+    const result = await this.test(settings);
     return {
-      connected: false,
-      status: 'ok',
-      error: null,
+      connected: result.success === true,
+      status: result.success === true ? 'ok' : 'error',
+      error: result.error ?? null,
       user: { email: '', name: `${settings.s3Bucket}@${endpointHost}` },
       endpointHost,
     };
