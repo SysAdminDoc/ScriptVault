@@ -3,7 +3,6 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,6 +26,23 @@ describe('check-readme-claims.mjs', () => {
     expect(parsed.registryProviders).toContain('webdav');
     expect(parsed.registryProviders).toContain('google drive');
     expect(parsed.registryProviders).toContain('s3-compatible');
+  });
+
+  it('pins the shipped-feature checklist rows', () => {
+    const checklist = readFileSync(join(repoRoot, 'docs', 'readme-feature-claim-checklist.md'), 'utf8');
+    const requiredRows = [
+      ['ESM userscript bundler', 'bg/esm-bundler.js', 'tests/esm-bundler.test.js'],
+      ['Per-install/update trust receipts with diff', 'createScriptTrustReceipt', 'tests/trust-receipt-diff.test.js'],
+      ['Install-source trust badges', 'classifyInstallSource', 'tests/install-source.test.js'],
+      ['Internal-host fetch guard', 'modules/internal-host-guard.js', 'tests/internal-host-guard.test.js'],
+      ['Sync cockpit', 'CloudSync.preview', 'tests/sync-cockpit.test.js'],
+      ['Dashboard table virtualization', 'pages/dashboard-virtual-rows.js', 'tests/dashboard-virtual-rows.test.js'],
+    ];
+    for (const row of requiredRows) {
+      for (const needle of row) {
+        expect(checklist).toContain(needle);
+      }
+    }
   });
 
   it('flags a resurrected deleted-module mention', () => {

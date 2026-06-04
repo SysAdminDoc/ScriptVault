@@ -74,6 +74,7 @@ phase.
 - [x] Firefox Phase 5 AMO source review and reviewer rationale prep: `AMO-SOURCE-README.md` now provides source-build instructions, source/dependency notes, AMO data-collection copy, permission rationale, Firefox v1 scope, and unlisted-first manual steps; `store-copy:check` gates that AMO review copy — *Source: FIREFOX-PORT.md Phase 5; commit docs: add amo source review notes*
 - [x] Cycle 9 CWS remote-code compliance packet and package scan: `docs/cws-remote-code-compliance.md` maps user-installed scripts, `@require`, sandboxed editor, OAuth, script-search, and sync flows to CWS review buckets; `npm run cws:remote-code:check` scans source/package inputs and CI scans the built Chrome ZIP after packaging — *Source: ROADMAP.md Cycle 9; commit feat: add cws remote-code compliance gate*
 - [x] CONTRIBUTING local-state guidance: `CONTRIBUTING.md` now covers setup, verification, release evidence, and generic local-only state hygiene; `.factory/` is excluded from source archives through `.gitattributes` while staying ignored locally — *Source: docs/archive/TODO.md I-1; commit docs: add contributor local-state guidance*
+- [x] README feature-claim checklist shipped-feature rows: the checklist contains ESM bundler, trust receipts, install-source badges, internal-host guard, sync cockpit, and dashboard virtualization rows, and `tests/check-readme-claims.test.js` now pins them — *Source: docs/archive/TODO.md I-2; commit test: pin readme checklist shipped rows*
 
 ## Stale / Obsolete Items
 
