@@ -20,11 +20,22 @@ function makeFakeFflate() {
       );
       return encoder.encode(JSON.stringify(serialized));
     },
-    unzipSync(data) {
+    unzipSync(data, opts = {}) {
       const parsed = JSON.parse(decoder.decode(data));
-      return Object.fromEntries(
-        Object.entries(parsed).map(([name, bytes]) => [name, Uint8Array.from(bytes)]),
-      );
+      const files = {};
+      for (const [name, rawEntry] of Object.entries(parsed)) {
+        const bytes = Array.isArray(rawEntry) ? rawEntry : rawEntry.bytes || [];
+        const dataBytes = Uint8Array.from(bytes);
+        const meta = {
+          name,
+          size: Array.isArray(rawEntry) ? dataBytes.byteLength : rawEntry.size ?? dataBytes.byteLength,
+          originalSize: Array.isArray(rawEntry) ? dataBytes.byteLength : rawEntry.originalSize ?? dataBytes.byteLength,
+          compression: Array.isArray(rawEntry) ? 0 : rawEntry.compression ?? 0,
+        };
+        if (opts.filter && opts.filter(meta) === false) continue;
+        files[name] = dataBytes;
+      }
+      return files;
     },
   };
 }
@@ -71,7 +82,7 @@ function makeScript(id, name, { version = '1.0.0', code: body = `console.log("${
 function extractRuntimeImportExportCode() {
   const parserStart = backgroundCoreCode.indexOf('function parseUserscript');
   const parserEnd = backgroundCoreCode.indexOf('// URL Matching', parserStart);
-  const importStart = backgroundCoreCode.indexOf('async function exportAllScripts');
+  const importStart = backgroundCoreCode.indexOf('const ARCHIVE_MAX_SCRIPT_BYTES');
   const importEnd = backgroundCoreCode.indexOf('// Message Handlers', importStart);
 
   if ([parserStart, parserEnd, importStart, importEnd].some(index => index === -1)) {

@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Bounded backup archive intake
+
+- **Rejected unsafe backup and import archives before parsing.** JSON imports,
+  ZIP imports, backup import, inspect, verify, and restore now share bounded
+  archive intake for compressed payload size, file count, expanded size,
+  per-entry size, nested archive entries, and compression ratio.
+- **Applied the 5 MB script cap to portable JSON/ZIP imports.** Oversized
+  script bodies are rejected before parser, storage, or registration work, and
+  backup verification reports deterministic non-secret archive errors.
+
 ### 2026-06-04 — Export and backup credential gating
 
 - **Redacted sync credentials from portable vault settings by default.** JSON

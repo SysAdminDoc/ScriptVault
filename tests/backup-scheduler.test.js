@@ -20,11 +20,22 @@ function makeFakeFflate() {
       );
       return encoder.encode(JSON.stringify(serialized));
     },
-    unzipSync(data) {
+    unzipSync(data, opts = {}) {
       const parsed = JSON.parse(decoder.decode(data));
-      return Object.fromEntries(
-        Object.entries(parsed).map(([name, bytes]) => [name, Uint8Array.from(bytes)]),
-      );
+      const files = {};
+      for (const [name, rawEntry] of Object.entries(parsed)) {
+        const bytes = Array.isArray(rawEntry) ? rawEntry : rawEntry.bytes || [];
+        const dataBytes = Uint8Array.from(bytes);
+        const meta = {
+          name,
+          size: Array.isArray(rawEntry) ? dataBytes.byteLength : rawEntry.size ?? dataBytes.byteLength,
+          originalSize: Array.isArray(rawEntry) ? dataBytes.byteLength : rawEntry.originalSize ?? dataBytes.byteLength,
+          compression: Array.isArray(rawEntry) ? 0 : rawEntry.compression ?? 0,
+        };
+        if (opts.filter && opts.filter(meta) === false) continue;
+        files[name] = dataBytes;
+      }
+      return files;
     },
   };
 }
@@ -36,6 +47,48 @@ function base64ToBytes(base64) {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes;
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function fakeZipBytes(entries) {
+  return encoder.encode(JSON.stringify(entries));
+}
+
+function textEntry(text, meta = {}) {
+  return {
+    bytes: Array.from(encoder.encode(text)),
+    ...meta,
+  };
+}
+
+function userscriptText(name = 'Backed Up') {
+  return [
+    '// ==UserScript==',
+    `// @name ${name}`,
+    '// @namespace scriptvault/backup',
+    '// @version 1.0.0',
+    '// @match https://example.com/*',
+    '// ==/UserScript==',
+    'console.log("backup");',
+  ].join('\n');
+}
+
+function backupRecord(id, entries) {
+  return {
+    id,
+    timestamp: Date.now(),
+    version: 'test',
+    reason: 'manual',
+    scriptCount: 1,
+    size: 1,
+    sizeFormatted: '1 B',
+    data: bytesToBase64(fakeZipBytes(entries)),
+  };
 }
 
 function makeScript(id, name) {
@@ -327,5 +380,59 @@ describe('runtime backup scheduler', () => {
 
     expect(chrome.alarms.clear).toHaveBeenCalledWith('sv_backup_scheduled');
     expect(chrome.alarms.clear).toHaveBeenCalledWith('sv_backup_debounce');
+  });
+
+  it('rejects nested archive imports before storing backup records', async () => {
+    const { BackupScheduler } = createSchedulerHarness([]);
+    const result = await BackupScheduler.importBackup(
+      bytesToBase64(fakeZipBytes({ 'nested.zip': textEntry('nested') })),
+    );
+    const stored = await chrome.storage.local.get('autoBackups');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/nested archive entry nested\.zip/);
+    expect(stored.autoBackups || []).toHaveLength(0);
+  });
+
+  it('rejects oversized storage JSON during restore and verify', async () => {
+    const { BackupScheduler, importFromZip } = createSchedulerHarness([]);
+    await chrome.storage.local.set({
+      autoBackups: [
+        backupRecord('oversized-storage', {
+          'scripts/Alpha.user.js': textEntry(userscriptText('Alpha')),
+          'scripts/Alpha.storage.json': textEntry('{}', {
+            size: 1024,
+            originalSize: 5 * 1024 * 1024 + 1,
+          }),
+        }),
+      ],
+    });
+
+    const restore = await BackupScheduler.restoreBackup('oversized-storage', {
+      recordReceipt: false,
+    });
+    const verified = await BackupScheduler.verifyBackup('oversized-storage');
+
+    expect(restore.success).toBe(false);
+    expect(restore.error).toMatch(/Alpha\.storage\.json is too large/);
+    expect(verified.valid).toBe(false);
+    expect(verified.issues[0].error).toMatch(/Alpha\.storage\.json is too large/);
+    expect(importFromZip).not.toHaveBeenCalled();
+  });
+
+  it('returns null for inspectBackup when archive metadata exceeds expansion limits', async () => {
+    const { BackupScheduler } = createSchedulerHarness([]);
+    await chrome.storage.local.set({
+      autoBackups: [
+        backupRecord('high-expansion', {
+          'scripts/Compressed.user.js': textEntry(userscriptText('Compressed'), {
+            size: 1,
+            originalSize: 1024,
+          }),
+        }),
+      ],
+    });
+
+    await expect(BackupScheduler.inspectBackup('high-expansion')).resolves.toBeNull();
   });
 });

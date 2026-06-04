@@ -20,11 +20,22 @@ function makeFakeFflate() {
       );
       return encoder.encode(JSON.stringify(serialized));
     },
-    unzipSync(data) {
+    unzipSync(data, opts = {}) {
       const parsed = JSON.parse(decoder.decode(data));
-      return Object.fromEntries(
-        Object.entries(parsed).map(([name, bytes]) => [name, Uint8Array.from(bytes)]),
-      );
+      const files = {};
+      for (const [name, rawEntry] of Object.entries(parsed)) {
+        const bytes = Array.isArray(rawEntry) ? rawEntry : rawEntry.bytes || [];
+        const dataBytes = Uint8Array.from(bytes);
+        const meta = {
+          name,
+          size: Array.isArray(rawEntry) ? dataBytes.byteLength : rawEntry.size ?? dataBytes.byteLength,
+          originalSize: Array.isArray(rawEntry) ? dataBytes.byteLength : rawEntry.originalSize ?? dataBytes.byteLength,
+          compression: Array.isArray(rawEntry) ? 0 : rawEntry.compression ?? 0,
+        };
+        if (opts.filter && opts.filter(meta) === false) continue;
+        files[name] = dataBytes;
+      }
+      return files;
     },
   };
 }
@@ -40,6 +51,29 @@ function base64ToBytes(base64) {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
   return bytes;
+}
+
+function fakeZipBytes(entries) {
+  return encoder.encode(JSON.stringify(entries));
+}
+
+function textEntry(text, meta = {}) {
+  return {
+    bytes: Array.from(encoder.encode(text)),
+    ...meta,
+  };
+}
+
+function userscriptText(name = 'Bounded Script') {
+  return [
+    '// ==UserScript==',
+    `// @name ${name}`,
+    '// @namespace scriptvault/bounded',
+    '// @version 1.0.0',
+    '// @match https://example.com/*',
+    '// ==/UserScript==',
+    'console.log("bounded");',
+  ].join('\n');
 }
 
 function makeScript(id, name) {
@@ -78,7 +112,7 @@ function makeScript(id, name) {
 function extractRuntimeImportExportCode() {
   const parserStart = backgroundCoreCode.indexOf('function parseUserscript');
   const parserEnd = backgroundCoreCode.indexOf('// URL Matching', parserStart);
-  const importStart = backgroundCoreCode.indexOf('const SETTINGS_CREDENTIAL_KEYS');
+  const importStart = backgroundCoreCode.indexOf('const ARCHIVE_MAX_SCRIPT_BYTES');
   const importEnd = backgroundCoreCode.indexOf('// Message Handlers', importStart);
 
   if ([parserStart, parserEnd, importStart, importEnd].some(index => index === -1)) {
@@ -336,5 +370,68 @@ describe('runtime import/export archive identity', () => {
     );
     expect(harness.ScriptStorage.get).not.toHaveBeenCalledWith('__proto__');
     expect(harness.generateId).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects oversized JSON imports before storage or parser work', async () => {
+    const harness = createRuntimeHarness();
+
+    const result = await harness.importScripts({
+      scripts: [{
+        id: 'script_too_large',
+        code: 'x'.repeat(5 * 1024 * 1024 + 1),
+      }],
+    }, { overwrite: true });
+
+    expect(result.error).toMatch(/too large/);
+    expect(harness.ScriptStorage.getAll).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsafe ZIP intake before importing scripts', async () => {
+    const cases = [
+      {
+        name: 'nested archive',
+        entries: {
+          'payload.zip': textEntry('nested'),
+        },
+        error: /nested archive entry payload\.zip/,
+      },
+      {
+        name: 'excessive file count',
+        entries: Object.fromEntries(
+          Array.from({ length: 301 }, (_, index) => [`file-${index}.txt`, textEntry('x')]),
+        ),
+        error: /too many files/,
+      },
+      {
+        name: 'oversized script',
+        entries: {
+          'Huge.user.js': textEntry(userscriptText('Huge'), {
+            size: 1024,
+            originalSize: 5 * 1024 * 1024 + 1,
+          }),
+        },
+        error: /Huge\.user\.js is too large/,
+      },
+      {
+        name: 'high expansion ratio',
+        entries: {
+          'Compressed.user.js': textEntry(userscriptText('Compressed'), {
+            size: 1,
+            originalSize: 1024,
+          }),
+        },
+        error: /compression ratio is too high/,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const harness = createRuntimeHarness();
+      const result = await harness.importFromZip(bytesToBase64(fakeZipBytes(testCase.entries)), {
+        overwrite: true,
+      });
+
+      expect(result.error, testCase.name).toMatch(testCase.error);
+      expect(harness.ScriptStorage.set, testCase.name).not.toHaveBeenCalled();
+    }
   });
 });
