@@ -62,7 +62,7 @@ WXT also handles:
 - `manifest-firefox.json` declares Firefox 140.0+ desktop, Firefox for Android 142.0+, `browser_specific_settings.gecko.data_collection_permissions`, and `userScripts` as a Firefox optional permission.
 - `npm run firefox:lint` builds `build-firefox/`, runs `web-ext lint`, and writes `firefox-artifacts/web-ext-lint.json`.
 - `npm run firefox:package` runs the lint gate, packages `firefox-artifacts/scriptvault-firefox-v<version>.zip`, and writes `firefox-artifacts/scriptvault-firefox-source-v<version>.zip` for AMO source review.
-- `npm run smoke:firefox` runs a geckodriver-based temporary sideload smoke against Firefox Developer Edition/Nightly 140+, opens the dashboard and popup, saves/toggles a smoke userscript through the extension message path, verifies it runs on a local target page, and imports Chrome-shaped JSON/ZIP backup fixtures.
+- `npm run smoke:firefox` runs a geckodriver-based temporary sideload smoke against Firefox Developer Edition/Nightly 140+, opens the dashboard and popup, saves/toggles a smoke userscript through the extension message path, verifies it runs on a local target page, imports Chrome-shaped JSON/ZIP backup fixtures, imports a 26-script quota fixture, and verifies trash restore after a profile-backed Firefox restart.
 - `lib/monaco/` is intentionally omitted from the Firefox package until the Monaco Firefox loading-path item is completed; the editor uses the existing textarea fallback in this validation build.
 - OAuth sync providers are deferred in the Firefox validation package because Firefox does not accept `identity` as an optional permission. Treat WebDAV as the only in-scope sync provider until a dedicated Firefox OAuth permission pass lands.
 

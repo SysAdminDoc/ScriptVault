@@ -68,6 +68,12 @@ describe('Firefox AMO validation gate', () => {
     expect(firefoxSmoke).toContain("action: 'importAll'");
     expect(firefoxSmoke).toContain('timestampsPreserved');
     expect(firefoxSmoke).toContain('jsonTimestampsPreserved');
+    expect(firefoxSmoke).toContain('async function storageAndTrashSmoke');
+    expect(firefoxSmoke).toContain('script_firefox_quota_');
+    expect(firefoxSmoke).toContain("action: 'getStorageUsage'");
+    expect(firefoxSmoke).toContain("action: 'restoreFromTrash'");
+    expect(firefoxSmoke).toContain('restartFirefoxSession');
+    expect(firefoxSmoke).toContain('firefoxProfileRestarted');
     expect(firefoxSmoke).toContain('ranOnTargetPage: runResult.ok');
     expect(firefoxSmoke).toContain('scriptvault-firefox-v${version}.zip');
   });

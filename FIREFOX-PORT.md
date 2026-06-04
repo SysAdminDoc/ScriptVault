@@ -55,13 +55,16 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 
 **Goal:** existing-Chrome-user data import path + Firefox-specific storage behavior validated.
 
-- [ ] **`unlimitedStorage` + `storage.local` quota.** Firefox has different IDB quotas than Chrome. Validate the 26-script test fixture still fits.
+- [x] **`unlimitedStorage` + `storage.local` quota.** Firefox has different IDB quotas than Chrome. Validate the 26-script test fixture still fits.
+  - **Shipped 2026-06-04:** `npm run smoke:firefox` imports a 26-script Firefox quota fixture, confirms every `script_firefox_quota_*` ID is restored, and verifies `getStorageUsage` returns level `ok` after import.
 - [x] **Import JSON/ZIP backups** from a Chrome export into the Firefox build. No data loss, metadata preserved, `updatedAt` intact.
   - **Shipped 2026-06-04:** `npm run smoke:firefox` now imports Chrome-shaped ScriptVault JSON and ZIP fixtures into the Firefox package and verifies metadata, disabled state, GM storage values, `createdAt`, and `updatedAt`.
 - [x] **Cross-browser ID strategy.** Script IDs are generated via `generateId()` — confirm they're opaque and won't collide with Chrome IDs on re-import.
   - **Shipped 2026-06-04:** ScriptVault ZIP exports include safe `scriptId` metadata plus `scriptVault` timestamp/position metadata. Import preserves safe `script_*` IDs and allocates generated IDs for unsafe/reserved IDs; source and runtime tests cover both paths.
-- [ ] **Migration logic** — `modules/migration.js` runs v1.x → v2.0 migration. Confirm it's idempotent so re-importing a migrated file doesn't double-migrate.
-- [ ] **Trash recovery + undo** still works after a Firefox restart (persistent background means state survives, unlike Chrome SW).
+- [x] **Migration logic** — `modules/migration.js` runs v1.x → v2.0 migration. Confirm it's idempotent so re-importing a migrated file doesn't double-migrate.
+  - **Shipped 2026-06-04:** `tests/migration.test.js` now seeds a legacy `userscripts` record, runs migration twice, and asserts the second run does not call `chrome.storage.local.set/remove` or alter migrated state.
+- [x] **Trash recovery + undo** still works after a Firefox restart (persistent background means state survives, unlike Chrome SW).
+  - **Shipped 2026-06-04:** the Firefox smoke uses a persistent temporary Firefox profile, deletes the WebDriver session, starts Firefox again with the same profile, reinstalls the temporary add-on, and verifies trash still contains the deleted script before `restoreFromTrash` restores it.
 
 ### Phase 3 — Integrations that need per-provider work
 
@@ -185,6 +188,14 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - `exportToZip()` now writes a ScriptVault-specific `scriptVault` metadata object into each `.options.json` file with `schemaVersion`, `createdAt`, `updatedAt`, and `position`. `importFromZip()` reads that metadata, while still accepting older top-level timestamp fields and legacy Tampermonkey-compatible options.
 - `npm run smoke:firefox` now imports Chrome-shaped JSON and ZIP backup fixtures into Firefox, checks stable `script_*` IDs, restored metadata, disabled state, GM storage values, and preserved timestamps.
 - Focused verification: `npm test -- tests/runtime-import-export.test.js tests/source-backup-modules.test.js tests/firefox-package.test.js`, `node scripts/smoke-firefox-sideload.mjs --skip-package`.
+
+### 2026-06-04 — Phase 2 storage, migration, and restart data safety
+
+- Closed the remaining Phase 2 storage/data-safety rows.
+- `npm run smoke:firefox` now imports a 26-script quota fixture, checks storage usage, soft-deletes a trash fixture, restarts Firefox with the same temporary profile, reinstalls the temporary package, verifies the trash entry survived, and restores it.
+- `tests/migration.test.js` now proves legacy v1.x script migration is idempotent across repeated runs.
+- Focused verification: `node --check scripts/smoke-firefox-sideload.mjs`, `npm test -- tests/firefox-package.test.js tests/migration.test.js`, and `node scripts/smoke-firefox-sideload.mjs --skip-package` with Firefox Developer Edition 151.0b10.
+- Next Firefox-port session starts at **Phase 3 — Integrations that need per-provider work**, beginning with the WebDAV-only baseline and explicit OAuth/identity decision.
 
 ---
 

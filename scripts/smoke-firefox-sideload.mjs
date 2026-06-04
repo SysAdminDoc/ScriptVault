@@ -2,7 +2,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -231,9 +231,10 @@ async function waitForGeckodriver(baseUrl, processHandle) {
   fail('geckodriver did not become ready');
 }
 
-async function webdriverSession(baseUrl, firefox) {
+async function webdriverSession(baseUrl, firefox, profileDir = null) {
   const firefoxArgs = ['-remote-allow-system-access'];
   if (!headed) firefoxArgs.unshift('-headless');
+  if (profileDir) firefoxArgs.push('-profile', profileDir);
   const capabilities = {
     capabilities: {
       alwaysMatch: {
@@ -355,6 +356,19 @@ async function grantFirefoxUserScriptsPermission(baseUrl, sessionId) {
     fail(`Could not grant Firefox userScripts permission in headless smoke: ${value?.error || JSON.stringify(value)}`);
   }
   return value;
+}
+
+async function restartFirefoxSession(baseUrl, sessionId, firefox, packagePath, profileDir) {
+  await request(baseUrl, 'DELETE', `/session/${sessionId}`).catch(() => {});
+  await delay(1500);
+  const restartedSessionId = await webdriverSession(baseUrl, firefox, profileDir);
+  if (!restartedSessionId) fail('geckodriver did not return a WebDriver session id after Firefox restart');
+  const install = await request(baseUrl, 'POST', `/session/${restartedSessionId}/moz/addon/install`, {
+    path: packagePath,
+    temporary: true,
+  }, 60000);
+  if (install.value !== EXTENSION_ID) fail(`unexpected installed add-on id after Firefox restart: ${install.value}`);
+  return restartedSessionId;
 }
 
 async function navigate(baseUrl, sessionId, url) {
@@ -670,6 +684,110 @@ async function backupRoundTripSmoke(baseUrl, sessionId, dashboardUrl) {
   };
 }
 
+async function storageAndTrashSmoke(baseUrl, sessionId, dashboardUrl, firefox, packagePath, profileDir) {
+  await navigate(baseUrl, sessionId, dashboardUrl);
+  const bulkScripts = Array.from({ length: 26 }, (_, index) => {
+    const suffix = String(index + 1).padStart(2, '0');
+    return {
+      id: `script_firefox_quota_${suffix}`,
+      code: [
+        '// ==UserScript==',
+        `// @name Firefox Quota Fixture ${suffix}`,
+        `// @namespace scriptvault/firefox-quota/${suffix}`,
+        '// @version 1.0.0',
+        '// @match https://quota.example/*',
+        '// @grant none',
+        '// ==/UserScript==',
+        `console.log('quota ${suffix}');`,
+      ].join('\n'),
+      enabled: false,
+      position: index,
+      createdAt: 1700000100000 + index,
+      updatedAt: 1700000200000 + index,
+    };
+  });
+
+  const bulkImport = await runtimeMessage(baseUrl, sessionId, {
+    action: 'importAll',
+    data: {
+      data: {
+        version: 2,
+        exportedAt: '2026-06-04T00:00:00.000Z',
+        scripts: bulkScripts,
+      },
+      options: {
+        overwrite: true,
+        importSettings: false,
+      },
+    },
+  }, 60000);
+  if (bulkImport?.imported !== bulkScripts.length || bulkImport?.errors?.length) {
+    fail(`26-script Firefox quota fixture import failed: ${JSON.stringify(bulkImport)}`);
+  }
+
+  const afterBulkImport = await runtimeMessage(baseUrl, sessionId, { action: 'getScripts' }, 60000);
+  const importedIds = new Set((afterBulkImport?.scripts || []).map(script => script.id));
+  const missingBulkIds = bulkScripts.map(script => script.id).filter(id => !importedIds.has(id));
+  if (missingBulkIds.length > 0) {
+    fail(`26-script Firefox quota fixture missing restored ids: ${missingBulkIds.join(', ')}`);
+  }
+  const storageUsage = await runtimeMessage(baseUrl, sessionId, { action: 'getStorageUsage' }, 60000);
+  if (storageUsage?.error) fail(`getStorageUsage failed after quota fixture import: ${storageUsage.error}`);
+
+  const trashScriptId = 'script_firefox_trash_restart';
+  const trashCode = `// ==UserScript==\n// @name Firefox Trash Restart Fixture\n// @namespace scriptvault/firefox-trash\n// @version 1.0.0\n// @match https://trash.example/*\n// @grant none\n// ==/UserScript==\n\nconsole.log('trash restart');\n`;
+  const saveTrashScript = await runtimeMessage(baseUrl, sessionId, {
+    action: 'saveScript',
+    id: trashScriptId,
+    code: trashCode,
+    enabled: false,
+  }, 60000);
+  if (!saveTrashScript?.success) fail(`saveScript failed for trash restart fixture: ${JSON.stringify(saveTrashScript)}`);
+  const deleteTrashScript = await runtimeMessage(baseUrl, sessionId, { action: 'deleteScript', scriptId: trashScriptId }, 60000);
+  if (!deleteTrashScript?.success) fail(`deleteScript failed for trash restart fixture: ${JSON.stringify(deleteTrashScript)}`);
+  const trashBeforeRestart = await runtimeMessage(baseUrl, sessionId, { action: 'getTrash' }, 60000);
+  if (!(trashBeforeRestart?.trash || []).some(script => script.id === trashScriptId)) {
+    fail(`Trash restart fixture missing before Firefox restart: ${JSON.stringify(trashBeforeRestart)}`);
+  }
+
+  const restartedSessionId = await restartFirefoxSession(baseUrl, sessionId, firefox, packagePath, profileDir);
+  const refreshedDashboard = await getExtensionResource(baseUrl, restartedSessionId, 'pages/dashboard.html');
+  await navigate(baseUrl, restartedSessionId, refreshedDashboard.uri);
+  await waitFor(baseUrl, restartedSessionId, 'dashboard reload after Firefox restart', `
+    return {
+      ok: document.readyState !== 'loading'
+        && document.title === 'ScriptVault Dashboard'
+        && !!document.querySelector('#scriptsPanel'),
+      title: document.title,
+      url: location.href
+    };
+  `, 30000);
+
+  const trashAfterRestart = await runtimeMessage(baseUrl, restartedSessionId, { action: 'getTrash' }, 60000);
+  if (!(trashAfterRestart?.trash || []).some(script => script.id === trashScriptId)) {
+    fail(`Trash restart fixture missing after Firefox restart: ${JSON.stringify(trashAfterRestart)}`);
+  }
+  const restoreResult = await runtimeMessage(baseUrl, restartedSessionId, { action: 'restoreFromTrash', scriptId: trashScriptId }, 60000);
+  if (!restoreResult?.success) fail(`restoreFromTrash failed after Firefox restart: ${JSON.stringify(restoreResult)}`);
+  const restoredScript = await runtimeMessage(baseUrl, restartedSessionId, { action: 'getScript', id: trashScriptId }, 60000);
+  const restoredName = restoredScript?.metadata?.name || restoredScript?.meta?.name || '';
+  if (restoredName !== 'Firefox Trash Restart Fixture') {
+    fail(`Trash restart fixture restored with wrong metadata: ${JSON.stringify(restoredScript)}`);
+  }
+
+  return {
+    sessionId: restartedSessionId,
+    result: {
+      importedCount: bulkImport.imported,
+      storageUsageLevel: storageUsage?.level || '',
+      storageBytesUsed: storageUsage?.bytesUsed || 0,
+      firefoxProfileRestarted: true,
+      trashPersistedAfterRestart: true,
+      trashRestoredName: restoredName,
+    },
+  };
+}
+
 async function main() {
   const packageJson = await readJsonFile(resolve(ROOT, 'package.json'));
   const firefoxManifest = await readJsonFile(resolve(ROOT, 'manifest-firefox.json'));
@@ -686,6 +804,7 @@ async function main() {
   const geckodriver = findGeckodriver();
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
+  const profileDir = await mkdtemp(join(tmpdir(), 'scriptvault-firefox-profile-'));
   console.log(`Firefox: ${firefox.version.output || firefox.version.raw}`);
   console.log(`Package: ${basename(packagePath)}`);
 
@@ -710,7 +829,7 @@ async function main() {
   let sessionId = null;
   try {
     await waitForGeckodriver(baseUrl, gecko);
-    sessionId = await webdriverSession(baseUrl, firefox);
+    sessionId = await webdriverSession(baseUrl, firefox, profileDir);
     if (!sessionId) fail('geckodriver did not return a WebDriver session id');
     const install = await request(baseUrl, 'POST', `/session/${sessionId}/moz/addon/install`, {
       path: packagePath,
@@ -724,6 +843,9 @@ async function main() {
     const popupResult = await popupSmoke(baseUrl, sessionId, popup.uri);
     const scriptResult = await scriptRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
     const backupResult = await backupRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
+    const storageSmoke = await storageAndTrashSmoke(baseUrl, sessionId, dashboard.uri, firefox, packagePath, profileDir);
+    sessionId = storageSmoke.sessionId;
+    const storageResult = storageSmoke.result;
 
     console.log('Firefox sideload smoke passed.');
     console.log(JSON.stringify({
@@ -733,6 +855,7 @@ async function main() {
       popup: popupResult,
       script: scriptResult,
       backup: backupResult,
+      storage: storageResult,
     }, null, 2));
   } catch (error) {
     const tail = geckoOutput.join('').split(/\r?\n/).filter(Boolean).slice(-25).join('\n');
@@ -743,6 +866,7 @@ async function main() {
       await request(baseUrl, 'DELETE', `/session/${sessionId}`).catch(() => {});
     }
     if (!keepBrowser) gecko.kill();
+    if (!keepBrowser) await rm(profileDir, { recursive: true, force: true }).catch(() => {});
   }
 }
 

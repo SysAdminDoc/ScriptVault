@@ -79,4 +79,30 @@ describe('Migration runtime module', () => {
     });
     expect(stored.userscripts.legacy_a.installedAt).toBe(100);
   });
+
+  it('is idempotent after migrating legacy script records', async () => {
+    const Migration = createFreshMigration();
+    await chrome.storage.local.set({
+      userscripts: {
+        legacy_a: {
+          id: 'legacy_a',
+          code: 'console.log("a")',
+          metadata: { name: 'Legacy A' },
+          createdAt: 100,
+        },
+      },
+    });
+
+    await Migration.run();
+    const afterFirstRun = await chrome.storage.local.get(['userscripts', 'notificationPrefs', 'backupSchedulerSettings', 'gamification']);
+    chrome.storage.local.set.mockClear();
+    chrome.storage.local.remove.mockClear();
+
+    await Migration.run();
+
+    const afterSecondRun = await chrome.storage.local.get(['userscripts', 'notificationPrefs', 'backupSchedulerSettings', 'gamification']);
+    expect(afterSecondRun).toEqual(afterFirstRun);
+    expect(chrome.storage.local.set).not.toHaveBeenCalled();
+    expect(chrome.storage.local.remove).not.toHaveBeenCalled();
+  });
 });

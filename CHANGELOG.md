@@ -27,6 +27,12 @@ All notable changes to ScriptVault will be documented in this file.
   checks stable script IDs, metadata, disabled state, GM storage, and timestamps.
   ScriptVault ZIP exports now include `scriptVault` timestamp metadata so
   `createdAt`, `updatedAt`, and position survive cross-browser restore.
+- **Closed Firefox Phase 2 data-safety validation.** The Firefox smoke now
+  imports a 26-script quota fixture, verifies storage usage, restarts Firefox
+  with the same temporary profile, reinstalls the temporary package, confirms
+  trash survived the restart, and restores the deleted script. The migration
+  suite also proves the v1.x -> v2.0 migration is idempotent across repeated
+  runs.
 - **Cleared the high-severity `web-ext` audit path.** `web-ext` now resolves to
   the `10.3.0` line with fixed `tmp@0.2.6`, restoring the high-level npm audit
   gate.
