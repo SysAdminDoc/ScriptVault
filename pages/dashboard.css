@@ -223,6 +223,23 @@ a:hover {
   pointer-events: none;
 }
 
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--tint-blue-edge);
+  border-radius: var(--r-sm);
+  background: var(--tint-blue-soft);
+  color: var(--accent-blue);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ===== CONTENT ===== */
 .content {
   background: var(--bg-row);
@@ -757,6 +774,175 @@ input[type="checkbox"] {
 .action-btn svg {
   width: 15px;
   height: 15px;
+}
+
+/* ===== UPDATE QUEUE ===== */
+.updates-shell {
+  padding: 18px 20px 24px;
+  display: grid;
+  gap: 14px;
+}
+
+.updates-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--bg-header);
+  box-shadow: var(--shadow-sm);
+}
+
+.updates-hero h2 {
+  margin-top: 2px;
+  font-size: 18px;
+}
+
+.updates-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.updates-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.updates-summary-item {
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--bg-row);
+}
+
+.updates-summary-item span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.updates-summary-item strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.updates-summary-text {
+  color: var(--text-secondary);
+}
+
+.pending-updates-list {
+  display: grid;
+  gap: 10px;
+}
+
+.pending-update-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--bg-row);
+  box-shadow: var(--shadow-sm);
+}
+
+.pending-update-card.review-required {
+  border-color: var(--tint-yellow-edge);
+}
+
+.pending-update-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.pending-update-title {
+  min-width: 0;
+}
+
+.pending-update-title strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-update-meta,
+.pending-update-reasons,
+.pending-update-source {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.pending-update-status {
+  flex-shrink: 0;
+  padding: 3px 7px;
+  border: 1px solid var(--tint-green-edge);
+  border-radius: var(--r-sm);
+  background: var(--tint-green-soft);
+  color: var(--accent-green);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pending-update-status.review {
+  border-color: var(--tint-yellow-edge);
+  background: var(--tint-yellow-soft);
+  color: var(--accent-yellow);
+}
+
+.pending-update-diff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.pending-update-diff span {
+  padding: 3px 7px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+}
+
+.pending-update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pending-updates-empty {
+  padding: 24px;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: var(--r-md);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .updates-hero,
+  .pending-update-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .updates-actions {
+    justify-content: flex-start;
+  }
+
+  .updates-summary-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ===== EMPTY STATE ===== */

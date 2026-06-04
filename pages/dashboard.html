@@ -5609,6 +5609,7 @@
                 <button type="button" class="tm-tab" data-tab="newscript" id="tabNewScript" title="Create a new script" aria-label="Create a new script">+</button>
                 <div class="tm-tablist" role="tablist" aria-label="Dashboard sections">
                     <button type="button" class="tm-tab active" id="dashboardTabScripts" role="tab" aria-selected="true" aria-controls="scriptsPanel" tabindex="0" data-tab="scripts">Installed Userscripts</button>
+                    <button type="button" class="tm-tab" id="dashboardTabUpdates" role="tab" aria-selected="false" aria-controls="updatesPanel" tabindex="-1" data-tab="updates">Updates <span class="tab-count" id="dashboardUpdatesBadge" hidden>0</span></button>
                     <button type="button" class="tm-tab" id="dashboardTabSettings" role="tab" aria-selected="false" aria-controls="settingsPanel" tabindex="-1" data-tab="settings">Settings</button>
                     <button type="button" class="tm-tab" id="dashboardTabUtilities" role="tab" aria-selected="false" aria-controls="utilitiesPanel" tabindex="-1" data-tab="utilities">Utilities</button>
                     <button type="button" class="tm-tab" id="dashboardTabTrash" role="tab" aria-selected="false" aria-controls="trashPanel" tabindex="-1" data-tab="trash">Trash</button>
@@ -5802,6 +5803,39 @@
                         <button class="btn" id="emptyStateSecondaryAction" type="button">Import Script</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Updates Panel -->
+        <div id="updatesPanel" class="tm-panel" role="tabpanel" aria-labelledby="dashboardTabUpdates" hidden>
+            <div class="updates-shell">
+                <div class="updates-hero">
+                    <div>
+                        <div class="settings-eyebrow">Update queue</div>
+                        <h2>Updates</h2>
+                    </div>
+                    <div class="updates-actions" role="toolbar" aria-label="Update queue actions">
+                        <button type="button" class="toolbar-btn" id="btnRefreshPendingUpdates">Check Now</button>
+                        <button type="button" class="toolbar-btn primary" id="btnApplySafePendingUpdates">Apply Safe</button>
+                        <button type="button" class="toolbar-btn" id="btnClearPendingUpdates">Clear Queue</button>
+                    </div>
+                </div>
+                <div class="updates-summary-grid" aria-label="Update queue summary">
+                    <div class="updates-summary-item">
+                        <span>Queued</span>
+                        <strong id="pendingUpdatesCount">0</strong>
+                    </div>
+                    <div class="updates-summary-item">
+                        <span>Safe</span>
+                        <strong id="pendingUpdatesSafeCount">0</strong>
+                    </div>
+                    <div class="updates-summary-item">
+                        <span>Review</span>
+                        <strong id="pendingUpdatesReviewCount">0</strong>
+                    </div>
+                </div>
+                <p class="updates-summary-text" id="pendingUpdatesSummary" role="status" aria-live="polite">No queued updates.</p>
+                <div class="pending-updates-list" id="pendingUpdatesList"></div>
             </div>
         </div>
 
@@ -6044,7 +6078,7 @@
                         <label><input type="checkbox" id="settingsUpdateDisabled"> Update disabled scripts</label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsSilentUpdate" checked> Don't ask me for simple script updates</label>
+                        <label><input type="checkbox" id="settingsSilentUpdate"> Apply safe updates without review</label>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Check Interval:</span>
@@ -7168,7 +7202,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <span class="shortcut-desc">Import Script</span>
                     <span class="shortcut-key">Ctrl+/</span>
                     <span class="shortcut-desc">Focus Search</span>
-                    <span class="shortcut-key">Alt+1-6</span>
+                    <span class="shortcut-key">Alt+1-7</span>
                     <span class="shortcut-desc">Switch Tabs</span>
                     <span class="shortcut-key">Ctrl+W</span>
                     <span class="shortcut-desc">Close Script Tab</span>

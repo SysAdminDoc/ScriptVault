@@ -2,7 +2,7 @@
 // Update System — strict TypeScript migration from background.core.js
 // ============================================================================
 
-import type { Script, ScriptMeta, VersionHistoryEntry } from '../types/script';
+import type { Script, ScriptMeta, ScriptTrustReceipt, VersionHistoryEntry } from '../types/script';
 import type { Settings } from '../types/settings';
 import { fetchTextBounded } from './fetch-bounded';
 import { classifyFetchUrl, classifyResponseUrl } from './internal-host-guard';
@@ -53,6 +53,31 @@ export interface UpdateInfo {
   sourceUrl?: string;
 }
 
+export interface PendingUpdateInfo extends UpdateInfo {
+  source: string;
+  queuedAt: number;
+  checkedAt: number;
+  safeToApply: boolean;
+  reviewReasons: string[];
+  sourceIdentityChanged: boolean;
+  trustReceipt?: unknown;
+  dependencyChanges?: unknown;
+  permissionChanges?: unknown;
+  diff?: unknown;
+  sourceInfo?: unknown;
+  rollback?: unknown;
+}
+
+export interface RecentUpdateInfo {
+  id: string;
+  name: string;
+  previousVersion: string;
+  newVersion: string;
+  dependencyChanges?: ScriptTrustReceipt['dependencyChanges'];
+  permissionChanges?: ScriptTrustReceipt['permissionChanges'];
+  appliedAt: number;
+}
+
 export interface ApplyUpdateSuccess {
   success: true;
   script: Script;
@@ -82,6 +107,10 @@ export type ApplyUpdateResult = ApplyUpdateSuccess | ApplyUpdateError | ApplyUpd
 export const UpdateSystem = {
   _FETCH_TIMEOUT_MS: 15 * 1000,
   _MAX_UPDATE_BYTES: 5 * 1024 * 1024,
+  _PENDING_UPDATES_KEY: 'pendingUpdates',
+  _MAX_PENDING_UPDATES: 50,
+  _pendingUpdates: null as PendingUpdateInfo[] | null,
+  _recentUpdates: [] as RecentUpdateInfo[],
 
   async fetchUpdateCandidate(
     updateUrl: string,
@@ -317,6 +346,187 @@ export const UpdateSystem = {
     return { success: true, script };
   },
 
+  async _loadPendingUpdates(): Promise<PendingUpdateInfo[]> {
+    if (Array.isArray(this._pendingUpdates)) return this._pendingUpdates;
+    const data = await chrome.storage.local.get(this._PENDING_UPDATES_KEY);
+    const raw = data[this._PENDING_UPDATES_KEY];
+    this._pendingUpdates = Array.isArray(raw)
+      ? raw.filter((item: Partial<PendingUpdateInfo>) => item?.id && typeof item.code === 'string') as PendingUpdateInfo[]
+      : [];
+    return this._pendingUpdates;
+  },
+
+  async _savePendingUpdates(list: PendingUpdateInfo[] | null = null): Promise<PendingUpdateInfo[]> {
+    const sourceList = list || this._pendingUpdates;
+    const normalized = (Array.isArray(sourceList) ? sourceList : [])
+      .filter((item) => item?.id && typeof item.code === 'string')
+      .slice(0, this._MAX_PENDING_UPDATES);
+    this._pendingUpdates = normalized;
+    await chrome.storage.local.set({ [this._PENDING_UPDATES_KEY]: normalized });
+    return normalized.slice();
+  },
+
+  _hasAddedPermission(permissionChanges: Record<string, { added?: string[] }> = {}): boolean {
+    return ['grant', 'connect', 'match'].some((key) => {
+      const group = permissionChanges[key] || {};
+      return Array.isArray(group.added) && group.added.length > 0;
+    });
+  },
+
+  _hasRiskyDependencyChange(dependencyChanges: { require?: Array<{ change?: string; nextError?: string }> } = {}): boolean {
+    const requireChanges = dependencyChanges.require || [];
+    return requireChanges.some((change) =>
+      ['added', 'changed', 'unverified'].includes(change.change || '')
+      || !!change.nextError
+    );
+  },
+
+  _getUpdateReviewReasons(receipt: { permissionChanges?: Record<string, { added?: string[] }>; dependencyChanges?: { require?: Array<{ change?: string; nextError?: string }> } }, sourceIdentityChanged: boolean): string[] {
+    const reasons: string[] = [];
+    if (this._hasAddedPermission(receipt.permissionChanges)) {
+      reasons.push('Adds permissions or host scope');
+    }
+    if (this._hasRiskyDependencyChange(receipt.dependencyChanges)) {
+      reasons.push('Changes external dependencies');
+    }
+    if (sourceIdentityChanged) {
+      reasons.push('Changes install source');
+    }
+    return reasons;
+  },
+
+  async _buildPendingUpdate(update: UpdateInfo, source = 'manual-check'): Promise<PendingUpdateInfo | null> {
+    if (!update?.id || typeof update.code !== 'string') return null;
+    const script: Script | null = await ScriptStorage.get(update.id);
+    if (!script) return null;
+    const parsed = parseUserscript(update.code);
+    if (parsed.error !== undefined || !parsed.meta) return null;
+
+    const sourceUrl = update.sourceUrl || parsed.meta.downloadURL || parsed.meta.updateURL || '';
+    const previousSourceUrl = script.meta?.downloadURL || script.meta?.updateURL || '';
+    const sourceIdentityChanged = !!sourceUrl
+      && !!previousSourceUrl
+      && hostFromComparableUrl(sourceUrl) !== hostFromComparableUrl(previousSourceUrl);
+    const receipt = await createScriptTrustReceipt({
+      operation: 'pending-update',
+      code: update.code,
+      meta: parsed.meta,
+      sourceUrl,
+      previousScript: script,
+      fetchDependencyBody: fetchRequireScript,
+    });
+    const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged);
+    const now = Date.now();
+
+    return {
+      id: update.id,
+      name: script.meta?.name || update.name || update.id,
+      currentVersion: script.meta?.version || update.currentVersion || '',
+      newVersion: parsed.meta.version || update.newVersion || '',
+      code: update.code,
+      sourceUrl,
+      source,
+      queuedAt: now,
+      checkedAt: now,
+      safeToApply: reviewReasons.length === 0,
+      reviewReasons,
+      sourceIdentityChanged,
+      trustReceipt: receipt,
+      dependencyChanges: receipt.dependencyChanges,
+      permissionChanges: receipt.permissionChanges,
+      diff: receipt.diff,
+      sourceInfo: receipt.source,
+      rollback: {
+        ...receipt.rollback,
+        available: Array.isArray(script.versionHistory) && script.versionHistory.length > 0,
+        historyIndex: Array.isArray(script.versionHistory) && script.versionHistory.length > 0
+          ? script.versionHistory.length - 1
+          : null,
+      },
+    };
+  },
+
+  async queueUpdates(updates: UpdateInfo[] = [], { source = 'manual-check' } = {}): Promise<{ success: true; queued: number; pendingUpdates: PendingUpdateInfo[]; safeCount: number; reviewCount: number }> {
+    const incoming = Array.isArray(updates) ? updates : [];
+    const existing = await this._loadPendingUpdates();
+    const incomingIds = new Set(incoming.map((update) => update?.id).filter(Boolean));
+    const retained = existing.filter((item) => !incomingIds.has(item.id));
+    const queued: PendingUpdateInfo[] = [];
+
+    for (const update of incoming) {
+      const pending = await this._buildPendingUpdate(update, source);
+      if (pending) queued.push(pending);
+    }
+
+    const pendingUpdates = await this._savePendingUpdates([...queued, ...retained]);
+    return {
+      success: true,
+      queued: queued.length,
+      pendingUpdates,
+      safeCount: pendingUpdates.filter((item) => item.safeToApply).length,
+      reviewCount: pendingUpdates.filter((item) => !item.safeToApply).length,
+    };
+  },
+
+  async getPendingUpdates(): Promise<PendingUpdateInfo[]> {
+    return (await this._loadPendingUpdates()).slice();
+  },
+
+  async clearPendingUpdates(scriptId: string | null = null): Promise<{ success: true; cleared: number | 'all'; pendingUpdates: PendingUpdateInfo[] }> {
+    if (!scriptId) {
+      await this._savePendingUpdates([]);
+      return { success: true, cleared: 'all', pendingUpdates: [] };
+    }
+    const existing = await this._loadPendingUpdates();
+    const next = existing.filter((item) => item.id !== scriptId);
+    const pendingUpdates = await this._savePendingUpdates(next);
+    return { success: true, cleared: existing.length - next.length, pendingUpdates };
+  },
+
+  _recordRecentUpdates(entries: RecentUpdateInfo[]): void {
+    const successful = (Array.isArray(entries) ? entries : []).filter(Boolean);
+    if (successful.length === 0) return;
+    this._recentUpdates = [...successful, ...this._recentUpdates].slice(0, 20);
+  },
+
+  async applyPendingUpdate(scriptId: string, { force = false } = {}): Promise<ApplyUpdateResult> {
+    const pendingUpdates = await this._loadPendingUpdates();
+    const item = pendingUpdates.find((update) => update.id === scriptId);
+    if (!item) return { error: 'Pending update not found' };
+    const result = await this.applyUpdate(scriptId, item.code, { force, sourceUrl: item.sourceUrl || '' });
+    if (result.success) {
+      await this.clearPendingUpdates(scriptId);
+      this._recordRecentUpdates([{
+        id: item.id,
+        name: item.name,
+        previousVersion: item.currentVersion,
+        newVersion: item.newVersion,
+        dependencyChanges: result.script.trustReceipt?.dependencyChanges || item.dependencyChanges as ScriptTrustReceipt['dependencyChanges'],
+        permissionChanges: result.script.trustReceipt?.permissionChanges || item.permissionChanges as ScriptTrustReceipt['permissionChanges'],
+        appliedAt: Date.now(),
+      }]);
+    }
+    return result;
+  },
+
+  async applySafePendingUpdates(scriptIds: string[] | null = null): Promise<{ success: true; applied: number; skipped: number; failed: number; results: Array<{ id: string; result: ApplyUpdateResult }>; pendingUpdates: PendingUpdateInfo[] }> {
+    const idSet = Array.isArray(scriptIds) && scriptIds.length > 0 ? new Set(scriptIds) : null;
+    const pendingUpdates = await this._loadPendingUpdates();
+    const candidates = pendingUpdates.filter((item) => item.safeToApply && (!idSet || idSet.has(item.id)));
+    const results: Array<{ id: string; result: ApplyUpdateResult }> = [];
+    for (const item of candidates) {
+      results.push({ id: item.id, result: await this.applyPendingUpdate(item.id, { force: false }) });
+    }
+    return {
+      success: true,
+      applied: results.filter((entry) => entry.result.success).length,
+      skipped: results.filter((entry) => entry.result.skipped).length,
+      failed: results.filter((entry) => entry.result.error).length,
+      results,
+      pendingUpdates: await this.getPendingUpdates(),
+    };
+  },
+
   /**
    * Run a full auto-update cycle: check all scripts and apply any available updates.
    */
@@ -325,20 +535,35 @@ export const UpdateSystem = {
     if (!settings.autoUpdate) return;
 
     const updates: UpdateInfo[] = await this.checkForUpdates();
-    // Apply all pending updates in parallel — each applyUpdate is independent
-    const results: PromiseSettledResult<ApplyUpdateResult>[] = await Promise.allSettled(
-      updates.map((update: UpdateInfo) => this.applyUpdate(update.id, update.code, { sourceUrl: update.sourceUrl })),
-    );
-    const failed: PromiseRejectedResult[] = results.filter(
-      (r): r is PromiseRejectedResult => r.status === 'rejected',
-    );
-    if (failed.length > 0) {
-      console.error(
-        '[ScriptVault] Auto-update failures:',
-        failed.map((r: PromiseRejectedResult) => (r.reason as Error)?.message || r.reason),
-      );
+    const queueResult = await this.queueUpdates(updates, { source: 'auto-check' });
+    if (settings.autoUpdateMode === 'apply-safe') {
+      await this.applySafePendingUpdates(updates.map((update) => update.id));
+    }
+    if (queueResult.queued > 0 && settings.notifyOnUpdate) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'images/icon128.png',
+        title: `${queueResult.queued} update${queueResult.queued === 1 ? '' : 's'} ready`,
+        message: 'Open ScriptVault to review queued updates',
+      });
     }
 
     await SettingsManager.set('lastUpdateCheck', Date.now());
   },
+
+  getRecentUpdates(): RecentUpdateInfo[] {
+    return this._recentUpdates.slice();
+  },
+
+  clearRecentUpdates(): void {
+    this._recentUpdates = [];
+  },
 };
+
+function hostFromComparableUrl(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch (_) {
+    return '';
+  }
+}

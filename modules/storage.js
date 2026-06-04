@@ -65,6 +65,7 @@ const StorageModule = (() => {
     editorShowInvisibles: false,
     editorKeyMap: "default",
     autoUpdate: true,
+    autoUpdateMode: "notify",
     updateInterval: 864e5,
     lastUpdateCheck: 0,
     syncEnabled: false,

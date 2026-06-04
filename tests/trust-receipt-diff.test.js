@@ -293,8 +293,8 @@ describe('dashboard trust-change review wiring', () => {
   const background = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 
   it('surfaces update trust diffs in the recent-updates banner', () => {
-    expect(background).toContain('dependencyChanges: r.value.script?.trustReceipt?.dependencyChanges');
-    expect(background).toContain('permissionChanges: r.value.script?.trustReceipt?.permissionChanges');
+    expect(background).toContain('dependencyChanges: result.script?.trustReceipt?.dependencyChanges');
+    expect(background).toContain('permissionChanges: result.script?.trustReceipt?.permissionChanges');
     expect(dashboard).toContain('Review changes');
     expect(dashboard).toContain('showRecentUpdateChangesModal');
     expect(dashboard).toContain('renderDependencyChangeRows');

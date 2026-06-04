@@ -549,6 +549,9 @@ const UpdateSystem = {
   _MAX_BACKOFF_EXP: 10,                 // 2^10 * 1m = ~17 hours; capped by _BACKOFF_MAX_MS
   _FETCH_TIMEOUT_MS: 15 * 1000,
   _MAX_UPDATE_BYTES: 5 * 1024 * 1024,
+  _PENDING_UPDATES_KEY: 'pendingUpdates',
+  _MAX_PENDING_UPDATES: 50,
+  _pendingUpdates: null,
 
   /** Compute the next-check timestamp for a failure-count value. */
   _nextRetryAt(failures) {
@@ -816,57 +819,236 @@ const UpdateSystem = {
   // dashboard via the `getRecentUpdates` background message. Capped at 20.
   _recentUpdates: [],
 
+  async _loadPendingUpdates() {
+    if (Array.isArray(this._pendingUpdates)) return this._pendingUpdates;
+    const data = await chrome.storage.local.get(this._PENDING_UPDATES_KEY);
+    this._pendingUpdates = Array.isArray(data[this._PENDING_UPDATES_KEY])
+      ? data[this._PENDING_UPDATES_KEY].filter(item => item && item.id && typeof item.code === 'string')
+      : [];
+    return this._pendingUpdates;
+  },
+
+  async _savePendingUpdates(list = this._pendingUpdates) {
+    const normalized = (Array.isArray(list) ? list : [])
+      .filter(item => item && item.id && typeof item.code === 'string')
+      .slice(0, this._MAX_PENDING_UPDATES);
+    this._pendingUpdates = normalized;
+    await chrome.storage.local.set({ [this._PENDING_UPDATES_KEY]: normalized });
+    return normalized.slice();
+  },
+
+  _hasAddedPermission(permissionChanges = {}) {
+    return ['grant', 'connect', 'match'].some(key => {
+      const group = permissionChanges[key] || {};
+      return Array.isArray(group.added) && group.added.length > 0;
+    });
+  },
+
+  _hasRiskyDependencyChange(dependencyChanges = {}) {
+    const requireChanges = dependencyChanges.require || [];
+    return requireChanges.some(change =>
+      ['added', 'changed', 'unverified'].includes(change.change)
+      || change.nextError
+    );
+  },
+
+  _getUpdateReviewReasons(receipt, sourceIdentityChanged) {
+    const reasons = [];
+    if (this._hasAddedPermission(receipt.permissionChanges)) {
+      reasons.push('Adds permissions or host scope');
+    }
+    if (this._hasRiskyDependencyChange(receipt.dependencyChanges)) {
+      reasons.push('Changes external dependencies');
+    }
+    if (sourceIdentityChanged) {
+      reasons.push('Changes install source');
+    }
+    return reasons;
+  },
+
+  async _buildPendingUpdate(update, source = 'manual-check') {
+    if (!update?.id || typeof update.code !== 'string') return null;
+    const script = await ScriptStorage.get(update.id);
+    if (!script) return null;
+    const parsed = parseUserscript(update.code);
+    if (parsed.error) return null;
+
+    const sourceUrl = update.sourceUrl || parsed.meta.downloadURL || parsed.meta.updateURL || '';
+    const nextSource = classifyInstallSource(sourceUrl);
+    const previousSource = script.installSource || classifyInstallSource(script.meta?.downloadURL || script.meta?.updateURL || '');
+    const sourceIdentityChanged = !!previousSource?.id
+      && previousSource.id !== 'local'
+      && nextSource.id !== 'local'
+      && previousSource.id !== nextSource.id;
+    const receipt = await createScriptTrustReceipt({
+      operation: 'pending-update',
+      code: update.code,
+      meta: parsed.meta,
+      sourceUrl,
+      previousScript: script,
+      fetchDependencyBody: fetchRequireScript
+    });
+    const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged);
+    const now = Date.now();
+
+    return {
+      id: update.id,
+      name: script.meta?.name || update.name || update.id,
+      currentVersion: script.meta?.version || update.currentVersion || '',
+      newVersion: parsed.meta.version || update.newVersion || '',
+      code: update.code,
+      sourceUrl,
+      source,
+      queuedAt: now,
+      checkedAt: now,
+      safeToApply: reviewReasons.length === 0,
+      reviewReasons,
+      sourceIdentityChanged,
+      installSource: nextSource,
+      previousInstallSource: previousSource,
+      trustReceipt: receipt,
+      dependencyChanges: receipt.dependencyChanges || { require: [] },
+      permissionChanges: receipt.permissionChanges || null,
+      diff: receipt.diff || null,
+      sourceInfo: receipt.source || null,
+      rollback: {
+        ...(receipt.rollback || {}),
+        available: Array.isArray(script.versionHistory) && script.versionHistory.length > 0,
+        historyIndex: Array.isArray(script.versionHistory) && script.versionHistory.length > 0
+          ? script.versionHistory.length - 1
+          : null
+      }
+    };
+  },
+
+  async queueUpdates(updates = [], { source = 'manual-check' } = {}) {
+    const incoming = Array.isArray(updates) ? updates : [];
+    const existing = await this._loadPendingUpdates();
+    const incomingIds = new Set(incoming.map(update => update?.id).filter(Boolean));
+    const retained = existing.filter(item => !incomingIds.has(item.id));
+    const queued = [];
+
+    for (const update of incoming) {
+      try {
+        const pending = await this._buildPendingUpdate(update, source);
+        if (pending) queued.push(pending);
+      } catch (error) {
+        console.warn('[ScriptVault] Failed to queue update:', update?.name || update?.id, error?.message || error);
+      }
+    }
+
+    const pendingUpdates = await this._savePendingUpdates([...queued, ...retained]);
+    return {
+      success: true,
+      queued: queued.length,
+      pendingUpdates,
+      safeCount: pendingUpdates.filter(item => item.safeToApply).length,
+      reviewCount: pendingUpdates.filter(item => !item.safeToApply).length
+    };
+  },
+
+  async getPendingUpdates() {
+    return (await this._loadPendingUpdates()).slice();
+  },
+
+  async clearPendingUpdates(scriptId = null) {
+    if (!scriptId) {
+      await this._savePendingUpdates([]);
+      return { success: true, cleared: 'all', pendingUpdates: [] };
+    }
+    const existing = await this._loadPendingUpdates();
+    const next = existing.filter(item => item.id !== scriptId);
+    const pendingUpdates = await this._savePendingUpdates(next);
+    return { success: true, cleared: existing.length - next.length, pendingUpdates };
+  },
+
+  _recordRecentUpdates(entries) {
+    const successful = (Array.isArray(entries) ? entries : []).filter(Boolean);
+    if (successful.length === 0) return;
+    this._recentUpdates = [...successful, ...this._recentUpdates].slice(0, 20);
+  },
+
+  async applyPendingUpdate(scriptId, { force = false } = {}) {
+    const pendingUpdates = await this._loadPendingUpdates();
+    const item = pendingUpdates.find(update => update.id === scriptId);
+    if (!item) return { error: 'Pending update not found' };
+
+    const result = await this.applyUpdate(scriptId, item.code, { force, sourceUrl: item.sourceUrl || '' });
+    if (result?.success) {
+      await this.clearPendingUpdates(scriptId);
+      this._recordRecentUpdates([{
+        id: item.id,
+        name: item.name,
+        previousVersion: item.currentVersion,
+        newVersion: item.newVersion,
+        dependencyChanges: result.script?.trustReceipt?.dependencyChanges || item.dependencyChanges || { require: [] },
+        permissionChanges: result.script?.trustReceipt?.permissionChanges || item.permissionChanges || null,
+        appliedAt: Date.now()
+      }]);
+    }
+    return result;
+  },
+
+  async applySafePendingUpdates(scriptIds = null) {
+    const idSet = Array.isArray(scriptIds) && scriptIds.length > 0 ? new Set(scriptIds) : null;
+    const pendingUpdates = await this._loadPendingUpdates();
+    const candidates = pendingUpdates.filter(item => item.safeToApply && (!idSet || idSet.has(item.id)));
+    const results = [];
+
+    for (const item of candidates) {
+      try {
+        results.push({
+          id: item.id,
+          result: await this.applyPendingUpdate(item.id, { force: false })
+        });
+      } catch (error) {
+        results.push({ id: item.id, result: { error: error?.message || 'Update failed' } });
+      }
+    }
+
+    const applied = results.filter(entry => entry.result?.success).length;
+    const skipped = results.filter(entry => entry.result?.skipped).length;
+    const failed = results.filter(entry => entry.result?.error).length;
+    return {
+      success: true,
+      applied,
+      skipped,
+      failed,
+      results,
+      pendingUpdates: await this.getPendingUpdates()
+    };
+  },
+
   async autoUpdate() {
     const settings = await SettingsManager.get();
     if (!settings.autoUpdate) return;
 
     const updates = await this.checkForUpdates();
-    // Apply all pending updates in parallel — each applyUpdate is independent
-    const results = await Promise.allSettled(updates.map(update => this.applyUpdate(update.id, update.code, { sourceUrl: update.sourceUrl })));
-    const failed = results.filter(r => r.status === 'rejected');
-    if (failed.length > 0) {
-      console.error('[ScriptVault] Auto-update failures:', failed.map(r => r.reason?.message || r.reason));
+    const queueResult = await this.queueUpdates(updates, { source: 'auto-check' });
+    let applyResult = null;
+    if (settings.autoUpdateMode === 'apply-safe') {
+      applyResult = await this.applySafePendingUpdates(updates.map(update => update.id));
     }
 
-    // Aggregate successful updates for in-app surfacing + a single summary
-    // OS notification (only fired when the user opted in via notifyOnUpdate).
-    const successful = [];
-    results.forEach((r, idx) => {
-      if (r.status === 'fulfilled' && r.value?.success && updates[idx]) {
-        successful.push({
-          id: updates[idx].id,
-          name: updates[idx].name,
-          previousVersion: updates[idx].currentVersion,
-          newVersion: updates[idx].newVersion,
-          dependencyChanges: r.value.script?.trustReceipt?.dependencyChanges || { require: [] },
-          permissionChanges: r.value.script?.trustReceipt?.permissionChanges || null,
-          appliedAt: Date.now()
+    const pendingAfter = applyResult?.pendingUpdates || queueResult.pendingUpdates;
+    const reviewCount = pendingAfter.filter(item => updates.some(update => update.id === item.id)).length;
+    const appliedCount = applyResult?.applied || 0;
+    if ((queueResult.queued > 0 || appliedCount > 0) && settings.notifyOnUpdate) {
+      const title = appliedCount > 0
+        ? `${appliedCount} safe update${appliedCount === 1 ? '' : 's'} applied`
+        : `${queueResult.queued} update${queueResult.queued === 1 ? '' : 's'} ready`;
+      const messageParts = [];
+      if (reviewCount > 0) messageParts.push(`${reviewCount} waiting in the Updates queue`);
+      if (appliedCount > 0) messageParts.push(`${appliedCount} installed`);
+      const message = messageParts.join(', ') || 'Open ScriptVault to review updates';
+      try {
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'images/icon128.png',
+          title,
+          message
         });
-      }
-    });
-    if (successful.length > 0) {
-      // Push onto the ring (newest first), cap at 20.
-      this._recentUpdates = [...successful, ...this._recentUpdates].slice(0, 20);
-
-      if (settings.notifyOnUpdate) {
-        const title = successful.length === 1
-          ? 'Script Updated'
-          : `${successful.length} scripts updated`;
-        // Compact message body: list up to 3 names then "+N more".
-        const names = successful.slice(0, 3).map(s => `${s.name} v${s.newVersion}`);
-        const overflow = successful.length - names.length;
-        const message = overflow > 0
-          ? `${names.join(', ')} (+${overflow} more)`
-          : names.join(', ');
-        try {
-          chrome.notifications.create({
-            type: 'basic',
-            iconUrl: 'images/icon128.png',
-            title,
-            message
-          });
-        } catch (_e) { /* notifications may be disabled; non-fatal */ }
-      }
+      } catch (_e) { /* notifications may be disabled; non-fatal */ }
     }
 
     await SettingsManager.set('lastUpdateCheck', Date.now());
@@ -2639,6 +2821,25 @@ async function handleMessage(message, sender) {
       // Updates
       case 'checkUpdates':
         return await UpdateSystem.checkForUpdates(data?.scriptId);
+
+      case 'queueUpdates': {
+        const updates = Array.isArray(data?.updates)
+          ? data.updates
+          : await UpdateSystem.checkForUpdates(data?.scriptId || null);
+        return await UpdateSystem.queueUpdates(updates, { source: data?.source || 'manual-check' });
+      }
+
+      case 'getPendingUpdates':
+        return await UpdateSystem.getPendingUpdates();
+
+      case 'clearPendingUpdates':
+        return await UpdateSystem.clearPendingUpdates(data?.scriptId || null);
+
+      case 'applyPendingUpdate':
+        return await UpdateSystem.applyPendingUpdate(data.scriptId, { force: data?.force === true });
+
+      case 'applySafePendingUpdates':
+        return await UpdateSystem.applySafePendingUpdates(data?.scriptIds || null);
 
       // Phase 12.10 — recently-applied updates for the in-app dashboard banner.
       case 'getRecentUpdates':
@@ -4737,7 +4938,8 @@ async function handleMessage(message, sender) {
         const dashUrl = chrome.runtime.getURL('pages/dashboard.html');
         const scriptParam = data.scriptId ? `#script_${encodeURIComponent(data.scriptId)}` : '';
         const newParam = data.newScript ? '#new_script' : '';
-        await chrome.tabs.create({ url: dashUrl + (scriptParam || newParam) });
+        const tabParam = data.tab ? `#tab=${encodeURIComponent(data.tab)}` : '';
+        await chrome.tabs.create({ url: dashUrl + (scriptParam || newParam || tabParam) });
         return { success: true };
       }
 

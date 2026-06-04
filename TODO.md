@@ -36,10 +36,11 @@
 
 ## Phase C — Pending update inbox queue (P0)
 
-- [ ] **C-1** Build global pending-update inbox queue UI
+- [x] **C-1** Build global pending-update inbox queue UI (2026-06-03)
   - Evidence: RESEARCH_FEATURE_PLAN.md New Feature 2 (partial); PASS2 NF-8.
   - Touches: `background.core.js` `_recentUpdates` ring + new `_pendingUpdates`; `pages/dashboard.js` Updates tab; `pages/popup.js` chip; `pages/sidepanel.js` chip.
   - Acceptance: auto-update default is "notify only" (settings change); bulk update applies to safe categories only; all other updates land in a queue with diff/permissions/source/rollback button.
+  - Verification: `npm run check` (89 files / 1127 tests), `npm run ts-runtime:check`, `npm run ts-source:check`, `npm run store-copy:check`, `node --check background.js pages/dashboard.js pages/popup.js pages/sidepanel.js`.
 
 ## Phase D — Code-level small parity / drift items
 
@@ -151,6 +152,7 @@
 | 2026-05-24 | D | D-1, D-2, D-3, D-4, D-6 | 6a95dde |
 | 2026-05-24 | B | B-1 | cc59980 |
 | 2026-05-24 | E | E-1 | 4560ff9 |
-| 2026-05-24 | B | B-2 | next commit |
+| 2026-05-24 | B | B-2 | 38a6b8f |
+| 2026-06-03 | C | C-1 | feat: queue script updates for review |
 
 (Append a row each time work lands.)

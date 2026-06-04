@@ -750,6 +750,21 @@
             font-size: 12px;
         }
 
+        .menu-item-badge {
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            border: 1px solid rgba(96, 165, 250, 0.32);
+            border-radius: var(--popup-radius-control);
+            background: rgba(96, 165, 250, 0.12);
+            color: #93c5fd;
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 16px;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+
         .menu-item-arrow {
             color: var(--popup-text-dim);
         }
@@ -1278,6 +1293,7 @@
         <div class="submenu" id="utilitiesSubmenu" aria-hidden="true" hidden role="group" aria-label="Utility actions">
             <button class="menu-item" id="btnCheckUpdates" type="button">
                 <span class="menu-item-text">Update Userscripts</span>
+                <span class="menu-item-badge" id="pendingUpdatesBadge" hidden>0</span>
             </button>
             <button class="menu-item" id="btnBlacklistDomain" type="button">
                 <span class="menu-item-text">Do not run on this domain</span>

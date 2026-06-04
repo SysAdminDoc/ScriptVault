@@ -58,8 +58,9 @@ Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state, `window.close`
 
 - **Auto-detect installation** &mdash; Navigate to any `.user.js` URL
 - **One-click toggle** &mdash; Enable/disable scripts individually or globally
-- **Auto-updates** &mdash; Configurable update intervals with notifications
-- **Per-script update check** &mdash; Check and apply updates for individual scripts inline
+- **Auto-updates** &mdash; Configurable update intervals that default to notify-only queued review
+- **Update inbox** &mdash; Review pending updates with diff, permission, source, and rollback context before install
+- **Per-script update check** &mdash; Check and queue updates for individual scripts inline
 - **Version tracking** &mdash; Installed vs. available version comparison
 - **Tags & search** &mdash; Organize and filter scripts by name, description, or metadata
 - **Popup quick-edit** &mdash; Click any script in the toolbar popup to jump straight into the editor
@@ -75,7 +76,7 @@ Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state, `window.close`
 - **Library browser** &mdash; Search and add CDN libraries (`@require`) from cdnjs directly in the editor
 - **Advanced filters** &mdash; Filter scripts by grant type, error status, update URL, scope breadth, or tags
 - **Code snippets** &mdash; Insert GM API templates directly from the editor toolbar
-- **Keyboard shortcuts** &mdash; Ctrl+N new, Alt+1-5 switch tabs, Ctrl+W close tab, Ctrl+Tab cycle tabs
+- **Keyboard shortcuts** &mdash; Ctrl+N new, Alt+1-7 switch tabs, Ctrl+W close tab, Ctrl+Tab cycle tabs
 - **Script pinning** &mdash; Pin favorite scripts to the top of the list
 - **Pattern tester** &mdash; Test any URL to see which scripts would run on it
 - **Activity log** &mdash; Timestamped log of all installs, updates, and errors
@@ -251,7 +252,7 @@ English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portug
 - **Storage Quota Manager** &mdash; Auto-cleanup when approaching Chrome's 10MB limit
 
 #### Quality & Testing
-- **600+ Vitest Tests** &mdash; Coverage for parser, utilities, storage, update flows, UI modules, accessibility, and security boundaries
+- **1100+ Vitest Tests** &mdash; Coverage for parser, utilities, storage, update flows, UI modules, accessibility, and security boundaries
 - **JSDoc Type Annotations** &mdash; @ts-check compatible on critical functions
 - **esbuild Build System** &mdash; Modern bundler with minification and source maps
 - **Accessibility (WCAG 2.1 AA)** &mdash; ARIA labels, focus trapping, high contrast, reduced motion

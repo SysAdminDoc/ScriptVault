@@ -28,6 +28,7 @@ export interface Settings {
 
   // Updates
   autoUpdate: boolean;
+  autoUpdateMode: 'notify' | 'apply-safe';
   updateInterval: number;
   lastUpdateCheck: number;
 
