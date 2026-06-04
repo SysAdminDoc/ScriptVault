@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-03 — GM API ambient declarations
+
+- **Generated TypeScript declarations for userscripts.** `scripts/generate-gm-types.mjs`
+  now writes `lib/scriptvault.d.ts` with ambient GM/GM_* declarations for the
+  built ScriptVault runtime, including notification handles, cookie/audio APIs,
+  resource helpers, tab state, `GM_webRequest`, and `window.onurlchange`.
+- **Build and package paths keep declarations current.** The background build
+  regenerates the declaration file, `npm run gm-types:check` fails on drift,
+  and the Chrome package include list ships `lib/scriptvault.d.ts`.
+- **Typecheck coverage added.** `tests/gm-types.test.js` compiles a temporary
+  TypeScript userscript against the generated declarations and verifies the CWS
+  include path.
+
 ### 2026-06-03 — Sync tombstone resurrection drill
 
 - **Added a deletion-resurrection regression drill.** The cloud-sync source

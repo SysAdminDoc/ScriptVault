@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { build } from "esbuild";
+import { generateGmTypes } from "./scripts/generate-gm-types.mjs";
 import { generateTsRuntimeModules } from "./scripts/generate-ts-runtime-modules.mjs";
 
 const ROOT = resolve(import.meta.dirname || ".");
@@ -66,6 +67,7 @@ async function buildBackground() {
   const settingsDefaults = readJson("src/config/settings-defaults.json");
   console.log(`Building background.js v${version}${production ? " (production)" : ""}...`);
   await generateTsRuntimeModules({ rootDir: ROOT });
+  await generateGmTypes({ rootDir: ROOT });
 
   const separator = "\n";
 

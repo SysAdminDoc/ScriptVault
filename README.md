@@ -50,9 +50,11 @@ Full Greasemonkey/Tampermonkey API compatibility with promise-based `GM.*` async
 | `GM_setValues` | | `GM_addElement` | `GM_getResourceURL` |
 | `GM_deleteValues` | `GM_head` | `GM_loadScript` | `GM_cookie` |
 | `GM_addValueChangeListener` | | `GM_audio` | `GM_focusTab` |
-| `GM_removeValueChangeListener` | | | `GM_closeTab` |
+| `GM_removeValueChangeListener` | | | |
 
 Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state, `window.close`, `window.focus`, `window.onurlchange` grants, `@top-level-await`, `@delay`, and `@nodownload` support.
+
+TypeScript userscripts can reference `lib/scriptvault.d.ts` for generated ambient declarations that match ScriptVault's GM API surface.
 
 ### Script Management
 
@@ -508,6 +510,7 @@ ScriptVault/
 │   └── monaco-adapter.js      # CodeMirror-to-Monaco API bridge
 ├── lib/
 │   ├── codemirror/            # CodeMirror (lint only)
+│   ├── scriptvault.d.ts       # Generated GM API ambient declarations
 │   ├── acorn.min.js           # Acorn JS parser for AST analysis
 │   ├── diff.min.js            # diff.js for 3-way merge
 │   └── fflate.js              # ZIP compression

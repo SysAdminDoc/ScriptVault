@@ -83,10 +83,11 @@
   - Verification: `npm run check` (89 files / 1128 tests), `npm test -- tests/source-cloud-sync.test.js`, `npm run readme:check`.
 - [x] **E-3** Implement or remove README "Browser Sync" provider claim *(folded into A-1; verified 2026-06-03)*
   - Verification: `rg -n "Browser Sync|browser sync" README.md` returns no README hits; `npm run readme:check`.
-- [ ] **E-4** Generate `gm-api.d.ts` ambient declarations
+- [x] **E-4** Generate `gm-api.d.ts` ambient declarations (2026-06-03)
   - Evidence: PASS2 NF-13.
   - Touches: `scripts/generate-gm-types.mjs`, `lib/scriptvault.d.ts`, `build.sh`.
   - Acceptance: generated `.d.ts` is built into CWS ZIP; sample TS userscript typechecks.
+  - Verification: `npm run gm-types:check`, `npm test -- tests/gm-types.test.js`, `npm run build:bg`, `npm run build`, `BASH_PATH="C:\Program Files\Git\bin\bash.exe" node scripts/run-bash.mjs build.sh`; `tar -tf ScriptVault-v3.11.0.zip` confirms `lib/scriptvault.d.ts`.
 - [ ] **E-5** Playwright E2E for install + update + restore + sync flows
   - Evidence: PASS2 NF-16; ROADMAP 10.3.
   - Touches: `tests/e2e/`, `package.json`, `.github/workflows/ci.yml`.
@@ -160,5 +161,6 @@
 | 2026-06-03 | D | D-5 | feat: show trash auto-purge dates |
 | 2026-06-03 | E | E-2 | test: cover sync tombstone resurrection |
 | 2026-06-03 | E | E-3 | docs: close folded browser sync TODO |
+| 2026-06-03 | E | E-4 | feat: generate GM ambient declarations |
 
 (Append a row each time work lands.)
