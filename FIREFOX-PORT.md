@@ -86,13 +86,20 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 
 ### Phase 4 — Polish + parity
 
-- [ ] **Hide broken UI.** Any feature not available on Firefox should have its entry point hidden, not just throw on click.
-- [ ] **Firefox compat shim** (`pages/dashboard-firefox-compat.js`) already exists — audit what it does today, expand as needed.
-- [ ] **Dashboard "About" panel** — show a "Firefox build" or "Chrome build" indicator with the current browser's version string.
-- [ ] **Icon adjustments.** Firefox uses the `action` icon slightly differently; make sure it renders in the toolbar at all Firefox zoom levels.
-- [ ] **Popup width** — Firefox has a stricter popup sizing model; confirm the 360 px popup doesn't get cut off.
-- [ ] **Keyboard shortcuts** — the `commands` block already uses `Alt+Shift+*`, which works on both. Verify no Firefox conflicts.
-- [ ] **Dark / light theme** — verify both themes render correctly on `about:addons`-injected chrome.
+- [x] **Hide broken UI.** Any feature not available on Firefox should have its entry point hidden, not just throw on click.
+  - **Shipped 2026-06-04:** the dashboard now applies a runtime provider gate for Firefox builds. OAuth and S3 sync/cloud provider options are hidden and disabled in both Settings and Utilities, while WebDAV remains selectable.
+- [x] **Firefox compat shim** (`pages/dashboard-firefox-compat.js`) already exists — audit what it does today, expand as needed.
+  - **Shipped 2026-06-04:** the compatibility shim now exposes `getRuntimeDescriptor()` with browser name/version, build label, extension version, and supported sync providers. Firefox gets a WebDAV-only provider list; Chromium keeps the full provider list.
+- [x] **Dashboard "About" panel** — show a "Firefox build" or "Chrome build" indicator with the current browser's version string.
+  - **Shipped 2026-06-04:** the About panel now shows a runtime build line such as `Firefox build - Firefox 151.0`, and the dashboard root carries `data-browser-build="firefox"` / `"chrome"`.
+- [x] **Icon adjustments.** Firefox uses the `action` icon slightly differently; make sure it renders in the toolbar at all Firefox zoom levels.
+  - **Shipped 2026-06-04:** static Firefox package tests pin the complete `icons` set at 16/32/48/128 px, verify the PNG dimensions, and confirm the Firefox `action.default_icon` uses the 16 px and 32 px assets Firefox expects for toolbar scaling.
+- [x] **Popup width** — Firefox has a stricter popup sizing model; confirm the 360 px popup doesn't get cut off.
+  - **Shipped 2026-06-04:** `npm run smoke:firefox` now checks the packaged popup body renders at 360 px with `scrollWidth <= width`.
+- [x] **Keyboard shortcuts** — the `commands` block already uses `Alt+Shift+*`, which works on both. Verify no Firefox conflicts.
+  - **Shipped 2026-06-04:** Firefox package tests pin the three unique shortcuts: `Alt+Shift+S`, `Alt+Shift+D`, and `Alt+Shift+E`.
+- [x] **Dark / light theme** — verify both themes render correctly on `about:addons`-injected chrome.
+  - **Shipped 2026-06-04:** `npm run smoke:firefox` now flips dashboard and popup dark/light theme roots in the packaged extension pages and verifies the expected background/text/accent CSS variables are present.
 
 ### Phase 5 — AMO submission
 
@@ -122,7 +129,7 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 | 4 | Per-script `worldId` is Chrome 133+ only | `background.core.js`, `src/background/registration.ts` | **Mitigated** — guarded behind Chromium 133+ detection |
 | 5 | Google / Dropbox / OneDrive PKCE redirect URI plus `identity` permission | `modules/sync-providers.js`, `modules/sync-easycloud.js`, `manifest-firefox.json` | Medium — deferred; WebDAV-only for validation gate |
 | 6 | Chrome CRX3 format irrelevant on Firefox | `build/pack-release.py` | Low — separate build path needed anyway |
-| 7 | `navigator.userAgent` / `runtime.getBrowserInfo` detection | shared modules | Low — wrapper helper |
+| 7 | `navigator.userAgent` / `runtime.getBrowserInfo` detection | shared modules | **Mitigated** — dashboard runtime descriptor is centralized in `dashboard-firefox-compat.js` with a UA fallback |
 
 ## Open decisions for the user
 
@@ -214,6 +221,15 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - Runtime hardening follow-up: `@require` and provenance fetches no longer force `mode: 'cors'`, matching extension host-permission semantics; registration now stores `_failedRequireErrors` beside `_failedRequires` for actionable dependency diagnostics.
 - Focused verification: `node --check scripts/smoke-firefox-sideload.mjs`, `npm test -- tests/firefox-package.test.js tests/source-hardening-parity.test.js tests/internal-host-guard.test.js tests/core-flows.test.js`, and `npm run smoke:firefox` with Firefox Developer Edition 151.0b10.
 - Next Firefox-port session starts Phase 4 polish and compatibility UI validation, then Phase 5 AMO submission prep.
+
+### 2026-06-04 — Phase 4 polish and compatibility UI validation
+
+- Closed the Firefox Phase 4 polish rows. `dashboard-firefox-compat.js` now reports a runtime descriptor with browser/build/version and supported-provider metadata; `pages/dashboard.js` uses it to expose a Firefox/Chrome About-panel build indicator and to hide/disable unsupported Firefox sync provider choices.
+- Firefox v1 remains WebDAV-only in the UI. Settings and Utilities provider selects now hide Google Drive, Dropbox, OneDrive, and S3 in Firefox builds, while Chrome keeps the full provider list.
+- `npm run smoke:firefox` now verifies the packaged dashboard reports `Firefox build - Firefox 151.0`, unsupported provider options are hidden/disabled, dashboard and popup dark/light CSS variables resolve, and the popup renders at 360 px without horizontal overflow.
+- Static Firefox package tests pin the AMO-facing command shortcuts and action icon assets/dimensions used for Firefox toolbar scaling.
+- Verification: `node --check pages/dashboard-firefox-compat.js`, `node --check pages/dashboard.js`, `node --check scripts/smoke-firefox-sideload.mjs`, `npm test -- tests/dashboard-firefox-compat.test.js tests/firefox-package.test.js`, and `npm run smoke:firefox` with Firefox Developer Edition 151.0b10.
+- Next Firefox-port session starts at **Phase 5 — AMO submission**, beginning with privacy/permissions rationale copy and the unlisted listing prep.
 
 ---
 

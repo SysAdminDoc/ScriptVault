@@ -6224,6 +6224,9 @@
                             <option value="s3">S3-compatible (AWS / R2 / MinIO / B2)</option>
                         </select>
                     </div>
+                    <div class="setting-row" id="firefoxSyncNote" hidden>
+                        <span class="utility-inline-status">Firefox build currently supports WebDAV sync only.</span>
+                    </div>
 
                     <!-- S3-compatible Settings (hidden by default) -->
                     <div id="syncS3Settings" class="sync-provider-settings" style="display:none; margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 4px;">
@@ -6778,6 +6781,9 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             <option value="onedrive">OneDrive</option>
                             <option value="webdav">WebDAV</option>
                         </select>
+                    </div>
+                    <div class="setting-row" id="firefoxCloudNote" hidden>
+                        <span class="utility-inline-status">Firefox build hides OAuth cloud providers until a dedicated identity flow ships.</span>
                     </div>
                     <div class="setting-row" id="cloudStatusRow">
                         <span class="label-text">Status:</span>
@@ -7448,7 +7454,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <div class="about-brand-copy">
                             <h2>ScriptVault</h2>
                             <p class="version" id="aboutVersion"></p>
-                            <p>A lightweight userscript manager for Chrome with a fast local control surface and a deliberate editing workspace.</p>
+                            <p class="version" id="aboutBrowserBuild"></p>
+                            <p>A lightweight userscript manager with a fast local control surface and a deliberate editing workspace.</p>
                         </div>
                     </div>
                     <div class="about-links">

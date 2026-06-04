@@ -122,6 +122,12 @@ priority section below.
   - Progress: 2026-06-04 extended `npm run smoke:firefox` with a runtime parity block. The Firefox package now adds and removes a DNR dynamic block rule, validates `@require` SRI during packaged-runtime registration using a pinned HTTPS dependency after Firefox rejects DNS-to-loopback local aliases, and exercises Ed25519 key generation, signing, verification, and tamper rejection through runtime signing messages. `@require` and provenance fetches no longer force `mode: 'cors'`, preserving extension host-permission fetch semantics, and registration now records `_failedRequireErrors` beside `_failedRequires`.
   - Verification: `node --check scripts/smoke-firefox-sideload.mjs`; `npm test -- tests/firefox-package.test.js tests/source-hardening-parity.test.js tests/internal-host-guard.test.js tests/core-flows.test.js`; `npm run smoke:firefox` with Firefox Developer Edition 151.0b10.
   - Source: FIREFOX-PORT.md Phase 3 remaining integration rows.
+- [x] P2 — Phase 4: Firefox polish and compatibility UI validation
+  - Why: Firefox v1 should hide unsupported entry points and expose clear browser/build metadata before AMO submission.
+  - Acceptance: Firefox dashboard hides unsupported sync/cloud provider entry points; About identifies Firefox/Chrome build and browser version; popup width, dark/light themes, command shortcuts, and action icons are pinned by smoke/static checks.
+  - Progress: 2026-06-04 added a Firefox compatibility runtime descriptor, wired dashboard provider gates for WebDAV-only Firefox builds, added a Firefox/Chrome About-panel build line, and extended the Firefox smoke/static tests for hidden provider options, dashboard/popup dark-light theme tokens, 360 px popup sizing, command shortcuts, and action icon dimensions.
+  - Verification: `node --check pages/dashboard-firefox-compat.js`; `node --check pages/dashboard.js`; `node --check scripts/smoke-firefox-sideload.mjs`; `npm test -- tests/dashboard-firefox-compat.test.js tests/firefox-package.test.js`; `npm run smoke:firefox` with Firefox Developer Edition 151.0b10.
+  - Source: FIREFOX-PORT.md Phase 4.
 - [ ] P2 — Phase 5: AMO submission (unlisted then listed)
   - Source: docs/archive/TODO.md G-7.
 

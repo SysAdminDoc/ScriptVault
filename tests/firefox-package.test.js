@@ -9,6 +9,17 @@ const firefoxSmoke = readFileSync(resolve(process.cwd(), 'scripts/smoke-firefox-
 const ciWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
 const backgroundCore = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 const registrationTs = readFileSync(resolve(process.cwd(), 'src/background/registration.ts'), 'utf8');
+const dashboardHtml = readFileSync(resolve(process.cwd(), 'pages/dashboard.html'), 'utf8');
+const dashboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), 'utf8');
+const popupHtml = readFileSync(resolve(process.cwd(), 'pages/popup.html'), 'utf8');
+
+function readPngDimensions(file) {
+  const png = readFileSync(resolve(process.cwd(), file));
+  return {
+    width: png.readUInt32BE(16),
+    height: png.readUInt32BE(20),
+  };
+}
 
 describe('Firefox AMO validation gate', () => {
   it('declares AMO data collection permissions explicitly', () => {
@@ -112,5 +123,36 @@ describe('Firefox AMO validation gate', () => {
     expect(backgroundCore).toContain('if (_supportsUserScriptsWorldId())');
     expect(registrationTs).toContain('function supportsUserScriptsWorldId(): boolean');
     expect(registrationTs).toContain('if (supportsUserScriptsWorldId())');
+  });
+
+  it('pins Firefox polish UI gates, keyboard commands, and action icons', () => {
+    expect(dashboardHtml).toContain('id="aboutBrowserBuild"');
+    expect(dashboardHtml).toContain('id="firefoxSyncNote"');
+    expect(dashboardHtml).toContain('id="firefoxCloudNote"');
+    expect(dashboardJs).toContain('function getDashboardRuntimeDescriptor()');
+    expect(dashboardJs).toContain('function applyRuntimeProviderGate()');
+    expect(dashboardJs).toContain('supportedSyncProviders: isFirefox ? [');
+    expect(dashboardJs).toContain("option.hidden = !supportedOption");
+    expect(dashboardJs).toContain("option.disabled = !supportedOption");
+    expect(firefoxSmoke).toContain('aboutBrowserBuild');
+    expect(firefoxSmoke).toContain('unsupportedSyncOptions');
+    expect(firefoxSmoke).toContain('popupWidthOk');
+    expect(firefoxSmoke).toContain('themeChecks');
+
+    expect(firefoxManifest.commands._execute_action.suggested_key.default).toBe('Alt+Shift+S');
+    expect(firefoxManifest.commands.open_dashboard.suggested_key.default).toBe('Alt+Shift+D');
+    expect(firefoxManifest.commands.toggle_scripts.suggested_key.default).toBe('Alt+Shift+E');
+    expect(new Set(Object.values(firefoxManifest.commands).map(command => command.suggested_key.default)).size).toBe(3);
+
+    for (const size of [16, 32, 48, 128]) {
+      expect(firefoxManifest.icons[String(size)]).toBe(`images/icon${size}.png`);
+      expect(readPngDimensions(`images/icon${size}.png`)).toEqual({ width: size, height: size });
+    }
+    expect(firefoxManifest.action.default_icon).toEqual({
+      16: 'images/icon16.png',
+      32: 'images/icon32.png',
+    });
+    expect(popupHtml).toContain('width: 360px;');
+    expect(popupHtml).toContain('html[data-theme="light"]');
   });
 });

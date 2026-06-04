@@ -19,6 +19,14 @@ const FirefoxCompat = (() => {
     );
 
     const _browserName = _isFirefox ? 'firefox' : _isChrome ? 'chrome' : 'unknown';
+    const _browserVersion = (() => {
+        const ua = navigator.userAgent || '';
+        const firefox = ua.match(/Firefox\/([\d.]+)/);
+        if (firefox) return firefox[1];
+        const chromium = ua.match(/(?:Chrome|Chromium)\/([\d.]+)/);
+        if (chromium) return chromium[1];
+        return '';
+    })();
 
     // Unified browser API reference (Firefox uses `browser`, Chrome uses `chrome`)
     const _api = (typeof browser !== 'undefined' && browser.runtime)
@@ -491,6 +499,22 @@ const FirefoxCompat = (() => {
         return status;
     }
 
+    function getRuntimeDescriptor(manifest = _api?.runtime?.getManifest?.() || (typeof chrome !== 'undefined' ? chrome.runtime?.getManifest?.() : undefined) || {}) {
+        const browserLabel = _isFirefox ? 'Firefox' : _isChrome ? 'Chrome' : 'Unknown browser';
+        const buildLabel = _isFirefox ? 'Firefox build' : _isChrome ? 'Chrome build' : 'Extension build';
+        return {
+            browserName: _browserName,
+            browserLabel,
+            browserVersion: _browserVersion,
+            extensionVersion: manifest.version || '',
+            buildLabel,
+            buildIndicator: `${buildLabel}${_browserVersion ? ` - ${browserLabel} ${_browserVersion}` : ''}`,
+            supportedSyncProviders: _isFirefox
+                ? ['none', 'webdav']
+                : ['none', 'webdav', 'googledrive', 'dropbox', 'onedrive', 's3'],
+        };
+    }
+
     // =========================================
     // Manifest Differences Documentation
     // =========================================
@@ -605,6 +629,13 @@ const FirefoxCompat = (() => {
          * @returns {object} Feature status map
          */
         getFeatureStatus,
+
+        /**
+         * Runtime/build descriptor for browser-specific dashboard UI.
+         * @param {object} [manifest]
+         * @returns {object}
+         */
+        getRuntimeDescriptor,
 
         /**
          * Normalized message sending (returns Promise).
