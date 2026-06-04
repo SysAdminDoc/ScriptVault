@@ -6,6 +6,7 @@ const QUOTA_FALLBACK: number = 10 * 1024 * 1024; // 10MB without unlimitedStorag
 const QUOTA_UNLIMITED: number = 500 * 1024 * 1024; // 500MB with unlimitedStorage
 const WARNING_THRESHOLD: number = 0.85; // Warn at 85%
 const CRITICAL_THRESHOLD: number = 0.95; // Critical at 95%
+const PERSISTENCE_STATUS_KEY = 'sv_storage_persistence';
 
 type UsageLevel = 'ok' | 'warning' | 'critical';
 
@@ -45,6 +46,23 @@ interface CleanupOptions {
 interface CleanupResult {
   freedBytes: number;
   actions: string[];
+}
+
+interface PersistenceRequestOptions {
+  reason?: string;
+  bytes?: number;
+  force?: boolean;
+}
+
+interface PersistenceStatus {
+  supported: boolean;
+  requested: boolean;
+  persisted: boolean;
+  granted: boolean;
+  checkedAt: number;
+  reason: string;
+  bytes: number;
+  error: string;
 }
 
 /** Resolve the effective quota once and cache it. */
@@ -96,6 +114,89 @@ async function getUsage(): Promise<UsageInfo> {
     : percentage >= WARNING_THRESHOLD ? 'warning'
     : 'ok';
   return { bytesUsed, quota: quotaLimit, percentage, level };
+}
+
+function normalizePersistenceStatus(value: unknown): PersistenceStatus | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Partial<PersistenceStatus>;
+  return {
+    supported: record.supported === true,
+    requested: record.requested === true,
+    persisted: record.persisted === true,
+    granted: record.granted === true,
+    checkedAt: typeof record.checkedAt === 'number' ? record.checkedAt : 0,
+    reason: typeof record.reason === 'string' ? record.reason : '',
+    bytes: typeof record.bytes === 'number' ? record.bytes : 0,
+    error: typeof record.error === 'string' ? record.error : '',
+  };
+}
+
+async function getPersistenceStatus(): Promise<PersistenceStatus | null> {
+  const data = await chrome.storage.local.get(PERSISTENCE_STATUS_KEY);
+  return normalizePersistenceStatus(data[PERSISTENCE_STATUS_KEY]);
+}
+
+async function savePersistenceStatus(status: PersistenceStatus): Promise<PersistenceStatus> {
+  await chrome.storage.local.set({ [PERSISTENCE_STATUS_KEY]: status });
+  return status;
+}
+
+/**
+ * Request persistent storage once before the first meaningful script-data write.
+ * Browsers may grant automatically, prompt, deny, or omit the API. Writes remain
+ * non-blocking; this records the outcome so the extension does not nag.
+ */
+async function ensurePersistentStorageForWrite(options: PersistenceRequestOptions = {}): Promise<PersistenceStatus> {
+  const existing = await getPersistenceStatus();
+  if (existing?.requested && !options.force) return existing;
+
+  const reason = typeof options.reason === 'string' && options.reason.trim()
+    ? options.reason.trim()
+    : 'script-write';
+  const bytes = Math.max(0, Number(options.bytes || 0) || 0);
+  const now = Date.now();
+  const storageApi = typeof navigator !== 'undefined' ? navigator.storage : undefined;
+
+  if (!storageApi?.persist) {
+    return await savePersistenceStatus({
+      supported: false,
+      requested: true,
+      persisted: false,
+      granted: false,
+      checkedAt: now,
+      reason,
+      bytes,
+      error: 'navigator.storage.persist is unavailable',
+    });
+  }
+
+  try {
+    const alreadyPersisted = typeof storageApi.persisted === 'function'
+      ? await storageApi.persisted()
+      : false;
+    const granted = alreadyPersisted ? true : await storageApi.persist();
+    return await savePersistenceStatus({
+      supported: true,
+      requested: true,
+      persisted: granted === true,
+      granted: granted === true,
+      checkedAt: Date.now(),
+      reason,
+      bytes,
+      error: '',
+    });
+  } catch (error) {
+    return await savePersistenceStatus({
+      supported: true,
+      requested: true,
+      persisted: false,
+      granted: false,
+      checkedAt: Date.now(),
+      reason,
+      bytes,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 /**
@@ -276,6 +377,6 @@ async function autoCleanup(): Promise<CleanupResult | null> {
   return result;
 }
 
-export const QuotaManager = { getUsage, getBreakdown, cleanup, autoCleanup } as const;
+export const QuotaManager = { getUsage, getBreakdown, getPersistenceStatus, ensurePersistentStorageForWrite, cleanup, autoCleanup } as const;
 
-export type { UsageInfo, UsageLevel, CategoryEntry, StorageBreakdown, CleanupOptions, CleanupResult };
+export type { UsageInfo, UsageLevel, CategoryEntry, StorageBreakdown, CleanupOptions, CleanupResult, PersistenceRequestOptions, PersistenceStatus };

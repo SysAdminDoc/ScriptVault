@@ -27,15 +27,13 @@ P1 core workflow gaps, P2 polish, P3 nice-to-have.
 
 ### Ecosystem and modernization
 
-- [ ] P2 — `navigator.storage.persist()` prompt on first non-trivial write
-  - Why: avoid silent eviction of script data under storage pressure.
-  - Touches: `modules/quota-manager.js`, `background.core.js`.
-  - Source: docs/archive/TODO.md E-8 (PASS2 ecosystem item 17).
+All consolidated Phase E ecosystem items are shipped. Continue with the next
+priority section below.
 
 ### TypeScript source-of-truth and release trust (larger bets)
 
 - [ ] P1 — Continue TypeScript authoritative-source promotion until `background.core.js` is generated from TS
-  - Why: collapse runtime/TS mirror drift (14/20 modules promoted, 6 still mirrored).
+  - Why: collapse runtime/TS mirror drift (15 promoted entries, 6 still mirrored).
   - Acceptance: `ts-source-promotion.json` reaches 0 mirrored; `background.core.js` is generated from TS source.
   - Source: docs/archive/TODO.md F-1 (ROADMAP Larger Bets).
 - [ ] P1 — Complete release trust pipeline (rollback rehearsal automation, CWS/AMO status checks)

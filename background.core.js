@@ -802,6 +802,8 @@ const UpdateSystem = {
       script.settings._registrationError = regError.message || 'Registration failed after update';
     }
 
+    await ensurePersistentStorageForScriptWrite('script-update', newCode);
+
     // Persist to storage after registration attempt
     await ScriptStorage.set(scriptId, script);
 
@@ -1853,6 +1855,21 @@ async function exportAllScripts(options = {}) {
   };
 }
 
+async function ensurePersistentStorageForScriptWrite(reason, code = '') {
+  try {
+    if (typeof QuotaManager === 'undefined' || typeof QuotaManager.ensurePersistentStorageForWrite !== 'function') {
+      return null;
+    }
+    const bytes = typeof code === 'string'
+      ? new TextEncoder().encode(code).length
+      : 0;
+    return await QuotaManager.ensurePersistentStorageForWrite({ reason, bytes });
+  } catch (error) {
+    console.warn('[ScriptVault] Persistent storage request failed:', error?.message || error);
+    return null;
+  }
+}
+
 // Phase 39.31 — WECG #935 pre-emptive string clamping. Chrome's
 // chrome.notifications.create() silently truncates `title` past ~100 chars
 // and `message` past ~300 chars; chrome.contextMenus.create() truncates
@@ -2093,6 +2110,7 @@ async function importScripts(data, options = {}) {
       } else if (script.versionHistory && Array.isArray(script.versionHistory)) {
         importEntry.versionHistory = script.versionHistory;
       }
+      await ensurePersistentStorageForScriptWrite('script-import', importEntry.code);
       await ScriptStorage.set(scriptId, importEntry);
       if (importStorage) {
         const storedValues = script.storage && typeof script.storage === 'object' ? script.storage : {};
@@ -2386,6 +2404,7 @@ async function importFromZip(zipData, options = {}) {
           });
         }
 
+        await ensurePersistentStorageForScriptWrite(existing ? 'zip-import-update' : 'zip-import', script.code);
         await ScriptStorage.set(scriptId, script);
 
         // Import stored values
@@ -2414,6 +2433,7 @@ async function importFromZip(zipData, options = {}) {
           if (parsed.error) continue;
           
           const scriptId = generateId();
+          await ensurePersistentStorageForScriptWrite('zip-import', code);
           await ScriptStorage.set(scriptId, {
             id: scriptId,
             code: code,
@@ -2741,6 +2761,7 @@ async function handleMessage(message, sender) {
         };
         if (versionHistory.length > 0) script.versionHistory = versionHistory;
         
+        await ensurePersistentStorageForScriptWrite(existing ? 'script-save' : 'script-create', script.code);
         await ScriptStorage.set(id, script);
         await updateBadge();
 
@@ -2800,6 +2821,7 @@ async function handleMessage(message, sender) {
           updatedAt: Date.now()
         };
         
+        await ensurePersistentStorageForScriptWrite('script-create', script.code);
         await ScriptStorage.set(id, script);
         await updateBadge();
 
@@ -3611,6 +3633,7 @@ async function handleMessage(message, sender) {
             );
             if (existing && !data.overwrite) { results.skipped++; continue; }
             const id = existing?.id || generateId();
+            await ensurePersistentStorageForScriptWrite(existing ? 'tampermonkey-import-update' : 'tampermonkey-import', code);
             await ScriptStorage.set(id, {
               id, code, meta: parsed.meta,
               enabled: true,
@@ -6657,6 +6680,7 @@ async function installFromCode(code, receiptOptions = {}) {
     }
     if (versionHistory.length > 0) script.versionHistory = versionHistory;
 
+    await ensurePersistentStorageForScriptWrite(existing ? 'script-reinstall' : 'script-install', script.code);
     await ScriptStorage.set(id, script);
     await registerAllScripts(true);
     await updateBadge();
