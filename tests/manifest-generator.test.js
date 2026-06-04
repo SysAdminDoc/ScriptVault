@@ -23,6 +23,7 @@ describe('manifest generator', () => {
 
     expect(generated.text).toBe(current);
     expect(generated.manifest.browser_specific_settings.gecko.strict_min_version).toBe('140.0');
+    expect(generated.manifest.browser_specific_settings).not.toHaveProperty('gecko_android');
   });
 
   it('generates the Edge staging manifest from the shared profile', async () => {
@@ -50,6 +51,7 @@ describe('manifest generator', () => {
     expect(manifest.manifest_version).toBe(3);
     expect(manifest.background).toEqual({ scripts: ['background.js'] });
     expect(manifest.browser_specific_settings.gecko.id).toBe('ScriptVault@sysadmindoc.dev');
+    expect(manifest.browser_specific_settings).not.toHaveProperty('gecko_android');
     expect(manifest.permissions).toContain('menus');
     expect(manifest.permissions).not.toContain('contextMenus');
     expect(manifest.permissions).not.toContain('sidePanel');

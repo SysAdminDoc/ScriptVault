@@ -33,7 +33,7 @@ All from a single source tree; no manual fork per browser. This document is the 
 
 WXT also handles:
 - Per-browser manifest functions (return a different manifest object for Chrome vs Firefox).
-- Firefox `browser_specific_settings` (`gecko.id`, `gecko_android`).
+- Firefox `browser_specific_settings.gecko` (`gecko.id`, desktop minimum version, and data-collection declaration).
 - Web-accessible resources UUID handling for Firefox's `moz-extension://` random UUIDs.
 - Auto-handling of `world_accessible_resources` matches.
 
@@ -59,7 +59,7 @@ WXT also handles:
 
 **Current validation gate (2026-05-24):** before the WXT migration, the manual Firefox target now has a repeatable AMO gate:
 
-- `manifest-firefox.json` declares Firefox 140.0+ desktop, Firefox for Android 142.0+, `browser_specific_settings.gecko.data_collection_permissions`, and `userScripts` as a Firefox optional permission.
+- `manifest-firefox.json` declares Firefox 140.0+ desktop, `browser_specific_settings.gecko.data_collection_permissions`, and `userScripts` as a Firefox optional permission. It intentionally omits `gecko_android` until an Android smoke gate exists.
 - `npm run firefox:lint` builds `build-firefox/`, runs `web-ext lint`, and writes `firefox-artifacts/web-ext-lint.json`.
 - `npm run firefox:package` runs the lint gate, packages `firefox-artifacts/scriptvault-firefox-v<version>.zip`, and writes `firefox-artifacts/scriptvault-firefox-source-v<version>.zip` for AMO source review.
 - `npm run smoke:firefox` runs a geckodriver-based temporary sideload smoke against Firefox Developer Edition/Nightly 140+, opens the dashboard and popup, saves/toggles a smoke userscript through the extension message path, verifies it runs on a local target page, validates DNR dynamic-rule add/remove, verifies `@require` SRI at packaged-runtime registration, exercises Ed25519 signing/verification, validates WebDAV sync against a local fixture, imports Chrome-shaped JSON/ZIP backup fixtures, imports a 26-script quota fixture, and verifies trash restore after a profile-backed Firefox restart.
@@ -67,7 +67,7 @@ WXT also handles:
 - OAuth sync providers are deferred in the Firefox validation package because Firefox does not accept `identity` as an optional permission. Treat WebDAV as the only in-scope sync provider until a dedicated Firefox OAuth permission pass lands.
 
 1. Add `firefox` build target in `wxt.config.ts`.
-2. Add `browser_specific_settings.gecko` (id + strict_min_version 140 + data collection declaration).
+2. Add `browser_specific_settings.gecko` (id + strict_min_version 140 + data collection declaration). Do not add `gecko_android` until Firefox for Android has device/emulator smoke evidence.
 3. Bundle `webextension-polyfill` — wrap every `chrome.*` call in `browser.*` where Firefox semantics differ.
 4. Switch background to event-page format for Firefox (Firefox MV3 doesn't fully support service workers; it uses event pages with `persistent: false`).
 5. Handle Firefox's `userScripts` API as `optional_permissions` — implement first-run grant flow.
@@ -110,7 +110,7 @@ _Last generated: 2026-06-04 with `npm run support:matrix`. Version source: `mani
 | Chrome / Chromium | Tier 1 published target | Chrome 130+ MV3 | 2026-06-04 | `npm run smoke:dashboard`, `npm run cws:check`, Chrome ZIP packaging in CI | Chrome 138+ requires per-extension Allow User Scripts; per-script `worldId` is Chrome 133+ and feature-gated |
 | Microsoft Edge | Tier 1 compatible package; separate store automation pending | Edge 130+ Chromium MV3 package | 2026-06-04 package/manifests; no separate Edge CI smoke yet | Same ZIP as Chrome; smoke harness can run with Edge via `SCRIPT_VAULT_CHROME_PATH` | Edge Add-ons package/publish path is not automated yet |
 | Firefox Desktop | AMO validation target, not a published listing | Firefox 140.0+ MV3 | 2026-06-04 | `npm run firefox:package`, `npm run smoke:firefox`; web-ext lint 0 errors / 0 notices / 139 warnings | `sidePanel`, `offscreen`, `identity` OAuth, and some `userScripts.execute` flows are unsupported/deferred; Firefox package omits Monaco until the Firefox editor-loading pass |
-| Firefox for Android | Manifest validation target | Firefox for Android 142.0+ | 2026-06-04 package/manifests; no Android device smoke yet | `manifest-firefox.json` `gecko_android` target plus Firefox source/package ZIP | Same Firefox API deferrals; no side panel; Android device smoke is not wired |
+| Firefox for Android | Deferred; not an AMO compatibility target | No current `gecko_android` manifest target | 2026-06-04 | `manifest-firefox.json` intentionally omits `gecko_android` until an Android smoke gate exists | Android UI/runtime, extension-action overlay, host-permission, import/export, and WebDAV paths are unverified |
 | Brave / Vivaldi / Opera / Arc | Chromium derivative watchlist | Chrome 130+ package may load | Not release-verified | No CI smoke or store package for these browsers | Store policy, shields/sidebar behavior, and extension UI chrome are unverified |
 | Orion / Safari | Not supported | Not a current target | Not verified | No build, smoke, or package path | Requires separate WebKit/Orion validation and likely native Safari extension work |
 <!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:END -->
