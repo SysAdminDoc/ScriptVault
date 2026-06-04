@@ -95,6 +95,7 @@ export interface ScriptSettings {
   userModified?: boolean;
   mergeConflict?: boolean;
   _failedRequires?: string[];
+  _failedRequireErrors?: Array<{ url: string; message: string }>;
   _registrationError?: string;
   [key: string]: unknown;
 }

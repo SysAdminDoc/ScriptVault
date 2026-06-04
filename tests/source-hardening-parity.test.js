@@ -81,4 +81,13 @@ describe('source hardening parity guards', () => {
     expect(core).toContain("const xhrPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);");
     expect(core).toContain("GM_xmlhttpRequest redirected to internal host");
   });
+
+  it('keeps @require fetches on extension host-permission fetch semantics', () => {
+    const loader = source('src/background/resource-loader.ts');
+    const core = source('src/background/core.ts');
+    expect(loader).toContain("Do not force mode:'cors'");
+    expect(core).toContain("Do not force mode:'cors'");
+    expect(loader).not.toContain("mode: 'cors'");
+    expect(core).not.toContain("mode: 'cors'");
+  });
 });

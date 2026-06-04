@@ -77,9 +77,12 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
   - WebDAV — should work as-is (no OAuth)
   - Easy Cloud (`chrome.identity` + `chrome.storage.managed`) — may not work on Firefox depending on identity flow support
   - **Shipped 2026-06-04:** Firefox v1 is explicitly WebDAV-only. `manifest-firefox.json` still omits `identity`, and `npm run smoke:firefox` now starts a local WebDAV fixture, saves WebDAV settings, checks provider health, runs a no-write dry-run preview, performs `syncNow`, verifies the uploaded JSON backup, and confirms Basic Auth was sent to the configured endpoint. Google Drive, Dropbox, OneDrive, and Easy Cloud stay deferred until a dedicated install-time `identity`/OAuth redirect pass.
-- [ ] **DeclarativeNetRequest rule management** (`src/background/dnr-rules.ts`) — Firefox MV3 DNR is supported but the dynamic rule API may differ. Test rule registration + teardown.
-- [ ] **`@require` SRI verification** (`src/background/resource-loader.ts`) — works the same on both (pure crypto).
-- [ ] **Ed25519 signing** (`bg/signing.js`) — Web Crypto API, identical.
+- [x] **DeclarativeNetRequest rule management** (`src/background/dnr-rules.ts`) — Firefox MV3 DNR is supported but the dynamic rule API may differ. Test rule registration + teardown.
+  - **Shipped 2026-06-04:** `npm run smoke:firefox` now adds a packaged-runtime DNR dynamic block rule, verifies it appears via `getDynamicRules`, removes it, and verifies teardown leaves no dynamic rule behind.
+- [x] **`@require` SRI verification** (`src/background/resource-loader.ts`) — works the same on both (pure crypto).
+  - **Shipped 2026-06-04:** the Firefox smoke validates `@require` SRI during packaged-runtime registration. Local DNS-to-loopback aliases are attempted and recorded, but Firefox rejects them before socket open; the validation falls back to a pinned HTTPS dependency (`code.jquery.com/jquery-3.7.1.min.js` with `sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=`). `@require` and provenance fetches now avoid forcing `mode: 'cors'`, and failed dependency registration records `_failedRequireErrors`.
+- [x] **Ed25519 signing** (`bg/signing.js`) — Web Crypto API, identical.
+  - **Shipped 2026-06-04:** the Firefox smoke generates an Ed25519 keypair, signs a userscript, verifies the embedded signature, and confirms a tampered body is rejected.
 
 ### Phase 4 — Polish + parity
 
@@ -203,6 +206,14 @@ Living document. Tracks the Chrome → Firefox MV3 port across sessions. **Updat
 - `npm run smoke:firefox` now starts a local WebDAV fixture, configures WebDAV sync through runtime settings, verifies provider health, runs dry-run preview without writing, performs `syncNow`, checks the uploaded JSON payload, and asserts Basic Auth reached the configured endpoint.
 - Focused verification: `node --check scripts/smoke-firefox-sideload.mjs`, `npm test -- tests/firefox-package.test.js tests/source-sync-providers.test.js`, and `node scripts/smoke-firefox-sideload.mjs --skip-package` with Firefox Developer Edition 151.0b10.
 - Next Firefox-port session continues Phase 3 with DNR dynamic-rule registration/teardown, `@require` SRI, and Ed25519 signing parity checks.
+
+### 2026-06-04 — Phase 3 DNR, SRI, and Ed25519 parity
+
+- Closed the remaining Firefox Phase 3 runtime parity rows: DNR dynamic-rule registration/teardown, `@require` SRI verification, and Ed25519 signing.
+- `npm run smoke:firefox` now validates DNR add/remove through `chrome.declarativeNetRequest`, verifies `@require` SRI at packaged-runtime registration with a pinned HTTPS dependency after recording Firefox's DNS-to-loopback local-alias refusal, and checks Ed25519 key generation/sign/verify/tamper-reject through runtime signing messages.
+- Runtime hardening follow-up: `@require` and provenance fetches no longer force `mode: 'cors'`, matching extension host-permission semantics; registration now stores `_failedRequireErrors` beside `_failedRequires` for actionable dependency diagnostics.
+- Focused verification: `node --check scripts/smoke-firefox-sideload.mjs`, `npm test -- tests/firefox-package.test.js tests/source-hardening-parity.test.js tests/internal-host-guard.test.js tests/core-flows.test.js`, and `npm run smoke:firefox` with Firefox Developer Edition 151.0b10.
+- Next Firefox-port session starts Phase 4 polish and compatibility UI validation, then Phase 5 AMO submission prep.
 
 ---
 

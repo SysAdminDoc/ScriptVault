@@ -135,20 +135,32 @@ describe('@require failure tracking', () => {
 
     if (failedRequires.length > 0) {
       script.settings._failedRequires = failedRequires;
+      script.settings._failedRequireErrors = [{ url: failedRequires[0], message: 'HTTP 404' }];
     }
 
     expect(script.settings._failedRequires).toEqual(['https://cdn.example.com/missing.js']);
+    expect(script.settings._failedRequireErrors).toEqual([
+      { url: 'https://cdn.example.com/missing.js', message: 'HTTP 404' },
+    ]);
   });
 
   it('should clear failed requires when all succeed', () => {
-    const script = { id: 'test_1', settings: { _failedRequires: ['old.js'] } };
+    const script = {
+      id: 'test_1',
+      settings: {
+        _failedRequires: ['old.js'],
+        _failedRequireErrors: [{ url: 'old.js', message: 'network down' }],
+      },
+    };
     const failedRequires = [];
 
-    if (failedRequires.length === 0 && script.settings._failedRequires) {
+    if (failedRequires.length === 0 && (script.settings._failedRequires || script.settings._failedRequireErrors)) {
       delete script.settings._failedRequires;
+      delete script.settings._failedRequireErrors;
     }
 
     expect(script.settings._failedRequires).toBeUndefined();
+    expect(script.settings._failedRequireErrors).toBeUndefined();
   });
 });
 

@@ -8184,6 +8184,7 @@ async function registerScript(script, { useUpdate = false } = {}) {
     const requires = Array.isArray(meta.require) ? meta.require : (meta.require ? [meta.require] : []);
     
     const failedRequires = [];
+    const failedRequireErrors = [];
     for (const url of requires) {
       try {
         const code = await fetchRequireScript(url);
@@ -8191,10 +8192,12 @@ async function registerScript(script, { useUpdate = false } = {}) {
           requireScripts.push({ url, code });
         } else {
           failedRequires.push(url);
+          failedRequireErrors.push({ url, message: 'empty response' });
         }
       } catch (e) {
         console.warn(`[ScriptVault] Failed to fetch @require ${url}:`, e.message);
         failedRequires.push(url);
+        failedRequireErrors.push({ url, message: e?.message || String(e) });
       }
     }
 
@@ -8202,11 +8205,13 @@ async function registerScript(script, { useUpdate = false } = {}) {
     if (failedRequires.length > 0) {
       script.settings = script.settings || {};
       script.settings._failedRequires = failedRequires;
+      script.settings._failedRequireErrors = failedRequireErrors;
       await ScriptStorage.set(script.id, script);
       debugWarn(`${meta.name}: ${failedRequires.length} @require dependency(s) failed to load`);
-    } else if (script.settings?._failedRequires) {
+    } else if (script.settings?._failedRequires || script.settings?._failedRequireErrors) {
       // Clear previous failures
       delete script.settings._failedRequires;
+      delete script.settings._failedRequireErrors;
       await ScriptStorage.set(script.id, script);
     }
     
@@ -8563,7 +8568,9 @@ async function fetchProvenanceBundle(url) {
         'Accept': 'application/vnd.dev.sigstore.bundle.v0.3+json, application/json, text/plain, */*',
         'Cache-Control': 'no-cache'
       },
-      mode: 'cors',
+      // Do not force mode:'cors'. Extension host permissions cover these
+      // remote reads, and forcing CORS breaks valid dependency hosts that do
+      // not echo the extension origin.
       credentials: 'omit',
       signal: controller.signal
     });
@@ -8605,7 +8612,9 @@ async function fetchWithRetry(url, retries = 2) {
             'Accept': 'text/javascript, application/javascript, text/plain, */*',
             'Cache-Control': 'no-cache'
           },
-          mode: 'cors',
+          // Do not force mode:'cors'. Extension host permissions cover these
+          // remote reads, and forcing CORS breaks valid dependency hosts that do
+          // not echo the extension origin.
           credentials: 'omit',
           signal: controller.signal
         });

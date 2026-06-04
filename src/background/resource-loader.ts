@@ -284,7 +284,9 @@ export async function fetchProvenanceBundle(url: string): Promise<string | null>
         'Accept': 'application/vnd.dev.sigstore.bundle.v0.3+json, application/json, text/plain, */*',
         'Cache-Control': 'no-cache',
       },
-      mode: 'cors',
+      // Do not force mode:'cors'. Extension host permissions cover these
+      // remote reads, and forcing CORS breaks valid dependency hosts that do
+      // not echo the extension origin.
       credentials: 'omit',
       signal: controller.signal,
     });
@@ -327,7 +329,9 @@ export async function fetchWithRetry(url: string, retries: number = 2): Promise<
           'Accept': 'text/javascript, application/javascript, text/plain, */*',
           'Cache-Control': 'no-cache'
         },
-        mode: 'cors',
+        // Do not force mode:'cors'. Extension host permissions cover these
+        // remote reads, and forcing CORS breaks valid dependency hosts that do
+        // not echo the extension origin.
         credentials: 'omit',
         signal: controller.signal
       });

@@ -116,9 +116,11 @@ priority section below.
   - Progress: 2026-06-04 extended `npm run smoke:firefox` with a local WebDAV server fixture. The Firefox package now sets WebDAV sync settings through the runtime, checks provider health, runs a no-write dry-run preview, performs `syncNow`, verifies a remote JSON upload, and asserts Basic Auth was sent to the configured endpoint. Firefox v1 stays WebDAV-only because `manifest-firefox.json` omits `identity`; Google Drive, Dropbox, OneDrive, and Easy Cloud remain deferred to a later install-time identity/OAuth pass.
   - Verification: `node --check scripts/smoke-firefox-sideload.mjs`; `npm test -- tests/firefox-package.test.js tests/source-sync-providers.test.js`; `node scripts/smoke-firefox-sideload.mjs --skip-package`.
   - Source: docs/archive/TODO.md G-6.
-- [ ] P2 — Phase 3: Firefox DNR, `@require` SRI, and Ed25519 parity validation
+- [x] P2 — Phase 3: Firefox DNR, `@require` SRI, and Ed25519 parity validation
   - Why: the provider decision is closed, but FIREFOX-PORT Phase 3 still needs non-provider runtime integration evidence before moving to polish/AMO work.
   - Acceptance: Firefox validation covers DNR dynamic rule registration/teardown, `@require` SRI verification through the packaged Firefox runtime, and Ed25519 signing/verification with Firefox Web Crypto.
+  - Progress: 2026-06-04 extended `npm run smoke:firefox` with a runtime parity block. The Firefox package now adds and removes a DNR dynamic block rule, validates `@require` SRI during packaged-runtime registration using a pinned HTTPS dependency after Firefox rejects DNS-to-loopback local aliases, and exercises Ed25519 key generation, signing, verification, and tamper rejection through runtime signing messages. `@require` and provenance fetches no longer force `mode: 'cors'`, preserving extension host-permission fetch semantics, and registration now records `_failedRequireErrors` beside `_failedRequires`.
+  - Verification: `node --check scripts/smoke-firefox-sideload.mjs`; `npm test -- tests/firefox-package.test.js tests/source-hardening-parity.test.js tests/internal-host-guard.test.js tests/core-flows.test.js`; `npm run smoke:firefox` with Firefox Developer Edition 151.0b10.
   - Source: FIREFOX-PORT.md Phase 3 remaining integration rows.
 - [ ] P2 — Phase 5: AMO submission (unlisted then listed)
   - Source: docs/archive/TODO.md G-7.
