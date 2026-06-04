@@ -81,6 +81,7 @@ export interface Settings {
   dashboardVirtualizationThreshold: number;
   injectIntoFrames: boolean;
   xhrTimeout: number;
+  allowInternalXhr: boolean;
 
   // Blacklist
   blacklist: string[];

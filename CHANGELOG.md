@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — GM_xmlhttpRequest internal-host guard
+
+- **Blocked GM_xmlhttpRequest internal-host SSRF by default.** GM_xhr now runs
+  the shared `InternalHostGuard` before fetching and again on the final response
+  URL before reading the body, so IMDS, loopback, RFC1918, link-local, and IPv6
+  internal redirects are rejected even when `@connect` is empty or `*`.
+- **Preserved explicit localhost development opt-ins.** Loopback GM_xhr remains
+  available when a script explicitly declares `@connect localhost`, and the new
+  advanced `allowInternalXhr` setting is a global escape hatch for users who
+  intentionally allow internal XHR.
+
 ### 2026-06-04 — Firefox sideload smoke and web-ext audit fix
 
 - **Firefox Phase 1 now has an automated temporary sideload smoke.**
