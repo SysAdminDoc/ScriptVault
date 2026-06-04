@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Local health diagnostics
+
+- **Support snapshots now include local health diagnostics.** Added
+  `getLocalHealthReport` to summarize runtime setup, storage pressure,
+  pending update queues, callback-map pressure, and script health warnings.
+- **Diagnostics remain local and aggregate-only.** The report explicitly
+  excludes script source, script names, URLs, and external usage beacons.
+
 ### 2026-06-04 — Release store status gate
 
 - **Release trust now includes store-status evidence.** Added

@@ -204,6 +204,11 @@ interface ResetSettings {
 interface GetExtensionStatus {
   action: 'getExtensionStatus';
 }
+
+interface GetLocalHealthReport {
+  action: 'getLocalHealthReport';
+}
+
 type UserScriptsSetupState =
   | 'available'
   | 'allow-user-scripts-disabled'
@@ -220,6 +225,67 @@ interface ExtensionStatusResponse {
   setupAction: string;
   setupUrl: string;
   apiProbeError?: string;
+}
+
+type LocalHealthLevel = 'ok' | 'info' | 'warning' | 'critical' | 'unavailable' | 'error';
+
+interface LocalHealthReportResponse {
+  schema: 'scriptvault-local-health/v1';
+  generatedAt: string;
+  privacy: {
+    localOnly: boolean;
+    includesScriptSource: boolean;
+    includesScriptNames: boolean;
+    includesUrls: boolean;
+    includesExternalBeacons: boolean;
+  };
+  runtime: {
+    userScriptsAvailable: boolean;
+    setupRequired: boolean;
+    setupState: UserScriptsSetupState;
+    setupTitle: string;
+    setupAction: string;
+    setupMessage: string;
+    chromeVersion: number;
+    apiProbeError: string;
+  };
+  storage: {
+    available: boolean;
+    usageBytes: number;
+    quotaBytes: number;
+    usagePercent: number;
+    usageFormatted: string;
+    quotaFormatted: string;
+    level: LocalHealthLevel;
+    error?: string;
+  };
+  scripts: {
+    total: number;
+    enabled: number;
+    disabled: number;
+    registrationErrors: number;
+    scriptsWithExecutionErrors: number;
+    slowScripts: number;
+    staleRemoteScripts: number;
+    sourceIdentityChanged: number;
+    userModified: number;
+    syncLocked: number;
+    slowScriptThresholdMs: number;
+    staleRemoteThresholdDays: number;
+  };
+  updates: {
+    pendingUpdates: number;
+    safePendingUpdates: number;
+    reviewPendingUpdates: number;
+    recentUpdates: number;
+    pendingCap: number;
+  };
+  callbacks: {
+    notificationCallbacks: { size: number; cap: number; percentOfCap: number; level: LocalHealthLevel };
+    openTabTrackers: { size: number; cap: number; percentOfCap: number; level: LocalHealthLevel };
+    audioWatchedTabs: { size: number; level: LocalHealthLevel };
+  };
+  warnings: Array<{ id: string; level: LocalHealthLevel; message: string }>;
 }
 
 // ─── Per-Script Settings ─────────────────────────────────────────────
@@ -1060,7 +1126,7 @@ export type BackgroundMessage =
   // Tab storage
   | GMGetTab | GMSaveTab | GMGetTabs
   // Settings
-  | GetSettings | GetSetting | SetSettings | ResetSettings | GetExtensionStatus
+  | GetSettings | GetSetting | SetSettings | ResetSettings | GetExtensionStatus | GetLocalHealthReport
   // Per-script settings
   | GetScriptSettings | SetScriptSettings
   // Updates
@@ -1231,6 +1297,7 @@ export interface ResponseMap {
   setScriptSettings: SuccessOrError;
   resetSettings: unknown;
   getExtensionStatus: ExtensionStatusResponse;
+  getLocalHealthReport: LocalHealthReportResponse;
   repairRuntimeState: SuccessOrError<ExtensionStatusResponse>;
 
   // ── Version history ────────────────────────────────────────────────

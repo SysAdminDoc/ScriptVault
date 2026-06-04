@@ -3836,6 +3836,7 @@
             const wantPublicApi = enabledCategories.has('publicApiPermissions') || enabledCategories.has('publicApiAudit');
             const [
                 runtimeStatus,
+                localHealthReport,
                 publicApiData,
                 signingKeys,
                 errorLog,
@@ -3846,6 +3847,7 @@
                 backupSettings
             ] = await Promise.all([
                 chrome.runtime.sendMessage({ action: 'getExtensionStatus' }),
+                chrome.runtime.sendMessage({ action: 'getLocalHealthReport' }),
                 wantPublicApi
                     ? Promise.all([
                         chrome.runtime.sendMessage({ action: 'publicApi_getTrustedOrigins' }),
@@ -3932,6 +3934,7 @@
                         .map(c => ({ id: c.id, label: c.label, sensitive: !!c.sensitive }))
                 },
                 runtime: runtimeStatus,
+                localHealth: localHealthReport?.schema === 'scriptvault-local-health/v1' ? localHealthReport : undefined,
                 counts: enabledCategories.has('counts') ? {
                     scripts: state.scripts.length,
                     enabledScripts: state.scripts.filter(script => script.enabled !== false).length,
