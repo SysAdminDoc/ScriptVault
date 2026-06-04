@@ -284,6 +284,21 @@ External anchors: npm audit `omit` config docs
 docs for `peerDependenciesMeta` / `optionalDependencies`
 (`https://docs.npmjs.com/cli/v11/configuring-npm/package-json/`).
 
+2026-06-04 Cycle 15 action pinning refresh: the release workflow's trusted
+artifact path still consumes external actions by movable major tags. Local
+evidence is eight `uses:` references in `.github/workflows/ci.yml`:
+`actions/checkout@v4`, `actions/setup-node@v4`,
+`browser-actions/setup-chrome@v1`, two `actions/attest@v4` steps, and three
+`actions/upload-artifact@v4` steps. The same job grants `id-token: write` and
+`attestations: write`, runs `npm run release:trust`, creates package/SBOM
+attestations, and uploads Chrome/Firefox/Edge artifacts. `ROADMAP.md` now marks
+the item verified and requires full 40-character SHA pins from the intended
+upstream repositories plus a documented update path for those pins. External
+anchors: GitHub's secure-use reference on full-length SHA pinning
+(`https://docs.github.com/en/actions/reference/security/secure-use`) and
+GitHub's action release-management docs for full commit SHA references
+(`https://docs.github.com/en/actions/how-tos/create-and-publish-actions/manage-custom-actions`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
@@ -308,7 +323,7 @@ Top opportunities (one line each):
 1. **[Closed 2026-06-04] CI was red on a real CVE** — `web-ext@10.2.0` → `tmp@0.2.5` → GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (CVSS 7.7). `web-ext@^10.3.0` now resolves fixed `tmp@0.2.6`, and the high audit gate exits 0. (P0)
 2. **[Verified] Coverage is blind** — `vitest.config.mjs` has no thresholds and omits `src/background/**` from coverage includes even though `background.core.js` is now generated from `src/background/core.ts`; a focused coverage smoke passed tests while reporting 0%. (P1)
 3. **[Verified] No dependency-update automation** — 10 devDeps behind latest; the audit gate is reactive only, which is exactly how the `tmp` CVE slipped in. Add Dependabot/Renovate. (P1)
-4. **[Likely] Floating Action tags in a signing/attestation pipeline** — `ci.yml` uses `@v4`/`@v1` tags while also doing SLSA attestation + SBOM; SHA-pin to protect the trusted artifact. (P1)
+4. **[Verified] Floating Action tags in a signing/attestation pipeline** — `ci.yml` has eight tag-based `uses:` references, including attestation and artifact-upload steps, while the same job grants `id-token: write` / `attestations: write` and publishes trusted artifacts; SHA-pin and keep those pins fresh. (P1)
 5. **[Closed 2026-06-04] Sync envelopes mixed shared script data with device-local state** — CloudSync/EasyCloud now upload only allowlisted user-facing per-script settings and ignore legacy local-only remote keys. (P1)
 6. **[Closed 2026-06-04] Cloud sync uploaded plaintext script source** — CloudSync/EasyCloud now support optional local-passphrase v2 sync-envelope encryption while still reading legacy v1 plaintext envelopes. (P1)
 7. **[Closed 2026-06-04] User-configured sync endpoints lacked the internal-host guard** — WebDAV/S3 now share preflight and post-fetch redirect guards with explicit local/private endpoint opt-in. (P1)
@@ -343,6 +358,7 @@ Top opportunities (one line each):
 - **Host permission recovery**: `manifest.json:37-39` and `manifest-firefox.json:48-50` still require `<all_urls>`; `pages/dashboard.html:6598-6612` / `pages/dashboard.js:10066-10119` expose only a read-only denied-host list plus restore buttons; `pages/install.js:89-134` requests named optional permissions for grants but no optional origins; archived NF-7/NF-19 and Phase 12.12/13.9 hold the old Narrow Host Mode / host-access-request research without an active row.
 - **Coverage/source glob alignment**: `vitest.config.mjs:21-25` uses V8 coverage with `all:false`, no thresholds, and includes only `src/shared/**/*.ts`, `src/modules/**/*.ts`, and `src/bg/**/*.ts`; `ts-source-promotion.json:163-168` marks `background.core.js` as promoted from `src/background/core.ts`; `package.json:54` runs `vitest run --coverage`; a mapped-drive run of `npx vitest run tests/wrapper-dom-security.test.js --coverage --coverage.reporter=json-summary --coverage.reporter=text-summary` passed 9 tests but `coverage/coverage-summary.json` showed 0% total coverage and no `src/background/wrapper-builder.ts` entry.
 - **Optional dependency reach**: `.github/workflows/ci.yml:44-50` and `docs/dependency-audit-policy.md:3-31` intentionally use `npm audit --audit-level=high --omit=optional`; `package.json` has no direct `optionalDependencies`; `package-lock.json` currently has 60 optional package records and 43 peer-optional edges; a lockfile-derived import/require scan over 116 shipped extension files found zero hits; loose `canvas` matches in dashboard files were DOM canvas strings only.
+- **Action pinning state**: `.github/workflows/ci.yml:9-12` grants `id-token: write` and `attestations: write`; `.github/workflows/ci.yml:21`, `:26`, `:87`, `:120`, `:126`, `:132`, `:141`, and `:148` use movable major tags for checkout, setup-node, setup-chrome, attest, and upload-artifact in the same trusted artifact job.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -358,6 +374,7 @@ Top opportunities (one line each):
   - Chrome optional-permission / host-permission docs, Chrome Permissions API `request` / `addHostAccessRequest`, and MDN MV3 `optional_host_permissions` anchor the host-permission recovery item: https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions, https://developer.chrome.com/docs/extensions/reference/api/permissions, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/optional_host_permissions
   - Vitest coverage config and guide anchor the coverage-source-glob refinement: https://vitest.dev/config/coverage.html and https://main.vitest.dev/guide/coverage
   - npm audit omit config and package metadata docs anchor the optional-dependency reach item: https://docs.npmjs.com/cli/v11/commands/npm-audit/ and https://docs.npmjs.com/cli/v11/configuring-npm/package-json/
+  - GitHub Actions secure-use and action release-management docs anchor the action SHA-pinning item: https://docs.github.com/en/actions/reference/security/secure-use and https://docs.github.com/en/actions/how-tos/create-and-publish-actions/manage-custom-actions
   - Userscript-manager landscape (Tampermonkey / Violentmonkey / ScriptCat sync, MV3, GitHub-Gist sync, granular execution control): comparison sources at extensionfixes.com and addons.mozilla.org Violentmonkey listing.
 - **Unverifiable here** [Needs validation]: live MV3 runtime behavior (cross-tab GM listener fan-out, omnibox UX, settings round-trips) — no browser run performed this pass; all runtime claims are static-read [Verified] or [Likely].
 
@@ -405,7 +422,7 @@ Top opportunities (one line each):
 | Host-permission recovery | Browser site access / runtime diagnostics | required `<all_urls>` manifests, dashboard denied-host list, popup/side panel | partial | runtime host-scope enforcement shipped; withheld-host recovery and optional-host prototype not active |
 | Coverage report | `npm run test:cov` | `vitest.config.mjs`, `coverage/coverage-summary.json` | partial | no threshold; include globs omit `src/background/**`; focused smoke passed tests with 0% reported coverage |
 | Dependency audit policy | manual / CI | `docs/dependency-audit-policy.md`, `.github/workflows/ci.yml`, `package-lock.json` | partial | high+ audit gate exists; optional-dep reach is manually verified but not gated |
-| Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | actions **tag-pinned, not SHA** |
+| Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | eight workflow actions are tag-pinned, not SHA-pinned |
 
 ## Competitive Landscape
 
@@ -420,7 +437,7 @@ Top opportunities (one line each):
 - **Closed** — CI audit gate failure on `tmp` CVE-2026-44705 was resolved by the ROADMAP P0 `web-ext@^10.3.0` bump. [Verified]
 - **Major** — Coverage blind: no threshold, `src/background/**` omitted from coverage includes, and a focused smoke can pass tests while reporting 0%. → ROADMAP P1 coverage gate. [Verified]
 - **Major** — No dependency-update automation; reactive audit only (root cause of the CVE slip). → ROADMAP P1 Dependabot/Renovate. [Verified]
-- **Major** — Floating Action tags in an attestation/SBOM pipeline. → ROADMAP P1 SHA-pin. [Likely]
+- **Major** — Floating Action tags in an attestation/SBOM pipeline. → ROADMAP P1 SHA-pin. [Verified]
 - **Closed** — AMO vendored-library provenance for minified Firefox-package libraries now has official package/source/hash inventory and a gate. [Verified]
 - **Closed 2026-06-04** — CWS remote-hosted-code policy evidence is now packaged and scanned for Chrome submissions through `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check`.
 - **Moderate, closed 2026-06-04** — Edge package evidence is now wired into CI artifacts and generated support claims. → ROADMAP P2 Edge artifact/support-matrix gate. [Closed]
