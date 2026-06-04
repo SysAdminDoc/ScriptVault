@@ -2,6 +2,15 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-04 Cycle 8 comprehensive feature-plan refresh: root-level
+`RESEARCH_FEATURE_PLAN.md` now holds the current implementation-oriented
+research plan for ScriptVault v3.11.0. It preserves `ROADMAP.md` as the open
+queue while consolidating product map, feature inventory, competitive research,
+highest-value new features, improvement themes, security/privacy/data-safety
+risks, UX/accessibility/trust items, maintainability themes, prioritized
+checkbox roadmap entries, quick wins, larger bets, non-goals, and open
+questions.
+
 2026-06-04 implementation refresh: the 2026-06-03 findings still stand, but the
 currently-breaking dependency item is now closed. `web-ext` was bumped to
 `^10.3.0`, `npm ls tmp` resolves `tmp@0.2.6`, and
@@ -167,6 +176,8 @@ Top opportunities (one line each):
   holds the active queue folded from the former `TODO.md`; `## Research-Driven Additions`
   holds the PASS3 net-new findings plus this 2026-06-03 dependency/CI/release/UX block;
   the Round 14 body below is the broad historical planning appendix.
+- `RESEARCH_FEATURE_PLAN.md` — current comprehensive research-backed feature
+  plan for v3.11.0; it is a companion synthesis, not the active queue.
 - `COMPLETED.md` — completed-work navigator with the shipped-feature roll-up.
 - `CHANGELOG.md` — canonical shipped-release ledger.
 - `FIREFOX-PORT.md` — active Firefox-port session ledger (open items extracted as G-* in ROADMAP).
