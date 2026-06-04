@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier, sync-crypto promotions, and npm resolver wiring, `ts-source:check` reports 27 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 18 - 2026-06-04.
+> Last researched: Cycle 19 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -399,7 +399,7 @@ Priorities/sizes preserve the source labels.
 
 ### Researcher Queue (Cycle 18 - 2026-06-04)
 
-- [ ] 🔬 `import-restore-quarantine-2026-06-04` - rechecked JSON import, ZIP
+- [x] 🔬 `import-restore-quarantine-2026-06-04` - rechecked JSON import, ZIP
   import, raw-JS fallback import, selected backup restore, and full-vault
   restore after the credential-redaction, archive-bound, and restore-receipt
   work. The remaining gap is execution trust rather than storage safety:
@@ -415,6 +415,24 @@ Priorities/sizes preserve the source labels.
   script bodies. The P1 row below should preserve backup identity and rollback
   while making imported/restored executable code inert until explicit review or
   a counted trusted-archive override.
+
+### Researcher Queue (Cycle 19 - 2026-06-04)
+
+- [ ] 🔬 `gm-promise-namespace-parity-2026-06-04` - rechecked the wrapper GM
+  API after the host-scope and import-trust work. `wrapper-builder.ts` defines
+  34 `window.GM_*` exports but only 25 top-level `GM.*` properties, with
+  promise aliases missing for already-shipped callback APIs: `GM.addElement`,
+  `GM.audio`, `GM.cookie`, `GM.focusTab`, `GM.getMenuCommands`, `GM.head`,
+  `GM.log`, and `GM.webRequest`. The wrapper exposes `GM.cookies` while grant
+  and optional-permission logic already accepts singular `GM.cookie`, and no
+  `GM.fetch` / `GM_fetch` path exists. Violentmonkey documents
+  Greasemonkey4-compatible `GM.*` aliases, Tampermonkey documents
+  `GM.xmlHttpRequest` as the promise form, and the current background
+  `GM_xmlhttpRequest` path already enforces `@connect` plus internal-host
+  redirect checks. The row below should therefore make namespace parity
+  generated/tested instead of manually maintained, and any fetch-shaped alias
+  should reuse the same guarded network policy rather than adding a second
+  outbound path.
 
 ### Firefox and mobile release quality
 
@@ -660,7 +678,11 @@ Priorities/sizes preserve the source labels.
   - Acceptance: two-tab test — write in A, listener in B fires with `remote=true`.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-6.
 - [ ] P3 — `GM.*` namespace completeness + `GM.fetch`
-  - Why: generate the `GM.*` promise namespace mechanically from the `GM_*` table so coverage can't drift; add `GM.fetch` alias behind `@connect`+NF-1.
+  - Why: `src/background/wrapper-builder.ts` currently defines 34 `window.GM_*` exports but only 25 top-level `GM.*` properties. Existing callback APIs have no promise namespace alias for `GM.addElement`, `GM.audio`, `GM.cookie`, `GM.focusTab`, `GM.getMenuCommands`, `GM.head`, `GM.log`, and `GM.webRequest`; the wrapper exposes plural `GM.cookies` while grant/permission code already accepts singular `GM.cookie`; and no `GM.fetch` / `GM_fetch` path exists. Violentmonkey documents Greasemonkey4-compatible `GM.*` aliases, Tampermonkey documents `GM.xmlHttpRequest` as the promise form with `@connect`, and ScriptVault's existing `GM_xmlhttpRequest` handler already enforces `@connect` plus pre/post internal-host checks, so namespace parity should be generated and fetch-shaped behavior must reuse that policy.
+  - Evidence: `src/background/wrapper-builder.ts:1328-1393`; `src/background/wrapper-builder.ts:1393-1592`; `src/background/core.ts:5635-5778`; `tests/gm-types.test.js:79-124`; `tests/install-optional-permissions.test.js:81-93`; Violentmonkey GM API (`https://violentmonkey.github.io/api/gm/`); Tampermonkey GM_xmlhttpRequest docs (`https://www.tampermonkey.net/documentation.php?ext=d2&q=GM_xmlhttpRequest`); Tampermonkey GM.fetch proposal/streaming discussion (`https://github.com/Tampermonkey/tampermonkey/issues/1278`).
+  - Touches: `src/background/wrapper-builder.ts`, generated `background.core.js`, GM type declarations/tests, optional-permission grant mapping, README/API docs, and network-policy tests if `GM.fetch` is added.
+  - Acceptance: a wrapper parity test derives the `GM.*` namespace from the available `GM_*` table or an explicit alias map and fails on future drift; all shipped callback APIs either expose a documented promise alias or are explicitly classified as callback-only/non-aliasable; `GM.cookie` and `GM.cookies` compatibility is intentional and tested; any `GM.fetch` alias returns a documented fetch-like result while enforcing the same `@connect`, host-scope, abort, redirect, and internal-host behavior as `GM_xmlhttpRequest`.
+  - Verify: focused wrapper/type tests for each added alias; a grant-mapping test for singular/plural cookie aliases; network tests proving denied `@connect`, internal-host preflight, and redirect-to-internal-host failures apply to `GM.fetch`; `npm run readme:check`.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-7.
 
 <!-- Append future research-driven items here, preserving Source pointers. -->
