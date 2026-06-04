@@ -206,6 +206,13 @@ Microsoft Edge supported extension APIs
 and Microsoft Edge Add-ons update REST API
 (`https://learn.microsoft.com/en-us/microsoft-edge/extensions/update/api/using-addons-api`).
 
+2026-06-04 build-lane Edge evidence update: CI now runs
+`npm run build:edge:check`, uploads `edge-artifacts/*`, and keeps
+`npm run support:matrix:check` behind the generated Edge ZIP/report. The
+support matrix no longer describes Edge as the Chrome ZIP; it reads
+`edge-build-<version>.json` and records manual Partner Center publication,
+deferred REST update automation, and no dedicated Edge browser smoke in CI.
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
@@ -239,7 +246,7 @@ Top opportunities (one line each):
 10. **[Closed 2026-06-04] Firefox for Android was claimed but not smoke-tested** — `gecko_android` and Android support-matrix claims are deferred until a real device/emulator smoke exists. (P2)
 11. **[Closed 2026-06-04] AMO vendored-library provenance was incomplete** — Firefox package libraries now have exact npm pins, official source/package hashes, and a provenance check. (P2)
 12. **[Closed 2026-06-04] CWS remote-hosted-code review packet was missing** — `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check` now separate allowed User Scripts/sandbox flows from forbidden extension remote logic and scan source/package inputs plus the built Chrome ZIP in CI. (P1)
-13. **[Verified] Edge artifact evidence is not wired into CI or support claims** — `build:edge` exists, but CI/support matrix still treat Edge as Chrome-ZIP/manual-only. (P2)
+13. **[Closed 2026-06-04] Edge artifact evidence was not wired into CI or support claims** — CI now builds/uploads `edge-artifacts/*`, and the support matrix validates the current Edge ZIP/report instead of claiming the Chrome ZIP is the Edge package. (P2)
 14. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
 15. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
 16. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
@@ -258,7 +265,7 @@ Top opportunities (one line each):
 - **Firefox Android target**: `manifest-firefox.json` declares `gecko_android.strict_min_version: 142.0`; `FIREFOX-PORT.md`, `README.md`, `docs/cross-browser-pipeline.md`, and `scripts/generate-browser-support-matrix.mjs` state Android is only a manifest validation target and that no Android device smoke is wired; `scripts/smoke-firefox-sideload.mjs` targets desktop Firefox/geckodriver only.
 - **AMO vendored libraries**: `build-firefox.sh` includes `lib/acorn.min.js` and `lib/diff.min.js`; `AMO-SOURCE-README.md` describes only local library paths and generic source ZIP contents; tests pin those library inclusions but not reviewer provenance; `lib/acorn.min.js` says it was minified by jsDelivr from `acorn@8.14.1`, while `package-lock.json` currently resolves npm `acorn@8.16.0`.
 - **CWS remote-code review**: `manifest.json` declares `userScripts` and limits extension-page CSP to `script-src 'self'` while sandboxing `pages/editor-sandbox.html`; `PRIVACY.md` explains externally sourced userscript execution; `docs/cws-remote-code-compliance.md` maps policy buckets; `scripts/check-cws-remote-code.mjs` scans source/package inputs and the built Chrome ZIP for forbidden remote-code execution patterns.
-- **Edge artifact/support claims**: `scripts/build-edge.mjs` stages `build-edge/`, writes `edge-artifacts/scriptvault-edge-v<version>.zip`, and emits an `edge-build-<version>.json` report; `tests/edge-build.test.js` covers the builder; CI currently uploads Chrome and Firefox artifacts only; `scripts/generate-browser-support-matrix.mjs`, `README.md`, and `docs/cross-browser-pipeline.md` still say Edge uses the same Chrome ZIP and that the Edge package path is not automated.
+- **Edge artifact/support claims**: `scripts/build-edge.mjs` stages `build-edge/`, writes `edge-artifacts/scriptvault-edge-v<version>.zip`, and emits an `edge-build-<version>.json` release-readiness report; `tests/edge-build.test.js` covers the builder/report; CI now builds and uploads `edge-artifacts/*`; `scripts/generate-browser-support-matrix.mjs`, `README.md`, and `docs/cross-browser-pipeline.md` validate the current Edge report and state that Partner Center publication remains manual while REST update automation is deferred.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -312,7 +319,7 @@ Top opportunities (one line each):
 | Firefox Android compatibility claim | AMO / Android listing via `gecko_android` | `manifest-firefox.json`, generated support matrix | deferred | no Android claim until ADB/device smoke exists |
 | AMO vendored library provenance | AMO source review | `AMO-SOURCE-README.md`, `docs/amo-vendored-libraries.md`, `build-firefox.sh`, `lib/acorn.min.js`, `lib/diff.min.js` | shipped | exact package/source/hash inventory gated |
 | CWS remote-code review packet | Chrome Web Store review | `PRIVACY.md`, `docs/store-listing-copy.md`, `docs/cws-remote-code-compliance.md`, `manifest.json`, package ZIP | shipped 2026-06-04 | reviewer memo plus source/package and built-artifact remote-code scan |
-| Edge package evidence | Edge Add-ons package/release | `scripts/build-edge.mjs`, `edge-artifacts/edge-build-<version>.json`, support matrix | partial | builder exists; CI upload/support matrix evidence still missing |
+| Edge package evidence | Edge Add-ons package/release | `scripts/build-edge.mjs`, `edge-artifacts/edge-build-<version>.json`, support matrix | shipped | CI builds/uploads Edge artifacts; support matrix validates the Edge report |
 | Coverage report | `npm run test:cov` | `vitest.config.mjs` | shipped | `all:false`, **no threshold** |
 | Dependency audit policy | manual | `docs/dependency-audit-policy.md` | doc only | **no bot automation** |
 | Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | actions **tag-pinned, not SHA** |
@@ -333,7 +340,7 @@ Top opportunities (one line each):
 - **Major** — Floating Action tags in an attestation/SBOM pipeline. → ROADMAP P1 SHA-pin. [Likely]
 - **Closed** — AMO vendored-library provenance for minified Firefox-package libraries now has official package/source/hash inventory and a gate. [Verified]
 - **Closed 2026-06-04** — CWS remote-hosted-code policy evidence is now packaged and scanned for Chrome submissions through `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check`.
-- **Moderate** — Edge package evidence is not wired into CI artifacts or generated support claims even though the builder exists. → ROADMAP P2 Edge artifact/support-matrix gate. [Verified]
+- **Moderate, closed 2026-06-04** — Edge package evidence is now wired into CI artifacts and generated support claims. → ROADMAP P2 Edge artifact/support-matrix gate. [Closed]
 - **Major** — `--omit=optional` audit exemption is unguarded against shipped optional deps. → ROADMAP P2 reach check. [Likely]
 - **Major** — No consolidated/validated Settings surface for operator knobs. → ROADMAP P2 settings audit. [Likely]
 - **Minor** — `sv` omnibox + keyboard commands undocumented. → ROADMAP P3 doc items. [Verified]

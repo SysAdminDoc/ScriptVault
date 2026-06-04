@@ -103,6 +103,9 @@ jobs:
       - name: Firefox lint and package
         run: npm run firefox:package
 
+      - name: Edge package
+        run: npm run build:edge:check
+
       - name: Release store status check
         run: npm run release:store-status
 
@@ -139,4 +142,11 @@ jobs:
         with:
           name: scriptvault-firefox-package
           path: firefox-artifacts/*
+          if-no-files-found: error
+
+      - name: Upload Edge package
+        uses: actions/upload-artifact@v4
+        with:
+          name: scriptvault-edge-package
+          path: edge-artifacts/*
           if-no-files-found: error

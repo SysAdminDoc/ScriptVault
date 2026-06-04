@@ -12,6 +12,7 @@ const ARTIFACT_DIR = resolve(process.cwd(), 'edge-artifacts');
 describe('scripts/build-edge.mjs', () => {
   afterAll(() => {
     try { rmSync(BUILD_DIR, { recursive: true, force: true }); } catch (_) {}
+    try { rmSync(ARTIFACT_DIR, { recursive: true, force: true }); } catch (_) {}
   });
 
   it('stages a complete Edge build directory with declared files present', () => {
@@ -40,8 +41,15 @@ describe('scripts/build-edge.mjs', () => {
     const reportPath = join(ARTIFACT_DIR, 'edge-build-3.11.0.json');
     expect(existsSync(reportPath)).toBe(true);
     const report = JSON.parse(readFileSync(reportPath, 'utf8'));
+    expect(report.schemaVersion).toBe(2);
     expect(report.version).toBe('3.11.0');
+    expect(report.buildDir).toBe('build-edge');
     expect(report.missingFiles).toEqual([]);
+    expect(report.edgeReadiness.updateUrlRemoved).toBe(true);
+    expect(report.edgeReadiness.packageAutomation).toContain('npm run build:edge:check');
+    expect(report.edgeReadiness.initialPublication).toContain('Manual Partner Center upload');
+    expect(report.edgeReadiness.updateAutomation).toContain('REST update automation is deferred');
+    expect(report.reviewDeclarations.remoteCode).toBe('docs/cws-remote-code-compliance.md');
     expect(report.transformsApplied.removeKeys).toContain('update_url');
   });
 

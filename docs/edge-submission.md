@@ -20,7 +20,28 @@ small set of declarative manifest transformations (today: strip
 `edge-artifacts/scriptvault-edge-v<version>.zip` plus a sidecar
 `edge-build-<version>.json` report.
 
+CI runs `npm run build:edge:check`, uploads `edge-artifacts/*`, and runs
+`npm run support:matrix:check` after the Edge report exists. The browser
+support matrix treats that report as the source of truth for Edge package
+evidence and fails when the ZIP or report is missing.
+
 `build-edge/` and `edge-artifacts/` are gitignored.
+
+## Report fields
+
+`edge-build-<version>.json` is the release evidence packet for Edge. It records:
+
+- the staged build directory and Edge ZIP path;
+- every manifest transform applied to the Chrome manifest;
+- missing declared files, if any;
+- `edgeReadiness` status for Chrome compatibility review, `update_url`
+  removal, unsupported-API review, package automation, manual initial
+  Partner Center publication, deferred REST update automation, and manual
+  Edge sideload smoke;
+- `reviewDeclarations` pointers for `PRIVACY.md`,
+  `docs/store-listing-copy.md`, `docs/cws-remote-code-compliance.md`, this
+  submission guide, and the Microsoft Edge documentation used for the current
+  checklist.
 
 ## Manifest differences (current)
 
@@ -59,6 +80,7 @@ checklist before pressing "Submit for review":
 
 - [ ] `npm run release:check` (or `release:check:public`) is green.
 - [ ] `npm run build:edge:check` produced a ZIP without missing files.
+- [ ] `npm run support:matrix:check` is green after the Edge report exists.
 - [ ] Loaded the staged `build-edge/` directory via
       `edge://extensions` → "Load unpacked" and exercised the dashboard +
       popup + side panel + install flow.
@@ -71,10 +93,27 @@ checklist before pressing "Submit for review":
 - [ ] Privacy notice references the same shipping permissions as Chrome.
 - [ ] Store listing reuses the canonical short description and matches
       the Chrome listing (CWS 132-character cap also keeps Edge safe).
+- [ ] Remote-code declaration says the extension does not execute remote
+      code from extension pages/service worker; use
+      `docs/cws-remote-code-compliance.md` as the reviewer memo.
+- [ ] Permission, data-use, and privacy declarations match
+      `docs/store-listing-copy.md` and `PRIVACY.md`.
 - [ ] Categorize as "Productivity → Tools" to match the Chrome listing.
 - [ ] Upload the produced ZIP and the matching `edge-build-<version>.json`
       report for traceability (Partner Center accepts arbitrary attachments
       in the support notes).
+
+## Publication and update automation
+
+Initial Edge Add-ons publication still requires a Microsoft Partner Center
+developer account and manual ZIP upload. The generated report intentionally
+labels this as manual until a live listing exists.
+
+After initial publication, Microsoft's Edge Add-ons REST API can update a
+published extension package. ScriptVault defers that automation until listing
+identifiers, API credentials, and a safe credential-custody model are available.
+Do not add long-lived Edge publisher credentials to CI before that custody
+work is designed.
 
 ## Post-publish
 
