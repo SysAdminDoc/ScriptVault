@@ -56,6 +56,9 @@ Expected outputs:
 - Firefox package libraries are local files: `lib/acorn.min.js` and
   `lib/diff.min.js` for the background parser/merge fallback. The source
   archive includes the repo, `package.json`, and `package-lock.json`.
+- `docs/amo-vendored-libraries.md` lists the package name, version, license,
+  official npm source/tarball URL, source hash, packaged hash, and source-map
+  status for each minified library copied into the Firefox package.
 - Dependencies are installed through npm's official package manager path. Do not
   download third-party libraries from CDNs during review builds.
 - Obfuscated code is not used. Minified/generated code is paired with this source

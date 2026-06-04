@@ -12,6 +12,9 @@ ARTIFACT_DIR="$SCRIPT_DIR/firefox-artifacts"
 echo "Checking generated Firefox manifest parity..."
 node "$SCRIPT_DIR/scripts/generate-manifest-firefox.mjs" --profile firefox --check --root "$SCRIPT_DIR"
 
+echo "Checking Firefox vendored library provenance..."
+node "$SCRIPT_DIR/scripts/check-vendored-library-provenance.mjs" --check
+
 VERSION=$(node -e "console.log(require('./manifest-firefox.json').version)" 2>/dev/null || grep -o '"version": "[^"]*"' "$SCRIPT_DIR/manifest-firefox.json" | cut -d'"' -f4)
 ZIP_NAME="scriptvault-firefox-v${VERSION}.zip"
 SOURCE_ZIP_NAME="scriptvault-firefox-source-v${VERSION}.zip"
