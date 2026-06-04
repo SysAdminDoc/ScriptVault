@@ -6913,6 +6913,80 @@ const NpmResolver = (() => {
 })();
 
 // ============================================================================
+// Generated from src/background/host-permission-patterns.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const HostPermissionPatterns = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/host-permission-patterns.ts
+  var host_permission_patterns_exports = {};
+  __export(host_permission_patterns_exports, {
+    runtimeHostPermissionPatternForUrl: () => runtimeHostPermissionPatternForUrl
+  });
+  module.exports = __toCommonJS(host_permission_patterns_exports);
+  var RECOVERABLE_HOST_SCHEMES = /* @__PURE__ */ new Set(["http:", "https:"]);
+  function emptyPattern(reason) {
+    return {
+      supported: false,
+      pattern: "",
+      origin: "",
+      scheme: "",
+      host: "",
+      reason
+    };
+  }
+  function normalizeHostForPattern(hostname) {
+    const host = String(hostname || "").trim().toLowerCase();
+    if (!host) return "";
+    if (host.includes(":") && !host.startsWith("[")) return `[${host}]`;
+    return host;
+  }
+  function runtimeHostPermissionPatternForUrl(rawUrl) {
+    let url;
+    try {
+      url = rawUrl instanceof URL ? rawUrl : new URL(String(rawUrl || ""));
+    } catch {
+      return emptyPattern("invalid-url");
+    }
+    if (!RECOVERABLE_HOST_SCHEMES.has(url.protocol)) {
+      return emptyPattern("unsupported-scheme");
+    }
+    const host = normalizeHostForPattern(url.hostname);
+    if (!host) return emptyPattern("missing-host");
+    return {
+      supported: true,
+      pattern: `${url.protocol}//${host}/*`,
+      origin: url.origin,
+      scheme: url.protocol.slice(0, -1),
+      host,
+      reason: ""
+    };
+  }
+  return module.exports.default || module.exports.HostPermissionPatterns || module.exports;
+})();
+
+// ============================================================================
 // Generated from src/modules/error-log.ts; do not edit by hand.
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
@@ -19880,6 +19954,208 @@ function resolveCookiePolicyTarget(data, sender) {
   return isHttpCookieUrl(senderUrl) ? senderUrl : '';
 }
 
+function runtimeHostPermissionPatternForUrl(url) {
+  if (typeof HostPermissionPatterns !== 'undefined'
+      && typeof HostPermissionPatterns.runtimeHostPermissionPatternForUrl === 'function') {
+    return HostPermissionPatterns.runtimeHostPermissionPatternForUrl(url);
+  }
+
+  try {
+    const parsed = new URL(String(url || ''));
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { supported: false, pattern: '', origin: '', scheme: '', host: '', reason: 'unsupported-scheme' };
+    }
+    let host = parsed.hostname.toLowerCase();
+    if (host.includes(':') && !host.startsWith('[')) host = `[${host}]`;
+    if (!host) return { supported: false, pattern: '', origin: '', scheme: '', host: '', reason: 'missing-host' };
+    return {
+      supported: true,
+      pattern: `${parsed.protocol}//${host}/*`,
+      origin: parsed.origin,
+      scheme: parsed.protocol.slice(0, -1),
+      host,
+      reason: ''
+    };
+  } catch (_) {
+    return { supported: false, pattern: '', origin: '', scheme: '', host: '', reason: 'invalid-url' };
+  }
+}
+
+function getHostPermissionRequestMethod() {
+  if (typeof chrome?.permissions?.addHostAccessRequest === 'function') return 'addHostAccessRequest';
+  if (typeof chrome?.permissions?.request === 'function') return 'permissions.request';
+  return 'manual';
+}
+
+function getHostPermissionBrowserLabel() {
+  const ua = navigator?.userAgent || '';
+  if (/Firefox\//.test(ua)) return 'firefox';
+  if (/Edg\//.test(ua)) return 'edge';
+  if (/(Chrome|Chromium)\//.test(ua)) return 'chromium';
+  return 'unknown';
+}
+
+function rememberRuntimeHostPermissionTarget(tab) {
+  const url = tab?.url || '';
+  const patternInfo = runtimeHostPermissionPatternForUrl(url);
+  if (!patternInfo.supported || typeof tab?.id !== 'number') return;
+  self._lastRuntimeHostPermissionTarget = {
+    tabId: tab.id,
+    url,
+    title: tab.title || '',
+    host: patternInfo.host,
+    updatedAt: Date.now()
+  };
+}
+
+function getRememberedRuntimeHostPermissionTarget() {
+  const target = self._lastRuntimeHostPermissionTarget;
+  if (!target?.url || !runtimeHostPermissionPatternForUrl(target.url).supported) return null;
+  return target;
+}
+
+function summarizeBlockedHostScript(script) {
+  return {
+    id: script.id || '',
+    name: script.meta?.name || script.metadata?.name || script.id || 'Unnamed script',
+    enabled: script.enabled !== false
+  };
+}
+
+async function getRuntimeHostPermissionStatus(url) {
+  const patternInfo = runtimeHostPermissionPatternForUrl(url);
+  const requestMethod = getHostPermissionRequestMethod();
+  const browser = getHostPermissionBrowserLabel();
+  const status = {
+    success: true,
+    supported: patternInfo.supported,
+    url: String(url || ''),
+    origin: patternInfo.origin,
+    pattern: patternInfo.pattern,
+    scheme: patternInfo.scheme,
+    host: patternInfo.host,
+    reason: patternInfo.reason,
+    browser,
+    requestMethod,
+    granted: patternInfo.supported ? null : true,
+    needsHostAccess: false,
+    blockedCount: 0,
+    blockedScripts: [],
+    message: ''
+  };
+
+  if (!patternInfo.supported) {
+    status.message = patternInfo.reason === 'unsupported-scheme'
+      ? 'Browser host access can only be requested for http and https pages.'
+      : 'Current tab URL is not available for host access diagnostics.';
+    return status;
+  }
+
+  const settings = await SettingsManager.get();
+  if (isUrlBlockedByGlobalSettings(url, settings)) {
+    status.granted = true;
+    status.message = 'This site is blocked by ScriptVault page filters.';
+    return status;
+  }
+
+  let scripts = [];
+  try {
+    const matchSet = await getMatchSet();
+    scripts = matchSet.getMatching(url);
+  } catch (_) {
+    scripts = (await ScriptStorage.getAll()).filter(script => doesScriptMatchUrl(script, url));
+  }
+
+  const enabledScripts = scripts
+    .filter(script => script.enabled !== false)
+    .sort((a, b) => (a.position || 0) - (b.position || 0));
+
+  if (typeof chrome?.permissions?.contains === 'function') {
+    try {
+      status.granted = await chrome.permissions.contains({ origins: [patternInfo.pattern] });
+    } catch (error) {
+      status.granted = null;
+      status.reason = 'permission-probe-failed';
+      status.message = error?.message || 'Host permission probe failed.';
+    }
+  }
+
+  if (status.granted === false && enabledScripts.length > 0) {
+    status.needsHostAccess = true;
+    status.blockedCount = enabledScripts.length;
+    status.blockedScripts = enabledScripts.slice(0, 12).map(summarizeBlockedHostScript);
+    const first = status.blockedScripts[0]?.name || 'matching script';
+    status.message = enabledScripts.length === 1
+      ? `${first} is blocked until this site is granted to ScriptVault.`
+      : `${enabledScripts.length} enabled scripts are blocked until this site is granted to ScriptVault.`;
+  } else if (status.granted === false) {
+    status.message = 'ScriptVault does not currently have browser host access for this site.';
+  } else if (status.granted === true) {
+    status.message = enabledScripts.length
+      ? `Browser host access is granted for ${patternInfo.host}.`
+      : `Browser host access is granted for ${patternInfo.host}; no enabled scripts match this page.`;
+  } else if (!status.message) {
+    status.message = 'Host permission state could not be confirmed.';
+  }
+
+  return status;
+}
+
+async function queueRuntimeHostAccessRequest(url, tabId, documentId) {
+  const patternInfo = runtimeHostPermissionPatternForUrl(url);
+  if (!patternInfo.supported) {
+    return { success: false, error: 'Current tab does not support browser host access requests.', ...patternInfo };
+  }
+  if (typeof chrome?.permissions?.addHostAccessRequest !== 'function') {
+    return {
+      success: false,
+      error: 'Chrome host access request surface is unavailable.',
+      requestMethod: getHostPermissionRequestMethod(),
+      ...patternInfo
+    };
+  }
+
+  const request = { pattern: patternInfo.pattern };
+  if (typeof tabId === 'number') {
+    request.tabId = tabId;
+  } else if (documentId) {
+    request.documentId = String(documentId);
+  } else {
+    return {
+      success: false,
+      error: 'A tab id or document id is required to show a host access request.',
+      requestMethod: 'addHostAccessRequest',
+      ...patternInfo
+    };
+  }
+
+  await chrome.permissions.addHostAccessRequest(request);
+  const status = await getRuntimeHostPermissionStatus(url);
+  return {
+    ...status,
+    success: true,
+    requested: true,
+    requestMethod: 'addHostAccessRequest',
+    message: `Site access request added for ${patternInfo.host}. Approve it from the browser Extensions menu.`
+  };
+}
+
+function hasRuntimeHostPermissionOrigins(permissions) {
+  return Array.isArray(permissions?.origins) && permissions.origins.length > 0;
+}
+
+async function notifyRuntimeHostPermissionChanged(changeType, permissions) {
+  if (!hasRuntimeHostPermissionOrigins(permissions)) return;
+  try { await updateBadge(); } catch (_) {}
+  try {
+    chrome.runtime.sendMessage({
+      action: 'runtimeHostPermissionsChanged',
+      changeType,
+      origins: permissions.origins
+    }).catch(() => {});
+  } catch (_) {}
+}
+
 if (chrome.runtime.onUserScriptMessage) {
   chrome.runtime.onUserScriptMessage.addListener((message, sender, sendResponse) => {
     if (!message || !isUserScriptAllowedAction(message.action)) {
@@ -19913,6 +20189,26 @@ async function handleMessage(message, sender) {
         const scripts = await ScriptStorage.getAll();
         // Convert meta -> metadata for dashboard compatibility
         return { scripts: scripts.map(s => ({ ...s, metadata: s.meta })) };
+      }
+
+      case 'getHostPermissionStatus': {
+        const remembered = getRememberedRuntimeHostPermissionTarget();
+        const url = data.url || data.currentUrl || sender?.tab?.url || remembered?.url || '';
+        const status = await getRuntimeHostPermissionStatus(url);
+        if (remembered && remembered.url === url) {
+          status.tabId = remembered.tabId;
+          status.tabTitle = remembered.title;
+        }
+        return status;
+      }
+
+      case 'queueHostAccessRequest': {
+        const remembered = getRememberedRuntimeHostPermissionTarget();
+        return await queueRuntimeHostAccessRequest(
+          data.url || data.currentUrl || sender?.tab?.url || remembered?.url || '',
+          typeof data.tabId === 'number' ? data.tabId : sender?.tab?.id || remembered?.tabId,
+          data.documentId
+        );
       }
         
       case 'getScript': {
@@ -23781,6 +24077,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   try {
     const tab = await chrome.tabs.get(activeInfo.tabId);
+    rememberRuntimeHostPermissionTarget(tab);
     if (tab.url) {
       await updateBadgeForTab(activeInfo.tabId, tab.url);
     }
@@ -23794,6 +24091,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   if (changeInfo.url || changeInfo.status === 'complete') {
     if (tab.url) {
+      rememberRuntimeHostPermissionTarget({ ...tab, id: tabId });
       await updateBadgeForTab(tabId, tab.url);
     }
   }
@@ -23816,6 +24114,18 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     }
   }
 });
+
+if (chrome.permissions?.onAdded?.addListener) {
+  chrome.permissions.onAdded.addListener((permissions) => {
+    notifyRuntimeHostPermissionChanged('added', permissions).catch(() => {});
+  });
+}
+
+if (chrome.permissions?.onRemoved?.addListener) {
+  chrome.permissions.onRemoved.addListener((permissions) => {
+    notifyRuntimeHostPermissionChanged('removed', permissions).catch(() => {});
+  });
+}
 
 // GM_openInTab onclose: fire callback when tracked tab closes
 chrome.tabs.onRemoved.addListener(async (tabId) => {

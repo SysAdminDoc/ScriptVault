@@ -33,6 +33,8 @@
     "gm-types:generate": "node scripts/generate-gm-types.mjs",
     "gm-types:check": "node scripts/generate-gm-types.mjs --check",
     "store-copy:check": "node scripts/check-permission-copy.mjs",
+    "host-permissions:prototype": "node scripts/check-host-permission-prototype.mjs --write",
+    "host-permissions:prototype:check": "node scripts/check-host-permission-prototype.mjs --check",
     "dashboard:modules:check": "node scripts/check-dashboard-modules.mjs",
     "whatsnew:check": "node scripts/check-whatsnew-changelog.mjs",
     "readability:check": "node scripts/check-readability.mjs --check",

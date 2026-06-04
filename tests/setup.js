@@ -180,9 +180,12 @@ globalThis.chrome = {
   },
   permissions: {
     request: vi.fn().mockResolvedValue(true),
+    addHostAccessRequest: vi.fn().mockResolvedValue(),
     getAll: vi.fn().mockResolvedValue({ permissions: [] }),
     contains: vi.fn().mockResolvedValue(false),
     remove: vi.fn().mockResolvedValue(true),
+    onAdded: { addListener: vi.fn() },
+    onRemoved: { addListener: vi.fn() },
   },
   declarativeNetRequest: {
     updateDynamicRules: vi.fn().mockResolvedValue(),

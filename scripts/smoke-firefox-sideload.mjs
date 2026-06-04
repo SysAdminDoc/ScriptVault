@@ -423,6 +423,18 @@ async function clickElement(baseUrl, sessionId, element) {
   await request(baseUrl, 'POST', `/session/${sessionId}/element/${element}/click`, {});
 }
 
+async function dismissDashboardWhatsNew(baseUrl, sessionId) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const result = await execute(baseUrl, sessionId, `
+      const dismiss = document.querySelector('#svWnDismiss');
+      if (dismiss) dismiss.click();
+      return { dismissed: !!dismiss, overlayPresent: !!document.querySelector('.sv-wn-overlay') };
+    `).catch(() => null);
+    if (result?.dismissed || result?.overlayPresent === false) return;
+    await delay(150);
+  }
+}
+
 async function getExtensionResource(baseUrl, sessionId, resourcePath) {
   await switchContext(baseUrl, sessionId, 'chrome');
   const value = await executeAsync(baseUrl, sessionId, `
@@ -626,6 +638,7 @@ async function popupSmoke(baseUrl, sessionId, popupUrl) {
 
 async function scriptRoundTripSmoke(baseUrl, sessionId, dashboardUrl) {
   await navigate(baseUrl, sessionId, dashboardUrl);
+  await dismissDashboardWhatsNew(baseUrl, sessionId);
   let usedHeadlessPermissionGrant = false;
   const initialStatus = await executeAsync(baseUrl, sessionId, `
     const done = arguments[arguments.length - 1];
@@ -643,6 +656,7 @@ async function scriptRoundTripSmoke(baseUrl, sessionId, dashboardUrl) {
         disabled: !!button?.disabled
       };
     `);
+    await dismissDashboardWhatsNew(baseUrl, sessionId);
     await clickElement(baseUrl, sessionId, await findElement(baseUrl, sessionId, '#btnOpenExtensionDetails'));
     const userGrantStatus = await waitForAsync(baseUrl, sessionId, 'Firefox userScripts permission grant', `
       const done = arguments[arguments.length - 1];
@@ -877,6 +891,7 @@ async function webDavSyncSmoke(baseUrl, sessionId, dashboardUrl) {
         webdavUrl: server.url,
         webdavUsername: username,
         webdavPassword: password,
+        allowInternalSyncEndpoints: true,
       },
     }, 60000);
     if (settings?.syncProvider !== 'webdav' || settings?.webdavUrl !== server.url) {

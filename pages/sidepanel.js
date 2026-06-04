@@ -17,6 +17,7 @@
   let noticeTimer = null;
   let searchRenderTimer = null;
   let currentPageCanRunScripts = false;
+  let hostPermissionStatus = null;
   const pendingScriptActions = new Set();
   const SEARCH_RENDER_DEBOUNCE_MS = 90;
   const MATCHABLE_PROTOCOLS = new Set(['http:', 'https:', 'file:', 'ftp:']);
@@ -298,6 +299,68 @@
     }
   }
 
+  function summarizeHostAccessStatus(status) {
+    const blocked = Array.isArray(status?.blockedScripts) ? status.blockedScripts : [];
+    const names = blocked.slice(0, 2).map(script => script.name || script.id || 'script').join(', ');
+    const remaining = status?.blockedCount > blocked.slice(0, 2).length
+      ? ` and ${status.blockedCount - blocked.slice(0, 2).length} more`
+      : '';
+    if (names) return `${names}${remaining} need browser access for ${status.host || 'this site'}.`;
+    return status?.message || 'Grant browser access before matching scripts can run here.';
+  }
+
+  function renderHostAccessPanel(status = hostPermissionStatus) {
+    const panel = $('hostAccessPanel');
+    const message = $('hostAccessMessage');
+    const button = $('btnGrantHostAccess');
+    if (!panel || !message || !button) return;
+
+    const show = !!status?.needsHostAccess;
+    panel.hidden = !show;
+    panel.classList.toggle('show', show);
+    button.hidden = !show;
+    if (!show) {
+      message.textContent = '';
+      return;
+    }
+    message.textContent = summarizeHostAccessStatus(status);
+    button.textContent = status.requestMethod === 'addHostAccessRequest' ? 'Request Site Access' : 'Grant Site Access';
+  }
+
+  async function requestHostAccessFromPanel() {
+    const status = hostPermissionStatus;
+    if (!status?.supported || !status.pattern) {
+      showPanelNotice(status?.message || 'Host access is not available for this page', 'error');
+      return;
+    }
+
+    const button = $('btnGrantHostAccess');
+    if (button) button.disabled = true;
+    try {
+      if (status.requestMethod === 'addHostAccessRequest') {
+        const response = await chrome.runtime.sendMessage({
+          action: 'queueHostAccessRequest',
+          url: currentTab?.url || '',
+          tabId: currentTab?.id
+        });
+        if (response?.error || response?.success === false) {
+          throw new Error(response?.error || 'Could not queue site access request');
+        }
+        showPanelNotice(response.message || 'Site access request added');
+      } else if (chrome.permissions?.request) {
+        const granted = await chrome.permissions.request({ origins: [status.pattern] });
+        showPanelNotice(granted ? 'Site access granted' : 'Site access was not granted', granted ? 'success' : 'error');
+      } else {
+        await chrome.tabs.create({ url: `chrome://extensions/?id=${chrome.runtime.id}` });
+      }
+      await refresh();
+    } catch (error) {
+      showPanelNotice(error?.message || 'Failed to request site access', 'error');
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
   function createScriptBadge(domain, name) {
     const badge = document.createElement('span');
     badge.className = 'sp-item-icon-badge';
@@ -333,11 +396,14 @@
       updateUrlBar();
       const currentUrl = currentTab?.url || '';
       currentPageCanRunScripts = canMatchScriptsForUrl(currentUrl);
-      const [allRes, matchedRes] = await Promise.all([
+      const [allRes, matchedRes, hostStatus] = await Promise.all([
         chrome.runtime.sendMessage({ action: 'getScripts' }),
         currentPageCanRunScripts
           ? chrome.runtime.sendMessage({ action: 'getScriptsForUrl', url: currentUrl })
-          : Promise.resolve([])
+          : Promise.resolve([]),
+        currentPageCanRunScripts
+          ? chrome.runtime.sendMessage({ action: 'getHostPermissionStatus', url: currentUrl }).catch(() => null)
+          : Promise.resolve(null)
       ]);
       // Phase 39.23 — VM #2516 cross-realm array guard. Coerce through
       // Array.from so an array-like response from a foreign realm doesn't
@@ -345,8 +411,10 @@
       const rawAll = allRes?.scripts ?? Object.values(allRes || {});
       allScripts = Array.isArray(rawAll) ? rawAll : Array.from(rawAll ?? []);
       pageScripts = Array.isArray(matchedRes) ? matchedRes : Array.from(matchedRes ?? []);
+      hostPermissionStatus = hostStatus || null;
       renderPageScripts();
       renderAllScripts();
+      renderHostAccessPanel();
       await refreshPendingUpdatesChip();
     } catch (e) {
       console.error('[SP] refresh error:', e);
@@ -823,6 +891,7 @@
     });
     $('btnOpenDash').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }).catch(() => {}));
     $('btnToggleAll').addEventListener('click', toggleAll);
+    $('btnGrantHostAccess')?.addEventListener('click', requestHostAccessFromPanel);
     $('allSectionHeader').addEventListener('click', () => {
       setAllScriptsCollapsed(!allCollapsed);
     });
@@ -880,6 +949,7 @@
 
     updateSearchSummary(allScripts.length);
     updatePageActions();
+    renderHostAccessPanel();
     setAllScriptsCollapsed(false);
   }
 
@@ -893,6 +963,12 @@
       if (info.status === 'complete' && currentTab && tabId === currentTab.id) {
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(refresh, 200);
+      }
+    });
+    chrome.runtime.onMessage?.addListener((message) => {
+      if (message?.action === 'runtimeHostPermissionsChanged') {
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(refresh, 150);
       }
     });
   }

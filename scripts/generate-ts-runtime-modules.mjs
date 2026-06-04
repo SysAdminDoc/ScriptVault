@@ -124,6 +124,12 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'InternalHostGuard',
   },
   {
+    id: 'host-permission-patterns',
+    source: 'src/background/host-permission-patterns.ts',
+    output: 'modules/host-permission-patterns.js',
+    exportName: 'HostPermissionPatterns',
+  },
+  {
     id: 'resources',
     source: 'src/modules/resources.ts',
     output: 'modules/resources.js',

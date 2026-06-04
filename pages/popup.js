@@ -28,6 +28,7 @@
     let settings = {};
     let userScriptsAvailable = true;
     let setupStatus = null;
+    let hostPermissionStatus = null;
     let popupToastTimer = null;
     const MATCHABLE_PROTOCOLS = new Set(['http:', 'https:', 'file:', 'ftp:']);
     const busyControls = new WeakSet();
@@ -477,6 +478,94 @@
         return true;
     }
 
+    function clearHostPermissionWarning() {
+        hostPermissionStatus = null;
+        if (setupStatus?.setupState === 'host-permission-needed') {
+            hideSetupWarning();
+        }
+    }
+
+    function summarizeHostPermissionWarning(status) {
+        const blocked = Array.isArray(status?.blockedScripts) ? status.blockedScripts : [];
+        const names = blocked.slice(0, 2).map(script => script.name || script.id || 'script').join(', ');
+        const more = status.blockedCount > blocked.slice(0, 2).length
+            ? ` and ${status.blockedCount - blocked.slice(0, 2).length} more`
+            : '';
+        const target = status?.host || 'this site';
+        if (names) {
+            return `${names}${more} cannot run until ScriptVault is granted browser access to ${target}.`;
+        }
+        return status?.message || `Grant ScriptVault browser access to ${target} before matching scripts can run.`;
+    }
+
+    async function refreshHostPermissionWarning() {
+        if (!userScriptsAvailable || !currentUrl || !canMatchScriptsForUrl(currentUrl)) {
+            clearHostPermissionWarning();
+            return null;
+        }
+
+        try {
+            const status = await chrome.runtime.sendMessage({ action: 'getHostPermissionStatus', url: currentUrl });
+            hostPermissionStatus = status || null;
+            if (status?.needsHostAccess) {
+                showSetupWarning({
+                    setupState: 'host-permission-needed',
+                    setupTitle: 'Site access needed',
+                    setupMessage: summarizeHostPermissionWarning(status),
+                    setupAction: status.requestMethod === 'addHostAccessRequest' ? 'Request Site Access' : 'Grant Site Access',
+                    setupUrl: '',
+                    pattern: status.pattern,
+                    host: status.host,
+                    requestMethod: status.requestMethod
+                });
+            } else if (setupStatus?.setupState === 'host-permission-needed') {
+                hideSetupWarning();
+            }
+            return status;
+        } catch (error) {
+            clearHostPermissionWarning();
+            return null;
+        }
+    }
+
+    async function requestHostPermissionFromPopup() {
+        const status = hostPermissionStatus || await refreshHostPermissionWarning();
+        if (!status?.supported || !status.pattern) {
+            showPopupToast(status?.message || 'Host access is not available for this page', 'warning');
+            return false;
+        }
+
+        if (status.requestMethod === 'addHostAccessRequest') {
+            const response = await chrome.runtime.sendMessage({
+                action: 'queueHostAccessRequest',
+                url: currentUrl,
+                tabId: currentTab?.id
+            });
+            if (response?.error || response?.success === false) {
+                throw new Error(response?.error || 'Could not queue site access request');
+            }
+            showPopupToast(response.message || 'Site access request added', 'info');
+            await refreshHostPermissionWarning();
+            return true;
+        }
+
+        if (chrome.permissions?.request) {
+            const granted = await chrome.permissions.request({ origins: [status.pattern] });
+            if (!granted) {
+                showPopupToast('Site access was not granted', 'warning');
+                await refreshHostPermissionWarning();
+                return false;
+            }
+            showPopupToast('Site access granted');
+            await loadPageScripts();
+            return true;
+        }
+
+        await chrome.tabs.create({ url: `chrome://extensions/?id=${chrome.runtime.id}` });
+        window.close();
+        return false;
+    }
+
     function showSetupWarning(statusOrMessage) {
         if (elements.setupWarning) {
             const status = typeof statusOrMessage === 'string'
@@ -532,6 +621,7 @@
     // Load scripts for current page (with 5s timeout)
     async function loadPageScripts() {
         if (!currentUrl) {
+            clearHostPermissionWarning();
             pageScripts = [];
             renderScriptList();
             updateEnabledState();
@@ -540,6 +630,7 @@
         }
 
         if (!canMatchScriptsForUrl(currentUrl)) {
+            clearHostPermissionWarning();
             pageScripts = [];
             renderScriptList();
             updateEnabledState();
@@ -557,6 +648,7 @@
             pageScripts = Array.isArray(response) ? response : Array.from(response ?? []);
             renderScriptList();
             updateEnabledState();
+            await refreshHostPermissionWarning();
         } catch (error) {
             console.error('Failed to load scripts:', error);
             pageScripts = [];
@@ -1680,9 +1772,23 @@
                 await requestFirefoxUserScriptsPermissionFromPopup();
                 return;
             }
+            if (setupStatus?.setupState === 'host-permission-needed') {
+                try {
+                    await requestHostPermissionFromPopup();
+                } catch (error) {
+                    showPopupToast(error?.message || 'Failed to request site access', 'error');
+                }
+                return;
+            }
             const targetUrl = setupStatus?.setupUrl || `chrome://extensions/?id=${chrome.runtime.id}`;
             chrome.tabs.create({ url: targetUrl });
             window.close();
+        });
+
+        chrome.runtime.onMessage?.addListener((message) => {
+            if (message?.action === 'runtimeHostPermissionsChanged') {
+                refreshHostPermissionWarning().catch(() => {});
+            }
         });
 
         // Keyboard navigation for script list
