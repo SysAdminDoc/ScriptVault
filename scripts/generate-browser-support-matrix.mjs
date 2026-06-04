@@ -38,16 +38,16 @@ function existingGeneratedDate() {
 function firefoxLintSummary() {
   const artifact = resolve(root, 'firefox-artifacts/web-ext-lint.json');
   if (!existsSync(artifact)) {
-    return '`npm run firefox:package` (no local `firefox-artifacts/web-ext-lint.json` present)';
+    return '`npm run firefox:package`, `npm run smoke:firefox` (no local `firefox-artifacts/web-ext-lint.json` present)';
   }
   try {
     const lint = JSON.parse(readFileSync(artifact, 'utf8'));
     const errors = lint.summary?.errors ?? lint.errors?.length ?? 0;
     const notices = lint.summary?.notices ?? lint.notices?.length ?? 0;
     const warnings = lint.summary?.warnings ?? lint.warnings?.length ?? lint.count ?? 0;
-    return `\`npm run firefox:package\`; web-ext lint ${errors} errors / ${notices} notices / ${warnings} warnings`;
+    return `\`npm run firefox:package\`, \`npm run smoke:firefox\`; web-ext lint ${errors} errors / ${notices} notices / ${warnings} warnings`;
   } catch {
-    return '`npm run firefox:package` (local lint artifact unreadable)';
+    return '`npm run firefox:package`, `npm run smoke:firefox` (local lint artifact unreadable)';
   }
 }
 

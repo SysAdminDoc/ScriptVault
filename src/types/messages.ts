@@ -211,6 +211,7 @@ interface GetLocalHealthReport {
 
 type UserScriptsSetupState =
   | 'available'
+  | 'firefox-user-scripts-permission'
   | 'allow-user-scripts-disabled'
   | 'developer-mode-disabled'
   | 'unsupported-browser';

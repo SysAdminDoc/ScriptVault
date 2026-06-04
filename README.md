@@ -294,23 +294,24 @@ Firefox is still a validation target, not a published AMO listing. The current p
 
 ```bash
 npm run firefox:package
+npm run smoke:firefox
 ```
 
-Artifacts are written to `firefox-artifacts/`: the Firefox package ZIP, a source-review ZIP, and `web-ext-lint.json`. The gate currently passes with 0 linter errors and 0 notices. Monaco is omitted from the Firefox package until the dedicated editor-loading pass lands, so the editor falls back to the textarea adapter; OAuth cloud providers are deferred because Firefox does not support `identity` as an optional permission.
+Artifacts are written to `firefox-artifacts/`: the Firefox package ZIP, a source-review ZIP, and `web-ext-lint.json`. The package gate currently passes with 0 linter errors and 0 notices. `npm run smoke:firefox` uses geckodriver plus Firefox Developer Edition/Nightly 140+ to temporary-install the package, open the dashboard and popup, save/toggle a smoke userscript, and verify it runs on a local target page. Monaco is omitted from the Firefox package until the dedicated editor-loading pass lands, so the editor falls back to the textarea adapter; OAuth cloud providers are deferred because Firefox does not support `identity` as an optional permission.
 
 ---
 
 ## Browser Support Matrix
 
 <!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:START -->
-_Last generated: 2026-05-24 with `npm run support:matrix`. Version source: `manifest.json` / `manifest-firefox.json` 3.11.0._
+_Last generated: 2026-06-04 with `npm run support:matrix`. Version source: `manifest.json` / `manifest-firefox.json` 3.11.0._
 
 | Browser | Support level | Tested version / target | Last successful verification | Verification evidence | Unsupported or deferred APIs |
 |---|---|---|---|---|---|
-| Chrome / Chromium | Tier 1 published target | Chrome 130+ MV3 | 2026-05-24 | `npm run smoke:dashboard`, `npm run cws:check`, Chrome ZIP packaging in CI | Chrome 138+ requires per-extension Allow User Scripts; per-script `worldId` is Chrome 133+ and feature-gated |
-| Microsoft Edge | Tier 1 compatible package; separate store automation pending | Edge 130+ Chromium MV3 package | 2026-05-24 package/manifests; no separate Edge CI smoke yet | Same ZIP as Chrome; smoke harness can run with Edge via `SCRIPT_VAULT_CHROME_PATH` | Edge Add-ons package/publish path is not automated yet |
-| Firefox Desktop | AMO validation target, not a published listing | Firefox 140.0+ MV3 | 2026-05-24 | `npm run firefox:package`; web-ext lint 0 errors / 0 notices / 138 warnings | `sidePanel`, `offscreen`, `identity` OAuth, and some `userScripts.execute` flows are unsupported/deferred; Firefox package omits Monaco until the Firefox editor-loading pass |
-| Firefox for Android | Manifest validation target | Firefox for Android 142.0+ | 2026-05-24 package/manifests; no Android device smoke yet | `manifest-firefox.json` `gecko_android` target plus Firefox source/package ZIP | Same Firefox API deferrals; no side panel; Android device smoke is not wired |
+| Chrome / Chromium | Tier 1 published target | Chrome 130+ MV3 | 2026-06-04 | `npm run smoke:dashboard`, `npm run cws:check`, Chrome ZIP packaging in CI | Chrome 138+ requires per-extension Allow User Scripts; per-script `worldId` is Chrome 133+ and feature-gated |
+| Microsoft Edge | Tier 1 compatible package; separate store automation pending | Edge 130+ Chromium MV3 package | 2026-06-04 package/manifests; no separate Edge CI smoke yet | Same ZIP as Chrome; smoke harness can run with Edge via `SCRIPT_VAULT_CHROME_PATH` | Edge Add-ons package/publish path is not automated yet |
+| Firefox Desktop | AMO validation target, not a published listing | Firefox 140.0+ MV3 | 2026-06-04 | `npm run firefox:package`, `npm run smoke:firefox`; web-ext lint 0 errors / 0 notices / 139 warnings | `sidePanel`, `offscreen`, `identity` OAuth, and some `userScripts.execute` flows are unsupported/deferred; Firefox package omits Monaco until the Firefox editor-loading pass |
+| Firefox for Android | Manifest validation target | Firefox for Android 142.0+ | 2026-06-04 package/manifests; no Android device smoke yet | `manifest-firefox.json` `gecko_android` target plus Firefox source/package ZIP | Same Firefox API deferrals; no side panel; Android device smoke is not wired |
 | Brave / Vivaldi / Opera / Arc | Chromium derivative watchlist | Chrome 130+ package may load | Not release-verified | No CI smoke or store package for these browsers | Store policy, shields/sidebar behavior, and extension UI chrome are unverified |
 | Orion / Safari | Not supported | Not a current target | Not verified | No build, smoke, or package path | Requires separate WebKit/Orion validation and likely native Safari extension work |
 <!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:END -->

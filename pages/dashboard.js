@@ -2374,6 +2374,25 @@
     // Ask the background worker for the canonical live probe so popup,
     // dashboard, support snapshots, and repair all agree on Chrome's current
     // userScripts state.
+    async function requestFirefoxUserScriptsPermission() {
+        if (!chrome.permissions?.request) {
+            showToast('Firefox permission request API is unavailable', 'error');
+            return false;
+        }
+        const granted = await chrome.permissions.request({ permissions: ['userScripts'] });
+        if (!granted) {
+            showToast('Firefox userScripts permission was not granted', 'warning');
+            return false;
+        }
+        const result = await chrome.runtime.sendMessage({ action: 'repairRuntimeState' });
+        if (result?.error || result?.success === false || result?.userScriptsAvailable === false) {
+            showToast(result?.error || result?.setupMessage || 'Runtime still needs setup', 'warning');
+            return false;
+        }
+        showToast('Firefox userScripts permission granted', 'success');
+        return true;
+    }
+
     async function checkUserScriptsAvailability() {
         const banner = document.getElementById('setupWarningBanner');
         const text = document.getElementById('setupWarningText');
@@ -2427,7 +2446,11 @@
 
         // Tailor copy + visibility per state.
         if (text) {
-            if (status?.setupState === 'allow-user-scripts-disabled') {
+            if (status?.setupState === 'firefox-user-scripts-permission') {
+                text.innerHTML =
+                    '<strong>Setup required:</strong> Grant the optional ' +
+                    '<strong>userScripts</strong> permission so Firefox can register userscripts.';
+            } else if (status?.setupState === 'allow-user-scripts-disabled') {
                 text.innerHTML =
                     '<strong>Setup required:</strong> ScriptVault needs the ' +
                     '<strong>"Allow User Scripts"</strong> toggle for this extension. ' +
@@ -2456,10 +2479,21 @@
             btnDirect.textContent = status?.setupAction || 'Open Extension Details';
         }
 
-        if (btnDirect) btnDirect.onclick = () => {
+        if (btnDirect) btnDirect.onclick = async () => {
             try {
+                if (status?.setupState === 'firefox-user-scripts-permission') {
+                    btnDirect.disabled = true;
+                    const granted = await requestFirefoxUserScriptsPermission();
+                    await checkUserScriptsAvailability();
+                    if (granted) await loadRuntimeStatus({ announce: true });
+                    return;
+                }
                 chrome.tabs.create({ url: status?.setupUrl || 'chrome://extensions/?id=' + chrome.runtime.id });
-            } catch (_e) { /* extension context invalidated */ }
+            } catch (error) {
+                showToast(error?.message || 'Failed to open setup action', 'error');
+            } finally {
+                btnDirect.disabled = false;
+            }
         };
         if (btnHelp) btnHelp.onclick = () => {
             showSetupInstructions();
@@ -2473,7 +2507,16 @@
         const chromeVersion = parseInt(navigator.userAgent.match(/(?:Chrome|Chromium)\/(\d+)/)?.[1] || 0);
         
         let instructions = '';
-        if (chromeVersion >= 138) {
+        if (/Firefox\//.test(navigator.userAgent || '')) {
+            instructions = `
+                <h3 style="margin-bottom: 15px; color: var(--text-primary);">Grant Firefox userScripts Permission</h3>
+                <ol style="line-height: 1.8; color: var(--text-secondary); padding-left: 20px;">
+                    <li>Click <strong>Grant Permission</strong> in the setup banner.</li>
+                    <li>Approve Firefox's permission prompt for ScriptVault.</li>
+                    <li>Refresh runtime status, then reload any open target pages.</li>
+                </ol>
+            `;
+        } else if (chromeVersion >= 138) {
             instructions = `
                 <h3 style="margin-bottom: 15px; color: var(--text-primary);">Enable User Scripts (Chrome 138+)</h3>
                 <ol style="line-height: 1.8; color: var(--text-secondary); padding-left: 20px;">

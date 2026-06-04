@@ -46,7 +46,9 @@ When a High advisory has no upstream fix:
 
 ## Current exceptions
 
-_None as of 2026-05-24._
+_None as of 2026-06-04._ The `web-ext@10.2.0 -> tmp@0.2.5`
+GHSA-ph9p-34f9-6g65 / CVE-2026-44705 advisory was cleared by bumping
+`web-ext` to `^10.3.0`, which depends on fixed `tmp@0.2.6`.
 
 ## Why not advisory-only?
 
@@ -60,6 +62,6 @@ way to keep the muscle memory.
 ## Verification
 
 - `npm audit --audit-level=high --omit=optional` in this repo currently
-  exits 0 (clean) as of 2026-05-24.
+  exits 0 (clean) as of 2026-06-04.
 - The CI step at `.github/workflows/ci.yml` line 45 enforces the same
   command on every push.

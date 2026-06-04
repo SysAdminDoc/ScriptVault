@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 const firefoxManifest = JSON.parse(readFileSync(resolve(process.cwd(), 'manifest-firefox.json'), 'utf8'));
 const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'));
 const buildFirefox = readFileSync(resolve(process.cwd(), 'build-firefox.sh'), 'utf8');
+const runBash = readFileSync(resolve(process.cwd(), 'scripts/run-bash.mjs'), 'utf8');
+const firefoxSmoke = readFileSync(resolve(process.cwd(), 'scripts/smoke-firefox-sideload.mjs'), 'utf8');
 const ciWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
 const backgroundCore = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 const registrationTs = readFileSync(resolve(process.cwd(), 'src/background/registration.ts'), 'utf8');
@@ -35,9 +37,10 @@ describe('Firefox AMO validation gate', () => {
   });
 
   it('builds, lints, packages, and sources Firefox artifacts through web-ext', () => {
-    expect(packageJson.devDependencies['web-ext']).toMatch(/10\.2/);
+    expect(packageJson.devDependencies['web-ext']).toMatch(/10\.3/);
     expect(packageJson.scripts['firefox:lint']).toBe('node scripts/run-bash.mjs build-firefox.sh --lint --keep-build --no-source-zip --prepare-only');
     expect(packageJson.scripts['firefox:package']).toBe('node scripts/run-bash.mjs build-firefox.sh --lint');
+    expect(packageJson.scripts['smoke:firefox']).toBe('node scripts/smoke-firefox-sideload.mjs');
     expect(buildFirefox).toContain('generate-manifest-firefox.mjs" --profile firefox --check');
     expect(buildFirefox).toContain('npx web-ext lint');
     expect(buildFirefox).toContain('npx web-ext build');
@@ -47,6 +50,30 @@ describe('Firefox AMO validation gate', () => {
     expect(buildFirefox).not.toMatch(/^\s+lib\s*$/m);
     expect(ciWorkflow).toContain('npm run firefox:package');
     expect(ciWorkflow).toContain('scriptvault-firefox-package');
+  });
+
+  it('automates temporary Firefox sideload smoke through geckodriver', () => {
+    expect(firefoxSmoke).toContain("const EXTENSION_ID = 'ScriptVault@sysadmindoc.dev'");
+    expect(firefoxSmoke).toContain('/moz/addon/install');
+    expect(firefoxSmoke).toContain('-remote-allow-system-access');
+    expect(firefoxSmoke).toContain('ExtensionParent.GlobalManager.extensionMap.get');
+    expect(firefoxSmoke).toContain('ExtensionPermissions.add');
+    expect(firefoxSmoke).toContain('extension.baseURI.spec');
+    expect(firefoxSmoke).toContain('Firefox userScripts permission button');
+    expect(firefoxSmoke).toContain("action: 'saveScript'");
+    expect(firefoxSmoke).toContain("action: 'toggleScript'");
+    expect(firefoxSmoke).toContain('ranOnTargetPage: runResult.ok');
+    expect(firefoxSmoke).toContain('scriptvault-firefox-v${version}.zip');
+  });
+
+  it('aliases Firefox menus to the shared contextMenus runtime path', () => {
+    expect(backgroundCore).toContain('!chrome.contextMenus && chrome.menus');
+    expect(backgroundCore).toContain('chrome.contextMenus = chrome.menus');
+  });
+
+  it('prefers native Windows bash before generic WSL bash for packaging', () => {
+    expect(runBash).toContain("process.platform === 'win32' ? windowsBashCandidates : posixBashCandidates");
+    expect(runBash.indexOf("'C:\\\\Program Files\\\\Git\\\\bin\\\\bash.exe'")).toBeLessThan(runBash.indexOf("'bash'"));
   });
 
   it('guards Chrome-only per-script worldId on Firefox in runtime and TS mirror', () => {

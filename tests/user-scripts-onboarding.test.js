@@ -10,9 +10,11 @@ describe('Chrome userScripts onboarding diagnostics', () => {
   it('centralizes the live Chrome userScripts probe in the background worker', () => {
     expect(backgroundCore).toContain('async function probeUserScriptsAvailability()');
     expect(backgroundCore).toContain("await chrome.userScripts.getScripts();");
+    expect(backgroundCore).toContain("setupState = 'firefox-user-scripts-permission';");
     expect(backgroundCore).toContain("setupState = 'allow-user-scripts-disabled';");
     expect(backgroundCore).toContain("setupState = 'developer-mode-disabled';");
     expect(backgroundCore).toContain("setupState = 'unsupported-browser';");
+    expect(backgroundCore).toContain('Grant ScriptVault the optional Firefox userScripts permission, then refresh runtime status.');
     expect(backgroundCore).toContain('Open Extension Details, enable "Allow User Scripts" for ScriptVault, then refresh status; reload the extension if this banner remains.');
     expect(backgroundCore).toContain('Open chrome://extensions and enable Developer Mode to run userscripts.');
   });
@@ -29,11 +31,15 @@ describe('Chrome userScripts onboarding diagnostics', () => {
 
   it('surfaces the canonical setup state in popup and dashboard diagnostics', () => {
     expect(popupJs).toContain('function buildPopupSetupFallback(message = \'\')');
+    expect(popupJs).toContain("chrome.permissions.request({ permissions: ['userScripts'] })");
+    expect(popupJs).toContain("if (setupStatus?.setupState === 'firefox-user-scripts-permission')");
     expect(popupJs).toContain('showSetupWarning(status);');
     expect(popupJs).toContain('elements.setupWarning.dataset.setupState = status.setupState || \'unknown\';');
     expect(popupJs).toContain('const targetUrl = setupStatus?.setupUrl ||');
 
     expect(dashboardJs).toContain("chrome.runtime.sendMessage({ action: 'getExtensionStatus' })");
+    expect(dashboardJs).toContain("chrome.permissions.request({ permissions: ['userScripts'] })");
+    expect(dashboardJs).toContain("if (status?.setupState === 'firefox-user-scripts-permission')");
     expect(dashboardJs).toContain("banner.dataset.setupState = status?.setupState || 'unknown';");
     expect(dashboardJs).toContain("btnDirect.textContent = status?.setupAction || 'Open Extension Details';");
     expect(dashboardJs).toContain("chrome.tabs.create({ url: status?.setupUrl || 'chrome://extensions/?id=' + chrome.runtime.id });");
@@ -41,6 +47,7 @@ describe('Chrome userScripts onboarding diagnostics', () => {
 
   it('types the richer status response for TS consumers', () => {
     expect(messagesTs).toContain("type UserScriptsSetupState =");
+    expect(messagesTs).toContain("'firefox-user-scripts-permission'");
     expect(messagesTs).toContain("'allow-user-scripts-disabled'");
     expect(messagesTs).toContain("'developer-mode-disabled'");
     expect(messagesTs).toContain('setupState: UserScriptsSetupState;');
