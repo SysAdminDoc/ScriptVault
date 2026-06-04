@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier and sync-crypto promotions, `ts-source:check` reports 26 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 15 - 2026-06-04.
+> Last researched: Cycle 16 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -357,6 +357,24 @@ Priorities/sizes preserve the source labels.
   now evidence-backed and should require pinned SHAs plus a freshness path, not
   only a grep for `@v`.
 
+### Researcher Queue (Cycle 16 - 2026-06-04)
+
+- [ ] 🔬 `dependency-freshness-automation-2026-06-04` - reran
+  `npm outdated --json` from a mapped checkout after the `web-ext@^10.3.0`
+  remediation and found nine direct devDependencies still behind:
+  `@vitest/coverage-v8` 4.1.3 -> 4.1.8, `chrome-types` 0.1.425 -> 0.1.429,
+  `chrome-webstore-upload-cli` 4.0.0 -> 4.0.1, `esbuild` 0.27.4 -> wanted
+  0.27.7 / latest 0.28.0, `jsdom` 29.0.1 -> 29.1.1, `monaco-editor`
+  0.52.2 -> latest 0.55.1, `puppeteer-core` 24.42.0 -> wanted 24.43.1 /
+  latest 25.1.0, `typescript` 6.0.2 -> 6.0.3, and `vitest` 4.1.3 -> 4.1.8.
+  `.github/` still contains only `workflows/ci.yml`, so no checked-in updater
+  watches npm or workflow action drift. GitHub's Dependabot docs require
+  `version: 2`, one `updates` entry per ecosystem, `directory: "/"`, and
+  `schedule.interval`; they also support grouping npm development updates and a
+  separate `github-actions` ecosystem for workflow references. The P1 row below
+  should therefore include npm and action-update coverage, grouping/noise limits,
+  and an explicit path for major-version review.
+
 ### Firefox and mobile release quality
 
 - [x] 🤖 🔧 🔬 P2 — Add a Firefox for Android smoke gate or remove the Android compatibility claim before AMO listing
@@ -588,10 +606,10 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
   - Verify: run `npm run test:cov` from a local or `pushd`-mapped path so Node tooling does not inherit a UNC cwd; temporarily drop a covered `src/background/**` fixture below the floor and confirm the gate fails; inspect `coverage/coverage-summary.json` for `src/background/core.ts` and `src/background/wrapper-builder.ts`.
   - Complexity: M
 - [ ] P1 — Automate dependency freshness (Dependabot/Renovate) instead of reactive audit
-  - Why: 10 devDeps are behind latest (esbuild 0.27→0.28, monaco 0.52→0.55, puppeteer-core 24→25, vitest/coverage 4.1.3→4.1.8, web-ext 10.2→10.3, etc.); `docs/dependency-audit-policy.md` documents a manual cadence and the CI gate is purely reactive (fails only after a CVE lands, as with `tmp`). A scheduled bot would have surfaced the web-ext bump before CI broke.
-  - Touches: new `.github/dependabot.yml` (or `renovate.json`), grouped devDep PRs.
-  - Acceptance: weekly grouped update PRs open automatically against `main`.
-  - Verify: Dependabot config validates; first scheduled run opens a PR.
+  - Why: current mapped-checkout `npm outdated --json` still reports nine direct devDependencies behind after the `web-ext@^10.3.0` fix: `@vitest/coverage-v8` and `vitest` 4.1.3 -> 4.1.8, `chrome-types` 0.1.425 -> 0.1.429, `chrome-webstore-upload-cli` 4.0.0 -> 4.0.1, `esbuild` 0.27.4 -> wanted 0.27.7 / latest 0.28.0, `jsdom` 29.0.1 -> 29.1.1, `monaco-editor` 0.52.2 -> latest 0.55.1, `puppeteer-core` 24.42.0 -> wanted 24.43.1 / latest 25.1.0, and `typescript` 6.0.2 -> 6.0.3. `.github/` contains only `workflows/ci.yml`, while `docs/dependency-audit-policy.md` documents reactive audit handling. GitHub's Dependabot docs support npm and `github-actions` version checks from `directory: "/"` with `schedule.interval`, so this should also keep the Cycle 15 action pins fresh once they land.
+  - Touches: new `.github/dependabot.yml` (or `renovate.json`) covering npm and GitHub Actions, grouped patch/minor devDep PRs, separate major-update handling for Monaco/Puppeteer/esbuild, and dependency-audit policy notes.
+  - Acceptance: scheduled grouped update PRs open against `main` for npm dev tooling and workflow actions; patch/minor tooling updates are grouped to control PR volume; major updates are isolated with manual review labels; security updates are not blocked by broad ignore rules.
+  - Verify: Dependabot config validates, the dependency graph Dependabot tab shows npm and GitHub Actions checks, first scheduled run or manual trigger opens the expected grouped PRs, and `npm audit --audit-level=high --omit=optional` remains green after bot-driven lockfile refreshes.
   - Complexity: S
 - [ ] P1 — Pin GitHub Actions to commit SHAs (supply-chain hardening of the release pipeline)
   - Why: `ci.yml` has eight tag-based action references in the trusted release job: `actions/checkout@v4`, `actions/setup-node@v4`, `browser-actions/setup-chrome@v1`, two `actions/attest@v4` steps, and three `actions/upload-artifact@v4` steps. That same job grants `id-token: write` and `attestations: write`, runs `npm run release:trust`, attests the Chrome package/SBOM, and uploads Chrome/Firefox/Edge artifacts. GitHub's secure-use reference says full-length commit SHAs are the immutable action reference and warns tags can be moved or deleted; GitHub's action release docs also require the full SHA, not an abbreviated one, when taking that path. SHA-pinning closes that gap and complements the existing F-2 release-trust work.
