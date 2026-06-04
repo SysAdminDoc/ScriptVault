@@ -1,14 +1,184 @@
 # ScriptVault Roadmap
 
+> Single source of truth for planned work. Items above the first `---` are the
+> consolidated active queue and research-driven additions; the Round 14 body
+> below is the broad historical planning appendix. Items above `---` are
+> existing plans; below the Research-Driven Additions heading are research
+> conducted 2026-06-03.
+>
 > From v2.0.1 (bash-concatenated JS prototype) to production-grade TypeScript extension.
 > Each phase is independently shippable. Later phases depend on earlier ones.
-> Active open-work extraction lives in [`TODO.md`](TODO.md); research and
-> completion indexes live in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md) and
-> [`COMPLETED.md`](COMPLETED.md).
+> Completion history lives in [`COMPLETED.md`](COMPLETED.md); the research and
+> planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
+> planning passes are archived under `docs/archive/`.
 >
 > **Roadmap version:** Round 14 - OSINT refresh 2026-05-24. Shipped baseline remains **v3.11.0 (2026-05-19, tag pushed)**, and `main` now has additional unreleased 2026-05-24 hardening/release commits including release artifact reconciliation, CWS runbook/audit-gate alignment, Chrome userScripts diagnostics, Firefox AMO validation packaging, and permission/store-copy drift checks. This Round 14 section is the current planning source for v3.12.0+ and supersedes older Round 13 prioritization where rows disagree.
 > **2026-05-24 state:** 821 local Vitest cases were last recorded green via `npm run check`; `npm audit --audit-level=high --omit=optional` is currently clean; GitHub Release `v3.11.0` is now published as latest with `ScriptVault-v3.11.0.zip`; Firefox AMO package/source ZIP generation now passes `web-ext lint` with 0 errors and 0 notices; `npm run store-copy:check` covers 30 manifest permission/privacy/store surfaces; no GitHub issues or PRs are currently open.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
+
+---
+
+## Existing Planned Work
+
+Active, unshipped items consolidated 2026-06-03 from the former `TODO.md`
+(archived at `docs/archive/TODO.md`). Shipped items moved to `COMPLETED.md`.
+Priorities preserve the original phase labels: P0 safety/security/data-loss,
+P1 core workflow gaps, P2 polish, P3 nice-to-have.
+
+### Ecosystem and modernization
+
+- [ ] P2 — ESM badge in script row (R-2 from ESM roadmap)
+  - Why: surface ES-module userscripts in the dashboard list.
+  - Touches: `pages/dashboard.js` `renderScriptRow`, `pages/dashboard.css`.
+  - Source: docs/archive/TODO.md E-6 (PASS2 NF-14).
+- [ ] P2 — ScriptCat-style script subscriptions (URL → JSON list)
+  - Why: auto-updating curated bundle install.
+  - Touches: `background.core.js`, new `modules/subscriptions.js`, dashboard import UI.
+  - Source: docs/archive/TODO.md E-7 (PASS2 ecosystem item 14).
+- [ ] P2 — `navigator.storage.persist()` prompt on first non-trivial write
+  - Why: avoid silent eviction of script data under storage pressure.
+  - Touches: `modules/quota-manager.js`, `background.core.js`.
+  - Source: docs/archive/TODO.md E-8 (PASS2 ecosystem item 17).
+
+### TypeScript source-of-truth and release trust (larger bets)
+
+- [ ] P1 — Continue TypeScript authoritative-source promotion until `background.core.js` is generated from TS
+  - Why: collapse runtime/TS mirror drift (14/20 modules promoted, 6 still mirrored).
+  - Acceptance: `ts-source-promotion.json` reaches 0 mirrored; `background.core.js` is generated from TS source.
+  - Source: docs/archive/TODO.md F-1 (ROADMAP Larger Bets).
+- [ ] P1 — Complete release trust pipeline (rollback rehearsal automation, CWS/AMO status checks)
+  - Why: partial — signatures/SBOM/source ZIP/package diff done; rollback rehearsal + store status checks remain.
+  - Source: docs/archive/TODO.md F-2 (ROADMAP Larger Bets).
+- [ ] P2 — Local health diagnostics (other half of large-library bet)
+  - Why: perf harness + virtualization shipped; diagnostics half remains.
+  - Source: docs/archive/TODO.md F-3 (ROADMAP Larger Bets).
+- [ ] P2 — Sigstore `@require-provenance` implementation
+  - Why: design-complete supply-chain provenance for `@require`.
+  - Source: docs/archive/TODO.md F-4 (`docs/require-provenance-design.md`).
+- [ ] P2 — Module-mode service worker (Chrome 124+ `"type":"module"` background)
+  - Source: docs/archive/TODO.md F-5 (PASS2 NF-17).
+
+### Firefox port carry-over
+
+- [ ] P1 — Feature-flag `chrome.offscreen` for Firefox MV3
+  - Why: `bg/analyzer.js` + `background.core.js` call `chrome.offscreen.createDocument(...)`.
+  - Source: docs/archive/TODO.md G-1 (FIREFOX-PORT.md Phase 1).
+- [ ] P1 — Feature-flag `chrome.sidePanel` for Firefox MV3
+  - Source: docs/archive/TODO.md G-2 (FIREFOX-PORT.md Phase 1).
+- [ ] P1 — Monaco editor loading path on Firefox (decide A vs B)
+  - Source: docs/archive/TODO.md G-3 (FIREFOX-PORT.md Phase 1).
+- [ ] P1 — Build + Firefox sideload smoke (Phase 1 completion)
+  - Source: docs/archive/TODO.md G-4.
+- [ ] P2 — Phase 2: import-from-Chrome backup round-trip
+  - Source: docs/archive/TODO.md G-5.
+- [ ] P2 — Phase 3: per-provider WebDAV-only baseline + later OAuth/identity decision
+  - Source: docs/archive/TODO.md G-6.
+- [ ] P2 — Phase 5: AMO submission (unlisted then listed)
+  - Source: docs/archive/TODO.md G-7.
+
+### Accessibility (WCAG3 gap matrix open rows)
+
+- [ ] P2 — Help link consistency across pages
+  - Why: centralized Help entry in dashboard header, consistent link from popup / sidepanel / install.
+  - Source: docs/archive/TODO.md H-1 (`docs/wcag3-gap-analysis.md`).
+- [ ] P2 — Plain-language audit (Flesch ≥ 60) per Phase 34.6
+  - Source: docs/archive/TODO.md H-2 (`docs/wcag3-gap-analysis.md`).
+
+### Documentation hygiene
+
+- [ ] P3 — Add CONTRIBUTING.md note explaining `.factory/` directory purpose
+  - Source: docs/archive/TODO.md I-1 (PASS2 Architecture #8).
+- [ ] P3 — Expand `docs/readme-feature-claim-checklist.md` rows for ESM bundler, trust receipts, install-source badges, internal-host guard, sync cockpit, virtualized dashboard
+  - Source: docs/archive/TODO.md I-2 (PASS2 quick-win 13).
+- [ ] P3 — Add `"engines": {"node": ">=20"}` to `package.json`
+  - Source: docs/archive/TODO.md I-3 (PASS2 quick-win 14).
+
+---
+
+## Research-Driven Additions
+
+Net-new findings from the third-pass deep audit of the live runtime
+(2026-06-03), folded from `docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md`.
+Priorities/sizes preserve the source labels.
+
+### Security and data safety
+
+- [ ] P0 — `GM_xmlhttpRequest` internal-host / SSRF guard
+  - Why: a script with `@grant GM_xmlhttpRequest` and empty/`@connect *` can fetch IMDS (`169.254.169.254`), localhost admin panels, or RFC1918 routers with `credentials:'include'` — a session-hijack/SSRF primitive. GM_xhr gates only on `evaluateConnectPolicy`; the raw `fetch` is never wrapped by `InternalHostGuard` (GM_loadScript does both pre/post checks).
+  - Touches: `background.core.js:3832`, `modules/internal-host-guard.js`, `modules/xhr.js` redirect default.
+  - Acceptance: `{url:'http://169.254.169.254/'}` and a redirect-to-private-IP both reject; explicit `allowInternalXhr`/`@connect localhost` opt-in preserved.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-1.
+- [ ] P1 — Optional client-side E2E encryption for cloud sync
+  - Why: synced script source (often embedding API keys) uploads as plaintext `JSON.stringify` to every provider; a WebDAV operator or compromised Drive/Dropbox account reads the whole library.
+  - Touches: new `modules/sync-crypto.js`, `cloud-sync.ts` `_performSync`, each provider `upload/download`.
+  - Acceptance: PBKDF2→AES-256-GCM round-trip identity; wrong-passphrase rejection; mixed v1/v2 envelope handling.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-2.
+- [ ] P1 — Per-script host scope for GM network/cookie/DNR primitives
+  - Why: injection is `@match`-scoped but background GM_xhr/GM_cookie/GM_download/GM_webRequest run with the extension's ambient `<all_urls>`; umbrella for NF-1/B-1/H-1.
+  - Touches: GM_xhr/GM_cookie/GM_download cases, `dnr-rules.ts`, install card.
+  - Acceptance: `@match example.com`-only script blocked from `other.com` fetch/cookie/DNR unless overridden; CSP-strip rule rejected without high-privilege toggle.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-4.
+- [ ] P1 — TOFU SRI for unpinned `@require`
+  - Why: SRI enforced only when an author hand-pins `#sha256=`; a compromised CDN silently swaps `@require` bytes. `trust-receipt.ts` already computes per-`@require` SHA-256 and diffs across updates but only displays, never enforces.
+  - Touches: `resource-loader.ts`; wire existing trust-receipt diff to fail-closed on update.
+  - Acceptance: changing a remote `@require` body on update is flagged/blocked.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-5.
+
+### Correctness and reachability
+
+- [ ] P1 — Triage unreachable/duplicated dashboard modules (O-1)
+  - Why: ~760 KB of dashboard UI JS (snippets, templates, gist, collections, scheduler, depgraph, profiles, i18n-v2, linter, csp, debugger, standalone, gamification, diff, recommendations, pattern-builder, heatmap) is tested in CI but never mounted by any user (`initOnDemandModule`/`LazyLoader.loadForEditor()` discard results). Inline equivalents shadow most.
+  - Acceptance: each module triaged wire-or-delete; add a CI reachability gate; README claims drop for removed modules.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md O-1 / EI-4.
+- [ ] P1 — Correct `@crontab` next-fire engine
+  - Why: everything except `*/N * * * *`, `0 */N * * *`, `0 * * * *`, `0 0 * * *` silently falls back to 60 min — `30 9 * * 1` ("9:30am Mondays") runs hourly. A correctness/trust failure in an advertised feature.
+  - Touches: `background.core.js` (`parseCronToMinutes`→`nextCronFire`), `src/background/*` mirror, scheduler validate/preview.
+  - Acceptance: cron-expr→next-fire table matches a reference; unsupported expressions surfaced in the editor, not silenced.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-9.
+- [ ] P1 — Fix "What's New" dead for all v3.x users
+  - Why: `dashboard-whatsnew.js` CHANGELOG keys top out at 2.0.x while `CURRENT_VERSION` = 3.11.0, so `show()` resolves `undefined` and silently returns.
+  - Acceptance: add `CHANGELOG['3.11.0']` + a CHANGELOG-freshness CI check tied to manifest version.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-1.
+- [ ] P1 — i18n-v2 table is 100% dead, eager-loaded
+  - Why: `dashboard-i18n-v2.js` (600 keys / 8 langs, 39 KB) is referenced nowhere; `dashboard.html` has 0 `data-i18n`; eager-loaded for nothing; `npm run locale:check` audits a table no user sees.
+  - Acceptance: implement a real `applyTranslations()` over `data-i18n` + a language selector, OR remove from eager load and stop advertising multi-language UI.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-2.
+
+### Ecosystem parity and author ergonomics
+
+- [ ] P1 — Script-author configuration UI (`@var` / GM_config / CAT_userConfig)
+  - Why: no userscript settings surface; the `GM_config`/`CAT_userConfig` pattern is the most-requested author ergonomic and a ScriptCat wedge. The variable editor already exists for `.user.css`.
+  - Touches: new `modules/script-config.js` (reuse `userstyles.ts` widgets), `parser.ts` (`@var` for userscripts), per-script config modal, wrapper injection.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-3.
+- [ ] P1 — Structured `@antifeature` parsing + install label + row chip
+  - Why: parser pushes the whole directive as one element; `install.js` `afLabels` covers only ads/tracking/miner, so descriptioned antifeatures miss the label and print run-on text, and antifeatures vanish after install.
+  - Touches: `parser.ts`, `src/types/script.ts`, `install.js`, `dashboard.js renderScriptRow`.
+  - Acceptance: parse into `{type, description, locale}`; all 6 GreasyFork types labelled; amber chip in the script row.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-3.
+- [ ] P2 — Script subscriptions (URL → JSON list), authored in TS
+  - Why: curated auto-updating bundle install (ScriptCat differentiator); sharpens E-7. New members land in the pending-update inbox, not auto-installed.
+  - Touches: new `src/modules/subscriptions.ts`; reuse `InternalHostGuard` + `_fetchTextBounded` + install-source classification.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-6.
+- [ ] P2 — Wire the built npm/ESM `@require` resolver
+  - Why: `modules/npm-resolve.js` (SRI + 5 MB cap) is built but unwired; fix the documented computed-integrity TOCTOU before wiring, or delete to shrink attack surface. Sharpens E-6.
+  - Touches: `resource-loader.ts` `@require` fetch path.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-7.
+- [ ] P2 — True `@background` (DOM-less) scripts
+  - Why: `@crontab` currently requires an open matching tab; no headless scheduled-job context. ScriptCat parity.
+  - Touches: `offscreen.{js,html}` runner + restricted GM bridge, `background.core.js` dispatch, `wrapper-builder.ts` DOM-less variant, parser `@background`; gated behind default-off `experimentalBackgroundScripts`.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md NF-8.
+- [ ] P2 — `GM_addValueChangeListener` `remote` flag + cross-tab fan-out
+  - Why: listener exists but cross-tab firing and VM's 5th `remote` arg are unverified (needs live validation).
+  - Acceptance: two-tab test — write in A, listener in B fires with `remote=true`.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-6.
+- [ ] P3 — ESM badge (10-line add)
+  - Why: `parser.ts` already sets `meta.esm`; dashboard already renders a badge cluster — insert one `.script-health-badge.neutral` span. Sharpens E-6.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-5.
+- [ ] P3 — `GM.*` namespace completeness + `GM.fetch`
+  - Why: generate the `GM.*` promise namespace mechanically from the `GM_*` table so coverage can't drift; add `GM.fetch` alias behind `@connect`+NF-1.
+  - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-7.
+
+<!-- Append future research-driven items here, preserving Source pointers. -->
 
 ---
 
