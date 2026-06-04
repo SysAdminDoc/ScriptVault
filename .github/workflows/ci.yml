@@ -97,6 +97,9 @@ jobs:
       - name: Firefox lint and package
         run: npm run firefox:package
 
+      - name: Release store status check
+        run: npm run release:store-status
+
       - name: Browser support matrix check
         run: npm run support:matrix:check
 
