@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier promotions, `ts-source:check` reports 25 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 4 - 2026-06-04.
+> Last researched: Cycle 5 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -204,6 +204,15 @@ Priorities/sizes preserve the source labels.
   duplicate of support snapshot redaction and cloud-sync E2E encryption by
   targeting backup/export credential inclusion and restore semantics.
 
+### Researcher Queue (Cycle 5 - 2026-06-04)
+
+- [x] 🔬 `backup-zip-intake-bounds-2026-06-04` - rechecked ZIP/JSON import,
+  stored-backup import, inspect, verify, and restore paths after the backup
+  credential pass. This is not a duplicate of CompressionStream-for-export or
+  the fflate Zip64 dependency bump: the gap is intake-side resource bounding
+  before full archive materialization and before oversized script/settings/value
+  entries are converted to strings or written.
+
 ### Security and data safety
 
 - [x] P0 — `GM_xmlhttpRequest` internal-host / SSRF guard
@@ -226,6 +235,13 @@ Priorities/sizes preserve the source labels.
   - Touches: `src/background/import-export.ts`, `src/modules/backup-scheduler.ts`, generated `modules/backup-scheduler.js`, dashboard export/restore UI, settings disclosure copy, import/export and backup scheduler tests.
   - Acceptance: shared settings-serialization helper omits credential-bearing keys by default for JSON export, ZIP export, scheduled backups, and cloud backup payloads; a separate "Include sync credentials and tokens" opt-in shows risk copy and stamps archive metadata such as `settingsCredentialsIncluded: true`; restore/import preserves current credential fields by default and only overwrites them when archive metadata plus restore confirmation both opt in; legacy archives with credential keys list skipped credential fields in the restore receipt without printing values; backup verification reports credential presence as boolean/category counts only.
   - Verify: focused tests prove sentinel OAuth/WebDAV/S3 secrets are absent from default JSON/ZIP/scheduled backups, present only under explicit opt-in metadata, and do not overwrite existing credentials on default restore; legacy archive restore receipt lists skipped credential keys; `npm run ts-runtime:check`; relevant import/export and backup scheduler tests.
+  - Complexity: M
+- [ ] 🤖 🔬 P1 — Bound backup ZIP/JSON intake before full decompression and registration
+  - Why: dropped ZIPs, imported backup archives, stored-backup inspect/verify, and restore all decode base64 and call `fflate.unzipSync(...)` into memory before any file-count, decompressed-byte, per-entry, or per-script code limit is enforced. The normal install path caps scripts at 5 MB, but JSON/ZIP backup imports can still feed oversized script code, settings, or stored-value blobs through string conversion, parser work, storage writes, and service-worker memory pressure.
+  - Evidence: `src/background/import-export.ts:167-225,328-348,356-412,472-478`; `src/background/core.ts:1683-1688,2429-2472,2522-2690,2779-3028,3261-3262`; `src/modules/backup-scheduler.ts:874-906,1198-1229,1313-1335,1441-1505`; `modules/backup-scheduler.js:473-495,725-753,821-839,925-970`; `tests/runtime-import-export.test.js:163-239`, `tests/source-backup-modules.test.js:393-460`, and `tests/backup-scheduler.test.js:136-178` cover identity/restore happy paths but no decompression bomb, entry-count, oversized JSON, or per-script size rejection; OWASP File Upload guidance calls out ZIP bombs and says decompressed-size limits must be considered when archives are processed (`https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html`); MITRE CWE-409 defines highly-compressed-data amplification as a resource-consumption weakness (`https://cwe.mitre.org/data/definitions/409.html`).
+  - Touches: `src/background/import-export.ts`, `src/background/core.ts`, `src/modules/backup-scheduler.ts`, generated `modules/backup-scheduler.js`, dashboard import/backup error copy, import/export and backup scheduler tests.
+  - Acceptance: shared archive-intake helper rejects compressed payloads, entry counts, aggregate decompressed bytes, single entry bytes, nested archive entries, and compression ratios above documented caps before `strFromU8`/JSON parse/registration; JSON imports enforce the same per-script code cap as URL/local install plus a sane total import budget; backup `importBackup`, `inspectBackup`, `verifyBackup`, and `restoreBackup` use the same helper and report deterministic non-secret errors; legitimate 26-script Firefox and large-library backup fixtures still import/inspect/verify under the caps.
+  - Verify: focused tests with a fake high-expansion ZIP, excessive file count, oversized `.user.js`, oversized `.storage.json`, nested `.zip`, and oversized JSON import; existing import snapshot/rollback tests remain green; `npm run ts-runtime:check`; focused Firefox backup import smoke where practical.
   - Complexity: M
 - [ ] P1 — Optional client-side E2E encryption for cloud sync
   - Why: synced script source (often embedding API keys) uploads as plaintext `JSON.stringify` to every provider; a WebDAV operator or compromised Drive/Dropbox account reads the whole library.
