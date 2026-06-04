@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Firefox side-panel feature flag
+
+- **Firefox no longer receives a fake `chrome.sidePanel`.**
+  `dashboard-firefox-compat.js` preserves native Chromium side-panel support
+  but leaves the API undefined on unsupported browsers, so dashboard
+  feature-detects can hide side-panel entry points.
+- **The side-panel gate is covered by executable compatibility tests.**
+  `tests/dashboard-firefox-compat.test.js` evaluates the dashboard
+  compatibility layer in Firefox-like and Chromium-like contexts.
+
 ### 2026-06-04 — Firefox offscreen fallback
 
 - **Firefox no longer calls `chrome.offscreen`.** `ScriptAnalyzer` now

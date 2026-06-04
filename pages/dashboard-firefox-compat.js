@@ -81,32 +81,13 @@ const FirefoxCompat = (() => {
     const _features = detectFeatures();
 
     // =========================================
-    // Polyfill: chrome.sidePanel
+    // Feature flag: chrome.sidePanel
     // =========================================
-    function polyfillSidePanel() {
+    function featureFlagSidePanel() {
         if (_features.sidePanel) return; // Already available
-        if (typeof chrome === 'undefined') return;
-
-        chrome.sidePanel = chrome.sidePanel || {
-            /** @param {object} options */
-            setOptions(_options) {
-                // No-op: Firefox doesn't support sidePanel
-                return Promise.resolve();
-            },
-            /** @param {object} options */
-            open(_options) {
-                console.warn('[FirefoxCompat] sidePanel.open is not supported on this browser.');
-                return Promise.resolve();
-            },
-            /** @param {function} callback */
-            setPanelBehavior(_behavior) {
-                return Promise.resolve();
-            },
-            /** @returns {Promise<object>} */
-            getOptions(_options) {
-                return Promise.resolve({ enabled: false });
-            },
-        };
+        // Firefox has no sidePanel equivalent. Keep chrome.sidePanel absent so
+        // dashboard feature-detects hide side-panel entry points instead of
+        // seeing a fake no-op API as support.
     }
 
     // =========================================
@@ -591,7 +572,7 @@ const FirefoxCompat = (() => {
     // Apply All Polyfills
     // =========================================
     function polyfill() {
-        polyfillSidePanel();
+        featureFlagSidePanel();
         polyfillOffscreen();
         polyfillIdentity();
         polyfillStorageSession();
