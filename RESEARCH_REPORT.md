@@ -83,6 +83,24 @@ Firefox `userScripts` optional-permission docs
 and Android desktop-difference guidance
 (`https://extensionworkshop.com/documentation/develop/differences-between-desktop-and-android-extensions/`).
 
+2026-06-04 Cycle 7 AMO vendored-library provenance refresh: the Firefox
+package ships `lib/acorn.min.js` and `lib/diff.min.js`, while
+`AMO-SOURCE-README.md` only names those paths and says the source ZIP includes
+the repo plus lockfiles. Mozilla source-code and third-party-library guidance
+requires reviewer-readable source/build material, links to original included
+files, and official release or package-manager provenance; local Acorn identifies
+itself as jsDelivr-minified `acorn@8.14.1` while the lockfile resolves npm
+`acorn@8.16.0`. `ROADMAP.md` now promotes a P2 item to add a reviewer-facing
+library provenance inventory and gate packaged Firefox library hashes before AMO
+upload. External anchors: Mozilla source-code submission
+(`https://extensionworkshop.com/documentation/publish/source-code-submission/`),
+third-party library usage
+(`https://extensionworkshop.com/documentation/publish/third-party-library-usage/`),
+add-on policies
+(`https://extensionworkshop.com/documentation/publish/add-on-policies/`), and
+MDN publishing notes
+(`https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/What_next`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
@@ -113,9 +131,10 @@ Top opportunities (one line each):
 7. **[Verified] Backup/export settings can include sync credentials** — JSON exports and ZIP/scheduled backups serialize global settings wholesale while provider settings hold OAuth tokens, WebDAV passwords, and S3 access keys; redact by default and require a separate credential-export opt-in. (P1)
 8. **[Verified] Backup ZIP/JSON intake is not resource-bounded** — import/inspect/verify/restore use synchronous full ZIP decompression and JSON imports bypass the install path's per-script code cap; add archive and entry limits before parse/write. (P1)
 9. **[Verified] Firefox for Android is claimed but not smoke-tested** — the Firefox manifest declares `gecko_android` and docs list Android as a validation target, while the repo explicitly says no Android device smoke exists; add an ADB/web-ext smoke or remove the Android claim before AMO listing. (P2)
-10. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
-11. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
-12. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
+10. **[Verified] AMO vendored-library provenance is incomplete** — the Firefox package ships minified Acorn/jsdiff files, but reviewer docs do not yet provide exact official source/release links, hashes, or a gate tying those packaged bytes to source-review material. (P2)
+11. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
+12. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
+13. **[Likely] `--omit=optional` audit exemption is unguarded** — safe only if no optional dep ships; add a reach check so the exemption can't mask a shipped-code CVE. (P2)
 
 ## Evidence Reviewed
 
@@ -129,6 +148,7 @@ Top opportunities (one line each):
 - **Backup/export settings**: `exportAllScripts()` reads `SettingsManager.get()` into export data; `BackupScheduler.createBackup()` writes `global-settings.json` from `SettingsManager.get()`; backup restore and import paths call `SettingsManager.set(...)`; dashboard copy exposes an "Include ScriptVault settings" checkbox and says cloud backups can restore settings when enabled, but credential-bearing settings are not split from ordinary preferences.
 - **Backup archive intake**: `importFromZip`, `BackupScheduler.importBackup`, `BackupScheduler.inspectBackup`, `BackupScheduler.verifyBackup`, and restore paths call `fflate.unzipSync(...)` on decoded archive bytes; code then converts `.user.js`, options, storage, settings, folders, and workspace entries with `strFromU8`/`JSON.parse`. Existing tests cover identity, selective restore, and metadata preservation, but not decompression amplification, file-count limits, oversized per-entry JSON, nested archives, or the install path's 5 MB code cap on backup imports.
 - **Firefox Android target**: `manifest-firefox.json` declares `gecko_android.strict_min_version: 142.0`; `FIREFOX-PORT.md`, `README.md`, `docs/cross-browser-pipeline.md`, and `scripts/generate-browser-support-matrix.mjs` state Android is only a manifest validation target and that no Android device smoke is wired; `scripts/smoke-firefox-sideload.mjs` targets desktop Firefox/geckodriver only.
+- **AMO vendored libraries**: `build-firefox.sh` includes `lib/acorn.min.js` and `lib/diff.min.js`; `AMO-SOURCE-README.md` describes only local library paths and generic source ZIP contents; tests pin those library inclusions but not reviewer provenance; `lib/acorn.min.js` says it was minified by jsDelivr from `acorn@8.14.1`, while `package-lock.json` currently resolves npm `acorn@8.16.0`.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -137,6 +157,7 @@ Top opportunities (one line each):
   - OWASP Secrets Management, Google OAuth token storage best practices, and AWS IAM access-key guidance anchor the backup/export credential redaction item: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html, https://developers.google.com/identity/protocols/oauth2/resources/best-practices, https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
   - OWASP File Upload guidance and MITRE CWE-409 anchor the backup ZIP/JSON intake bounds item: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html and https://cwe.mitre.org/data/definitions/409.html
   - Mozilla Android compatibility/listing guidance, Firefox-for-Android development checklist/MV3 caveats, web-ext Android run workflow, Firefox `userScripts` optional-permission docs, and Android desktop-difference guidance anchor the Firefox Android smoke item: https://extensionworkshop.com/documentation/publish/version-compatibility/, https://extensionworkshop.com/documentation/develop/developing-extensions-for-firefox-for-android/, https://extensionworkshop.com/documentation/develop/getting-started-with-web-ext/, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts, https://extensionworkshop.com/documentation/develop/differences-between-desktop-and-android-extensions/
+  - Mozilla source-code submission, third-party library usage, add-on policies, and MDN publishing notes anchor the AMO vendored-library provenance item: https://extensionworkshop.com/documentation/publish/source-code-submission/, https://extensionworkshop.com/documentation/publish/third-party-library-usage/, https://extensionworkshop.com/documentation/publish/add-on-policies/, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/What_next
   - Userscript-manager landscape (Tampermonkey / Violentmonkey / ScriptCat sync, MV3, GitHub-Gist sync, granular execution control): comparison sources at extensionfixes.com and addons.mozilla.org Violentmonkey listing.
 - **Unverifiable here** [Needs validation]: live MV3 runtime behavior (cross-tab GM listener fan-out, omnibox UX, settings round-trips) — no browser run performed this pass; all runtime claims are static-read [Verified] or [Likely].
 
@@ -175,6 +196,7 @@ Top opportunities (one line each):
 | Keyboard commands | `Alt+Shift+S/D/E` | `manifest.json` commands | shipped | **undocumented**, no rebind note |
 | CI audit gate | CI | `ci.yml` `npm audit --audit-level=high` | shipped | clean after `web-ext@^10.3.0` |
 | Firefox Android compatibility claim | AMO / Android listing via `gecko_android` | `manifest-firefox.json`, generated support matrix | declared, unverified | no ADB/device smoke; desktop `npm run smoke:firefox` only |
+| AMO vendored library provenance | AMO source review | `AMO-SOURCE-README.md`, `build-firefox.sh`, `lib/acorn.min.js`, `lib/diff.min.js` | partial | lacks exact official source/release/hash inventory |
 | Coverage report | `npm run test:cov` | `vitest.config.mjs` | shipped | `all:false`, **no threshold** |
 | Dependency audit policy | manual | `docs/dependency-audit-policy.md` | doc only | **no bot automation** |
 | Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | actions **tag-pinned, not SHA** |
@@ -193,6 +215,7 @@ Top opportunities (one line each):
 - **Major** — Coverage blind (`all:false`, no threshold): the largest runtime files have no enforced coverage. → ROADMAP P1 coverage gate. [Verified]
 - **Major** — No dependency-update automation; reactive audit only (root cause of the CVE slip). → ROADMAP P1 Dependabot/Renovate. [Verified]
 - **Major** — Floating Action tags in an attestation/SBOM pipeline. → ROADMAP P1 SHA-pin. [Likely]
+- **Major** — AMO vendored-library provenance is incomplete for minified Firefox-package libraries. → ROADMAP P2 source-review provenance gate. [Verified]
 - **Major** — `--omit=optional` audit exemption is unguarded against shipped optional deps. → ROADMAP P2 reach check. [Likely]
 - **Major** — No consolidated/validated Settings surface for operator knobs. → ROADMAP P2 settings audit. [Likely]
 - **Minor** — `sv` omnibox + keyboard commands undocumented. → ROADMAP P3 doc items. [Verified]
@@ -208,7 +231,7 @@ Top opportunities (one line each):
 ## Security / Privacy / Data Safety
 
 - The deepest runtime risks (GM_xhr SSRF NF-1, plaintext cloud sync NF-2, per-script scope NF-4, TOFU SRI NF-5) are already roadmapped — not re-listed.
-- New: the **supply-chain** layer is the gap this pass surfaces — a CVE reached CI via an unpinned, un-bot-tracked dev dependency, and the release pipeline that signs/attests artifacts uses floating action tags. The P0 web-ext bump is closed; P1 Dependabot + P1 SHA-pin remain to harden the path from source to attested artifact.
+- New: the **supply-chain** layer is the gap this pass surfaces — a CVE reached CI via an unpinned, un-bot-tracked dev dependency, the release pipeline that signs/attests artifacts uses floating action tags, and the Firefox AMO package needs reviewer-reproducible provenance for bundled minified third-party libraries. The P0 web-ext bump is closed; P1 Dependabot + P1 SHA-pin + P2 AMO library provenance remain to harden the path from source to reviewed artifact.
 - Privacy posture remains local-first with no usage beacon; external telemetry stays a non-goal.
 
 ## UX & Accessibility

@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier promotions, `ts-source:check` reports 25 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 6 - 2026-06-04.
+> Last researched: Cycle 7 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -226,6 +226,20 @@ Priorities/sizes preserve the source labels.
   mobile-specific host-permission and feature-parity gaps. The promoted row
   below is not a duplicate of the desktop `npm run smoke:firefox` gate.
 
+### Researcher Queue (Cycle 7 - 2026-06-04)
+
+- [x] 🔬 `amo-vendored-library-provenance-2026-06-04` - rechecked AMO
+  source-review guidance against the current Firefox package. Mozilla requires
+  reviewer-readable source/build material when minified or generated code ships,
+  and third-party library submissions need original included-file links plus
+  readable source links from official release or package-manager sources. The
+  Firefox package currently includes `lib/acorn.min.js` and `lib/diff.min.js`,
+  but `AMO-SOURCE-README.md` only names those local paths and the source ZIP
+  contents; it does not provide exact upstream release/source links, packaged
+  hashes, local source maps, or a gate tying packaged hashes to reviewer-facing
+  provenance. The promoted row below is not a duplicate of AMO account/upload
+  work; it is a source-review quality gate to complete before upload.
+
 ### Firefox and mobile release quality
 
 - [ ] 🤖 🔧 🔬 P2 — Add a Firefox for Android smoke gate or remove the Android compatibility claim before AMO listing
@@ -234,6 +248,16 @@ Priorities/sizes preserve the source labels.
   - Touches: new `scripts/smoke-firefox-android.mjs` or documented manual harness, `package.json` script wiring, `tests/firefox-package.test.js`, `manifest-firefox.json` if Android is deferred, `scripts/generate-browser-support-matrix.mjs`, `README.md`, `docs/cross-browser-pipeline.md`, `FIREFOX-PORT.md`.
   - Acceptance: either (A) an ADB/emulator-gated smoke can run against `org.mozilla.firefox`, `org.mozilla.firefox_beta`, or `org.mozilla.fenix` with `web-ext run --target=firefox-android`, temporarily loads the Firefox package, grants/handles `userScripts`, opens the extension action/dashboard path, saves/toggles/runs a smoke userscript on a local target page, checks no horizontal overflow in the action overlay, validates WebDAV-only provider copy, imports a small JSON backup, and records logcat manifest/runtime errors; or (B) the build removes/deactivates `gecko_android` and all Android support-matrix claims until that evidence exists.
   - Verify: `npm run firefox:android:smoke` with `ANDROID_SERIAL`/`FIREFOX_APK` or an equivalent manual checklist recorded in `FIREFOX-PORT.md`; `npm run support:matrix:check`; `npm test -- tests/firefox-package.test.js`.
+  - Complexity: M
+
+### Firefox AMO source-review quality
+
+- [ ] 🤖 🔬 P2 — Add reviewer-reproducible provenance for packaged minified third-party libraries
+  - Why: the Firefox package ships minified local Acorn/jsdiff files, but the current AMO source instructions only identify their local paths. AMO reviewers need readable source, official release/package-manager provenance, and enough data to compare packaged bytes against the submitted source. `lib/acorn.min.js` identifies itself as jsDelivr-minified `acorn@8.14.1`, while the current lockfile resolves npm `acorn@8.16.0`, so `npm ci` alone does not explain or reproduce the vendored Firefox file. That can create manual-review churn or rejection even when `web-ext lint` is clean.
+  - Evidence: `build-firefox.sh:70-71`; `AMO-SOURCE-README.md:52-61`; `tests/firefox-package.test.js:62-63,162-166`; `lib/acorn.min.js:2-3,8`; `lib/diff.min.js:3-7`; `package-lock.json:1811-1816`; README jsdiff attribution at `README.md:551`; Mozilla source-code submission guidance (`https://extensionworkshop.com/documentation/publish/source-code-submission/`); Mozilla third-party library guidance (`https://extensionworkshop.com/documentation/publish/third-party-library-usage/`); Mozilla add-on policy requiring reviewable source and official dependency retrieval (`https://extensionworkshop.com/documentation/publish/add-on-policies/`); MDN extension publishing notes on minified third-party libraries (`https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/What_next`).
+  - Touches: `AMO-SOURCE-README.md`, new `docs/third-party-libraries.md` or `docs/amo-vendored-libraries.md`, new `scripts/check-vendored-library-provenance.mjs`, `tests/firefox-package.test.js`, and `build-firefox.sh` only if the source ZIP must include unminified originals or local source maps.
+  - Acceptance: reviewer-facing inventory lists every minified/generated third-party file in the Firefox package with package name, version, license, official release/source URL, local packaged path, SHA-256, npm tarball integrity or original-file hash, and local source-map/unminified-source status; the gate fails if a packaged Firefox library is not inventoried or if inventory version/hash data disagrees; either Acorn is regenerated from the locked official npm version or the vendored 8.14.1 source is explicitly pinned and included enough to reproduce/review.
+  - Verify: `npm run firefox:package`; `npm test -- tests/firefox-package.test.js`; new provenance check; compare source-review ZIP contents against the inventory.
   - Complexity: M
 
 ### Security and data safety
