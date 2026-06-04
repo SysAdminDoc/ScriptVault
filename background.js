@@ -3267,10 +3267,12 @@ const CloudSyncProviders = (() => {
       try {
         const token = await this.getToken();
         if (token) {
-          fetchWithTimeout(`https://accounts.google.com/o/oauth2/revoke?token=${token}`, {}, 1e4).catch(
-            () => {
-            }
-          );
+          fetchWithTimeout(`https://accounts.google.com/o/oauth2/revoke`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: `token=${encodeURIComponent(token)}`
+          }, 1e4).catch(() => {
+          });
         }
         await SettingsManager.set({
           googleDriveToken: "",
@@ -3314,7 +3316,8 @@ const CloudSyncProviders = (() => {
         JSON.stringify(data),
         `--${boundary}--`
       ].join("\r\n");
-      const url = existingFile ? `https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=multipart` : "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
+      const safeFileId = existingFile ? String(existingFile.id).replace(/[^a-zA-Z0-9_-]/g, "") : "";
+      const url = existingFile ? `https://www.googleapis.com/upload/drive/v3/files/${safeFileId}?uploadType=multipart` : "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
       const response = await fetchWithTimeout(url, {
         method: existingFile ? "PATCH" : "POST",
         headers: {
@@ -5896,14 +5899,18 @@ const InternalHostGuard = (() => {
     if (a === 172 && b >= 16 && b <= 31) return true;
     if (a === 192 && b === 168) return true;
     if (a === 100 && b >= 64 && b <= 127) return true;
-    if (a === 255 && b === 255 && c === 255 && d === 255) return true;
+    if (a === 192 && b === 0 && c === 2) return true;
+    if (a === 198 && b === 51 && c === 100) return true;
+    if (a === 203 && b === 0 && c === 113) return true;
+    if (a === 198 && (b === 18 || b === 19)) return true;
+    if (a >= 240) return true;
     return false;
   }
   function isInternalHost(rawHost) {
     if (typeof rawHost !== "string" || !rawHost) return true;
     let h = rawHost.toLowerCase();
     if (h.startsWith("[") && h.endsWith("]")) h = h.slice(1, -1);
-    if (h === "localhost" || h === "localhost.localdomain" || h === "ip6-localhost" || h === "ip6-loopback") {
+    if (h === "localhost" || h === "localhost.localdomain" || h === "ip6-localhost" || h === "ip6-loopback" || h.endsWith(".localhost")) {
       return true;
     }
     if (h.includes(":")) {
@@ -5947,7 +5954,7 @@ const InternalHostGuard = (() => {
     }
     if (isInternalHost(host)) {
       let reason = "internal-host";
-      if (host === "localhost" || host.endsWith(".localdomain") || host === "ip6-localhost" || host === "ip6-loopback") {
+      if (host === "localhost" || host.endsWith(".localdomain") || host === "ip6-localhost" || host === "ip6-loopback" || host.endsWith(".localhost")) {
         reason = "localhost-alias";
       } else if (host.includes(":")) {
         reason = "ipv6-internal";
@@ -6021,14 +6028,18 @@ const ResourceCache = (() => {
     if (a === 172 && b >= 16 && b <= 31) return true;
     if (a === 192 && b === 168) return true;
     if (a === 100 && b >= 64 && b <= 127) return true;
-    if (a === 255 && b === 255 && c === 255 && d === 255) return true;
+    if (a === 192 && b === 0 && c === 2) return true;
+    if (a === 198 && b === 51 && c === 100) return true;
+    if (a === 203 && b === 0 && c === 113) return true;
+    if (a === 198 && (b === 18 || b === 19)) return true;
+    if (a >= 240) return true;
     return false;
   }
   function isInternalHost(rawHost) {
     if (typeof rawHost !== "string" || !rawHost) return true;
     let h = rawHost.toLowerCase();
     if (h.startsWith("[") && h.endsWith("]")) h = h.slice(1, -1);
-    if (h === "localhost" || h === "localhost.localdomain" || h === "ip6-localhost" || h === "ip6-loopback") {
+    if (h === "localhost" || h === "localhost.localdomain" || h === "ip6-localhost" || h === "ip6-loopback" || h.endsWith(".localhost")) {
       return true;
     }
     if (h.includes(":")) {
@@ -6072,7 +6083,7 @@ const ResourceCache = (() => {
     }
     if (isInternalHost(host)) {
       let reason = "internal-host";
-      if (host === "localhost" || host.endsWith(".localdomain") || host === "ip6-localhost" || host === "ip6-loopback") {
+      if (host === "localhost" || host.endsWith(".localdomain") || host === "ip6-localhost" || host === "ip6-loopback" || host.endsWith(".localhost")) {
         reason = "localhost-alias";
       } else if (host.includes(":")) {
         reason = "ipv6-internal";
@@ -8707,10 +8718,10 @@ const BackupScheduler = (() => {
           sizeFormatted: _formatBytes(sizeBytes),
           data: base64
         };
+        await BackupScheduler.pruneOldBackups();
         const backups = await _getBackupList();
         backups.unshift(backup);
         await _saveBackupList(backups);
-        await BackupScheduler.pruneOldBackups();
         if (settings.warnOnStorageFull) {
           const allBackups = await _getBackupList();
           const totalSize = _estimateBackupSize(allBackups);
@@ -9055,10 +9066,10 @@ const BackupScheduler = (() => {
           sizeFormatted: _formatBytes(sizeBytes),
           data
         };
+        await BackupScheduler.pruneOldBackups();
         const backups = await _getBackupList();
         backups.unshift(backup);
         await _saveBackupList(backups);
-        await BackupScheduler.pruneOldBackups();
         return { success: true, backupId: backup.id };
       } catch (err) {
         console.error("[BackupScheduler] importBackup error:", err);
@@ -14948,7 +14959,7 @@ function parseUserscript(code) {
     require: [],
     requireProvenance: [],
     requireIdentity: [],
-    resource: {},
+    resource: Object.create(null),
     'run-at': 'document-idle',
     noframes: false,
     icon: '',
@@ -15765,9 +15776,27 @@ const UpdateSystem = {
     // Numeric parts are equal — a pre-release is less than a release of the same version
     if (preRelease1 && !preRelease2) return -1;
     if (!preRelease1 && preRelease2) return 1;
+    // Both have pre-release suffixes: compare lexicographically by dot-separated identifiers
+    if (preRelease1 && preRelease2) {
+      const pre1 = v1.replace(/^[^-]*-/, '').split('.');
+      const pre2 = v2.replace(/^[^-]*-/, '').split('.');
+      for (let i = 0; i < Math.max(pre1.length, pre2.length); i++) {
+        const a = pre1[i] ?? '';
+        const b = pre2[i] ?? '';
+        const aNum = /^\d+$/.test(a) ? parseInt(a, 10) : NaN;
+        const bNum = /^\d+$/.test(b) ? parseInt(b, 10) : NaN;
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          if (aNum > bNum) return 1;
+          if (aNum < bNum) return -1;
+        } else {
+          if (a > b) return 1;
+          if (a < b) return -1;
+        }
+      }
+    }
     return 0;
   },
-  
+
   async applyUpdate(scriptId, newCode, { force = false, sourceUrl = '', fetchDependencyBody = null, fetchProvenanceBundle: fetchProvenanceBundleOption = null } = {}) {
     const script = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
@@ -17037,14 +17066,32 @@ const CloudSync = {
         try { await updateBadge(); } catch (_) { /* best effort */ }
       }
 
-      // Upload merged data (includes tombstones)
-      merged.timestamp = Date.now();
-      merged.tombstones = mergedTombstones;
+      // Rebuild the upload envelope from the current post-merge ScriptStorage state
+      // so the remote gets 3-way merge results, updated syncBaseCode, and conflict markers.
+      const postMergeScripts = await ScriptStorage.getAll();
+      const uploadData = {
+        version: 1,
+        timestamp: Date.now(),
+        scripts: postMergeScripts.map(s => ({
+          id: s.id,
+          code: s.code,
+          enabled: s.enabled,
+          position: s.position,
+          settings: s.settings || {},
+          updatedAt: s.updatedAt,
+          syncBaseCode: s.syncBaseCode ?? null
+        })),
+        tombstones: mergedTombstones
+      };
       if (signal?.aborted) throw new Error('Sync aborted');
-      await provider.upload(merged, settings, { signal });
+      await provider.upload(uploadData, settings, { signal });
     } else {
-      // First sync, just upload (include tombstones so remote gets deletion info)
+      // First sync, just upload (include tombstones and syncBaseCode)
       if (signal?.aborted) throw new Error('Sync aborted');
+      localData.scripts = localData.scripts.map(s => ({
+        ...s,
+        syncBaseCode: s.syncBaseCode ?? null
+      }));
       await provider.upload(localData, settings, { signal });
     }
 
@@ -18304,6 +18351,13 @@ async function handleMessage(message, sender) {
         delete script.trashedAt;
         trash.splice(idx, 1);
         await chrome.storage.local.set({ trash });
+        // Clear sync tombstone so the restored script isn't re-deleted on next sync
+        const _tombstoneData = await chrome.storage.local.get('syncTombstones');
+        const _tombstones = _tombstoneData.syncTombstones || {};
+        if (_tombstones[scriptId]) {
+          delete _tombstones[scriptId];
+          await chrome.storage.local.set({ syncTombstones: _tombstones });
+        }
         await ScriptStorage.set(script.id, script);
         if (script.enabled !== false) await registerScript(script);
         await updateBadge();
@@ -20719,15 +20773,23 @@ async function handleMessage(message, sender) {
       }
 
       case 'factoryReset': {
-        // Clear all scripts through the storage abstraction so per-script
-        // values, IDB rows, and in-memory caches stay consistent.
         const allScripts = await ScriptStorage.getAll();
         for (const s of allScripts) {
           await unregisterScript(s.id);
         }
         await ScriptStorage.clear();
-        // Reset settings
         await SettingsManager.reset();
+        // Clear ghost state that would otherwise survive the reset
+        await chrome.storage.local.remove([
+          'syncTombstones', 'trash', 'pendingUpdates', 'scriptFolders',
+          'cspReports', 'gistSettings', 'lastSyncResult', 'liveReloadScripts',
+          'restoreReceipts'
+        ]).catch(() => {});
+        // Clear all alarms (crontab, autoUpdate, autoSync, backup, etc.)
+        await chrome.alarms.clearAll().catch(() => {});
+        if (typeof FolderStorage !== 'undefined' && FolderStorage.cache) {
+          FolderStorage.cache = null;
+        }
         await updateBadge();
         return { success: true };
       }
@@ -22096,7 +22158,7 @@ async function installFromCode(code, receiptOptions = {}) {
 
     await ensurePersistentStorageForScriptWrite(existing ? 'script-reinstall' : 'script-install', script.code);
     await ScriptStorage.set(id, script);
-    await registerAllScripts(true);
+    await reregisterScript(script);
     await updateBadge();
     await autoReloadMatchingTabs(script);
 

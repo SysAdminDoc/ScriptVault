@@ -174,7 +174,7 @@ describe('dashboard diff LCS Uint32Array (2026-06-04)', () => {
 describe('Google OAuth revoke uses POST (2026-06-04)', () => {
   it('sends token in POST body instead of query parameter', () => {
     const src = fs.readFileSync(path.join(ROOT, 'modules/sync-providers.js'), 'utf8');
-    expect(src).toContain("method: 'POST'");
+    expect(src).toMatch(/method:\s*["']POST["']/);
     expect(src).toContain('application/x-www-form-urlencoded');
     expect(src).not.toContain('revoke?token=');
   });

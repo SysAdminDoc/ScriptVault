@@ -351,10 +351,11 @@ const CloudSyncProviders = (() => {
         const token = await this.getToken();
         if (token) {
           fetchWithTimeout(`https://accounts.google.com/o/oauth2/revoke`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: `token=${encodeURIComponent(token)}`
-          }, 1e4).catch(() => {});
+          }, 1e4).catch(() => {
+          });
         }
         await SettingsManager.set({
           googleDriveToken: "",
@@ -398,7 +399,7 @@ const CloudSyncProviders = (() => {
         JSON.stringify(data),
         `--${boundary}--`
       ].join("\r\n");
-      const safeFileId = existingFile ? String(existingFile.id).replace(/[^a-zA-Z0-9_-]/g, '') : '';
+      const safeFileId = existingFile ? String(existingFile.id).replace(/[^a-zA-Z0-9_-]/g, "") : "";
       const url = existingFile ? `https://www.googleapis.com/upload/drive/v3/files/${safeFileId}?uploadType=multipart` : "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
       const response = await fetchWithTimeout(url, {
         method: existingFile ? "PATCH" : "POST",
