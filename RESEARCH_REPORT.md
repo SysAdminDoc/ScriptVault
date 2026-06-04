@@ -29,6 +29,15 @@ payloads, excessive file counts, aggregate expanded data, oversized entries,
 nested archives, and high compression ratios; JSON imports also enforce the
 5 MB per-script code cap plus a total import budget.
 
+2026-06-04 Cycle 18 import/restore quarantine refresh: archive intake and
+credential restore are now bounded/gated, but executable script bodies restored
+from JSON, ZIP, raw-JS fallback, selected backup restore, or full-vault restore
+can still be persisted as enabled and re-registered in the same flow. The
+active roadmap now promotes a P1 quarantine/default-disabled first-run review
+gate so imported/restored code is inert unless the user explicitly trusts that
+archive. Detailed evidence and 52 external sources are in
+`docs/research-cycle-18-2026-06-04.md`.
+
 2026-06-04 build-lane sync-settings update: CloudSync and EasyCloud now
 partition per-script settings before sync. Upload envelopes include only
 allowlisted user-facing preferences, while local-only state such as
@@ -315,6 +324,25 @@ action update setup
 and Dependabot grouping/options reference
 (`https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference`).
 
+2026-06-04 Cycle 17 Settings schema/validation refresh: the dashboard now has
+a consolidated Settings tab, so the original "no panel" framing is stale. The
+remaining verified gap is schema drift and validation. `settings-defaults.json`
+has 71 default keys, the Settings tab has 91 `settings*` controls, and
+dashboard listeners can persist 80 keys. A parity scan found 51 saveable keys
+missing from the defaults/type contract and 42 default keys with no Settings UI
+save path. Several missing defaults are intentionally internal credential or
+timestamp fields, but visible-operator candidates such as `allowInternalXhr`,
+`xhrTimeout`, `dashboardVirtualizationThreshold`, `experimentalESMUserscripts`,
+`syncInterval`, `notifyOnInstall`, `notifyOnUpdate`, and `showBadge` need an
+explicit classification. Raw text fields such as badge color, lint max size,
+WebDAV/S3 URLs, denied hosts, custom CSS, and linter config save on blur without
+a shared constraint layer or field-specific text errors. `ROADMAP.md` now
+promotes this to a schema-parity and accessible-validation gate. External
+anchors: MDN form constraint validation
+(`https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Constraint_validation`)
+and WCAG 2.1 SC 3.3.1 Error Identification
+(`https://www.w3.org/TR/WCAG21/#error-identification`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel
@@ -345,15 +373,16 @@ Top opportunities (one line each):
 7. **[Closed 2026-06-04] User-configured sync endpoints lacked the internal-host guard** — WebDAV/S3 now share preflight and post-fetch redirect guards with explicit local/private endpoint opt-in. (P1)
 8. **[Closed 2026-06-04] Backup/export settings could include sync credentials** — exports/backups now redact provider credentials by default and require separate credential opt-ins. (P1)
 9. **[Closed 2026-06-04] Backup ZIP/JSON intake was not resource-bounded** — import/inspect/verify/restore now use bounded archive intake before decode, parse, or registration. (P1)
-10. **[Closed 2026-06-04] Firefox for Android was claimed but not smoke-tested** — `gecko_android` and Android support-matrix claims are deferred until a real device/emulator smoke exists. (P2)
-11. **[Closed 2026-06-04] AMO vendored-library provenance was incomplete** — Firefox package libraries now have exact npm pins, official source/package hashes, and a provenance check. (P2)
-12. **[Closed 2026-06-04] CWS remote-hosted-code review packet was missing** — `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check` now separate allowed User Scripts/sandbox flows from forbidden extension remote logic and scan source/package inputs plus the built Chrome ZIP in CI. (P1)
-13. **[Closed 2026-06-04] Edge artifact evidence was not wired into CI or support claims** — CI now builds/uploads `edge-artifacts/*`, and the support matrix validates the current Edge ZIP/report instead of claiming the Chrome ZIP is the Edge package. (P2)
-14. **[Verified] Node toolchain contract drift** — `package.json` declares `engines.node >=21.2.0`, CI still runs setup-node `20`, there is no Node version file / package-manager pin / engine-strict gate, and npm treats `engines` as advisory by default. (P2)
-15. **[Verified] Host-permission recovery/narrow mode is not active** — per-script host scope is enforced, but required `<all_urls>` remains and withheld-host recovery / optional-host prototype work is only archived. (P2)
-16. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
-17. **[Likely] No consolidated, validated Settings surface** — operator knobs (`allowInternalXhr`, `maxBackups`, sync config, experimental flags) are scattered with no defaults table or input validation. (P2)
-18. **[Verified] `--omit=optional` audit exemption is unguarded** — current static scan found zero shipped import/require hits, but package-lock contains optional/peer-optional entries and no CI guard proves they stay unreachable. (P2)
+10. **[Verified] Imported/restored executable scripts are not quarantined before first run** — JSON/ZIP/raw-JS imports and selected/full restores can persist enabled script bodies and re-register immediately; add a default quarantine plus explicit trusted-archive override. (P1)
+11. **[Closed 2026-06-04] Firefox for Android was claimed but not smoke-tested** — `gecko_android` and Android support-matrix claims are deferred until a real device/emulator smoke exists. (P2)
+12. **[Closed 2026-06-04] AMO vendored-library provenance was incomplete** — Firefox package libraries now have exact npm pins, official source/package hashes, and a provenance check. (P2)
+13. **[Closed 2026-06-04] CWS remote-hosted-code review packet was missing** — `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check` now separate allowed User Scripts/sandbox flows from forbidden extension remote logic and scan source/package inputs plus the built Chrome ZIP in CI. (P1)
+14. **[Closed 2026-06-04] Edge artifact evidence was not wired into CI or support claims** — CI now builds/uploads `edge-artifacts/*`, and the support matrix validates the current Edge ZIP/report instead of claiming the Chrome ZIP is the Edge package. (P2)
+15. **[Verified] Node toolchain contract drift** — `package.json` declares `engines.node >=21.2.0`, CI still runs setup-node `20`, there is no Node version file / package-manager pin / engine-strict gate, and npm treats `engines` as advisory by default. (P2)
+16. **[Verified] Host-permission recovery/narrow mode is not active** — per-script host scope is enforced, but required `<all_urls>` remains and withheld-host recovery / optional-host prototype work is only archived. (P2)
+17. **[Verified] Undocumented `sv` omnibox + keyboard commands** — shipped in `background.core.js`/`manifest.json`, surfaced nowhere in docs/help; pure discoverability loss. (P3)
+18. **[Verified] Settings surface is not schema-driven or consistently validated** — the Settings tab exists, but 51 saveable keys are outside the defaults/type contract and raw text controls lack shared field-level validation. (P2)
+19. **[Verified] `--omit=optional` audit exemption is unguarded** — current static scan found zero shipped import/require hits, but package-lock contains optional/peer-optional entries and no CI guard proves they stay unreachable. (P2)
 
 ## Evidence Reviewed
 
@@ -366,6 +395,7 @@ Top opportunities (one line each):
 - **Sync endpoint egress**: WebDAV `test`/`upload`/`download` and S3 `test`/`upload`/`download` build URLs from `webdavUrl`/`s3Endpoint` and call `fetch`/`fetchWithTimeout`; existing `InternalHostGuard` pre/post checks are present in script-source, `@require`, provenance, GM_loadScript, and GM_xhr paths but not these provider endpoints.
 - **Backup/export settings**: `exportAllScripts()` reads `SettingsManager.get()` into export data; `BackupScheduler.createBackup()` writes `global-settings.json` from `SettingsManager.get()`; backup restore and import paths call `SettingsManager.set(...)`; dashboard copy exposes an "Include ScriptVault settings" checkbox and says cloud backups can restore settings when enabled, but credential-bearing settings are not split from ordinary preferences.
 - **Backup archive intake**: `importFromZip`, `BackupScheduler.importBackup`, `BackupScheduler.inspectBackup`, `BackupScheduler.verifyBackup`, and restore paths call `fflate.unzipSync(...)` on decoded archive bytes; code then converts `.user.js`, options, storage, settings, folders, and workspace entries with `strFromU8`/`JSON.parse`. Existing tests cover identity, selective restore, and metadata preservation, but not decompression amplification, file-count limits, oversized per-entry JSON, nested archives, or the install path's 5 MB code cap on backup imports.
+- **Import/restore execution trust**: `src/background/import-export.ts:538-568` stores JSON imports as enabled unless the archive explicitly says false and then re-registers scripts; `src/background/import-export.ts:697-825` defaults ZIP imports and raw-JS fallback imports to enabled before re-registering; `src/modules/backup-scheduler.ts:1321-1345` routes selected and full restores through `importFromZip(... overwrite true ...)`; dashboard confirmations at `pages/dashboard.js:1336-1365,8278-8289,12248-12535` cover overwrite/settings/storage/credentials but not default quarantine or first-run review; current import/restore tests pin enabled-state preservation rather than quarantine.
 - **Firefox Android target**: `manifest-firefox.json` declares `gecko_android.strict_min_version: 142.0`; `FIREFOX-PORT.md`, `README.md`, `docs/cross-browser-pipeline.md`, and `scripts/generate-browser-support-matrix.mjs` state Android is only a manifest validation target and that no Android device smoke is wired; `scripts/smoke-firefox-sideload.mjs` targets desktop Firefox/geckodriver only.
 - **AMO vendored libraries**: `build-firefox.sh` includes `lib/acorn.min.js` and `lib/diff.min.js`; `AMO-SOURCE-README.md` describes only local library paths and generic source ZIP contents; tests pin those library inclusions but not reviewer provenance; `lib/acorn.min.js` says it was minified by jsDelivr from `acorn@8.14.1`, while `package-lock.json` currently resolves npm `acorn@8.16.0`.
 - **CWS remote-code review**: `manifest.json` declares `userScripts` and limits extension-page CSP to `script-src 'self'` while sandboxing `pages/editor-sandbox.html`; `PRIVACY.md` explains externally sourced userscript execution; `docs/cws-remote-code-compliance.md` maps policy buckets; `scripts/check-cws-remote-code.mjs` scans source/package inputs and the built Chrome ZIP for forbidden remote-code execution patterns.
@@ -376,6 +406,7 @@ Top opportunities (one line each):
 - **Optional dependency reach**: `.github/workflows/ci.yml:44-50` and `docs/dependency-audit-policy.md:3-31` intentionally use `npm audit --audit-level=high --omit=optional`; `package.json` has no direct `optionalDependencies`; `package-lock.json` currently has 60 optional package records and 43 peer-optional edges; a lockfile-derived import/require scan over 116 shipped extension files found zero hits; loose `canvas` matches in dashboard files were DOM canvas strings only.
 - **Action pinning state**: `.github/workflows/ci.yml:9-12` grants `id-token: write` and `attestations: write`; `.github/workflows/ci.yml:21`, `:26`, `:87`, `:120`, `:126`, `:132`, `:141`, and `:148` use movable major tags for checkout, setup-node, setup-chrome, attest, and upload-artifact in the same trusted artifact job.
 - **Dependency updater state**: `.github/` contains only `workflows/ci.yml`; no `.github/dependabot.yml`, `renovate.json`, or equivalent updater config is present for npm or workflow action references.
+- **Settings schema/validation state**: `src/config/settings-defaults.json` has 71 default keys; `src/types/settings.ts` is a hand-written interface; `SettingsManager.set(...)` merges arbitrary keys; `pages/dashboard.html:5985-6554` exposes 91 Settings controls; dashboard listeners can save 80 keys; a parity scan found 51 saveable keys absent from defaults/types and 42 default keys with no Settings UI save path; settings inputs use some URL/password controls, but no shared `setCustomValidity` / `aria-invalid` pattern exists for Settings fields.
 - **External sources**:
   - tmp advisory GHSA-ph9p-34f9-6g65 / CVE-2026-44705 (fixed in `tmp@0.2.6`, CVSS 7.7): https://github.com/advisories/GHSA-ph9p-34f9-6g65
   - web-ext 10.3.0 bundles `tmp@0.2.6` (verified via `npm view web-ext@10.3.0 dependencies.tmp`).
@@ -383,6 +414,7 @@ Top opportunities (one line each):
   - OWASP SSRF Prevention, AWS IMDS, and Chrome extension network-request docs anchor the sync-endpoint egress guard: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html, https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html, https://developer.chrome.com/docs/extensions/develop/concepts/network-requests
   - OWASP Secrets Management, Google OAuth token storage best practices, and AWS IAM access-key guidance anchor the backup/export credential redaction item: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html, https://developers.google.com/identity/protocols/oauth2/resources/best-practices, https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
   - OWASP File Upload guidance and MITRE CWE-409 anchor the backup ZIP/JSON intake bounds item: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html and https://cwe.mitre.org/data/definitions/409.html
+  - Chrome Web Store policies, remote-hosted-code guidance, the User Scripts API, OWASP File Upload, MITRE CWE-494, MITRE CWE-829, Tampermonkey docs, and Violentmonkey docs anchor the import/restore quarantine item: https://developer.chrome.com/docs/webstore/program-policies/policies, https://developer.chrome.com/docs/extensions/develop/migrate/remote-hosted-code, https://developer.chrome.com/docs/extensions/reference/api/userScripts, https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html, https://cwe.mitre.org/data/definitions/494.html, https://cwe.mitre.org/data/definitions/829.html, https://www.tampermonkey.net/documentation.php, and https://violentmonkey.github.io/
   - Mozilla Android compatibility/listing guidance, Firefox-for-Android development checklist/MV3 caveats, web-ext Android run workflow, Firefox `userScripts` optional-permission docs, and Android desktop-difference guidance anchor the Firefox Android smoke item: https://extensionworkshop.com/documentation/publish/version-compatibility/, https://extensionworkshop.com/documentation/develop/developing-extensions-for-firefox-for-android/, https://extensionworkshop.com/documentation/develop/getting-started-with-web-ext/, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts, https://extensionworkshop.com/documentation/develop/differences-between-desktop-and-android-extensions/
   - Mozilla source-code submission, third-party library usage, add-on policies, and MDN publishing notes anchor the AMO vendored-library provenance item: https://extensionworkshop.com/documentation/publish/source-code-submission/, https://extensionworkshop.com/documentation/publish/third-party-library-usage/, https://extensionworkshop.com/documentation/publish/add-on-policies/, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/What_next
   - Chrome Web Store program policies, Chrome remote-hosted-code violation guidance, and the Chrome `userScripts` API reference anchor the CWS remote-code review packet item: https://developer.chrome.com/docs/webstore/program-policies/policies, https://developer.chrome.com/docs/extensions/develop/migrate/remote-hosted-code, https://developer.chrome.com/docs/extensions/reference/api/userScripts
@@ -393,6 +425,7 @@ Top opportunities (one line each):
   - npm audit omit config and package metadata docs anchor the optional-dependency reach item: https://docs.npmjs.com/cli/v11/commands/npm-audit/ and https://docs.npmjs.com/cli/v11/configuring-npm/package-json/
   - GitHub Actions secure-use and action release-management docs anchor the action SHA-pinning item: https://docs.github.com/en/actions/reference/security/secure-use and https://docs.github.com/en/actions/how-tos/create-and-publish-actions/manage-custom-actions
   - GitHub Dependabot version-update, action-update, and options docs anchor the dependency-freshness item: https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/configuring-dependabot-version-updates, https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/keeping-your-actions-up-to-date-with-dependabot, and https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+  - MDN constraint-validation guidance and WCAG 2.1 Error Identification anchor the Settings validation item: https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Constraint_validation and https://www.w3.org/TR/WCAG21/#error-identification
   - Userscript-manager landscape (Tampermonkey / Violentmonkey / ScriptCat sync, MV3, GitHub-Gist sync, granular execution control): comparison sources at extensionfixes.com and addons.mozilla.org Violentmonkey listing.
 - **Unverifiable here** [Needs validation]: live MV3 runtime behavior (cross-tab GM listener fan-out, omnibox UX, settings round-trips) — no browser run performed this pass; all runtime claims are static-read [Verified] or [Likely].
 
@@ -441,6 +474,7 @@ Top opportunities (one line each):
 | Coverage report | `npm run test:cov` | `vitest.config.mjs`, `coverage/coverage-summary.json` | partial | no threshold; include globs omit `src/background/**`; focused smoke passed tests with 0% reported coverage |
 | Dependency audit policy | manual / CI | `docs/dependency-audit-policy.md`, `.github/workflows/ci.yml`, `package-lock.json` | partial | high+ audit gate exists; optional-dep reach is manually verified but not gated |
 | Release attestation/SBOM | CI on push | `ci.yml` `actions/attest@v4` | shipped | eight workflow actions are tag-pinned, not SHA-pinned |
+| Dashboard Settings | dashboard Settings tab | `pages/dashboard.html`, `pages/dashboard.js`, `settings-defaults.json`, `Settings` type | partial | consolidated tab exists; schema parity and field-level validation are missing |
 
 ## Competitive Landscape
 
@@ -460,7 +494,7 @@ Top opportunities (one line each):
 - **Closed 2026-06-04** — CWS remote-hosted-code policy evidence is now packaged and scanned for Chrome submissions through `docs/cws-remote-code-compliance.md` and `npm run cws:remote-code:check`.
 - **Moderate, closed 2026-06-04** — Edge package evidence is now wired into CI artifacts and generated support claims. → ROADMAP P2 Edge artifact/support-matrix gate. [Closed]
 - **Major** — `--omit=optional` audit exemption is unguarded against shipped optional deps. Current scan found zero shipped import/require hits, but this is not automated. → ROADMAP P2 reach check. [Verified]
-- **Major** — No consolidated/validated Settings surface for operator knobs. → ROADMAP P2 settings audit. [Likely]
+- **Major** — Settings surface exists but is not schema-driven or consistently validated. → ROADMAP P2 settings audit. [Verified]
 - **Minor** — `sv` omnibox + keyboard commands undocumented. → ROADMAP P3 doc items. [Verified]
 - **Major** — Node/toolchain contract drift: `engines.node >=21.2.0` is advisory under default npm config, CI still sets up Node 20, and the repo lacks a version file/package-manager pin/engine-strict gate. → ROADMAP P2 toolchain alignment. [Verified]
 - **Major** — Host-permission recovery/narrow mode is archived but not active: users who withhold site access need clear repair paths, and any future optional-host manifest needs a gated browser prototype before lowering required `<all_urls>`. → ROADMAP P2 host-permission recovery. [Verified]

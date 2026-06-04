@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier, sync-crypto promotions, and npm resolver wiring, `ts-source:check` reports 27 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 16 - 2026-06-04.
+> Last researched: Cycle 18 - 2026-06-04.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -375,6 +375,47 @@ Priorities/sizes preserve the source labels.
   should therefore include npm and action-update coverage, grouping/noise limits,
   and an explicit path for major-version review.
 
+### Researcher Queue (Cycle 17 - 2026-06-04)
+
+- [ ] 🔬 `settings-schema-validation-2026-06-04` - rechecked the Settings
+  surface after the dashboard wiring work. The old "no consolidated panel"
+  wording is partly stale: `pages/dashboard.html:5985-6554` now has a Settings
+  tab with search, category filters, sync/provider controls, editor controls,
+  and advanced security sections. The remaining verified gap is schema drift and
+  validation. `src/config/settings-defaults.json` currently has 71 default keys,
+  the Settings tab exposes 91 `settings*` controls, and the dashboard listener
+  map plus direct blur/save handlers can persist 80 setting keys. A parity scan
+  found 51 saveable keys missing from `settings-defaults.json` / `Settings`
+  typing, and 42 default keys with no Settings UI save path. Some missing keys
+  are internal tokens or timestamps by design, but operator-facing examples such
+  as `allowInternalXhr`, `xhrTimeout`, `dashboardVirtualizationThreshold`,
+  `experimentalESMUserscripts`, `syncInterval`, `notifyOnInstall`,
+  `notifyOnUpdate`, and `showBadge` need an explicit hidden/internal/defaults
+  policy. `SettingsManager.set(...)` still merges arbitrary keys into storage,
+  while raw text inputs such as badge color, lint max size, URL fields, denied
+  hosts, custom CSS, and linter config rely on blur-time saves without a shared
+  constraint layer or per-field text errors. This should become a schema-parity
+  and accessible-validation gate, not a broad UI rewrite.
+
+### Researcher Queue (Cycle 18 - 2026-06-04)
+
+- [ ] 🔬 `import-restore-quarantine-2026-06-04` - rechecked JSON import, ZIP
+  import, raw-JS fallback import, selected backup restore, and full-vault
+  restore after the credential-redaction, archive-bound, and restore-receipt
+  work. The remaining gap is execution trust rather than storage safety:
+  `src/background/import-export.ts:538-568` stores JSON-imported scripts with
+  `enabled: script.enabled !== false` and re-registers all scripts,
+  `src/background/import-export.ts:697-825` defaults ZIP imports to enabled,
+  preserves enabled metadata when present, stores raw JS fallback imports as
+  enabled, and re-registers, while `src/modules/backup-scheduler.ts:1321-1345`
+  funnels selected and full restores through `importFromZip(... overwrite
+  true ...)`. Dashboard confirmations cover overwrite, settings, stored values,
+  and credential behavior at `pages/dashboard.js:1336-1365,8278-8289,12248-12535`,
+  but do not offer a default quarantine or first-run review for executable
+  script bodies. The P1 row below should preserve backup identity and rollback
+  while making imported/restored executable code inert until explicit review or
+  a counted trusted-archive override.
+
 ### Firefox and mobile release quality
 
 - [x] 🤖 🔧 🔬 P2 — Add a Firefox for Android smoke gate or remove the Android compatibility claim before AMO listing
@@ -458,6 +499,54 @@ Priorities/sizes preserve the source labels.
   - Verify: focused tests with a fake high-expansion ZIP, excessive file count, oversized `.user.js`, oversized `.storage.json`, nested `.zip`, and oversized JSON import; existing import snapshot/rollback tests remain green; `npm run ts-runtime:check`; focused Firefox backup import smoke where practical.
   - Progress: 2026-06-04 JSON import, ZIP import, managed backup import, inspect, verify, and restore now route through bounded archive intake. The helper caps compressed payload bytes, file count, aggregate expanded bytes, per-entry size, script-code size, nested archive entries, and compression ratio before any text decode, JSON parse, or script registration path runs.
   - Verification: `npm run ts-runtime:generate`; `npm run build:bg`; `npm run typecheck`; `npm test -- tests/runtime-import-export.test.js tests/source-backup-modules.test.js tests/backup-scheduler.test.js tests/source-hardening-parity.test.js`; `npm test -- tests/import-snapshot.test.js`; `npm run ts-runtime:check`; `npm run ts-source:check`; `npm run store-copy:check`; `npm run readme:check`; `npm run test:a11y`; `npm run check`; `git diff --check`.
+  - Complexity: M
+- [ ] P1 - Quarantine imported/restored executable scripts before first run
+  - Why: JSON import, ZIP import, selected backup restore, full-vault restore,
+    and raw-JS fallback import are now bounded and credential-safe, but they can
+    still persist executable script bodies as enabled and call
+    `registerAllScripts()` in the same flow. A shared or stale backup can
+    therefore activate imported code before the user has reviewed the restored
+    script bodies, even though rollback only helps after mutation.
+  - Evidence: `src/background/import-export.ts:538-568,697-825`;
+    `src/modules/backup-scheduler.ts:1321-1345`;
+    `pages/dashboard.js:1336-1365,8278-8289,12248-12535`;
+    `tests/runtime-import-export.test.js:280-338`;
+    `tests/import-snapshot.test.js:150-225`; Chrome Web Store program policies
+    and remote-hosted-code guidance distinguish submitted extension logic from
+    allowed user-provided User Scripts API code
+    (`https://developer.chrome.com/docs/webstore/program-policies/policies`,
+    `https://developer.chrome.com/docs/extensions/develop/migrate/remote-hosted-code`,
+    `https://developer.chrome.com/docs/extensions/reference/api/userScripts`);
+    OWASP File Upload treats uploaded archives as untrusted content
+    (`https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html`);
+    MITRE CWE-494 and CWE-829 cover integrity and untrusted-functionality risks
+    for externally supplied code (`https://cwe.mitre.org/data/definitions/494.html`,
+    `https://cwe.mitre.org/data/definitions/829.html`); competitor managers
+    document backup/import as a normal workflow, so ScriptVault should make the
+    trust transition explicit rather than surprising
+    (`https://www.tampermonkey.net/documentation.php`,
+    `https://violentmonkey.github.io/`).
+  - Touches: `src/background/import-export.ts`, `src/modules/backup-scheduler.ts`,
+    `src/background/core.ts` generated runtime path, import/restore receipt
+    schema, dashboard import/backup review UI, enable/review affordance,
+    import/export and backup scheduler tests, store-review/release copy if the
+    trust wording changes.
+  - Acceptance: JSON imports, ZIP imports, raw `.js` fallback imports,
+    selected backup restores, and full-vault restores default new or overwritten
+    executable script bodies to a disabled/quarantined state unless the user
+    chooses an explicit trusted-archive override; disabled archive entries stay
+    disabled without extra noise; trusted override copy names the count of
+    scripts that will become active; receipts record quarantined, preserved
+    disabled, and explicitly preserved enabled counts without script bodies or
+    credentials; dashboard exposes a review path to enable quarantined scripts
+    later; `registerAllScripts()` cannot activate quarantined imports before the
+    state is persisted.
+  - Verify: focused tests for JSON import, ZIP import, raw-JS fallback,
+    selected restore, full restore, overwrite receipts, rollback, and archived
+    disabled-state preservation; dashboard confirmation/a11y tests for default
+    quarantine and trusted override copy; `npm run ts-runtime:check`;
+    `npm run ts-source:check`; relevant import/export, backup scheduler, store
+    copy, and a11y gates.
   - Complexity: M
 - [x] 🤖 🔬 P1 — Optional client-side E2E encryption for cloud sync
   - Why: synced script source (often embedding API keys) uploads as plaintext `JSON.stringify` to every provider; a WebDAV operator or compromised Drive/Dropbox account reads the whole library.
@@ -628,10 +717,10 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
   - Verify: run the new script locally; add a fixture import of an optional package and confirm the gate fails; keep `npm audit --audit-level=high --omit=optional` green.
   - Complexity: M
 - [ ] P2 — Settings discoverability/validation audit for the dashboard options surface
-  - Why: `options_ui` points at the full dashboard (`open_in_tab`), but there is no consolidated, validated Settings panel — toggles like `allowInternalXhr`, `maxBackups`, sync provider config, and `experimentalBackgroundScripts` (NF-8) are scattered. No documented defaults table or range validation surface for operator-facing knobs. Pairs with the NF-3 script-config work but targets *app* settings, not per-script `@var`.
-  - Touches: `pages/dashboard*.js` settings section, a defaults/validation table doc.
-  - Acceptance: every persisted setting has a labelled control, a documented default, and input validation; invalid values are rejected with a visible message, not silently clamped.
-  - Verify: `npm run test:a11y` + manual settings walk-through.
+  - Why: the "no panel" part is now stale because `pages/dashboard.html` has a Settings tab with search/category filters and many advanced controls, but it is not schema-driven or consistently validated. Current evidence: `src/config/settings-defaults.json` has 71 default keys; the Settings tab has 91 `settings*` controls; dashboard save handlers can persist 80 keys; 51 saveable keys are absent from the defaults/`Settings` type, and 42 default keys have no Settings UI save path. Some absences are expected internal credentials/timestamps, but operator-facing defaults such as `allowInternalXhr`, `xhrTimeout`, `dashboardVirtualizationThreshold`, `experimentalESMUserscripts`, `syncInterval`, `notifyOnInstall`, `notifyOnUpdate`, and `showBadge` are not explicitly classified. `SettingsManager.set(...)` merges arbitrary keys into storage, and raw inputs such as badge color, lint max size, URL fields, denied hosts, custom CSS, and linter config save on blur without a shared constraint layer or per-field text errors. MDN documents native constraints, `checkValidity()` / `reportValidity()`, and `setCustomValidity()` for client-side validation; WCAG 2.1 SC 3.3.1 requires detected input errors to identify the field and describe the error in text.
+  - Touches: `src/config/settings-defaults.json`, `src/types/settings.ts`, `src/modules/storage.ts` / generated storage, `pages/dashboard.html`, `pages/dashboard.js`, dashboard a11y/settings tests, and a defaults/validation table doc.
+  - Acceptance: every persisted setting is classified as visible, internal, credential, timestamp, derived, or deprecated; saveable dashboard keys all exist in the schema or an explicit extension allowlist; visible controls declare type/range/options/default/help copy from the schema; invalid badge colors, numeric values, URLs, JSON config, host lists, and allowlist text show field-specific text errors and do not persist silently coerced values; security-sensitive settings keep explicit advanced labels.
+  - Verify: add a schema parity test comparing `settings-defaults.json`, `Settings`, dashboard controls, and save handlers; add validation fixtures for malformed badge color, lint size, WebDAV/S3 URLs, denied hosts, and linter JSON; run `npm run test:a11y`, focused settings tests, and a manual Settings tab walk-through.
   - Complexity: L
 
 ---
