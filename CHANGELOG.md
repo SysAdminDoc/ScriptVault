@@ -4,6 +4,20 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-03 — Playwright E2E critical flows
+
+- **Added Playwright E2E coverage for four critical flows.** New specs cover
+  install review, update review with rollback history, backup restore plus
+  restore-receipt rollback, and WebDAV sync preview/upload against a real local
+  HTTP endpoint.
+- **CI now runs the browser flow suite.** `npm run test:e2e` runs after the
+  dashboard smoke test; CI installs Playwright Chromium explicitly while
+  keeping dependency install from downloading unused browsers.
+- **Install review bootstrap fixed.** The install page now relies on the shared
+  `formatBytes` helper instead of redeclaring it after `shared/utils.js`, which
+  previously caused a page-level SyntaxError and left the install review stuck
+  on its loading state.
+
 ### 2026-06-03 — GM API ambient declarations
 
 - **Generated TypeScript declarations for userscripts.** `scripts/generate-gm-types.mjs`

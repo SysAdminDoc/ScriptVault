@@ -17,6 +17,7 @@ export default defineConfig({
     minWorkers: 1,
     testTimeout: 30000,
     include: ["tests/**/*.test.{js,mjs}", "tests/**/*.spec.{js,mjs}"],
+    exclude: ["tests/e2e/**", "node_modules/**", "dist/**", "build/**"],
     coverage: {
       provider: "v8",
       all: false,

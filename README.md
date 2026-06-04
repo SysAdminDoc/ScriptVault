@@ -480,6 +480,7 @@ ScriptVault/
 ├── manifest.json              # Chrome MV3 manifest
 ├── manifest-firefox.json      # Firefox MV3 manifest
 ├── esbuild.config.mjs         # Cross-platform build pipeline
+├── playwright.config.mjs      # Playwright E2E flow suite
 ├── .env.example               # Safe template for Chrome Web Store publishing credentials
 ├── background.js              # Service worker (built from source modules)
 ├── background.core.js         # Main service worker logic (~5500 lines)
@@ -515,6 +516,7 @@ ScriptVault/
 │   ├── diff.min.js            # diff.js for 3-way merge
 │   └── fflate.js              # ZIP compression
 ├── images/                    # Extension icons
+├── tests/e2e/                 # Playwright install/update/restore/sync flows
 └── _locales/                  # 8 language translations
 ```
 

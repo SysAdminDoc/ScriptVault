@@ -1867,13 +1867,6 @@ function compareVersions(v1, v2) {
   return 0;
 }
 
-function formatBytes(bytes) {
-  if (bytes === 0) return '0 B';
-  const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
-
 async function runSignatureVerification(sourceUrl) {
   const signatureInfo = extractSignatureInfo(scriptCode);
   if (!signatureInfo) {
