@@ -156,7 +156,9 @@ priority section below.
   - Acceptance: `npm run support:matrix:check` passes without hand-editing generated blocks; matrix warning count and last-verification date match the latest Firefox lint artifact.
   - Progress: 2026-06-04 updated `scripts/generate-browser-support-matrix.mjs` so Firefox Desktop evidence includes both `npm run firefox:package` and `npm run smoke:firefox`, regenerated `README.md` and `docs/cross-browser-pipeline.md`, and verified `npm run support:matrix:check`.
   - Source: 2026-06-04 research refresh.
-- [ ] P3 — Add CONTRIBUTING.md note explaining `.factory/` directory purpose
+- [x] P3 — Add CONTRIBUTING.md note explaining `.factory/` directory purpose
+  - Progress: 2026-06-04 added `CONTRIBUTING.md` with generic local-only state guidance and added `.factory/** export-ignore` to `.gitattributes`, keeping the local automation state untracked and out of source-review archives without exposing workflow internals.
+  - Verification: `git check-attr export-ignore -- .factory/state.yaml`; `npm run readme:check`; `git diff --check`.
   - Source: docs/archive/TODO.md I-1 (PASS2 Architecture #8).
 - [ ] P3 — Expand `docs/readme-feature-claim-checklist.md` rows for ESM bundler, trust receipts, install-source badges, internal-host guard, sync cockpit, virtualized dashboard
   - Source: docs/archive/TODO.md I-2 (PASS2 quick-win 13).

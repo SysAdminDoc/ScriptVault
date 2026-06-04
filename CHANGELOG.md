@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-04 — Contributor local-state guidance
+
+- **Added a public CONTRIBUTING guide.** The guide covers setup,
+  verification, release evidence commands, and generic local-only file hygiene.
+- **Excluded local state from source archives.** `.gitattributes` now marks
+  `.factory/` as `export-ignore`, matching the existing `.gitignore` rule and
+  keeping local workflow state out of release/source-review archives.
+
 ### 2026-06-04 — CWS remote-code compliance gate
 
 - **Added a Chrome Web Store remote-code compliance packet.**
