@@ -50,6 +50,25 @@ _None as of 2026-06-04._ The `web-ext@10.2.0 -> tmp@0.2.5`
 GHSA-ph9p-34f9-6g65 / CVE-2026-44705 advisory was cleared by bumping
 `web-ext` to `^10.3.0`, which depends on fixed `tmp@0.2.6`.
 
+## Freshness automation
+
+Dependabot version updates are enabled in `.github/dependabot.yml` for:
+
+- npm at `/`, checked weekly on Monday morning America/New_York time.
+- GitHub Actions at `/`, checked weekly on Tuesday morning America/New_York
+  time.
+
+Low-risk npm dev-tooling updates are grouped by purpose: test tooling, browser
+test tooling, extension release tooling, build tooling, and the editor runtime.
+Those groups accept only minor and patch updates so major updates stay as
+separate PRs for manual review. GitHub Actions minor and patch updates are also
+grouped; major action updates remain separate so release-trust workflow changes
+are easier to inspect.
+
+Security updates must not be blocked by broad ignore rules. If a dependency
+requires a temporary hold, document it in the exception table above instead of
+adding a silent Dependabot ignore.
+
 ## Why not advisory-only?
 
 A Quick Win in the roadmap asked whether to make this gate advisory.
@@ -62,6 +81,9 @@ way to keep the muscle memory.
 ## Verification
 
 - `npm audit --audit-level=high --omit=optional` in this repo currently
-  exits 0 (clean) as of 2026-06-04.
+  exits 0 (clean) as of 2026-06-05.
 - The CI step at `.github/workflows/ci.yml` line 45 enforces the same
   command on every push.
+- `tests/dependabot-config.test.js` pins the required npm and GitHub Actions
+  Dependabot update blocks, weekly schedules, bounded PR limits, and grouped
+  minor/patch update policy.
