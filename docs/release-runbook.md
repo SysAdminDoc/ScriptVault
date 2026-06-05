@@ -60,8 +60,8 @@ If any gate fails, stop. Do not patch the test to make it green.
 
 Verified current implementation:
 
-1. `package.json` pins `chrome-webstore-upload-cli@^4.0.0`; the installed package reports `engines.node >=20`.
-2. `.github/workflows/ci.yml` runs Node 20, matching the CLI engine.
+1. `package.json` pins `chrome-webstore-upload-cli@^4.0.0`; the installed package reports `engines.node >=20`, while ScriptVault itself requires Node 24.16.0+ / npm 11.13.0+.
+2. `.github/workflows/ci.yml` reads `.node-version`, and `.npmrc` enables `engine-strict=true` so CI and local installs fail below the project floor.
 3. `publish.sh` loads `EXTENSION_ID`, `PUBLISHER_ID`, `CLIENT_ID`, `CLIENT_SECRET`, and `REFRESH_TOKEN` from `.env`.
 4. `publish.sh --draft` builds and uploads the ZIP with `chrome-webstore-upload upload --source ...`, then keeps the ZIP on disk for reviewer/manual fallback.
 5. `publish.sh` builds, uploads, and then runs `chrome-webstore-upload publish`.

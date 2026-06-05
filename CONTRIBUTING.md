@@ -5,7 +5,8 @@ reproducible, and easy to package for Chrome Web Store and AMO review.
 
 ## Development setup
 
-1. Install Node.js 21.2.0 or newer.
+1. Install the Node.js version in `.node-version` (currently 24.16.0) with
+   npm 11.13.0 or newer.
 2. Run `npm ci`.
 3. Run `npm run check` before sending changes.
 

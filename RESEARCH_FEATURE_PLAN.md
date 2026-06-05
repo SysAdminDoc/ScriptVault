@@ -638,7 +638,7 @@ Important integrations, permissions, storage, and data flows:
     roots, CI runs `npm run test:cov`, and `scripts/check-coverage-sources.mjs`
     verifies promoted/source-root presence in `coverage-summary.json`.
 
-- [ ] P1 - Align Node/npm/toolchain contract
+- [x] P1 - Align Node/npm/toolchain contract
   - Why: package floor is Node >=21.2.0 while CI uses Node 20 and npm engines
     are advisory locally.
   - Evidence: `package.json`, `.github/workflows/ci.yml`, missing version files,
@@ -649,6 +649,9 @@ Important integrations, permissions, storage, and data flows:
     fail fast below the floor.
   - Verify: `npm run cws:check`; CI setup-node uses version file or matching
     semver.
+  - Closed 2026-06-05: Node 24.16.0+ / npm 11.13.0+ is declared in
+    `package.json`, `.node-version`, `.nvmrc`, `.npmrc`, CI, contributor docs,
+    and the CWS/toolchain gates.
 
 - [x] P1 - Add dependency freshness automation
   - Why: direct devDependencies are stale and no updater watches npm or actions.

@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 22 - 2026-06-05
+Last cycle: Cycle 23 - 2026-06-05
 
 ## Latest Result
 
@@ -10,15 +10,19 @@ Last cycle: Cycle 22 - 2026-06-05
   `1772b6a`.
 - Cycle 22 added weekly Dependabot version updates for npm and GitHub Actions,
   with grouped minor/patch tooling updates and separate major update PRs.
+- Cycle 23 aligned the Node/npm toolchain contract on Node 24.16.0+ and npm
+  11.13.0+, with engine-strict local installs, setup-node version-file usage,
+  CWS/toolchain gates, and docs.
 - Verification used `C:\tmp\ScriptVault-verify`: `npm ci`, `npm run typecheck`,
   `npm run test:cov`, `npm run check`, `npm run build`, focused Dependabot
-  config tests, and `npm audit --audit-level=high --omit=optional` passed.
+  config tests, focused toolchain tests, `npm run cws:check`, and
+  `npm audit --audit-level=high --omit=optional` passed.
 
 ## Next Cycle Focus
 
 Continue top-down from `ROADMAP.md`. The next local implementer-actionable row is
-P1 Node/npm/toolchain contract alignment unless newer repo state promotes a
-higher priority security or correctness item.
+P1 GitHub Actions SHA pinning unless newer repo state promotes a higher priority
+security or correctness item.
 
 ## Loop Pointer
 

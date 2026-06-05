@@ -29,6 +29,29 @@ function requirePattern(label, value, pattern) {
   if (!pattern.test(value)) fail(`${label} did not match ${pattern}`);
 }
 
+function parseSemver(version) {
+  const match = String(version || '').match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!match) return null;
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    raw: match[0],
+  };
+}
+
+function compareSemver(a, b) {
+  for (const key of ['major', 'minor', 'patch']) {
+    if (a[key] !== b[key]) return a[key] - b[key];
+  }
+  return 0;
+}
+
+function minimumVersionFromRange(range) {
+  const match = String(range || '').match(/>=\s*(\d+\.\d+\.\d+)/);
+  return match ? parseSemver(match[1]) : null;
+}
+
 const pkg = readJson('package.json');
 const cliRange = pkg.devDependencies?.['chrome-webstore-upload-cli'];
 if (!cliRange) {
@@ -37,9 +60,12 @@ if (!cliRange) {
   fail(`package.json pins chrome-webstore-upload-cli to ${cliRange}, expected v4.x for CWS API v2`);
 }
 
-const nodeMajor = Number(process.versions.node.split('.')[0]);
-if (!Number.isFinite(nodeMajor) || nodeMajor < 20) {
-  fail(`Node ${process.versions.node} is too old; chrome-webstore-upload-cli v4 requires Node >=20`);
+const projectNodeFloor = minimumVersionFromRange(pkg.engines?.node);
+const currentNodeVersion = parseSemver(process.versions.node);
+if (!projectNodeFloor || !currentNodeVersion) {
+  fail(`Unable to parse project Node engine (${pkg.engines?.node || '<missing>'}) or current Node ${process.versions.node}`);
+} else if (compareSemver(currentNodeVersion, projectNodeFloor) < 0) {
+  fail(`Node ${process.versions.node} is too old; ScriptVault requires ${pkg.engines.node}`);
 }
 
 const cliPackagePath = join(projectRoot, 'node_modules', 'chrome-webstore-upload-cli', 'package.json');
@@ -54,8 +80,11 @@ if (!existsSync(cliPackagePath)) {
   if (cliMajor !== 4) {
     fail(`installed chrome-webstore-upload-cli is ${cliPkg.version || '<unknown>'}, expected v4.x`);
   }
-  if (cliPkg.engines?.node && !cliPkg.engines.node.includes('20')) {
-    warn(`installed CLI engine is ${cliPkg.engines.node}; verify .github/workflows/ci.yml Node version still matches`);
+  if (cliPkg.engines?.node && projectNodeFloor) {
+    const cliNodeFloor = minimumVersionFromRange(cliPkg.engines.node);
+    if (cliNodeFloor && compareSemver(projectNodeFloor, cliNodeFloor) < 0) {
+      warn(`installed CLI engine is ${cliPkg.engines.node}; verify ScriptVault engine ${pkg.engines.node} still satisfies it`);
+    }
   }
 }
 
