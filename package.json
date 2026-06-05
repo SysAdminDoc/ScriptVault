@@ -56,7 +56,7 @@
     "release:store-status": "node scripts/check-store-status.mjs",
     "release:check": "node scripts/check-release-artifacts.mjs",
     "release:check:public": "node scripts/check-release-artifacts.mjs --public",
-    "test:cov": "vitest run --coverage",
+    "test:cov": "vitest run --coverage && node scripts/check-coverage-sources.mjs",
     "check": "node scripts/check-readability.mjs --check && npm run dashboard:modules:check && npm run whatsnew:check && tsc --noEmit && vitest run",
     "clean": "node --input-type=commonjs -e \"const fs=require('fs'); fs.rmSync('background.js',{force:true}); fs.rmSync('lib/monaco',{recursive:true,force:true});\"",
     "publish": "bash publish.sh",
