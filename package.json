@@ -21,6 +21,7 @@
     "test:e2e": "playwright test",
     "test:a11y": "node scripts/check-readability.mjs --check && vitest run tests/dashboard-a11y.test.js tests/popup-a11y.test.js tests/gui-ux-audit.test.js tests/accessibility-surface-pass.test.js",
     "smoke:dashboard": "node scripts/smoke-dashboard.mjs",
+    "smoke:edge": "node scripts/smoke-edge-sideload.mjs",
     "smoke:firefox": "node scripts/smoke-firefox-sideload.mjs",
     "smoke:large-library": "node scripts/smoke-large-library.mjs",
     "smoke:large-library:check": "node scripts/smoke-large-library.mjs --check",
