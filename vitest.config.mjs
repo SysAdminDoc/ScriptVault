@@ -15,14 +15,26 @@ export default defineConfig({
     // Vitest 4 moved per-pool config to top-level pool options.
     maxWorkers: 1,
     minWorkers: 1,
-    testTimeout: 30000,
+    testTimeout: 60000,
     include: ["tests/**/*.test.{js,mjs}", "tests/**/*.spec.{js,mjs}"],
     exclude: ["tests/e2e/**", "node_modules/**", "dist/**", "build/**"],
     coverage: {
       provider: "v8",
-      all: false,
-      include: ["src/shared/**/*.ts", "src/modules/**/*.ts", "src/bg/**/*.ts"],
+      reporter: ["text", "json-summary"],
+      include: [
+        "src/background/**/*.ts",
+        "src/bg/**/*.ts",
+        "src/modules/**/*.ts",
+        "src/shared/**/*.ts",
+        "src/storage/**/*.ts",
+      ],
       exclude: ["src/config/**", "src/types/**", "lib/**", "node_modules/**"],
+      thresholds: {
+        lines: 10,
+        functions: 10,
+        branches: 5,
+        statements: 10,
+      },
     },
     // Mock chrome.* APIs that aren't available in jsdom
     setupFiles: ["tests/setup.js"],

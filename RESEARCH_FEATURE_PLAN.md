@@ -626,7 +626,7 @@ Important integrations, permissions, storage, and data flows:
 
 ## Prioritized Roadmap
 
-- [ ] P1 - Add source-aligned coverage gate
+- [x] P1 - Add source-aligned coverage gate
   - Why: promoted runtime sources can be invisible to current coverage.
   - Evidence: `vitest.config.mjs`, `ts-source-promotion.json`, ROADMAP Cycle 13.
   - Touches: `vitest.config.mjs`, `package.json`, `.github/workflows/ci.yml`,
@@ -634,6 +634,9 @@ Important integrations, permissions, storage, and data flows:
   - Acceptance: coverage includes promoted `src/background/**`, enforces a
     measured floor, and fails when promoted source files are absent.
   - Verify: `npm run test:cov`; inspect `coverage/coverage-summary.json`.
+  - Closed 2026-06-05: coverage now includes authoritative runtime TypeScript
+    roots, CI runs `npm run test:cov`, and `scripts/check-coverage-sources.mjs`
+    verifies promoted/source-root presence in `coverage-summary.json`.
 
 - [ ] P1 - Align Node/npm/toolchain contract
   - Why: package floor is Node >=21.2.0 while CI uses Node 20 and npm engines

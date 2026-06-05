@@ -174,7 +174,7 @@ describe('dashboard surface modules', () => {
     expect(icon?.getAttribute('onerror')).toBeNull();
     expect(fallback?.hasAttribute('hidden')).toBe(true);
 
-    icon?.dispatchEvent(new Event('error'));
+    icon?.dispatchEvent(new window.Event('error'));
     expect(icon?.hidden).toBe(true);
     expect(fallback?.hasAttribute('hidden')).toBe(false);
 

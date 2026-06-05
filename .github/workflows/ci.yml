@@ -79,6 +79,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Coverage source gate
+        run: npm run test:cov
+
       - name: Build extension bundle
         run: npm run build
 
