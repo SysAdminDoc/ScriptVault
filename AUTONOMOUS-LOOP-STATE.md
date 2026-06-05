@@ -2,23 +2,23 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 21 - 2026-06-05
+Last cycle: Cycle 22 - 2026-06-05
 
 ## Latest Result
 
-- Shipped the P1 source-aligned coverage gate.
-- Verification was run from `C:\tmp\ScriptVault-verify` to avoid UNC/jsdom
-  resolution issues: `npm ci`, `npm run typecheck`, and `npm run test:cov`
-  passed.
-- `npm run test:cov` covered 118 test files / 1354 tests and the source guard
-  confirmed 48 authoritative TypeScript files plus 28 promoted source files in
-  `coverage-summary.json`.
+- Cycle 21 shipped the P1 source-aligned coverage gate and pushed commit
+  `1772b6a`.
+- Cycle 22 added weekly Dependabot version updates for npm and GitHub Actions,
+  with grouped minor/patch tooling updates and separate major update PRs.
+- Verification used `C:\tmp\ScriptVault-verify`: `npm ci`, `npm run typecheck`,
+  `npm run test:cov`, `npm run check`, `npm run build`, focused Dependabot
+  config tests, and `npm audit --audit-level=high --omit=optional` passed.
 
 ## Next Cycle Focus
 
 Continue top-down from `ROADMAP.md`. The next local implementer-actionable row is
-P1 dependency freshness automation unless newer repo state promotes a higher
-priority security or correctness item.
+P1 Node/npm/toolchain contract alignment unless newer repo state promotes a
+higher priority security or correctness item.
 
 ## Loop Pointer
 

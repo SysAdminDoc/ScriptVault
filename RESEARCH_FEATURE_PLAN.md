@@ -650,7 +650,7 @@ Important integrations, permissions, storage, and data flows:
   - Verify: `npm run cws:check`; CI setup-node uses version file or matching
     semver.
 
-- [ ] P1 - Add dependency freshness automation
+- [x] P1 - Add dependency freshness automation
   - Why: direct devDependencies are stale and no updater watches npm or actions.
   - Evidence: `npm outdated --json`, missing `.github/dependabot.yml` and
     `renovate.json`.
@@ -660,6 +660,9 @@ Important integrations, permissions, storage, and data flows:
     patch/minor tooling updates and isolated major changes.
   - Verify: Dependabot/Renovate config validation and first scheduled/manual
     update run.
+  - Closed 2026-06-05: `.github/dependabot.yml` now watches npm and GitHub
+    Actions weekly, groups minor/patch tooling updates, leaves majors as
+    separate PRs, and is pinned by `tests/dependabot-config.test.js`.
 
 - [ ] P1 - Pin release workflow actions to full SHAs
   - Why: current release job uses mutable action tags while granting
