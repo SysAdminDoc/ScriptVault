@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## Unreleased
 
+### 2026-06-05 — Microsoft Edge sideload smoke
+
+- **Added a dedicated Edge browser smoke.** `npm run smoke:edge` now builds the
+  Edge package, loads `build-edge/` into Microsoft Edge, opens dashboard and
+  popup surfaces, saves/toggles a smoke userscript, verifies it runs on a local
+  target page, and captures extension console/runtime errors.
+- **Recorded Edge smoke evidence.** The smoke writes
+  `edge-artifacts/edge-smoke-<version>.json`, and the Edge readiness report
+  now points release operators to that evidence path.
+- **Kept Edge support claims conservative.** The generated support matrix still
+  labels Edge as a compatible package / manual Partner Center publication path
+  until maintainers run the local smoke on a release machine.
+
 ### 2026-06-04 — Import and restore quarantine
 
 - **Quarantined restored executable scripts by default.** JSON imports, ZIP

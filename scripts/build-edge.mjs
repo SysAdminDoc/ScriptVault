@@ -178,7 +178,9 @@ async function main() {
       packageAutomation: 'Local and CI package generation is automated by npm run build:edge:check.',
       initialPublication: 'Manual Partner Center upload remains required until a live Edge Add-ons listing exists.',
       updateAutomation: 'Microsoft Edge Add-ons REST update automation is deferred until listing identifiers and publisher credentials are provisioned.',
-      browserSmoke: 'No dedicated Edge browser smoke is wired in CI; release operators sideload build-edge/ manually through edge://extensions.'
+      browserSmoke: 'Dedicated local Edge sideload smoke is wired via npm run smoke:edge; CI still keeps Edge at package-ready unless a maintainer runs that command on Microsoft Edge.',
+      browserSmokeCommand: 'npm run smoke:edge',
+      browserSmokeEvidence: `edge-artifacts/edge-smoke-${version}.json`
     },
     reviewDeclarations: {
       privacyPolicy: 'PRIVACY.md',
