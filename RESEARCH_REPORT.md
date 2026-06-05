@@ -369,6 +369,35 @@ alias to reuse the guarded network path. External anchors: Violentmonkey GM API
 and Tampermonkey's `GM.fetch` / streaming proposal
 (`https://github.com/Tampermonkey/tampermonkey/issues/1278`).
 
+2026-06-05 Cycle 20 companion-plan reconciliation: rechecked the current
+`RESEARCH_FEATURE_PLAN.md` against `ROADMAP.md` after `2ad4acd`. The companion
+plan's top opportunities for coverage, Node/npm enforcement, dependency
+freshness, action SHA pinning, Settings schema validation, optional-dependency
+reach, GM namespace parity, GM value-change semantics, and AMO publication are
+already represented by active roadmap rows or the Firefox Phase 5 carry-over.
+The missing active handoff was Edge runtime evidence: the package builder, CI
+artifact upload, Edge readiness report, and support-matrix checks are shipped,
+but the current docs still intentionally state that no dedicated live Edge
+browser smoke exists. `ROADMAP.md` now adds a P2 Edge sideload smoke gate that
+keeps "package ready" separate from "runtime smoked" until Microsoft Edge can
+load the generated package, exercise dashboard/popup/script execution, and
+record console/runtime evidence. Validation during this pass: `npm audit
+--audit-level=high --omit=optional` passed with 0 vulnerabilities;
+`npm run ts-source:check` passed with 27 promoted entries and no promoted
+JS-only drift; `npm run readme:check` passed; `npm run dashboard:modules:check`
+passed for 28 modules; `npm config get engine-strict` returned `false`; and
+`npm outdated --json` still reported nine stale direct devDependencies
+(`@vitest/coverage-v8`, `vitest`, `chrome-types`,
+`chrome-webstore-upload-cli`, `esbuild`, `jsdom`, `monaco-editor`,
+`puppeteer-core`, and `typescript`). Detailed evidence is in
+`docs/research-cycle-20-2026-06-05.md`. External anchors: Microsoft Edge
+Chrome-port guidance
+(`https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/port-chrome-extension`),
+Microsoft Edge Add-ons publish flow
+(`https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension`),
+and Microsoft Edge supported APIs
+(`https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/api-support`).
+
 ## Executive Summary
 
 ScriptVault is a Manifest V3 Chrome userscript manager (Chrome 130+, with a parallel

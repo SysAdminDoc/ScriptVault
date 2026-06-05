@@ -71,9 +71,10 @@ Local files and directories inspected:
 Git history reviewed:
 
 - `rtk git log -10 --oneline --decorate` showed current `HEAD` on `main` at
-  `33db482 docs: add gm namespace parity research`, preceded by host permission
-  recovery, import quarantine, npm resolver, dependency/action/settings
-  research, optional dependency research, and user-config work.
+  `2ad4acd docs: refresh research feature plan`, preceded by GM namespace
+  parity research, host permission recovery, import quarantine, npm resolver,
+  dependency/action/settings research, optional dependency research, and
+  user-config work.
 - `rtk git status --short --branch` showed `main...origin/main` clean before
   this document was rewritten.
 

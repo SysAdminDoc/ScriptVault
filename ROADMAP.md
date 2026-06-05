@@ -17,7 +17,7 @@
 > **2026-06-04 refresh:** Post-`04087ed` continuation keeps the active queue direction intact. The `web-ext@10.2.0 -> tmp@0.2.5` / GHSA-ph9p-34f9-6g65 audit failure is closed by `web-ext@^10.3.0` resolving to fixed `tmp@0.2.6`; `npm audit --audit-level=high --omit=optional` exits 0. Firefox package/sideload validation now passes with Firefox Developer Edition 151.0b10: `npm run firefox:package` reports 0 errors / 0 notices / 139 warnings, `npm run smoke:firefox` opens the dashboard and popup, saves/toggles a smoke userscript, and verifies it runs on a local target page, and `npm run support:matrix:check` passes after regenerating the matrix. F-1 is complete: `background.core.js` is generated from the raw bridge source at `src/background/core.ts`; after the F-4 parser/verifier, sync-crypto promotions, and npm resolver wiring, `ts-source:check` reports 27 promoted entries, 0 mirrored entries, and 0 intentionally divergent runtime files.
 > **Source floor:** >294 URLs from Rounds 1-13 plus 88 Round 14 external sources below. Every Round 14 Now/Next item carries local or external source IDs from the appendix.
 
-> Last researched: Cycle 19 - 2026-06-04.
+> Last researched: Cycle 20 - 2026-06-05.
 
 ## ▶ Implementer Instructions (for the build machine)
 
@@ -434,6 +434,20 @@ Priorities/sizes preserve the source labels.
   should reuse the same guarded network policy rather than adding a second
   outbound path.
 
+### Researcher Queue (Cycle 20 - 2026-06-05)
+
+- [x] 🔬 `feature-plan-reconciliation-2026-06-05` - rechecked the root
+  `RESEARCH_FEATURE_PLAN.md` against the active roadmap after `2ad4acd`. The
+  top companion-plan opportunities for coverage, Node/npm enforcement,
+  dependency freshness, action SHA pinning, Settings schema validation,
+  optional-dependency reach, GM namespace parity, GM value-change semantics,
+  and AMO publication already map to open rows below or the Firefox Phase 5
+  carry-over. The only missing active handoff is the next Edge support step:
+  the package/report and CI artifact path are shipped, but the docs still
+  intentionally say there is no dedicated live Edge browser smoke. This cycle
+  promotes that runtime smoke as a separate P2 row rather than reopening the
+  closed Edge package-evidence item.
+
 ### Firefox and mobile release quality
 
 - [x] 🤖 🔧 🔬 P2 — Add a Firefox for Android smoke gate or remove the Android compatibility claim before AMO listing
@@ -481,6 +495,13 @@ Priorities/sizes preserve the source labels.
   - Progress: 2026-06-04 `build:edge:check` now writes a schema-versioned Edge readiness report with relative artifact paths, manifest-transform evidence, privacy/permission/remote-code declaration pointers, manual initial Partner Center publication status, deferred REST update automation, and no dedicated Edge browser smoke in CI. CI runs the Edge package gate, uploads `edge-artifacts/*`, and the generated support matrix requires the current Edge ZIP/report before updating README and cross-browser docs.
   - Verification: `npm test -- tests/edge-build.test.js`; `npm run build:edge:check`; `npm run support:matrix`; `npm run support:matrix:check`; `npm run check`; `npm run ts-runtime:check`; `npm run ts-source:check`; `npm run store-copy:check`; `npm run readme:check`; `git diff --check`.
   - Complexity: S
+- [ ] 🤖 🔬 P2 — Add a dedicated Edge browser smoke before raising Edge support beyond package-ready
+  - Why: `build:edge:check`, CI artifact upload, and the generated support matrix now prove that an Edge-transformed package and readiness report exist, but they do not prove that Microsoft Edge can load the staged package, open the dashboard/popup, save a smoke userscript, run it on a local target page, and preserve the same store-review declarations after sideload. Microsoft Edge porting guidance calls for unsupported-API review, `update_url` removal, and local sideload testing; Partner Center publication also requires a ZIP package, manifest review, privacy information, permission justification, and remote-code declaration. Keep "package ready" separate from "runtime smoked" until that evidence exists.
+  - Evidence: `scripts/build-edge.mjs`; `tests/edge-build.test.js`; `.github/workflows/ci.yml`; `scripts/generate-browser-support-matrix.mjs`; `README.md`; `docs/cross-browser-pipeline.md`; `docs/edge-submission.md`; Microsoft Edge Chrome-port guidance (`https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/port-chrome-extension`); Microsoft Edge Add-ons publish flow (`https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension`); Microsoft Edge supported APIs (`https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/api-support`).
+  - Touches: new or extended Edge smoke script, `package.json` script wiring, support-matrix generator/docs, release-machine checklist, and focused tests for the smoke harness where practical.
+  - Acceptance: a maintainer can run a deterministic Edge sideload smoke against the generated Edge package; the smoke opens dashboard and popup surfaces, saves/toggles/runs a local smoke userscript, captures extension-console/runtime errors, and records the Edge package report used for the run. Support docs continue to label Edge as package-ready until the smoke is wired and passing.
+  - Verify: `npm run build:edge:check`; new Edge smoke command on a machine with Microsoft Edge installed; `npm run support:matrix:check`; `npm run readme:check`.
+  - Complexity: M
 
 ### Security and data safety
 
