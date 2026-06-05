@@ -667,7 +667,7 @@ Important integrations, permissions, storage, and data flows:
     Actions weekly, groups minor/patch tooling updates, leaves majors as
     separate PRs, and is pinned by `tests/dependabot-config.test.js`.
 
-- [ ] P1 - Pin release workflow actions to full SHAs
+- [x] P1 - Pin release workflow actions to full SHAs
   - Why: current release job uses mutable action tags while granting
     attestation/OIDC permissions.
   - Evidence: `.github/workflows/ci.yml`; GitHub Actions secure-use reference.
@@ -675,6 +675,9 @@ Important integrations, permissions, storage, and data flows:
   - Acceptance: every `uses:` ref is a full 40-character SHA with version
     comment and update path.
   - Verify: workflow lint rejects `@v*`, branches, and short SHAs; CI passes.
+  - Closed 2026-06-05: CI action refs are pinned to full SHAs with same-line
+    version comments, Dependabot watches GitHub Actions, and
+    `npm run actions:pins:check` gates future drift.
 
 - [ ] P1 - Add settings schema parity and accessible validation
   - Why: settings defaults, types, controls, and save handlers drift.
