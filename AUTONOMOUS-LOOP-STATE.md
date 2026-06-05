@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 23 - 2026-06-05
+Last cycle: Cycle 24 - 2026-06-05
 
 ## Latest Result
 
@@ -13,16 +13,19 @@ Last cycle: Cycle 23 - 2026-06-05
 - Cycle 23 aligned the Node/npm toolchain contract on Node 24.16.0+ and npm
   11.13.0+, with engine-strict local installs, setup-node version-file usage,
   CWS/toolchain gates, and docs.
+- Cycle 24 pinned all GitHub Actions workflow refs to full SHAs with same-line
+  version comments and added `npm run actions:pins:check`.
 - Verification used `C:\tmp\ScriptVault-verify`: `npm ci`, `npm run typecheck`,
   `npm run test:cov`, `npm run check`, `npm run build`, focused Dependabot
   config tests, focused toolchain tests, `npm run cws:check`, and
-  `npm audit --audit-level=high --omit=optional` passed.
+  `npm run actions:pins:check`, and `npm audit --audit-level=high
+  --omit=optional` passed.
 
 ## Next Cycle Focus
 
 Continue top-down from `ROADMAP.md`. The next local implementer-actionable row is
-P1 GitHub Actions SHA pinning unless newer repo state promotes a higher priority
-security or correctness item.
+P2 optional dependency reach gate unless newer repo state promotes a higher
+priority security or correctness item.
 
 ## Loop Pointer
 
