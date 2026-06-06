@@ -16635,6 +16635,13 @@ function getValueBundleKeyMetadata(bundle) {
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
+function getValueBundleKeyUpdatedAt(metadata, key) {
+  if (!metadata) return null;
+  const timestamp = Number(metadata[key]?.updatedAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+  return Math.floor(timestamp);
+}
+
 function createEmptyRemoteValueBundleSelection() {
   return { valueBundles: {}, ignored: 0, warnings: 0 };
 }
@@ -16776,8 +16783,10 @@ function preserveRemoteValueBundle(result, scriptId, remoteBundle, localBundle) 
 
 function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {
   const hasLocalBundle = isPlainObject(localBundle);
+  const localKeyMetadata = hasLocalBundle ? getValueBundleKeyMetadata(localBundle) : undefined;
+  const remoteKeyMetadata = getValueBundleKeyMetadata(remoteBundle);
   const keyCounts = hasLocalBundle
-    ? countValueBundleKeyOverlap(localBundle.values, remoteBundle.values)
+    ? countValueBundleKeyOverlap(localBundle.values, remoteBundle.values, localKeyMetadata, remoteKeyMetadata)
     : null;
   const localLastValueUpdatedAt = hasLocalBundle
     ? getValueBundleLastUpdatedAt(localBundle) ?? null
@@ -16794,26 +16803,61 @@ function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {
     remoteOnlyKeyCount: keyCounts?.remoteOnly ?? null,
     localLastValueUpdatedAt,
     remoteLastValueUpdatedAt,
-    lastWriteHint: compareValueBundleLastWrite(localLastValueUpdatedAt, remoteLastValueUpdatedAt)
+    lastWriteHint: compareValueBundleLastWrite(localLastValueUpdatedAt, remoteLastValueUpdatedAt),
+    overlappingRemoteNewerKeyCount: keyCounts?.overlappingRemoteNewer ?? null,
+    overlappingLocalNewerKeyCount: keyCounts?.overlappingLocalNewer ?? null,
+    overlappingSameTimestampKeyCount: keyCounts?.overlappingSameTimestamp ?? null,
+    overlappingRemoteTimestampOnlyKeyCount: keyCounts?.overlappingRemoteTimestampOnly ?? null,
+    overlappingLocalTimestampOnlyKeyCount: keyCounts?.overlappingLocalTimestampOnly ?? null,
+    overlappingUnknownTimestampKeyCount: keyCounts?.overlappingUnknownTimestamp ?? null
   };
 }
 
-function countValueBundleKeyOverlap(localValues, remoteValues) {
+function countValueBundleKeyOverlap(localValues, remoteValues, localKeyMetadata, remoteKeyMetadata) {
   const localKeys = new Set(isPlainObject(localValues) ? Object.keys(localValues) : []);
   const remoteKeys = new Set(isPlainObject(remoteValues) ? Object.keys(remoteValues) : []);
   let overlapping = 0;
   let localOnly = 0;
   let remoteOnly = 0;
+  let overlappingRemoteNewer = 0;
+  let overlappingLocalNewer = 0;
+  let overlappingSameTimestamp = 0;
+  let overlappingRemoteTimestampOnly = 0;
+  let overlappingLocalTimestampOnly = 0;
+  let overlappingUnknownTimestamp = 0;
 
   for (const key of localKeys) {
-    if (remoteKeys.has(key)) overlapping++;
-    else localOnly++;
+    if (remoteKeys.has(key)) {
+      overlapping++;
+      const hint = compareValueBundleLastWrite(
+        getValueBundleKeyUpdatedAt(localKeyMetadata, key),
+        getValueBundleKeyUpdatedAt(remoteKeyMetadata, key)
+      );
+      if (hint === 'remote-newer') overlappingRemoteNewer++;
+      else if (hint === 'local-newer') overlappingLocalNewer++;
+      else if (hint === 'same') overlappingSameTimestamp++;
+      else if (hint === 'remote-timestamp-only') overlappingRemoteTimestampOnly++;
+      else if (hint === 'local-timestamp-only') overlappingLocalTimestampOnly++;
+      else overlappingUnknownTimestamp++;
+    } else {
+      localOnly++;
+    }
   }
   for (const key of remoteKeys) {
     if (!localKeys.has(key)) remoteOnly++;
   }
 
-  return { overlapping, localOnly, remoteOnly };
+  return {
+    overlapping,
+    localOnly,
+    remoteOnly,
+    overlappingRemoteNewer,
+    overlappingLocalNewer,
+    overlappingSameTimestamp,
+    overlappingRemoteTimestampOnly,
+    overlappingLocalTimestampOnly,
+    overlappingUnknownTimestamp
+  };
 }
 
 async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts = [], localValueBundles = {}) {

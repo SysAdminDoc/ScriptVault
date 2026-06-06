@@ -723,6 +723,10 @@ describe('source cloud sync module', () => {
             keyCount: 2,
             bytes: 100,
             lastValueUpdatedAt: 2000,
+            keyMetadata: {
+              sharedKeyName: { updatedAt: 2000 },
+              remoteKeyName: { updatedAt: 2000 },
+            },
             values: {
               sharedKeyName: 'remote-value-456',
               remoteKeyName: true,
@@ -741,6 +745,10 @@ describe('source cloud sync module', () => {
         script_values: {
           valueCount: 2,
           lastUpdatedAt: 1000,
+          keyMetadata: {
+            sharedKeyName: { updatedAt: 1000 },
+            localKeyName: { updatedAt: 900 },
+          },
         },
       },
     );
@@ -767,6 +775,12 @@ describe('source cloud sync module', () => {
         localLastValueUpdatedAt: 1000,
         remoteLastValueUpdatedAt: 2000,
         lastWriteHint: 'remote-newer',
+        overlappingRemoteNewerKeyCount: 1,
+        overlappingLocalNewerKeyCount: 0,
+        overlappingSameTimestampKeyCount: 0,
+        overlappingRemoteTimestampOnlyKeyCount: 0,
+        overlappingLocalTimestampOnlyKeyCount: 0,
+        overlappingUnknownTimestampKeyCount: 0,
       }),
     ]);
     expect(preview.valueBundleConflicts[0].localBytes).toBeGreaterThan(0);
@@ -779,6 +793,7 @@ describe('source cloud sync module', () => {
     expect(serializedPreview).not.toContain('remoteKeyName');
     expect(serializedPreview).not.toContain('local-value-123');
     expect(serializedPreview).not.toContain('remote-value-456');
+    expect(serializedPreview).not.toContain('keyMetadata');
     expect(provider.upload).not.toHaveBeenCalled();
     expect(ScriptValues.setAll).not.toHaveBeenCalled();
   });

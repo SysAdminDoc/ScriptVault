@@ -173,6 +173,12 @@ interface SyncPreviewValueBundleConflict {
   localLastValueUpdatedAt: number | null;
   remoteLastValueUpdatedAt: number | null;
   lastWriteHint: ValueBundleLastWriteHint;
+  overlappingRemoteNewerKeyCount: number | null;
+  overlappingLocalNewerKeyCount: number | null;
+  overlappingSameTimestampKeyCount: number | null;
+  overlappingRemoteTimestampOnlyKeyCount: number | null;
+  overlappingLocalTimestampOnlyKeyCount: number | null;
+  overlappingUnknownTimestampKeyCount: number | null;
 }
 
 interface SyncPreviewResult extends SyncResult {
@@ -457,6 +463,16 @@ function getValueBundleKeyMetadata(bundle: unknown): Record<string, { updatedAt:
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
+function getValueBundleKeyUpdatedAt(
+  metadata: Record<string, { updatedAt: number }> | undefined,
+  key: string,
+): number | null {
+  if (!metadata) return null;
+  const timestamp = Number(metadata[key]?.updatedAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+  return Math.floor(timestamp);
+}
+
 function createEmptyRemoteValueBundleSelection(): RemoteValueBundleSelection {
   return { valueBundles: {}, ignored: 0, warnings: 0 };
 }
@@ -628,8 +644,10 @@ function buildValueBundleConflictPreview(
   localBundle: unknown,
 ): SyncPreviewValueBundleConflict {
   const hasLocalBundle = isPlainRecord(localBundle);
+  const localKeyMetadata = hasLocalBundle ? getValueBundleKeyMetadata(localBundle) : undefined;
+  const remoteKeyMetadata = getValueBundleKeyMetadata(remoteBundle);
   const keyCounts = hasLocalBundle
-    ? countValueBundleKeyOverlap(localBundle.values, remoteBundle.values)
+    ? countValueBundleKeyOverlap(localBundle.values, remoteBundle.values, localKeyMetadata, remoteKeyMetadata)
     : null;
   const localLastValueUpdatedAt = hasLocalBundle
     ? getValueBundleLastUpdatedAt(localBundle) ?? null
@@ -647,28 +665,75 @@ function buildValueBundleConflictPreview(
     localLastValueUpdatedAt,
     remoteLastValueUpdatedAt,
     lastWriteHint: compareValueBundleLastWrite(localLastValueUpdatedAt, remoteLastValueUpdatedAt),
+    overlappingRemoteNewerKeyCount: keyCounts?.overlappingRemoteNewer ?? null,
+    overlappingLocalNewerKeyCount: keyCounts?.overlappingLocalNewer ?? null,
+    overlappingSameTimestampKeyCount: keyCounts?.overlappingSameTimestamp ?? null,
+    overlappingRemoteTimestampOnlyKeyCount: keyCounts?.overlappingRemoteTimestampOnly ?? null,
+    overlappingLocalTimestampOnlyKeyCount: keyCounts?.overlappingLocalTimestampOnly ?? null,
+    overlappingUnknownTimestampKeyCount: keyCounts?.overlappingUnknownTimestamp ?? null,
   };
 }
 
 function countValueBundleKeyOverlap(
   localValues: unknown,
   remoteValues: unknown,
-): { overlapping: number; localOnly: number; remoteOnly: number } {
+  localKeyMetadata?: Record<string, { updatedAt: number }>,
+  remoteKeyMetadata?: Record<string, { updatedAt: number }>,
+): {
+  overlapping: number;
+  localOnly: number;
+  remoteOnly: number;
+  overlappingRemoteNewer: number;
+  overlappingLocalNewer: number;
+  overlappingSameTimestamp: number;
+  overlappingRemoteTimestampOnly: number;
+  overlappingLocalTimestampOnly: number;
+  overlappingUnknownTimestamp: number;
+} {
   const localKeys = new Set(isPlainRecord(localValues) ? Object.keys(localValues) : []);
   const remoteKeys = new Set(isPlainRecord(remoteValues) ? Object.keys(remoteValues) : []);
   let overlapping = 0;
   let localOnly = 0;
   let remoteOnly = 0;
+  let overlappingRemoteNewer = 0;
+  let overlappingLocalNewer = 0;
+  let overlappingSameTimestamp = 0;
+  let overlappingRemoteTimestampOnly = 0;
+  let overlappingLocalTimestampOnly = 0;
+  let overlappingUnknownTimestamp = 0;
 
   for (const key of localKeys) {
-    if (remoteKeys.has(key)) overlapping += 1;
-    else localOnly += 1;
+    if (remoteKeys.has(key)) {
+      overlapping += 1;
+      const hint = compareValueBundleLastWrite(
+        getValueBundleKeyUpdatedAt(localKeyMetadata, key),
+        getValueBundleKeyUpdatedAt(remoteKeyMetadata, key),
+      );
+      if (hint === 'remote-newer') overlappingRemoteNewer += 1;
+      else if (hint === 'local-newer') overlappingLocalNewer += 1;
+      else if (hint === 'same') overlappingSameTimestamp += 1;
+      else if (hint === 'remote-timestamp-only') overlappingRemoteTimestampOnly += 1;
+      else if (hint === 'local-timestamp-only') overlappingLocalTimestampOnly += 1;
+      else overlappingUnknownTimestamp += 1;
+    } else {
+      localOnly += 1;
+    }
   }
   for (const key of remoteKeys) {
     if (!localKeys.has(key)) remoteOnly += 1;
   }
 
-  return { overlapping, localOnly, remoteOnly };
+  return {
+    overlapping,
+    localOnly,
+    remoteOnly,
+    overlappingRemoteNewer,
+    overlappingLocalNewer,
+    overlappingSameTimestamp,
+    overlappingRemoteTimestampOnly,
+    overlappingLocalTimestampOnly,
+    overlappingUnknownTimestamp,
+  };
 }
 
 async function applyRemoteValueBundlesWhenLocalEmpty(
