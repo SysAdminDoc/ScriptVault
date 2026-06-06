@@ -430,6 +430,9 @@ describe("dashboard accessibility markup", () => {
     const validatedFields = [
       ["settingsBadgeColor", "settingsBadgeColorError"],
       ["settingsLintMaxSize", "settingsLintMaxSizeError"],
+      ["settingsCheckInterval", "settingsCheckIntervalError"],
+      ["settingsNotifyHideAfter", "settingsNotifyHideAfterError"],
+      ["settingsExternalsInterval", "settingsExternalsIntervalError"],
       ["settingsEditorFontSize", "settingsEditorFontSizeError"],
       ["settingsIndentWidth", "settingsIndentWidthError"],
       ["settingsTabSize", "settingsTabSizeError"],
@@ -465,6 +468,9 @@ describe("dashboard accessibility markup", () => {
     expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("type")).toBe("number");
     expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("min")).toBe("1000");
     expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("max")).toBe("5000000");
+    expect(doc.getElementById("settingsCheckInterval")?.querySelector('option[value="0"]')?.textContent).toContain("Never");
+    expect(doc.getElementById("settingsNotifyHideAfter")?.querySelector('option[value="0"]')?.textContent).toContain("Never");
+    expect(doc.getElementById("settingsExternalsInterval")?.querySelector('option[value="0"]')?.textContent).toContain("Never");
     expect(doc.getElementById("settingsEditorFontSize")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsIndentWidth")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsTabSize")?.tagName).toBe("SELECT");
@@ -486,6 +492,9 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toContain("Use a hex color like #22c55e.");
     expect(dashboardJs).toContain("Use a whole number from 1,000 to 5,000,000 bytes.");
     expect(dashboardJs).toContain("Choose a listed ${label}.");
+    expect(dashboardJs).toMatch(/case 'checkInterval':\s*return validateSelectOptionValue\('checkInterval', value, 'userscript update check interval', \{ number: true \}\)/);
+    expect(dashboardJs).toMatch(/case 'notifyHideAfter':\s*return validateSelectOptionValue\('notifyHideAfter', value, 'notification hide delay', \{ number: true \}\)/);
+    expect(dashboardJs).toMatch(/case 'externalsInterval':\s*return validateSelectOptionValue\('externalsInterval', value, 'externals update interval', \{ number: true \}\)/);
     expect(dashboardJs).toMatch(/case 'editorFontSize':\s*return validateSelectOptionValue\('editorFontSize', value, 'editor font size', \{ number: true \}\)/);
     expect(dashboardJs).toMatch(/case 'indentWidth':\s*return validateSelectOptionValue\('indentWidth', value, 'indentation width', \{ number: true \}\)/);
     expect(dashboardJs).toMatch(/case 'tabSize':\s*return validateSelectOptionValue\('tabSize', value, 'tab size', \{ number: true \}\)/);
@@ -508,6 +517,9 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toContain('Blacklist pattern');
     expect(dashboardJs).toContain('Download pattern');
     expect(dashboardJs).toMatch(/if \(!validation\.ok\) \{\s*setSettingsFieldError\(input, validation\.error\);/);
+    expect(dashboardJs).toMatch(/elements\.settingsCheckInterval\.value = s\.checkInterval \?\? '24'/);
+    expect(dashboardJs).toMatch(/settingsCheckInterval: \['checkInterval', 'value'\]/);
+    expect(dashboardJs).toMatch(/settingsExternalsInterval: \['externalsInterval', 'value'\]/);
     expect(dashboardJs).toMatch(/elements\.settingsLintMaxSize\?\.addEventListener\('blur', e => saveSetting\('lintMaxSize', e\.target\.value\)\)/);
     expect(dashboardJs).toMatch(/elements\.settingsS3Bucket\?\.addEventListener\('blur', e => saveSetting\('s3Bucket', e\.target\.value\.trim\(\)\)\)/);
     expect(dashboardJs).toMatch(/elements\.settingsS3AccessKeyId\?\.addEventListener\('blur', e => saveSetting\('s3AccessKeyId', e\.target\.value\.trim\(\)\)\)/);

@@ -3142,11 +3142,11 @@
         // Userscript Update
         if (elements.settingsUpdateDisabled) elements.settingsUpdateDisabled.checked = s.updateDisabled || false;
         if (elements.settingsSilentUpdate) elements.settingsSilentUpdate.checked = s.autoUpdateMode === 'apply-safe';
-        if (elements.settingsCheckInterval) elements.settingsCheckInterval.value = s.checkInterval || '24';
-        if (elements.settingsNotifyHideAfter) elements.settingsNotifyHideAfter.value = s.notifyHideAfter || '15';
+        if (elements.settingsCheckInterval) elements.settingsCheckInterval.value = s.checkInterval ?? '24';
+        if (elements.settingsNotifyHideAfter) elements.settingsNotifyHideAfter.value = s.notifyHideAfter ?? '15';
         
         // Externals
-        if (elements.settingsExternalsInterval) elements.settingsExternalsInterval.value = s.externalsInterval || '0';
+        if (elements.settingsExternalsInterval) elements.settingsExternalsInterval.value = s.externalsInterval ?? '0';
         
         // Sync settings
         if (elements.settingsEnableSync) elements.settingsEnableSync.checked = normalizeSyncEnabled(s);
@@ -3180,10 +3180,10 @@
         // Editor settings
         if (elements.settingsEnableEditor) elements.settingsEnableEditor.checked = s.enableEditor !== false;
         if (elements.settingsEditorTheme) elements.settingsEditorTheme.value = s.editorTheme || 'default';
-        if (elements.settingsEditorFontSize) elements.settingsEditorFontSize.value = s.editorFontSize || '100';
+        if (elements.settingsEditorFontSize) elements.settingsEditorFontSize.value = s.editorFontSize ?? '100';
         if (elements.settingsKeyMapping) elements.settingsKeyMapping.value = s.keyMapping || 'default';
-        if (elements.settingsIndentWidth) elements.settingsIndentWidth.value = s.indentWidth || '4';
-        if (elements.settingsTabSize) elements.settingsTabSize.value = s.tabSize || '4';
+        if (elements.settingsIndentWidth) elements.settingsIndentWidth.value = s.indentWidth ?? '4';
+        if (elements.settingsTabSize) elements.settingsTabSize.value = s.tabSize ?? '4';
         if (elements.settingsIndentWith) elements.settingsIndentWith.value = s.indentWith || 'spaces';
         if (elements.settingsTabMode) elements.settingsTabMode.value = s.tabMode || 'indent';
         if (elements.settingsHighlightMatches) elements.settingsHighlightMatches.value = s.highlightMatches || 'cursor';
@@ -3258,6 +3258,9 @@
         const keyToElement = {
             badgeColor: elements.settingsBadgeColor,
             lintMaxSize: elements.settingsLintMaxSize,
+            checkInterval: elements.settingsCheckInterval,
+            notifyHideAfter: elements.settingsNotifyHideAfter,
+            externalsInterval: elements.settingsExternalsInterval,
             editorFontSize: elements.settingsEditorFontSize,
             indentWidth: elements.settingsIndentWidth,
             tabSize: elements.settingsTabSize,
@@ -3511,6 +3514,12 @@
                 }
                 return { ok: true, value: size };
             }
+            case 'checkInterval':
+                return validateSelectOptionValue('checkInterval', value, 'userscript update check interval', { number: true });
+            case 'notifyHideAfter':
+                return validateSelectOptionValue('notifyHideAfter', value, 'notification hide delay', { number: true });
+            case 'externalsInterval':
+                return validateSelectOptionValue('externalsInterval', value, 'externals update interval', { number: true });
             case 'editorFontSize':
                 return validateSelectOptionValue('editorFontSize', value, 'editor font size', { number: true });
             case 'indentWidth':
@@ -11708,11 +11717,11 @@
             // Userscript Update
             settingsUpdateDisabled: ['updateDisabled', 'checked'],
             settingsSilentUpdate: ['autoUpdateMode', 'checked', checked => checked ? 'apply-safe' : 'notify'],
-            settingsCheckInterval: ['checkInterval', 'value', v => parseInt(v) || 24],
-            settingsNotifyHideAfter: ['notifyHideAfter', 'value', v => parseInt(v) || 0],
+            settingsCheckInterval: ['checkInterval', 'value'],
+            settingsNotifyHideAfter: ['notifyHideAfter', 'value'],
 
             // Externals
-            settingsExternalsInterval: ['externalsInterval', 'value', v => parseInt(v) || 24],
+            settingsExternalsInterval: ['externalsInterval', 'value'],
             
             // Sync
             settingsEnableSync: ['syncEnabled', 'checked'],
@@ -11722,10 +11731,10 @@
             // Editor
             settingsEnableEditor: ['enableEditor', 'checked'],
             settingsEditorTheme: ['editorTheme', 'value'],
-            settingsEditorFontSize: ['editorFontSize', 'value', v => parseInt(v) || 100],
+            settingsEditorFontSize: ['editorFontSize', 'value'],
             settingsKeyMapping: ['keyMapping', 'value'],
-            settingsIndentWidth: ['indentWidth', 'value', v => parseInt(v) || 4],
-            settingsTabSize: ['tabSize', 'value', v => parseInt(v) || 4],
+            settingsIndentWidth: ['indentWidth', 'value'],
+            settingsTabSize: ['tabSize', 'value'],
             settingsIndentWith: ['indentWith', 'value'],
             settingsTabMode: ['tabMode', 'value'],
             settingsHighlightMatches: ['highlightMatches', 'value'],
