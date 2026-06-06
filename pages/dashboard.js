@@ -7439,15 +7439,46 @@
         const codeSha256 = await sha256HexForPublicationText(preflight.code);
         const receipt = buildGreasyForkPublicationReceiptRecord(preflight, { scriptId, codeSha256 });
         const summary = await putGreasyForkPublicationReceipt(receipt);
+        const receipts = await getGreasyForkPublicationReceiptsForScript(scriptId);
         const currentScript = state.scripts.find(item => item.id === scriptId) || script || null;
-        patchOpenTabStatus(scriptId, { publicationReceipt: summary }, currentScript);
+        patchOpenTabStatus(scriptId, {
+            publicationReceipt: receipts[0] || summary,
+            publicationReceipts: receipts.length ? receipts : [summary].filter(Boolean)
+        }, currentScript);
         if (scriptId === state.currentScriptId && currentScript) {
-            renderGreasyForkPublicationReceiptInfo(summary);
+            renderGreasyForkPublicationReceiptInfo(receipts.length ? receipts : summary);
         }
         return summary;
     }
 
-    function renderGreasyForkPublicationReceiptHtml(receipt) {
+    function normalizeGreasyForkPublicationReceiptList(receipts) {
+        return (Array.isArray(receipts) ? receipts : [receipts]).filter(Boolean);
+    }
+
+    function renderGreasyForkPublicationReceiptHistoryRows(receipts) {
+        if (receipts.length <= 1) return '';
+        return `
+                <div class="conflict-list-item" style="align-items:flex-start">
+                    <span>
+                        <strong>Previous receipts</strong>
+                        <div class="panel-empty-inline" style="margin-top:4px">
+                            ${receipts.slice(1).map(receipt => {
+                                const label = receipt.mode === 'update'
+                                    ? `Update ${receipt.greasyForkScriptId || '?'}`
+                                    : 'New script';
+                                const version = receipt.metadata?.version || '-';
+                                const hashLabel = receipt.codeSha256 ? receipt.codeSha256.slice(0, 12) : 'no hash';
+                                return `<span class="info-tag">${escapeHtml(label)} v${escapeHtml(version)} - ${escapeHtml(formatTime(receipt.confirmedAt || receipt.createdAt))} - ${escapeHtml(hashLabel)}</span>`;
+                            }).join(' ')}
+                        </div>
+                    </span>
+                    <span class="info-tag">${numberFormatter.format(receipts.length)} local receipts</span>
+                </div>`;
+    }
+
+    function renderGreasyForkPublicationReceiptHtml(receipts) {
+        const history = normalizeGreasyForkPublicationReceiptList(receipts);
+        const receipt = history[0] || null;
         if (!receipt) {
             return '<span class="panel-empty-inline">No publish handoff receipt recorded yet</span>';
         }
@@ -7475,13 +7506,36 @@
                     <span>${renderInfoLink(receipt.targetUrl)}</span>
                     <span class="info-tag">Local receipt</span>
                 </div>
+                ${renderGreasyForkPublicationReceiptHistoryRows(history)}
+                <div class="conflict-list-item">
+                    <span class="panel-empty-inline">Receipts are local audit markers only; submitted source and account/session data are not stored.</span>
+                    <button type="button" class="btn btn-sm" data-publication-receipts-clear="${escapeHtml(receipt.scriptId || '')}">Clear history</button>
+                </div>
             </div>
         `;
     }
 
-    function renderGreasyForkPublicationReceiptInfo(receipt) {
+    function bindGreasyForkPublicationReceiptActions() {
+        const clearButton = elements.infoPublicationReceipt?.querySelector('[data-publication-receipts-clear]');
+        clearButton?.addEventListener('click', async () => {
+            const scriptId = clearButton.dataset.publicationReceiptsClear || state.currentScriptId || '';
+            if (!scriptId) return;
+            const confirmed = await showConfirmModal('Clear publication receipts', 'Clear local Greasy Fork publication receipts for this script? This does not affect the script or Greasy Fork.');
+            if (!confirmed) return;
+            const count = await deleteGreasyForkPublicationReceiptsForScript(scriptId);
+            const script = state.scripts.find(item => item.id === scriptId) || null;
+            patchOpenTabStatus(scriptId, { publicationReceipt: null, publicationReceipts: [] }, script);
+            if (scriptId === state.currentScriptId) {
+                renderGreasyForkPublicationReceiptInfo([]);
+            }
+            showToast(count ? 'Publication receipt history cleared' : 'No publication receipts to clear', 'success');
+        });
+    }
+
+    function renderGreasyForkPublicationReceiptInfo(receipts) {
         if (elements.infoPublicationReceipt) {
-            elements.infoPublicationReceipt.innerHTML = renderGreasyForkPublicationReceiptHtml(receipt);
+            elements.infoPublicationReceipt.innerHTML = renderGreasyForkPublicationReceiptHtml(receipts);
+            bindGreasyForkPublicationReceiptActions();
         }
     }
 
@@ -7959,8 +8013,8 @@
         return summarizeDashboardLocalWorkspaceBinding(row);
     }
 
-    async function getLatestGreasyForkPublicationReceipt(scriptId) {
-        if (!scriptId || typeof indexedDB === 'undefined') return null;
+    async function getGreasyForkPublicationReceiptsForScript(scriptId, limit = MAX_PUBLICATION_RECEIPTS_PER_SCRIPT) {
+        if (!scriptId || typeof indexedDB === 'undefined') return [];
         return withDashboardPublicationReceiptStore('readonly', store => new Promise((resolve, reject) => {
             const out = [];
             const request = store.index('by-script').openCursor(IDBKeyRange.only(scriptId));
@@ -7968,11 +8022,33 @@
                 const cursor = request.result;
                 if (!cursor) {
                     out.sort((a, b) => (b.confirmedAt || b.createdAt || 0) - (a.confirmedAt || a.createdAt || 0));
-                    resolve(summarizeGreasyForkPublicationReceipt(out[0] || null));
+                    resolve(out.slice(0, limit).map(summarizeGreasyForkPublicationReceipt).filter(Boolean));
                     return;
                 }
                 out.push(cursor.value);
                 cursor.continue();
+            };
+            request.onerror = () => reject(request.error || new Error('IndexedDB cursor failed'));
+        }));
+    }
+
+    async function deleteGreasyForkPublicationReceiptsForScript(scriptId) {
+        if (!scriptId || typeof indexedDB === 'undefined') return 0;
+        return withDashboardPublicationReceiptStore('readwrite', store => new Promise((resolve, reject) => {
+            let deleted = 0;
+            const request = store.index('by-script').openCursor(IDBKeyRange.only(scriptId));
+            request.onsuccess = () => {
+                const cursor = request.result;
+                if (!cursor) {
+                    resolve(deleted);
+                    return;
+                }
+                const deleteRequest = cursor.delete();
+                deleteRequest.onsuccess = () => {
+                    deleted += 1;
+                    cursor.continue();
+                };
+                deleteRequest.onerror = () => reject(deleteRequest.error || new Error('IndexedDB delete failed'));
             };
             request.onerror = () => reject(request.error || new Error('IndexedDB cursor failed'));
         }));
@@ -8017,11 +8093,12 @@
     async function refreshGreasyForkPublicationReceiptForScript(scriptId) {
         if (!scriptId) return null;
         try {
-            const receipt = await getLatestGreasyForkPublicationReceipt(scriptId);
+            const receipts = await getGreasyForkPublicationReceiptsForScript(scriptId);
+            const receipt = receipts[0] || null;
             const script = state.scripts.find(s => s.id === scriptId) || null;
-            patchOpenTabStatus(scriptId, { publicationReceipt: receipt }, script);
+            patchOpenTabStatus(scriptId, { publicationReceipt: receipt, publicationReceipts: receipts }, script);
             if (scriptId === state.currentScriptId) {
-                renderGreasyForkPublicationReceiptInfo(receipt);
+                renderGreasyForkPublicationReceiptInfo(receipts);
             }
             return receipt;
         } catch (error) {
@@ -8887,7 +8964,7 @@
             elements.infoTrustReceipt.innerHTML = renderTrustReceiptInfo(script.trustReceipt);
         }
         if (elements.infoPublicationReceipt) {
-            renderGreasyForkPublicationReceiptInfo(state.openTabs[script.id]?.publicationReceipt || null);
+            renderGreasyForkPublicationReceiptInfo(state.openTabs[script.id]?.publicationReceipts || state.openTabs[script.id]?.publicationReceipt || null);
         }
 
         // @contributionURL

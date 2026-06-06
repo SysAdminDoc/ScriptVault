@@ -261,4 +261,67 @@ describe('Greasy Fork publish handoff preflight', () => {
     expect(dashboardJs).toContain('trimGreasyForkPublicationReceiptsForScript');
     expect(dashboardJs).toContain('void refreshGreasyForkPublicationReceiptForScript(scriptId)');
   });
+
+  it('renders local publication receipt history without exposing source data', () => {
+    const constantsStart = dashboardJs.indexOf('const GREASY_FORK_PREFILL_BASE_URL');
+    const functionsEnd = dashboardJs.indexOf('    function showGreasyForkPublicationConfirmation', constantsStart);
+    const api = new Function(`
+      const numberFormatter = new Intl.NumberFormat('en-US');
+      const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[char]);
+      const formatTime = value => 'time-' + value;
+      const formatBytes = value => value + ' bytes';
+      const renderInfoLink = value => 'link:' + escapeHtml(value);
+      ${dashboardJs.slice(constantsStart, functionsEnd)}
+      return {
+        renderGreasyForkPublicationReceiptHtml,
+        normalizeGreasyForkPublicationReceiptList
+      };
+    `)();
+
+    const receipts = [
+      {
+        receiptId: 'latest',
+        scriptId: 'script-1',
+        mode: 'update',
+        greasyForkScriptId: '456',
+        targetUrl: 'https://greasyfork.org/en/scripts/456/versions/prefill',
+        codeLength: 30,
+        codeSha256: 'b'.repeat(64),
+        metadata: { name: 'Receipt Demo', version: '1.2.4' },
+        confirmedAt: 200,
+        createdAt: 200
+      },
+      {
+        receiptId: 'previous',
+        scriptId: 'script-1',
+        mode: 'update',
+        greasyForkScriptId: '456',
+        targetUrl: 'https://greasyfork.org/en/scripts/456/versions/prefill',
+        codeLength: 29,
+        codeSha256: 'a'.repeat(64),
+        metadata: { name: 'Receipt Demo', version: '1.2.3' },
+        confirmedAt: 100,
+        createdAt: 100
+      }
+    ];
+
+    const html = api.renderGreasyForkPublicationReceiptHtml(receipts);
+    expect(api.normalizeGreasyForkPublicationReceiptList(receipts[0])).toHaveLength(1);
+    expect(html).toContain('Updated Greasy Fork script 456');
+    expect(html).toContain('Previous receipts');
+    expect(html).toContain('2 local receipts');
+    expect(html).toContain('data-publication-receipts-clear="script-1"');
+    expect(html).toContain('Receipts are local audit markers only');
+    expect(html).not.toMatch(/console\.log|script_version\[code\]|document\.cookie|csrf|credentials/i);
+
+    expect(dashboardJs).toContain('async function getGreasyForkPublicationReceiptsForScript');
+    expect(dashboardJs).toContain('async function deleteGreasyForkPublicationReceiptsForScript');
+    expect(dashboardJs).toContain('publicationReceipts: receipts');
+  });
 });
