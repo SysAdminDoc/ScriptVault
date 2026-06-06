@@ -169,6 +169,13 @@ type ValueBundleLastWriteHint =
   | 'remote-timestamp-only'
   | 'unknown';
 
+type ValueBundleCandidateMergePlan =
+  | 'timestamp-guided'
+  | 'remote-preferred'
+  | 'local-preferred'
+  | 'manual-review'
+  | 'unavailable';
+
 interface SyncPreviewValueBundleConflict {
   reason: 'local-values-present' | 'local-bundle-unavailable';
   localKeyCount: number | null;
@@ -187,6 +194,11 @@ interface SyncPreviewValueBundleConflict {
   overlappingRemoteTimestampOnlyKeyCount: number | null;
   overlappingLocalTimestampOnlyKeyCount: number | null;
   overlappingUnknownTimestampKeyCount: number | null;
+  candidateMergePlan: ValueBundleCandidateMergePlan;
+  candidateRemoteKeyCount: number | null;
+  candidateLocalKeyCount: number | null;
+  candidateSameTimestampKeyCount: number | null;
+  candidateManualKeyCount: number | null;
 }
 
 interface SyncPreviewResult extends SyncResult {
@@ -691,6 +703,7 @@ function buildValueBundleConflictPreview(
     ? getValueBundleLastUpdatedAt(localBundle) ?? null
     : null;
   const remoteLastValueUpdatedAt = getValueBundleLastUpdatedAt(remoteBundle) ?? null;
+  const candidateMerge = buildValueBundleCandidateMergePlan(keyCounts);
   return {
     reason,
     localKeyCount: hasLocalBundle ? safeBundleMetric(localBundle.keyCount) : null,
@@ -709,7 +722,46 @@ function buildValueBundleConflictPreview(
     overlappingRemoteTimestampOnlyKeyCount: keyCounts?.overlappingRemoteTimestampOnly ?? null,
     overlappingLocalTimestampOnlyKeyCount: keyCounts?.overlappingLocalTimestampOnly ?? null,
     overlappingUnknownTimestampKeyCount: keyCounts?.overlappingUnknownTimestamp ?? null,
+    candidateMergePlan: candidateMerge.plan,
+    candidateRemoteKeyCount: candidateMerge.remoteKeyCount,
+    candidateLocalKeyCount: candidateMerge.localKeyCount,
+    candidateSameTimestampKeyCount: candidateMerge.sameTimestampKeyCount,
+    candidateManualKeyCount: candidateMerge.manualKeyCount,
   };
+}
+
+function buildValueBundleCandidateMergePlan(
+  keyCounts: ReturnType<typeof countValueBundleKeyOverlap> | null,
+): {
+  plan: ValueBundleCandidateMergePlan;
+  remoteKeyCount: number | null;
+  localKeyCount: number | null;
+  sameTimestampKeyCount: number | null;
+  manualKeyCount: number | null;
+} {
+  if (!keyCounts) {
+    return {
+      plan: 'unavailable',
+      remoteKeyCount: null,
+      localKeyCount: null,
+      sameTimestampKeyCount: null,
+      manualKeyCount: null,
+    };
+  }
+  const remoteKeyCount = keyCounts.remoteOnly
+    + keyCounts.overlappingRemoteNewer
+    + keyCounts.overlappingRemoteTimestampOnly;
+  const localKeyCount = keyCounts.localOnly
+    + keyCounts.overlappingLocalNewer
+    + keyCounts.overlappingLocalTimestampOnly;
+  const sameTimestampKeyCount = keyCounts.overlappingSameTimestamp;
+  const manualKeyCount = keyCounts.overlappingUnknownTimestamp;
+  let plan: ValueBundleCandidateMergePlan = 'manual-review';
+  if (manualKeyCount > 0 || sameTimestampKeyCount > 0) plan = 'manual-review';
+  else if (remoteKeyCount > 0 && localKeyCount > 0) plan = 'timestamp-guided';
+  else if (remoteKeyCount > 0) plan = 'remote-preferred';
+  else if (localKeyCount > 0) plan = 'local-preferred';
+  return { plan, remoteKeyCount, localKeyCount, sameTimestampKeyCount, manualKeyCount };
 }
 
 function countValueBundleKeyOverlap(

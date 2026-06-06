@@ -25,6 +25,7 @@ function loadSyncPreviewExportApi() {
     ${extractFunction(dashboardJs, 'sanitizeSyncPreviewSummary')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleTimestamp')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleLastWriteHint')}
+    ${extractFunction(dashboardJs, 'sanitizeValueBundleCandidateMergePlan')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleConflictPreview')}
     ${extractFunction(dashboardJs, 'buildSyncPreviewExport')}
     return { buildSyncPreviewExport };
@@ -63,6 +64,8 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('overlap timestamps');
     expect(dashboardJs).toContain('localValueBundlesWithTimestamps');
     expect(dashboardJs).toContain('GM value timestamps');
+    expect(dashboardJs).toContain('candidateMergePlan');
+    expect(dashboardJs).toContain('remote candidate keys');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {
@@ -117,6 +120,11 @@ describe('sync safety cockpit wiring', () => {
         overlappingRemoteTimestampOnlyKeyCount: 0,
         overlappingLocalTimestampOnlyKeyCount: 0,
         overlappingUnknownTimestampKeyCount: 0,
+        candidateMergePlan: 'timestamp-guided',
+        candidateRemoteKeyCount: 2,
+        candidateLocalKeyCount: 1,
+        candidateSameTimestampKeyCount: 0,
+        candidateManualKeyCount: 0,
         keyMetadata: {
           token: { updatedAt: 2000 },
         },
@@ -152,6 +160,11 @@ describe('sync safety cockpit wiring', () => {
           overlappingRemoteTimestampOnlyKeyCount: 0,
           overlappingLocalTimestampOnlyKeyCount: 0,
           overlappingUnknownTimestampKeyCount: 0,
+          candidateMergePlan: 'timestamp-guided',
+          candidateRemoteKeyCount: 2,
+          candidateLocalKeyCount: 1,
+          candidateSameTimestampKeyCount: 0,
+          candidateManualKeyCount: 0,
         }],
       }),
     );
