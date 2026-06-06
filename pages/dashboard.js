@@ -3887,6 +3887,9 @@
             `Changes: ${summary.localOnly || 0} local-only, ${summary.remoteOnly || 0} remote-only, ${summary.localNewer || 0} local newer, ${summary.remoteNewer || 0} remote newer, ${summary.conflicts || 0} conflicts, ${summary.tombstoned || 0} tombstoned`,
             `A real sync would ${summary.wouldDownload ? 'download remote changes' : 'not download remote changes'} and ${summary.wouldUpload ? 'upload a merged backup' : 'not upload a merged backup'}.`
         ];
+        if ((summary.localValueOptIns || 0) > 0 || (summary.localValueBundles || 0) > 0 || (summary.remoteValueBundles || 0) > 0) {
+            lines.push(`GM values: ${summary.localValueOptIns || 0} local opt-ins, ${summary.localValueBundles || 0} local bundles, ${summary.remoteValueBundles || 0} remote bundles (${summary.remoteValueBundlesApplicable || 0} eligible, ${summary.remoteValueBundlesIgnored || 0} ignored); apply is disabled until conflict handling is ready.`);
+        }
         if (Array.isArray(preview.conflicts) && preview.conflicts.length) {
             lines.push('');
             lines.push('Potential conflicts:');

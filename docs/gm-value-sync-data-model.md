@@ -44,6 +44,23 @@ Cycle 98 wires the first provider-write path for CloudSync:
   count, bundle warning count, and whether value bundles would upload.
 - Downloaded remote value bundles are not applied to local GM storage yet.
 
+Cycle 99 adds the downloaded-bundle apply gate without enabling local writes:
+
+- Remote `valueBundles` are validated against the post-merge script set so
+  remote-only scripts can be recognized only after their script records are
+  present in the merged sync view.
+- A remote bundle is eligible only when the schema is
+  `scriptvault-gm-value-sync/v1`, the bundle key matches `bundle.scriptId`, the
+  target script still has `script.settings.syncValues === true`, `values` is a
+  plain object, and the capped bundle builder can rebuild the payload.
+- Dry-run previews report eligible, ignored, and warning bundle counts and set
+  `valueBundleApplyEnabled: false` plus `wouldApplyValues: false`.
+- The dashboard preview displays only aggregate value-bundle counts. It does
+  not display script IDs, value keys, or values.
+- Real sync runs check remote bundle eligibility for aggregate diagnostics but
+  still do not call a local GM value write path.
+
 The next implementation slice can apply downloaded bundles only for scripts with
-the opt-in flag. Conflict handling should stay conservative until the value
-store records per-key timestamps or another durable last-write signal.
+the opt-in flag and a conflict-safe value state. A first apply pass should stay
+limited to an empty-local-store case, or wait for per-key timestamps or another
+durable last-write signal before merging non-empty local and remote values.

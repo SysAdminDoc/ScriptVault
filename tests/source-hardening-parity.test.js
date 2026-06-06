@@ -210,6 +210,24 @@ describe('source hardening parity guards', () => {
     expect(easyCloud).toContain('SyncCrypto.prepareSyncEnvelopeForUpload');
   });
 
+  it('keeps downloaded GM value bundles behind the non-writing opt-in apply gate', () => {
+    const core = source('src/background/core.ts');
+    const cloudSync = source('src/background/cloud-sync.ts');
+
+    for (const text of [core, cloudSync]) {
+      expect(text).toContain('selectApplicableRemoteValueBundles');
+      expect(text).toContain('getSyncEnvelopeValueBundles');
+      expect(text).toContain('valueBundleApplyEnabled');
+      expect(text).toContain('wouldApplyValues');
+      expect(text).toContain('applyEnabled: false');
+      const gateStart = text.indexOf('function selectApplicableRemoteValueBundles');
+      const gateEnd = text.indexOf('async function', gateStart);
+      expect(gateStart).toBeGreaterThanOrEqual(0);
+      expect(gateEnd).toBeGreaterThan(gateStart);
+      expect(text.slice(gateStart, gateEnd)).not.toContain('ScriptValues.setAll');
+    }
+  });
+
   it('keeps @require fetches on extension host-permission fetch semantics', () => {
     const loader = source('src/background/resource-loader.ts');
     const core = source('src/background/core.ts');

@@ -129,17 +129,57 @@ function sanitizeSyncEnvelopeForUpload(envelope) {
 function sanitizeValueBundlesForUpload(envelope) {
   const result = {};
   const scriptsById = new Map((envelope.scripts || []).map(script => [script.id, script]));
-  const sourceBundles = envelope.valueBundles && typeof envelope.valueBundles === 'object'
-    ? envelope.valueBundles
-    : {};
+  const sourceBundles = getSyncEnvelopeValueBundles(envelope);
 
   for (const [scriptId, bundle] of Object.entries(sourceBundles)) {
     const script = scriptsById.get(scriptId);
     if (!script || !shouldSyncScriptValuesForSync(script)) continue;
-    if (!bundle || bundle.schema !== GM_VALUE_SYNC_SCHEMA || bundle.scriptId !== scriptId) continue;
-    if (!bundle.values || typeof bundle.values !== 'object' || Array.isArray(bundle.values)) continue;
+    if (!isPlainObject(bundle) || bundle.schema !== GM_VALUE_SYNC_SCHEMA || bundle.scriptId !== scriptId) continue;
+    if (!isPlainObject(bundle.values)) continue;
     const rebuilt = buildGmValueSyncBundleForSync(script, bundle.values);
     if (rebuilt.bundle) result[scriptId] = rebuilt.bundle;
+  }
+
+  return result;
+}
+
+function getSyncEnvelopeValueBundles(envelope) {
+  return isPlainObject(envelope?.valueBundles) ? envelope.valueBundles : {};
+}
+
+function createEmptyRemoteValueBundleSelection() {
+  return { valueBundles: {}, ignored: 0, warnings: 0 };
+}
+
+function selectApplicableRemoteValueBundles(remote, targetScripts = []) {
+  const sourceBundles = getSyncEnvelopeValueBundles(remote);
+  if (Object.keys(sourceBundles).length === 0) return createEmptyRemoteValueBundleSelection();
+
+  const result = createEmptyRemoteValueBundleSelection();
+  const scriptsById = new Map(targetScripts.map(script => [script.id, script]));
+
+  for (const [scriptId, bundle] of Object.entries(sourceBundles)) {
+    const script = scriptsById.get(scriptId);
+    if (!script || !shouldSyncScriptValuesForSync(script)) {
+      result.ignored++;
+      continue;
+    }
+    if (!isPlainObject(bundle) || bundle.schema !== GM_VALUE_SYNC_SCHEMA || bundle.scriptId !== scriptId) {
+      result.ignored++;
+      continue;
+    }
+    if (!isPlainObject(bundle.values)) {
+      result.ignored++;
+      continue;
+    }
+
+    const rebuilt = buildGmValueSyncBundleForSync(script, bundle.values);
+    result.warnings += Object.values(rebuilt.warningCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
+    if (rebuilt.bundle) {
+      result.valueBundles[scriptId] = rebuilt.bundle;
+    } else {
+      result.ignored++;
+    }
   }
 
   return result;
@@ -2935,6 +2975,9 @@ const CloudSync = {
     const tombstones = { ...(local?.tombstones || {}), ...(remote?.tombstones || {}) };
     const localById = new Map(localScripts.map(script => [script.id, script]));
     const remoteById = new Map(remoteScripts.map(script => [script.id, script]));
+    const remoteValueBundleSelection = remote
+      ? selectApplicableRemoteValueBundles(remote, this.mergeData(local, remote).scripts)
+      : createEmptyRemoteValueBundleSelection();
     const ids = new Set([...localById.keys(), ...remoteById.keys()]);
     const summary = {
       localScripts: localScripts.length,
@@ -2950,9 +2993,14 @@ const CloudSync = {
       localValueBundles: Object.keys(local?.valueBundles || {}).length,
       remoteValueBundles: Object.keys(remote?.valueBundles || {}).length,
       valueBundleWarnings: Math.max(0, Number(options.valueBundleWarnings) || 0),
+      remoteValueBundlesApplicable: Object.keys(remoteValueBundleSelection.valueBundles).length,
+      remoteValueBundlesIgnored: remoteValueBundleSelection.ignored,
+      remoteValueBundleWarnings: remoteValueBundleSelection.warnings,
+      valueBundleApplyEnabled: false,
       wouldUpload: false,
       wouldDownload: false,
-      wouldUploadValues: false
+      wouldUploadValues: false,
+      wouldApplyValues: false
     };
     const conflicts = [];
 
@@ -3002,6 +3050,7 @@ const CloudSync = {
     summary.wouldUpload = summary.localOnly > 0 || summary.localNewer > 0 || summary.conflicts > 0 || !remote;
     summary.wouldDownload = summary.remoteOnly > 0 || summary.remoteNewer > 0 || summary.conflicts > 0;
     summary.wouldUploadValues = summary.localValueBundles > 0;
+    summary.wouldApplyValues = summary.valueBundleApplyEnabled && summary.remoteValueBundlesApplicable > 0;
 
     return {
       dryRun: true,
@@ -3058,6 +3107,19 @@ const CloudSync = {
 
       // Merge: prefer newer versions
       const merged = this.mergeData(localData, remoteData);
+      const remoteValueBundleSelection = selectApplicableRemoteValueBundles(remoteData, merged.scripts);
+      if (
+        Object.keys(remoteValueBundleSelection.valueBundles).length > 0 ||
+        remoteValueBundleSelection.ignored > 0 ||
+        remoteValueBundleSelection.warnings > 0
+      ) {
+        debugLog('[CloudSync] Remote GM value bundles checked:', {
+          applicable: Object.keys(remoteValueBundleSelection.valueBundles).length,
+          ignored: remoteValueBundleSelection.ignored,
+          warnings: remoteValueBundleSelection.warnings,
+          applyEnabled: false
+        });
+      }
 
       // Apply merged data locally, skipping tombstoned (deleted) scripts
       // Uses 3-way text merge when both sides have changed since sync base.

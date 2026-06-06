@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 98 - 2026-06-06
+Last cycle: Cycle 99 - 2026-06-06
 
 ## Latest Result
 
@@ -487,15 +487,24 @@ Last cycle: Cycle 98 - 2026-06-06
   CloudSync/hardening/GM value-sync/local-health tests, the full check suite,
   build, high-severity audit, CWS remote-code scan, Monaco ESM scan, TS runtime
   check, forbidden-reference grep, and `git diff --check`.
+  Cycle 99 added the conservative downloaded value-bundle apply gate for L-8:
+  CloudSync validates remote `valueBundles` against the post-merge script set,
+  schema/scriptId/value shape, and `syncValues === true`, counts eligible,
+  ignored, and warning bundles in dry-run previews, surfaces those aggregate
+  counts in the dashboard preview, and keeps `valueBundleApplyEnabled` plus
+  `wouldApplyValues` false until conflict handling is ready. Verification used
+  focused CloudSync/hardening tests, typecheck, the full check suite, build,
+  high-severity audit, CWS remote-code scan, Monaco ESM scan, TS runtime check,
+  forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. Cycle 98 wired CloudSync preview/upload for
-opt-in GM value bundles but did not apply downloaded value bundles locally. The
-next best local cycle is Cycle 99: add the conservative downloaded-bundle apply
-prerequisite for scripts that still have `syncValues === true`, or add the next
-smallest non-credential-gated L-8 conflict/redaction safeguard if direct apply
-still needs per-key timestamp evidence.
+Continue from `ROADMAP.md` Round 41. Cycle 99 added the conservative
+downloaded-bundle apply gate but still does not write downloaded values to local
+GM storage. The next best local cycle is Cycle 100: add the safest first apply
+rule, such as applying a valid remote bundle only when the target script remains
+opted in and local GM storage is empty, or add the per-key timestamp/conflict
+evidence needed before broader value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -504,8 +513,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 98 complete for 2026-06-06; roadmap continuation
-  points to Cycle 99 GM value sync downloaded-bundle application prerequisites
-  or the next available non-credential-gated L-8 safeguard.
+- Status: ScriptVault Cycle 99 complete for 2026-06-06; roadmap continuation
+  points to Cycle 100 GM value sync first-apply safety or the next available
+  non-credential-gated L-8 conflict safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

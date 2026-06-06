@@ -51,6 +51,7 @@ async function loadFreshCloudSync(initialScripts, remoteData, settingsOverride =
 
   const ScriptValues = {
     getAll: vi.fn(async (scriptId) => structuredClone(valuesByScript[scriptId] || {})),
+    setAll: vi.fn(async () => {}),
   };
 
   const provider = {
@@ -582,13 +583,129 @@ describe('source cloud sync module', () => {
         localValueOptIns: 1,
         localValueBundles: 1,
         remoteValueBundles: 1,
+        remoteValueBundlesApplicable: 0,
+        remoteValueBundlesIgnored: 1,
+        remoteValueBundleWarnings: 0,
         valueBundleWarnings: 0,
+        valueBundleApplyEnabled: false,
         wouldUploadValues: true,
+        wouldApplyValues: false,
       }),
     );
     expect(provider.upload).not.toHaveBeenCalled();
     expect(ScriptStorage.set).not.toHaveBeenCalled();
+    expect(harness.ScriptValues.setAll).not.toHaveBeenCalled();
     expect(SettingsManager.set).not.toHaveBeenCalled();
+  });
+
+  it('previews remote GM value bundles that pass the opt-in apply gate without writing values', async () => {
+    const harness = await loadFreshCloudSync(
+      [],
+      {
+        version: 1,
+        timestamp: 10,
+        scripts: [
+          {
+            id: 'script_remote_values',
+            code: '// ==UserScript==\n// @name Remote Values\n// ==/UserScript==\n',
+            enabled: true,
+            position: 0,
+            settings: { syncValues: true },
+            updatedAt: 10,
+          },
+        ],
+        tombstones: {},
+        valueBundles: {
+          script_remote_values: {
+            schema: 'scriptvault-gm-value-sync/v1',
+            scriptId: 'script_remote_values',
+            keyCount: 1,
+            bytes: 100,
+            values: { theme: 'remote' },
+          },
+        },
+      },
+    );
+    const { CloudSync, ScriptStorage, ScriptValues, provider } = harness;
+
+    const preview = await CloudSync.preview('googledrive');
+
+    expect(preview.summary).toEqual(
+      expect.objectContaining({
+        remoteOnly: 1,
+        remoteValueBundles: 1,
+        remoteValueBundlesApplicable: 1,
+        remoteValueBundlesIgnored: 0,
+        remoteValueBundleWarnings: 0,
+        valueBundleApplyEnabled: false,
+        wouldApplyValues: false,
+      }),
+    );
+    expect(provider.upload).not.toHaveBeenCalled();
+    expect(ScriptStorage.set).not.toHaveBeenCalled();
+    expect(ScriptValues.setAll).not.toHaveBeenCalled();
+  });
+
+  it('does not apply remote GM value bundles during sync until conflict handling is available', async () => {
+    await chrome.storage.local.set({
+      syncTombstones: {},
+    });
+
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_values',
+          code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Values' },
+          settings: { syncValues: true },
+          syncBaseCode: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 20,
+        scripts: [
+          {
+            id: 'script_values',
+            code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// remote',
+            enabled: true,
+            position: 0,
+            settings: { syncValues: true },
+            updatedAt: 20,
+          },
+        ],
+        tombstones: {},
+        valueBundles: {
+          script_values: {
+            schema: 'scriptvault-gm-value-sync/v1',
+            scriptId: 'script_values',
+            keyCount: 1,
+            bytes: 100,
+            values: { token: 'remote-token' },
+          },
+        },
+      },
+      {},
+      {
+        script_values: {
+          token: 'local-token',
+        },
+      },
+    );
+    const { CloudSync, ScriptValues, getRemoteData, scriptState } = harness;
+
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+
+    expect(ScriptValues.setAll).not.toHaveBeenCalled();
+    expect(scriptState[0].code).toContain('// remote');
+    expect(getRemoteData().valueBundles.script_values.values).toEqual({
+      token: 'local-token',
+    });
+    expect(JSON.stringify(getRemoteData())).not.toContain('remote-token');
   });
 
   it('uploads encrypted v2 envelopes when sync encryption is enabled', async () => {
