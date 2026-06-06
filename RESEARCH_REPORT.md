@@ -18,6 +18,13 @@ normalizes the restricted GM grant surface, blocks DOM/page/tab grants, and
 clamps timeout/concurrency/queue budgets. No offscreen or service-worker script
 execution is enabled by this scaffold.
 
+2026-06-06 Cycle 39 dormant background diagnostics: registration now records
+the background planner status/reason when skipping `@background` scripts, and
+the local health report exposes aggregate background-script counts for dormant,
+eligible, gate-disabled, missing-trigger, unsupported-grant, and disabled states.
+The diagnostics stay inside the existing privacy envelope: no script source,
+names, identifiers, or URLs are included.
+
 2026-06-04 Cycle 8 comprehensive feature-plan refresh: root-level
 `RESEARCH_FEATURE_PLAN.md` now holds the current implementation-oriented
 research plan for ScriptVault v3.11.0. It preserves `ROADMAP.md` as the open

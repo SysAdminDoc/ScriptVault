@@ -1618,6 +1618,31 @@ const LOCAL_HEALTH_SLOW_SCRIPT_MS = 200;
 const LOCAL_HEALTH_STORAGE_WARNING_PERCENT = 85;
 const LOCAL_HEALTH_STORAGE_CRITICAL_PERCENT = 95;
 const LOCAL_HEALTH_CALLBACK_WARNING_PERCENT = 80;
+const BACKGROUND_RUNNER_ALLOWED_GRANTS = new Set([
+  'none',
+  'GM_getValue',
+  'GM_setValue',
+  'GM_deleteValue',
+  'GM_listValues',
+  'GM_addValueChangeListener',
+  'GM_removeValueChangeListener',
+  'GM_xmlhttpRequest',
+  'GM_notification',
+  'GM_info',
+  'GM_log'
+]);
+const BACKGROUND_RUNNER_GRANT_ALIASES = {
+  'GM.getValue': 'GM_getValue',
+  'GM.setValue': 'GM_setValue',
+  'GM.deleteValue': 'GM_deleteValue',
+  'GM.listValues': 'GM_listValues',
+  'GM.addValueChangeListener': 'GM_addValueChangeListener',
+  'GM.removeValueChangeListener': 'GM_removeValueChangeListener',
+  'GM.xmlHttpRequest': 'GM_xmlhttpRequest',
+  'GM.notification': 'GM_notification',
+  'GM.info': 'GM_info',
+  'GM.log': 'GM_log'
+};
 
 function _localHealthRoundPercent(value) {
   return Math.round(value * 10) / 10;
@@ -1625,6 +1650,38 @@ function _localHealthRoundPercent(value) {
 
 function _localHealthSanitizeError(error) {
   return error?.message || String(error || 'unknown error');
+}
+
+function normalizeBackgroundGrant(grant) {
+  const trimmed = String(grant || '').trim();
+  return BACKGROUND_RUNNER_GRANT_ALIASES[trimmed] || trimmed;
+}
+
+function getUnsupportedBackgroundGrants(meta) {
+  const grants = Array.isArray(meta?.grant) ? meta.grant : [];
+  const unsupported = new Set();
+  for (const grant of grants) {
+    const normalized = normalizeBackgroundGrant(grant);
+    if (!normalized || BACKGROUND_RUNNER_ALLOWED_GRANTS.has(normalized)) continue;
+    unsupported.add(normalized);
+  }
+  return [...unsupported].sort();
+}
+
+function getBackgroundRunnerTriggers(meta) {
+  return typeof meta?.crontab === 'string' && meta.crontab.trim() ? ['crontab'] : [];
+}
+
+function planBackgroundScript(script, settings = {}) {
+  const meta = script?.meta || null;
+  const triggers = getBackgroundRunnerTriggers(meta);
+  const unsupportedGrants = getUnsupportedBackgroundGrants(meta);
+  if (!meta?.background) return { status: 'not-background', reason: 'Script does not declare @background.', triggers, unsupportedGrants };
+  if (script?.enabled === false) return { status: 'script-disabled', reason: 'Script is disabled.', triggers, unsupportedGrants };
+  if (!settings.experimentalBackgroundScripts) return { status: 'gate-disabled', reason: 'experimentalBackgroundScripts is disabled.', triggers, unsupportedGrants };
+  if (unsupportedGrants.length > 0) return { status: 'unsupported-grants', reason: 'Script requests GM grants that are not available in DOM-less background context.', triggers, unsupportedGrants };
+  if (triggers.length === 0) return { status: 'missing-trigger', reason: 'Background script has no supported automatic trigger.', triggers, unsupportedGrants };
+  return { status: 'ready', reason: 'Background script is eligible for the DOM-less runner.', triggers, unsupportedGrants };
 }
 
 async function buildLocalHealthStorageSummary() {
@@ -1674,8 +1731,9 @@ async function buildLocalHealthStorageSummary() {
   }
 }
 
-function buildLocalHealthScriptSummary(scripts = []) {
+function buildLocalHealthScriptSummary(scripts = [], settings = {}) {
   const now = Date.now();
+  const unsupportedBackgroundGrantNames = new Set();
   const summary = {
     total: scripts.length,
     enabled: 0,
@@ -1687,6 +1745,16 @@ function buildLocalHealthScriptSummary(scripts = []) {
     sourceIdentityChanged: 0,
     userModified: 0,
     syncLocked: 0,
+    backgroundScripts: {
+      total: 0,
+      dormant: 0,
+      eligible: 0,
+      gateDisabled: 0,
+      missingTrigger: 0,
+      unsupportedGrants: 0,
+      scriptDisabled: 0,
+      unsupportedGrantNames: []
+    },
     slowScriptThresholdMs: LOCAL_HEALTH_SLOW_SCRIPT_MS,
     staleRemoteThresholdDays: Math.round(LOCAL_HEALTH_STALE_REMOTE_MS / (24 * 60 * 60 * 1000))
   };
@@ -1702,12 +1770,25 @@ function buildLocalHealthScriptSummary(scripts = []) {
     if (script?.settings?.userModified) summary.userModified++;
     if (script?.settings?.syncLock) summary.syncLocked++;
 
+    if (script?.meta?.background) {
+      const plan = planBackgroundScript(script, settings);
+      summary.backgroundScripts.total++;
+      summary.backgroundScripts.dormant++;
+      if (plan.status === 'ready') summary.backgroundScripts.eligible++;
+      if (plan.status === 'gate-disabled') summary.backgroundScripts.gateDisabled++;
+      if (plan.status === 'missing-trigger') summary.backgroundScripts.missingTrigger++;
+      if (plan.status === 'unsupported-grants') summary.backgroundScripts.unsupportedGrants++;
+      if (plan.status === 'script-disabled') summary.backgroundScripts.scriptDisabled++;
+      for (const grant of plan.unsupportedGrants || []) unsupportedBackgroundGrantNames.add(grant);
+    }
+
     const hasRemoteUpdateSource = !!(script?.meta?.updateURL || script?.meta?.downloadURL);
     if (hasRemoteUpdateSource && script?.updatedAt && now - script.updatedAt >= LOCAL_HEALTH_STALE_REMOTE_MS) {
       summary.staleRemoteScripts++;
     }
   }
 
+  summary.backgroundScripts.unsupportedGrantNames = [...unsupportedBackgroundGrantNames].sort();
   return summary;
 }
 
@@ -1761,6 +1842,9 @@ function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callb
   if (scripts?.sourceIdentityChanged > 0) {
     push('sourceIdentityChanged', 'warning', `${scripts.sourceIdentityChanged} script${scripts.sourceIdentityChanged === 1 ? '' : 's'} changed install source identity`);
   }
+  if (scripts?.backgroundScripts?.dormant > 0) {
+    push('backgroundScriptsDormant', 'info', `${scripts.backgroundScripts.dormant} background script${scripts.backgroundScripts.dormant === 1 ? '' : 's'} dormant pending the DOM-less runner`);
+  }
   if (updates?.reviewPendingUpdates > 0) {
     push('pendingUpdateReview', 'info', `${updates.reviewPendingUpdates} queued update${updates.reviewPendingUpdates === 1 ? '' : 's'} need review`);
   }
@@ -1778,9 +1862,10 @@ function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callb
 
 async function buildLocalHealthReport() {
   const collectionErrors = [];
-  const [runtimeResult, scriptsResult, pendingResult, recentResult, storageResult] = await Promise.allSettled([
+  const [runtimeResult, scriptsResult, settingsResult, pendingResult, recentResult, storageResult] = await Promise.allSettled([
     probeUserScriptsAvailability(),
     ScriptStorage.getAll(),
+    SettingsManager.get(),
     UpdateSystem.getPendingUpdates(),
     Promise.resolve(UpdateSystem.getRecentUpdates()),
     buildLocalHealthStorageSummary()
@@ -1797,9 +1882,16 @@ async function buildLocalHealthReport() {
     collectionErrors.push({ id: 'runtimeProbeFailed', message: 'Runtime setup probe failed' });
   }
 
+  const healthSettings = settingsResult.status === 'fulfilled'
+    ? settingsResult.value
+    : { experimentalBackgroundScripts: false };
+  if (settingsResult.status === 'rejected') {
+    collectionErrors.push({ id: 'settingsSummaryFailed', message: 'Settings health summary failed' });
+  }
+
   const scripts = scriptsResult.status === 'fulfilled' && Array.isArray(scriptsResult.value)
-    ? buildLocalHealthScriptSummary(scriptsResult.value)
-    : buildLocalHealthScriptSummary([]);
+    ? buildLocalHealthScriptSummary(scriptsResult.value, healthSettings)
+    : buildLocalHealthScriptSummary([], healthSettings);
   if (scriptsResult.status === 'rejected') {
     collectionErrors.push({ id: 'scriptSummaryFailed', message: 'Script inventory health summary failed' });
   }
@@ -9053,11 +9145,12 @@ async function registerScript(script, { useUpdate = false } = {}) {
     // Until that default-off runner exists, keep these scripts dormant instead
     // of registering them as normal page-load userscripts.
     if (meta.background) {
+      const backgroundPlan = planBackgroundScript(script, await SettingsManager.get());
       await chrome.alarms.clear(getCrontabAlarmName(script.id)).catch(() => {});
       if (chrome.userScripts) {
         try { await chrome.userScripts.unregister({ ids: [script.id] }); } catch (_) {}
       }
-      debugLog(`Skipped @background script until experimentalBackgroundScripts runner ships: ${meta.name || script.id}`);
+      debugLog(`Skipped @background script (${backgroundPlan.status}): ${backgroundPlan.reason}`);
       return;
     }
 

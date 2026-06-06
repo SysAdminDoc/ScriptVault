@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 38 - 2026-06-06
+Last cycle: Cycle 39 - 2026-06-06
 
 ## Latest Result
 
@@ -57,8 +57,12 @@ Last cycle: Cycle 38 - 2026-06-06
   classification, supported trigger detection, restricted GM grant checks, and
   reviewed timeout/concurrency/queue budget clamps. It still executes no script
   code.
-- Verification used the live checkout: focused background runner tests,
-  TypeScript, `npm run check`, and `npm run build`.
+- Cycle 39 wired planner status into registration logging and local-health
+  diagnostics, preserving aggregate-only support data for dormant background
+  scripts with no script names, source, or URLs.
+- Verification used the live checkout: focused local-health/background contract
+  tests, TypeScript, TS runtime generation/check, `npm run check`, and
+  `npm run build`.
 
 ## Next Cycle Focus
 
@@ -66,13 +70,13 @@ Continue top-down from `ROADMAP.md`. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, and the AMO
 submission row is blocked on maintainer credentials. The next local
-implementer-actionable work remains X-2. The next local slice is wiring the
-planner into registration/runtime diagnostics without enabling execution, then
-building the restricted DOM-less wrapper. Edge Partner Center upload and REST
-automation remain credential/listing gated.
+implementer-actionable work remains X-2. The next local slice is the restricted
+DOM-less wrapper scaffold: no page globals, only the reviewed GM value/XHR/
+notification/log/info surface, and fail-closed errors for DOM/tab/page APIs.
+Edge Partner Center upload and REST automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 38 complete for 2026-06-06.
+- Status: ScriptVault Cycle 39 complete for 2026-06-06.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
