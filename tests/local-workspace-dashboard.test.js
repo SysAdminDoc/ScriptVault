@@ -68,6 +68,7 @@ describe('dashboard local workspace binding', () => {
     expect(dashboardJs).toContain("const LOCAL_WORKSPACE_DB_NAME = 'scriptvault'");
     expect(dashboardJs).toContain('const LOCAL_WORKSPACE_DB_VERSION = 2');
     expect(dashboardJs).toContain("const LOCAL_WORKSPACE_STORE = 'localWorkspaceBindings'");
+    expect(dashboardJs).toContain('const LOCAL_WORKSPACE_MAX_SCRIPT_BYTES = 5 * 1024 * 1024');
     expect(dashboardJs).toContain("db.createObjectStore(LOCAL_WORKSPACE_STORE, { keyPath: 'bindingId' })");
     expect(dashboardJs).toContain("bindings.createIndex('by-script', 'scriptId', { unique: false })");
 
@@ -112,11 +113,32 @@ describe('dashboard local workspace binding', () => {
     expect(saveFn).toContain("operation: 'local-save'");
     expect(saveFn).toContain("sourceKind: 'local-file'");
     expect(saveFn).toContain('suppressMetadataSourceFallback: true');
+    expect(saveFn).not.toContain("action: 'registerAllScripts'");
+    expect(saveFn).not.toContain("action: 'registerScript'");
     expect(saveFn).toContain("lastStatusKind: 'applied'");
     expect(refreshFn).toContain("lastStatusKind: 'unchanged'");
     expect(refreshFn).toContain("lastStatusKind: 'review-cancelled'");
     expect(refreshFn).toContain("lastErrorKind: 'permission-denied'");
-    expect(refreshFn).toContain("lastErrorKind: 'apply-failed'");
+    expect(refreshFn).toContain('classifyLocalWorkspaceApplyError(error)');
+    expect(refreshFn).toContain('formatLocalWorkspaceErrorToast(errorKind');
+  });
+
+  it('guards local refresh against oversized files and parse failures', () => {
+    const readFn = extractFunction(dashboardJs, 'readLocalWorkspaceFileText');
+    const readErrorFn = extractFunction(dashboardJs, 'classifyLocalWorkspaceError');
+    const applyErrorFn = extractFunction(dashboardJs, 'classifyLocalWorkspaceApplyError');
+    const toastFn = extractFunction(dashboardJs, 'formatLocalWorkspaceErrorToast');
+    const statusFn = extractFunction(dashboardJs, 'formatLocalWorkspaceRefreshStatus');
+
+    expect(readFn).toContain('file.size > LOCAL_WORKSPACE_MAX_SCRIPT_BYTES');
+    expect(readFn).toContain("error.localWorkspaceErrorKind = 'too-large'");
+    expect(readFn.indexOf('file.size > LOCAL_WORKSPACE_MAX_SCRIPT_BYTES')).toBeLessThan(readFn.indexOf('await file.text()'));
+    expect(readErrorFn).toContain("error?.localWorkspaceErrorKind === 'too-large'");
+    expect(applyErrorFn).toContain("return 'parse-failed'");
+    expect(applyErrorFn).toContain("return 'too-large'");
+    expect(toastFn).toContain("case 'parse-failed': return 'Local file is not a valid userscript'");
+    expect(statusFn).toContain("case 'too-large': return 'too large'");
+    expect(statusFn).toContain("case 'parse-failed': return 'parse failed'");
   });
 
   it('summarizes local workspace refresh status in the editor chip', () => {

@@ -1974,6 +1974,8 @@ function normalizeLocalWorkspaceStatusKind(binding) {
     case 'permission-denied':
     case 'file-missing':
     case 'handle-missing':
+    case 'too-large':
+    case 'parse-failed':
     case 'read-failed':
     case 'apply-failed':
     case 'load-failed':

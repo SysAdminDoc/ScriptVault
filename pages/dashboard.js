@@ -140,6 +140,7 @@
     const LOCAL_WORKSPACE_DB_NAME = 'scriptvault';
     const LOCAL_WORKSPACE_DB_VERSION = 2;
     const LOCAL_WORKSPACE_STORE = 'localWorkspaceBindings';
+    const LOCAL_WORKSPACE_MAX_SCRIPT_BYTES = 5 * 1024 * 1024;
     const SETTINGS_SECTION_GROUPS = {
         general: 'core',
         appearance: 'workspace',
@@ -7597,6 +7598,11 @@
 
     async function readLocalWorkspaceFileText(handle) {
         const file = await handle.getFile();
+        if (typeof file.size === 'number' && file.size > LOCAL_WORKSPACE_MAX_SCRIPT_BYTES) {
+            const error = new Error(`Local file is too large (${formatBytes(file.size)}). Maximum is ${formatBytes(LOCAL_WORKSPACE_MAX_SCRIPT_BYTES)}.`);
+            error.localWorkspaceErrorKind = 'too-large';
+            throw error;
+        }
         return {
             text: await file.text(),
             displayName: handle.name || file.name || 'local file',
@@ -7629,6 +7635,8 @@
             case 'permission-denied': return 'permission denied';
             case 'file-missing': return 'file missing';
             case 'handle-missing': return 'rebind needed';
+            case 'too-large': return 'too large';
+            case 'parse-failed': return 'parse failed';
             case 'read-failed': return 'read failed';
             case 'apply-failed': return 'apply failed';
             case 'load-failed': return 'status unavailable';
@@ -7788,11 +7796,32 @@
     }
 
     function classifyLocalWorkspaceError(error) {
+        if (error?.localWorkspaceErrorKind === 'too-large') return 'too-large';
         const name = String(error?.name || '').toLowerCase();
         if (name.includes('notfound')) return 'file-missing';
         if (name.includes('notallowed') || name.includes('security')) return 'permission-denied';
         if (name.includes('abort')) return 'cancelled';
         return 'read-failed';
+    }
+
+    function classifyLocalWorkspaceApplyError(error) {
+        if (error?.localWorkspaceErrorKind === 'too-large') return 'too-large';
+        const message = String(error?.message || error || '').toLowerCase();
+        if (message.includes('metadata block') || message.includes('parse') || message.includes('userscript')) {
+            return 'parse-failed';
+        }
+        if (message.includes('too large') || message.includes('maximum is')) return 'too-large';
+        return 'apply-failed';
+    }
+
+    function formatLocalWorkspaceErrorToast(kind, fallback = 'Failed to read local file') {
+        switch (kind) {
+            case 'file-missing': return 'Local file is missing';
+            case 'too-large': return 'Local file is too large';
+            case 'parse-failed': return 'Local file is not a valid userscript';
+            case 'permission-denied': return 'Local file permission was not granted';
+            default: return fallback;
+        }
     }
 
     function buildLocalWorkspaceDiffPreview(currentCode, localCode, currentLabel, localLabel) {
@@ -7983,7 +8012,7 @@
                 lastErrorKind: errorKind,
                 lastStatusKind: ''
             }, script);
-            showToast(errorKind === 'file-missing' ? 'Local file is missing' : 'Failed to read local file', 'error');
+            showToast(formatLocalWorkspaceErrorToast(errorKind), 'error');
             return;
         }
 
@@ -8027,16 +8056,17 @@
             }, fileRead.text, fileRead);
         } catch (error) {
             markScriptSaveFailed(script.id, error?.message || 'Failed to apply local file');
+            const errorKind = classifyLocalWorkspaceApplyError(error);
             await updateLocalWorkspaceBindingAfterRefresh(bindingRecord, {
                 displayName: fileRead.displayName,
                 lastKnownSize: fileRead.lastKnownSize,
                 lastKnownModified: fileRead.lastKnownModified,
                 permissionState,
                 lastRefreshAt: Date.now(),
-                lastErrorKind: 'apply-failed',
+                lastErrorKind: errorKind,
                 lastStatusKind: ''
             }, script);
-            showToast(error?.message || 'Failed to apply local file', 'error');
+            showToast(formatLocalWorkspaceErrorToast(errorKind, error?.message || 'Failed to apply local file'), 'error');
         }
     }
 

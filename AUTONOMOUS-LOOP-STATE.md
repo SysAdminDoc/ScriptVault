@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 84 - 2026-06-06
+Last cycle: Cycle 85 - 2026-06-06
 
 ## Latest Result
 
@@ -386,17 +386,21 @@ Last cycle: Cycle 84 - 2026-06-06
   stored-handle/permission guidance and verified aggregate local workspace
   health evidence with focused local-health, support-redaction,
   local-workspace, storage, and TS runtime tests, high-severity audit, full
-  check suite, build, CWS remote-code scan, and `git diff --check`.
+  check suite, build, CWS remote-code scan, and `git diff --check`. Cycle 85
+  refreshed File System Access/File API file-size guidance and verified local
+  refresh acceptance hardening with focused local-workspace, local-health,
+  local-save, reregister, and TS runtime tests, high-severity audit, full check
+  suite, build, CWS remote-code scan, dashboard modal smoke, and `git diff
+  --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. Cycle 84 continued X-8 with aggregate
-support/local-health evidence for local workspace bindings while keeping
-handles, local paths, names, URLs, source, binding IDs, and script IDs out of
-the exported default support snapshot. The next best local cycle is Cycle 85:
-continue X-8 by tightening local file refresh acceptance around oversized
-files, parse failures, successful re-registration proof, and Chromium smoke
-coverage for bind-refresh-apply.
+Continue from `ROADMAP.md` Round 40. Cycle 85 continued X-8 with local refresh
+acceptance hardening: oversized bound files are rejected before text reads,
+parse failures get their own status, and accepted local applies still go
+through `saveScript`/`reregisterScript()`. The next best local cycle is Cycle
+86: continue X-8 with a Chromium bind-refresh-apply smoke if file-picker
+automation is workable, or move to X-9 publish-handoff preflight scaffolding.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -405,8 +409,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 84 complete for 2026-06-06; roadmap continuation
-  points to Cycle 85 X-8 local refresh acceptance hardening or the next local
-  packaging audit.
+- Status: ScriptVault Cycle 85 complete for 2026-06-06; roadmap continuation
+  points to Cycle 86 X-8 Chromium smoke coverage or X-9 publish-handoff
+  preflight scaffolding.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

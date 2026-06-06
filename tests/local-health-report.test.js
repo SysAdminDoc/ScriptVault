@@ -43,6 +43,8 @@ describe('local health report background action', () => {
     expect(backgroundCoreTs).toContain('permissionStates');
     expect(backgroundCoreTs).toContain('refreshStatuses');
     expect(backgroundCoreTs).toContain('errorStates');
+    expect(backgroundCoreTs).toContain("case 'too-large':");
+    expect(backgroundCoreTs).toContain("case 'parse-failed':");
     expect(backgroundCoreTs).toContain('staleRefreshThresholdDays');
     expect(backgroundCoreTs).toContain("push('localWorkspacePermissionDenied', 'warning'");
     expect(backgroundCoreTs).toContain("push('localWorkspaceRefreshErrors', 'warning'");
