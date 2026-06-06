@@ -2,6 +2,16 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 81 Trusted Types author docs: X-6 is complete as a
+documentation-only cycle. `README.md` and the dashboard Help tab now explain
+that ScriptVault's default `USER_SCRIPT` world is separate from page Trusted
+Types policy, while MAIN/page context and `unsafeWindow` scripts must obey the
+target page policy for raw `innerHTML`, script URLs, and inline handlers. The
+guidance recommends `textContent`, `append`, `createElement`, and
+`GM_addElement` with attributes, and warns against broad passthrough
+`TrustedHTML` policies. `tests/trusted-types-docs.test.js` pins both docs
+surfaces and confirms the cycle did not add a runtime policy shim.
+
 2026-06-06 Cycle 80 browser namespace alias: X-5 is complete. The promoted
 shared utilities now expose `installBrowserNamespaceAlias()`, and the runtime
 generator auto-installs it only when the loaded global already has

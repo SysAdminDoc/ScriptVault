@@ -5,9 +5,9 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 40 - browser namespace alias 2026-06-06.
+> **Roadmap version:** Round 40 - Trusted Types author docs 2026-06-06.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-05.
-> **Test suite:** 1460 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1463 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 40 - 2026-06-06.
@@ -155,6 +155,9 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P3 | **Effort:** S | **Source:** [S26]
 - **Problem:** Sites using Trusted Types CSP reject raw `innerHTML` in MAIN-world scripts. USER_SCRIPT world is exempt.
 - **Deliverable:** Documentation in README and Help tab. Optional `TrustedTypes` wrapper helper.
+- **Status:** Shipped 2026-06-06 as documentation-only guidance.
+- **Progress:** Cycle 81 added README and dashboard Help guidance explaining that the default `USER_SCRIPT` world is separate from page Trusted Types policy, while MAIN/page-context scripts and `unsafeWindow` must obey the target page policy for raw `innerHTML`, script URLs, and inline handlers. The docs recommend `textContent`, `append`, `createElement`, and `GM_addElement` with attributes, and warn against broad passthrough TrustedHTML policies. `tests/trusted-types-docs.test.js` pins the README, Help tab, and no-runtime-policy-shim boundary.
+- **Acceptance:** Complete: author-facing README guidance, in-app Help guidance, and static tests are present; no runtime Trusted Types wrapper was added.
 
 ### X-7. Script Subscription Feed Improvements
 - **Priority:** P3 | **Effort:** M | **Source:** [S04, S27]
@@ -291,11 +294,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 78 | Monaco ESM Chromium sandbox smoke | `tests/e2e/monaco-esm-sandbox.spec.js`, `tests/e2e/helpers/extension-fixture.js` | The ESM sandbox switch must run in a real Chromium extension page, not only jsdom/VM harnesses [S17, S24] | Added a Playwright extension-page smoke for the packaged sandbox ready path and routed missing-bundle fallback path |
 | 79 | Monaco adapter dashboard smoke | `tests/e2e/monaco-adapter-dashboard.spec.js` | The ESM editor must persist real dashboard edits through the CodeMirror-compatible Monaco adapter [S17, S24] | Added a Playwright dashboard smoke for edit-open, adapter readiness, toolbar save, reload, and adapter value persistence |
 | 80 | `browser` namespace alias | `src/shared/utils.ts`, `shared/utils.js`, `scripts/generate-ts-runtime-modules.mjs`, `pages/dashboard-firefox-compat.js`, focused tests | Chrome 148 exposes `browser`, so Chrome/Firefox code should converge without exposing extension APIs to userscript/page worlds [S25] | Added a generated extension-context alias, fixed Chromium-vs-Firefox detection when `browser.runtime` exists, and pinned wrapper boundary coverage |
+| 81 | Trusted Types author docs | `README.md`, `pages/dashboard.html`, `tests/trusted-types-docs.test.js` | MAIN-world scripts on Trusted Types pages need explicit author guidance, while ScriptVault's default USER_SCRIPT path should stay documented as the safer default [S26] | Added README and Help guidance plus a static test that pins the docs and confirms no runtime policy shim was introduced |
 
 ## Continuation State
 
-- **Current cycle:** Round 40 Cycle 80 closed X-5 with a generated extension-context `browser` namespace alias and Chromium/Firefox detection safeguards.
-- **Next implementation angle:** Cycle 81 should move to X-6 with Trusted Types documentation for userscript authors and Help/README guidance that explains USER_SCRIPT isolation, MAIN-world limitations, and safe wrapper patterns without adding runtime code.
+- **Current cycle:** Round 40 Cycle 81 closed X-6 with Trusted Types documentation in README and the dashboard Help tab.
+- **Next implementation angle:** Cycle 82 should move to X-7 and add subscription feed refresh/health groundwork, starting with a focused audit of `src/modules/subscriptions.ts`, scheduler hooks, and existing update-alarm behavior before adding runtime changes.
 - **Follow-up source checks:** Re-check CWS user-data/privacy expectations and File System Access handle persistence before editing local-save or local-workspace metadata.
 - **Suggested verification before implementation:** Run focused tests for setup-state banners, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching N-7, N-8, X-8, or X-9.
 

@@ -7592,6 +7592,16 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="help-inline-note">All functions also available as promise-based <code>GM.*</code> variants, such as <code>await GM.getValue()</code>.</div>
             </div>
 
+            <div class="help-section" data-help-group="reference">
+                <div class="shortcuts-title">Trusted Types And MAIN-World Scripts</div>
+                <div class="help-content">
+                    <div class="help-step"><strong>Default path:</strong> ScriptVault runs scripts in <code>USER_SCRIPT</code> world, which is separate from page Trusted Types policy.</div>
+                    <div class="help-step"><strong>MAIN-world path:</strong> Scripts that use page context or <code>unsafeWindow</code> must obey the page policy for raw <code>innerHTML</code>, script URLs, and inline handlers.</div>
+                    <div class="help-step"><strong>Safer DOM writes:</strong> Prefer <code>textContent</code>, <code>append</code>, <code>createElement</code>, and <code>GM_addElement</code> with attributes.</div>
+                    <div class="help-step"><strong>TrustedHTML:</strong> Use a target-site approved policy when the page requires it; do not create broad passthrough policies to bypass CSP.</div>
+                </div>
+            </div>
+
             <!-- Pattern Tester -->
             <div class="help-section" data-help-group="reference">
                 <div class="shortcuts-title">Pattern Tester</div>
