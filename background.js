@@ -24520,6 +24520,31 @@ function scheduleCrontabAlarm(script, from = new Date()) {
   return next;
 }
 
+async function executeCrontabScriptInTab(tabId, wrappedCode) {
+  if (typeof chrome.userScripts?.execute === 'function') {
+    try {
+      await chrome.userScripts.execute({
+        target: { tabId },
+        js: [{ code: wrappedCode }],
+        world: 'USER_SCRIPT'
+      });
+      return 'userScripts.execute';
+    } catch (e) {
+      debugLog('crontab userScripts.execute failed, falling back:', e?.message);
+    }
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    func: (code) => {
+      try { (0, eval)(code); } catch (err) { console.error('[ScriptVault Crontab]', err); }
+    },
+    args: [wrappedCode]
+  });
+  return 'scripting.executeScript';
+}
+
 /** Execute a @crontab script in all currently-open matching tabs. */
 async function handleCrontabAlarm(scriptId) {
   const script = await ScriptStorage.get(scriptId);
@@ -24564,13 +24589,8 @@ async function handleCrontabAlarm(scriptId) {
     if (!tab.url || !tab.id) continue;
     if (!doesScriptMatchUrl(script, tab.url)) continue;
     try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (code) => { (new Function(code))(); },
-        args: [wrappedCode],
-        world: 'ISOLATED'
-      });
-      debugLog(`@crontab ${meta.name}: executed in tab ${tab.id}`);
+      const mode = await executeCrontabScriptInTab(tab.id, wrappedCode);
+      debugLog(`@crontab ${meta.name}: executed in tab ${tab.id} via ${mode}`);
     } catch (e) {
       debugLog(`@crontab ${meta.name}: failed in tab ${tab.id}: ${e.message}`);
     }

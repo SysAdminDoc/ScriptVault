@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 59 - 2026-06-06
+Last cycle: Cycle 60 - 2026-06-06
 
 ## Latest Result
 
@@ -154,6 +154,11 @@ Last cycle: Cycle 59 - 2026-06-06
   `innerHTML` iframes in both the focused wrapper source and core runtime
   source, with generated artifacts refreshed and DOM security tests pinning the
   bypass.
+- Cycle 60 fixed N-9 EI-2: scheduled `@crontab` execution now prefers
+  `chrome.userScripts.execute` in `USER_SCRIPT` world and falls back only to
+  `chrome.scripting.executeScript` in `MAIN` world, removing the prior scheduled
+  `ISOLATED`/`new Function` extension-world path and pinning that boundary in
+  the crontab regression suite.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -188,23 +193,27 @@ Last cycle: Cycle 59 - 2026-06-06
   Cycle 59 consumed the new deep-audit local research plan, then verified the
   `GM_addElement` `srcdoc` hardening with focused DOM security tests, TS runtime
   generation/check, high-severity audit, full check suite, build, and CWS
-  remote-code scan.
+  remote-code scan. Cycle 60 continued that local deep-audit plan, then verified
+  the `@crontab` execution-world hardening with focused crontab tests, TS
+  runtime generation/check, high-severity audit, full check suite, build, CWS
+  remote-code scan, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 27. The next best local cycle is Cycle 60:
-continue N-9 with the next P0 security closure. Start with the `@crontab`
-isolated-world escalation analysis/fix so scheduled userscripts cannot access
-extension APIs; if that requires a larger execution change than one safe batch,
-take the adjacent PublicAPI internal-host guard drift in the same security
-lane. The live two-tab `GM_addValueChangeListener` smoke remains browser-profile
-gated until `chrome.userScripts` is enabled for the unpacked extension, AMO
-submission remains blocked on maintainer credentials, and Edge Partner Center
-upload/REST automation remain credential/listing gated.
+Continue from `ROADMAP.md` Round 28. The next best local cycle is Cycle 61:
+continue N-9 with the remaining P0 security closure. Start with the PublicAPI
+internal-host guard drift from `docs/research-deep-audit-2026-06-06.md`, compare
+`modules/public-api.js` / `src/modules/public-api.ts` against
+`src/background/internal-host-guard.ts`, and make trusted-origin install safety
+reuse the same canonical internal-host policy. The live two-tab
+`GM_addValueChangeListener` smoke remains browser-profile gated until
+`chrome.userScripts` is enabled for the unpacked extension, AMO submission
+remains blocked on maintainer credentials, and Edge Partner Center upload/REST
+automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 59 complete for 2026-06-06; roadmap continuation
-  points to Cycle 60 deep-audit P0 security closures.
+- Status: ScriptVault Cycle 60 complete for 2026-06-06; roadmap continuation
+  points to Cycle 61 deep-audit P0 security closure.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
