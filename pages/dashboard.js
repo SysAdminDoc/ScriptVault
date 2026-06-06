@@ -1527,6 +1527,8 @@
         elements.tbtnPattern = document.getElementById('tbtnPattern');
         elements.tbtnDiff = document.getElementById('tbtnDiff');
         elements.tbtnBindLocalFile = document.getElementById('tbtnBindLocalFile');
+        elements.tbtnRefreshLocalFile = document.getElementById('tbtnRefreshLocalFile');
+        elements.tbtnUnbindLocalFile = document.getElementById('tbtnUnbindLocalFile');
         elements.tbtnDebug = document.getElementById('tbtnDebug');
         elements.tbtnShare = document.getElementById('tbtnShare');
 
@@ -7206,6 +7208,16 @@
         }));
     }
 
+    async function getDashboardLocalWorkspaceBindingRecord(bindingId) {
+        if (!bindingId || !isLocalWorkspaceFileAccessSupported()) return null;
+        return withDashboardLocalWorkspaceStore('readonly', store => localWorkspaceRequest(store.get(bindingId)));
+    }
+
+    async function deleteDashboardLocalWorkspaceBinding(bindingId) {
+        if (!bindingId || !isLocalWorkspaceFileAccessSupported()) return;
+        await withDashboardLocalWorkspaceStore('readwrite', store => localWorkspaceRequest(store.delete(bindingId)));
+    }
+
     async function putDashboardLocalWorkspaceBinding(record) {
         const now = Date.now();
         const row = {
@@ -7219,10 +7231,20 @@
         return summarizeDashboardLocalWorkspaceBinding(row);
     }
 
-    async function queryLocalWorkspacePermission(handle) {
+    async function queryLocalWorkspacePermission(handle, mode = 'read') {
         if (!handle || typeof handle.queryPermission !== 'function') return 'unknown';
         try {
-            const state = await handle.queryPermission({ mode: 'readwrite' });
+            const state = await handle.queryPermission({ mode });
+            return state === 'granted' || state === 'prompt' || state === 'denied' ? state : 'unknown';
+        } catch {
+            return 'unknown';
+        }
+    }
+
+    async function requestLocalWorkspacePermission(handle, mode = 'read') {
+        if (!handle || typeof handle.requestPermission !== 'function') return await queryLocalWorkspacePermission(handle, mode);
+        try {
+            const state = await handle.requestPermission({ mode });
             return state === 'granted' || state === 'prompt' || state === 'denied' ? state : 'unknown';
         } catch {
             return 'unknown';
@@ -7235,6 +7257,16 @@
         }
         const file = await handle.getFile();
         return {
+            displayName: handle.name || file.name || 'local file',
+            lastKnownSize: typeof file.size === 'number' ? file.size : undefined,
+            lastKnownModified: typeof file.lastModified === 'number' ? file.lastModified : undefined
+        };
+    }
+
+    async function readLocalWorkspaceFileText(handle) {
+        const file = await handle.getFile();
+        return {
+            text: await file.text(),
             displayName: handle.name || file.name || 'local file',
             lastKnownSize: typeof file.size === 'number' ? file.size : undefined,
             lastKnownModified: typeof file.lastModified === 'number' ? file.lastModified : undefined
@@ -7267,6 +7299,22 @@
                 ? `Rebind local file (${formatLocalWorkspacePermission(binding.permissionState)})`
                 : 'Bind local file';
             elements.tbtnBindLocalFile.setAttribute('aria-label', binding ? 'Rebind local file' : 'Bind local file');
+        }
+
+        if (elements.tbtnRefreshLocalFile) {
+            elements.tbtnRefreshLocalFile.hidden = !supported;
+            elements.tbtnRefreshLocalFile.disabled = !supported || !script || !binding;
+            elements.tbtnRefreshLocalFile.title = binding
+                ? `Refresh from ${binding.displayName} (${formatLocalWorkspacePermission(binding.permissionState)})`
+                : 'Refresh from local file';
+            elements.tbtnRefreshLocalFile.setAttribute('aria-label', 'Refresh from local file');
+        }
+
+        if (elements.tbtnUnbindLocalFile) {
+            elements.tbtnUnbindLocalFile.hidden = !supported;
+            elements.tbtnUnbindLocalFile.disabled = !supported || !script || !binding;
+            elements.tbtnUnbindLocalFile.title = binding ? `Unbind ${binding.displayName}` : 'Unbind local file';
+            elements.tbtnUnbindLocalFile.setAttribute('aria-label', 'Unbind local file');
         }
 
         if (!elements.editorLocalWorkspaceStatus) return;
@@ -7383,6 +7431,265 @@
         } finally {
             refreshLocalWorkspaceControls(script);
         }
+    }
+
+    function classifyLocalWorkspaceError(error) {
+        const name = String(error?.name || '').toLowerCase();
+        if (name.includes('notfound')) return 'file-missing';
+        if (name.includes('notallowed') || name.includes('security')) return 'permission-denied';
+        if (name.includes('abort')) return 'cancelled';
+        return 'read-failed';
+    }
+
+    function buildLocalWorkspaceDiffPreview(currentCode, localCode, currentLabel, localLabel) {
+        const currentLines = String(currentCode || '').split('\n');
+        const localLines = String(localCode || '').split('\n');
+        const maxLines = Math.max(currentLines.length, localLines.length);
+        const rows = [];
+        let additions = 0;
+        let deletions = 0;
+        let unchanged = 0;
+        let truncated = false;
+
+        for (let i = 0; i < maxLines; i += 1) {
+            const currentLine = currentLines[i];
+            const localLine = localLines[i];
+            if (currentLine === localLine) {
+                unchanged += 1;
+                continue;
+            }
+            if (typeof currentLine === 'string') {
+                deletions += 1;
+                if (rows.length < 400) {
+                    rows.push(`<div class="diff-line diff-del"><span class="diff-ln">${i + 1}</span><span class="diff-sign">-</span><span class="diff-text">${escapeHtml(currentLine)}</span></div>`);
+                } else {
+                    truncated = true;
+                }
+            }
+            if (typeof localLine === 'string') {
+                additions += 1;
+                if (rows.length < 400) {
+                    rows.push(`<div class="diff-line diff-add"><span class="diff-ln">${i + 1}</span><span class="diff-sign">+</span><span class="diff-text">${escapeHtml(localLine)}</span></div>`);
+                } else {
+                    truncated = true;
+                }
+            }
+        }
+
+        const summary = `<div class="diff-summary"><span class="diff-add-count">+${additions}</span> <span class="diff-del-count">-${deletions}</span> <span class="diff-unch-count">${unchanged} unchanged</span></div>`;
+        const header = `<div class="diff-header"><span>${escapeHtml(currentLabel)}</span> vs <span>${escapeHtml(localLabel)}</span></div>`;
+        const body = rows.length
+            ? rows.join('')
+            : '<div style="padding:20px;text-align:center;color:var(--text-muted)">No differences found</div>';
+        const truncation = truncated
+            ? '<div class="panel-empty-inline" style="padding:8px 12px">Preview truncated after 400 changed rows.</div>'
+            : '';
+        return {
+            html: `${header}${summary}<div class="diff-container">${body}${truncation}</div>`,
+            additions,
+            deletions,
+            changed: additions + deletions > 0
+        };
+    }
+
+    function confirmLocalWorkspaceRefreshApply(script, binding, localCode, fileMeta) {
+        return new Promise(resolve => {
+            let settled = false;
+            const finish = result => {
+                if (settled) return;
+                settled = true;
+                modalDismissHandler = null;
+                closeModalShell();
+                resolve(result);
+            };
+            const currentCode = state.editor?.getValue?.() ?? script.code ?? '';
+            const diff = buildLocalWorkspaceDiffPreview(
+                currentCode,
+                localCode,
+                'Current editor',
+                fileMeta.displayName || binding.displayName || 'Local file'
+            );
+            const meta = [
+                typeof fileMeta.lastKnownSize === 'number' ? `${formatBytes(fileMeta.lastKnownSize)}` : '',
+                fileMeta.lastKnownModified ? `modified ${formatTime(fileMeta.lastKnownModified)}` : '',
+                formatLocalWorkspacePermission(binding.permissionState)
+            ].filter(Boolean).join(' - ');
+            const html = `
+                <div class="panel-empty-inline" style="margin-bottom:10px">${escapeHtml(meta || 'Review the local file before applying it.')}</div>
+                ${diff.html}
+            `;
+            showModal('Refresh from local file', html, [
+                { label: 'Cancel', callback: () => finish(false) },
+                { label: 'Apply local file', class: 'btn-primary', busyLabel: 'Applying...', callback: () => finish(true) }
+            ], { onDismiss: () => finish(false) });
+        });
+    }
+
+    async function updateLocalWorkspaceBindingAfterRefresh(bindingRecord, patch, script = getCurrentScript()) {
+        if (!bindingRecord) return null;
+        const summary = await putDashboardLocalWorkspaceBinding({
+            ...bindingRecord,
+            ...patch,
+            updatedAt: Date.now()
+        });
+        if (script?.id) {
+            patchOpenTabStatus(script.id, { localWorkspaceBinding: summary }, script);
+            refreshLocalWorkspaceControls(script);
+        }
+        return summary;
+    }
+
+    async function saveLocalWorkspaceRefresh(script, bindingRecord, bindingSummary, localCode, fileMeta) {
+        markScriptSavePending(script.id);
+        const result = await chrome.runtime.sendMessage({
+            action: 'saveScript',
+            scriptId: script.id,
+            code: localCode,
+            markModified: true,
+            trust: {
+                recordReceipt: true,
+                operation: 'local-save',
+                sourceKind: 'local-file',
+                sourceLabel: bindingSummary.displayName || fileMeta.displayName || 'Local file',
+                suppressMetadataSourceFallback: true
+            }
+        });
+        if (result?.error) throw new Error(result.error);
+
+        await loadScripts();
+        const updatedScript = state.scripts.find(s => s.id === script.id) || script;
+        if (state.openTabs[script.id]) {
+            state.openTabs[script.id].code = localCode;
+        }
+        if (state.currentScriptId === script.id && state.editor) {
+            state.editor.setValue(localCode);
+            loadScriptInfo(updatedScript);
+        }
+        await updateLocalWorkspaceBindingAfterRefresh(bindingRecord, {
+            displayName: fileMeta.displayName || bindingSummary.displayName,
+            lastKnownSize: fileMeta.lastKnownSize,
+            lastKnownModified: fileMeta.lastKnownModified,
+            permissionState: bindingSummary.permissionState || 'granted',
+            lastRefreshAt: Date.now(),
+            lastErrorKind: ''
+        }, updatedScript);
+        markScriptSaved(script.id, Date.now());
+        updateStats();
+        renderScriptTable();
+        showToast('Local file applied', 'success');
+    }
+
+    async function refreshCurrentScriptFromLocalFile() {
+        const script = getCurrentScript();
+        const bindingSummary = script?.id ? ensureOpenTabStatus(script.id, script)?.localWorkspaceBinding : null;
+        if (!script || !bindingSummary?.bindingId) {
+            showToast('Bind a local file first', 'warning');
+            return;
+        }
+
+        const bindingRecord = await getDashboardLocalWorkspaceBindingRecord(bindingSummary.bindingId);
+        if (!bindingRecord?.handle) {
+            patchOpenTabStatus(script.id, {
+                localWorkspaceBinding: {
+                    ...bindingSummary,
+                    lastErrorKind: 'handle-missing',
+                    updatedAt: Date.now()
+                }
+            }, script);
+            refreshLocalWorkspaceControls(script);
+            showToast('Local file handle is missing. Bind the file again.', 'warning');
+            return;
+        }
+
+        const initialPermission = await queryLocalWorkspacePermission(bindingRecord.handle, 'read');
+        const permissionState = initialPermission === 'granted'
+            ? initialPermission
+            : await requestLocalWorkspacePermission(bindingRecord.handle, 'read');
+        if (permissionState !== 'granted') {
+            await updateLocalWorkspaceBindingAfterRefresh(bindingRecord, {
+                permissionState,
+                lastRefreshAt: Date.now(),
+                lastErrorKind: 'permission-denied'
+            }, script);
+            showToast('Local file permission was not granted', 'warning');
+            return;
+        }
+
+        let fileRead;
+        try {
+            fileRead = await readLocalWorkspaceFileText(bindingRecord.handle);
+        } catch (error) {
+            const errorKind = classifyLocalWorkspaceError(error);
+            await updateLocalWorkspaceBindingAfterRefresh(bindingRecord, {
+                permissionState,
+                lastRefreshAt: Date.now(),
+                lastErrorKind: errorKind
+            }, script);
+            showToast(errorKind === 'file-missing' ? 'Local file is missing' : 'Failed to read local file', 'error');
+            return;
+        }
+
+        const currentCode = state.editor?.getValue?.() ?? script.code ?? '';
+        if (currentCode === fileRead.text) {
+            await updateLocalWorkspaceBindingAfterRefresh(bindingRecord, {
+                displayName: fileRead.displayName,
+                lastKnownSize: fileRead.lastKnownSize,
+                lastKnownModified: fileRead.lastKnownModified,
+                permissionState,
+                lastRefreshAt: Date.now(),
+                lastErrorKind: ''
+            }, script);
+            showToast('Local file unchanged', 'info');
+            return;
+        }
+
+        const reviewed = await confirmLocalWorkspaceRefreshApply(script, {
+            ...bindingSummary,
+            permissionState
+        }, fileRead.text, fileRead);
+        if (!reviewed) {
+            await updateLocalWorkspaceBindingAfterRefresh(bindingRecord, {
+                displayName: fileRead.displayName,
+                lastKnownSize: fileRead.lastKnownSize,
+                lastKnownModified: fileRead.lastKnownModified,
+                permissionState,
+                lastRefreshAt: Date.now(),
+                lastErrorKind: 'review-cancelled'
+            }, script);
+            showToast('Local file refresh cancelled', 'info');
+            return;
+        }
+
+        try {
+            await saveLocalWorkspaceRefresh(script, bindingRecord, {
+                ...bindingSummary,
+                permissionState
+            }, fileRead.text, fileRead);
+        } catch (error) {
+            markScriptSaveFailed(script.id, error?.message || 'Failed to apply local file');
+            await updateLocalWorkspaceBindingAfterRefresh(bindingRecord, {
+                displayName: fileRead.displayName,
+                lastKnownSize: fileRead.lastKnownSize,
+                lastKnownModified: fileRead.lastKnownModified,
+                permissionState,
+                lastRefreshAt: Date.now(),
+                lastErrorKind: 'apply-failed'
+            }, script);
+            showToast(error?.message || 'Failed to apply local file', 'error');
+        }
+    }
+
+    async function unbindCurrentScriptLocalFile() {
+        const script = getCurrentScript();
+        const binding = script?.id ? ensureOpenTabStatus(script.id, script)?.localWorkspaceBinding : null;
+        if (!script || !binding?.bindingId) {
+            showToast('No local file is bound', 'info');
+            return;
+        }
+        await deleteDashboardLocalWorkspaceBinding(binding.bindingId);
+        patchOpenTabStatus(script.id, { localWorkspaceBinding: null }, script);
+        refreshLocalWorkspaceControls(script);
+        showToast('Local file unbound', 'success');
     }
 
     function updateEditorHeader(script = getCurrentScript()) {
@@ -10788,6 +11095,12 @@
         // Editor
         elements.btnEditorSave?.addEventListener('click', saveCurrentScript);
         elements.tbtnBindLocalFile?.addEventListener('click', bindCurrentScriptToLocalFile);
+        elements.tbtnRefreshLocalFile?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, refreshCurrentScriptFromLocalFile, { busyLabel: 'Refreshing...' });
+        });
+        elements.tbtnUnbindLocalFile?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, unbindCurrentScriptLocalFile, { busyLabel: 'Unbinding...' });
+        });
         elements.btnEditorToggle?.addEventListener('click', () => {
             const script = state.scripts.find(s => s.id === state.currentScriptId);
             if (script) toggleScriptEnabled(script.id, script.enabled === false);

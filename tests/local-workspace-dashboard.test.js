@@ -28,6 +28,8 @@ describe('dashboard local workspace binding', () => {
   it('adds an accessible editor control and status summary', () => {
     const doc = parseDashboard();
     const button = doc.getElementById('tbtnBindLocalFile');
+    const refreshButton = doc.getElementById('tbtnRefreshLocalFile');
+    const unbindButton = doc.getElementById('tbtnUnbindLocalFile');
     const status = doc.getElementById('editorLocalWorkspaceStatus');
 
     expect(button).not.toBeNull();
@@ -36,13 +38,27 @@ describe('dashboard local workspace binding', () => {
     expect(button?.getAttribute('aria-describedby')).toBe('editorLocalWorkspaceStatus');
     expect(button?.textContent.replace(/\s+/g, ' ').trim()).toContain('Bind File');
 
+    expect(refreshButton).not.toBeNull();
+    expect(refreshButton?.getAttribute('type')).toBe('button');
+    expect(refreshButton?.getAttribute('aria-describedby')).toBe('editorLocalWorkspaceStatus');
+    expect(refreshButton?.hasAttribute('disabled')).toBe(true);
+
+    expect(unbindButton).not.toBeNull();
+    expect(unbindButton?.getAttribute('type')).toBe('button');
+    expect(unbindButton?.getAttribute('aria-describedby')).toBe('editorLocalWorkspaceStatus');
+    expect(unbindButton?.hasAttribute('disabled')).toBe(true);
+
     expect(status).not.toBeNull();
     expect(status?.getAttribute('role')).toBe('status');
     expect(status?.getAttribute('aria-live')).toBe('polite');
     expect(status?.hasAttribute('hidden')).toBe(true);
 
     expect(dashboardJs).toContain('elements.tbtnBindLocalFile = document.getElementById');
+    expect(dashboardJs).toContain('elements.tbtnRefreshLocalFile = document.getElementById');
+    expect(dashboardJs).toContain('elements.tbtnUnbindLocalFile = document.getElementById');
     expect(dashboardJs).toContain("elements.tbtnBindLocalFile?.addEventListener('click', bindCurrentScriptToLocalFile)");
+    expect(dashboardJs).toContain("runButtonTask(event.currentTarget, refreshCurrentScriptFromLocalFile");
+    expect(dashboardJs).toContain("runButtonTask(event.currentTarget, unbindCurrentScriptLocalFile");
     expect(dashboardJs).toContain('void refreshLocalWorkspaceBindingForScript(scriptId)');
   });
 
@@ -78,5 +94,29 @@ describe('dashboard local workspace binding', () => {
     expect(bindFn).not.toContain('state.editor.setValue');
     expect(bindFn).toContain('putDashboardLocalWorkspaceBinding');
     expect(bindFn).toContain('localWorkspaceBinding: summary');
+  });
+
+  it('requests permission only from refresh and reviews changed files before saveScript', () => {
+    const refreshFn = extractFunction(dashboardJs, 'refreshCurrentScriptFromLocalFile');
+    const saveFn = extractFunction(dashboardJs, 'saveLocalWorkspaceRefresh');
+
+    expect(refreshFn).not.toContain('showOpenFilePicker');
+    expect(refreshFn).toContain("requestLocalWorkspacePermission(bindingRecord.handle, 'read')");
+    expect(refreshFn).toContain('confirmLocalWorkspaceRefreshApply');
+    expect(refreshFn).toContain('if (currentCode === fileRead.text)');
+    expect(refreshFn.indexOf('if (currentCode === fileRead.text)')).toBeLessThan(refreshFn.indexOf('saveLocalWorkspaceRefresh'));
+
+    expect(saveFn).toContain("action: 'saveScript'");
+    expect(saveFn).toContain("operation: 'local-save'");
+    expect(saveFn).toContain("sourceKind: 'local-file'");
+    expect(saveFn).toContain('suppressMetadataSourceFallback: true');
+  });
+
+  it('unbind removes only the local binding record', () => {
+    const unbindFn = extractFunction(dashboardJs, 'unbindCurrentScriptLocalFile');
+    expect(unbindFn).toContain('deleteDashboardLocalWorkspaceBinding(binding.bindingId)');
+    expect(unbindFn).toContain('localWorkspaceBinding: null');
+    expect(unbindFn).not.toContain("action: 'deleteScript'");
+    expect(unbindFn).not.toContain("action: 'saveScript'");
   });
 });
