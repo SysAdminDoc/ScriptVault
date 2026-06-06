@@ -3273,6 +3273,20 @@
             blockSeverity: elements.settingsBlockSeverity,
             strictMode: elements.settingsStrictMode,
             topLevelAwait: elements.settingsTopLevelAwait,
+            configMode: elements.settingsConfigMode,
+            loggingLevel: elements.settingsLoggingLevel,
+            trashMode: elements.settingsTrashMode,
+            popupColumns: elements.settingsPopupColumns,
+            scriptOrder: elements.settingsScriptOrder,
+            badgeInfo: elements.settingsBadgeInfo,
+            searchIntegration: elements.settingsSearchIntegration,
+            editorTheme: elements.settingsEditorTheme,
+            keyMapping: elements.settingsKeyMapping,
+            indentWith: elements.settingsIndentWith,
+            tabMode: elements.settingsTabMode,
+            highlightMatches: elements.settingsHighlightMatches,
+            blacklistSource: elements.settingsBlacklistSource,
+            downloadMode: elements.settingsDownloadMode,
             lintMaxSize: elements.settingsLintMaxSize,
             checkInterval: elements.settingsCheckInterval,
             notifyHideAfter: elements.settingsNotifyHideAfter,
@@ -3574,6 +3588,34 @@
                 return validateSelectOptionValue('strictMode', value, 'strict mode');
             case 'topLevelAwait':
                 return validateSelectOptionValue('topLevelAwait', value, 'top-level await mode');
+            case 'configMode':
+                return validateSelectOptionValue('configMode', value, 'configuration mode');
+            case 'loggingLevel':
+                return validateSelectOptionValue('loggingLevel', value, 'logging level');
+            case 'trashMode':
+                return validateSelectOptionValue('trashMode', value, 'trash retention mode');
+            case 'popupColumns':
+                return validateSelectOptionValue('popupColumns', value, 'popup column count', { number: true });
+            case 'scriptOrder':
+                return validateSelectOptionValue('scriptOrder', value, 'script ordering mode');
+            case 'badgeInfo':
+                return validateSelectOptionValue('badgeInfo', value, 'badge info mode');
+            case 'searchIntegration':
+                return validateSelectOptionValue('searchIntegration', value, 'userscript search integration');
+            case 'editorTheme':
+                return validateSelectOptionValue('editorTheme', value, 'editor theme');
+            case 'keyMapping':
+                return validateSelectOptionValue('keyMapping', value, 'key mapping');
+            case 'indentWith':
+                return validateSelectOptionValue('indentWith', value, 'indent style');
+            case 'tabMode':
+                return validateSelectOptionValue('tabMode', value, 'tab key mode');
+            case 'highlightMatches':
+                return validateSelectOptionValue('highlightMatches', value, 'selection highlight mode');
+            case 'blacklistSource':
+                return validateSelectOptionValue('blacklistSource', value, 'blacklist source mode');
+            case 'downloadMode':
+                return validateSelectOptionValue('downloadMode', value, 'download mode');
             case 'webdavUrl': {
                 const url = String(value || '').trim();
                 if (!url) {
@@ -11750,7 +11792,7 @@
             
             // Action Menu
             settingsHideDisabledPopup: ['hideDisabledPopup', 'checked'],
-            settingsPopupColumns: ['popupColumns', 'value', v => parseInt(v) || 1],
+            settingsPopupColumns: ['popupColumns', 'value'],
             settingsScriptOrder: ['scriptOrder', 'value'],
             settingsBadgeInfo: ['badgeInfo', 'value'],
             

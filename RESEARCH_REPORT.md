@@ -2,6 +2,21 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 68 remaining select validation: N-1 closed the current
+schema-backed select validation backlog. The same select-specific source
+signal from Cycles 64-67 applies: option `value` is the persisted selection
+contract, and `HTMLSelectElement.setCustomValidity()` supports custom
+validation messages for select controls. ScriptVault now requires validation
+metadata and dashboard `setting-error` nodes for badge info, blacklist source,
+config mode, download mode, editor theme, highlight matches, indent style, key
+mapping, logging level, popup columns, script order, search integration, tab
+mode, and trash mode. The dashboard validates each value against its live
+option list before persisting; popup columns now stores the raw select value
+until validation accepts and converts it to a number. Remaining N-1 work should
+move from select controls to export/backup and other non-select dashboard-saved
+settings that still need native constraints, text errors, or field-specific
+validators.
+
 2026-06-06 Cycle 67 action behavior select validation: N-1 continued through
 the remaining security/action behavior selects that already had schema option
 lists. The same select-specific source signal from Cycles 64-66 applies:

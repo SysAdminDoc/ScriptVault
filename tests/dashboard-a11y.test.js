@@ -445,6 +445,20 @@ describe("dashboard accessibility markup", () => {
       ["settingsBlockSeverity", "settingsBlockSeverityError"],
       ["settingsStrictMode", "settingsStrictModeError"],
       ["settingsTopLevelAwait", "settingsTopLevelAwaitError"],
+      ["settingsConfigMode", "settingsConfigModeError"],
+      ["settingsLoggingLevel", "settingsLoggingLevelError"],
+      ["settingsTrashMode", "settingsTrashModeError"],
+      ["settingsPopupColumns", "settingsPopupColumnsError"],
+      ["settingsScriptOrder", "settingsScriptOrderError"],
+      ["settingsBadgeInfo", "settingsBadgeInfoError"],
+      ["settingsSearchIntegration", "settingsSearchIntegrationError"],
+      ["settingsEditorTheme", "settingsEditorThemeError"],
+      ["settingsKeyMapping", "settingsKeyMappingError"],
+      ["settingsIndentWith", "settingsIndentWithError"],
+      ["settingsTabMode", "settingsTabModeError"],
+      ["settingsHighlightMatches", "settingsHighlightMatchesError"],
+      ["settingsBlacklistSource", "settingsBlacklistSourceError"],
+      ["settingsDownloadMode", "settingsDownloadModeError"],
       ["settingsLintMaxSize", "settingsLintMaxSizeError"],
       ["settingsCheckInterval", "settingsCheckIntervalError"],
       ["settingsNotifyHideAfter", "settingsNotifyHideAfterError"],
@@ -503,6 +517,20 @@ describe("dashboard accessibility markup", () => {
     expect(doc.getElementById("settingsBlockSeverity")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsStrictMode")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsTopLevelAwait")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsConfigMode")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsLoggingLevel")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsTrashMode")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsPopupColumns")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsScriptOrder")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsBadgeInfo")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsSearchIntegration")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsEditorTheme")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsKeyMapping")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsIndentWith")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsTabMode")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsHighlightMatches")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsBlacklistSource")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsDownloadMode")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsEditorFontSize")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsIndentWidth")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsTabSize")?.tagName).toBe("SELECT");
@@ -546,7 +574,22 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/case 'blockSeverity':\s*return validateSelectOptionValue\('blockSeverity', value, 'block severity level', \{ number: true \}\)/);
     expect(dashboardJs).toMatch(/case 'strictMode':\s*return validateSelectOptionValue\('strictMode', value, 'strict mode'\)/);
     expect(dashboardJs).toMatch(/case 'topLevelAwait':\s*return validateSelectOptionValue\('topLevelAwait', value, 'top-level await mode'\)/);
+    expect(dashboardJs).toMatch(/case 'configMode':\s*return validateSelectOptionValue\('configMode', value, 'configuration mode'\)/);
+    expect(dashboardJs).toMatch(/case 'loggingLevel':\s*return validateSelectOptionValue\('loggingLevel', value, 'logging level'\)/);
+    expect(dashboardJs).toMatch(/case 'trashMode':\s*return validateSelectOptionValue\('trashMode', value, 'trash retention mode'\)/);
+    expect(dashboardJs).toMatch(/case 'popupColumns':\s*return validateSelectOptionValue\('popupColumns', value, 'popup column count', \{ number: true \}\)/);
+    expect(dashboardJs).toMatch(/case 'scriptOrder':\s*return validateSelectOptionValue\('scriptOrder', value, 'script ordering mode'\)/);
+    expect(dashboardJs).toMatch(/case 'badgeInfo':\s*return validateSelectOptionValue\('badgeInfo', value, 'badge info mode'\)/);
+    expect(dashboardJs).toMatch(/case 'searchIntegration':\s*return validateSelectOptionValue\('searchIntegration', value, 'userscript search integration'\)/);
+    expect(dashboardJs).toMatch(/case 'editorTheme':\s*return validateSelectOptionValue\('editorTheme', value, 'editor theme'\)/);
+    expect(dashboardJs).toMatch(/case 'keyMapping':\s*return validateSelectOptionValue\('keyMapping', value, 'key mapping'\)/);
+    expect(dashboardJs).toMatch(/case 'indentWith':\s*return validateSelectOptionValue\('indentWith', value, 'indent style'\)/);
+    expect(dashboardJs).toMatch(/case 'tabMode':\s*return validateSelectOptionValue\('tabMode', value, 'tab key mode'\)/);
+    expect(dashboardJs).toMatch(/case 'highlightMatches':\s*return validateSelectOptionValue\('highlightMatches', value, 'selection highlight mode'\)/);
+    expect(dashboardJs).toMatch(/case 'blacklistSource':\s*return validateSelectOptionValue\('blacklistSource', value, 'blacklist source mode'\)/);
+    expect(dashboardJs).toMatch(/case 'downloadMode':\s*return validateSelectOptionValue\('downloadMode', value, 'download mode'\)/);
     expect(dashboardJs).toMatch(/settingsBlockSeverity: \['blockSeverity', 'value'\]/);
+    expect(dashboardJs).toMatch(/settingsPopupColumns: \['popupColumns', 'value'\]/);
     expect(dashboardJs).toContain("Use an http or https URL.");
     expect(dashboardJs).toContain("WebDAV URL is required.");
     expect(dashboardJs).toContain("label: 'Sync encryption passphrase'");
