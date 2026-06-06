@@ -747,7 +747,11 @@ Important integrations, permissions, storage, and data flows:
   - Touches: storage, wrapper, browser smoke/e2e.
   - Acceptance: listener in tab B fires when tab A writes and receives
     `remote=true`; origin tab receives `remote=false`.
-  - Verify: Playwright/extension two-tab smoke.
+  - Progress: Cycle 33 added wrapper-boundary and storage fan-out regressions
+    plus a Playwright two-tab spec. Live smoke remains gated when the Chromium
+    profile reports `allow-user-scripts-disabled`.
+  - Verify: focused GM value remote tests; Playwright/extension two-tab smoke
+    in a profile with `chrome.userScripts` enabled.
 
 - [ ] P2 - Complete AMO unlisted to listed publication loop
   - Why: Firefox package evidence is ready but publication is not live.

@@ -52,6 +52,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P2 | **Effort:** S | **Source:** [S10, S11]
 - **Problem:** TM and VM document that the `remote` argument to value-change listeners is `true` when the change originated in another tab. ScriptVault implements the listener but has no browser-level proof.
 - **Deliverable:** Two-tab Playwright E2E test that writes in tab A and observes `remote: true` in tab B.
+- **Progress:** Cycle 33 added deterministic coverage for the background fan-out contract (`remote: !isOriginTab`) and wrapper callback boundary (`msg.remote !== false`) plus a Playwright two-tab spec. The live spec self-skips in unattended Chromium profiles where `getExtensionStatus` reports `setupState: allow-user-scripts-disabled` / `chrome.userScripts is unavailable`.
 
 ### N-4. Firefox Phase 5: AMO Submission
 - **Priority:** P2 | **Effort:** M (external dependency) | **Source:** [S13, S14, S15]
