@@ -39,7 +39,8 @@
         subscriptions: [],
         backups: [],
         backupSettings: null,
-        runtimeDescriptor: null
+        runtimeDescriptor: null,
+        lastSyncPreviewExport: null
     };
 
     // DOM Elements
@@ -1660,6 +1661,7 @@
         elements.btnSyncNow = document.getElementById('btnSyncNow');
         elements.btnSyncCheckHealth = document.getElementById('btnSyncCheckHealth');
         elements.btnSyncPreview = document.getElementById('btnSyncPreview');
+        elements.btnSyncPreviewDownload = document.getElementById('btnSyncPreviewDownload');
         elements.btnSyncRevoke = document.getElementById('btnSyncRevoke');
         elements.btnSyncReset = document.getElementById('btnSyncReset');
         elements.syncLog = document.getElementById('syncLog');
@@ -3863,6 +3865,9 @@
         if (elements.btnSyncNow) elements.btnSyncNow.disabled = !configured || health?.canManualSync === false;
         if (elements.btnSyncCheckHealth) elements.btnSyncCheckHealth.disabled = !configured;
         if (elements.btnSyncPreview) elements.btnSyncPreview.disabled = !configured || health?.canDryRun === false;
+        if (elements.btnSyncPreviewDownload) {
+            elements.btnSyncPreviewDownload.disabled = !configured || !state.lastSyncPreviewExport;
+        }
         if (elements.btnSyncRevoke) {
             elements.btnSyncRevoke.disabled = !configured || health?.canRevoke === false;
             elements.btnSyncRevoke.style.display = configured ? '' : 'none';
@@ -3895,13 +3900,95 @@
         return `${Math.max(0, number)} ${label}`;
     }
 
+    function sanitizeSyncPreviewSummary(summary) {
+        const safe = {};
+        const keys = [
+            'localScripts',
+            'remoteScripts',
+            'localOnly',
+            'remoteOnly',
+            'localNewer',
+            'remoteNewer',
+            'unchanged',
+            'tombstoned',
+            'conflicts',
+            'localValueOptIns',
+            'localValueBundles',
+            'remoteValueBundles',
+            'valueBundleWarnings',
+            'remoteValueBundlesApplicable',
+            'remoteValueBundlesApplyReady',
+            'remoteValueBundlesConflictBlocked',
+            'remoteValueBundlesIgnored',
+            'remoteValueBundleWarnings',
+        ];
+        for (const key of keys) {
+            safe[key] = Math.max(0, Number(summary?.[key]) || 0);
+        }
+        safe.valueBundleApplyEnabled = summary?.valueBundleApplyEnabled === true;
+        safe.valueBundleApplyMode = summary?.valueBundleApplyMode === 'empty-local-only' ? 'empty-local-only' : null;
+        safe.wouldUpload = summary?.wouldUpload === true;
+        safe.wouldDownload = summary?.wouldDownload === true;
+        safe.wouldUploadValues = summary?.wouldUploadValues === true;
+        safe.wouldApplyValues = summary?.wouldApplyValues === true;
+        return safe;
+    }
+
+    function sanitizeValueBundleConflictPreview(conflicts) {
+        if (!Array.isArray(conflicts)) return [];
+        return conflicts.slice(0, 20).map(conflict => ({
+            reason: conflict?.reason === 'local-values-present' || conflict?.reason === 'local-bundle-unavailable'
+                ? conflict.reason
+                : 'blocked',
+            localKeyCount: conflict?.localKeyCount == null ? null : Math.max(0, Number(conflict.localKeyCount) || 0),
+            remoteKeyCount: Math.max(0, Number(conflict?.remoteKeyCount) || 0),
+            localBytes: conflict?.localBytes == null ? null : Math.max(0, Number(conflict.localBytes) || 0),
+            remoteBytes: Math.max(0, Number(conflict?.remoteBytes) || 0)
+        }));
+    }
+
+    function buildSyncPreviewExport(preview) {
+        return {
+            schema: 'scriptvault-sync-preview/v1',
+            exportedAt: new Date().toISOString(),
+            provider: String(preview?.provider || ''),
+            providerLabel: String(preview?.providerLabel || preview?.provider || ''),
+            dryRun: preview?.dryRun === true,
+            noWrites: preview?.noWrites === true,
+            remoteFound: preview?.remoteFound === true,
+            summary: sanitizeSyncPreviewSummary(preview?.summary || {}),
+            valueBundleConflicts: sanitizeValueBundleConflictPreview(preview?.valueBundleConflicts)
+        };
+    }
+
+    function downloadSyncPreviewExport(exportData) {
+        if (!exportData || exportData.schema !== 'scriptvault-sync-preview/v1') {
+            showToast('Run a successful sync preview first', 'info');
+            return false;
+        }
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `scriptvault-sync-preview-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        return true;
+    }
+
     function renderSyncPreview(preview) {
         if (!elements.syncPreviewSummary) return;
         if (!preview?.success) {
             elements.syncPreviewSummary.style.display = '';
             elements.syncPreviewSummary.textContent = preview?.error || 'Sync preview failed';
+            state.lastSyncPreviewExport = null;
+            if (elements.btnSyncPreviewDownload) elements.btnSyncPreviewDownload.disabled = true;
             return;
         }
+        state.lastSyncPreviewExport = buildSyncPreviewExport(preview);
+        if (elements.btnSyncPreviewDownload) elements.btnSyncPreviewDownload.disabled = false;
         const summary = preview.summary || {};
         const lines = [
             `Dry-run for ${preview.providerLabel || preview.provider || 'provider'} (no writes performed)`,
@@ -12873,6 +12960,11 @@
                 }
                 showToast(preview?.success ? 'Sync preview complete' : (preview?.error || 'Sync preview failed'), preview?.success ? 'success' : 'error');
             }, { busyLabel: 'Previewing…', errorMessage: 'Sync preview failed' });
+        });
+
+        elements.btnSyncPreviewDownload?.addEventListener('click', event => {
+            const ok = downloadSyncPreviewExport(state.lastSyncPreviewExport);
+            if (ok) showToast('Sync preview downloaded', 'success');
         });
 
         elements.btnSyncRevoke?.addEventListener('click', async event => {
