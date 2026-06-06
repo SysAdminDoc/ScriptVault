@@ -117,6 +117,9 @@ export interface ScriptSettings {
     importedAt: number;
     archiveEnabled: boolean;
   };
+  managed?: boolean;
+  managedOriginKey?: string;
+  managedAppliedAt?: number;
   // User-facing preferences such as runAt, URL overrides, notes, tags, and
   // pinned state are synced only when explicitly allowlisted by the sync helper.
   [key: string]: unknown;

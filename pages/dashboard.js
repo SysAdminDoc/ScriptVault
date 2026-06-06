@@ -6785,6 +6785,9 @@
         const importQuarantineHtml = isImportQuarantined(script)
           ? `<span class="script-health-badge alert" title="${escapeHtml(`Imported from ${importQuarantine?.sourceLabel || 'an archive'} and kept disabled until you enable it after review.`)}">Import review</span>`
           : '';
+        const managedHtml = script.settings?.managed
+          ? '<span class="script-health-badge neutral" data-managed-badge="true" title="Installed or updated from enterprise managed policy.">Managed</span>'
+          : '';
         const staleHtml = isStale
           ? '<span class="script-health-badge warning" title="This remote script has not been refreshed in over 180 days.">Stale</span>'
           : '';
@@ -6842,6 +6845,7 @@
                             ${antifeatureBadgeHtml}
                             ${esmBadgeHtml}
                             ${localEditsHtml}
+                            ${managedHtml}
                             ${importQuarantineHtml}
                             ${errorHtml}
                             ${slowHtml}

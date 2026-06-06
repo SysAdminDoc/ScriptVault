@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "managedScripts": {
+      "title": "Managed userscripts",
+      "description": "Userscripts provisioned by enterprise policy. Each item may provide a remote userscript URL or inline userscript source.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "title": "Userscript URL",
+            "description": "HTTPS or HTTP userscript URL fetched through ScriptVault's normal install guards.",
+            "type": "string"
+          },
+          "code": {
+            "title": "Inline userscript source",
+            "description": "Complete userscript source including a ==UserScript== metadata block.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "managedScriptsCleanup": {
+      "title": "Prune removed managed scripts",
+      "description": "When true, ScriptVault removes locally stored managed scripts that are no longer present in managedScripts.",
+      "type": "boolean"
+    }
+  }
+}
