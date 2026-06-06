@@ -52,6 +52,9 @@ jobs:
       - name: Toolchain contract check
         run: npm run toolchain:check
 
+      - name: Optional dependency reach check
+        run: npm run optional-deps:check
+
       - name: CWS publish tooling check
         run: npm run cws:check
 

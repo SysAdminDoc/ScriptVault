@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 24 - 2026-06-05
+Last cycle: Cycle 25 - 2026-06-06
 
 ## Latest Result
 
@@ -15,20 +15,20 @@ Last cycle: Cycle 24 - 2026-06-05
   CWS/toolchain gates, and docs.
 - Cycle 24 pinned all GitHub Actions workflow refs to full SHAs with same-line
   version comments and added `npm run actions:pins:check`.
-- Verification used `C:\tmp\ScriptVault-verify`: `npm ci`, `npm run typecheck`,
-  `npm run test:cov`, `npm run check`, `npm run build`, focused Dependabot
-  config tests, focused toolchain tests, `npm run cws:check`, and
-  `npm run actions:pins:check`, and `npm audit --audit-level=high
-  --omit=optional` passed.
+- Cycle 25 added the optional dependency reach gate so the
+  `npm audit --omit=optional` policy is backed by a shipped-source import scan.
+- Verification used the live checkout: `npm run optional-deps:check`, focused
+  optional-dependency reach tests, `npm audit --audit-level=high
+  --omit=optional`, `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
 
 Continue top-down from `ROADMAP.md`. The next local implementer-actionable row is
-P2 optional dependency reach gate unless newer repo state promotes a higher
-priority security or correctness item.
+P2 settings discoverability/schema validation unless newer repo state promotes a
+higher priority security or correctness item.
 
 ## Loop Pointer
 
-- Status: ScriptVault cycle complete for 2026-06-05.
+- Status: ScriptVault cycle complete for 2026-06-06.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

@@ -689,12 +689,14 @@ Important integrations, permissions, storage, and data flows:
     and do not persist.
   - Verify: schema parity tests, malformed-input tests, `npm run test:a11y`.
 
-- [ ] P2 - Add optional dependency reach gate
+- [x] P2 - Add optional dependency reach gate
   - Why: `--omit=optional` audit policy is not enforced against shipped code.
   - Evidence: 60 optional package records and 43 peer-optional edges in lockfile.
   - Touches: new scanner, CI, dependency policy docs.
   - Acceptance: static imports/requires of optional packages in shipped inputs
     fail unless explicitly classified.
+  - Status: Shipped 2026-06-06 with `npm run optional-deps:check`, CI/check
+    wiring, dependency-policy documentation, and focused pass/fail fixtures.
   - Verify: scanner pass today; fixture optional import fails.
 
 - [ ] P2 - Complete GM namespace parity and GM.fetch decision
