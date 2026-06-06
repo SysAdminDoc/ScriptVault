@@ -26,6 +26,10 @@ Background executions must be queued and serialized per script. A later cycle
 should add explicit time, memory, and concurrent-job budgets before enabling
 the gate.
 
+`src/background/background-runner.ts` owns the current pure planning contract.
+It does not execute script code. It classifies candidates as gated, missing a
+trigger, blocked by unsupported grants, or ready for a future runner.
+
 ## API Surface
 
 Initial allowed APIs should be limited to DOM-independent primitives:
@@ -48,6 +52,22 @@ or explicit dashboard run actions. A script with `@background` but no schedule
 should remain disabled for automatic execution until the user chooses an
 explicit trigger model.
 
+The first supported automatic trigger is `@crontab`. The planner reports
+`missing-trigger` for a background script without a non-empty crontab expression.
+
+## Budgets
+
+The reviewed defaults are:
+
+- Timeout: 30 seconds per run.
+- Concurrency: one active run per script.
+- Queue depth: three pending runs per script.
+
+The planner clamps overrides to conservative limits: timeout 1-60 seconds,
+concurrency fixed at one, and queue depth 0-10. The execution runner must apply
+the same limits before the `experimentalBackgroundScripts` gate can do anything
+other than classify candidates.
+
 ## Review And Safety
 
 Enablement must reuse review-only install and import quarantine flows. The
@@ -61,6 +81,8 @@ Acceptance for the implementation pass:
 - Parser preserves `meta.background === true`.
 - Default settings keep `experimentalBackgroundScripts === false`.
 - Page registration skips `@background` scripts while the runner is dormant.
+- `planBackgroundScript()` blocks the runner when the gate is off, grants are
+  unsupported, no trigger exists, or budgets exceed reviewed limits.
 - A later live smoke proves a scheduled background script can call
   `GM_notification` with no matching tab open.
 - Tests prove blocked DOM APIs, host-scope enforcement, timeouts, and disabled

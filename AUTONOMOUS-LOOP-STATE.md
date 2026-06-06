@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 37 - 2026-06-06
+Last cycle: Cycle 38 - 2026-06-06
 
 ## Latest Result
 
@@ -53,9 +53,12 @@ Last cycle: Cycle 37 - 2026-06-06
   internal default-off `experimentalBackgroundScripts` setting, a dormant
   page-registration guard, and `docs/background-scripts-design.md` for the
   DOM-less runner contract.
-- Verification used the live checkout: focused background contract/storage
-  tests, `npm run settings:schema:check`, `npm run ts-runtime:check`,
-  `npm run check`, and `npm run build`.
+- Cycle 38 added the pure background runner planner, including gate
+  classification, supported trigger detection, restricted GM grant checks, and
+  reviewed timeout/concurrency/queue budget clamps. It still executes no script
+  code.
+- Verification used the live checkout: focused background runner tests,
+  TypeScript, `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
 
@@ -63,14 +66,13 @@ Continue top-down from `ROADMAP.md`. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, and the AMO
 submission row is blocked on maintainer credentials. The next local
-implementer-actionable work remains X-2. The next local slice is the DOM-less
-runner scaffold: restricted wrapper/API inventory, offscreen/service-worker
-execution boundary, and budget enforcement tests, unless Edge Partner Center
-credentials/listing IDs are available to continue the external publication half
-of X-1.
+implementer-actionable work remains X-2. The next local slice is wiring the
+planner into registration/runtime diagnostics without enabling execution, then
+building the restricted DOM-less wrapper. Edge Partner Center upload and REST
+automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 37 complete for 2026-06-06.
+- Status: ScriptVault Cycle 38 complete for 2026-06-06.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

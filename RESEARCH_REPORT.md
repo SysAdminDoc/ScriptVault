@@ -11,6 +11,13 @@ userscripts before the DOM-less offscreen/service-worker runner exists. The
 remaining X-2 work is runner scaffolding, restricted API enforcement,
 scheduling/budget controls, review-only enablement, and a no-open-tab smoke.
 
+2026-06-06 Cycle 38 background-runner scaffold: `src/background/background-runner.ts`
+now provides the pure planning layer for the future DOM-less runner. It keeps
+execution behind `experimentalBackgroundScripts`, requires a supported trigger,
+normalizes the restricted GM grant surface, blocks DOM/page/tab grants, and
+clamps timeout/concurrency/queue budgets. No offscreen or service-worker script
+execution is enabled by this scaffold.
+
 2026-06-04 Cycle 8 comprehensive feature-plan refresh: root-level
 `RESEARCH_FEATURE_PLAN.md` now holds the current implementation-oriented
 research plan for ScriptVault v3.11.0. It preserves `ROADMAP.md` as the open
