@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 71 - 2026-06-06
+Last cycle: Cycle 72 - 2026-06-06
 
 ## Latest Result
 
@@ -213,6 +213,10 @@ Last cycle: Cycle 71 - 2026-06-06
   `GM_xmlhttpRequest` bridge, preserving host-scope, `@connect`, abort,
   redirect, no-cache, and internal-host policy without adding a new background
   fetch action.
+- Cycle 72 shipped X-3 SPA navigation support proof. `window.onurlchange` now
+  uses one shared scheduler across Navigation API, history, popstate, and
+  hashchange, with microtask/frame rechecks, duplicate suppression, focused
+  jsdom wrapper coverage, and README author examples.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -297,22 +301,25 @@ Last cycle: Cycle 71 - 2026-06-06
   `GM.fetch` with focused GM parity/type/wrapper tests, GM type generation and
   check, TS runtime generation/check, settings schema gate, high-severity
   audit, full check suite, build, CWS remote-code scan, and `git diff --check`.
+  Cycle 72 reused the Navigation API and history-fallback source set, then
+  verified SPA URL-change support with focused URL-change wrapper tests, TS
+  runtime generation/check, settings schema gate, high-severity audit, full
+  check suite, build, CWS remote-code scan, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 39. The next best local cycle is Cycle 72:
-move to X-3 SPA navigation support proof by adding deterministic wrapper
-coverage for Navigation API `navigate` events, history/popstate/hashchange
-fallbacks, same-turn duplicate suppression, preserved `{ url, oldUrl }`
-details, and author-facing documentation examples. The live two-tab
-`GM_addValueChangeListener` smoke remains browser-profile gated until
-`chrome.userScripts` is enabled for the unpacked extension, AMO submission
-remains blocked on maintainer credentials, and Edge Partner Center upload/REST
-automation remain credential/listing gated.
+Continue from `ROADMAP.md` Round 40. The next best local cycle is Cycle 73:
+pick the next implementable non-credential item. X-4 Monaco ESM build
+implementation is the next roadmap row, but if the first implementation slice
+is too broad for one cycle, run a local audit/UX hardening pass and hoist the
+findings. The live two-tab `GM_addValueChangeListener` smoke remains
+browser-profile gated until `chrome.userScripts` is enabled for the unpacked
+extension, AMO submission remains blocked on maintainer credentials, and Edge
+Partner Center upload/REST automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 71 complete for 2026-06-06; roadmap continuation
-  points to Cycle 72 X-3 SPA navigation support proof.
+- Status: ScriptVault Cycle 72 complete for 2026-06-06; roadmap continuation
+  points to Cycle 73 X-4 Monaco ESM or the next local audit/UX hardening pass.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

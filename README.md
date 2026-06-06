@@ -58,6 +58,27 @@ Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state, `window.close`
 
 TypeScript userscripts can reference `lib/scriptvault.d.ts` for generated ambient declarations that match ScriptVault's GM API surface.
 
+#### SPA URL Changes
+
+Scripts that need to re-run on soft navigation can grant `window.onurlchange`.
+ScriptVault dispatches it for Navigation API route changes, history updates,
+`popstate`, and `hashchange` without requiring an extra extension permission.
+Keep handlers idempotent and re-check the DOM when the target app renders
+asynchronously:
+
+```javascript
+// ==UserScript==
+// @grant window.onurlchange
+// ==/UserScript==
+function apply() {
+  // Rebind or refresh page-specific UI here.
+}
+window.addEventListener('urlchange', ({ url, oldUrl }) => {
+  apply();
+});
+apply();
+```
+
 ### Script Management
 
 - **Auto-detect installation** &mdash; Navigate to any `.user.js` URL

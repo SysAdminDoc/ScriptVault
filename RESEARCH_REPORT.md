@@ -2,6 +2,19 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 72 SPA URL-change proof: X-3 is shipped for source/jsdom
+coverage. Current Navigation API guidance still supports page-level
+`navigate` events as the least-permission route-change signal, while history,
+popstate, and hashchange remain necessary fallbacks for non-Navigation-API
+or library-specific paths. ScriptVault now routes all four signals through
+`__scheduleUrlChangeCheck(reason)`, runs a microtask check plus a frame-level
+recheck, and suppresses repeated dispatches for the same `(oldUrl, newUrl)`
+pair. `tests/urlchange-wrapper.test.js` executes the real wrapper in isolated
+jsdom frames and proves fake Navigation API notifications, duplicate listener
+suppression, remove-listener behavior, popstate/hashchange fallback, and
+preserved `{ url, oldUrl }` details. README now documents the
+`window.onurlchange` grant and an idempotent rebinding pattern for SPA scripts.
+
 2026-06-06 Cycle 71 guarded GM.fetch closure: N-2 is complete. The
 Tampermonkey and Violentmonkey GM API source signal still supports
 promise-style GM namespace parity, but ScriptVault's network safety boundary
