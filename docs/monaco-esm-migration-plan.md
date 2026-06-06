@@ -128,23 +128,26 @@ The X-4 implementation pass should add or update these gates:
    handle the namespace/API drift in adapter or editor configuration tests.
 
 Cycle 74 completed steps 1 and 2 for the installed Monaco 0.52.2 package.
-`docs/audit/monaco-esm-prototype-2026-06-06.json` records:
+`docs/audit/monaco-esm-prototype-2026-06-06.json` records the selected
+full-worker Chromium strategy:
 
-| Output | Bytes |
-| --- | ---: |
-| `lib/monaco-esm/editor.js` | 8,231,464 |
-| `lib/monaco-esm/editor.css` | 158,378 |
-| `lib/monaco-esm/assets/codicon-37A3DWZT.ttf` | 80,340 |
-| `lib/monaco-esm/workers/editor.worker.js` | 555,624 |
-| `lib/monaco-esm/workers/json.worker.js` | 856,164 |
-| `lib/monaco-esm/workers/css.worker.js` | 1,883,186 |
-| `lib/monaco-esm/workers/html.worker.js` | 1,264,765 |
-| `lib/monaco-esm/workers/ts.worker.js` | 12,156,466 |
+| Output | Bytes | Gzip bytes |
+| --- | ---: | ---: |
+| `lib/monaco-esm/editor.js` | 8,231,464 | 1,433,472 |
+| `lib/monaco-esm/editor.css` | 158,378 | 23,224 |
+| `lib/monaco-esm/assets/codicon-37A3DWZT.ttf` | 80,340 | 44,393 |
+| `lib/monaco-esm/workers/editor.worker.js` | 555,624 | 116,865 |
+| `lib/monaco-esm/workers/json.worker.js` | 856,164 | 170,016 |
+| `lib/monaco-esm/workers/css.worker.js` | 1,883,186 | 303,112 |
+| `lib/monaco-esm/workers/html.worker.js` | 1,264,765 | 242,013 |
+| `lib/monaco-esm/workers/ts.worker.js` | 12,156,466 | 1,946,168 |
+| **Total** | **25,186,387** | **4,279,263** |
 
-The sandbox still loads the AMD bundle. The next slice should decide whether
-the 12 MB TypeScript worker is acceptable for Chromium-only packaging or
-whether ScriptVault should produce a slimmer JavaScript/userscript-focused ESM
-bundle before switching `pages/editor-sandbox.html`.
+The active budget is `maxTotalBytes: 26000000`, `maxTotalGzipBytes: 5000000`,
+`editor.js <= 9000000`, and `ts.worker.js <= 13000000`. The sandbox still
+loads the AMD bundle. The next slice can replace `pages/editor-sandbox.html`
+only with a Chromium smoke plan and AMD-removal/static-asset tests in the same
+change.
 
 ## Non-Goals
 

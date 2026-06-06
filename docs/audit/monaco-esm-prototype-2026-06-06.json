@@ -1,38 +1,58 @@
 {
-  "generatedAt": "2026-06-06T19:55:50.865Z",
+  "generatedAt": "2026-06-06T20:00:34.508Z",
   "root": "lib/monaco-esm",
+  "sizeBudgets": {
+    "maxTotalBytes": 26000000,
+    "maxTotalGzipBytes": 5000000,
+    "maxFileBytes": {
+      "lib/monaco-esm/editor.js": 9000000,
+      "lib/monaco-esm/workers/ts.worker.js": 13000000
+    }
+  },
+  "totals": {
+    "totalBytes": 25186387,
+    "totalGzipBytes": 4279263
+  },
   "outputs": [
     {
       "path": "lib/monaco-esm/assets/codicon-37A3DWZT.ttf",
-      "bytes": 80340
+      "bytes": 80340,
+      "gzipBytes": 44393
     },
     {
       "path": "lib/monaco-esm/editor.css",
-      "bytes": 158378
+      "bytes": 158378,
+      "gzipBytes": 23224
     },
     {
       "path": "lib/monaco-esm/editor.js",
-      "bytes": 8231464
+      "bytes": 8231464,
+      "gzipBytes": 1433472
     },
     {
       "path": "lib/monaco-esm/workers/css.worker.js",
-      "bytes": 1883186
+      "bytes": 1883186,
+      "gzipBytes": 303112
     },
     {
       "path": "lib/monaco-esm/workers/editor.worker.js",
-      "bytes": 555624
+      "bytes": 555624,
+      "gzipBytes": 116865
     },
     {
       "path": "lib/monaco-esm/workers/html.worker.js",
-      "bytes": 1264765
+      "bytes": 1264765,
+      "gzipBytes": 242013
     },
     {
       "path": "lib/monaco-esm/workers/json.worker.js",
-      "bytes": 856164
+      "bytes": 856164,
+      "gzipBytes": 170016
     },
     {
       "path": "lib/monaco-esm/workers/ts.worker.js",
-      "bytes": 12156466
+      "bytes": 12156466,
+      "gzipBytes": 1946168
     }
   ],
   "failures": []

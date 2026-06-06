@@ -168,6 +168,8 @@ function checkPlan(files, failures) {
     'npm run build:monaco:esm',
     'npm run monaco:esm:check',
     'docs/audit/monaco-esm-prototype-2026-06-06.json',
+    'maxTotalBytes: 26000000',
+    'maxTotalGzipBytes: 5000000',
     'lib/monaco-esm/editor.js',
     'lib/monaco-esm/workers/ts.worker.js',
   ]) {

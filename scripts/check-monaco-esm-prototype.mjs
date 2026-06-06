@@ -2,6 +2,7 @@
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const defaultProjectRoot = resolve(scriptDir, '..');
@@ -16,6 +17,15 @@ const REQUIRED_OUTPUTS = [
   'lib/monaco-esm/workers/ts.worker.js',
 ];
 
+export const DEFAULT_SIZE_BUDGETS = Object.freeze({
+  maxTotalBytes: 26_000_000,
+  maxTotalGzipBytes: 5_000_000,
+  maxFileBytes: Object.freeze({
+    'lib/monaco-esm/editor.js': 9_000_000,
+    'lib/monaco-esm/workers/ts.worker.js': 13_000_000,
+  }),
+});
+
 function normalizePath(path) {
   return path.replace(/\\/g, '/');
 }
@@ -24,21 +34,26 @@ function addFailure(failures, path, message) {
   failures.push({ path: normalizePath(path), message });
 }
 
-function fileSize(projectRoot, path, failures) {
+function outputInfo(projectRoot, path, failures) {
   const absolute = join(projectRoot, path);
   if (!existsSync(absolute)) {
     addFailure(failures, path, 'required Monaco ESM prototype output is missing');
-    return 0;
+    return { path: normalizePath(path), bytes: 0, gzipBytes: 0 };
   }
   const stat = statSync(absolute);
   if (!stat.isFile()) {
     addFailure(failures, path, 'required Monaco ESM prototype output is not a file');
-    return 0;
+    return { path: normalizePath(path), bytes: 0, gzipBytes: 0 };
   }
   if (stat.size <= 0) {
     addFailure(failures, path, 'required Monaco ESM prototype output is empty');
   }
-  return stat.size;
+  const bytes = readFileSync(absolute);
+  return {
+    path: normalizePath(path),
+    bytes: bytes.length,
+    gzipBytes: gzipSync(bytes, { level: 9 }).length,
+  };
 }
 
 function listAssets(projectRoot, failures) {
@@ -75,26 +90,59 @@ function scanOutputText(projectRoot, path, failures) {
   }
 }
 
+function checkSizeBudgets(outputs, budgets, failures) {
+  const totalBytes = outputs.reduce((sum, output) => sum + output.bytes, 0);
+  const totalGzipBytes = outputs.reduce((sum, output) => sum + output.gzipBytes, 0);
+
+  if (totalBytes > budgets.maxTotalBytes) {
+    addFailure(
+      failures,
+      'lib/monaco-esm',
+      `Monaco ESM prototype exceeds total uncompressed budget (${totalBytes} > ${budgets.maxTotalBytes})`,
+    );
+  }
+  if (totalGzipBytes > budgets.maxTotalGzipBytes) {
+    addFailure(
+      failures,
+      'lib/monaco-esm',
+      `Monaco ESM prototype exceeds total gzip budget (${totalGzipBytes} > ${budgets.maxTotalGzipBytes})`,
+    );
+  }
+
+  for (const [path, maxBytes] of Object.entries(budgets.maxFileBytes || {})) {
+    const output = outputs.find((item) => item.path === normalizePath(path));
+    if (output && output.bytes > maxBytes) {
+      addFailure(failures, path, `Monaco ESM output exceeds file budget (${output.bytes} > ${maxBytes})`);
+    }
+  }
+
+  return { totalBytes, totalGzipBytes };
+}
+
 export function runMonacoEsmPrototypeCheck(options = {}) {
   const projectRoot = resolve(options.projectRoot || defaultProjectRoot);
+  const sizeBudgets = options.sizeBudgets || DEFAULT_SIZE_BUDGETS;
   const failures = [];
   const outputs = [];
 
   for (const path of REQUIRED_OUTPUTS) {
-    const size = fileSize(projectRoot, path, failures);
-    outputs.push({ path: normalizePath(path), bytes: size });
+    outputs.push(outputInfo(projectRoot, path, failures));
     scanOutputText(projectRoot, path, failures);
   }
 
   for (const path of listAssets(projectRoot, failures)) {
-    const size = fileSize(projectRoot, path, failures);
-    outputs.push({ path: normalizePath(path), bytes: size });
+    outputs.push(outputInfo(projectRoot, path, failures));
   }
+
+  const sortedOutputs = outputs.sort((a, b) => a.path.localeCompare(b.path));
+  const totals = checkSizeBudgets(sortedOutputs, sizeBudgets, failures);
 
   return {
     generatedAt: new Date().toISOString(),
     root: normalizePath(relative(projectRoot, join(projectRoot, 'lib/monaco-esm')) || 'lib/monaco-esm'),
-    outputs: outputs.sort((a, b) => a.path.localeCompare(b.path)),
+    sizeBudgets,
+    totals,
+    outputs: sortedOutputs,
     failures,
   };
 }
