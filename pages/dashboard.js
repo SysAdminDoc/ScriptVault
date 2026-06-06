@@ -3258,10 +3258,15 @@
         const keyToElement = {
             badgeColor: elements.settingsBadgeColor,
             lintMaxSize: elements.settingsLintMaxSize,
+            syncEncryptionPassphrase: elements.settingsSyncEncryptionPassphrase,
             webdavUrl: elements.settingsWebdavUrl,
+            webdavUsername: elements.settingsWebdavUsername,
+            webdavPassword: elements.settingsWebdavPassword,
             s3Endpoint: elements.settingsS3Endpoint,
             s3Region: elements.settingsS3Region,
             s3Bucket: elements.settingsS3Bucket,
+            s3AccessKeyId: elements.settingsS3AccessKeyId,
+            s3SecretKey: elements.settingsS3SecretKey,
             s3ObjectKey: elements.settingsS3ObjectKey,
             deniedHosts: elements.settingsDeniedHosts,
             linterConfig: elements.settingsLinterConfig,
@@ -3299,6 +3304,16 @@
         return coerceSyncProviderForRuntime(selected) === 's3';
     }
 
+    function isWebdavProviderSelected() {
+        const selected = elements.settingsSyncType?.value || normalizeSyncProvider(state.settings);
+        return coerceSyncProviderForRuntime(selected) === 'webdav';
+    }
+
+    function isSyncEncryptionSelected() {
+        if (elements.settingsSyncEncryptionEnabled) return !!elements.settingsSyncEncryptionEnabled.checked;
+        return state.settings?.syncEncryptionEnabled === true;
+    }
+
     function isHttpUrl(value) {
         try {
             const parsed = new URL(value);
@@ -3306,6 +3321,78 @@
         } catch {
             return false;
         }
+    }
+
+    function hasUnsafeControlCharacters(value) {
+        return /[\x00-\x08\x0E-\x1F\x7F]/.test(String(value || ''));
+    }
+
+    function validateCredentialText(value, options = {}) {
+        const {
+            label = 'Credential',
+            maxLength = 4096,
+            required = false,
+            trim = false,
+            disallowWhitespace = false
+        } = options;
+        const raw = String(value ?? '');
+        const normalized = trim ? raw.trim() : raw;
+        if (!normalized) {
+            return required
+                ? { ok: false, error: `${label} is required.` }
+                : { ok: true, value: trim ? '' : raw };
+        }
+        if (normalized.length > maxLength) {
+            return { ok: false, error: `${label} must be ${maxLength.toLocaleString()} characters or fewer.` };
+        }
+        if (hasUnsafeControlCharacters(normalized)) {
+            return { ok: false, error: `${label} contains a control character.` };
+        }
+        if (disallowWhitespace && /\s/.test(normalized)) {
+            return { ok: false, error: `${label} must not contain spaces.` };
+        }
+        return { ok: true, value: normalized };
+    }
+
+    function validateSyncEncryptionPassphrase(value) {
+        return validateCredentialText(value, {
+            label: 'Sync encryption passphrase',
+            maxLength: 4096,
+            required: isSyncEncryptionSelected()
+        });
+    }
+
+    function validateWebdavUsername(value) {
+        return validateCredentialText(value, {
+            label: 'WebDAV username',
+            maxLength: 1024,
+            trim: true
+        });
+    }
+
+    function validateWebdavPassword(value) {
+        return validateCredentialText(value, {
+            label: 'WebDAV password',
+            maxLength: 4096
+        });
+    }
+
+    function validateS3AccessKeyId(value) {
+        return validateCredentialText(value, {
+            label: 'S3 access key ID',
+            maxLength: 256,
+            required: isS3ProviderSelected(),
+            trim: true,
+            disallowWhitespace: true
+        });
+    }
+
+    function validateS3SecretKey(value) {
+        return validateCredentialText(value, {
+            label: 'S3 secret access key',
+            maxLength: 1024,
+            required: isS3ProviderSelected()
+        });
     }
 
     function validateS3Region(value) {
@@ -3410,11 +3497,22 @@
             }
             case 'webdavUrl': {
                 const url = String(value || '').trim();
+                if (!url) {
+                    return isWebdavProviderSelected()
+                        ? { ok: false, error: 'WebDAV URL is required.' }
+                        : { ok: true, value: '' };
+                }
                 if (url && !isHttpUrl(url)) {
                     return { ok: false, error: 'Use an http or https URL.' };
                 }
                 return { ok: true, value: url };
             }
+            case 'webdavUsername':
+                return validateWebdavUsername(value);
+            case 'webdavPassword':
+                return validateWebdavPassword(value);
+            case 'syncEncryptionPassphrase':
+                return validateSyncEncryptionPassphrase(value);
             case 's3Endpoint': {
                 const url = String(value || '').trim();
                 if (!url) {
@@ -3435,6 +3533,10 @@
                 return validateS3Region(value);
             case 's3Bucket':
                 return validateS3Bucket(value);
+            case 's3AccessKeyId':
+                return validateS3AccessKeyId(value);
+            case 's3SecretKey':
+                return validateS3SecretKey(value);
             case 's3ObjectKey':
                 return validateS3ObjectKey(value);
             case 'deniedHosts':
@@ -11642,7 +11744,23 @@
         };
 
         Object.entries(settingMap).forEach(([id, [key, prop, fn]]) => {
-            elements[id]?.addEventListener('change', e => saveSetting(key, fn ? fn(e.target[prop]) : e.target[prop]));
+            elements[id]?.addEventListener('change', e => {
+                const nextValue = fn ? fn(e.target[prop]) : e.target[prop];
+                if (key === 'syncEncryptionEnabled') {
+                    if (nextValue) {
+                        const validation = validateSettingsValue('syncEncryptionPassphrase', elements.settingsSyncEncryptionPassphrase?.value || '');
+                        if (!validation.ok) {
+                            e.target.checked = false;
+                            setSettingsFieldError(elements.settingsSyncEncryptionPassphrase, validation.error);
+                            showToast(validation.error, 'error');
+                            return;
+                        }
+                    } else {
+                        setSettingsFieldError(elements.settingsSyncEncryptionPassphrase, '');
+                    }
+                }
+                saveSetting(key, nextValue);
+            });
         });
         
         // Layout/Theme setting (saveSetting handles data-theme)
@@ -11685,6 +11803,8 @@
         elements.settingsS3Endpoint?.addEventListener('blur', e => saveSetting('s3Endpoint', e.target.value.trim()));
         elements.settingsS3Region?.addEventListener('blur', e => saveSetting('s3Region', e.target.value.trim()));
         elements.settingsS3Bucket?.addEventListener('blur', e => saveSetting('s3Bucket', e.target.value.trim()));
+        elements.settingsS3AccessKeyId?.addEventListener('blur', e => saveSetting('s3AccessKeyId', e.target.value.trim()));
+        elements.settingsS3SecretKey?.addEventListener('blur', e => saveSetting('s3SecretKey', e.target.value));
         elements.settingsS3ObjectKey?.addEventListener('blur', e => saveSetting('s3ObjectKey', e.target.value.trim()));
         elements.settingsLintMaxSize?.addEventListener('blur', e => saveSetting('lintMaxSize', e.target.value));
 
