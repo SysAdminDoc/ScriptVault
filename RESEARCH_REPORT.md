@@ -2,6 +2,14 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 84 local workspace health evidence: X-8 now has aggregate
+local-workspace diagnostics in the local health report. Current File System
+Access guidance still supports stored handles plus permission rechecks, so the
+report counts local bindings by permission, refresh state, error state, and
+refresh age without exposing handles, paths, names, URLs, source, binding IDs,
+or script IDs. Support snapshots route through a sanitizer that strips the
+local-workspace block unless the user opts into script inventory.
+
 2026-06-06 Cycle 83 local workspace refresh status: X-8 now has clearer
 dashboard status for the review-only local-file refresh flow. Current File
 System Access guidance still supports storing handles in IndexedDB while

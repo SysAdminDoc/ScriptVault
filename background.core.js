@@ -1667,6 +1667,7 @@ const LOCAL_HEALTH_SLOW_SCRIPT_MS = 200;
 const LOCAL_HEALTH_STORAGE_WARNING_PERCENT = 85;
 const LOCAL_HEALTH_STORAGE_CRITICAL_PERCENT = 95;
 const LOCAL_HEALTH_CALLBACK_WARNING_PERCENT = 80;
+const LOCAL_WORKSPACE_REFRESH_STALE_MS = 30 * 24 * 60 * 60 * 1000;
 const REGISTRATION_SWEEP_SCHEMA = 'scriptvault-registration-sweep/v1';
 const BACKGROUND_RUNNER_ALLOWED_GRANTS = new Set([
   'none',
@@ -1705,6 +1706,11 @@ function _localHealthRoundPercent(value) {
 
 function _localHealthSanitizeError(error) {
   return error?.message || String(error || 'unknown error');
+}
+
+function _localHealthCount(record, key) {
+  const safeKey = key || 'unknown';
+  record[safeKey] = (record[safeKey] || 0) + 1;
 }
 
 let _lastRegistrationSweep = {
@@ -1953,7 +1959,99 @@ function buildLocalHealthCallbackSummary() {
   };
 }
 
-function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, collectionErrors }) {
+function normalizeLocalWorkspacePermissionState(state) {
+  const value = String(state || '').trim();
+  return ['granted', 'prompt', 'denied'].includes(value) ? value : 'unknown';
+}
+
+function normalizeLocalWorkspaceStatusKind(binding) {
+  const kind = String(binding?.lastErrorKind || binding?.lastStatusKind || '').trim();
+  switch (kind) {
+    case 'bound':
+    case 'applied':
+    case 'unchanged':
+    case 'review-cancelled':
+    case 'permission-denied':
+    case 'file-missing':
+    case 'handle-missing':
+    case 'read-failed':
+    case 'apply-failed':
+    case 'load-failed':
+    case 'cancelled':
+      return kind;
+    default:
+      return binding?.lastRefreshAt ? 'checked' : 'not-refreshed';
+  }
+}
+
+function buildLocalWorkspaceHealthSummary(bindings = []) {
+  const now = Date.now();
+  const scriptIds = new Set();
+  const permissionStates = { granted: 0, prompt: 0, denied: 0, unknown: 0 };
+  const refreshStatuses = {};
+  const errorStates = {};
+  let refreshedBindings = 0;
+  let neverRefreshed = 0;
+  let staleRefreshes = 0;
+  let mostRecentRefreshAgeDays = null;
+  let oldestRefreshAgeDays = null;
+
+  for (const binding of bindings) {
+    if (binding?.scriptId) scriptIds.add(binding.scriptId);
+    _localHealthCount(permissionStates, normalizeLocalWorkspacePermissionState(binding?.permissionState));
+    const statusKind = normalizeLocalWorkspaceStatusKind(binding);
+    _localHealthCount(refreshStatuses, statusKind);
+    if (binding?.lastErrorKind) _localHealthCount(errorStates, statusKind);
+
+    if (binding?.lastRefreshAt) {
+      refreshedBindings++;
+      const ageMs = Math.max(0, now - Number(binding.lastRefreshAt || 0));
+      const ageDays = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+      mostRecentRefreshAgeDays = mostRecentRefreshAgeDays == null ? ageDays : Math.min(mostRecentRefreshAgeDays, ageDays);
+      oldestRefreshAgeDays = oldestRefreshAgeDays == null ? ageDays : Math.max(oldestRefreshAgeDays, ageDays);
+      if (ageMs >= LOCAL_WORKSPACE_REFRESH_STALE_MS) staleRefreshes++;
+    } else {
+      neverRefreshed++;
+    }
+  }
+
+  return {
+    available: true,
+    totalBindings: bindings.length,
+    boundScripts: scriptIds.size,
+    permissionStates,
+    refreshStatuses,
+    errorStates,
+    refreshedBindings,
+    neverRefreshed,
+    staleRefreshes,
+    staleRefreshThresholdDays: Math.round(LOCAL_WORKSPACE_REFRESH_STALE_MS / (24 * 60 * 60 * 1000)),
+    mostRecentRefreshAgeDays,
+    oldestRefreshAgeDays
+  };
+}
+
+async function buildLocalWorkspaceHealthSummaryFromStore() {
+  if (typeof LocalWorkspaceBindings === 'undefined' || typeof LocalWorkspaceBindings.list !== 'function') {
+    return {
+      available: false,
+      totalBindings: 0,
+      boundScripts: 0,
+      permissionStates: { granted: 0, prompt: 0, denied: 0, unknown: 0 },
+      refreshStatuses: {},
+      errorStates: {},
+      refreshedBindings: 0,
+      neverRefreshed: 0,
+      staleRefreshes: 0,
+      staleRefreshThresholdDays: Math.round(LOCAL_WORKSPACE_REFRESH_STALE_MS / (24 * 60 * 60 * 1000)),
+      mostRecentRefreshAgeDays: null,
+      oldestRefreshAgeDays: null
+    };
+  }
+  return buildLocalWorkspaceHealthSummary(await LocalWorkspaceBindings.list());
+}
+
+function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, localWorkspace, collectionErrors }) {
   const warnings = [];
   const push = (id, level, message) => warnings.push({ id, level, message });
 
@@ -1990,6 +2088,16 @@ function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callb
   if (updates?.reviewPendingUpdates > 0) {
     push('pendingUpdateReview', 'info', `${updates.reviewPendingUpdates} queued update${updates.reviewPendingUpdates === 1 ? '' : 's'} need review`);
   }
+  if (localWorkspace?.permissionStates?.denied > 0) {
+    push('localWorkspacePermissionDenied', 'warning', `${localWorkspace.permissionStates.denied} local workspace binding${localWorkspace.permissionStates.denied === 1 ? '' : 's'} need file permission`);
+  }
+  const localWorkspaceErrorCount = Object.values(localWorkspace?.errorStates || {}).reduce((sum, count) => sum + (Number(count) || 0), 0);
+  if (localWorkspaceErrorCount > 0) {
+    push('localWorkspaceRefreshErrors', 'warning', `${localWorkspaceErrorCount} local workspace binding${localWorkspaceErrorCount === 1 ? '' : 's'} have refresh errors`);
+  }
+  if (localWorkspace?.staleRefreshes > 0) {
+    push('localWorkspaceStaleRefreshes', 'info', `${localWorkspace.staleRefreshes} local workspace binding${localWorkspace.staleRefreshes === 1 ? '' : 's'} have not been refreshed in ${localWorkspace.staleRefreshThresholdDays}+ days`);
+  }
   for (const [id, block] of Object.entries(callbacks || {})) {
     if (block?.level === 'warning' || block?.level === 'critical') {
       push(id, block.level, `${id} is at ${block.percentOfCap}% of its cap`);
@@ -2004,13 +2112,14 @@ function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callb
 
 async function buildLocalHealthReport() {
   const collectionErrors = [];
-  const [runtimeResult, scriptsResult, settingsResult, pendingResult, recentResult, storageResult] = await Promise.allSettled([
+  const [runtimeResult, scriptsResult, settingsResult, pendingResult, recentResult, storageResult, localWorkspaceResult] = await Promise.allSettled([
     probeUserScriptsAvailability(),
     ScriptStorage.getAll(),
     SettingsManager.get(),
     UpdateSystem.getPendingUpdates(),
     Promise.resolve(UpdateSystem.getRecentUpdates()),
-    buildLocalHealthStorageSummary()
+    buildLocalHealthStorageSummary(),
+    buildLocalWorkspaceHealthSummaryFromStore()
   ]);
 
   const runtime = runtimeResult.status === 'fulfilled'
@@ -2071,8 +2180,15 @@ async function buildLocalHealthReport() {
     collectionErrors.push({ id: 'storageEstimateFailed', message: 'Storage estimate health summary failed' });
   }
 
+  const localWorkspace = localWorkspaceResult.status === 'fulfilled'
+    ? localWorkspaceResult.value
+    : { ...buildLocalWorkspaceHealthSummary([]), available: false };
+  if (localWorkspaceResult.status === 'rejected') {
+    collectionErrors.push({ id: 'localWorkspaceSummaryFailed', message: 'Local workspace health summary failed' });
+  }
+
   const callbacks = buildLocalHealthCallbackSummary();
-  const warnings = buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, collectionErrors });
+  const warnings = buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, localWorkspace, collectionErrors });
 
   return {
     schema: LOCAL_HEALTH_SCHEMA,
@@ -2082,6 +2198,8 @@ async function buildLocalHealthReport() {
       includesScriptSource: false,
       includesScriptNames: false,
       includesUrls: false,
+      includesFileHandles: false,
+      includesLocalPaths: false,
       includesExternalBeacons: false
     },
     runtime: {
@@ -2097,6 +2215,7 @@ async function buildLocalHealthReport() {
     storage,
     registration: _lastRegistrationSweep,
     scripts,
+    localWorkspace,
     updates,
     callbacks,
     warnings
