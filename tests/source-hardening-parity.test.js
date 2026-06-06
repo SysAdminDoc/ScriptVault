@@ -93,8 +93,12 @@ describe('source hardening parity guards', () => {
     expect(core).toContain('evaluateScriptHostScopePolicy(cookieScript, data.url,');
     expect(core).toContain('_validateWebRequestRulesForScript(script, rules, settings)');
     expect(core).toContain('GM_webRequest CSP header changes require Modify CSP = yes');
+    expect(core).toContain('dnr.condition.responseHeaders = responseHeaders;');
+    expect(core).toContain('dnr.condition.excludedResponseHeaders = excludedResponseHeaders;');
     expect(dnr).toContain('function validateWebRequestRulesForScript(');
     expect(dnr).toContain('condition.initiatorDomains = options.initiatorDomains;');
+    expect(dnr).toContain('condition.responseHeaders = responseHeaders;');
+    expect(dnr).toContain('condition.excludedResponseHeaders = excludedResponseHeaders;');
     expect(wrapper).toContain("sendToBackground('GM_cookie_list', { ...(details || {}), scriptId })");
     expect(wrapper).toContain("sendToBackground('GM_webRequest', { scriptId, rules: ruleArray })");
   });

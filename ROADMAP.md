@@ -5,9 +5,9 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 40 - managed policy apply feedback 2026-06-06.
+> **Roadmap version:** Round 40 - DNR response-header matching 2026-06-06.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1489 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1492 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 40 - 2026-06-06.
@@ -216,6 +216,8 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P3 | **Effort:** M | **Source:** [S31]
 - **Problem:** Chrome 128+ added `responseHeaders` conditions to DNR.
 - **Deliverable:** Expose response-header-based DNR rules through `@webRequest` or dashboard UI.
+- **Status:** Shipped 2026-06-06 through `@webRequest`.
+- **Progress:** Cycle 95 added Chrome 128+ DNR `responseHeaders` and `excludedResponseHeaders` selector support for `@webRequest`/`GM_webRequest`, parser validation for HeaderInfo arrays and header mutation maps, type coverage, source/runtime parity checks, and docs. Runtime callbacks remain unsupported by MV3 DNR.
 
 ### L-5. Firefox for Android Validation
 - **Priority:** P3 | **Effort:** M | **Source:** [S32]

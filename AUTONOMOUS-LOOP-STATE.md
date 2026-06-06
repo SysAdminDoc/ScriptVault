@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 94 - 2026-06-06
+Last cycle: Cycle 95 - 2026-06-06
 
 ## Latest Result
 
@@ -450,14 +450,23 @@ Last cycle: Cycle 94 - 2026-06-06
   tests, the full check suite, build, high-severity audit, CWS remote-code scan,
   Monaco ESM scan, TS runtime check, forbidden-reference grep, and `git diff
   --check`.
+  Cycle 95 closed the DNR response-header matching roadmap slice through
+  `@webRequest` / `GM_webRequest`: selectors now accept Chrome 128+
+  `responseHeaders` and `excludedResponseHeaders` HeaderInfo arrays, parser
+  validation admits only reviewed header condition and mutation shapes, the DNR
+  builder emits those response-stage conditions, source/runtime parity is
+  pinned, and docs state that MV3 DNR runtime callbacks remain unsupported.
+  Verification used focused parser/DNR/parity tests, the full check suite,
+  build, high-severity audit, CWS remote-code scan, Monaco ESM scan, TS runtime
+  check, forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. Cycle 94 added aggregate managed-policy
-apply feedback without policy values or script identifiers. The next best local
-cycle is Cycle 95: move to the next non-credential-gated roadmap item, starting
-with an L-4 DNR response-header matching audit/prototype if current Chrome DNR
-capabilities and the existing `@webRequest` path support a safe slice.
+Continue from `ROADMAP.md` Round 40. Cycle 95 closed L-4 through the
+`@webRequest` path. The next best local cycle is Cycle 96: audit the next
+non-credential-gated roadmap item, starting with L-8 per-script
+GM_setValue/getValue sync value data-model planning or a smaller local slice if
+the live code shows a safer prerequisite.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -466,8 +475,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 94 complete for 2026-06-06; roadmap continuation
-  points to Cycle 95 DNR response-header matching audit/prototype or the next
+- Status: ScriptVault Cycle 95 complete for 2026-06-06; roadmap continuation
+  points to Cycle 96 per-script GM storage sync data-model planning or the next
   available non-credential-gated roadmap item.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

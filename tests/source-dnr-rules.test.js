@@ -194,6 +194,37 @@ describe('source DNR GM_webRequest rules', () => {
     });
   });
 
+  it('translates response-header match conditions into DNR rules', async () => {
+    const dnr = createDnrHarness();
+    const module = await loadFreshDnrModule();
+
+    const result = await module.applyWebRequestRules('script-response-headers', [
+      {
+        selector: {
+          url: '||example.com',
+          responseHeaders: [{ header: 'content-type', values: ['text/html*'] }],
+          excludedResponseHeaders: [{ header: 'x-scriptvault-skip' }],
+        },
+        action: { setResponseHeaders: { 'x-scriptvault-matched': '1' } },
+      },
+    ], { script: scriptContext({ id: 'script-response-headers' }) });
+
+    expect(result).toMatchObject({ success: true, count: 1 });
+    expect(dnr.liveRules()).toHaveLength(1);
+    expect(dnr.liveRules()[0]).toMatchObject({
+      condition: {
+        urlFilter: '||example.com',
+        initiatorDomains: ['example.com'],
+        responseHeaders: [{ header: 'content-type', values: ['text/html*'] }],
+        excludedResponseHeaders: [{ header: 'x-scriptvault-skip' }],
+      },
+      action: {
+        type: 'modifyHeaders',
+        responseHeaders: [{ header: 'x-scriptvault-matched', operation: 'set', value: '1' }],
+      },
+    });
+  });
+
   it('rejects CSP header stripping unless Modify CSP is explicitly enabled', async () => {
     const dnr = createDnrHarness();
     const module = await loadFreshDnrModule();

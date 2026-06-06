@@ -19,6 +19,13 @@ interface UrlFilterEntry {
   exclude?: string;
 }
 
+/** Chrome DNR HeaderInfo condition used by response-header matching. */
+interface HeaderConditionEntry {
+  header?: string;
+  values?: string[];
+  excludedValues?: string[];
+}
+
 /** GM_webRequest rule selector. */
 interface WebRequestSelector {
   url?: string | UrlFilterEntry[];
@@ -26,6 +33,8 @@ interface WebRequestSelector {
   exclude?: string | string[];
   tab?: number | number[];
   type?: chrome.declarativeNetRequest.ResourceType | chrome.declarativeNetRequest.ResourceType[];
+  responseHeaders?: HeaderConditionEntry[];
+  excludedResponseHeaders?: HeaderConditionEntry[];
 }
 
 /** Redirect target — either a plain URL string or an object. */
@@ -267,6 +276,25 @@ function excludedRequestDomainsForRule(rule: WebRequestRule): string[] {
   return values.map(extractDnrFilterHost).filter((host) => host && host !== '*');
 }
 
+function normalizeHeaderConditions(value: unknown): chrome.declarativeNetRequest.HeaderInfo[] {
+  if (!Array.isArray(value)) return [];
+  const conditions: chrome.declarativeNetRequest.HeaderInfo[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const header = String((entry as HeaderConditionEntry).header || '').trim();
+    if (!header) continue;
+    const condition: chrome.declarativeNetRequest.HeaderInfo = { header };
+    if (Array.isArray((entry as HeaderConditionEntry).values)) {
+      condition.values = (entry as HeaderConditionEntry).values!.map(String).filter(Boolean);
+    }
+    if (Array.isArray((entry as HeaderConditionEntry).excludedValues)) {
+      condition.excludedValues = (entry as HeaderConditionEntry).excludedValues!.map(String).filter(Boolean);
+    }
+    conditions.push(condition);
+  }
+  return conditions;
+}
+
 function isCspHeaderName(name: string): boolean {
   return [
     'content-security-policy',
@@ -389,6 +417,13 @@ export function _translateWebRequestRule(
 
   if (typeof sel !== 'string' && sel.type !== undefined) {
     condition.resourceTypes = Array.isArray(sel.type) ? sel.type : [sel.type];
+  }
+
+  if (typeof sel !== 'string') {
+    const responseHeaders = normalizeHeaderConditions(sel.responseHeaders);
+    if (responseHeaders.length > 0) condition.responseHeaders = responseHeaders;
+    const excludedResponseHeaders = normalizeHeaderConditions(sel.excludedResponseHeaders);
+    if (excludedResponseHeaders.length > 0) condition.excludedResponseHeaders = excludedResponseHeaders;
   }
 
   if (Array.isArray(options.initiatorDomains) && options.initiatorDomains.length > 0) {
