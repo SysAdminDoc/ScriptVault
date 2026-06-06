@@ -55,6 +55,26 @@ describe('local health report background action', () => {
     expect(block[0]).not.toMatch(/originKey|managedOriginKey|scriptId|scriptName|name:|return\s+policy|entries:\s*items/i);
   });
 
+  it('summarizes GM value sync readiness without values, value keys, script names, or script ids', () => {
+    const block = backgroundCoreTs.match(/async function buildGmValueSyncHealthSummary\(scripts = \[\]\) \{[\s\S]*?\n\}/);
+    expect(block).toBeTruthy();
+    expect(backgroundCoreTs).toContain("const GM_VALUE_SYNC_SCHEMA = 'scriptvault-gm-value-sync/v1';");
+    expect(backgroundCoreTs).toContain('GM_VALUE_SYNC_MAX_SCRIPT_BYTES = 64 * 1024');
+    expect(backgroundCoreTs).toContain('GM_VALUE_SYNC_MAX_KEYS = 128');
+    expect(backgroundCoreTs).toContain('GM_VALUE_SYNC_MAX_KEY_BYTES = 256');
+    expect(backgroundCoreTs).toContain('buildGmValueSyncHealthSummary(scriptList)');
+    expect(backgroundCoreTs).toContain('providerWritesEnabled: false');
+    expect(backgroundCoreTs).toContain('ScriptValues.getAll(script.id)');
+    expect(backgroundCoreTs).toContain('gmValueSync,');
+    expect(backgroundCoreTs).toContain("push('gmValueSyncProviderWritesPending', 'info'");
+    expect(backgroundCoreTs).toContain("push('gmValueSyncBundleWarnings', 'warning'");
+    expect(backgroundCoreTs).toContain("push('gmValueSyncValueReadFailures', 'warning'");
+    expect(backgroundCoreTs).toContain('includesValues: false');
+    expect(backgroundCoreTs).toContain('includesValueKeys: false');
+    expect(backgroundCoreTs).toContain('includesScriptIds: false');
+    expect(block[0]).not.toMatch(/return\s+\{[\s\S]{0,400}(values|key|scriptId|name|url):/i);
+  });
+
   it('summarizes local workspace bindings without file handles, paths, or script identifiers', () => {
     const block = backgroundCoreTs.match(/function buildLocalWorkspaceHealthSummary\(bindings = \[\]\) \{[\s\S]*?\n\}/);
     expect(block).toBeTruthy();
@@ -131,6 +151,10 @@ describe('local health report support snapshot wiring', () => {
     expect(messagesTs).toMatch(/managedPolicy:\s*\{[\s\S]{0,400}configuredInlineEntries: number;/);
     expect(messagesTs).toMatch(/lastRun: null \| \{[\s\S]{0,700}schema: 'scriptvault-managed-policy-run\/v1';/);
     expect(messagesTs).toMatch(/lastRun: null \| \{[\s\S]{0,900}skippedInvalidEntries: number;/);
+    expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,250}schema: 'scriptvault-gm-value-sync\/v1';/);
+    expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,500}providerWritesEnabled: boolean;/);
+    expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,900}warningCounts: Record<string, number>;/);
+    expect(messagesTs).toMatch(/privacy:\s*\{[\s\S]{0,300}includesValueKeys: boolean;/);
     expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,300}totalBindings: number;/);
     expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,700}refreshStatuses: Record<string, number>;/);
     expect(messagesTs).toMatch(/GetExtensionStatus \| GetLocalHealthReport/);

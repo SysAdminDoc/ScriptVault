@@ -4,7 +4,7 @@ ScriptVault can already back up GM storage values through explicit local
 backup/export flows. Cross-device cloud sync needs a stricter contract because
 GM values may contain tokens, preferences, or site data written by scripts.
 
-Cycle 96 adds the first opt-in data model slice:
+Cycle 96 added the first opt-in data model slice:
 
 - Per-script opt-in is represented by `script.settings.syncValues === true`.
 - The opt-in marker is allowed through CloudSync and EasyCloud script-settings
@@ -18,7 +18,21 @@ Cycle 96 adds the first opt-in data model slice:
   not include script source, script metadata, local workspace handles, local
   paths, sync credentials, or provider account data.
 
-The next implementation slice can wire `buildGmValueSyncBundle()` into provider
-envelopes, then apply downloaded bundles only for scripts with the opt-in flag.
-Conflict handling should stay conservative until the value store records per-key
-timestamps or another durable last-write signal.
+Cycle 97 adds the support diagnostics prerequisite before provider writes:
+
+- Local health reports include a `gmValueSync` aggregate readiness block.
+- The block counts opt-in scripts, ready bundles, empty bundles, aggregate
+  warning IDs, value-read failures, total syncable keys, total estimated bytes,
+  and the active caps.
+- The block explicitly reports `providerWritesEnabled: false`.
+- Diagnostics do not include GM values, value key names, script IDs, script
+  names, URLs, local workspace handles, local paths, sync credentials, or
+  provider account data.
+- Support snapshots carry that aggregate block through the existing local-health
+  path without requiring script inventory.
+
+The next implementation slice can wire `buildGmValueSyncBundle()` into
+CloudSync preview/upload with the same per-script opt-in and caps, then apply
+downloaded bundles only for scripts with the opt-in flag. Conflict handling
+should stay conservative until the value store records per-key timestamps or
+another durable last-write signal.
