@@ -40,6 +40,7 @@ declare const ScriptStorage: {
 
 declare const ScriptValues: {
   getAll(scriptId: string): Promise<Record<string, unknown>>;
+  getAllMetadata?(scriptId: string): Promise<{ valueCount: number; lastUpdatedAt: number | null }>;
   setAll?(scriptId: string, values: Record<string, unknown>): Promise<void>;
 };
 
@@ -380,7 +381,9 @@ function sanitizeValueBundlesForUpload(envelope: SyncEnvelope): Record<string, G
     if (!script || !shouldSyncScriptValues(script)) continue;
     if (!isPlainRecord(bundle) || bundle.schema !== GM_VALUE_SYNC_SCHEMA || bundle.scriptId !== scriptId) continue;
     if (!isPlainRecord(bundle.values)) continue;
-    const rebuilt = buildGmValueSyncBundle(script, bundle.values);
+    const rebuilt = buildGmValueSyncBundle(script, bundle.values, {
+      lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle),
+    });
     if (rebuilt.bundle) result[scriptId] = rebuilt.bundle;
   }
 
@@ -395,6 +398,13 @@ function getSyncEnvelopeValueBundles(
   envelope: Pick<SyncEnvelope, 'valueBundles'> | null | undefined,
 ): Record<string, unknown> {
   return isPlainRecord(envelope?.valueBundles) ? envelope.valueBundles : {};
+}
+
+function getValueBundleLastUpdatedAt(bundle: unknown): number | undefined {
+  if (!isPlainRecord(bundle)) return undefined;
+  const timestamp = Number(bundle.lastValueUpdatedAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return undefined;
+  return Math.floor(timestamp);
 }
 
 function createEmptyRemoteValueBundleSelection(): RemoteValueBundleSelection {
@@ -454,7 +464,9 @@ function selectApplicableRemoteValueBundles(
       continue;
     }
 
-    const rebuilt = buildGmValueSyncBundle(script, bundle.values);
+    const rebuilt = buildGmValueSyncBundle(script, bundle.values, {
+      lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle),
+    });
     result.warnings += rebuilt.warnings.length;
     if (rebuilt.bundle) {
       result.valueBundles[scriptId] = rebuilt.bundle;
@@ -615,7 +627,12 @@ async function buildValueBundlesForScripts(scripts: Script[] | SyncScript[]): Pr
     if (!shouldSyncScriptValues(script)) continue;
     optIns++;
     const values = await ScriptValues.getAll(script.id);
-    const result = buildGmValueSyncBundle(script, values);
+    const metadata = typeof ScriptValues.getAllMetadata === 'function'
+      ? await ScriptValues.getAllMetadata(script.id)
+      : null;
+    const result = buildGmValueSyncBundle(script, values, {
+      lastValueUpdatedAt: metadata?.lastUpdatedAt ?? null,
+    });
     warnings += result.warnings.length;
     if (result.bundle) valueBundles[script.id] = result.bundle;
   }

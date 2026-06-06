@@ -365,7 +365,7 @@ const StorageModule = (() => {
     async set(scriptId, key, value) {
       await openScriptDB();
       await withTransaction(Stores.values, "readwrite", async (tx) => {
-        const row = { scriptId, key, value };
+        const row = { scriptId, key, value, updatedAt: Date.now() };
         await reqToPromise(tx.objectStore(Stores.values).put(row));
       });
     },
@@ -386,6 +386,22 @@ const StorageModule = (() => {
         return out;
       });
     },
+    async getAllMetadata(scriptId) {
+      await openScriptDB();
+      return withTransaction(Stores.values, "readonly", async (tx) => {
+        let valueCount = 0;
+        let lastUpdatedAt = null;
+        const idx = tx.objectStore(Stores.values).index("by-script");
+        await forEachCursor(idx, (row) => {
+          valueCount += 1;
+          const updatedAt = Number(row.updatedAt);
+          if (Number.isFinite(updatedAt) && updatedAt > 0) {
+            lastUpdatedAt = Math.max(lastUpdatedAt ?? 0, updatedAt);
+          }
+        }, IDBKeyRange.only(scriptId));
+        return { valueCount, lastUpdatedAt };
+      });
+    },
     async list(scriptId) {
       const all = await this.getAll(scriptId);
       return Object.keys(all);
@@ -394,8 +410,9 @@ const StorageModule = (() => {
       await openScriptDB();
       await withTransaction(Stores.values, "readwrite", async (tx) => {
         const store = tx.objectStore(Stores.values);
+        const updatedAt = Date.now();
         for (const [key, value] of Object.entries(values)) {
-          await reqToPromise(store.put({ scriptId, key, value }));
+          await reqToPromise(store.put({ scriptId, key, value, updatedAt }));
         }
       });
     },
@@ -966,6 +983,10 @@ const StorageModule = (() => {
     async getAll(scriptId) {
       await this.init(scriptId);
       return exportValueBag(this.cache[scriptId]);
+    },
+    async getAllMetadata(scriptId) {
+      await this.init(scriptId);
+      return ValuesDAO.getAllMetadata(scriptId);
     },
     async setAll(scriptId, values, senderTabId = null) {
       await this.init(scriptId);

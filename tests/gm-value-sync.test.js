@@ -73,6 +73,25 @@ describe('GM value sync data model', () => {
     ]);
   });
 
+  it('carries optional aggregate value timestamps without requiring them', () => {
+    const withTimestamp = buildGmValueSyncBundle(
+      script({ syncValues: true }),
+      { token: 'sync-token' },
+      { lastValueUpdatedAt: 1234.8 },
+    );
+    const withoutTimestamp = buildGmValueSyncBundle(
+      script({ syncValues: true }),
+      { token: 'sync-token' },
+    );
+
+    expect(withTimestamp.bundle).toEqual(expect.objectContaining({
+      lastValueUpdatedAt: 1234,
+      keyCount: 1,
+    }));
+    expect(withTimestamp.bundle.bytes).toBeGreaterThan(withoutTimestamp.bundle.bytes);
+    expect(withoutTimestamp.bundle).not.toHaveProperty('lastValueUpdatedAt');
+  });
+
   it('enforces key-count and per-script byte caps', () => {
     const manyValues = Object.fromEntries(
       Array.from({ length: GM_VALUE_SYNC_MAX_KEYS + 5 }, (_, index) => [`k${index}`, index]),

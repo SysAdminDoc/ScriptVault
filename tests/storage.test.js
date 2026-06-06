@@ -356,6 +356,22 @@ describe('ScriptValues', () => {
     expect(await ScriptValues.get('s1', 'draft', false)).toBe(false);
   });
 
+  it('tracks aggregate value metadata for future sync bundles', async () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    try {
+      await ScriptValues.set('s1', 'count', 1);
+      nowSpy.mockReturnValue(2000);
+      await ScriptValues.setAll('s1', { count: 2, name: 'Alpha' });
+
+      expect(await ScriptValues.getAllMetadata('s1')).toEqual({
+        valueCount: 2,
+        lastUpdatedAt: 2000,
+      });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it('isolates object values at set/get/getAll boundaries', async () => {
     const value = { nested: { items: ['saved'] } };
     const returned = await ScriptValues.set('s1', 'prefs', value);

@@ -53,6 +53,7 @@ export interface ScriptValueRow {
   scriptId: string;
   key: string;
   value: unknown;
+  updatedAt?: number;
 }
 
 export interface BackupRecord {
@@ -242,7 +243,7 @@ export const ValuesDAO = {
   async set(scriptId: string, key: string, value: unknown): Promise<void> {
     await openScriptDB();
     await withTransaction(Stores.values, 'readwrite', async (tx) => {
-      const row: ScriptValueRow = { scriptId, key, value };
+      const row: ScriptValueRow = { scriptId, key, value, updatedAt: Date.now() };
       await reqToPromise(tx.objectStore(Stores.values).put(row));
     });
   },
@@ -266,6 +267,23 @@ export const ValuesDAO = {
     });
   },
 
+  async getAllMetadata(scriptId: string): Promise<{ valueCount: number; lastUpdatedAt: number | null }> {
+    await openScriptDB();
+    return withTransaction(Stores.values, 'readonly', async (tx) => {
+      let valueCount = 0;
+      let lastUpdatedAt: number | null = null;
+      const idx = tx.objectStore(Stores.values).index('by-script');
+      await forEachCursor<ScriptValueRow>(idx, (row) => {
+        valueCount += 1;
+        const updatedAt = Number(row.updatedAt);
+        if (Number.isFinite(updatedAt) && updatedAt > 0) {
+          lastUpdatedAt = Math.max(lastUpdatedAt ?? 0, updatedAt);
+        }
+      }, IDBKeyRange.only(scriptId));
+      return { valueCount, lastUpdatedAt };
+    });
+  },
+
   async list(scriptId: string): Promise<string[]> {
     const all = await this.getAll(scriptId);
     return Object.keys(all);
@@ -275,8 +293,9 @@ export const ValuesDAO = {
     await openScriptDB();
     await withTransaction(Stores.values, 'readwrite', async (tx) => {
       const store = tx.objectStore(Stores.values);
+      const updatedAt = Date.now();
       for (const [key, value] of Object.entries(values)) {
-        await reqToPromise(store.put({ scriptId, key, value } satisfies ScriptValueRow));
+        await reqToPromise(store.put({ scriptId, key, value, updatedAt } satisfies ScriptValueRow));
       }
     });
   },

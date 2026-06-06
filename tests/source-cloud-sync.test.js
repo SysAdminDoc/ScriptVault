@@ -15,7 +15,13 @@ const originalGlobals = {
   updateBadge: globalThis.updateBadge,
 };
 
-async function loadFreshCloudSync(initialScripts, remoteData, settingsOverride = {}, valuesByScript = {}) {
+async function loadFreshCloudSync(
+  initialScripts,
+  remoteData,
+  settingsOverride = {},
+  valuesByScript = {},
+  metadataByScript = null,
+) {
   vi.resetModules();
 
   const scriptState = initialScripts.map((script) => structuredClone(script));
@@ -56,6 +62,14 @@ async function loadFreshCloudSync(initialScripts, remoteData, settingsOverride =
       valueState[scriptId] = structuredClone(values || {});
     }),
   };
+  if (metadataByScript) {
+    ScriptValues.getAllMetadata = vi.fn(async (scriptId) => structuredClone(
+      metadataByScript[scriptId] || {
+        valueCount: Object.keys(valueState[scriptId] || {}).length,
+        lastUpdatedAt: null,
+      },
+    ));
+  }
 
   const provider = {
     name: 'Google Drive',
@@ -392,6 +406,12 @@ describe('source cloud sync module', () => {
           token: 'local-only-token',
         },
       },
+      {
+        script_values: {
+          valueCount: 2,
+          lastUpdatedAt: 4242,
+        },
+      },
     );
     const { CloudSync, ScriptValues, getRemoteData } = harness;
 
@@ -405,6 +425,7 @@ describe('source cloud sync module', () => {
         schema: 'scriptvault-gm-value-sync/v1',
         scriptId: 'script_values',
         keyCount: 2,
+        lastValueUpdatedAt: 4242,
         values: {
           alpha: { enabled: true },
           token: 'sync-token',
