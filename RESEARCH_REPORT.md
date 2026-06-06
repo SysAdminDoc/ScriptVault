@@ -2,6 +2,17 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 76 Monaco ESM sandbox switch: X-4 moved from prototype to the
+Chromium sandbox path. `pages/editor-sandbox.html` now loads the packaged ESM
+stylesheet and dynamically imports the packaged ESM editor bundle from
+`lib/monaco-esm/`; the local fallback still posts `monaco-load-error` so
+`pages/monaco-adapter.js` can activate textarea mode. `esbuild.config.mjs` no
+longer copies `node_modules/monaco-editor/min` into `lib/monaco/`, and
+`npm run monaco:package:check` rejects AMD loader or copy regressions. The next
+X-4 gap is browser-level proof that the dashboard editor reports
+`editor.isMonaco === true`, save/reload persists edits, and missing ESM assets
+still route to fallback.
+
 2026-06-06 Cycle 75 Monaco ESM size budget: X-4 now has an explicit size
 strategy. The prototype keeps the full JavaScript/TypeScript worker set for
 Chromium because that preserves userscript language-service behavior, but the

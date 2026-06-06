@@ -50,6 +50,8 @@ describe('Monaco ESM prototype build contract', () => {
     }
     expect(config).toContain('const monacoEsmOnly = args.includes("--monaco-esm-only");');
     expect(config).toContain('await buildMonacoEsm();');
+    expect(config).not.toContain('"node_modules", "monaco-editor", "min"');
+    expect(config).not.toContain('cpSync(src, dest');
   });
 
   it('keeps generated ESM assets out of source control and Firefox packaging', () => {

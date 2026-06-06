@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import * as acorn from 'acorn';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = process.cwd();
@@ -49,10 +50,21 @@ describe('Monaco ESM migration plan', () => {
     const adapter = read('pages/monaco-adapter.js');
     const buildFirefox = read('build-firefox.sh');
 
-    expect(sandbox).toContain("../lib/monaco/vs");
-    expect(sandbox).toContain("require(['vs/editor/editor.main']");
+    expect(sandbox).toContain("../lib/monaco-esm/editor.js");
+    expect(sandbox).toContain("../lib/monaco-esm/editor.css");
+    expect(sandbox).toContain('await import(LOCAL_ESM_ENTRY)');
+    expect(sandbox).not.toContain('vs/loader.js');
+    expect(sandbox).not.toContain('require.config');
     expect(adapter).toContain('activateFallback');
     expect(adapter).toContain("e.source !== frame.contentWindow");
     expect(buildFirefox).not.toContain('lib/monaco');
+    expect(buildFirefox).not.toContain('lib/monaco-esm');
+  });
+
+  it('keeps the sandbox loader script syntactically valid', () => {
+    const sandbox = read('pages/editor-sandbox.html');
+    const match = sandbox.match(/<script>([\s\S]*)<\/script>/);
+    expect(match).toBeTruthy();
+    acorn.parse(match[1], { ecmaVersion: 'latest', sourceType: 'script' });
   });
 });

@@ -4,30 +4,29 @@ Last reviewed: 2026-06-06.
 
 ## Decision
 
-Keep ScriptVault on the packaged Monaco AMD bundle for v3.12.0, and migrate
-the Chromium editor to a bundled ESM build in a later X-4 implementation pass.
-Do not load Monaco from a CDN, do not import Monaco ESM directly from browser
-extension pages, and do not reintroduce Monaco into the Firefox AMO package
-until the ESM worker chunks pass AMO lint.
+ScriptVault now loads Monaco from the packaged ESM bundle for the Chromium
+editor sandbox. Do not load Monaco from a CDN, do not import Monaco ESM
+directly from privileged extension pages, and do not reintroduce Monaco into
+the Firefox AMO package until the ESM worker chunks pass AMO lint.
 
 ## Current State
 
 - `package.json` currently depends on `monaco-editor@^0.52.0`.
-- `esbuild.config.mjs` copies `node_modules/monaco-editor/min` into
-  `lib/monaco/`.
-- `pages/editor-sandbox.html` loads `../lib/monaco/vs/loader.js` inside the
-  manifest-declared sandbox iframe, then calls `require(['vs/editor/editor.main'])`.
+- `esbuild.config.mjs` builds `src/editor/monaco-esm-entry.ts` into
+  `lib/monaco-esm/editor.js`.
+- `pages/editor-sandbox.html` loads `../lib/monaco-esm/editor.css` and
+  dynamically imports `../lib/monaco-esm/editor.js` inside the
+  manifest-declared sandbox iframe.
 - `pages/monaco-adapter.js` keeps the dashboard on a CodeMirror-compatible
   adapter surface and falls back to the textarea editor when Monaco fails.
-- `build-firefox.sh` intentionally omits `lib/monaco/`; Firefox keeps the
-  textarea fallback for AMO package validation.
-- `npm run monaco:package:check` pins this current packaging contract so
-  Chromium remains on the local AMD bundle, Firefox remains Monaco-free, and
-  remote/CDN editor assets stay rejected until the X-4 migration deliberately
-  replaces the guard with the ESM contract.
-- `npm run build:monaco:esm` now builds an ignored ESM prototype under
-  `lib/monaco-esm/` without switching the sandbox. `npm run monaco:esm:check`
-  validates the post-build editor, CSS, font, and worker outputs.
+- `build-firefox.sh` intentionally omits `lib/monaco/` and `lib/monaco-esm/`;
+  Firefox keeps the textarea fallback for AMO package validation.
+- `npm run monaco:package:check` pins this packaging contract so Chromium
+  remains on the local ESM bundle, Firefox remains Monaco-free, and remote/CDN
+  editor assets stay rejected.
+- `npm run build:monaco:esm` builds ignored ESM assets under
+  `lib/monaco-esm/`. `npm run monaco:esm:check` validates the post-build
+  editor, CSS, font, and worker outputs.
 
 ## Source Findings
 
@@ -56,7 +55,7 @@ Primary sources:
 3. Emit Monaco worker chunks under `lib/monaco-esm/workers/` with deterministic
    filenames.
 4. Replace the AMD loader block in `pages/editor-sandbox.html` with a local
-   module script that imports the packaged ESM bundle.
+   dynamic import of the packaged ESM bundle.
 5. Configure `self.MonacoEnvironment.getWorkerUrl` or equivalent worker mapping
    to extension-local worker files; no blob workers and no remote URLs.
 6. Keep `pages/monaco-adapter.js` as the dashboard contract so the dashboard
@@ -93,13 +92,13 @@ textarea fallback as the supported Firefox editor.
 
 The X-4 implementation pass should add or update these gates:
 
-- `npm run build` writes prototype `lib/monaco-esm/editor.js`,
+- `npm run build` writes `lib/monaco-esm/editor.js`,
   `editor.css`, a codicon font asset, and deterministic worker chunks while
-  still copying the AMD `min/` tree for the current Chromium sandbox.
+  no longer copying the AMD `min/` tree for the Chromium sandbox.
 - `npm run build:prod` packages only local Monaco ESM assets.
-- `npm run monaco:package:check` should be updated from the current AMD/Firefox
-  fallback contract to the final ESM package contract in the same change that
-  switches `pages/editor-sandbox.html`.
+- `npm run monaco:package:check` rejects `vs/loader.js`, `require.config`,
+  `require(['vs/editor/editor.main'])`, remote/CDN editor URLs, and AMD copy
+  steps in the Chromium build.
 - `npm run monaco:esm:check` should stay green after `npm run build` or
   `npm run build:monaco:esm` and should be refreshed with
   `--write docs/audit/monaco-esm-prototype-2026-06-06.json` when the prototype
@@ -144,10 +143,11 @@ full-worker Chromium strategy:
 | **Total** | **25,186,387** | **4,279,263** |
 
 The active budget is `maxTotalBytes: 26000000`, `maxTotalGzipBytes: 5000000`,
-`editor.js <= 9000000`, and `ts.worker.js <= 13000000`. The sandbox still
-loads the AMD bundle. The next slice can replace `pages/editor-sandbox.html`
-only with a Chromium smoke plan and AMD-removal/static-asset tests in the same
-change.
+`editor.js <= 9000000`, and `ts.worker.js <= 13000000`. Cycle 76 switched the
+Chromium sandbox to the ESM bundle while preserving the adapter fallback path.
+The next slice should add a browser smoke that opens the dashboard editor,
+waits for `editor.isMonaco === true`, edits a script, saves it, reloads, and
+confirms the edit persisted.
 
 ## Non-Goals
 
