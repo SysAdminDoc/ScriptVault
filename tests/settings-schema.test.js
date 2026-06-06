@@ -248,6 +248,40 @@ describe('settings schema gate', () => {
     expect(report.errors).toContain('Setting "badgeColor" metadata must declare hex-color validation');
   });
 
+  it('requires validation metadata for dashboard-backed free-form controls', () => {
+    const root = makeFixture({
+      metadata: {
+        theme: {
+          type: 'string',
+          control: 'select',
+          label: 'Theme',
+          help: 'Controls the dashboard theme.',
+          default: 'dark',
+          options: [{ value: 'dark', label: 'Dark' }],
+        },
+        debugMode: {
+          type: 'boolean',
+          control: 'checkbox',
+          label: 'Debug mode',
+          help: 'Controls verbose diagnostics.',
+          default: false,
+        },
+        customCss: {
+          type: 'string',
+          control: 'textarea',
+          label: 'Custom CSS',
+          help: 'Stores custom dashboard CSS.',
+          elementId: 'settingsCustomCss',
+          defaultSource: 'runtime',
+        },
+      },
+    });
+    const report = analyzeSettingsSchema({ rootDir: root });
+
+    expect(report.ok).toBe(false);
+    expect(report.errors).toContain('Setting "customCss" dashboard textarea control requires validation metadata');
+  });
+
   it('fails when metadata points at a missing dashboard element', () => {
     const root = makeFixture({
       metadata: {

@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 69 - 2026-06-06
+Last cycle: Cycle 70 - 2026-06-06
 
 ## Latest Result
 
@@ -204,6 +204,10 @@ Last cycle: Cycle 69 - 2026-06-06
   Dashboard custom CSS now has validation metadata, a native length limit,
   accessible error text, and save-blocking validation for unsafe control
   characters or overlarge CSS while preserving intentional whitespace.
+- Cycle 70 closed N-1 Settings Schema Parity and Accessible Validation. The
+  settings schema gate now requires validation metadata for every
+  dashboard-backed input control that can accept malformed values, while
+  checkboxes and readonly controls remain exempt.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -279,14 +283,20 @@ Last cycle: Cycle 69 - 2026-06-06
   text-error and constraint-validation guidance, then verified custom CSS
   validation with focused dashboard a11y/schema tests, the settings schema gate,
   TS runtime generation/check, high-severity audit, full check suite, build,
-  CWS remote-code scan, and `git diff --check`.
+  CWS remote-code scan, and `git diff --check`. Cycle 70 reused the same
+  WCAG/MDN validation guidance, then verified the N-1 acceptance gate with
+  focused settings schema/dashboard tests, the settings schema gate, TS runtime
+  generation/check, high-severity audit, full check suite, build, CWS
+  remote-code scan, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 37. The next best local cycle is Cycle 70:
-run the N-1 acceptance recheck across dashboard-saved settings and utility
-export/backup controls; if no validation gaps remain, mark N-1 complete and
-choose the next roadmap row. The live
+Continue from `ROADMAP.md` Round 38. The next best local cycle is Cycle 71:
+continue N-2 by evaluating guarded `GM.fetch` against the existing
+`GM_xmlhttpRequest` host-scope, `@connect`, abort, redirect, and internal-host
+policy. If the contract is still too broad for implementation, add an explicit
+design/test plan and parity gate for the remaining `GM.*` namespace aliases.
+The live
 two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -295,7 +305,7 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 69 complete for 2026-06-06; roadmap continuation
-  points to Cycle 70 N-1 acceptance recheck.
+- Status: ScriptVault Cycle 70 complete for 2026-06-06; roadmap continuation
+  points to Cycle 71 N-2 guarded GM.fetch continuation.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

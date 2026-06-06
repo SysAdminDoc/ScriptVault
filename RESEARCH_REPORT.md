@@ -2,6 +2,17 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 70 settings validation acceptance closure: N-1 is complete.
+The source signal remains WCAG error identification plus MDN constraint
+validation: dashboard controls that can accept malformed values need
+user-facing errors and validation metadata. `npm run settings:schema:check`
+now enforces that every dashboard-backed schema metadata control in the
+malformed-input set (`select`, text, textarea, number, password, URL) declares
+validation metadata; checkboxes and readonly fields stay exempt. A focused
+settings-schema regression proves a dashboard-backed textarea without
+validation now fails the gate, and the repository schema passes the acceptance
+check.
+
 2026-06-06 Cycle 69 custom CSS validation: N-1 closed the last non-select
 schema-backed dashboard metadata gap. WCAG error identification and MDN
 constraint validation still point to text errors, native constraints, and
