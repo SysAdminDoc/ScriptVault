@@ -169,7 +169,8 @@ describe('Greasy Fork publish handoff preflight', () => {
     const previewFn = extractFunction(dashboardJs, 'showGreasyForkPublishPreview');
     const confirmationFn = extractFunction(dashboardJs, 'showGreasyForkPublicationConfirmation');
     const openFn = extractFunction(dashboardJs, 'openGreasyForkPublishHandoff');
-    const handoffSource = `${submitFn}\n${previewFn}\n${confirmationFn}\n${openFn}`;
+    const sessionCheckFn = extractFunction(dashboardJs, 'openGreasyForkSessionCheck');
+    const handoffSource = `${submitFn}\n${previewFn}\n${confirmationFn}\n${openFn}\n${sessionCheckFn}`;
 
     expect(submitFn).toContain("form.method = 'POST'");
     expect(submitFn).toContain('form.enctype = GREASY_FORK_PREFILL_FORM_ENCTYPE');
@@ -178,7 +179,9 @@ describe('Greasy Fork publish handoff preflight', () => {
     expect(submitFn).toContain("form.setAttribute('rel', 'noopener noreferrer')");
     expect(previewFn).toContain('downloadGreasyForkPublishCode(preflight)');
     expect(previewFn).toContain('navigator.clipboard.writeText(preflight.code)');
+    expect(previewFn).toContain('openGreasyForkSessionCheck()');
     expect(previewFn).toContain('showGreasyForkPublicationConfirmation(preflight)');
+    expect(sessionCheckFn).toContain("window.open(GREASY_FORK_PREFILL_BASE_URL, '_blank', 'noopener,noreferrer')");
     expect(confirmationFn).toContain('recordGreasyForkSubmittedPublication(preflight)');
 
     expect(handoffSource).not.toMatch(/\bfetch\s*\(/);

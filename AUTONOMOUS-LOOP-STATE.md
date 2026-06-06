@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 90 - 2026-06-06
+Last cycle: Cycle 91 - 2026-06-06
 
 ## Latest Result
 
@@ -418,17 +418,22 @@ Last cycle: Cycle 90 - 2026-06-06
   source and account/session data. Verification used focused Greasy
   Fork/local-workspace tests, Chromium receipt-export smoke, the full check
   suite, build, high-severity audit, CWS remote-code scan, Monaco ESM scan, TS
-  runtime check, and `git diff --check`.
+  runtime check, and `git diff --check`. Cycle 91 added publish preflight
+  session-check polish: the modal now includes an `Open Greasy Fork` action that
+  opens only the Greasy Fork base URL with noopener/noreferrer and no script
+  payload so users can check their session before posting the prefilled form.
+  Verification used focused Greasy Fork/local-workspace tests, Chromium
+  preflight session-check smoke, the full check suite, build, high-severity
+  audit, CWS remote-code scan, Monaco ESM scan, TS runtime check, and
+  `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. Cycle 90 continued X-9 with a downloadable
-local receipt-summary fallback for Greasy Fork handoffs: the dashboard exports
-target, version, size, timestamp, and SHA-256 evidence while keeping submitted
-source and account/session data out of the text file. The next best local cycle
-is Cycle 91: prove the prefilled form in Chromium with a logged-in Greasy Fork
-session if available, otherwise audit the publish handoff UI for additional
-low-risk fallback polish or move to the next highest-value roadmap item.
+Continue from `ROADMAP.md` Round 40. Cycle 91 continued X-9 with publish
+preflight session-check polish: the dashboard opens the Greasy Fork base URL in
+a noopener/noreferrer tab without posting script data. The next best local cycle
+is Cycle 92: move to the next highest-value non-credential-gated roadmap item or
+audit the publish handoff UI for any remaining low-risk polish.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -437,8 +442,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 90 complete for 2026-06-06; roadmap continuation
-  points to Cycle 91 X-9 live handoff proof or fallback UI / next-roadmap
+- Status: ScriptVault Cycle 91 complete for 2026-06-06; roadmap continuation
+  points to Cycle 92 next non-credential-gated roadmap item / fallback UI
   hardening.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

@@ -7371,6 +7371,10 @@
         return true;
     }
 
+    function openGreasyForkSessionCheck() {
+        return !!window.open(GREASY_FORK_PREFILL_BASE_URL, '_blank', 'noopener,noreferrer');
+    }
+
     function buildGreasyForkPublicationReceiptRecord(preflight, options = {}) {
         const metadata = preflight?.metadata || {};
         const createdAt = options.createdAt || Date.now();
@@ -7703,6 +7707,16 @@
                 callback: () => {
                     downloadGreasyForkPublishCode(preflight);
                     showToast('Script file downloaded', 'success');
+                }
+            },
+            {
+                label: 'Open Greasy Fork',
+                callback: () => {
+                    if (openGreasyForkSessionCheck()) {
+                        showToast('Greasy Fork opened', 'success');
+                    } else {
+                        showToast('Unable to open Greasy Fork', 'error');
+                    }
                 }
             },
             {
