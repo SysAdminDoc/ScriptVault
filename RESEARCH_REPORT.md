@@ -2,6 +2,16 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 73 Monaco package guard: X-4 has its first implementation
+slice, but the ESM migration is not complete. Monaco AMD remains deprecated,
+so the next implementation work should prototype a local ESM bundle and worker
+layout. Until that deliberate switch lands, `npm run monaco:package:check`
+pins the current safe packaging state: Chromium copies the local AMD bundle
+from `node_modules/monaco-editor/min` into `lib/monaco/`, the sandbox loads
+`../lib/monaco/vs/loader.js` rather than remote/CDN editor assets, Firefox
+continues omitting Monaco from AMO package inputs, and `npm run check` runs the
+guard so packaging drift fails before release work.
+
 2026-06-06 Cycle 72 SPA URL-change proof: X-3 is shipped for source/jsdom
 coverage. Current Navigation API guidance still supports page-level
 `navigate` events as the least-permission route-change signal, while history,
