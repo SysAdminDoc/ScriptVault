@@ -12,6 +12,7 @@ export interface GmValueSyncBundle {
   bytes: number;
   values: Record<string, unknown>;
   lastValueUpdatedAt?: number;
+  keyMetadata?: Record<string, { updatedAt: number }>;
 }
 
 export interface GmValueSyncBuildResult {
@@ -37,6 +38,22 @@ function normalizeTimestamp(value: unknown): number | undefined {
   return Math.floor(timestamp);
 }
 
+function setMetadataKey(record: Record<string, { updatedAt: number }>, key: string, value: { updatedAt: number }): void {
+  Object.defineProperty(record, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function normalizeKeyMetadataEntry(value: unknown): { updatedAt: number } | undefined {
+  const timestamp = value && typeof value === 'object'
+    ? normalizeTimestamp((value as { updatedAt?: unknown }).updatedAt)
+    : normalizeTimestamp(value);
+  return timestamp ? { updatedAt: timestamp } : undefined;
+}
+
 export function shouldSyncScriptValues(script: Pick<Script, 'id' | 'settings'> | null | undefined): boolean {
   return script?.settings?.syncValues === true;
 }
@@ -49,6 +66,7 @@ export function buildGmValueSyncBundle(
     maxKeys?: number;
     maxKeyBytes?: number;
     lastValueUpdatedAt?: number | null;
+    keyMetadata?: Record<string, unknown> | null;
   } = {},
 ): GmValueSyncBuildResult {
   const warnings: GmValueSyncBuildResult['warnings'] = [];
@@ -63,6 +81,9 @@ export function buildGmValueSyncBundle(
   const maxKeys = options.maxKeys ?? GM_VALUE_SYNC_MAX_KEYS;
   const maxKeyBytes = options.maxKeyBytes ?? GM_VALUE_SYNC_MAX_KEY_BYTES;
   const lastValueUpdatedAt = normalizeTimestamp(options.lastValueUpdatedAt);
+  const sourceKeyMetadata = options.keyMetadata && typeof options.keyMetadata === 'object' && !Array.isArray(options.keyMetadata)
+    ? options.keyMetadata
+    : {};
   const sourceValues = values && typeof values === 'object' && !Array.isArray(values) ? values : {};
   const bundle: GmValueSyncBundle = {
     schema: GM_VALUE_SYNC_SCHEMA,
@@ -97,7 +118,15 @@ export function buildGmValueSyncBundle(
     }
 
     const nextValues = { ...bundle.values, [key]: cloned };
-    const nextBundle = { ...bundle, values: nextValues, keyCount: Object.keys(nextValues).length };
+    const nextKeyMetadata: Record<string, { updatedAt: number }> = { ...(bundle.keyMetadata ?? {}) };
+    const keyMetadataEntry = normalizeKeyMetadataEntry(sourceKeyMetadata[key]);
+    if (keyMetadataEntry) setMetadataKey(nextKeyMetadata, key, keyMetadataEntry);
+    const nextBundle: GmValueSyncBundle = {
+      ...bundle,
+      values: nextValues,
+      keyCount: Object.keys(nextValues).length,
+      ...(Object.keys(nextKeyMetadata).length > 0 ? { keyMetadata: nextKeyMetadata } : {}),
+    };
     const nextBytes = byteLength(nextBundle);
     if (nextBytes > maxScriptBytes) {
       warnings.push({ id: 'scriptValueCapExceeded', message: 'Stored values exceed the per-script sync size cap' });
@@ -106,6 +135,7 @@ export function buildGmValueSyncBundle(
 
     bundle.values = nextValues;
     bundle.keyCount = nextBundle.keyCount;
+    if (nextBundle.keyMetadata) bundle.keyMetadata = nextBundle.keyMetadata;
     bundle.bytes = nextBytes;
   }
 

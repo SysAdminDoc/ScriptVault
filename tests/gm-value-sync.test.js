@@ -92,6 +92,40 @@ describe('GM value sync data model', () => {
     expect(withoutTimestamp.bundle).not.toHaveProperty('lastValueUpdatedAt');
   });
 
+  it('carries optional per-key value timestamps for included keys only', () => {
+    const withKeyMetadata = buildGmValueSyncBundle(
+      script({ syncValues: true }),
+      {
+        alpha: { enabled: true },
+        zeta: 3,
+        missing: undefined,
+      },
+      {
+        keyMetadata: {
+          alpha: { updatedAt: 1000.8 },
+          zeta: 2000.2,
+          missing: { updatedAt: 3000 },
+          ignored: { updatedAt: 4000 },
+        },
+      },
+    );
+    const withoutKeyMetadata = buildGmValueSyncBundle(
+      script({ syncValues: true }),
+      {
+        alpha: { enabled: true },
+        zeta: 3,
+      },
+    );
+
+    expect(withKeyMetadata.bundle.keyMetadata).toEqual({
+      alpha: { updatedAt: 1000 },
+      zeta: { updatedAt: 2000 },
+    });
+    expect(withKeyMetadata.bundle).not.toHaveProperty('keyMetadata.missing');
+    expect(withKeyMetadata.bundle.bytes).toBeGreaterThan(withoutKeyMetadata.bundle.bytes);
+    expect(withoutKeyMetadata.bundle).not.toHaveProperty('keyMetadata');
+  });
+
   it('enforces key-count and per-script byte caps', () => {
     const manyValues = Object.fromEntries(
       Array.from({ length: GM_VALUE_SYNC_MAX_KEYS + 5 }, (_, index) => [`k${index}`, index]),

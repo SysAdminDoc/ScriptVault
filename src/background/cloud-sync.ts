@@ -41,6 +41,7 @@ declare const ScriptStorage: {
 declare const ScriptValues: {
   getAll(scriptId: string): Promise<Record<string, unknown>>;
   getAllMetadata?(scriptId: string): Promise<{ valueCount: number; lastUpdatedAt: number | null }>;
+  getAllKeyMetadata?(scriptId: string): Promise<Record<string, { updatedAt: number }>>;
   setAll?(scriptId: string, values: Record<string, unknown>): Promise<void>;
 };
 
@@ -406,6 +407,7 @@ function sanitizeValueBundlesForUpload(envelope: SyncEnvelope): Record<string, G
     if (!isPlainRecord(bundle.values)) continue;
     const rebuilt = buildGmValueSyncBundle(script, bundle.values, {
       lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle),
+      keyMetadata: getValueBundleKeyMetadata(bundle),
     });
     if (rebuilt.bundle) result[scriptId] = rebuilt.bundle;
   }
@@ -428,6 +430,31 @@ function getValueBundleLastUpdatedAt(bundle: unknown): number | undefined {
   const timestamp = Number(bundle.lastValueUpdatedAt);
   if (!Number.isFinite(timestamp) || timestamp <= 0) return undefined;
   return Math.floor(timestamp);
+}
+
+function setValueBundleMetadataKey(
+  record: Record<string, { updatedAt: number }>,
+  key: string,
+  value: { updatedAt: number },
+): void {
+  Object.defineProperty(record, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function getValueBundleKeyMetadata(bundle: unknown): Record<string, { updatedAt: number }> | undefined {
+  if (!isPlainRecord(bundle) || !isPlainRecord(bundle.keyMetadata)) return undefined;
+  const metadata: Record<string, { updatedAt: number }> = {};
+  for (const [key, entry] of Object.entries(bundle.keyMetadata)) {
+    const timestamp = isPlainRecord(entry) ? Number(entry.updatedAt) : Number(entry);
+    if (Number.isFinite(timestamp) && timestamp > 0) {
+      setValueBundleMetadataKey(metadata, key, { updatedAt: Math.floor(timestamp) });
+    }
+  }
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
 function createEmptyRemoteValueBundleSelection(): RemoteValueBundleSelection {
@@ -501,6 +528,7 @@ function selectApplicableRemoteValueBundles(
 
     const rebuilt = buildGmValueSyncBundle(script, bundle.values, {
       lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle),
+      keyMetadata: getValueBundleKeyMetadata(bundle),
     });
     result.warnings += rebuilt.warnings.length;
     if (rebuilt.bundle) {
@@ -716,8 +744,12 @@ async function buildValueBundlesForScripts(scripts: Script[] | SyncScript[]): Pr
     const metadata = typeof ScriptValues.getAllMetadata === 'function'
       ? await ScriptValues.getAllMetadata(script.id)
       : null;
+    const keyMetadata = typeof ScriptValues.getAllKeyMetadata === 'function'
+      ? await ScriptValues.getAllKeyMetadata(script.id)
+      : null;
     const result = buildGmValueSyncBundle(script, values, {
       lastValueUpdatedAt: metadata?.lastUpdatedAt ?? null,
+      keyMetadata,
     });
     warnings += result.warnings.length;
     if (result.bundle) valueBundles[script.id] = result.bundle;

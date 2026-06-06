@@ -402,6 +402,20 @@ const StorageModule = (() => {
         return { valueCount, lastUpdatedAt };
       });
     },
+    async getAllKeyMetadata(scriptId) {
+      await openScriptDB();
+      return withTransaction(Stores.values, "readonly", async (tx) => {
+        const out = {};
+        const idx = tx.objectStore(Stores.values).index("by-script");
+        await forEachCursor(idx, (row) => {
+          const updatedAt = Number(row.updatedAt);
+          if (Number.isFinite(updatedAt) && updatedAt > 0) {
+            setRecordKey(out, row.key, { updatedAt: Math.floor(updatedAt) });
+          }
+        }, IDBKeyRange.only(scriptId));
+        return out;
+      });
+    },
     async list(scriptId) {
       const all = await this.getAll(scriptId);
       return Object.keys(all);
@@ -987,6 +1001,10 @@ const StorageModule = (() => {
     async getAllMetadata(scriptId) {
       await this.init(scriptId);
       return ValuesDAO.getAllMetadata(scriptId);
+    },
+    async getAllKeyMetadata(scriptId) {
+      await this.init(scriptId);
+      return ValuesDAO.getAllKeyMetadata(scriptId);
     },
     async setAll(scriptId, values, senderTabId = null) {
       await this.init(scriptId);

@@ -526,6 +526,11 @@ export const ScriptValues = {
     return ValuesDAO.getAllMetadata(scriptId);
   },
 
+  async getAllKeyMetadata(scriptId: string): Promise<Record<string, { updatedAt: number }>> {
+    await this.init(scriptId);
+    return ValuesDAO.getAllKeyMetadata(scriptId);
+  },
+
   async setAll(scriptId: string, values: Record<string, unknown>, senderTabId: number | null = null): Promise<void> {
     await this.init(scriptId);
     const nextValues = exportValueBag(values);
