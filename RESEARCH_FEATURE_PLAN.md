@@ -387,8 +387,11 @@ Important integrations, permissions, storage, and data flows:
   through `src/config/settings-schema.json` and `npm run
   settings:schema:check`. Cycle 27 shipped the targeted accessible validation
   slice for badge color, lint max size, WebDAV/S3 URLs, denied hosts, and
-  linter JSON. Remaining work is schema-backed type/range/options/default/help
-  metadata for every visible Settings control.
+  linter JSON. Cycle 28 added schema metadata for all classified visible
+  settings plus dashboard-saved credential controls, including type, control,
+  label, help, default/defaultSource, select options, and validation
+  descriptors for the high-risk fields. Remaining work is UI consumption of
+  the metadata and allowlist/pattern text validation.
 - Implementation areas: `src/config/settings-defaults.json`,
   `src/types/settings.ts`, `src/modules/storage.ts`, `pages/dashboard.html`,
   `pages/dashboard.js`, settings tests, a schema report doc.
@@ -696,8 +699,10 @@ Important integrations, permissions, storage, and data flows:
   - Progress: 2026-06-06 shipped schema classification and parity checking via
     `src/config/settings-schema.json` and `npm run settings:schema:check`, then
     added accessible save-blocking validation for badge color, lint max size,
-    WebDAV/S3 URLs, denied hosts, and linter JSON. Remaining work is
-    schema-backed metadata for every visible Settings control.
+    WebDAV/S3 URLs, denied hosts, and linter JSON. Added 106 schema metadata
+    entries with checker enforcement for visible and dashboard credential
+    controls. Remaining work is UI consumption of the metadata and
+    allowlist/pattern text validation.
   - Verify: schema parity tests, malformed-input tests, `npm run test:a11y`.
 
 - [x] P2 - Add optional dependency reach gate

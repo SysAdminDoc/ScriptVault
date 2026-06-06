@@ -28,9 +28,18 @@ npm run settings:schema:check
 ```
 
 The checker fails when a default, TypeScript field, or dashboard-saved key lacks
-a classification, or when the schema keeps a stale key that no longer appears in
-any checked surface. It is wired into `npm run check` and CI so future settings
-UI or storage edits cannot add unclassified persisted state.
+a classification, when the schema keeps a stale key that no longer appears in
+any checked surface, or when a visible/dashboard credential control lacks
+metadata. It is wired into `npm run check` and CI so future settings UI or
+storage edits cannot add unclassified persisted state or unmodeled visible
+controls.
+
+Visible and dashboard credential controls are described under the `metadata`
+object. Each entry declares a storage type, control shape, label, help text,
+default or runtime default source, select options where applicable, and
+validation descriptors for the high-risk fields. The current schema has 106
+metadata entries covering all classified visible settings plus credential
+fields saved from the dashboard.
 
 Field-level validation has started on the highest-risk settings. Badge color,
 lint maximum size, WebDAV/S3 endpoint URLs, denied hosts, and linter JSON now
@@ -38,6 +47,6 @@ have native constraints where applicable, text error nodes wired through
 `aria-describedby`, `aria-invalid`, `setCustomValidity()`, and a shared
 save-blocking validator in `pages/dashboard.js`.
 
-Remaining work: extend the schema from classification-only metadata into
-type/range/options/default/help metadata that can drive every visible Settings
-control, not just the targeted high-risk fields.
+Remaining work: have the Settings UI consume this metadata directly and extend
+field-specific validation beyond the targeted high-risk fields to the
+allowlist/pattern text areas.

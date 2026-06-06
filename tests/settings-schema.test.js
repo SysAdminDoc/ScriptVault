@@ -11,7 +11,10 @@ import {
 const ROOT = process.cwd();
 const SCRIPT = resolve(ROOT, 'scripts/check-settings-schema.mjs');
 
-function makeFixture({ schemaKeys = ['theme', 'debugMode', 'customCss'] } = {}) {
+function makeFixture({
+  schemaKeys = ['theme', 'debugMode', 'customCss'],
+  metadata,
+} = {}) {
   const root = mkdtempSync(join(tmpdir(), 'scriptvault-settings-schema-'));
   mkdirSync(resolve(root, 'src/config'), { recursive: true });
   mkdirSync(resolve(root, 'src/types'), { recursive: true });
@@ -21,7 +24,7 @@ function makeFixture({ schemaKeys = ['theme', 'debugMode', 'customCss'] } = {}) 
     theme: 'dark',
     debugMode: false,
   }, null, 2));
-  writeFileSync(resolve(root, 'src/config/settings-schema.json'), JSON.stringify({
+  const schema = {
     schemaVersion: 1,
     classifications: {
       visible: schemaKeys,
@@ -31,7 +34,32 @@ function makeFixture({ schemaKeys = ['theme', 'debugMode', 'customCss'] } = {}) 
       derived: [],
       deprecated: [],
     },
-  }, null, 2));
+    metadata: metadata ?? {
+      theme: {
+        type: 'string',
+        control: 'select',
+        label: 'Theme',
+        help: 'Controls the dashboard theme.',
+        default: 'dark',
+        options: [{ value: 'dark', label: 'Dark' }],
+      },
+      debugMode: {
+        type: 'boolean',
+        control: 'checkbox',
+        label: 'Debug mode',
+        help: 'Controls verbose diagnostics.',
+        default: false,
+      },
+      customCss: {
+        type: 'string',
+        control: 'textarea',
+        label: 'Custom CSS',
+        help: 'Stores custom dashboard CSS.',
+        defaultSource: 'runtime',
+      },
+    },
+  };
+  writeFileSync(resolve(root, 'src/config/settings-schema.json'), JSON.stringify(schema, null, 2));
   writeFileSync(resolve(root, 'src/types/settings.ts'), `
 export interface Settings {
   theme: string;
@@ -57,6 +85,7 @@ describe('settings schema gate', () => {
     expect(report.counts.defaults).toBe(71);
     expect(report.counts.dashboardSaveKeys).toBeGreaterThan(70);
     expect(report.counts.classified).toBeGreaterThanOrEqual(report.counts.dashboardSaveKeys);
+    expect(report.counts.metadata).toBeGreaterThan(100);
     expect(formatSettingsSchemaReport(report)).toContain('[settings-schema] OK');
   });
 
@@ -71,13 +100,146 @@ describe('settings schema gate', () => {
   });
 
   it('fails when the schema classifies a stale key', () => {
-    const root = makeFixture({ schemaKeys: ['theme', 'debugMode', 'customCss', 'staleKey'] });
+    const root = makeFixture({
+      schemaKeys: ['theme', 'debugMode', 'customCss', 'staleKey'],
+      metadata: {
+        theme: {
+          type: 'string',
+          control: 'select',
+          label: 'Theme',
+          help: 'Controls the dashboard theme.',
+          default: 'dark',
+          options: [{ value: 'dark', label: 'Dark' }],
+        },
+        debugMode: {
+          type: 'boolean',
+          control: 'checkbox',
+          label: 'Debug mode',
+          help: 'Controls verbose diagnostics.',
+          default: false,
+        },
+        customCss: {
+          type: 'string',
+          control: 'textarea',
+          label: 'Custom CSS',
+          help: 'Stores custom dashboard CSS.',
+          defaultSource: 'runtime',
+        },
+        staleKey: {
+          type: 'string',
+          control: 'text',
+          label: 'Stale key',
+          help: 'Should fail as stale.',
+          defaultSource: 'runtime',
+        },
+      },
+    });
     const report = analyzeSettingsSchema({ rootDir: root });
 
     expect(report.ok).toBe(false);
     expect(report.errors).toContain(
       'Classified setting "staleKey" is not present in defaults, Settings type, or dashboard save handlers'
     );
+  });
+
+  it('fails when a visible setting is missing metadata', () => {
+    const root = makeFixture({
+      metadata: {
+        theme: {
+          type: 'string',
+          control: 'select',
+          label: 'Theme',
+          help: 'Controls the dashboard theme.',
+          default: 'dark',
+          options: [{ value: 'dark', label: 'Dark' }],
+        },
+        debugMode: {
+          type: 'boolean',
+          control: 'checkbox',
+          label: 'Debug mode',
+          help: 'Controls verbose diagnostics.',
+          default: false,
+        },
+      },
+    });
+    const report = analyzeSettingsSchema({ rootDir: root });
+
+    expect(report.ok).toBe(false);
+    expect(report.errors).toContain('Setting "customCss" is missing schema metadata');
+  });
+
+  it('fails when metadata defaults drift from settings defaults', () => {
+    const root = makeFixture({
+      metadata: {
+        theme: {
+          type: 'string',
+          control: 'select',
+          label: 'Theme',
+          help: 'Controls the dashboard theme.',
+          default: 'light',
+          options: [{ value: 'light', label: 'Light' }],
+        },
+        debugMode: {
+          type: 'boolean',
+          control: 'checkbox',
+          label: 'Debug mode',
+          help: 'Controls verbose diagnostics.',
+          default: false,
+        },
+        customCss: {
+          type: 'string',
+          control: 'textarea',
+          label: 'Custom CSS',
+          help: 'Stores custom dashboard CSS.',
+          defaultSource: 'runtime',
+        },
+      },
+    });
+    const report = analyzeSettingsSchema({ rootDir: root });
+
+    expect(report.ok).toBe(false);
+    expect(report.errors).toContain('Setting "theme" metadata default does not match src/config/settings-defaults.json');
+  });
+
+  it('requires validation descriptors for high-risk settings', () => {
+    const root = makeFixture({
+      schemaKeys: ['theme', 'debugMode', 'customCss', 'badgeColor'],
+      metadata: {
+        theme: {
+          type: 'string',
+          control: 'select',
+          label: 'Theme',
+          help: 'Controls the dashboard theme.',
+          default: 'dark',
+          options: [{ value: 'dark', label: 'Dark' }],
+        },
+        debugMode: {
+          type: 'boolean',
+          control: 'checkbox',
+          label: 'Debug mode',
+          help: 'Controls verbose diagnostics.',
+          default: false,
+        },
+        customCss: {
+          type: 'string',
+          control: 'textarea',
+          label: 'Custom CSS',
+          help: 'Stores custom dashboard CSS.',
+          defaultSource: 'runtime',
+        },
+        badgeColor: {
+          type: 'string',
+          control: 'text',
+          label: 'Badge color',
+          help: 'Controls the badge color.',
+          defaultSource: 'runtime',
+        },
+      },
+    });
+    const report = analyzeSettingsSchema({ rootDir: root });
+
+    expect(report.ok).toBe(false);
+    expect(report.errors).toContain('Setting "badgeColor" metadata must declare hex-color validation');
   });
 
   it('returns a non-zero CLI exit code when schema coverage drifts', () => {

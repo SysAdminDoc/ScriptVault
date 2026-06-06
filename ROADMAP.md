@@ -825,6 +825,12 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
     dashboard a11y coverage pins error markup, native constraints, shared
     validation hooks, and raw lint-size validation before coercion. Remaining
     work is schema-backed metadata for every visible Settings control.
+  - Progress: 2026-06-06 added 106 schema metadata entries for all classified
+    visible settings plus dashboard-saved credential controls. The schema gate
+    now requires type, control, label, help, default/defaultSource, select
+    options, and the high-risk validation descriptors. Remaining work is UI
+    consumption of the metadata and field-specific validation for
+    allowlist/pattern text areas.
   - Complexity: L
 
 ---
