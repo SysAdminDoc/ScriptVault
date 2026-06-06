@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 95 - 2026-06-06
+Last cycle: Cycle 96 - 2026-06-06
 
 ## Latest Result
 
@@ -459,14 +459,23 @@ Last cycle: Cycle 95 - 2026-06-06
   Verification used focused parser/DNR/parity tests, the full check suite,
   build, high-severity audit, CWS remote-code scan, Monaco ESM scan, TS runtime
   check, forbidden-reference grep, and `git diff --check`.
+  Cycle 96 added the L-8 GM storage sync data-model slice: `syncValues` is a
+  sync-safe per-script opt-in marker, `scriptvault-gm-value-sync/v1` bundles are
+  JSON-only and capped at 64 KiB per script, 128 keys, and 256 bytes per key
+  name, CloudSync/EasyCloud tests prove provider envelopes still exclude actual
+  GM values, and `docs/gm-value-sync-data-model.md` records provider-wiring and
+  conflict-handling constraints. Verification used focused GM value
+  sync/cloud-sync/EasyCloud/parity tests, the full check suite, build,
+  high-severity audit, CWS remote-code scan, Monaco ESM scan, TS runtime check,
+  forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. Cycle 95 closed L-4 through the
-`@webRequest` path. The next best local cycle is Cycle 96: audit the next
-non-credential-gated roadmap item, starting with L-8 per-script
-GM_setValue/getValue sync value data-model planning or a smaller local slice if
-the live code shows a safer prerequisite.
+Continue from `ROADMAP.md` Round 40. Cycle 96 added the L-8 opt-in/capped GM
+value sync data model but did not wire values into providers. The next best
+local cycle is Cycle 97: wire the bundle builder into CloudSync preview/upload
+with conservative opt-in behavior, or add the local support diagnostics needed
+before provider writes if the live code shows a safer prerequisite.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -475,8 +484,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 95 complete for 2026-06-06; roadmap continuation
-  points to Cycle 96 per-script GM storage sync data-model planning or the next
-  available non-credential-gated roadmap item.
+- Status: ScriptVault Cycle 96 complete for 2026-06-06; roadmap continuation
+  points to Cycle 97 GM value sync provider wiring/support diagnostics or the
+  next available non-credential-gated roadmap item.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

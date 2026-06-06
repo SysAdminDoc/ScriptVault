@@ -272,6 +272,7 @@ describe('source easycloud sync module', () => {
         settings: {
           runAt: 'document-start',
           notes: 'portable note',
+          syncValues: true,
           userModified: true,
           mergeConflict: true,
           _registrationError: 'local registration failed',
@@ -293,6 +294,9 @@ describe('source easycloud sync module', () => {
     const body = uploadCall[1].body;
     expect(body).toContain('"runAt":"document-start"');
     expect(body).toContain('"notes":"portable note"');
+    expect(body).toContain('"syncValues":true');
+    expect(body).not.toContain('"values"');
+    expect(body).not.toContain('"storage"');
     expect(body).not.toContain('userModified');
     expect(body).not.toContain('mergeConflict');
     expect(body).not.toContain('_registrationError');

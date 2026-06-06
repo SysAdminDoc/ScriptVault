@@ -197,9 +197,11 @@ describe('source hardening parity guards', () => {
       expect(text).toContain('userModified');
       expect(text).toContain('mergeConflict');
       expect(text).toContain('runAt');
+      expect(text).toContain('syncValues');
       expect(text).toContain('userMatches');
     }
     expect(scriptTypes).toContain('Cloud sync helpers must not upload these.');
+    expect(scriptTypes).toContain('syncValues?: boolean;');
     expect(core).toContain('prepareSyncEnvelopeForRemoteUpload');
     expect(cloudSync).toContain('prepareSyncEnvelopeForRemoteUpload');
     expect(easyCloud).toContain('prepareSyncEnvelopeForRemoteUpload');

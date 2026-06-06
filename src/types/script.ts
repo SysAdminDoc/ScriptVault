@@ -144,6 +144,8 @@ export interface ScriptSettings {
   managed?: boolean;
   managedOriginKey?: string;
   managedAppliedAt?: number;
+  /** Opt-in marker for future cross-device GM storage value sync. */
+  syncValues?: boolean;
   // User-facing preferences such as runAt, URL overrides, notes, tags, and
   // pinned state are synced only when explicitly allowlisted by the sync helper.
   [key: string]: unknown;

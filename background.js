@@ -8517,6 +8517,7 @@ const EasyCloudSync = (() => {
     "userExcludes",
     "pinned",
     "perfBudget",
+    "syncValues",
     "tags"
   ]);
   var LOCAL_ONLY_SCRIPT_SETTING_KEYS = /* @__PURE__ */ new Set([
@@ -16474,6 +16475,7 @@ const SYNC_SAFE_SCRIPT_SETTING_KEYS = new Set([
   'userConfig',
   'pinned',
   'perfBudget',
+  'syncValues',
   'tags',
 ]);
 
