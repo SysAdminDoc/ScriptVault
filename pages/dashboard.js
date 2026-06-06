@@ -7476,6 +7476,36 @@
                 </div>`;
     }
 
+    function formatGreasyForkPublicationReceiptSummaryLine(receipt, index) {
+        const modeLabel = receipt.mode === 'update'
+            ? `Update Greasy Fork script ${receipt.greasyForkScriptId || '?'}`
+            : 'New Greasy Fork script';
+        const version = receipt.metadata?.version || '-';
+        const name = receipt.metadata?.name || 'Unnamed script';
+        const hashLabel = receipt.codeSha256 ? `SHA-256 ${receipt.codeSha256}` : 'SHA-256 unavailable';
+        const target = receipt.targetUrl || '-';
+        const timestamp = formatTime(receipt.confirmedAt || receipt.createdAt);
+        return [
+            `${index === 0 ? 'Latest' : `Receipt ${index + 1}`}: ${modeLabel}`,
+            `${name} v${version}`,
+            timestamp,
+            hashLabel,
+            formatBytes(receipt.codeLength || 0),
+            target
+        ].join(' | ');
+    }
+
+    function buildGreasyForkPublicationReceiptSummaryText(receipts) {
+        const history = normalizeGreasyForkPublicationReceiptList(receipts);
+        if (!history.length) return 'No local Greasy Fork publication receipts recorded.';
+        return [
+            'Greasy Fork publication receipt summary',
+            'Local audit markers only. Submitted source and account/session data are not stored.',
+            '',
+            ...history.map(formatGreasyForkPublicationReceiptSummaryLine)
+        ].join('\n');
+    }
+
     function renderGreasyForkPublicationReceiptHtml(receipts) {
         const history = normalizeGreasyForkPublicationReceiptList(receipts);
         const receipt = history[0] || null;
@@ -7509,14 +7539,33 @@
                 ${renderGreasyForkPublicationReceiptHistoryRows(history)}
                 <div class="conflict-list-item">
                     <span class="panel-empty-inline">Receipts are local audit markers only; submitted source and account/session data are not stored.</span>
-                    <button type="button" class="btn btn-sm" data-publication-receipts-clear="${escapeHtml(receipt.scriptId || '')}">Clear history</button>
+                    <span>
+                        <button type="button" class="btn btn-sm" data-publication-receipts-copy="${escapeHtml(receipt.scriptId || '')}">Copy summary</button>
+                        <button type="button" class="btn btn-sm" data-publication-receipts-clear="${escapeHtml(receipt.scriptId || '')}">Clear history</button>
+                    </span>
                 </div>
             </div>
         `;
     }
 
     function bindGreasyForkPublicationReceiptActions() {
+        const copyButton = elements.infoPublicationReceipt?.querySelector('[data-publication-receipts-copy]');
         const clearButton = elements.infoPublicationReceipt?.querySelector('[data-publication-receipts-clear]');
+        copyButton?.addEventListener('click', async () => {
+            const scriptId = copyButton.dataset.publicationReceiptsCopy || state.currentScriptId || '';
+            const tabState = scriptId ? state.openTabs[scriptId] : null;
+            const receipts = normalizeGreasyForkPublicationReceiptList(tabState?.publicationReceipts || tabState?.publicationReceipt || []);
+            if (!receipts.length) {
+                showToast('No publication receipts to copy', 'info');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(buildGreasyForkPublicationReceiptSummaryText(receipts));
+                showToast('Publication receipt summary copied', 'success');
+            } catch {
+                showToast('Copy failed', 'error');
+            }
+        });
         clearButton?.addEventListener('click', async () => {
             const scriptId = clearButton.dataset.publicationReceiptsClear || state.currentScriptId || '';
             if (!scriptId) return;
