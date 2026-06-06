@@ -138,8 +138,10 @@
     };
     const BACKUP_DAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const LOCAL_WORKSPACE_DB_NAME = 'scriptvault';
-    const LOCAL_WORKSPACE_DB_VERSION = 2;
+    const LOCAL_WORKSPACE_DB_VERSION = 3;
     const LOCAL_WORKSPACE_STORE = 'localWorkspaceBindings';
+    const PUBLICATION_RECEIPTS_STORE = 'publicationReceipts';
+    const MAX_PUBLICATION_RECEIPTS_PER_SCRIPT = 10;
     const LOCAL_WORKSPACE_MAX_SCRIPT_BYTES = 5 * 1024 * 1024;
     const SETTINGS_SECTION_GROUPS = {
         general: 'core',
@@ -1501,6 +1503,7 @@
         elements.infoDownloadUrl = document.getElementById('infoDownloadUrl');
         elements.infoProvenance = document.getElementById('infoProvenance');
         elements.infoTrustReceipt = document.getElementById('infoTrustReceipt');
+        elements.infoPublicationReceipt = document.getElementById('infoPublicationReceipt');
         elements.infoGrants = document.getElementById('infoGrants');
         elements.infoMatches = document.getElementById('infoMatches');
         elements.infoResources = document.getElementById('infoResources');
@@ -7305,6 +7308,7 @@
 
         return {
             ok: missing.length === 0 && source.length > 0,
+            scriptRecordId: script?.id || '',
             mode: scriptId ? 'update' : 'new',
             scriptId,
             targetUrl,
@@ -7367,6 +7371,152 @@
         return true;
     }
 
+    function buildGreasyForkPublicationReceiptRecord(preflight, options = {}) {
+        const metadata = preflight?.metadata || {};
+        const createdAt = options.createdAt || Date.now();
+        const receiptId = options.receiptId || `gfpub-${createdAt.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        return {
+            receiptId,
+            scriptId: String(options.scriptId || preflight?.scriptRecordId || ''),
+            kind: 'greasy-fork-publication',
+            status: 'submitted-confirmed',
+            mode: preflight?.mode === 'update' ? 'update' : 'new',
+            greasyForkScriptId: String(preflight?.greasyForkScriptId || preflight?.scriptId || ''),
+            targetUrl: String(preflight?.targetUrl || ''),
+            codeLength: Number.isFinite(preflight?.codeLength) ? preflight.codeLength : 0,
+            codeSha256: typeof options.codeSha256 === 'string' ? options.codeSha256 : '',
+            metadata: {
+                name: String(metadata.name || '').slice(0, 200),
+                namespace: String(metadata.namespace || '').slice(0, 240),
+                version: String(metadata.version || '').slice(0, 80),
+                license: String(metadata.license || '').slice(0, 120),
+                updateURL: String(metadata.updateURL || '').slice(0, 1000),
+                downloadURL: String(metadata.downloadURL || '').slice(0, 1000)
+            },
+            confirmedAt: options.confirmedAt || createdAt,
+            createdAt
+        };
+    }
+
+    function summarizeGreasyForkPublicationReceipt(row) {
+        if (!row) return null;
+        return {
+            receiptId: row.receiptId,
+            scriptId: row.scriptId,
+            kind: row.kind,
+            status: row.status,
+            mode: row.mode,
+            greasyForkScriptId: row.greasyForkScriptId || '',
+            targetUrl: row.targetUrl || '',
+            codeLength: row.codeLength || 0,
+            codeSha256: row.codeSha256 || '',
+            metadata: {
+                name: row.metadata?.name || '',
+                namespace: row.metadata?.namespace || '',
+                version: row.metadata?.version || '',
+                license: row.metadata?.license || '',
+                updateURL: row.metadata?.updateURL || '',
+                downloadURL: row.metadata?.downloadURL || ''
+            },
+            confirmedAt: row.confirmedAt || row.createdAt || null,
+            createdAt: row.createdAt || null
+        };
+    }
+
+    async function sha256HexForPublicationText(text) {
+        if (!globalThis.crypto?.subtle || typeof TextEncoder === 'undefined') return '';
+        try {
+            const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(text || '')));
+            return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
+        } catch (_error) {
+            return '';
+        }
+    }
+
+    async function recordGreasyForkSubmittedPublication(preflight, script = getCurrentScript()) {
+        const scriptId = preflight?.scriptRecordId || script?.id || '';
+        if (!scriptId || !preflight?.ok) throw new Error('Publication preflight is incomplete');
+        const codeSha256 = await sha256HexForPublicationText(preflight.code);
+        const receipt = buildGreasyForkPublicationReceiptRecord(preflight, { scriptId, codeSha256 });
+        const summary = await putGreasyForkPublicationReceipt(receipt);
+        const currentScript = state.scripts.find(item => item.id === scriptId) || script || null;
+        patchOpenTabStatus(scriptId, { publicationReceipt: summary }, currentScript);
+        if (scriptId === state.currentScriptId && currentScript) {
+            renderGreasyForkPublicationReceiptInfo(summary);
+        }
+        return summary;
+    }
+
+    function renderGreasyForkPublicationReceiptHtml(receipt) {
+        if (!receipt) {
+            return '<span class="panel-empty-inline">No publish handoff receipt recorded yet</span>';
+        }
+        const modeLabel = receipt.mode === 'update'
+            ? `Updated Greasy Fork script ${receipt.greasyForkScriptId || '?'}`
+            : 'Submitted as a new Greasy Fork script';
+        const hashLabel = receipt.codeSha256
+            ? `SHA-256 ${receipt.codeSha256.slice(0, 16)}`
+            : 'Hash unavailable';
+        const version = receipt.metadata?.version || '-';
+        return `
+            <div class="conflict-list">
+                <div class="conflict-list-item">
+                    <span>
+                        <strong>${escapeHtml(modeLabel)}</strong>
+                        <div class="panel-empty-inline" style="margin-top:4px">${escapeHtml(receipt.metadata?.name || 'Unnamed script')} v${escapeHtml(version)}</div>
+                    </span>
+                    <span class="info-tag">${escapeHtml(formatTime(receipt.confirmedAt || receipt.createdAt))}</span>
+                </div>
+                <div class="conflict-list-item">
+                    <span>${escapeHtml(hashLabel)}</span>
+                    <span class="info-tag">${escapeHtml(formatBytes(receipt.codeLength || 0))}</span>
+                </div>
+                <div class="conflict-list-item">
+                    <span>${renderInfoLink(receipt.targetUrl)}</span>
+                    <span class="info-tag">Local receipt</span>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderGreasyForkPublicationReceiptInfo(receipt) {
+        if (elements.infoPublicationReceipt) {
+            elements.infoPublicationReceipt.innerHTML = renderGreasyForkPublicationReceiptHtml(receipt);
+        }
+    }
+
+    function showGreasyForkPublicationConfirmation(preflight) {
+        const html = `
+            <p>Record a local publication receipt only after the Greasy Fork form was reviewed and submitted.</p>
+            <div class="info-grid" style="margin-top:12px">
+                <div class="info-item">
+                    <span class="info-label">Target</span>
+                    <span class="info-value">${escapeHtml(preflight.targetUrl)}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Version</span>
+                    <span class="info-value">${escapeHtml(preflight.metadata?.version || '-')}</span>
+                </div>
+            </div>
+        `;
+        showModal('Record publication receipt', html, [
+            {
+                label: 'Not submitted',
+                callback: () => hideModal()
+            },
+            {
+                label: 'Record submitted',
+                class: 'btn-primary',
+                busyLabel: 'Recording...',
+                callback: async () => {
+                    await recordGreasyForkSubmittedPublication(preflight);
+                    hideModal();
+                    showToast('Publication receipt recorded', 'success');
+                }
+            }
+        ]);
+    }
+
     function showGreasyForkPublishPreview(preflight) {
         const metadataRows = [
             ['Mode', preflight.mode === 'update' ? `Update script ${preflight.scriptId}` : 'New script'],
@@ -7422,6 +7572,7 @@
                     }
                     if (submitGreasyForkPublishHandoff(preflight)) {
                         showToast('Greasy Fork handoff opened', 'success');
+                        showGreasyForkPublicationConfirmation(preflight);
                     } else {
                         showToast('Unable to open Greasy Fork handoff', 'error');
                     }
@@ -7661,6 +7812,12 @@
             const bindings = db.createObjectStore(LOCAL_WORKSPACE_STORE, { keyPath: 'bindingId' });
             bindings.createIndex('by-script', 'scriptId', { unique: false });
         }
+
+        if (oldVersion < 3 && !db.objectStoreNames.contains(PUBLICATION_RECEIPTS_STORE)) {
+            const receipts = db.createObjectStore(PUBLICATION_RECEIPTS_STORE, { keyPath: 'receiptId' });
+            receipts.createIndex('by-script', 'scriptId', { unique: false });
+            receipts.createIndex('by-created', 'createdAt', { unique: false });
+        }
     }
 
     function openDashboardLocalWorkspaceDB() {
@@ -7706,14 +7863,23 @@
         });
     }
 
-    async function withDashboardLocalWorkspaceStore(mode, callback) {
+    async function withDashboardLocalStore(storeName, mode, callback) {
         const db = await openDashboardLocalWorkspaceDB();
-        const tx = db.transaction(LOCAL_WORKSPACE_STORE, mode);
-        const store = tx.objectStore(LOCAL_WORKSPACE_STORE);
+        const tx = db.transaction(storeName, mode);
+        const store = tx.objectStore(storeName);
         const done = localWorkspaceTransactionDone(tx);
         const result = await callback(store, tx);
         await done;
         return result;
+    }
+
+    async function withDashboardLocalWorkspaceStore(mode, callback) {
+        return withDashboardLocalStore(LOCAL_WORKSPACE_STORE, mode, callback);
+    }
+
+    async function withDashboardPublicationReceiptStore(mode, callback) {
+        if (typeof indexedDB === 'undefined') return null;
+        return withDashboardLocalStore(PUBLICATION_RECEIPTS_STORE, mode, callback);
     }
 
     function summarizeDashboardLocalWorkspaceBinding(row) {
@@ -7791,6 +7957,77 @@
         };
         await withDashboardLocalWorkspaceStore('readwrite', store => localWorkspaceRequest(store.put(row)));
         return summarizeDashboardLocalWorkspaceBinding(row);
+    }
+
+    async function getLatestGreasyForkPublicationReceipt(scriptId) {
+        if (!scriptId || typeof indexedDB === 'undefined') return null;
+        return withDashboardPublicationReceiptStore('readonly', store => new Promise((resolve, reject) => {
+            const out = [];
+            const request = store.index('by-script').openCursor(IDBKeyRange.only(scriptId));
+            request.onsuccess = () => {
+                const cursor = request.result;
+                if (!cursor) {
+                    out.sort((a, b) => (b.confirmedAt || b.createdAt || 0) - (a.confirmedAt || a.createdAt || 0));
+                    resolve(summarizeGreasyForkPublicationReceipt(out[0] || null));
+                    return;
+                }
+                out.push(cursor.value);
+                cursor.continue();
+            };
+            request.onerror = () => reject(request.error || new Error('IndexedDB cursor failed'));
+        }));
+    }
+
+    async function trimGreasyForkPublicationReceiptsForScript(store, scriptId) {
+        if (!scriptId) return;
+        const rows = await new Promise((resolve, reject) => {
+            const out = [];
+            const request = store.index('by-script').openCursor(IDBKeyRange.only(scriptId));
+            request.onsuccess = () => {
+                const cursor = request.result;
+                if (!cursor) {
+                    resolve(out);
+                    return;
+                }
+                out.push(cursor.value);
+                cursor.continue();
+            };
+            request.onerror = () => reject(request.error || new Error('IndexedDB cursor failed'));
+        });
+        rows.sort((a, b) => (b.confirmedAt || b.createdAt || 0) - (a.confirmedAt || a.createdAt || 0));
+        await Promise.all(rows.slice(MAX_PUBLICATION_RECEIPTS_PER_SCRIPT).map(row => localWorkspaceRequest(store.delete(row.receiptId))));
+    }
+
+    async function putGreasyForkPublicationReceipt(record) {
+        if (!record?.scriptId || typeof indexedDB === 'undefined') return null;
+        const row = buildGreasyForkPublicationReceiptRecord(record, {
+            receiptId: record.receiptId,
+            scriptId: record.scriptId,
+            codeSha256: record.codeSha256,
+            confirmedAt: record.confirmedAt,
+            createdAt: record.createdAt
+        });
+        await withDashboardPublicationReceiptStore('readwrite', async store => {
+            await localWorkspaceRequest(store.put(row));
+            await trimGreasyForkPublicationReceiptsForScript(store, row.scriptId);
+        });
+        return summarizeGreasyForkPublicationReceipt(row);
+    }
+
+    async function refreshGreasyForkPublicationReceiptForScript(scriptId) {
+        if (!scriptId) return null;
+        try {
+            const receipt = await getLatestGreasyForkPublicationReceipt(scriptId);
+            const script = state.scripts.find(s => s.id === scriptId) || null;
+            patchOpenTabStatus(scriptId, { publicationReceipt: receipt }, script);
+            if (scriptId === state.currentScriptId) {
+                renderGreasyForkPublicationReceiptInfo(receipt);
+            }
+            return receipt;
+        } catch (error) {
+            console.warn('[ScriptVault] Failed to load publication receipt:', error);
+            return null;
+        }
     }
 
     async function queryLocalWorkspacePermission(handle, mode = 'read') {
@@ -8505,6 +8742,7 @@
         loadScriptStorage(script);
         loadExternals(script);
         void refreshLocalWorkspaceBindingForScript(scriptId);
+        void refreshGreasyForkPublicationReceiptForScript(scriptId);
         openEditorOverlay();
         if (updateRoute) {
             setDashboardHash(`script_${encodeURIComponent(scriptId)}`);
@@ -8647,6 +8885,9 @@
         }
         if (elements.infoTrustReceipt) {
             elements.infoTrustReceipt.innerHTML = renderTrustReceiptInfo(script.trustReceipt);
+        }
+        if (elements.infoPublicationReceipt) {
+            renderGreasyForkPublicationReceiptInfo(state.openTabs[script.id]?.publicationReceipt || null);
         }
 
         // @contributionURL
