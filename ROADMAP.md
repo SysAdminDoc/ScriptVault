@@ -197,6 +197,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Problem:** Tampermonkey v5.5.0 added OS policy provisioning. No open-source manager offers this.
 - **Deliverable:** Read `chrome.storage.managed` policy keys for script URLs, auto-install on load, managed-script indicator.
 - **Progress:** Cycle 92 made the existing provisioning hook loadable through a Chrome/Edge `storage.managed_schema`, restricted managed storage to trusted extension contexts when supported, tags managed installs by returned script ID plus URL/hash origin key, adds the dashboard `Managed` indicator, and documents the administrator policy payload.
+- **Progress:** Cycle 93 added aggregate managed-policy local health evidence: managed storage support, access-level control availability, policy read status, configured URL/inline/invalid entry counts, cleanup toggle state, installed managed script count, and warning-only mismatch signals without policy URLs, inline source, origin keys, script names, or script IDs.
 
 ### L-2. Local Filesystem Script Loading (Watch Mode)
 - **Priority:** P3 | **Effort:** M | **Source:** [S29, S30]
@@ -312,6 +313,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 90 | Greasy Fork receipt export fallback | `pages/dashboard.js`, `tests/greasyfork-publish-handoff.test.js` | Local Blob URLs plus anchor `download` preserve a browser-native export path for sanitized local receipt text [S76, S95, S96] | Added downloadable sanitized receipt summaries, safe receipt filenames, object URL revocation, focused static coverage, and Chromium smoke coverage for exported text redaction |
 | 91 | Greasy Fork session-check polish | `pages/dashboard.js`, `tests/greasyfork-publish-handoff.test.js` | Greasy Fork publication still depends on the user's browser session, so the preflight modal should let users open Greasy Fork without posting script data [S76] | Added a user-initiated `Open Greasy Fork` modal action that opens only the base URL with noopener/noreferrer, plus focused static coverage and Chromium smoke proof |
 | 92 | Enterprise policy provisioning | `manifest.json`, `managed-storage-schema.json`, `src/background/core.ts`, `pages/dashboard.js`, `docs/enterprise-policy-provisioning.md`, focused manifest/runtime tests | Chrome managed storage requires a manifest-declared schema; managed storage is read-only policy data and can be restricted to trusted contexts [S28, S97, S98] | Added schema wiring, trusted-context access narrowing, deterministic managed install tags, a dashboard Managed badge, and administrator docs |
+| 93 | Enterprise policy diagnostics | `src/background/core.ts`, `src/types/messages.ts`, local health/support snapshot tests | Chrome policy deployment is normally inspected at `chrome://policy`, but ScriptVault support snapshots need only aggregate extension-side evidence [S97, S98, S99] | Added managed policy support/read/configuration/install counts and warning signals to local health without exposing policy values |
 
 ## Continuation State
 
@@ -449,3 +451,4 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | S96 | MDN anchor download | https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a#download |
 | S97 | Chrome Storage API managed area | https://developer.chrome.com/docs/extensions/reference/api/storage |
 | S98 | Chrome managed storage manifest schema | https://developer.chrome.com/docs/extensions/reference/manifest/storage |
+| S99 | Chrome extension policy deployment verification | https://support.google.com/chrome/a/answer/7517624 |
