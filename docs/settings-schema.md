@@ -39,7 +39,9 @@ object. Each entry declares a storage type, control shape, label, help text,
 default or runtime default source, select options where applicable, and
 validation descriptors for the high-risk fields. The current schema has 106
 metadata entries covering all classified visible settings plus credential
-fields saved from the dashboard.
+fields saved from the dashboard. Entries with `elementId` are checked against
+`pages/dashboard.html` so control types, select option values, and validation
+error-node wiring cannot drift silently.
 
 Field-level validation has started on the highest-risk settings. Badge color,
 lint maximum size, WebDAV/S3 endpoint URLs, denied hosts, and linter JSON now
@@ -49,5 +51,5 @@ save-blocking validator in `pages/dashboard.js`. Page allowlist/blacklist,
 manual blacklist, and download whitelist text areas also expose text errors and
 block malformed regex literals or unsafe multiline entries before persistence.
 
-Remaining work: have the Settings UI consume this metadata directly instead of
-keeping the schema as a checked inventory.
+Remaining work: use the checked schema metadata to generate or initialize more
+of the Settings UI instead of keeping the dashboard markup fully hand-authored.

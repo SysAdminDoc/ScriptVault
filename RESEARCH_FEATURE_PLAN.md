@@ -392,8 +392,10 @@ Important integrations, permissions, storage, and data flows:
   label, help, default/defaultSource, select options, and validation
   descriptors for the high-risk fields. Cycle 29 added field-specific
   validation for page allowlist/blacklist, manual blacklist, and download
-  whitelist multiline pattern text. Remaining work is UI consumption of the
-  metadata.
+  whitelist multiline pattern text. Cycle 30 made metadata entries with
+  `elementId` an active dashboard contract by checking live control type,
+  select option values, and validation error-node wiring. Remaining work is
+  using the checked metadata to generate or initialize more Settings UI.
 - Implementation areas: `src/config/settings-defaults.json`,
   `src/types/settings.ts`, `src/modules/storage.ts`, `pages/dashboard.html`,
   `pages/dashboard.js`, settings tests, a schema report doc.
@@ -704,7 +706,9 @@ Important integrations, permissions, storage, and data flows:
     WebDAV/S3 URLs, denied hosts, and linter JSON. Added 106 schema metadata
     entries with checker enforcement for visible and dashboard credential
     controls. Added accessible validation for multiline pattern lists.
-    Remaining work is UI consumption of the metadata.
+    Added dashboard DOM cross-checks for metadata element IDs, control types,
+    select options, and validation error nodes. Remaining work is using the
+    checked metadata to generate or initialize more Settings UI.
   - Verify: schema parity tests, malformed-input tests, `npm run test:a11y`.
 
 - [x] P2 - Add optional dependency reach gate
