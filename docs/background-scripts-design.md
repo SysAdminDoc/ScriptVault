@@ -37,6 +37,12 @@ recording script names, source, or URLs.
 scaffold. It builds a DOM-less wrapper string for the future runner but is not
 called by registration or alarms yet.
 
+`src/background/background-runner-bridge.ts` owns the non-executing assembly
+step. It combines a planner result with a wrapper payload for eligible scripts,
+returns wrapper construction errors such as unsupported `@require`, and always
+reports `executionEnabled: false` until an offscreen/service-worker runner is
+wired.
+
 ## API Surface
 
 Initial allowed APIs should be limited to DOM-independent primitives:
@@ -99,6 +105,8 @@ Acceptance for the implementation pass:
   without script identifiers or URLs.
 - `buildBackgroundWrappedScript()` exposes only the reviewed value, XHR,
   notification, log, and info APIs, and fails closed for DOM/page globals.
+- `prepareBackgroundRunnerPayload()` can build a wrapper payload for an
+  eligible plan while still refusing execution.
 - A later live smoke proves a scheduled background script can call
   `GM_notification` with no matching tab open.
 - Tests prove blocked DOM APIs, host-scope enforcement, timeouts, and disabled

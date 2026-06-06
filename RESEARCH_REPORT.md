@@ -32,6 +32,13 @@ grants and `@require`, blocks page globals with throwing proxies, routes value,
 XHR, notification, log, and info calls through background messages, and records
 script errors through a runner-specific message.
 
+2026-06-06 Cycle 41 non-executing background runner bridge:
+`src/background/background-runner-bridge.ts` now assembles a planner result and
+wrapper payload for eligible `@background` scripts while keeping
+`executionEnabled: false`. The bridge carries reviewed budget clamps into the
+payload and reports wrapper-construction failures, so the next cycle can expose
+dry-run diagnostics without executing script code.
+
 2026-06-04 Cycle 8 comprehensive feature-plan refresh: root-level
 `RESEARCH_FEATURE_PLAN.md` now holds the current implementation-oriented
 research plan for ScriptVault v3.11.0. It preserves `ROADMAP.md` as the open

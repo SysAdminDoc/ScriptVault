@@ -90,6 +90,13 @@ export type {
 } from './background-runner';
 export { buildBackgroundWrappedScript } from './background-wrapper';
 export type { BackgroundWrapperOptions } from './background-wrapper';
+export { prepareBackgroundRunnerPayload } from './background-runner-bridge';
+export type {
+  BackgroundRunnerBridgeOptions,
+  BackgroundRunnerBridgeResult,
+  BackgroundRunnerBridgeStatus,
+  BackgroundRunnerPayload,
+} from './background-runner-bridge';
 
 export { updateBadge, updateBadgeForTab } from './badge';
 
