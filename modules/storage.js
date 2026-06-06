@@ -69,6 +69,8 @@ const StorageModule = (() => {
     autoUpdateMode: "notify",
     updateInterval: 864e5,
     lastUpdateCheck: 0,
+    subscriptionAutoRefresh: true,
+    subscriptionRefreshInterval: 24,
     syncEnabled: false,
     syncProvider: "none",
     syncInterval: 36e5,

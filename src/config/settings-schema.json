@@ -86,6 +86,8 @@
       "showFixedSource",
       "sri",
       "strictMode",
+      "subscriptionAutoRefresh",
+      "subscriptionRefreshInterval",
       "syncEnabled",
       "syncEncryptionEnabled",
       "syncEncryptionKdfIterations",
@@ -295,6 +297,43 @@
       "help": "Controls auto update mode.",
       "elementId": "settingsSilentUpdate",
       "default": "notify"
+    },
+    "subscriptionAutoRefresh": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Subscription auto-refresh",
+      "help": "Refreshes enabled script subscription feeds on a managed extension alarm.",
+      "elementId": "settingsSubscriptionAutoRefresh",
+      "default": true
+    },
+    "subscriptionRefreshInterval": {
+      "type": "number",
+      "control": "select",
+      "label": "Subscription refresh interval",
+      "help": "Controls how often enabled script subscription feeds refresh.",
+      "elementId": "settingsSubscriptionRefreshInterval",
+      "default": 24,
+      "validation": {
+        "kind": "select-option"
+      },
+      "options": [
+        {
+          "value": "0",
+          "label": "Never"
+        },
+        {
+          "value": "12",
+          "label": "Every 12 Hours"
+        },
+        {
+          "value": "24",
+          "label": "Every Day"
+        },
+        {
+          "value": "168",
+          "label": "Every Week"
+        }
+      ]
     },
     "badgeColor": {
       "type": "string",

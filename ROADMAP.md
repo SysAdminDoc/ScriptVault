@@ -160,9 +160,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Acceptance:** Complete: author-facing README guidance, in-app Help guidance, and static tests are present; no runtime Trusted Types wrapper was added.
 
 ### X-7. Script Subscription Feed Improvements
-- **Priority:** P3 | **Effort:** M | **Source:** [S04, S27]
+- **Priority:** P3 | **Effort:** M | **Source:** [S04, S27, S93]
 - **Problem:** Script subscriptions shipped but are basic JSON feeds.
 - **Deliverable:** Feed auto-refresh via `chrome.alarms`, feed health indicators, configurable refresh interval.
+- **Status:** Shipped 2026-06-06.
+- **Progress:** Cycle 82 added default-on subscription feed refresh scheduling through a managed `subscriptionRefresh` alarm, gated by `subscriptionAutoRefresh`, a visible refresh interval select, and at least one enabled saved feed. The alarm routes through the existing background task mutex and reuses `SubscriptionSystem.refreshSubscriptions()` instead of adding a parallel fetch path. The Utilities subscription list now shows Healthy, Needs attention, Not checked, or Disabled status from existing refresh timestamps/errors, and focused tests pin scheduler settings, alarm dispatch, rescheduling triggers, dashboard controls, and health labels.
+- **Acceptance:** Complete: feeds can auto-refresh on a configurable interval, disabled/empty feed sets do not keep a needless alarm, add/remove/settings changes reschedule the alarm, and dashboard feed rows expose health state.
 
 ### X-8. Developer Workspace and Local File Watch Mode
 - **Priority:** P2 | **Effort:** L | **Source:** [S29, S30, S77, S78, S79, S81, S89, S90, S91, S92]
@@ -295,11 +298,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 79 | Monaco adapter dashboard smoke | `tests/e2e/monaco-adapter-dashboard.spec.js` | The ESM editor must persist real dashboard edits through the CodeMirror-compatible Monaco adapter [S17, S24] | Added a Playwright dashboard smoke for edit-open, adapter readiness, toolbar save, reload, and adapter value persistence |
 | 80 | `browser` namespace alias | `src/shared/utils.ts`, `shared/utils.js`, `scripts/generate-ts-runtime-modules.mjs`, `pages/dashboard-firefox-compat.js`, focused tests | Chrome 148 exposes `browser`, so Chrome/Firefox code should converge without exposing extension APIs to userscript/page worlds [S25] | Added a generated extension-context alias, fixed Chromium-vs-Firefox detection when `browser.runtime` exists, and pinned wrapper boundary coverage |
 | 81 | Trusted Types author docs | `README.md`, `pages/dashboard.html`, `tests/trusted-types-docs.test.js` | MAIN-world scripts on Trusted Types pages need explicit author guidance, while ScriptVault's default USER_SCRIPT path should stay documented as the safer default [S26] | Added README and Help guidance plus a static test that pins the docs and confirms no runtime policy shim was introduced |
+| 82 | Subscription refresh scheduling | `src/background/core.ts`, settings defaults/schema/types, dashboard subscription controls, generated runtime artifacts, focused tests | Chrome alarms remain the MV3-safe periodic work primitive, with same-name replacement and a 30-second minimum interval in current Chrome [S93] | Added a managed subscription refresh alarm, visible auto-refresh/interval controls, feed health labels, scheduler resync on add/remove/settings changes, and static contract coverage |
 
 ## Continuation State
 
-- **Current cycle:** Round 40 Cycle 81 closed X-6 with Trusted Types documentation in README and the dashboard Help tab.
-- **Next implementation angle:** Cycle 82 should move to X-7 and add subscription feed refresh/health groundwork, starting with a focused audit of `src/modules/subscriptions.ts`, scheduler hooks, and existing update-alarm behavior before adding runtime changes.
+- **Current cycle:** Round 40 Cycle 82 closed X-7 with subscription feed auto-refresh scheduling, configurable interval controls, and dashboard health indicators.
+- **Next implementation angle:** Cycle 83 should continue X-8 by auditing local workspace refresh/watch acceptance gaps, especially dashboard state coverage for permission-reconnect, stale-handle, and review-only apply flows before adding runtime changes.
 - **Follow-up source checks:** Re-check CWS user-data/privacy expectations and File System Access handle persistence before editing local-save or local-workspace metadata.
 - **Suggested verification before implementation:** Run focused tests for setup-state banners, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching N-7, N-8, X-8, or X-9.
 
@@ -426,3 +430,4 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | S90 | MDN File System API overview | https://developer.mozilla.org/en-US/docs/Web/API/File_System_API |
 | S91 | Chrome File System Access persistent permissions | https://developer.chrome.com/blog/persistent-permissions-for-the-file-system-access-api |
 | S92 | MDN FileSystemFileHandle | https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle |
+| S93 | Chrome alarms API | https://developer.chrome.com/docs/extensions/reference/api/alarms |

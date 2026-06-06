@@ -12,6 +12,8 @@ describe('subscription dashboard surface', () => {
     expect(html).toContain('id="subscriptionNameInput"');
     expect(html).toContain('id="btnAddSubscription"');
     expect(html).toContain('id="btnRefreshSubscriptions"');
+    expect(html).toContain('id="settingsSubscriptionAutoRefresh"');
+    expect(html).toContain('id="settingsSubscriptionRefreshInterval"');
     expect(html).toContain('id="subscriptionList"');
   });
 
@@ -22,5 +24,15 @@ describe('subscription dashboard surface', () => {
     expect(js).toContain("action: 'refreshSubscriptions'");
     expect(js).toContain("action: 'removeSubscription'");
     expect(js).toContain("update.kind === 'subscription-install'");
+    expect(js).toContain("settingsSubscriptionAutoRefresh: ['subscriptionAutoRefresh', 'checked']");
+    expect(js).toContain("settingsSubscriptionRefreshInterval: ['subscriptionRefreshInterval', 'value']");
+  });
+
+  it('renders feed health indicators', () => {
+    expect(html).toContain('subscription-health');
+    expect(js).toContain("Health: ${escapeHtml(health.label)}");
+    expect(js).toContain("Needs attention");
+    expect(js).toContain("Not checked");
+    expect(js).toContain("Healthy");
   });
 });

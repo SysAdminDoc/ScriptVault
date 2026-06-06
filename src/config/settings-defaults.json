@@ -21,6 +21,8 @@
   "autoUpdateMode": "notify",
   "updateInterval": 86400000,
   "lastUpdateCheck": 0,
+  "subscriptionAutoRefresh": true,
+  "subscriptionRefreshInterval": 24,
   "syncEnabled": false,
   "syncProvider": "none",
   "syncInterval": 3600000,

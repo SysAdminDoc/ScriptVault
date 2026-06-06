@@ -2,6 +2,17 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 82 subscription refresh scheduling: X-7 is complete. Current
+Chrome alarms guidance still supports `chrome.alarms` as the MV3-safe periodic
+work primitive, with same-name alarm replacement and a 30-second minimum
+interval; ScriptVault uses a much longer default feed interval. The background
+now schedules a managed `subscriptionRefresh` alarm only when auto-refresh is
+enabled and at least one feed is enabled, clears stale subscription alarms
+during reconfiguration, dispatches through the existing background mutex, and
+reschedules after add/remove/settings changes. The Utilities feed list exposes
+configurable auto-refresh/interval controls plus health labels derived from
+existing refresh timestamps and errors.
+
 2026-06-06 Cycle 81 Trusted Types author docs: X-6 is complete as a
 documentation-only cycle. `README.md` and the dashboard Help tab now explain
 that ScriptVault's default `USER_SCRIPT` world is separate from page Trusted

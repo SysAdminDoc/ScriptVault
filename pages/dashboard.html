@@ -1988,6 +1988,15 @@
             font-size: 12px;
         }
 
+        .subscription-health {
+            font-weight: 700;
+        }
+
+        .subscription-health.ok { color: var(--accent-green); }
+        .subscription-health.warn { color: var(--accent-yellow); }
+        .subscription-health.error { color: var(--accent-red); }
+        .subscription-health.disabled { color: var(--text-muted); }
+
         .subscription-actions {
             display: flex;
             flex-wrap: wrap;
@@ -7142,6 +7151,14 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                     <div class="setting-row" style="gap:8px">
                         <button type="button" class="btn" id="btnRefreshSubscriptions">Refresh Feeds</button>
+                        <label><input type="checkbox" id="settingsSubscriptionAutoRefresh"> Auto-refresh</label>
+                        <select class="select-field" id="settingsSubscriptionRefreshInterval" aria-label="Subscription refresh interval" aria-describedby="settingsSubscriptionRefreshIntervalError">
+                            <option value="0">Never</option>
+                            <option value="12">Every 12 Hours</option>
+                            <option value="24" selected>Every Day</option>
+                            <option value="168">Every Week</option>
+                        </select>
+                        <span class="setting-error" id="settingsSubscriptionRefreshIntervalError" hidden></span>
                         <span class="utility-inline-status" id="subscriptionStatus">No feeds loaded</span>
                     </div>
                     <div id="subscriptionList" class="subscription-list utility-surface">
