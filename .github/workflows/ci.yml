@@ -55,6 +55,9 @@ jobs:
       - name: Optional dependency reach check
         run: npm run optional-deps:check
 
+      - name: Settings schema check
+        run: npm run settings:schema:check
+
       - name: CWS publish tooling check
         run: npm run cws:check
 

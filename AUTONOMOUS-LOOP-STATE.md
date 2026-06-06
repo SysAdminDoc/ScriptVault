@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 25 - 2026-06-06
+Last cycle: Cycle 26 - 2026-06-06
 
 ## Latest Result
 
@@ -17,15 +17,17 @@ Last cycle: Cycle 25 - 2026-06-06
   version comments and added `npm run actions:pins:check`.
 - Cycle 25 added the optional dependency reach gate so the
   `npm audit --omit=optional` policy is backed by a shipped-source import scan.
-- Verification used the live checkout: `npm run optional-deps:check`, focused
-  optional-dependency reach tests, `npm audit --audit-level=high
-  --omit=optional`, `npm run check`, and `npm run build`.
+- Cycle 26 added a settings schema classification gate covering defaults,
+  TypeScript keys, and dashboard save handlers.
+- Verification used the live checkout: `npm run settings:schema:check`, focused
+  settings schema tests, `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
 
 Continue top-down from `ROADMAP.md`. The next local implementer-actionable row is
-P2 settings discoverability/schema validation unless newer repo state promotes a
-higher priority security or correctness item.
+the remaining P2 settings field-level validation slice: native constraints,
+field-specific accessible text errors, and save-blocking validation for badge
+color, lint size, provider URLs, host lists, and linter JSON.
 
 ## Loop Pointer
 
