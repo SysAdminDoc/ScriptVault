@@ -315,6 +315,9 @@
       "help": "Controls icon badge info.",
       "elementId": "settingsBadgeInfo",
       "default": "running",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "running",
@@ -344,6 +347,9 @@
       "help": "Controls userscript blacklist source.",
       "elementId": "settingsBlacklistSource",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "remote_manual",
@@ -470,6 +476,9 @@
       "help": "Controls config mode.",
       "elementId": "settingsConfigMode",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "beginner",
@@ -584,6 +593,9 @@
       "help": "Controls download mode.",
       "elementId": "settingsDownloadMode",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "default",
@@ -712,6 +724,9 @@
       "help": "Controls theme.",
       "elementId": "settingsEditorTheme",
       "default": "material-darker",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "default",
@@ -821,6 +836,9 @@
       "help": "Controls highlight selection matches.",
       "elementId": "settingsHighlightMatches",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "cursor",
@@ -926,6 +944,9 @@
       "help": "Controls indent with.",
       "elementId": "settingsIndentWith",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "spaces",
@@ -951,6 +972,9 @@
       "help": "Controls key mapping.",
       "elementId": "settingsKeyMapping",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "default",
@@ -1025,6 +1049,9 @@
       "help": "Controls logging level.",
       "elementId": "settingsLoggingLevel",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "off",
@@ -1172,6 +1199,9 @@
       "help": "Controls columns.",
       "elementId": "settingsPopupColumns",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "1",
@@ -1317,6 +1347,9 @@
       "help": "Controls userscript order.",
       "elementId": "settingsScriptOrder",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "auto",
@@ -1343,6 +1376,9 @@
       "help": "Controls userscript search integration.",
       "elementId": "settingsSearchIntegration",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "disabled",
@@ -1480,6 +1516,9 @@
       "help": "Controls tabmode.",
       "elementId": "settingsTabMode",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "indent",
@@ -1559,6 +1598,9 @@
       "help": "Controls trash mode.",
       "elementId": "settingsTrashMode",
       "default": "30",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "disabled",

@@ -6051,10 +6051,11 @@
                 <div class="section-content">
                     <div class="setting-row">
                         <span class="label-text">Config mode:</span>
-                        <select class="select-field" id="settingsConfigMode">
+                        <select class="select-field" id="settingsConfigMode" aria-describedby="settingsConfigModeError">
                             <option value="beginner">Beginner</option>
                             <option value="advanced" selected>Advanced</option>
                         </select>
+                        <span class="setting-error" id="settingsConfigModeError" hidden></span>
                         <span class="help-icon" title="Beginner mode hides advanced options">?</span>
                     </div>
                     <div class="setting-row">
@@ -6073,22 +6074,24 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Logging Level:</span>
-                        <select class="select-field" id="settingsLoggingLevel">
+                        <select class="select-field" id="settingsLoggingLevel" aria-describedby="settingsLoggingLevelError">
                             <option value="off">Off</option>
                             <option value="error" selected>Error</option>
                             <option value="warn">Warning</option>
                             <option value="info">Info</option>
                             <option value="debug">Debug</option>
                         </select>
+                        <span class="setting-error" id="settingsLoggingLevelError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Trash Mode:</span>
-                        <select class="select-field" id="settingsTrashMode">
+                        <select class="select-field" id="settingsTrashMode" aria-describedby="settingsTrashModeError">
                             <option value="disabled" selected>Disabled</option>
                             <option value="1">1 day</option>
                             <option value="7">7 days</option>
                             <option value="30">30 days</option>
                         </select>
+                        <span class="setting-error" id="settingsTrashModeError" hidden></span>
                         <span class="help-icon" title="Keep deleted scripts in trash for recovery">?</span>
                     </div>
                 </div>
@@ -6162,28 +6165,31 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Columns:</span>
-                        <select class="select-field" id="settingsPopupColumns">
+                        <select class="select-field" id="settingsPopupColumns" aria-describedby="settingsPopupColumnsError">
                             <option value="1" selected>1</option>
                             <option value="2">2</option>
                             <option value="3">3</option>
                         </select>
+                        <span class="setting-error" id="settingsPopupColumnsError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Userscript order:</span>
-                        <select class="select-field" id="settingsScriptOrder">
+                        <select class="select-field" id="settingsScriptOrder" aria-describedby="settingsScriptOrderError">
                             <option value="auto" selected>Auto</option>
                             <option value="name">Name</option>
                             <option value="lastmod">Last Modified</option>
                             <option value="position">Position</option>
                         </select>
+                        <span class="setting-error" id="settingsScriptOrderError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Icon badge info:</span>
-                        <select class="select-field" id="settingsBadgeInfo">
+                        <select class="select-field" id="settingsBadgeInfo" aria-describedby="settingsBadgeInfoError">
                             <option value="running" selected>All-time running instances</option>
                             <option value="active">Active scripts only</option>
                             <option value="none">None</option>
                         </select>
+                        <span class="setting-error" id="settingsBadgeInfoError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Icon badge color:</span>
@@ -6219,11 +6225,12 @@
                 <div class="section-content">
                     <div class="setting-row">
                         <span class="label-text">Userscript Search integration:</span>
-                        <select class="select-field" id="settingsSearchIntegration">
+                        <select class="select-field" id="settingsSearchIntegration" aria-describedby="settingsSearchIntegrationError">
                             <option value="disabled" selected>Disabled</option>
                             <option value="greasyFork">Greasy Fork</option>
                             <option value="openUserJS">OpenUserJS</option>
                         </select>
+                        <span class="setting-error" id="settingsSearchIntegrationError" hidden></span>
                         <span class="help-icon" title="Search for scripts when visiting new sites">!</span>
                     </div>
                 </div>
@@ -6429,7 +6436,7 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Theme:</span>
-                        <select class="select-field" id="settingsEditorTheme">
+                        <select class="select-field" id="settingsEditorTheme" aria-describedby="settingsEditorThemeError">
                             <option value="default" selected>Default</option>
                             <option value="monokai">Monokai</option>
                             <option value="dracula">Dracula</option>
@@ -6438,6 +6445,7 @@
                             <option value="ayu-dark">Ayu Dark</option>
                             <option value="claude">Claude</option>
                         </select>
+                        <span class="setting-error" id="settingsEditorThemeError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Font Size:</span>
@@ -6453,12 +6461,13 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Key Mapping:</span>
-                        <select class="select-field" id="settingsKeyMapping">
+                        <select class="select-field" id="settingsKeyMapping" aria-describedby="settingsKeyMappingError">
                             <option value="default" selected>Windows</option>
                             <option value="vim">Vim</option>
                             <option value="emacs">Emacs</option>
                             <option value="sublime">Sublime</option>
                         </select>
+                        <span class="setting-error" id="settingsKeyMappingError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Indentation Width:</span>
@@ -6480,26 +6489,29 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Indent with:</span>
-                        <select class="select-field" id="settingsIndentWith">
+                        <select class="select-field" id="settingsIndentWith" aria-describedby="settingsIndentWithError">
                             <option value="spaces" selected>Spaces</option>
                             <option value="tabs">Tabs</option>
                         </select>
+                        <span class="setting-error" id="settingsIndentWithError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">TabMode:</span>
-                        <select class="select-field" id="settingsTabMode">
+                        <select class="select-field" id="settingsTabMode" aria-describedby="settingsTabModeError">
                             <option value="indent" selected>Indent</option>
                             <option value="shift">Shift</option>
                             <option value="default">Default</option>
                         </select>
+                        <span class="setting-error" id="settingsTabModeError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Highlight selection matches:</span>
-                        <select class="select-field" id="settingsHighlightMatches">
+                        <select class="select-field" id="settingsHighlightMatches" aria-describedby="settingsHighlightMatchesError">
                             <option value="cursor" selected>Cursor</option>
                             <option value="selection">Selection</option>
                             <option value="none">None</option>
                         </select>
+                        <span class="setting-error" id="settingsHighlightMatchesError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <label><input type="checkbox" id="settingsWordWrap" checked> Word wrap</label>
@@ -6723,12 +6735,13 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div class="setting-row">
                         <span class="label-text">Userscript Blacklist Source:</span>
-                        <select class="select-field" id="settingsBlacklistSource">
+                        <select class="select-field" id="settingsBlacklistSource" aria-describedby="settingsBlacklistSourceError">
                             <option value="remote_manual" selected>Remote + Manual</option>
                             <option value="remote">Remote only</option>
                             <option value="manual">Manual only</option>
                             <option value="disabled">Disabled</option>
                         </select>
+                        <span class="setting-error" id="settingsBlacklistSourceError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Block From Severity Level:</span>
@@ -6760,11 +6773,12 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div class="setting-row">
                         <span class="label-text">Download Mode:</span>
-                        <select class="select-field" id="settingsDownloadMode">
+                        <select class="select-field" id="settingsDownloadMode" aria-describedby="settingsDownloadModeError">
                             <option value="default" selected>Default</option>
                             <option value="native">Native</option>
                             <option value="browser">Browser</option>
                         </select>
+                        <span class="setting-error" id="settingsDownloadModeError" hidden></span>
                         <span class="help-icon" title="How GM_download handles file downloads">?</span>
                     </div>
                     <div class="setting-row">
