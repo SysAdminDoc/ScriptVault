@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 80 - 2026-06-06
+Last cycle: Cycle 81 - 2026-06-06
 
 ## Latest Result
 
@@ -253,6 +253,11 @@ Last cycle: Cycle 80 - 2026-06-06
   when `chrome.runtime` is already present, preserves native `browser`, leaves
   inert page globals unchanged, and the dashboard compatibility layer no longer
   treats Chromium `browser.runtime` as Firefox.
+- Cycle 81 closed X-6 with Trusted Types author documentation. README and the
+  dashboard Help tab now explain default `USER_SCRIPT` isolation, MAIN/page
+  context limits, safer DOM write patterns, `GM_addElement`, and the risk of
+  broad passthrough `TrustedHTML` policies, with a static docs test pinning the
+  no-runtime-shim boundary.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -366,14 +371,16 @@ Last cycle: Cycle 80 - 2026-06-06
   Cycle 80 verified the browser namespace alias with focused shared-utils,
   dashboard-compat, wrapper-boundary, and generator tests, TypeScript runtime
   check, high-severity audit, full check suite, build, CWS remote-code scan, and
-  `git diff --check`.
+  `git diff --check`. Cycle 81 verified the Trusted Types documentation with
+  focused docs/dashboard/readability tests, high-severity audit, full check
+  suite, build, CWS remote-code scan, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. The next best local cycle is Cycle 81:
-move to X-6 and add Trusted Types documentation for userscript authors and
-Help/README guidance that explains USER_SCRIPT isolation, MAIN-world
-limitations, and safe wrapper patterns without adding runtime code. The live two-tab
+Continue from `ROADMAP.md` Round 40. The next best local cycle is Cycle 82:
+move to X-7 and add subscription feed refresh/health groundwork, starting with
+a focused audit of `src/modules/subscriptions.ts`, scheduler hooks, and existing
+update-alarm behavior before runtime changes. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
 remains blocked on maintainer credentials, and Edge Partner Center upload/REST
@@ -381,8 +388,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 80 complete for 2026-06-06; roadmap continuation
-  points to Cycle 81 X-6 Trusted Types documentation or the next local
-  packaging audit.
+- Status: ScriptVault Cycle 81 complete for 2026-06-06; roadmap continuation
+  points to Cycle 82 X-7 subscription feed refresh/health groundwork or the
+  next local packaging audit.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

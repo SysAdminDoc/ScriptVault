@@ -79,6 +79,20 @@ window.addEventListener('urlchange', ({ url, oldUrl }) => {
 apply();
 ```
 
+#### Trusted Types and MAIN-world DOM Writes
+
+Most ScriptVault scripts run in the browser `USER_SCRIPT` world. That world is
+separate from the page Trusted Types policy, so `GM_addElement`, `GM_addStyle`,
+and normal DOM creation keep working on sites that enforce
+`require-trusted-types-for 'script'`.
+
+If a script intentionally switches to MAIN/page context or uses `unsafeWindow`,
+the page policy applies. Avoid assigning raw strings to `innerHTML`,
+`outerHTML`, script URLs, or inline event handlers there. Prefer `textContent`,
+`append`, `createElement`, and `GM_addElement` with attributes. If the target
+site requires a `TrustedHTML` object, use a policy approved by that site; do not
+create a broad passthrough policy just to bypass CSP.
+
 ### Script Management
 
 - **Auto-detect installation** &mdash; Navigate to any `.user.js` URL
