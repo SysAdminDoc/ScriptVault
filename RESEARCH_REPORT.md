@@ -2,6 +2,20 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 57 dashboard local file binding: X-8 now has the first
+user-facing File System Access entry point. Current Chrome guidance still
+requires picker feature detection and a user gesture, stored handles still need
+permission checks, and CWS guidance still treats local sensitive data as
+disclosure-relevant. ScriptVault now adds a `Bind File` editor-toolbar action
+that is hidden/disabled when `showOpenFilePicker` or IndexedDB is unavailable,
+calls `window.showOpenFilePicker()` directly from the click handler, stores the
+selected handle only in the local `localWorkspaceBindings` store, renders a
+display-name/permission status chip, and tests that binding does not call
+`saveScript`, read code text, or update save history. Remaining X-8 work is
+`Refresh from local`, `Unbind`, explicit permission reconnect, review-only diff
+apply, no-change detection, and local-file receipt coverage after accepted
+applies.
+
 2026-06-06 Cycle 56 local workspace binding store: X-8 now has the
 first local-only data model needed before a dashboard "Refresh from local file"
 flow can apply code. Current Chrome File System Access docs still allow
