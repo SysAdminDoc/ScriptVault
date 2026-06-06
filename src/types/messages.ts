@@ -306,6 +306,7 @@ interface LocalHealthReportResponse {
     sourceIdentityChanged: number;
     userModified: number;
     syncLocked: number;
+    managedScripts: number;
     backgroundScripts: {
       total: number;
       dormant: number;
@@ -318,6 +319,17 @@ interface LocalHealthReportResponse {
     };
     slowScriptThresholdMs: number;
     staleRemoteThresholdDays: number;
+  };
+  managedPolicy: {
+    available: boolean;
+    accessLevelControlAvailable: boolean;
+    policyReadStatus: 'unsupported' | 'not-configured' | 'readable' | 'unavailable' | 'error';
+    configuredEntries: number;
+    configuredUrlEntries: number;
+    configuredInlineEntries: number;
+    configuredInvalidEntries: number;
+    cleanupEnabled: boolean;
+    installedManagedScripts: number;
   };
   localWorkspace: {
     available: boolean;

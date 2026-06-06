@@ -18299,6 +18299,7 @@ function buildLocalHealthScriptSummary(scripts = [], settings = {}) {
     sourceIdentityChanged: 0,
     userModified: 0,
     syncLocked: 0,
+    managedScripts: 0,
     backgroundScripts: {
       total: 0,
       dormant: 0,
@@ -18323,6 +18324,7 @@ function buildLocalHealthScriptSummary(scripts = [], settings = {}) {
     if (script?.settings?.sourceIdentityChanged) summary.sourceIdentityChanged++;
     if (script?.settings?.userModified) summary.userModified++;
     if (script?.settings?.syncLock) summary.syncLocked++;
+    if (script?.settings?.managed) summary.managedScripts++;
 
     if (script?.meta?.background) {
       const plan = planBackgroundScript(script, settings);
@@ -18343,6 +18345,56 @@ function buildLocalHealthScriptSummary(scripts = [], settings = {}) {
   }
 
   summary.backgroundScripts.unsupportedGrantNames = [...unsupportedBackgroundGrantNames].sort();
+  return summary;
+}
+
+async function buildManagedPolicyHealthSummary(scripts = []) {
+  const managed = chrome.storage?.managed;
+  const summary = {
+    available: !!managed,
+    accessLevelControlAvailable: typeof managed?.setAccessLevel === 'function',
+    policyReadStatus: managed ? 'not-configured' : 'unsupported',
+    configuredEntries: 0,
+    configuredUrlEntries: 0,
+    configuredInlineEntries: 0,
+    configuredInvalidEntries: 0,
+    cleanupEnabled: false,
+    installedManagedScripts: scripts.filter(script => script?.settings?.managed).length
+  };
+  if (!managed) return summary;
+
+  let policy;
+  try {
+    policy = await managed.get(MANAGED_SCRIPT_POLICY_KEYS);
+  } catch (_) {
+    return {
+      ...summary,
+      policyReadStatus: 'unavailable'
+    };
+  }
+
+  const hasManagedScriptsKey = !!policy && Object.hasOwn(policy, 'managedScripts');
+  const hasCleanupKey = !!policy && Object.hasOwn(policy, 'managedScriptsCleanup');
+  const items = Array.isArray(policy?.managedScripts) ? policy.managedScripts : [];
+  summary.policyReadStatus = hasManagedScriptsKey || hasCleanupKey ? 'readable' : 'not-configured';
+  summary.cleanupEnabled = policy?.managedScriptsCleanup === true;
+  summary.configuredEntries = items.length;
+  if (hasManagedScriptsKey && !Array.isArray(policy?.managedScripts)) {
+    summary.configuredInvalidEntries++;
+  }
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') {
+      summary.configuredInvalidEntries++;
+    } else if (typeof item.url === 'string' && item.url.trim()) {
+      summary.configuredUrlEntries++;
+    } else if (typeof item.code === 'string' && item.code) {
+      summary.configuredInlineEntries++;
+    } else {
+      summary.configuredInvalidEntries++;
+    }
+  }
+
   return summary;
 }
 
@@ -18465,7 +18517,7 @@ async function buildLocalWorkspaceHealthSummaryFromStore() {
   return buildLocalWorkspaceHealthSummary(await LocalWorkspaceBindings.list());
 }
 
-function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, localWorkspace, collectionErrors }) {
+function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, localWorkspace, managedPolicy, collectionErrors }) {
   const warnings = [];
   const push = (id, level, message) => warnings.push({ id, level, message });
 
@@ -18512,6 +18564,12 @@ function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callb
   if (localWorkspace?.staleRefreshes > 0) {
     push('localWorkspaceStaleRefreshes', 'info', `${localWorkspace.staleRefreshes} local workspace binding${localWorkspace.staleRefreshes === 1 ? '' : 's'} have not been refreshed in ${localWorkspace.staleRefreshThresholdDays}+ days`);
   }
+  if (managedPolicy?.configuredInvalidEntries > 0) {
+    push('managedPolicyInvalidEntries', 'warning', `${managedPolicy.configuredInvalidEntries} managed policy entr${managedPolicy.configuredInvalidEntries === 1 ? 'y is' : 'ies are'} not installable`);
+  }
+  if (managedPolicy?.configuredEntries > 0 && managedPolicy?.installedManagedScripts === 0) {
+    push('managedPolicyNotApplied', 'warning', `${managedPolicy.configuredEntries} managed policy entr${managedPolicy.configuredEntries === 1 ? 'y has' : 'ies have'} not produced an installed managed script yet`);
+  }
   for (const [id, block] of Object.entries(callbacks || {})) {
     if (block?.level === 'warning' || block?.level === 'critical') {
       push(id, block.level, `${id} is at ${block.percentOfCap}% of its cap`);
@@ -18557,6 +18615,9 @@ async function buildLocalHealthReport() {
   const scripts = scriptsResult.status === 'fulfilled' && Array.isArray(scriptsResult.value)
     ? buildLocalHealthScriptSummary(scriptsResult.value, healthSettings)
     : buildLocalHealthScriptSummary([], healthSettings);
+  const scriptList = scriptsResult.status === 'fulfilled' && Array.isArray(scriptsResult.value)
+    ? scriptsResult.value
+    : [];
   if (scriptsResult.status === 'rejected') {
     collectionErrors.push({ id: 'scriptSummaryFailed', message: 'Script inventory health summary failed' });
   }
@@ -18601,8 +18662,26 @@ async function buildLocalHealthReport() {
     collectionErrors.push({ id: 'localWorkspaceSummaryFailed', message: 'Local workspace health summary failed' });
   }
 
+  let managedPolicy = null;
+  try {
+    managedPolicy = await buildManagedPolicyHealthSummary(scriptList);
+  } catch (_) {
+    managedPolicy = {
+      available: false,
+      accessLevelControlAvailable: false,
+      policyReadStatus: 'error',
+      configuredEntries: 0,
+      configuredUrlEntries: 0,
+      configuredInlineEntries: 0,
+      configuredInvalidEntries: 0,
+      cleanupEnabled: false,
+      installedManagedScripts: scripts.managedScripts
+    };
+    collectionErrors.push({ id: 'managedPolicySummaryFailed', message: 'Managed policy health summary failed' });
+  }
+
   const callbacks = buildLocalHealthCallbackSummary();
-  const warnings = buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, localWorkspace, collectionErrors });
+  const warnings = buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, localWorkspace, managedPolicy, collectionErrors });
 
   return {
     schema: LOCAL_HEALTH_SCHEMA,
@@ -18629,6 +18708,7 @@ async function buildLocalHealthReport() {
     storage,
     registration: _lastRegistrationSweep,
     scripts,
+    managedPolicy,
     localWorkspace,
     updates,
     callbacks,

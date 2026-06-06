@@ -111,6 +111,12 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(dashboardJs).toContain('includesLocalPaths: false');
   });
 
+  it('managed policy health stays aggregate when always included', () => {
+    expect(dashboardJs).toMatch(/localHealth:\s*sanitizeLocalHealthForSupportSnapshot\(localHealthReport/);
+    expect(dashboardJs).not.toMatch(/managedPolicy[\s\S]{0,500}managedOriginKey/);
+    expect(dashboardJs).not.toMatch(/managedPolicy[\s\S]{0,500}managedScripts/);
+  });
+
   it('script inventory omits local workspace handles and absolute paths', () => {
     const block = dashboardJs.match(/snapshot\.scripts = state\.scripts\.map\(script => \{[\s\S]*?\n\s*\}\);/);
     expect(block).toBeTruthy();

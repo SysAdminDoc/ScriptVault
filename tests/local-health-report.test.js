@@ -20,12 +20,13 @@ describe('local health report background action', () => {
     expect(backgroundCoreJs).toContain('scriptvault-local-health/v1');
   });
 
-  it('summarizes storage, scripts, queues, callbacks, and warnings without external beacons', () => {
+  it('summarizes storage, scripts, managed policy, queues, callbacks, and warnings without external beacons', () => {
     const block = backgroundCoreTs.match(/async function buildLocalHealthReport\(\) \{[\s\S]*?\n\}/);
     expect(block).toBeTruthy();
     expect(backgroundCoreTs).toContain('navigator.storage.estimate');
     expect(backgroundCoreTs).toContain('ScriptStorage.getAll()');
     expect(backgroundCoreTs).toContain('SettingsManager.get()');
+    expect(backgroundCoreTs).toContain('buildManagedPolicyHealthSummary(scriptList)');
     expect(backgroundCoreTs).toContain('UpdateSystem.getPendingUpdates()');
     expect(backgroundCoreTs).toContain('UpdateSystem.getRecentUpdates()');
     expect(backgroundCoreTs).toContain('self._notifCallbacks?.size');
@@ -33,6 +34,21 @@ describe('local health report background action', () => {
     expect(backgroundCoreTs).toContain('self._audioWatchedTabs?.size');
     expect(backgroundCoreTs).toContain('buildLocalHealthWarningList');
     expect(block[0]).not.toMatch(/\bfetch\s*\(/);
+  });
+
+  it('summarizes managed policy without policy values, URLs, code, script names, or script ids', () => {
+    const block = backgroundCoreTs.match(/async function buildManagedPolicyHealthSummary\(scripts = \[\]\) \{[\s\S]*?\n\}/);
+    expect(block).toBeTruthy();
+    expect(backgroundCoreTs).toContain('managed.get(MANAGED_SCRIPT_POLICY_KEYS)');
+    expect(backgroundCoreTs).toContain('accessLevelControlAvailable');
+    expect(backgroundCoreTs).toContain('configuredUrlEntries');
+    expect(backgroundCoreTs).toContain('configuredInlineEntries');
+    expect(backgroundCoreTs).toContain('configuredInvalidEntries');
+    expect(backgroundCoreTs).toContain('installedManagedScripts: scripts.filter');
+    expect(backgroundCoreTs).toContain('managedPolicy,');
+    expect(backgroundCoreTs).toContain("push('managedPolicyInvalidEntries', 'warning'");
+    expect(backgroundCoreTs).toContain("push('managedPolicyNotApplied', 'warning'");
+    expect(block[0]).not.toMatch(/originKey|managedOriginKey|scriptId|scriptName|name:|return\s+policy|entries:\s*items/i);
   });
 
   it('summarizes local workspace bindings without file handles, paths, or script identifiers', () => {
@@ -107,6 +123,8 @@ describe('local health report support snapshot wiring', () => {
     expect(messagesTs).toMatch(/registration:\s*\{[\s\S]{0,500}schema: 'scriptvault-registration-sweep\/v1';/);
     expect(messagesTs).toMatch(/registration:\s*\{[\s\S]{0,700}failedScripts: number;/);
     expect(messagesTs).toMatch(/backgroundScripts:\s*\{[\s\S]{0,300}unsupportedGrantNames: string\[\];/);
+    expect(messagesTs).toMatch(/managedScripts: number;/);
+    expect(messagesTs).toMatch(/managedPolicy:\s*\{[\s\S]{0,400}configuredInlineEntries: number;/);
     expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,300}totalBindings: number;/);
     expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,700}refreshStatuses: Record<string, number>;/);
     expect(messagesTs).toMatch(/GetExtensionStatus \| GetLocalHealthReport/);
