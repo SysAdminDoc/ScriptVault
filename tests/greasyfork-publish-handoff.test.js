@@ -279,6 +279,7 @@ describe('Greasy Fork publish handoff preflight', () => {
       const renderInfoLink = value => 'link:' + escapeHtml(value);
       ${dashboardJs.slice(constantsStart, functionsEnd)}
       return {
+        buildGreasyForkPublicationReceiptSummaryFilename,
         buildGreasyForkPublicationReceiptSummaryText,
         renderGreasyForkPublicationReceiptHtml,
         normalizeGreasyForkPublicationReceiptList
@@ -314,11 +315,13 @@ describe('Greasy Fork publish handoff preflight', () => {
 
     const html = api.renderGreasyForkPublicationReceiptHtml(receipts);
     const summary = api.buildGreasyForkPublicationReceiptSummaryText(receipts);
+    const filename = api.buildGreasyForkPublicationReceiptSummaryFilename(receipts);
     expect(api.normalizeGreasyForkPublicationReceiptList(receipts[0])).toHaveLength(1);
     expect(html).toContain('Updated Greasy Fork script 456');
     expect(html).toContain('Previous receipts');
     expect(html).toContain('2 local receipts');
     expect(html).toContain('data-publication-receipts-copy="script-1"');
+    expect(html).toContain('data-publication-receipts-download="script-1"');
     expect(html).toContain('data-publication-receipts-clear="script-1"');
     expect(html).toContain('Receipts are local audit markers only');
     expect(html).not.toMatch(/console\.log|script_version\[code\]|document\.cookie|csrf|credentials/i);
@@ -329,10 +332,12 @@ describe('Greasy Fork publish handoff preflight', () => {
     expect(summary).toContain('SHA-256 ' + 'b'.repeat(64));
     expect(summary).toContain('Receipt 2: Update Greasy Fork script 456');
     expect(summary).not.toMatch(/console\.log|script_version\[code\]|document\.cookie|csrf|credentials/i);
+    expect(filename).toBe('Receipt-Demo-1.2.4-greasyfork-receipts.txt');
 
     expect(dashboardJs).toContain('async function getGreasyForkPublicationReceiptsForScript');
     expect(dashboardJs).toContain('async function deleteGreasyForkPublicationReceiptsForScript');
     expect(dashboardJs).toContain('publicationReceipts: receipts');
     expect(dashboardJs).toContain('navigator.clipboard.writeText(buildGreasyForkPublicationReceiptSummaryText(receipts))');
+    expect(dashboardJs).toContain('downloadGreasyForkPublicationReceiptSummary(receipts)');
   });
 });

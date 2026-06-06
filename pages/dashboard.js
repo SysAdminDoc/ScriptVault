@@ -7506,6 +7506,32 @@
         ].join('\n');
     }
 
+    function buildGreasyForkPublicationReceiptSummaryFilename(receipts) {
+        const history = normalizeGreasyForkPublicationReceiptList(receipts);
+        const latest = history[0] || null;
+        const safeName = (latest?.metadata?.name || 'script')
+            .replace(/[\\/:*?"<>|]+/g, '-')
+            .replace(/\s+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 80) || 'script';
+        const version = String(latest?.metadata?.version || '').replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 40);
+        return `${safeName}${version ? `-${version}` : ''}-greasyfork-receipts.txt`;
+    }
+
+    function downloadGreasyForkPublicationReceiptSummary(receipts) {
+        const history = normalizeGreasyForkPublicationReceiptList(receipts);
+        if (!history.length) return false;
+        const text = buildGreasyForkPublicationReceiptSummaryText(history);
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = buildGreasyForkPublicationReceiptSummaryFilename(history);
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return true;
+    }
+
     function renderGreasyForkPublicationReceiptHtml(receipts) {
         const history = normalizeGreasyForkPublicationReceiptList(receipts);
         const receipt = history[0] || null;
@@ -7541,6 +7567,7 @@
                     <span class="panel-empty-inline">Receipts are local audit markers only; submitted source and account/session data are not stored.</span>
                     <span>
                         <button type="button" class="btn btn-sm" data-publication-receipts-copy="${escapeHtml(receipt.scriptId || '')}">Copy summary</button>
+                        <button type="button" class="btn btn-sm" data-publication-receipts-download="${escapeHtml(receipt.scriptId || '')}">Download summary</button>
                         <button type="button" class="btn btn-sm" data-publication-receipts-clear="${escapeHtml(receipt.scriptId || '')}">Clear history</button>
                     </span>
                 </div>
@@ -7550,11 +7577,15 @@
 
     function bindGreasyForkPublicationReceiptActions() {
         const copyButton = elements.infoPublicationReceipt?.querySelector('[data-publication-receipts-copy]');
+        const downloadButton = elements.infoPublicationReceipt?.querySelector('[data-publication-receipts-download]');
         const clearButton = elements.infoPublicationReceipt?.querySelector('[data-publication-receipts-clear]');
+        const getBoundReceiptHistory = scriptId => {
+            const tabState = scriptId ? state.openTabs[scriptId] : null;
+            return normalizeGreasyForkPublicationReceiptList(tabState?.publicationReceipts || tabState?.publicationReceipt || []);
+        };
         copyButton?.addEventListener('click', async () => {
             const scriptId = copyButton.dataset.publicationReceiptsCopy || state.currentScriptId || '';
-            const tabState = scriptId ? state.openTabs[scriptId] : null;
-            const receipts = normalizeGreasyForkPublicationReceiptList(tabState?.publicationReceipts || tabState?.publicationReceipt || []);
+            const receipts = getBoundReceiptHistory(scriptId);
             if (!receipts.length) {
                 showToast('No publication receipts to copy', 'info');
                 return;
@@ -7564,6 +7595,15 @@
                 showToast('Publication receipt summary copied', 'success');
             } catch {
                 showToast('Copy failed', 'error');
+            }
+        });
+        downloadButton?.addEventListener('click', () => {
+            const scriptId = downloadButton.dataset.publicationReceiptsDownload || state.currentScriptId || '';
+            const receipts = getBoundReceiptHistory(scriptId);
+            if (downloadGreasyForkPublicationReceiptSummary(receipts)) {
+                showToast('Publication receipt summary downloaded', 'success');
+            } else {
+                showToast('No publication receipts to download', 'info');
             }
         });
         clearButton?.addEventListener('click', async () => {

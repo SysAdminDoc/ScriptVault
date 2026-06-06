@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 89 - 2026-06-06
+Last cycle: Cycle 90 - 2026-06-06
 
 ## Latest Result
 
@@ -411,17 +411,24 @@ Last cycle: Cycle 89 - 2026-06-06
   omitting submitted source and account/session data. Verification used focused
   Greasy Fork/local-workspace tests, Chromium receipt-summary smoke, the full
   check suite, build, high-severity audit, CWS remote-code scan, Monaco ESM
-  scan, TS runtime check, and `git diff --check`.
+  scan, TS runtime check, and `git diff --check`. Cycle 90 added a
+  download-summary fallback for local Greasy Fork publication receipts:
+  summaries export target, version, size, timestamp, and SHA-256 evidence to a
+  text file through a Blob URL and safe filename, while still omitting submitted
+  source and account/session data. Verification used focused Greasy
+  Fork/local-workspace tests, Chromium receipt-export smoke, the full check
+  suite, build, high-severity audit, CWS remote-code scan, Monaco ESM scan, TS
+  runtime check, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. Cycle 89 continued X-9 with a copyable
-local receipt-summary fallback for Greasy Fork handoffs: the dashboard copies
+Continue from `ROADMAP.md` Round 40. Cycle 90 continued X-9 with a downloadable
+local receipt-summary fallback for Greasy Fork handoffs: the dashboard exports
 target, version, size, timestamp, and SHA-256 evidence while keeping submitted
-source and account/session data out of the copied text. The next best local
-cycle is Cycle 90: prove the prefilled form in Chromium with a logged-in Greasy
-Fork session if available, or add exportable receipt evidence / UI polish if
-live proof remains unavailable.
+source and account/session data out of the text file. The next best local cycle
+is Cycle 91: prove the prefilled form in Chromium with a logged-in Greasy Fork
+session if available, otherwise audit the publish handoff UI for additional
+low-risk fallback polish or move to the next highest-value roadmap item.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -430,8 +437,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 89 complete for 2026-06-06; roadmap continuation
-  points to Cycle 90 X-9 live handoff proof or fallback receipt-evidence
+- Status: ScriptVault Cycle 90 complete for 2026-06-06; roadmap continuation
+  points to Cycle 91 X-9 live handoff proof or fallback UI / next-roadmap
   hardening.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
