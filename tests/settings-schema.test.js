@@ -14,6 +14,7 @@ const SCRIPT = resolve(ROOT, 'scripts/check-settings-schema.mjs');
 function makeFixture({
   schemaKeys = ['theme', 'debugMode', 'customCss'],
   metadata,
+  dashboardHtml,
 } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'scriptvault-settings-schema-'));
   mkdirSync(resolve(root, 'src/config'), { recursive: true });
@@ -73,6 +74,11 @@ const settingMap = {
 function wire() {
   saveSetting('customCss', '');
 }
+`);
+  writeFileSync(resolve(root, 'pages/dashboard.html'), dashboardHtml ?? `
+<select id="settingsTheme"><option value="dark">Dark</option></select>
+<input id="settingsDebugMode" type="checkbox">
+<textarea id="settingsCustomCss"></textarea>
 `);
   return root;
 }
@@ -240,6 +246,153 @@ describe('settings schema gate', () => {
 
     expect(report.ok).toBe(false);
     expect(report.errors).toContain('Setting "badgeColor" metadata must declare hex-color validation');
+  });
+
+  it('fails when metadata points at a missing dashboard element', () => {
+    const root = makeFixture({
+      metadata: {
+        theme: {
+          type: 'string',
+          control: 'select',
+          label: 'Theme',
+          help: 'Controls the dashboard theme.',
+          elementId: 'settingsMissingTheme',
+          default: 'dark',
+          options: [{ value: 'dark', label: 'Dark' }],
+        },
+        debugMode: {
+          type: 'boolean',
+          control: 'checkbox',
+          label: 'Debug mode',
+          help: 'Controls verbose diagnostics.',
+          default: false,
+        },
+        customCss: {
+          type: 'string',
+          control: 'textarea',
+          label: 'Custom CSS',
+          help: 'Stores custom dashboard CSS.',
+          defaultSource: 'runtime',
+        },
+      },
+    });
+    const report = analyzeSettingsSchema({ rootDir: root });
+
+    expect(report.ok).toBe(false);
+    expect(report.errors).toContain(
+      'Setting "theme" metadata elementId "settingsMissingTheme" was not found in pages/dashboard.html'
+    );
+  });
+
+  it('fails when metadata control shape drifts from dashboard markup', () => {
+    const root = makeFixture({
+      metadata: {
+        theme: {
+          type: 'string',
+          control: 'text',
+          label: 'Theme',
+          help: 'Controls the dashboard theme.',
+          elementId: 'settingsTheme',
+          default: 'dark',
+        },
+        debugMode: {
+          type: 'boolean',
+          control: 'checkbox',
+          label: 'Debug mode',
+          help: 'Controls verbose diagnostics.',
+          default: false,
+        },
+        customCss: {
+          type: 'string',
+          control: 'textarea',
+          label: 'Custom CSS',
+          help: 'Stores custom dashboard CSS.',
+          defaultSource: 'runtime',
+        },
+      },
+    });
+    const report = analyzeSettingsSchema({ rootDir: root });
+
+    expect(report.ok).toBe(false);
+    expect(report.errors).toContain('Setting "theme" metadata control "text" does not match dashboard control "select"');
+  });
+
+  it('fails when metadata select options drift from dashboard markup', () => {
+    const root = makeFixture({
+      metadata: {
+        theme: {
+          type: 'string',
+          control: 'select',
+          label: 'Theme',
+          help: 'Controls the dashboard theme.',
+          elementId: 'settingsTheme',
+          default: 'dark',
+          options: [{ value: 'light', label: 'Light' }],
+        },
+        debugMode: {
+          type: 'boolean',
+          control: 'checkbox',
+          label: 'Debug mode',
+          help: 'Controls verbose diagnostics.',
+          default: false,
+        },
+        customCss: {
+          type: 'string',
+          control: 'textarea',
+          label: 'Custom CSS',
+          help: 'Stores custom dashboard CSS.',
+          defaultSource: 'runtime',
+        },
+      },
+    });
+    const report = analyzeSettingsSchema({ rootDir: root });
+
+    expect(report.ok).toBe(false);
+    expect(report.errors).toContain('Setting "theme" metadata select options do not match pages/dashboard.html');
+  });
+
+  it('fails when validation metadata is not wired to a dashboard error node', () => {
+    const root = makeFixture({
+      schemaKeys: ['theme', 'debugMode', 'customCss', 'badgeColor'],
+      metadata: {
+        theme: {
+          type: 'string',
+          control: 'select',
+          label: 'Theme',
+          help: 'Controls the dashboard theme.',
+          default: 'dark',
+          options: [{ value: 'dark', label: 'Dark' }],
+        },
+        debugMode: {
+          type: 'boolean',
+          control: 'checkbox',
+          label: 'Debug mode',
+          help: 'Controls verbose diagnostics.',
+          default: false,
+        },
+        customCss: {
+          type: 'string',
+          control: 'textarea',
+          label: 'Custom CSS',
+          help: 'Stores custom dashboard CSS.',
+          defaultSource: 'runtime',
+        },
+        badgeColor: {
+          type: 'string',
+          control: 'text',
+          label: 'Badge color',
+          help: 'Controls the badge color.',
+          elementId: 'settingsBadgeColor',
+          defaultSource: 'runtime',
+          validation: { kind: 'hex-color' },
+        },
+      },
+      dashboardHtml: '<input id="settingsBadgeColor" type="text">',
+    });
+    const report = analyzeSettingsSchema({ rootDir: root });
+
+    expect(report.ok).toBe(false);
+    expect(report.errors).toContain('Setting "badgeColor" validation metadata requires a dashboard setting-error element');
   });
 
   it('returns a non-zero CLI exit code when schema coverage drifts', () => {

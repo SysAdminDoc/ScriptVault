@@ -836,6 +836,11 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
     The dashboard now blocks malformed regex literals plus whitespace/control
     character mistakes in those multiline pattern lists before persisting them.
     Remaining work is UI consumption of the settings metadata.
+  - Progress: 2026-06-06 made the settings schema an active dashboard contract:
+    metadata entries with `elementId` are now checked against
+    `pages/dashboard.html` for control type, select option values, and
+    validation error-node wiring. Remaining work is using the checked metadata
+    to generate or initialize more Settings UI.
   - Complexity: L
 
 ---

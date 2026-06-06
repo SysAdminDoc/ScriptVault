@@ -161,12 +161,94 @@ function validateMetadata(schema, classified, defaultKeys, defaults, dashboardSa
   return { metadata, errors };
 }
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getAttribute(markup, name) {
+  const match = markup.match(new RegExp(`\\s${escapeRegex(name)}=(["'])(.*?)\\1`, 'i'));
+  return match?.[2] || '';
+}
+
+function findDashboardElement(html, id) {
+  const idPattern = escapeRegex(id);
+  const paired = html.match(new RegExp(`<([a-zA-Z][\\w:-]*)\\b([^>]*\\sid=(["'])${idPattern}\\3[^>]*)>([\\s\\S]*?)<\\/\\1>`, 'i'));
+  if (paired) {
+    return {
+      tagName: paired[1].toLowerCase(),
+      attrs: paired[2],
+      innerHtml: paired[4],
+      markup: paired[0],
+    };
+  }
+  const single = html.match(new RegExp(`<([a-zA-Z][\\w:-]*)\\b([^>]*\\sid=(["'])${idPattern}\\3[^>]*)>`, 'i'));
+  if (single) {
+    return {
+      tagName: single[1].toLowerCase(),
+      attrs: single[2],
+      innerHtml: '',
+      markup: single[0],
+    };
+  }
+  return null;
+}
+
+function dashboardControlFor(element) {
+  const tag = element.tagName;
+  if (tag === 'select') return 'select';
+  if (tag === 'textarea') return 'textarea';
+  if (tag !== 'input') return tag;
+  const type = getAttribute(element.attrs, 'type') || 'text';
+  if (type === 'checkbox') return 'checkbox';
+  if (type === 'number') return 'number';
+  if (type === 'password') return 'password';
+  if (type === 'url') return 'url';
+  return 'text';
+}
+
+function validateDashboardMetadata(metadata, dashboardHtml) {
+  const errors = [];
+
+  for (const [key, entry] of Object.entries(metadata).sort(([a], [b]) => a.localeCompare(b))) {
+    if (!entry.elementId) continue;
+    const element = findDashboardElement(dashboardHtml, entry.elementId);
+    if (!element) {
+      errors.push(`Setting "${key}" metadata elementId "${entry.elementId}" was not found in pages/dashboard.html`);
+      continue;
+    }
+    const actualControl = dashboardControlFor(element);
+    if (entry.control !== actualControl) {
+      errors.push(`Setting "${key}" metadata control "${entry.control}" does not match dashboard control "${actualControl}"`);
+    }
+    if (entry.control === 'select') {
+      const dashboardValues = [...element.innerHtml.matchAll(/<option\b([^>]*)>([\s\S]*?)<\/option>/gi)]
+        .map((option) => getAttribute(option[1], 'value') || option[2].replace(/<[^>]+>/g, '').trim());
+      const metadataValues = (entry.options || []).map((option) => option.value);
+      if (JSON.stringify(metadataValues) !== JSON.stringify(dashboardValues)) {
+        errors.push(`Setting "${key}" metadata select options do not match pages/dashboard.html`);
+      }
+    }
+    if (entry.validation) {
+      const describedBy = getAttribute(element.attrs, 'aria-describedby').split(/\s+/).filter(Boolean);
+      const errorId = describedBy.find((id) => id.endsWith('Error'));
+      const errorElement = errorId ? findDashboardElement(dashboardHtml, errorId) : null;
+      const errorClasses = errorElement ? getAttribute(errorElement.attrs, 'class').split(/\s+/) : [];
+      if (!errorElement || !errorClasses.includes('setting-error')) {
+        errors.push(`Setting "${key}" validation metadata requires a dashboard setting-error element`);
+      }
+    }
+  }
+
+  return errors;
+}
+
 export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
   const paths = {
     defaults: resolve(rootDir, 'src/config/settings-defaults.json'),
     schema: resolve(rootDir, 'src/config/settings-schema.json'),
     types: resolve(rootDir, 'src/types/settings.ts'),
     dashboard: resolve(rootDir, 'pages/dashboard.js'),
+    dashboardHtml: resolve(rootDir, 'pages/dashboard.html'),
   };
   const errors = [];
 
@@ -187,6 +269,7 @@ export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
   const schema = readJson(paths.schema);
   const typeKeys = extractSettingsTypeKeys(readFileSync(paths.types, 'utf8'));
   const dashboardSaveKeys = extractDashboardSaveKeys(readFileSync(paths.dashboard, 'utf8'));
+  const dashboardHtml = readFileSync(paths.dashboardHtml, 'utf8');
   const defaultKeys = Object.keys(defaults).sort();
   const { classified, errors: classificationErrors } = buildClassificationMap(schema);
   errors.push(...classificationErrors);
@@ -205,6 +288,7 @@ export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
   }
   const { metadata, errors: metadataErrors } = validateMetadata(schema, classified, defaultKeys, defaults, dashboardSaveKeys);
   errors.push(...metadataErrors);
+  errors.push(...validateDashboardMetadata(metadata, dashboardHtml));
 
   return {
     ok: errors.length === 0,
