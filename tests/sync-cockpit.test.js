@@ -57,6 +57,8 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('valueBundleSync');
     expect(dashboardJs).toContain('valueBundleConflicts');
     expect(dashboardJs).toContain('lastWriteHint');
+    expect(dashboardJs).toContain('preservedRemoteNewer');
+    expect(dashboardJs).toContain('timestamp hints');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {

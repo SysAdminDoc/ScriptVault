@@ -811,6 +811,7 @@ describe('source cloud sync module', () => {
             scriptId: 'script_values',
             keyCount: 1,
             bytes: 100,
+            lastValueUpdatedAt: 2000,
             values: { token: 'remote-token' },
           },
         },
@@ -819,6 +820,12 @@ describe('source cloud sync module', () => {
       {
         script_values: {
           token: 'local-token',
+        },
+      },
+      {
+        script_values: {
+          valueCount: 1,
+          lastUpdatedAt: 1000,
         },
       },
     );
@@ -834,6 +841,12 @@ describe('source cloud sync module', () => {
         skippedUserModified: 0,
         skippedUnavailable: 0,
         failures: 0,
+        preservedRemoteNewer: 1,
+        preservedLocalNewer: 0,
+        preservedSameTimestamp: 0,
+        preservedRemoteTimestampOnly: 0,
+        preservedLocalTimestampOnly: 0,
+        preservedTimestampUnknown: 0,
       },
     });
 
@@ -884,6 +897,7 @@ describe('source cloud sync module', () => {
             scriptId: 'script_values',
             keyCount: 1,
             bytes: 100,
+            lastValueUpdatedAt: 2000,
             values: { token: 'remote-token' },
           },
         },
@@ -891,6 +905,12 @@ describe('source cloud sync module', () => {
       {},
       {
         script_values: {},
+      },
+      {
+        script_values: {
+          valueCount: 0,
+          lastUpdatedAt: 3000,
+        },
       },
     );
     const { CloudSync, ScriptValues, getRemoteData, scriptState } = harness;
@@ -905,6 +925,12 @@ describe('source cloud sync module', () => {
         skippedUserModified: 1,
         skippedUnavailable: 0,
         failures: 0,
+        preservedRemoteNewer: 0,
+        preservedLocalNewer: 1,
+        preservedSameTimestamp: 0,
+        preservedRemoteTimestampOnly: 0,
+        preservedLocalTimestampOnly: 0,
+        preservedTimestampUnknown: 0,
       },
     });
 
@@ -976,6 +1002,12 @@ describe('source cloud sync module', () => {
         skippedUserModified: 0,
         skippedUnavailable: 0,
         failures: 0,
+        preservedRemoteNewer: 0,
+        preservedLocalNewer: 0,
+        preservedSameTimestamp: 0,
+        preservedRemoteTimestampOnly: 0,
+        preservedLocalTimestampOnly: 0,
+        preservedTimestampUnknown: 0,
       },
     });
 

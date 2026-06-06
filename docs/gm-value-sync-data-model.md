@@ -151,6 +151,19 @@ Cycle 107 surfaces aggregate timestamp evidence in previews:
 - These fields are advisory conflict evidence only. They do not enable
   non-empty merge writes.
 
-The next implementation slice should add real-sync aggregate timestamp
-summaries, per-key timestamp support, or another durable last-write signal before
-non-empty local and remote value bags can be merged bidirectionally.
+Cycle 108 adds aggregate timestamp evidence to real sync results:
+
+- Successful `syncNow` responses can include preserved-bundle timestamp hint
+  counts in `valueBundleSync`.
+- The counters classify preserved remote bundles as remote-newer, local-newer,
+  same timestamp, remote timestamp only, local timestamp only, or unknown.
+- The dashboard sync log displays those counts only as aggregate totals.
+- The response and log still omit script IDs, script names, value key names,
+  values, URLs, local workspace handles, local paths, sync credentials, and
+  provider account data.
+- These counters are advisory evidence only. They do not enable non-empty merge
+  writes.
+
+The next implementation slice should add per-key timestamp support, stale-bundle
+diagnostics, or another durable last-write signal before non-empty local and
+remote value bags can be merged bidirectionally.

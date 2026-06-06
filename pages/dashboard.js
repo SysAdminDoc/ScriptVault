@@ -3886,9 +3886,18 @@
         const userModified = Number(valueBundleSync.skippedUserModified) || 0;
         const unavailable = Number(valueBundleSync.skippedUnavailable) || 0;
         const failures = Number(valueBundleSync.failures) || 0;
+        const remoteNewer = Number(valueBundleSync.preservedRemoteNewer) || 0;
+        const localNewer = Number(valueBundleSync.preservedLocalNewer) || 0;
+        const sameTimestamp = Number(valueBundleSync.preservedSameTimestamp) || 0;
+        const remoteOnlyTimestamp = Number(valueBundleSync.preservedRemoteTimestampOnly) || 0;
+        const localOnlyTimestamp = Number(valueBundleSync.preservedLocalTimestampOnly) || 0;
+        const unknownTimestamp = Number(valueBundleSync.preservedTimestampUnknown) || 0;
         if (applied + preserved + blocked + unavailable + failures <= 0) return '';
         const blockedDetail = blocked > 0 ? `${blocked} blocked (${nonEmpty} non-empty, ${userModified} user-modified)` : '0 blocked';
-        return `; GM values: ${applied} applied, ${preserved} preserved, ${blockedDetail}, ${unavailable} unavailable, ${failures} failed`;
+        const timestampDetail = preserved > 0
+            ? `; timestamp hints: ${remoteNewer} remote-newer, ${localNewer} local-newer, ${sameTimestamp} same, ${remoteOnlyTimestamp} remote-only, ${localOnlyTimestamp} local-only, ${unknownTimestamp} unknown`
+            : '';
+        return `; GM values: ${applied} applied, ${preserved} preserved, ${blockedDetail}, ${unavailable} unavailable, ${failures} failed${timestampDetail}`;
     }
 
     function formatValueBundleConflictReason(reason) {
