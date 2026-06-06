@@ -2,6 +2,15 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 37 background-script groundwork: X-2 now has a local
+implementation contract in `docs/background-scripts-design.md`. The parser
+preserves `@background`, the global settings contract includes an internal
+default-off `experimentalBackgroundScripts` gate, and registration keeps
+`@background` scripts dormant rather than treating them as page-load
+userscripts before the DOM-less offscreen/service-worker runner exists. The
+remaining X-2 work is runner scaffolding, restricted API enforcement,
+scheduling/budget controls, review-only enablement, and a no-open-tab smoke.
+
 2026-06-04 Cycle 8 comprehensive feature-plan refresh: root-level
 `RESEARCH_FEATURE_PLAN.md` now holds the current implementation-oriented
 research plan for ScriptVault v3.11.0. It preserves `ROADMAP.md` as the open

@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 36 - 2026-06-06
+Last cycle: Cycle 37 - 2026-06-06
 
 ## Latest Result
 
@@ -49,8 +49,12 @@ Last cycle: Cycle 36 - 2026-06-06
   146.0.3856.97, added committed sanitized smoke evidence, and taught the
   browser support matrix generator to surface that live Edge proof without
   depending on ignored artifacts.
-- Verification used the live checkout: `npm run smoke:edge`, focused Edge
-  smoke tests, `npm run support:matrix`, `npm run support:matrix:check`,
+- Cycle 37 started X-2 by adding parser/type support for `@background`, an
+  internal default-off `experimentalBackgroundScripts` setting, a dormant
+  page-registration guard, and `docs/background-scripts-design.md` for the
+  DOM-less runner contract.
+- Verification used the live checkout: focused background contract/storage
+  tests, `npm run settings:schema:check`, `npm run ts-runtime:check`,
   `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
@@ -59,12 +63,14 @@ Continue top-down from `ROADMAP.md`. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, and the AMO
 submission row is blocked on maintainer credentials. The next local
-implementer-actionable work is X-2, DOM-less `@background` script design and
-implementation scoping, unless Edge Partner Center credentials/listing IDs are
-available to continue the external publication half of X-1.
+implementer-actionable work remains X-2. The next local slice is the DOM-less
+runner scaffold: restricted wrapper/API inventory, offscreen/service-worker
+execution boundary, and budget enforcement tests, unless Edge Partner Center
+credentials/listing IDs are available to continue the external publication half
+of X-1.
 
 ## Loop Pointer
 
-- Status: ScriptVault cycle complete for 2026-06-06.
+- Status: ScriptVault Cycle 37 complete for 2026-06-06.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

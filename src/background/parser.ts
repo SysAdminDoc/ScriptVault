@@ -197,6 +197,7 @@ export function parseUserscript(code: string): ParseResult {
     config: [],
     priority: 0,
     weight: 0,
+    background: false,
   };
 
   const metaBlock: string = metaBlockMatch[1]!;
@@ -262,6 +263,9 @@ export function parseUserscript(code: string): ParseResult {
           break;
         case 'top-level-await':
           meta['top-level-await'] = true;
+          break;
+        case 'background':
+          meta.background = true;
           break;
         case 'priority':
           meta.priority = parseInt(value, 10) || 0;

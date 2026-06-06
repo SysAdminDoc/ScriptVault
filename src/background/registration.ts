@@ -210,6 +210,13 @@ export async function registerScript(script: Script, options: { useUpdate?: bool
     const meta: ScriptMeta = script.meta;
     const settings: ScriptSettings = script.settings || {};
 
+    if (meta.background) {
+      await chrome.alarms.clear(`crontab_${script.id}`).catch(() => undefined);
+      await chrome.userScripts.unregister({ ids: [script.id] }).catch(() => undefined);
+      debugLog(`Skipped @background script until experimentalBackgroundScripts runner ships: ${meta.name || script.id}`);
+      return;
+    }
+
     // Build match patterns with URL override support
     const matches: string[] = [];
     const excludeMatches: string[] = [];
