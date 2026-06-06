@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 42 - 2026-06-06
+Last cycle: Cycle 43 - 2026-06-06
 
 ## Latest Result
 
@@ -69,8 +69,11 @@ Last cycle: Cycle 42 - 2026-06-06
 - Cycle 42 added the runtime `prepareBackgroundRunnerDryRun` action, returning
   planner status, wrapper support, reviewed budgets, and `executionEnabled:
   false` without returning wrapper code or executing scripts.
-- Verification used the live checkout: focused dry-run/local-health tests,
-  TypeScript, TS runtime generation/check, `npm run check`, and `npm run build`.
+- Cycle 43 exposed sanitized background runner dry-runs in support snapshots
+  behind the existing script-inventory opt-in, preserving `includesCode: false`
+  and no execution.
+- Verification used the live checkout: focused support snapshot/dry-run tests,
+  TypeScript, `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
 
@@ -78,13 +81,13 @@ Continue top-down from `ROADMAP.md`. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, and the AMO
 submission row is blocked on maintainer credentials. The next local
-implementer-actionable work remains X-2. The next local slice is exposing the
-dry-run action through dashboard/support diagnostics, then wiring
-offscreen/service-worker execution behind the default-off gate. Edge Partner
-Center upload and REST automation remain credential/listing gated.
+implementer-actionable work remains X-2. The next local slice is wiring
+offscreen/service-worker execution behind the default-off gate, starting with a
+disabled-by-default runner entrypoint and no-open-tab tests. Edge Partner Center
+upload and REST automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 42 complete for 2026-06-06.
+- Status: ScriptVault Cycle 43 complete for 2026-06-06.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

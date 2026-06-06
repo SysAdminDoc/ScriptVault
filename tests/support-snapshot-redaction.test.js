@@ -95,6 +95,14 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(dashboardJs).toMatch(/if \(enabledCategories\.has\('scriptInventory'\)\) \{[\s\S]{0,400}snapshot\.scripts/);
   });
 
+  it('background runner dry runs are gated by scriptInventory and omit wrapper code', () => {
+    expect(dashboardJs).toContain('async function collectBackgroundRunnerDryRuns()');
+    expect(dashboardJs).toMatch(/if \(enabledCategories\.has\('scriptInventory'\)\) \{[\s\S]{0,1100}snapshot\.backgroundRunnerDryRuns = await collectBackgroundRunnerDryRuns\(\);/);
+    expect(dashboardJs).toContain("action: 'prepareBackgroundRunnerDryRun'");
+    expect(dashboardJs).toContain('includesCode: false');
+    expect(dashboardJs).not.toMatch(/backgroundRunnerDryRuns[\s\S]{0,900}\bcode\b/);
+  });
+
   it('diagnostics block conditionally attaches activity/error/network', () => {
     expect(dashboardJs).toMatch(/if \(enabledCategories\.has\('activityLog'\)\) diagnosticsBlock\.activityLog/);
     expect(dashboardJs).toMatch(/if \(enabledCategories\.has\('errorLog'\)\) \{[\s\S]{0,150}diagnosticsBlock\.errorLog/);
