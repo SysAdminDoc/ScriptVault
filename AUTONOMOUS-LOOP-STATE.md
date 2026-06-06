@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 56 - 2026-06-06
+Last cycle: Cycle 57 - 2026-06-06
 
 ## Latest Result
 
@@ -137,6 +137,12 @@ Last cycle: Cycle 56 - 2026-06-06
   are deleted with scripts/storage clear; and JSON export, CloudSync,
   EasyCloud, and support snapshot tests prove future local workspace metadata
   does not leave local storage.
+- Cycle 57 implemented the first dashboard local-file binding control. `Bind
+  File` is hidden/disabled when File System Access or IndexedDB is unavailable,
+  calls `showOpenFilePicker()` directly from the user click handler, stores the
+  selected handle only in `localWorkspaceBindings`, renders display-name and
+  permission summaries, and has tests proving binding does not call
+  `saveScript`, read code text, or churn save history.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -160,22 +166,28 @@ Last cycle: Cycle 56 - 2026-06-06
   guidance and CWS local user-data disclosure expectations, then verified with
   focused storage/export/sync/support tests, TS runtime generation/check,
   high-severity audit, full check suite, build, and CWS remote-code scan.
+  Cycle 57 refreshed File System Access picker/user-gesture and stored-handle
+  permission guidance plus CWS local user-data disclosure expectations, then
+  verified with focused local-workspace/local-save/storage tests, TS runtime
+  generation/check, high-severity audit, full check suite, build, and CWS
+  remote-code scan.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 24. The next best local cycle is Cycle 57:
-continue X-8 by wiring a feature-detected dashboard "Bind local file" action
-with user-gesture-only `showOpenFilePicker()`, permission-state summaries from
-`LocalWorkspaceBindings`, review-only refresh apply groundwork, and
-behavior-level no-code/local-save history tests. The live two-tab
-`GM_addValueChangeListener` smoke remains browser-profile gated until
-`chrome.userScripts` is enabled for the unpacked extension, AMO submission
-remains blocked on maintainer credentials, and Edge Partner Center upload/REST
-automation remain credential/listing gated.
+Continue from `ROADMAP.md` Round 25. The next best local cycle is Cycle 58:
+continue X-8 with `Refresh from local` and `Unbind` actions, explicit
+permission reconnect through `requestPermission()` only from a user action,
+stale/missing-file/error summaries, a review-only diff modal, no-change
+detection, and local-file `saveScript` receipts only after the user accepts a
+changed-file apply. The live two-tab `GM_addValueChangeListener` smoke remains
+browser-profile gated until `chrome.userScripts` is enabled for the unpacked
+extension, AMO submission remains blocked on maintainer credentials, and Edge
+Partner Center upload/REST automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 56 complete for 2026-06-06; roadmap continuation
-  points to Cycle 57 dashboard local-file binding and permission summaries.
+- Status: ScriptVault Cycle 57 complete for 2026-06-06; roadmap continuation
+  points to Cycle 58 refresh/unbind, permission reconnect, and review-only
+  local-file apply.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

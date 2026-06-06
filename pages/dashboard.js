@@ -137,6 +137,9 @@
         reference: 'API and matcher references'
     };
     const BACKUP_DAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const LOCAL_WORKSPACE_DB_NAME = 'scriptvault';
+    const LOCAL_WORKSPACE_DB_VERSION = 2;
+    const LOCAL_WORKSPACE_STORE = 'localWorkspaceBindings';
     const SETTINGS_SECTION_GROUPS = {
         general: 'core',
         appearance: 'workspace',
@@ -1468,6 +1471,7 @@
         elements.editorLineCount = document.getElementById('editorLineCount');
         elements.editorCharCount = document.getElementById('editorCharCount');
         elements.editorCursorPos = document.getElementById('editorCursorPos');
+        elements.editorLocalWorkspaceStatus = document.getElementById('editorLocalWorkspaceStatus');
         elements.editorTextarea = document.getElementById('editorTextarea');
         elements.editorTabs = document.querySelectorAll('.editor-tab');
         elements.editorPanels = {
@@ -1522,6 +1526,7 @@
         elements.tbtnTemplate = document.getElementById('tbtnTemplate');
         elements.tbtnPattern = document.getElementById('tbtnPattern');
         elements.tbtnDiff = document.getElementById('tbtnDiff');
+        elements.tbtnBindLocalFile = document.getElementById('tbtnBindLocalFile');
         elements.tbtnDebug = document.getElementById('tbtnDebug');
         elements.tbtnShare = document.getElementById('tbtnShare');
 
@@ -7058,6 +7063,328 @@
         return match + include;
     }
 
+    let localWorkspaceDbPromise = null;
+
+    function isLocalWorkspaceFileAccessSupported() {
+        return typeof window.showOpenFilePicker === 'function' && typeof indexedDB !== 'undefined';
+    }
+
+    function ensureLocalWorkspaceIndex(store, name, keyPath, options = {}) {
+        if (!store.indexNames.contains(name)) store.createIndex(name, keyPath, options);
+    }
+
+    function createOrGetLocalWorkspaceStore(db, tx, name, options) {
+        return db.objectStoreNames.contains(name)
+            ? tx.objectStore(name)
+            : db.createObjectStore(name, options);
+    }
+
+    function upgradeDashboardLocalWorkspaceSchema(db, oldVersion, tx) {
+        if (oldVersion < 1) {
+            const scripts = createOrGetLocalWorkspaceStore(db, tx, 'scripts', { keyPath: 'id' });
+            ensureLocalWorkspaceIndex(scripts, 'by-enabled', 'enabled');
+            ensureLocalWorkspaceIndex(scripts, 'by-position', 'position');
+            ensureLocalWorkspaceIndex(scripts, 'by-namespace', 'meta.namespace');
+
+            const values = createOrGetLocalWorkspaceStore(db, tx, 'values', { keyPath: ['scriptId', 'key'] });
+            ensureLocalWorkspaceIndex(values, 'by-script', 'scriptId');
+
+            createOrGetLocalWorkspaceStore(db, tx, 'stats', { keyPath: 'scriptId' });
+
+            const backups = createOrGetLocalWorkspaceStore(db, tx, 'backups', { keyPath: 'id' });
+            ensureLocalWorkspaceIndex(backups, 'by-created', 'createdAt');
+        }
+
+        if (oldVersion < 2 && !db.objectStoreNames.contains(LOCAL_WORKSPACE_STORE)) {
+            const bindings = db.createObjectStore(LOCAL_WORKSPACE_STORE, { keyPath: 'bindingId' });
+            bindings.createIndex('by-script', 'scriptId', { unique: false });
+        }
+    }
+
+    function openDashboardLocalWorkspaceDB() {
+        if (localWorkspaceDbPromise) return localWorkspaceDbPromise;
+        localWorkspaceDbPromise = new Promise((resolve, reject) => {
+            const request = indexedDB.open(LOCAL_WORKSPACE_DB_NAME, LOCAL_WORKSPACE_DB_VERSION);
+            request.onupgradeneeded = event => {
+                const tx = request.transaction;
+                if (tx) upgradeDashboardLocalWorkspaceSchema(request.result, event.oldVersion, tx);
+            };
+            request.onsuccess = () => {
+                const db = request.result;
+                db.onversionchange = () => {
+                    try { db.close(); } catch {}
+                    localWorkspaceDbPromise = null;
+                };
+                resolve(db);
+            };
+            request.onerror = () => {
+                localWorkspaceDbPromise = null;
+                reject(request.error || new Error('IndexedDB open failed'));
+            };
+            request.onblocked = () => {
+                localWorkspaceDbPromise = null;
+                reject(new Error('IndexedDB open blocked by another ScriptVault tab'));
+            };
+        });
+        return localWorkspaceDbPromise;
+    }
+
+    function localWorkspaceRequest(request) {
+        return new Promise((resolve, reject) => {
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error || new Error('IndexedDB request failed'));
+        });
+    }
+
+    function localWorkspaceTransactionDone(tx) {
+        return new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error || new Error('IndexedDB transaction failed'));
+            tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
+        });
+    }
+
+    async function withDashboardLocalWorkspaceStore(mode, callback) {
+        const db = await openDashboardLocalWorkspaceDB();
+        const tx = db.transaction(LOCAL_WORKSPACE_STORE, mode);
+        const store = tx.objectStore(LOCAL_WORKSPACE_STORE);
+        const done = localWorkspaceTransactionDone(tx);
+        const result = await callback(store, tx);
+        await done;
+        return result;
+    }
+
+    function summarizeDashboardLocalWorkspaceBinding(row) {
+        if (!row) return null;
+        return {
+            bindingId: row.bindingId,
+            scriptId: row.scriptId,
+            displayName: String(row.displayName || '').slice(0, 160),
+            lastKnownSha256: row.lastKnownSha256,
+            lastKnownSize: row.lastKnownSize,
+            lastKnownModified: row.lastKnownModified,
+            permissionState: row.permissionState || 'unknown',
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+            lastRefreshAt: row.lastRefreshAt ?? null,
+            lastErrorKind: row.lastErrorKind || ''
+        };
+    }
+
+    async function getDashboardLocalWorkspaceBindingsByScript(scriptId) {
+        if (!scriptId || !isLocalWorkspaceFileAccessSupported()) return [];
+        return withDashboardLocalWorkspaceStore('readonly', (store) => new Promise((resolve, reject) => {
+            const out = [];
+            const request = store.index('by-script').openCursor(IDBKeyRange.only(scriptId));
+            request.onsuccess = () => {
+                const cursor = request.result;
+                if (!cursor) {
+                    resolve(out.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
+                    return;
+                }
+                out.push(summarizeDashboardLocalWorkspaceBinding(cursor.value));
+                cursor.continue();
+            };
+            request.onerror = () => reject(request.error || new Error('IndexedDB cursor failed'));
+        }));
+    }
+
+    async function deleteDashboardLocalWorkspaceBindingsForScript(scriptId) {
+        if (!scriptId || !isLocalWorkspaceFileAccessSupported()) return;
+        await withDashboardLocalWorkspaceStore('readwrite', (store) => new Promise((resolve, reject) => {
+            const request = store.index('by-script').openCursor(IDBKeyRange.only(scriptId));
+            request.onsuccess = () => {
+                const cursor = request.result;
+                if (!cursor) {
+                    resolve();
+                    return;
+                }
+                cursor.delete();
+                cursor.continue();
+            };
+            request.onerror = () => reject(request.error || new Error('IndexedDB cursor failed'));
+        }));
+    }
+
+    async function putDashboardLocalWorkspaceBinding(record) {
+        const now = Date.now();
+        const row = {
+            ...record,
+            displayName: String(record.displayName || '').slice(0, 160),
+            createdAt: record.createdAt || now,
+            updatedAt: now,
+            lastRefreshAt: record.lastRefreshAt ?? null
+        };
+        await withDashboardLocalWorkspaceStore('readwrite', store => localWorkspaceRequest(store.put(row)));
+        return summarizeDashboardLocalWorkspaceBinding(row);
+    }
+
+    async function queryLocalWorkspacePermission(handle) {
+        if (!handle || typeof handle.queryPermission !== 'function') return 'unknown';
+        try {
+            const state = await handle.queryPermission({ mode: 'readwrite' });
+            return state === 'granted' || state === 'prompt' || state === 'denied' ? state : 'unknown';
+        } catch {
+            return 'unknown';
+        }
+    }
+
+    async function readLocalWorkspaceFileMetadata(handle) {
+        if (!handle || typeof handle.getFile !== 'function') {
+            return { displayName: handle?.name || 'local file' };
+        }
+        const file = await handle.getFile();
+        return {
+            displayName: handle.name || file.name || 'local file',
+            lastKnownSize: typeof file.size === 'number' ? file.size : undefined,
+            lastKnownModified: typeof file.lastModified === 'number' ? file.lastModified : undefined
+        };
+    }
+
+    function createLocalWorkspaceBindingId(scriptId) {
+        const safeScriptId = String(scriptId || 'script').replace(/[^a-z0-9_-]/gi, '_').slice(0, 80);
+        return `local-workspace-${safeScriptId}-${Date.now().toString(36)}`;
+    }
+
+    function formatLocalWorkspacePermission(permissionState) {
+        switch (permissionState) {
+            case 'granted': return 'permission granted';
+            case 'prompt': return 'reconnect needed';
+            case 'denied': return 'permission denied';
+            default: return 'permission unknown';
+        }
+    }
+
+    function refreshLocalWorkspaceControls(script = getCurrentScript()) {
+        const supported = isLocalWorkspaceFileAccessSupported();
+        const tabData = script?.id ? ensureOpenTabStatus(script.id, script) : null;
+        const binding = tabData?.localWorkspaceBinding || null;
+
+        if (elements.tbtnBindLocalFile) {
+            elements.tbtnBindLocalFile.hidden = !supported;
+            elements.tbtnBindLocalFile.disabled = !supported || !script;
+            elements.tbtnBindLocalFile.title = binding
+                ? `Rebind local file (${formatLocalWorkspacePermission(binding.permissionState)})`
+                : 'Bind local file';
+            elements.tbtnBindLocalFile.setAttribute('aria-label', binding ? 'Rebind local file' : 'Bind local file');
+        }
+
+        if (!elements.editorLocalWorkspaceStatus) return;
+        if (!supported || !binding) {
+            elements.editorLocalWorkspaceStatus.hidden = true;
+            elements.editorLocalWorkspaceStatus.textContent = '';
+            elements.editorLocalWorkspaceStatus.removeAttribute('title');
+            return;
+        }
+
+        const permission = formatLocalWorkspacePermission(binding.permissionState);
+        const size = typeof binding.lastKnownSize === 'number' ? `, ${formatBytes(binding.lastKnownSize)}` : '';
+        const modified = binding.lastKnownModified ? `, modified ${formatTime(binding.lastKnownModified)}` : '';
+        const label = `Bound: ${binding.displayName} (${permission}${size}${modified})`;
+        elements.editorLocalWorkspaceStatus.hidden = false;
+        elements.editorLocalWorkspaceStatus.textContent = label;
+        elements.editorLocalWorkspaceStatus.title = label;
+    }
+
+    async function refreshLocalWorkspaceBindingForScript(scriptId) {
+        if (!scriptId || !state.openTabs[scriptId]) return null;
+        if (!isLocalWorkspaceFileAccessSupported()) {
+            patchOpenTabStatus(scriptId, { localWorkspaceBinding: null }, state.scripts.find(s => s.id === scriptId) || null);
+            if (scriptId === state.currentScriptId) refreshLocalWorkspaceControls();
+            return null;
+        }
+
+        try {
+            const [binding = null] = await getDashboardLocalWorkspaceBindingsByScript(scriptId);
+            patchOpenTabStatus(scriptId, { localWorkspaceBinding: binding }, state.scripts.find(s => s.id === scriptId) || null);
+            if (scriptId === state.currentScriptId) refreshLocalWorkspaceControls();
+            return binding;
+        } catch (error) {
+            console.warn('[ScriptVault] Failed to load local workspace binding:', error);
+            patchOpenTabStatus(scriptId, {
+                localWorkspaceBinding: {
+                    bindingId: '',
+                    scriptId,
+                    displayName: 'Local file',
+                    permissionState: 'unknown',
+                    createdAt: 0,
+                    updatedAt: 0,
+                    lastRefreshAt: null,
+                    lastErrorKind: 'load-failed'
+                }
+            }, state.scripts.find(s => s.id === scriptId) || null);
+            if (scriptId === state.currentScriptId) refreshLocalWorkspaceControls();
+            return null;
+        }
+    }
+
+    async function bindCurrentScriptToLocalFile(event) {
+        const script = getCurrentScript();
+        if (!script) {
+            showToast('Open a script first', 'warning');
+            return;
+        }
+        if (!isLocalWorkspaceFileAccessSupported()) {
+            showToast('Local file binding is not available in this browser', 'warning');
+            refreshLocalWorkspaceControls(script);
+            return;
+        }
+
+        let handle;
+        try {
+            [handle] = await window.showOpenFilePicker({
+                id: 'scriptvault-local-workspace',
+                multiple: false,
+                types: [
+                    {
+                        description: 'Userscript files',
+                        accept: {
+                            'text/javascript': ['.js', '.user.js'],
+                            'application/javascript': ['.js', '.user.js'],
+                            'text/plain': ['.txt', '.user.js']
+                        }
+                    }
+                ]
+            });
+        } catch (error) {
+            if (error?.name !== 'AbortError') showToast(error?.message || 'Failed to choose local file', 'error');
+            return;
+        }
+
+        if (!handle) return;
+
+        const button = event?.currentTarget instanceof HTMLElement ? event.currentTarget : elements.tbtnBindLocalFile;
+        if (button) button.disabled = true;
+        try {
+            const existing = (await getDashboardLocalWorkspaceBindingsByScript(script.id))[0] || null;
+            const [permissionState, fileMeta] = await Promise.all([
+                queryLocalWorkspacePermission(handle),
+                readLocalWorkspaceFileMetadata(handle)
+            ]);
+            await deleteDashboardLocalWorkspaceBindingsForScript(script.id);
+            const summary = await putDashboardLocalWorkspaceBinding({
+                bindingId: existing?.bindingId || createLocalWorkspaceBindingId(script.id),
+                scriptId: script.id,
+                handle,
+                displayName: fileMeta.displayName,
+                lastKnownSize: fileMeta.lastKnownSize,
+                lastKnownModified: fileMeta.lastKnownModified,
+                permissionState,
+                createdAt: existing?.createdAt || Date.now(),
+                updatedAt: Date.now(),
+                lastRefreshAt: null,
+                lastErrorKind: ''
+            });
+            patchOpenTabStatus(script.id, { localWorkspaceBinding: summary }, script);
+            updateEditorHeader(script);
+            showToast(`Bound local file: ${summary.displayName}`, 'success');
+        } catch (error) {
+            showToast(error?.message || 'Failed to bind local file', 'error');
+        } finally {
+            refreshLocalWorkspaceControls(script);
+        }
+    }
+
     function updateEditorHeader(script = getCurrentScript()) {
         if (!script) return;
 
@@ -7121,6 +7448,7 @@
         if (wordWrapButton && state.editor) {
             wordWrapButton.classList.toggle('active', !!state.editor.getOption('lineWrapping'));
         }
+        refreshLocalWorkspaceControls(script);
     }
 
     function markCurrentEditorDirty() {
@@ -7244,6 +7572,7 @@
         loadScriptInfo(script);
         loadScriptStorage(script);
         loadExternals(script);
+        void refreshLocalWorkspaceBindingForScript(scriptId);
         openEditorOverlay();
         if (updateRoute) {
             setDashboardHash(`script_${encodeURIComponent(scriptId)}`);
@@ -10458,6 +10787,7 @@
 
         // Editor
         elements.btnEditorSave?.addEventListener('click', saveCurrentScript);
+        elements.tbtnBindLocalFile?.addEventListener('click', bindCurrentScriptToLocalFile);
         elements.btnEditorToggle?.addEventListener('click', () => {
             const script = state.scripts.find(s => s.id === state.currentScriptId);
             if (script) toggleScriptEnabled(script.id, script.enabled === false);

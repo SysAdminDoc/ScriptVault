@@ -7693,6 +7693,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <span class="editor-metric" id="editorCharCount"></span>
                     <span class="editor-metric editor-cursor-pos" id="editorCursorPos"></span>
                     <span class="editor-metric" id="editorSavedAt"></span>
+                    <span class="editor-metric" id="editorLocalWorkspaceStatus" role="status" aria-live="polite" hidden></span>
                 </div>
             </div>
             <div class="editor-actions">
@@ -7794,6 +7795,10 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <button type="button" class="toolbar-btn" id="tbtnDiff" title="Compare saved and current code">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v18M18 3v18"/><path d="M10 8h8M10 16h8"/></svg>
                 Diff
+            </button>
+            <button type="button" class="toolbar-btn" id="tbtnBindLocalFile" title="Bind local file" aria-describedby="editorLocalWorkspaceStatus">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+                Bind File
             </button>
             <button type="button" class="toolbar-btn" id="tbtnDebug" title="Open Script Debugger">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h8v8H8z"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
