@@ -1531,6 +1531,9 @@ export interface ResponseMap {
       remoteKeyCount: number;
       localBytes: number | null;
       remoteBytes: number;
+      overlappingKeyCount: number | null;
+      localOnlyKeyCount: number | null;
+      remoteOnlyKeyCount: number | null;
     }[];
   }>;
   revokeSyncProvider: SuccessOrError;

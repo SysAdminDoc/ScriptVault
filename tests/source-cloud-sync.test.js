@@ -688,16 +688,20 @@ describe('source cloud sync module', () => {
           script_values: {
             schema: 'scriptvault-gm-value-sync/v1',
             scriptId: 'script_values',
-            keyCount: 1,
+            keyCount: 2,
             bytes: 100,
-            values: { token: 'remote-token' },
+            values: {
+              sharedKeyName: 'remote-value-456',
+              remoteKeyName: true,
+            },
           },
         },
       },
       {},
       {
         script_values: {
-          token: 'local-token',
+          sharedKeyName: 'local-value-123',
+          localKeyName: true,
         },
       },
     );
@@ -716,8 +720,11 @@ describe('source cloud sync module', () => {
     expect(preview.valueBundleConflicts).toEqual([
       expect.objectContaining({
         reason: 'local-values-present',
-        localKeyCount: 1,
-        remoteKeyCount: 1,
+        localKeyCount: 2,
+        remoteKeyCount: 2,
+        overlappingKeyCount: 1,
+        localOnlyKeyCount: 1,
+        remoteOnlyKeyCount: 1,
       }),
     ]);
     expect(preview.valueBundleConflicts[0].localBytes).toBeGreaterThan(0);
@@ -725,9 +732,11 @@ describe('source cloud sync module', () => {
     const serializedPreview = JSON.stringify(preview.valueBundleConflicts);
     expect(serializedPreview).not.toContain('script_values');
     expect(serializedPreview).not.toContain('Values');
-    expect(serializedPreview).not.toContain('token');
-    expect(serializedPreview).not.toContain('local-token');
-    expect(serializedPreview).not.toContain('remote-token');
+    expect(serializedPreview).not.toContain('sharedKeyName');
+    expect(serializedPreview).not.toContain('localKeyName');
+    expect(serializedPreview).not.toContain('remoteKeyName');
+    expect(serializedPreview).not.toContain('local-value-123');
+    expect(serializedPreview).not.toContain('remote-value-456');
     expect(provider.upload).not.toHaveBeenCalled();
     expect(ScriptValues.setAll).not.toHaveBeenCalled();
   });
