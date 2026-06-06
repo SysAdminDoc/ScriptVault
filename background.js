@@ -16533,10 +16533,34 @@ function sanitizeSyncScriptForEnvelope(script) {
 }
 
 function sanitizeSyncEnvelopeForUpload(envelope) {
-  return {
+  const scripts = (envelope.scripts || []).map(script => sanitizeSyncScriptForEnvelope(script));
+  const valueBundles = sanitizeValueBundlesForUpload({ ...envelope, scripts });
+  const sanitized = {
     ...envelope,
-    scripts: (envelope.scripts || []).map(script => sanitizeSyncScriptForEnvelope(script))
+    scripts
   };
+  delete sanitized.valueBundles;
+  if (Object.keys(valueBundles).length > 0) sanitized.valueBundles = valueBundles;
+  return sanitized;
+}
+
+function sanitizeValueBundlesForUpload(envelope) {
+  const result = {};
+  const scriptsById = new Map((envelope.scripts || []).map(script => [script.id, script]));
+  const sourceBundles = envelope.valueBundles && typeof envelope.valueBundles === 'object'
+    ? envelope.valueBundles
+    : {};
+
+  for (const [scriptId, bundle] of Object.entries(sourceBundles)) {
+    const script = scriptsById.get(scriptId);
+    if (!script || !shouldSyncScriptValuesForSync(script)) continue;
+    if (!bundle || bundle.schema !== GM_VALUE_SYNC_SCHEMA || bundle.scriptId !== scriptId) continue;
+    if (!bundle.values || typeof bundle.values !== 'object' || Array.isArray(bundle.values)) continue;
+    const rebuilt = buildGmValueSyncBundleForSync(script, bundle.values);
+    if (rebuilt.bundle) result[scriptId] = rebuilt.bundle;
+  }
+
+  return result;
 }
 
 async function readSyncEnvelopeFromRemote(remoteEnvelope, settings) {
@@ -18431,16 +18455,31 @@ function _gmValueSyncCountWarning(record, id) {
   _localHealthCount(record, id || 'unknown');
 }
 
-function buildGmValueSyncReadinessForValues(scriptId, values) {
+function shouldSyncScriptValuesForSync(script) {
+  return script?.settings?.syncValues === true;
+}
+
+function buildGmValueSyncBundleForSync(script, values) {
   const warningCounts = {};
+  if (!script?.id) {
+    return { included: false, reason: 'missing-script', bundle: null, warningCounts };
+  }
+  if (!shouldSyncScriptValuesForSync(script)) {
+    return { included: false, reason: 'not-opted-in', bundle: null, warningCounts };
+  }
+
   const sourceValues = values && typeof values === 'object' && !Array.isArray(values) ? values : {};
-  let keyCount = 0;
-  let bytes = 0;
-  let includedValues = {};
+  const bundle = {
+    schema: GM_VALUE_SYNC_SCHEMA,
+    scriptId: script.id,
+    keyCount: 0,
+    bytes: 0,
+    values: {}
+  };
 
   for (const [rawKey, rawValue] of Object.entries(sourceValues).sort(([a], [b]) => a.localeCompare(b))) {
     const key = String(rawKey);
-    if (keyCount >= GM_VALUE_SYNC_MAX_KEYS) {
+    if (bundle.keyCount >= GM_VALUE_SYNC_MAX_KEYS) {
       _gmValueSyncCountWarning(warningCounts, 'maxKeysExceeded');
       break;
     }
@@ -18462,10 +18501,10 @@ function buildGmValueSyncReadinessForValues(scriptId, values) {
       continue;
     }
 
-    const nextValues = { ...includedValues, [key]: cloned };
+    const nextValues = { ...bundle.values, [key]: cloned };
     const nextBundle = {
       schema: GM_VALUE_SYNC_SCHEMA,
-      scriptId: String(scriptId || ''),
+      scriptId: script.id,
       keyCount: Object.keys(nextValues).length,
       bytes: 0,
       values: nextValues
@@ -18476,17 +18515,47 @@ function buildGmValueSyncReadinessForValues(scriptId, values) {
       continue;
     }
 
-    includedValues = nextValues;
-    keyCount = nextBundle.keyCount;
-    bytes = nextBytes;
+    bundle.values = nextValues;
+    bundle.keyCount = nextBundle.keyCount;
+    bundle.bytes = nextBytes;
   }
 
+  if (bundle.keyCount === 0) {
+    return { included: true, reason: 'empty', bundle, warningCounts };
+  }
+  return { included: true, reason: 'included', bundle, warningCounts };
+}
+
+function buildGmValueSyncReadinessForValues(scriptId, values) {
+  const result = buildGmValueSyncBundleForSync({ id: scriptId, settings: { syncValues: true } }, values);
   return {
-    reason: keyCount > 0 ? 'included' : 'empty',
-    keyCount,
-    bytes,
-    warningCounts
+    reason: result.reason,
+    keyCount: result.bundle?.keyCount || 0,
+    bytes: result.bundle?.bytes || 0,
+    warningCounts: result.warningCounts
   };
+}
+
+async function buildValueBundlesForScripts(scripts = []) {
+  const valueBundles = {};
+  let optIns = 0;
+  let warnings = 0;
+  if (typeof ScriptValues === 'undefined' || typeof ScriptValues?.getAll !== 'function') {
+    const hasOptIns = scripts.some(script => shouldSyncScriptValuesForSync(script));
+    if (hasOptIns) throw new Error('GM value storage is unavailable for opted-in value sync');
+    return { valueBundles, optIns, warnings };
+  }
+
+  for (const script of scripts) {
+    if (!shouldSyncScriptValuesForSync(script)) continue;
+    optIns++;
+    const values = await ScriptValues.getAll(script.id);
+    const result = buildGmValueSyncBundleForSync(script, values);
+    warnings += Object.values(result.warningCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
+    if (result.bundle) valueBundles[script.id] = result.bundle;
+  }
+
+  return { valueBundles, optIns, warnings };
 }
 
 async function buildGmValueSyncHealthSummary(scripts = []) {
@@ -19215,22 +19284,26 @@ const CloudSync = {
 
   async _buildLocalData(tombstones = {}) {
     const scripts = await ScriptStorage.getAll();
+    const syncScripts = scripts.map(s => ({
+      id: s.id,
+      code: s.code,
+      enabled: s.enabled,
+      position: s.position,
+      settings: cloneSyncSafeScriptSettings(s.settings),
+      updatedAt: s.updatedAt,
+      syncBaseCode: s.syncBaseCode ?? null,
+      name: s.meta?.name || s.metadata?.name || s.name || s.id
+    }));
+    const valueBundleData = await buildValueBundlesForScripts(syncScripts);
     return {
       scripts,
+      valueBundleWarnings: valueBundleData.warnings,
       localData: {
         version: 1,
         timestamp: Date.now(),
-        scripts: scripts.map(s => ({
-          id: s.id,
-          code: s.code,
-          enabled: s.enabled,
-          position: s.position,
-          settings: cloneSyncSafeScriptSettings(s.settings),
-          updatedAt: s.updatedAt,
-          syncBaseCode: s.syncBaseCode ?? null,
-          name: s.meta?.name || s.metadata?.name || s.name || s.id
-        })),
-        tombstones
+        scripts: syncScripts,
+        tombstones,
+        ...(Object.keys(valueBundleData.valueBundles).length > 0 ? { valueBundles: valueBundleData.valueBundles } : {})
       }
     };
   },
@@ -19249,7 +19322,7 @@ const CloudSync = {
 
     const tombstoneData = await chrome.storage.local.get('syncTombstones');
     const tombstones = tombstoneData.syncTombstones || {};
-    const { localData } = await this._buildLocalData(tombstones);
+    const { localData, valueBundleWarnings } = await this._buildLocalData(tombstones);
     let remoteData = null;
     try {
       const remoteEnvelope = await provider.download(settings);
@@ -19268,7 +19341,8 @@ const CloudSync = {
       ...this.previewData(localData, remoteData, {
         provider: selectedProvider,
         providerLabel: provider.name || selectedProvider,
-        lastSync: settings.lastSync || null
+        lastSync: settings.lastSync || null,
+        valueBundleWarnings
       })
     };
   },
@@ -19290,8 +19364,13 @@ const CloudSync = {
       unchanged: 0,
       tombstoned: 0,
       conflicts: 0,
+      localValueOptIns: localScripts.filter(script => shouldSyncScriptValuesForSync(script)).length,
+      localValueBundles: Object.keys(local?.valueBundles || {}).length,
+      remoteValueBundles: Object.keys(remote?.valueBundles || {}).length,
+      valueBundleWarnings: Math.max(0, Number(options.valueBundleWarnings) || 0),
       wouldUpload: false,
-      wouldDownload: false
+      wouldDownload: false,
+      wouldUploadValues: false
     };
     const conflicts = [];
 
@@ -19340,6 +19419,7 @@ const CloudSync = {
 
     summary.wouldUpload = summary.localOnly > 0 || summary.localNewer > 0 || summary.conflicts > 0 || !remote;
     summary.wouldDownload = summary.remoteOnly > 0 || summary.remoteNewer > 0 || summary.conflicts > 0;
+    summary.wouldUploadValues = summary.localValueBundles > 0;
 
     return {
       dryRun: true,
@@ -19368,18 +19448,21 @@ const CloudSync = {
 
     // Get local data
     const scripts = await ScriptStorage.getAll();
+    const localSyncScripts = scripts.map(s => ({
+      id: s.id,
+      code: s.code,
+      enabled: s.enabled,
+      position: s.position,
+      settings: cloneSyncSafeScriptSettings(s.settings),
+      updatedAt: s.updatedAt
+    }));
+    const localValueBundleData = await buildValueBundlesForScripts(localSyncScripts);
     const localData = {
       version: 1,
       timestamp: Date.now(),
-      scripts: scripts.map(s => ({
-        id: s.id,
-        code: s.code,
-        enabled: s.enabled,
-        position: s.position,
-        settings: s.settings || {},
-        updatedAt: s.updatedAt
-      })),
-      tombstones
+      scripts: localSyncScripts,
+      tombstones,
+      ...(Object.keys(localValueBundleData.valueBundles).length > 0 ? { valueBundles: localValueBundleData.valueBundles } : {})
     };
 
     // Get remote data
@@ -19477,19 +19560,22 @@ const CloudSync = {
       // Rebuild the upload envelope from the current post-merge ScriptStorage state
       // so the remote gets 3-way merge results, updated syncBaseCode, and conflict markers.
       const postMergeScripts = await ScriptStorage.getAll();
+      const uploadScripts = postMergeScripts.map(s => ({
+        id: s.id,
+        code: s.code,
+        enabled: s.enabled,
+        position: s.position,
+        settings: cloneSyncSafeScriptSettings(s.settings),
+        updatedAt: s.updatedAt,
+        syncBaseCode: s.syncBaseCode ?? null
+      }));
+      const postMergeValueBundleData = await buildValueBundlesForScripts(uploadScripts);
       const uploadData = {
         version: 1,
         timestamp: Date.now(),
-        scripts: postMergeScripts.map(s => ({
-          id: s.id,
-          code: s.code,
-          enabled: s.enabled,
-          position: s.position,
-          settings: cloneSyncSafeScriptSettings(s.settings),
-          updatedAt: s.updatedAt,
-          syncBaseCode: s.syncBaseCode ?? null
-        })),
-        tombstones: mergedTombstones
+        scripts: uploadScripts,
+        tombstones: mergedTombstones,
+        ...(Object.keys(postMergeValueBundleData.valueBundles).length > 0 ? { valueBundles: postMergeValueBundleData.valueBundles } : {})
       };
       if (signal?.aborted) throw new Error('Sync aborted');
       await provider.upload(await prepareSyncEnvelopeForRemoteUpload(uploadData, settings), settings, { signal });

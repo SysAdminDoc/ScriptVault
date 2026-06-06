@@ -5,9 +5,9 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 40 - GM value sync diagnostics 2026-06-06.
+> **Roadmap version:** Round 40 - GM value sync CloudSync upload 2026-06-06.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1497 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1499 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 40 - 2026-06-06.
@@ -237,7 +237,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P3 | **Effort:** L | **Source:** [S37]
 - **Problem:** VM's most-requested sync feature (#48) is syncing per-script GM storage values.
 - **Deliverable:** Optional per-script "sync values" toggle with size caps.
-- **Progress:** Cycle 96 added the first opt-in data-model slice: `script.settings.syncValues === true` is now a sync-safe per-script marker, the new `scriptvault-gm-value-sync/v1` bundle builder enforces JSON-only values plus 64 KiB per-script, 128-key, and 256-byte key caps, CloudSync/EasyCloud tests prove the marker can sync while actual GM values stay out of provider envelopes, and `docs/gm-value-sync-data-model.md` records the remaining provider-wiring and conflict rules. Cycle 97 added local support diagnostics for that path before provider writes: the local health report now counts opt-in scripts, ready/empty bundles, aggregate warning IDs, value-read failures, syncable key totals, estimated bytes, and active caps while explicitly reporting `providerWritesEnabled: false` and excluding values, value key names, script IDs, script names, URLs, local workspace handles, local paths, sync credentials, and provider account data.
+- **Progress:** Cycle 96 added the first opt-in data-model slice: `script.settings.syncValues === true` is now a sync-safe per-script marker, the new `scriptvault-gm-value-sync/v1` bundle builder enforces JSON-only values plus 64 KiB per-script, 128-key, and 256-byte key caps, CloudSync/EasyCloud tests prove the marker can sync while actual GM values stay out of provider envelopes, and `docs/gm-value-sync-data-model.md` records the remaining provider-wiring and conflict rules. Cycle 97 added local support diagnostics for that path before provider writes: the local health report now counts opt-in scripts, ready/empty bundles, aggregate warning IDs, value-read failures, syncable key totals, estimated bytes, and active caps while explicitly reporting `providerWritesEnabled: false` and excluding values, value key names, script IDs, script names, URLs, local workspace handles, local paths, sync credentials, and provider account data. Cycle 98 wired CloudSync preview/upload for opt-in GM value bundles: local envelopes can include a top-level `valueBundles` object built only through the capped bundle builder, upload sanitization rebuilds bundles before provider writes, dry-run previews count local/remote value bundles, and downloaded remote value bundles remain unapplied until conflict handling is ready.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]

@@ -31,8 +31,19 @@ Cycle 97 adds the support diagnostics prerequisite before provider writes:
 - Support snapshots carry that aggregate block through the existing local-health
   path without requiring script inventory.
 
-The next implementation slice can wire `buildGmValueSyncBundle()` into
-CloudSync preview/upload with the same per-script opt-in and caps, then apply
-downloaded bundles only for scripts with the opt-in flag. Conflict handling
-should stay conservative until the value store records per-key timestamps or
-another durable last-write signal.
+Cycle 98 wires the first provider-write path for CloudSync:
+
+- CloudSync local envelopes can include a top-level `valueBundles` object keyed
+  by script ID.
+- Bundles are built only for scripts with `script.settings.syncValues === true`.
+- The upload sanitizer rebuilds each bundle through the capped
+  `buildGmValueSyncBundle()` contract before provider writes.
+- Values still stay out of per-script records, `settings`, `storage`, local
+  workspace metadata, support snapshots, and non-opted scripts.
+- Dry-run previews report local opt-in count, local bundle count, remote bundle
+  count, bundle warning count, and whether value bundles would upload.
+- Downloaded remote value bundles are not applied to local GM storage yet.
+
+The next implementation slice can apply downloaded bundles only for scripts with
+the opt-in flag. Conflict handling should stay conservative until the value
+store records per-key timestamps or another durable last-write signal.

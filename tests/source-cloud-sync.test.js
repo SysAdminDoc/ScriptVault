@@ -9,12 +9,13 @@ const originalGlobals = {
   CloudSyncProviders: globalThis.CloudSyncProviders,
   SettingsManager: globalThis.SettingsManager,
   ScriptStorage: globalThis.ScriptStorage,
+  ScriptValues: globalThis.ScriptValues,
   registerScript: globalThis.registerScript,
   unregisterScript: globalThis.unregisterScript,
   updateBadge: globalThis.updateBadge,
 };
 
-async function loadFreshCloudSync(initialScripts, remoteData, settingsOverride = {}) {
+async function loadFreshCloudSync(initialScripts, remoteData, settingsOverride = {}, valuesByScript = {}) {
   vi.resetModules();
 
   const scriptState = initialScripts.map((script) => structuredClone(script));
@@ -48,6 +49,10 @@ async function loadFreshCloudSync(initialScripts, remoteData, settingsOverride =
     set: vi.fn(async () => {}),
   };
 
+  const ScriptValues = {
+    getAll: vi.fn(async (scriptId) => structuredClone(valuesByScript[scriptId] || {})),
+  };
+
   const provider = {
     name: 'Google Drive',
     supportsDryRun: true,
@@ -71,6 +76,7 @@ async function loadFreshCloudSync(initialScripts, remoteData, settingsOverride =
   vi.stubGlobal('CloudSyncProviders', { googledrive: provider });
   vi.stubGlobal('SettingsManager', SettingsManager);
   vi.stubGlobal('ScriptStorage', ScriptStorage);
+  vi.stubGlobal('ScriptValues', ScriptValues);
   vi.stubGlobal('registerScript', registerScript);
   vi.stubGlobal('unregisterScript', unregisterScript);
   vi.stubGlobal('updateBadge', updateBadge);
@@ -80,6 +86,7 @@ async function loadFreshCloudSync(initialScripts, remoteData, settingsOverride =
     CloudSync: mod.CloudSync,
     ScriptStorage,
     SettingsManager,
+    ScriptValues,
     provider,
     registerScript,
     unregisterScript,
@@ -331,6 +338,7 @@ describe('source cloud sync module', () => {
     expect(provider.upload).toHaveBeenCalled();
     expect(uploaded.scripts[0].settings).toEqual({
       runAt: 'document-start',
+      notes: 'local note',
       syncValues: true,
       userMatches: ['https://example.com/*'],
     });
@@ -338,6 +346,69 @@ describe('source cloud sync module', () => {
     expect(uploaded.scripts[0]).not.toHaveProperty('storage');
     expect(JSON.stringify(uploaded)).not.toContain('binding-local');
     expect(JSON.stringify(uploaded)).not.toContain('secret\\\\local.user.js');
+  });
+
+  it('uploads capped GM value bundles only for opted-in scripts', async () => {
+    await chrome.storage.local.set({
+      syncTombstones: {},
+    });
+
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_values',
+          code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Values' },
+          settings: { syncValues: true },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        {
+          id: 'script_local_only_values',
+          code: '// ==UserScript==\n// @name Local Values\n// ==/UserScript==\n',
+          enabled: true,
+          position: 1,
+          meta: { name: 'Local Values' },
+          settings: {},
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      null,
+      {},
+      {
+        script_values: {
+          alpha: { enabled: true },
+          token: 'sync-token',
+        },
+        script_local_only_values: {
+          token: 'local-only-token',
+        },
+      },
+    );
+    const { CloudSync, ScriptValues, getRemoteData } = harness;
+
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+
+    const uploaded = getRemoteData();
+    expect(ScriptValues.getAll).toHaveBeenCalledWith('script_values');
+    expect(ScriptValues.getAll).not.toHaveBeenCalledWith('script_local_only_values');
+    expect(uploaded.valueBundles).toEqual({
+      script_values: expect.objectContaining({
+        schema: 'scriptvault-gm-value-sync/v1',
+        scriptId: 'script_values',
+        keyCount: 2,
+        values: {
+          alpha: { enabled: true },
+          token: 'sync-token',
+        },
+      }),
+    });
+    expect(uploaded.scripts.find((script) => script.id === 'script_values')).not.toHaveProperty('values');
+    expect(uploaded.scripts.find((script) => script.id === 'script_values')).not.toHaveProperty('storage');
+    expect(JSON.stringify(uploaded)).not.toContain('local-only-token');
   });
 
   it('previews sync conflicts and direction without writing local or remote data', async () => {
@@ -463,6 +534,60 @@ describe('source cloud sync module', () => {
     expect(provider.upload).not.toHaveBeenCalled();
     expect(ScriptStorage.set).not.toHaveBeenCalled();
     expect(ScriptStorage.delete).not.toHaveBeenCalled();
+    expect(SettingsManager.set).not.toHaveBeenCalled();
+  });
+
+  it('previews GM value-bundle counts without uploading provider data', async () => {
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_values',
+          code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Values' },
+          settings: { syncValues: true },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 10,
+        scripts: [],
+        tombstones: {},
+        valueBundles: {
+          remote_values: {
+            schema: 'scriptvault-gm-value-sync/v1',
+            scriptId: 'remote_values',
+            keyCount: 1,
+            bytes: 100,
+            values: { remote: true },
+          },
+        },
+      },
+      {},
+      {
+        script_values: {
+          mode: 'sync',
+        },
+      },
+    );
+    const { CloudSync, ScriptStorage, SettingsManager, provider } = harness;
+
+    const preview = await CloudSync.preview('googledrive');
+
+    expect(preview.summary).toEqual(
+      expect.objectContaining({
+        localValueOptIns: 1,
+        localValueBundles: 1,
+        remoteValueBundles: 1,
+        valueBundleWarnings: 0,
+        wouldUploadValues: true,
+      }),
+    );
+    expect(provider.upload).not.toHaveBeenCalled();
+    expect(ScriptStorage.set).not.toHaveBeenCalled();
     expect(SettingsManager.set).not.toHaveBeenCalled();
   });
 
