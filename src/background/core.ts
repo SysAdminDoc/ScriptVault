@@ -2103,6 +2103,8 @@ async function buildLocalHealthReport() {
 // ============================================================================
 
 const MAX_SCRIPT_SIZE = 5 * 1024 * 1024; // 5MB limit
+const SUBSCRIPTION_REFRESH_ALARM = 'subscriptionRefresh';
+const DEFAULT_SUBSCRIPTION_REFRESH_INTERVAL_HOURS = 24;
 
 const SubscriptionSystem = {
   _FETCH_TIMEOUT_MS: 15 * 1000,
@@ -2248,7 +2250,11 @@ const SubscriptionSystem = {
     try {
       const feed = await this.fetchFeed(url);
       const subscription = await ScriptSubscriptions.upsertFromFeed(feed.sourceUrl, feed, { name });
-      return await this.refreshSubscription(subscription.id, { feed, subscription });
+      const result = await this.refreshSubscription(subscription.id, { feed, subscription });
+      if (result?.success) {
+        await setupAlarms().catch(() => {});
+      }
+      return result;
     } catch (error) {
       return { success: false, error: error?.message || String(error) };
     }
@@ -2324,6 +2330,9 @@ const SubscriptionSystem = {
   async removeSubscription(id) {
     if (!id) return { success: false, error: 'Subscription id is required' };
     const removed = await ScriptSubscriptions.remove(id);
+    if (removed) {
+      await setupAlarms().catch(() => {});
+    }
     return {
       success: true,
       removed,
@@ -4887,7 +4896,8 @@ async function handleMessage(message, sender) {
 
         // If update/sync intervals changed, reconfigure alarms
         if ('checkInterval' in changed || 'autoUpdate' in changed ||
-            'syncEnabled' in changed || 'syncProvider' in changed || 'syncInterval' in changed) {
+            'syncEnabled' in changed || 'syncProvider' in changed || 'syncInterval' in changed ||
+            'subscriptionAutoRefresh' in changed || 'subscriptionRefreshInterval' in changed) {
           await setupAlarms();
         }
 
@@ -8011,6 +8021,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       await UpdateSystem.autoUpdate();
     } else if (alarm.name === 'autoSync') {
       await CloudSync.sync();
+    } else if (alarm.name === SUBSCRIPTION_REFRESH_ALARM) {
+      await SubscriptionSystem.refreshSubscriptions();
     }
   } catch (e) {
     console.error('[ScriptVault] Alarm handler error:', e);
@@ -8259,6 +8271,7 @@ async function setupAlarms() {
   // Clear only the alarms we manage here (preserve notification/backup alarms)
   await chrome.alarms.clear('autoUpdate').catch(() => {});
   await chrome.alarms.clear('autoSync').catch(() => {});
+  await chrome.alarms.clear(SUBSCRIPTION_REFRESH_ALARM).catch(() => {});
   
   // Setup auto-update alarm
   // checkInterval is hours from dashboard, updateInterval is ms legacy
@@ -8277,6 +8290,19 @@ async function setupAlarms() {
     chrome.alarms.create('autoSync', {
       periodInMinutes: Math.max(1, syncMs / 60000)
     });
+  }
+
+  if (settings.subscriptionAutoRefresh !== false) {
+    const subscriptions = await ScriptSubscriptions.list().catch(() => []);
+    if (subscriptions.some(subscription => subscription.enabled !== false)) {
+      const intervalHours = Number(settings.subscriptionRefreshInterval ?? DEFAULT_SUBSCRIPTION_REFRESH_INTERVAL_HOURS);
+      const periodInMinutes = intervalHours > 0
+        ? Math.max(30, intervalHours * 60)
+        : 0;
+      if (periodInMinutes > 0) {
+        chrome.alarms.create(SUBSCRIPTION_REFRESH_ALARM, { periodInMinutes });
+      }
+    }
   }
 
   // Setup @crontab alarms for all enabled scripts

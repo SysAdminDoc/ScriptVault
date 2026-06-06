@@ -31,6 +31,8 @@ export interface Settings {
   autoUpdateMode: 'notify' | 'apply-safe';
   updateInterval: number;
   lastUpdateCheck: number;
+  subscriptionAutoRefresh: boolean;
+  subscriptionRefreshInterval: number;
 
   // Sync
   syncEnabled: boolean;

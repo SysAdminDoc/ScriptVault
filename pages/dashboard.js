@@ -1773,6 +1773,8 @@
         elements.subscriptionNameInput = document.getElementById('subscriptionNameInput');
         elements.btnAddSubscription = document.getElementById('btnAddSubscription');
         elements.btnRefreshSubscriptions = document.getElementById('btnRefreshSubscriptions');
+        elements.settingsSubscriptionAutoRefresh = document.getElementById('settingsSubscriptionAutoRefresh');
+        elements.settingsSubscriptionRefreshInterval = document.getElementById('settingsSubscriptionRefreshInterval');
         elements.subscriptionList = document.getElementById('subscriptionList');
         elements.subscriptionStatus = document.getElementById('subscriptionStatus');
         elements.installFileInput = document.getElementById('installFileInput');
@@ -3144,6 +3146,8 @@
         if (elements.settingsSilentUpdate) elements.settingsSilentUpdate.checked = s.autoUpdateMode === 'apply-safe';
         if (elements.settingsCheckInterval) elements.settingsCheckInterval.value = s.checkInterval ?? '24';
         if (elements.settingsNotifyHideAfter) elements.settingsNotifyHideAfter.value = s.notifyHideAfter ?? '15';
+        if (elements.settingsSubscriptionAutoRefresh) elements.settingsSubscriptionAutoRefresh.checked = s.subscriptionAutoRefresh !== false;
+        if (elements.settingsSubscriptionRefreshInterval) elements.settingsSubscriptionRefreshInterval.value = s.subscriptionRefreshInterval ?? '24';
         
         // Externals
         if (elements.settingsExternalsInterval) elements.settingsExternalsInterval.value = s.externalsInterval ?? '0';
@@ -3291,6 +3295,7 @@
             lintMaxSize: elements.settingsLintMaxSize,
             checkInterval: elements.settingsCheckInterval,
             notifyHideAfter: elements.settingsNotifyHideAfter,
+            subscriptionRefreshInterval: elements.settingsSubscriptionRefreshInterval,
             externalsInterval: elements.settingsExternalsInterval,
             editorFontSize: elements.settingsEditorFontSize,
             indentWidth: elements.settingsIndentWidth,
@@ -3559,6 +3564,8 @@
                 return validateSelectOptionValue('checkInterval', value, 'userscript update check interval', { number: true });
             case 'notifyHideAfter':
                 return validateSelectOptionValue('notifyHideAfter', value, 'notification hide delay', { number: true });
+            case 'subscriptionRefreshInterval':
+                return validateSelectOptionValue('subscriptionRefreshInterval', value, 'subscription refresh interval', { number: true });
             case 'externalsInterval':
                 return validateSelectOptionValue('externalsInterval', value, 'externals update interval', { number: true });
             case 'editorFontSize':
@@ -9822,6 +9829,15 @@
         }
     }
 
+    function getSubscriptionHealth(subscription) {
+        if (subscription?.enabled === false) return { label: 'Disabled', className: 'disabled' };
+        if (Array.isArray(subscription?.lastErrors) && subscription.lastErrors.length > 0) {
+            return { label: 'Needs attention', className: 'error' };
+        }
+        if (subscription?.lastCheckedAt) return { label: 'Healthy', className: 'ok' };
+        return { label: 'Not checked', className: 'warn' };
+    }
+
     function renderSubscriptions() {
         if (!elements.subscriptionList) return;
         const subscriptions = Array.isArray(state.subscriptions) ? state.subscriptions : [];
@@ -9841,12 +9857,14 @@
             const errors = Array.isArray(subscription.lastErrors) && subscription.lastErrors.length
                 ? `<span>${numberFormatter.format(subscription.lastErrors.length)} error${subscription.lastErrors.length === 1 ? '' : 's'}</span>`
                 : '';
+            const health = getSubscriptionHealth(subscription);
             return `
                 <article class="subscription-item" data-subscription-id="${escapeHtml(subscription.id || '')}">
                     <div class="subscription-copy">
                         <strong>${escapeHtml(subscription.name || 'Script subscription')}</strong>
                         <span class="subscription-url">${escapeHtml(subscription.url || '')}</span>
                         <div class="subscription-meta">
+                            <span class="subscription-health ${escapeHtml(health.className)}">Health: ${escapeHtml(health.label)}</span>
                             <span>${numberFormatter.format(scripts)} script${scripts === 1 ? '' : 's'}</span>
                             <span>Last checked: ${escapeHtml(lastChecked)}</span>
                             <span>${numberFormatter.format(subscription.lastQueued || 0)} queued</span>
@@ -11820,6 +11838,8 @@
             settingsSilentUpdate: ['autoUpdateMode', 'checked', checked => checked ? 'apply-safe' : 'notify'],
             settingsCheckInterval: ['checkInterval', 'value'],
             settingsNotifyHideAfter: ['notifyHideAfter', 'value'],
+            settingsSubscriptionAutoRefresh: ['subscriptionAutoRefresh', 'checked'],
+            settingsSubscriptionRefreshInterval: ['subscriptionRefreshInterval', 'value'],
 
             // Externals
             settingsExternalsInterval: ['externalsInterval', 'value'],
