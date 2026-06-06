@@ -21,6 +21,10 @@ until the ESM worker chunks pass AMO lint.
   adapter surface and falls back to the textarea editor when Monaco fails.
 - `build-firefox.sh` intentionally omits `lib/monaco/`; Firefox keeps the
   textarea fallback for AMO package validation.
+- `npm run monaco:package:check` pins this current packaging contract so
+  Chromium remains on the local AMD bundle, Firefox remains Monaco-free, and
+  remote/CDN editor assets stay rejected until the X-4 migration deliberately
+  replaces the guard with the ESM contract.
 
 ## Source Findings
 
@@ -89,6 +93,9 @@ The X-4 implementation pass should add or update these gates:
 - `npm run build` writes `lib/monaco-esm/editor.js` and deterministic worker
   chunks, and no longer copies the AMD `min/` tree for Chromium packages.
 - `npm run build:prod` packages only local Monaco ESM assets.
+- `npm run monaco:package:check` should be updated from the current AMD/Firefox
+  fallback contract to the final ESM package contract in the same change that
+  switches `pages/editor-sandbox.html`.
 - A static test fails if `pages/editor-sandbox.html` references
   `vs/loader.js`, `require.config`, or CDN Monaco URLs.
 - A browser smoke opens the dashboard editor, waits for `editor.isMonaco === true`,
