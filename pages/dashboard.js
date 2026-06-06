@@ -3247,7 +3247,116 @@
         updateSupportSnapshotSummary();
     }
 
+    function getSettingsInputForKey(key) {
+        const keyToElement = {
+            badgeColor: elements.settingsBadgeColor,
+            lintMaxSize: elements.settingsLintMaxSize,
+            webdavUrl: elements.settingsWebdavUrl,
+            s3Endpoint: elements.settingsS3Endpoint,
+            deniedHosts: elements.settingsDeniedHosts,
+            linterConfig: elements.settingsLinterConfig
+        };
+        return keyToElement[key] || null;
+    }
+
+    function setSettingsFieldError(input, message) {
+        if (!input) return;
+        const errorId = input.getAttribute('aria-describedby')?.split(/\s+/).find(id => id.endsWith('Error'));
+        const errorEl = errorId ? document.getElementById(errorId) : null;
+        if (message) {
+            input.setAttribute('aria-invalid', 'true');
+            input.setCustomValidity?.(message);
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.hidden = false;
+            }
+            return;
+        }
+        input.removeAttribute('aria-invalid');
+        input.setCustomValidity?.('');
+        if (errorEl) {
+            errorEl.textContent = '';
+            errorEl.hidden = true;
+        }
+    }
+
+    function isHttpUrl(value) {
+        try {
+            const parsed = new URL(value);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+            return false;
+        }
+    }
+
+    function validateHostList(value) {
+        const hosts = Array.isArray(value)
+            ? value
+            : String(value || '').split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+        const invalid = hosts.find(host => {
+            if (/^\w+:\/\//.test(host) || /[/?#\s]/.test(host)) return true;
+            if (host === '*') return false;
+            return !/^(?:\*\.)?(?:[a-z0-9-]+\.)*[a-z0-9-]+(?::\d{1,5})?$/i.test(host) && host !== 'localhost';
+        });
+        return invalid
+            ? { ok: false, error: `Denied host "${invalid}" must be a hostname, optional wildcard hostname, or localhost.` }
+            : { ok: true, value: hosts };
+    }
+
+    function validateSettingsValue(key, value) {
+        switch (key) {
+            case 'badgeColor': {
+                const color = String(value || '').trim();
+                if (!/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color)) {
+                    return { ok: false, error: 'Use a hex color like #22c55e.' };
+                }
+                return { ok: true, value: color };
+            }
+            case 'lintMaxSize': {
+                const size = Number(value);
+                if (!Number.isInteger(size) || size < 1000 || size > 5000000) {
+                    return { ok: false, error: 'Use a whole number from 1,000 to 5,000,000 bytes.' };
+                }
+                return { ok: true, value: size };
+            }
+            case 'webdavUrl':
+            case 's3Endpoint': {
+                const url = String(value || '').trim();
+                if (url && !isHttpUrl(url)) {
+                    return { ok: false, error: 'Use an http or https URL.' };
+                }
+                return { ok: true, value: url };
+            }
+            case 'deniedHosts':
+                return validateHostList(value);
+            case 'linterConfig': {
+                const raw = String(value || '').trim();
+                if (!raw) return { ok: true, value: '' };
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+                        return { ok: false, error: 'Use a JSON object such as {"rules":{}}.' };
+                    }
+                    return { ok: true, value: raw };
+                } catch {
+                    return { ok: false, error: 'Use valid JSON for the linter config.' };
+                }
+            }
+            default:
+                return { ok: true, value };
+        }
+    }
+
     async function saveSetting(key, value, options = {}) {
+        const input = options.input || getSettingsInputForKey(key);
+        const validation = validateSettingsValue(key, value);
+        if (!validation.ok) {
+            setSettingsFieldError(input, validation.error);
+            if (!options.quiet) showToast(validation.error, 'error');
+            return false;
+        }
+        setSettingsFieldError(input, '');
+        value = validation.value;
         try {
             state.settings[key] = value;
             await chrome.runtime.sendMessage({ action: 'setSettings', settings: { [key]: value } });
@@ -3283,8 +3392,9 @@
     }
 
     async function saveSettingOrThrow(key, value) {
+        const input = getSettingsInputForKey(key);
         const saved = await saveSetting(key, value, { quiet: true });
-        if (!saved) throw new Error(`Failed to save ${key}`);
+        if (!saved) throw new Error(input?.validationMessage || `Failed to save ${key}`);
         return true;
     }
 
@@ -10725,7 +10835,7 @@
         elements.settingsWebdavUsername?.addEventListener('blur', e => saveSetting('webdavUsername', e.target.value.trim()));
         elements.settingsWebdavPassword?.addEventListener('blur', e => saveSetting('webdavPassword', e.target.value));
         elements.settingsSyncEncryptionPassphrase?.addEventListener('blur', e => saveSetting('syncEncryptionPassphrase', e.target.value));
-        elements.settingsLintMaxSize?.addEventListener('blur', e => saveSetting('lintMaxSize', parseInt(e.target.value) || 500));
+        elements.settingsLintMaxSize?.addEventListener('blur', e => saveSetting('lintMaxSize', e.target.value));
 
         // Textarea inputs that save on blur
         elements.settingsCustomCss?.addEventListener('blur', e => saveSetting('customCss', e.target.value));

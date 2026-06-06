@@ -1731,6 +1731,30 @@
             min-width: 220px;
         }
 
+        #settingsPanel .setting-error {
+            display: block;
+            flex: 1 1 100%;
+            margin-left: 230px;
+            margin-top: 6px;
+            color: var(--accent-red);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        #settingsPanel textarea + .setting-error {
+            margin-left: 0;
+        }
+
+        #settingsPanel .setting-error[hidden] {
+            display: none;
+        }
+
+        #settingsPanel input[aria-invalid="true"],
+        #settingsPanel textarea[aria-invalid="true"] {
+            border-color: var(--accent-red);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
+        }
+
         .utilities-shell {
             padding: 22px;
             display: flex;
@@ -6163,8 +6187,9 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Icon badge color:</span>
-                        <input type="text" class="input-field" id="settingsBadgeColor" value="#ee3131" style="width: 100px;">
+                        <input type="text" class="input-field" id="settingsBadgeColor" value="#ee3131" style="width: 100px;" pattern="^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" inputmode="text" autocomplete="off" aria-describedby="settingsBadgeColorError">
                         <div class="color-preview" id="badgeColorPreview" style="width: 24px; height: 24px; border-radius: 50%; background: #ee3131; border: 1px solid var(--border-color);"></div>
+                        <span class="setting-error" id="settingsBadgeColorError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnSaveActionMenu">Save</button>
@@ -6289,7 +6314,8 @@
                     <div id="syncS3Settings" class="sync-provider-settings" style="display:none; margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 4px;">
                         <div class="setting-row">
                             <span class="label-text">Endpoint:</span>
-                            <input type="url" id="settingsS3Endpoint" placeholder="https://s3.us-east-1.amazonaws.com" class="input-field" aria-label="S3 endpoint URL">
+                            <input type="url" id="settingsS3Endpoint" placeholder="https://s3.us-east-1.amazonaws.com" class="input-field" aria-label="S3 endpoint URL" inputmode="url" autocomplete="url" aria-describedby="settingsS3EndpointError">
+                            <span class="setting-error" id="settingsS3EndpointError" hidden></span>
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Region:</span>
@@ -6320,7 +6346,8 @@
                     <div id="syncWebdavSettings" class="sync-provider-settings" style="display:none; margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 4px;">
                         <div class="setting-row">
                             <span class="label-text">WebDAV URL:</span>
-                            <input type="text" class="input-field wide" id="settingsWebdavUrl" placeholder="https://your-server.com/dav/" aria-label="WebDAV URL">
+                            <input type="url" class="input-field wide" id="settingsWebdavUrl" placeholder="https://your-server.com/dav/" aria-label="WebDAV URL" inputmode="url" autocomplete="url" aria-describedby="settingsWebdavUrlError">
+                            <span class="setting-error" id="settingsWebdavUrlError" hidden></span>
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Username:</span>
@@ -6484,14 +6511,16 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Automatic syntax check max size:</span>
-                        <input type="text" class="input-field" id="settingsLintMaxSize" value="1000000" style="width: 100px;">
+                        <input type="number" class="input-field" id="settingsLintMaxSize" value="1000000" min="1000" max="5000000" step="1000" inputmode="numeric" style="width: 120px;" aria-describedby="settingsLintMaxSizeError">
+                        <span class="setting-error" id="settingsLintMaxSizeError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Custom Linter Config:</span>
                         <span class="help-icon" title="ESLint configuration in JSON format">!</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsLinterConfig" placeholder="{}" style="min-height: 80px; font-family: monospace;"></textarea>
+                        <textarea class="textarea-field" id="settingsLinterConfig" placeholder="{}" style="min-height: 80px; font-family: monospace;" aria-describedby="settingsLinterConfigError"></textarea>
+                        <span class="setting-error" id="settingsLinterConfigError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnSaveEditor">Save</button>
@@ -6648,7 +6677,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <span class="label-text">Host permissions denied by user:</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsDeniedHosts" readonly placeholder="&lt;No previously denied runtime host permissions found&gt;" style="min-height: 80px;"></textarea>
+                        <textarea class="textarea-field" id="settingsDeniedHosts" readonly placeholder="&lt;No previously denied runtime host permissions found&gt;" style="min-height: 80px;" aria-describedby="settingsDeniedHostsError"></textarea>
+                        <span class="setting-error" id="settingsDeniedHostsError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnGrantSelected">Grant Selected</button>
