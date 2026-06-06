@@ -1555,6 +1555,12 @@ export interface ResponseMap {
       skippedUserModified: number;
       skippedUnavailable: number;
       failures: number;
+      preservedRemoteNewer: number;
+      preservedLocalNewer: number;
+      preservedSameTimestamp: number;
+      preservedRemoteTimestampOnly: number;
+      preservedLocalTimestampOnly: number;
+      preservedTimestampUnknown: number;
     };
   }> | { skipped: true };
   connectGoogleDrive: SuccessOrError<{ user?: { email?: string; name?: string } }>;

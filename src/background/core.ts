@@ -167,7 +167,13 @@ function createEmptyRemoteValueBundleApplyResult() {
     skippedUserModified: 0,
     skippedUnavailable: 0,
     failures: 0,
-    preservedValueBundles: {}
+    preservedValueBundles: {},
+    preservedRemoteNewer: 0,
+    preservedLocalNewer: 0,
+    preservedSameTimestamp: 0,
+    preservedRemoteTimestampOnly: 0,
+    preservedLocalTimestampOnly: 0,
+    preservedTimestampUnknown: 0
   };
 }
 
@@ -179,7 +185,13 @@ function summarizeRemoteValueBundleApplyResult(result) {
     skippedNonEmpty: result.skippedNonEmpty,
     skippedUserModified: result.skippedUserModified,
     skippedUnavailable: result.skippedUnavailable,
-    failures: result.failures
+    failures: result.failures,
+    preservedRemoteNewer: result.preservedRemoteNewer,
+    preservedLocalNewer: result.preservedLocalNewer,
+    preservedSameTimestamp: result.preservedSameTimestamp,
+    preservedRemoteTimestampOnly: result.preservedRemoteTimestampOnly,
+    preservedLocalTimestampOnly: result.preservedLocalTimestampOnly,
+    preservedTimestampUnknown: result.preservedTimestampUnknown
   };
   return Object.values(summary).some(value => value > 0) ? summary : null;
 }
@@ -265,6 +277,23 @@ function compareValueBundleLastWrite(localTimestamp, remoteTimestamp) {
   return 'unknown';
 }
 
+function countPreservedValueBundleTimestampHint(result, localBundle, remoteBundle) {
+  const localLastValueUpdatedAt = getValueBundleLastUpdatedAt(localBundle) ?? null;
+  const remoteLastValueUpdatedAt = getValueBundleLastUpdatedAt(remoteBundle) ?? null;
+  const hint = compareValueBundleLastWrite(localLastValueUpdatedAt, remoteLastValueUpdatedAt);
+  if (hint === 'remote-newer') result.preservedRemoteNewer++;
+  else if (hint === 'local-newer') result.preservedLocalNewer++;
+  else if (hint === 'same') result.preservedSameTimestamp++;
+  else if (hint === 'remote-timestamp-only') result.preservedRemoteTimestampOnly++;
+  else if (hint === 'local-timestamp-only') result.preservedLocalTimestampOnly++;
+  else result.preservedTimestampUnknown++;
+}
+
+function preserveRemoteValueBundle(result, scriptId, remoteBundle, localBundle) {
+  result.preservedValueBundles[scriptId] = remoteBundle;
+  countPreservedValueBundleTimestampHint(result, localBundle, remoteBundle);
+}
+
 function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {
   const hasLocalBundle = isPlainObject(localBundle);
   const keyCounts = hasLocalBundle
@@ -307,7 +336,7 @@ function countValueBundleKeyOverlap(localValues, remoteValues) {
   return { overlapping, localOnly, remoteOnly };
 }
 
-async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts = []) {
+async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts = [], localValueBundles = {}) {
   const result = createEmptyRemoteValueBundleApplyResult();
   const bundles = Object.entries(selection.valueBundles);
   if (bundles.length === 0) return result;
@@ -318,7 +347,9 @@ async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts =
     typeof ScriptValues?.setAll !== 'function'
   ) {
     result.skippedUnavailable = bundles.length;
-    result.preservedValueBundles = Object.fromEntries(bundles);
+    for (const [scriptId, bundle] of bundles) {
+      preserveRemoteValueBundle(result, scriptId, bundle, localValueBundles[scriptId]);
+    }
     return result;
   }
 
@@ -326,9 +357,10 @@ async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts =
 
   for (const [scriptId, bundle] of bundles) {
     const currentScript = scriptsById.get(scriptId);
+    const localBundle = localValueBundles[scriptId];
     if (currentScript?.settings?.userModified) {
       result.skippedUserModified++;
-      result.preservedValueBundles[scriptId] = bundle;
+      preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
       continue;
     }
 
@@ -336,14 +368,14 @@ async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts =
       const localValues = await ScriptValues.getAll(scriptId);
       if (Object.keys(localValues || {}).length > 0) {
         result.skippedNonEmpty++;
-        result.preservedValueBundles[scriptId] = bundle;
+        preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
         continue;
       }
       await ScriptValues.setAll(scriptId, bundle.values);
       result.applied++;
     } catch (_) {
       result.failures++;
-      result.preservedValueBundles[scriptId] = bundle;
+      preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
     }
   }
 
@@ -3393,7 +3425,8 @@ const CloudSync = {
       const postMergeScripts = await ScriptStorage.getAll();
       const remoteValueApplyResult = await applyRemoteValueBundlesWhenLocalEmpty(
         remoteValueBundleSelection,
-        postMergeScripts
+        postMergeScripts,
+        localData.valueBundles || {}
       );
       valueBundleSync = summarizeRemoteValueBundleApplyResult(remoteValueApplyResult);
       if (

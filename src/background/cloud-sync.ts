@@ -109,6 +109,12 @@ interface ValueBundleSyncSummary {
   skippedUserModified: number;
   skippedUnavailable: number;
   failures: number;
+  preservedRemoteNewer: number;
+  preservedLocalNewer: number;
+  preservedSameTimestamp: number;
+  preservedRemoteTimestampOnly: number;
+  preservedLocalTimestampOnly: number;
+  preservedTimestampUnknown: number;
 }
 
 interface SyncPreviewSummary {
@@ -199,6 +205,12 @@ interface RemoteValueBundleApplyResult {
   skippedUnavailable: number;
   failures: number;
   preservedValueBundles: Record<string, GmValueSyncBundle>;
+  preservedRemoteNewer: number;
+  preservedLocalNewer: number;
+  preservedSameTimestamp: number;
+  preservedRemoteTimestampOnly: number;
+  preservedLocalTimestampOnly: number;
+  preservedTimestampUnknown: number;
 }
 
 type RuntimeHooks = typeof globalThis & {
@@ -430,6 +442,12 @@ function createEmptyRemoteValueBundleApplyResult(): RemoteValueBundleApplyResult
     skippedUnavailable: 0,
     failures: 0,
     preservedValueBundles: {},
+    preservedRemoteNewer: 0,
+    preservedLocalNewer: 0,
+    preservedSameTimestamp: 0,
+    preservedRemoteTimestampOnly: 0,
+    preservedLocalTimestampOnly: 0,
+    preservedTimestampUnknown: 0,
   };
 }
 
@@ -444,6 +462,12 @@ function summarizeRemoteValueBundleApplyResult(
     skippedUserModified: result.skippedUserModified,
     skippedUnavailable: result.skippedUnavailable,
     failures: result.failures,
+    preservedRemoteNewer: result.preservedRemoteNewer,
+    preservedLocalNewer: result.preservedLocalNewer,
+    preservedSameTimestamp: result.preservedSameTimestamp,
+    preservedRemoteTimestampOnly: result.preservedRemoteTimestampOnly,
+    preservedLocalTimestampOnly: result.preservedLocalTimestampOnly,
+    preservedTimestampUnknown: result.preservedTimestampUnknown,
   };
   return Object.values(summary).some((value) => value > 0) ? summary : null;
 }
@@ -544,6 +568,32 @@ function compareValueBundleLastWrite(
   return 'unknown';
 }
 
+function countPreservedValueBundleTimestampHint(
+  result: RemoteValueBundleApplyResult,
+  localBundle: unknown,
+  remoteBundle: GmValueSyncBundle,
+): void {
+  const localLastValueUpdatedAt = getValueBundleLastUpdatedAt(localBundle) ?? null;
+  const remoteLastValueUpdatedAt = getValueBundleLastUpdatedAt(remoteBundle) ?? null;
+  const hint = compareValueBundleLastWrite(localLastValueUpdatedAt, remoteLastValueUpdatedAt);
+  if (hint === 'remote-newer') result.preservedRemoteNewer += 1;
+  else if (hint === 'local-newer') result.preservedLocalNewer += 1;
+  else if (hint === 'same') result.preservedSameTimestamp += 1;
+  else if (hint === 'remote-timestamp-only') result.preservedRemoteTimestampOnly += 1;
+  else if (hint === 'local-timestamp-only') result.preservedLocalTimestampOnly += 1;
+  else result.preservedTimestampUnknown += 1;
+}
+
+function preserveRemoteValueBundle(
+  result: RemoteValueBundleApplyResult,
+  scriptId: string,
+  remoteBundle: GmValueSyncBundle,
+  localBundle: unknown,
+): void {
+  result.preservedValueBundles[scriptId] = remoteBundle;
+  countPreservedValueBundleTimestampHint(result, localBundle, remoteBundle);
+}
+
 function buildValueBundleConflictPreview(
   reason: SyncPreviewValueBundleConflict['reason'],
   remoteBundle: GmValueSyncBundle,
@@ -596,6 +646,7 @@ function countValueBundleKeyOverlap(
 async function applyRemoteValueBundlesWhenLocalEmpty(
   selection: RemoteValueBundleSelection,
   currentScripts: Script[] | SyncScript[] = [],
+  localValueBundles: Record<string, unknown> = {},
 ): Promise<RemoteValueBundleApplyResult> {
   const result = createEmptyRemoteValueBundleApplyResult();
   const bundles = Object.entries(selection.valueBundles);
@@ -607,7 +658,9 @@ async function applyRemoteValueBundlesWhenLocalEmpty(
     typeof ScriptValues?.setAll !== 'function'
   ) {
     result.skippedUnavailable = bundles.length;
-    result.preservedValueBundles = Object.fromEntries(bundles);
+    for (const [scriptId, bundle] of bundles) {
+      preserveRemoteValueBundle(result, scriptId, bundle, localValueBundles[scriptId]);
+    }
     return result;
   }
 
@@ -617,9 +670,10 @@ async function applyRemoteValueBundlesWhenLocalEmpty(
 
   for (const [scriptId, bundle] of bundles) {
     const currentScript = scriptsById.get(scriptId);
+    const localBundle = localValueBundles[scriptId];
     if (currentScript?.settings?.userModified) {
       result.skippedUserModified += 1;
-      result.preservedValueBundles[scriptId] = bundle;
+      preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
       continue;
     }
 
@@ -627,14 +681,14 @@ async function applyRemoteValueBundlesWhenLocalEmpty(
       const localValues = await ScriptValues.getAll(scriptId);
       if (Object.keys(localValues || {}).length > 0) {
         result.skippedNonEmpty += 1;
-        result.preservedValueBundles[scriptId] = bundle;
+        preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
         continue;
       }
       await ScriptValues.setAll(scriptId, bundle.values);
       result.applied += 1;
     } catch (_) {
       result.failures += 1;
-      result.preservedValueBundles[scriptId] = bundle;
+      preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
     }
   }
 
@@ -1037,6 +1091,7 @@ export const CloudSync = {
       const remoteValueApplyResult = await applyRemoteValueBundlesWhenLocalEmpty(
         remoteValueBundleSelection,
         postMergeScripts,
+        localData.valueBundles ?? {},
       );
       valueBundleSync = summarizeRemoteValueBundleApplyResult(remoteValueApplyResult);
       if (
