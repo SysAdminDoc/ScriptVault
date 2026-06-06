@@ -37,6 +37,9 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "storage": {
+    "managed_schema": "managed-storage-schema.json"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

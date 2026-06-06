@@ -8937,6 +8937,7 @@ async function init() {
   if (typeof EasyCloudSync !== 'undefined') {
     try { await EasyCloudSync.init(); } catch (e) { console.error('[ScriptVault] EasyCloudSync init error:', e); }
   }
+  await restrictManagedStorageAccess();
 
   // Phase 39.8 — OS-policy script provisioning. Read chrome.storage.managed
   // for an array of admin-pushed userscripts; install/update each. The
@@ -8958,6 +8959,46 @@ async function init() {
   console.log('[ScriptVault] Service worker ready');
 }
 
+const MANAGED_SCRIPT_POLICY_KEYS = ['managedScripts', 'managedScriptsCleanup'];
+
+async function restrictManagedStorageAccess() {
+  const managed = chrome.storage?.managed;
+  if (typeof managed?.setAccessLevel !== 'function') return;
+  try {
+    await managed.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
+  } catch (_) {
+    // Some Chromium builds expose managed storage without setAccessLevel.
+  }
+}
+
+async function getManagedScriptOriginKey(item) {
+  if (!item || typeof item !== 'object') return null;
+  if (typeof item.url === 'string' && item.url.trim()) {
+    return `url:${item.url.trim()}`;
+  }
+  if (typeof item.code === 'string' && item.code) {
+    return `code-sha256:${await _sha256Hex(item.code)}`;
+  }
+  return null;
+}
+
+async function markManagedScript(result, originKey) {
+  if (!result?.success || !result?.script?.id || !originKey) return null;
+  const current = await ScriptStorage.get(result.script.id);
+  const script = current || result.script;
+  const managedScript = {
+    ...script,
+    settings: {
+      ...(script.settings || {}),
+      managed: true,
+      managedOriginKey: originKey,
+      managedAppliedAt: Date.now()
+    }
+  };
+  await ScriptStorage.set(managedScript.id, managedScript);
+  return managedScript;
+}
+
 // Phase 39.8 — OS-policy script provisioning (TM 5.5.0 parity).
 //
 // Admins push userscripts via the standard Chrome enterprise policy mechanism
@@ -8968,16 +9009,15 @@ async function init() {
 //     { code: "// ==UserScript== ... " }              // installed inline
 //   ]
 //
-// Each managed script is flagged `script.settings.managed = true`. A future
-// dashboard pass surfaces this with a "Managed by your organization" pill
-// (deferred — UI scope, dashboard.js). Managed scripts are NOT auto-deleted
+// Each managed script is flagged `script.settings.managed = true` and appears
+// with a Managed badge in the dashboard. Managed scripts are NOT auto-deleted
 // from local storage when removed from policy; admins can clear via an explicit
 // `chrome.storage.managed.managedScriptsCleanup = true` toggle if needed.
 async function applyManagedScripts() {
   if (!chrome.storage?.managed) return; // Not all browsers expose .managed
   let policy;
   try {
-    policy = await chrome.storage.managed.get(['managedScripts', 'managedScriptsCleanup']);
+    policy = await chrome.storage.managed.get(MANAGED_SCRIPT_POLICY_KEYS);
   } catch (e) {
     // No managed policy attached or restricted-by-policy — silently skip.
     return;
@@ -8993,30 +9033,31 @@ async function applyManagedScripts() {
     }
   }
   const policyOriginKeys = new Set();
+  const policyManagedScriptIds = new Set();
 
   for (const item of items) {
     if (!item || typeof item !== 'object') continue;
-    const originKey = typeof item.url === 'string' ? `url:${item.url}` :
-                      typeof item.code === 'string' ? `code:${item.code.slice(0, 64)}` : null;
+    const originKey = await getManagedScriptOriginKey(item);
     if (!originKey) continue;
     policyOriginKeys.add(originKey);
 
-    let code;
-    if (typeof item.url === 'string') {
+    const url = typeof item.url === 'string' ? item.url.trim() : '';
+    const code = typeof item.code === 'string' ? item.code : '';
+    let res = null;
+    if (url) {
       try {
-        const res = await installFromUrl(item.url);
+        res = await installFromUrl(url);
         if (res?.error) {
-          console.warn('[ScriptVault] Managed script install (URL) failed:', item.url, res.error);
+          console.warn('[ScriptVault] Managed script install (URL) failed:', url, res.error);
           continue;
         }
       } catch (e) {
-        console.warn('[ScriptVault] Managed script fetch failed:', item.url, e?.message || e);
+        console.warn('[ScriptVault] Managed script fetch failed:', url, e?.message || e);
         continue;
       }
-    } else if (typeof item.code === 'string' && item.code) {
-      code = item.code;
+    } else if (code) {
       try {
-        const res = await installFromCode(code);
+        res = await installFromCode(code);
         if (res?.error) {
           console.warn('[ScriptVault] Managed script install (inline) failed:', res.error);
           continue;
@@ -9029,24 +9070,9 @@ async function applyManagedScripts() {
       continue;
     }
 
-    // Tag the installed script as managed. installFromUrl/installFromCode
-    // dedup by name+namespace so we have to look it up post-install.
     try {
-      const fresh = await ScriptStorage.getAll();
-      const lastInstalled = fresh.find(s =>
-        !s?.settings?.managed && s.updatedAt && Date.now() - s.updatedAt < 30000
-      );
-      if (lastInstalled) {
-        await ScriptStorage.set(lastInstalled.id, {
-          ...lastInstalled,
-          settings: {
-            ...(lastInstalled.settings || {}),
-            managed: true,
-            managedOriginKey: originKey,
-            managedAppliedAt: Date.now()
-          }
-        });
-      }
+      const managedScript = await markManagedScript(res, originKey);
+      if (managedScript?.id) policyManagedScriptIds.add(managedScript.id);
     } catch (e) {
       console.warn('[ScriptVault] Managed-flag tagging failed:', e?.message || e);
     }
@@ -9058,7 +9084,7 @@ async function applyManagedScripts() {
   // a script than silently delete one a sysadmin still wants users to have.
   if (policy?.managedScriptsCleanup === true) {
     for (const [originKey, script] of installedByOrigin.entries()) {
-      if (!policyOriginKeys.has(originKey)) {
+      if (!policyOriginKeys.has(originKey) && !policyManagedScriptIds.has(script.id)) {
         try {
           await ScriptStorage.delete(script.id);
           debugLog(`[ManagedScripts] Pruned ${script.meta?.name} (no longer in policy)`);

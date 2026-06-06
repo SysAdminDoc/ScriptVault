@@ -196,6 +196,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P3 | **Effort:** L | **Source:** [S28]
 - **Problem:** Tampermonkey v5.5.0 added OS policy provisioning. No open-source manager offers this.
 - **Deliverable:** Read `chrome.storage.managed` policy keys for script URLs, auto-install on load, managed-script indicator.
+- **Progress:** Cycle 92 made the existing provisioning hook loadable through a Chrome/Edge `storage.managed_schema`, restricted managed storage to trusted extension contexts when supported, tags managed installs by returned script ID plus URL/hash origin key, adds the dashboard `Managed` indicator, and documents the administrator policy payload.
 
 ### L-2. Local Filesystem Script Loading (Watch Mode)
 - **Priority:** P3 | **Effort:** M | **Source:** [S29, S30]
@@ -310,13 +311,14 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 89 | Greasy Fork receipt summary fallback | `pages/dashboard.js`, `tests/greasyfork-publish-handoff.test.js` | Clipboard writes are a user-initiated local action, while Greasy Fork publication still happens only through the user-reviewed prefilled form [S76, S94] | Added copyable sanitized receipt summaries for local publication history and Chromium smoke coverage that proves copied text omits source/account/session data |
 | 90 | Greasy Fork receipt export fallback | `pages/dashboard.js`, `tests/greasyfork-publish-handoff.test.js` | Local Blob URLs plus anchor `download` preserve a browser-native export path for sanitized local receipt text [S76, S95, S96] | Added downloadable sanitized receipt summaries, safe receipt filenames, object URL revocation, focused static coverage, and Chromium smoke coverage for exported text redaction |
 | 91 | Greasy Fork session-check polish | `pages/dashboard.js`, `tests/greasyfork-publish-handoff.test.js` | Greasy Fork publication still depends on the user's browser session, so the preflight modal should let users open Greasy Fork without posting script data [S76] | Added a user-initiated `Open Greasy Fork` modal action that opens only the base URL with noopener/noreferrer, plus focused static coverage and Chromium smoke proof |
+| 92 | Enterprise policy provisioning | `manifest.json`, `managed-storage-schema.json`, `src/background/core.ts`, `pages/dashboard.js`, `docs/enterprise-policy-provisioning.md`, focused manifest/runtime tests | Chrome managed storage requires a manifest-declared schema; managed storage is read-only policy data and can be restricted to trusted contexts [S28, S97, S98] | Added schema wiring, trusted-context access narrowing, deterministic managed install tags, a dashboard Managed badge, and administrator docs |
 
 ## Continuation State
 
-- **Current cycle:** Round 40 Cycle 91 continued X-9 by adding a non-posting `Open Greasy Fork` session-check action in the publish preflight modal.
-- **Next implementation angle:** Cycle 92 should move to the next highest-value non-credential-gated roadmap item or audit the publish handoff UI for any remaining low-risk polish.
+- **Current cycle:** Round 40 Cycle 92 implemented the first L-1 enterprise policy provisioning slice by adding Chrome/Edge managed-storage schema wiring, trusted-context policy access narrowing, deterministic managed install tags, administrator docs, and a dashboard `Managed` badge.
+- **Next implementation angle:** Cycle 93 should audit remaining enterprise provisioning gaps such as aggregate health evidence, policy diagnostics, or safe cleanup previews; if those are already covered, move to the next non-credential-gated roadmap item.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
-- **Suggested verification before implementation:** Run focused tests for setup-state banners, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching N-7, N-8, X-8, or X-9.
+- **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 
 ## Competitive Position Summary
 
@@ -340,7 +342,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | Command palette | **Yes** | No | No | No |
 | Performance budgets | **Yes** | No | No | No |
 | Background/cron scripts | Partial | No | No | **Yes** |
-| Enterprise provisioning | No | **Yes** (v5.5) | No | No |
+| Enterprise provisioning | **Yes** (Chrome/Edge) | **Yes** (v5.5) | No | No |
 | MCP/AI integration | No | **Yes** (v5.5) | No | No |
 | Firefox published | **No (AMO-ready)** | Yes | Yes | Yes |
 | Edge published | **No (pkg-ready)** | Yes | No | Yes |
@@ -445,3 +447,5 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | S94 | MDN Clipboard writeText | https://developer.mozilla.org/en-US/docs/Web/API/Clipboard/writeText |
 | S95 | MDN URL createObjectURL | https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL_static |
 | S96 | MDN anchor download | https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a#download |
+| S97 | Chrome Storage API managed area | https://developer.chrome.com/docs/extensions/reference/api/storage |
+| S98 | Chrome managed storage manifest schema | https://developer.chrome.com/docs/extensions/reference/manifest/storage |

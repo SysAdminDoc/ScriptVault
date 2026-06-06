@@ -9,7 +9,8 @@
         "side_panel",
         "devtools_page",
         "sandbox",
-        "content_security_policy"
+        "content_security_policy",
+        "storage"
       ],
       "set": [
         {

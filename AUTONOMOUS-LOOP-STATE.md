@@ -425,15 +425,24 @@ Last cycle: Cycle 91 - 2026-06-06
   Verification used focused Greasy Fork/local-workspace tests, Chromium
   preflight session-check smoke, the full check suite, build, high-severity
   audit, CWS remote-code scan, Monaco ESM scan, TS runtime check, and
-  `git diff --check`.
+  `git diff --check`. Cycle 92 moved to enterprise policy provisioning:
+  Chrome/Edge manifests now declare `managed-storage-schema.json`, managed
+  storage access is narrowed to trusted contexts when supported, managed installs
+  are tagged from the returned install result with URL/hash origin keys, and the
+  dashboard renders a `Managed` badge for provisioned scripts. Verification used
+  focused enterprise provisioning/manifest tests, Chromium managed-badge smoke,
+  the full check suite, build, high-severity audit, CWS remote-code scan, Monaco
+  ESM scan, TS runtime check, forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. Cycle 91 continued X-9 with publish
-preflight session-check polish: the dashboard opens the Greasy Fork base URL in
-a noopener/noreferrer tab without posting script data. The next best local cycle
-is Cycle 92: move to the next highest-value non-credential-gated roadmap item or
-audit the publish handoff UI for any remaining low-risk polish.
+Continue from `ROADMAP.md` Round 40. Cycle 92 moved to L-1 enterprise policy
+provisioning by adding Chrome/Edge managed-storage schema wiring, trusted-context
+policy access narrowing, deterministic managed install tags, administrator docs,
+and a dashboard `Managed` badge. The next best local cycle is Cycle 93: audit
+remaining enterprise provisioning gaps such as health evidence, policy diagnostics,
+or safe cleanup previews, then continue to the next non-credential-gated roadmap
+item if those are already covered.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -442,8 +451,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 91 complete for 2026-06-06; roadmap continuation
-  points to Cycle 92 next non-credential-gated roadmap item / fallback UI
-  hardening.
+- Status: ScriptVault Cycle 92 complete for 2026-06-06; roadmap continuation
+  points to Cycle 93 enterprise provisioning diagnostics / next
+  non-credential-gated roadmap item.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
