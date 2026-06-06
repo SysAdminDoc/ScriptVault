@@ -606,6 +606,9 @@
       "help": "Controls font size.",
       "elementId": "settingsEditorFontSize",
       "default": 13,
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "80",
@@ -862,6 +865,9 @@
       "help": "Controls indentation width.",
       "elementId": "settingsIndentWidth",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "2",
@@ -1442,6 +1448,9 @@
       "help": "Controls tab size.",
       "elementId": "settingsTabSize",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "2",

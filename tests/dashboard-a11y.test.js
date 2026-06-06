@@ -430,6 +430,9 @@ describe("dashboard accessibility markup", () => {
     const validatedFields = [
       ["settingsBadgeColor", "settingsBadgeColorError"],
       ["settingsLintMaxSize", "settingsLintMaxSizeError"],
+      ["settingsEditorFontSize", "settingsEditorFontSizeError"],
+      ["settingsIndentWidth", "settingsIndentWidthError"],
+      ["settingsTabSize", "settingsTabSizeError"],
       ["settingsSyncEncryptionPassphrase", "settingsSyncEncryptionPassphraseError"],
       ["settingsWebdavUrl", "settingsWebdavUrlError"],
       ["settingsWebdavUsername", "settingsWebdavUsernameError"],
@@ -462,6 +465,9 @@ describe("dashboard accessibility markup", () => {
     expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("type")).toBe("number");
     expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("min")).toBe("1000");
     expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("max")).toBe("5000000");
+    expect(doc.getElementById("settingsEditorFontSize")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsIndentWidth")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsTabSize")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsWebdavUrl")?.getAttribute("type")).toBe("url");
     expect(doc.getElementById("settingsWebdavUsername")?.getAttribute("maxlength")).toBe("1024");
     expect(doc.getElementById("settingsWebdavPassword")?.getAttribute("maxlength")).toBe("4096");
@@ -479,6 +485,10 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/function validateSettingsValue/);
     expect(dashboardJs).toContain("Use a hex color like #22c55e.");
     expect(dashboardJs).toContain("Use a whole number from 1,000 to 5,000,000 bytes.");
+    expect(dashboardJs).toContain("Choose a listed ${label}.");
+    expect(dashboardJs).toMatch(/case 'editorFontSize':\s*return validateSelectOptionValue\('editorFontSize', value, 'editor font size', \{ number: true \}\)/);
+    expect(dashboardJs).toMatch(/case 'indentWidth':\s*return validateSelectOptionValue\('indentWidth', value, 'indentation width', \{ number: true \}\)/);
+    expect(dashboardJs).toMatch(/case 'tabSize':\s*return validateSelectOptionValue\('tabSize', value, 'tab size', \{ number: true \}\)/);
     expect(dashboardJs).toContain("Use an http or https URL.");
     expect(dashboardJs).toContain("WebDAV URL is required.");
     expect(dashboardJs).toContain("label: 'Sync encryption passphrase'");

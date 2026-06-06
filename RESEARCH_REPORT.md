@@ -2,6 +2,19 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 64 editor select validation: N-1 continued through a visible
+editor-settings slice. The source refresh confirmed that `HTMLSelectElement`
+supports `setCustomValidity()` with an empty string clearing the custom
+validity error, and MDN's select documentation keeps option `value` as the
+submitted/persisted contract. ScriptVault now requires validation metadata and
+dashboard `setting-error` nodes for editor font size, indentation width, and
+tab size. `saveSetting()` checks the value against the live select options
+before persisting, returns numeric settings only after an allowed option
+matches, and surfaces a field-specific error for tampered or stale values.
+Remaining N-1 work should start with update/external interval selects because
+the current `parseInt(value) || fallback` transforms can collapse the visible
+`0`/"Never" option into a fallback value before saving.
+
 2026-06-06 Cycle 63 sync credential validation: N-1 continued through the
 remaining sync credential fields. The source refresh again confirmed the same
 form-validation contract: WCAG 2.1 SC 3.3.1 requires identified input errors,

@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 63 - 2026-06-06
+Last cycle: Cycle 64 - 2026-06-06
 
 ## Latest Result
 
@@ -174,6 +174,10 @@ Last cycle: Cycle 63 - 2026-06-06
   access/secret keys now have validation metadata, native length limits,
   accessible error nodes, and save-blocking dashboard validation; sync
   encryption cannot be enabled without a passphrase.
+- Cycle 64 continued N-1 Settings Schema Parity and Accessible Validation.
+  Editor font size, indentation width, and tab size now have validation
+  metadata, accessible error nodes, and save-blocking allowed-option checks
+  before numeric values are persisted.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -224,16 +228,20 @@ Last cycle: Cycle 63 - 2026-06-06
   `aria-invalid` guidance, then verified sync credential validation with
   focused dashboard a11y/schema tests, the settings schema gate, TS runtime
   generation/check, high-severity audit, full check suite, build, CWS
-  remote-code scan, and `git diff --check`.
+  remote-code scan, and `git diff --check`. Cycle 64 refreshed MDN select
+  custom-validity and option-value guidance, then verified editor select
+  validation with focused dashboard a11y/schema tests, the settings schema
+  gate, TS runtime generation/check, high-severity audit, full check suite,
+  build, CWS remote-code scan, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 31. The next best local cycle is Cycle 64:
-continue N-1 Settings Schema Parity and Accessible Validation by auditing
-remaining dashboard-saved editor, security, update, and export settings against
-`src/config/settings-schema.json` metadata and `pages/dashboard.html` controls,
-then ship the next missing UI constraints and field-specific error text with
-focused dashboard a11y/schema coverage. The live two-tab
+Continue from `ROADMAP.md` Round 32. The next best local cycle is Cycle 65:
+continue N-1 Settings Schema Parity and Accessible Validation by fixing
+update/external interval select validation and zero-value normalization,
+especially `settingsCheckInterval` and `settingsExternalsInterval`, then
+continue remaining export/backup setting constraints with focused dashboard
+a11y/schema coverage. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
 remains blocked on maintainer credentials, and Edge Partner Center upload/REST
@@ -241,7 +249,7 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 63 complete for 2026-06-06; roadmap continuation
-  points to Cycle 64 N-1 settings validation continuation.
+- Status: ScriptVault Cycle 64 complete for 2026-06-06; roadmap continuation
+  points to Cycle 65 N-1 settings validation continuation.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
