@@ -6438,7 +6438,7 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Font Size:</span>
-                        <select class="select-field" id="settingsEditorFontSize">
+                        <select class="select-field" id="settingsEditorFontSize" aria-describedby="settingsEditorFontSizeError">
                             <option value="80">80%</option>
                             <option value="90">90%</option>
                             <option value="100" selected>100%</option>
@@ -6446,6 +6446,7 @@
                             <option value="120">120%</option>
                             <option value="140">140%</option>
                         </select>
+                        <span class="setting-error" id="settingsEditorFontSizeError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Key Mapping:</span>
@@ -6458,19 +6459,21 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Indentation Width:</span>
-                        <select class="select-field" id="settingsIndentWidth">
+                        <select class="select-field" id="settingsIndentWidth" aria-describedby="settingsIndentWidthError">
                             <option value="2">2</option>
                             <option value="4" selected>4</option>
                             <option value="8">8</option>
                         </select>
+                        <span class="setting-error" id="settingsIndentWidthError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Tab Size:</span>
-                        <select class="select-field" id="settingsTabSize">
+                        <select class="select-field" id="settingsTabSize" aria-describedby="settingsTabSizeError">
                             <option value="2">2</option>
                             <option value="4" selected>4</option>
                             <option value="8">8</option>
                         </select>
+                        <span class="setting-error" id="settingsTabSizeError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Indent with:</span>

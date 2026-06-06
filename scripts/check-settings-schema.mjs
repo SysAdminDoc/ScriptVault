@@ -24,6 +24,9 @@ const ALLOWED_METADATA_CONTROLS = new Set([
 ]);
 const REQUIRED_VALIDATION_KEYS = new Map([
   ['badgeColor', 'hex-color'],
+  ['editorFontSize', 'select-option'],
+  ['indentWidth', 'select-option'],
+  ['tabSize', 'select-option'],
   ['lintMaxSize', 'integer-range'],
   ['webdavUrl', 'http-url'],
   ['webdavUsername', 'credential-text'],

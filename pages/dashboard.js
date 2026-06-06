@@ -3258,6 +3258,9 @@
         const keyToElement = {
             badgeColor: elements.settingsBadgeColor,
             lintMaxSize: elements.settingsLintMaxSize,
+            editorFontSize: elements.settingsEditorFontSize,
+            indentWidth: elements.settingsIndentWidth,
+            tabSize: elements.settingsTabSize,
             syncEncryptionPassphrase: elements.settingsSyncEncryptionPassphrase,
             webdavUrl: elements.settingsWebdavUrl,
             webdavUsername: elements.settingsWebdavUsername,
@@ -3395,6 +3398,19 @@
         });
     }
 
+    function validateSelectOptionValue(key, value, label, options = {}) {
+        const input = getSettingsInputForKey(key);
+        const selected = String(value ?? '');
+        const allowedValues = Array.from(input?.options || []).map(option => option.value);
+        if (allowedValues.length && !allowedValues.includes(selected)) {
+            return { ok: false, error: `Choose a listed ${label}.` };
+        }
+        return {
+            ok: true,
+            value: options.number ? Number(selected) : selected
+        };
+    }
+
     function validateS3Region(value) {
         const region = String(value || '').trim();
         if (!region) {
@@ -3495,6 +3511,12 @@
                 }
                 return { ok: true, value: size };
             }
+            case 'editorFontSize':
+                return validateSelectOptionValue('editorFontSize', value, 'editor font size', { number: true });
+            case 'indentWidth':
+                return validateSelectOptionValue('indentWidth', value, 'indentation width', { number: true });
+            case 'tabSize':
+                return validateSelectOptionValue('tabSize', value, 'tab size', { number: true });
             case 'webdavUrl': {
                 const url = String(value || '').trim();
                 if (!url) {
