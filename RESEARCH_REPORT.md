@@ -2,6 +2,15 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 77 Monaco ESM fallback harness: X-4 now has deterministic
+coverage for the ESM sandbox loader even before a live Chromium profile smoke.
+`tests/monaco-esm-sandbox-loader.test.js` executes the real inline sandbox
+script in a VM DOM harness, substitutes only the dynamic import boundary,
+proves `../lib/monaco-esm/editor.css` and `../lib/monaco-esm/editor.js` are the
+requested local assets, verifies a mock Monaco module posts `ready`, and
+verifies a rejected module posts `monaco-load-error`. The remaining gap is a
+real browser runtime proof for dashboard editor open/save/reload behavior.
+
 2026-06-06 Cycle 76 Monaco ESM sandbox switch: X-4 moved from prototype to the
 Chromium sandbox path. `pages/editor-sandbox.html` now loads the packaged ESM
 stylesheet and dynamically imports the packaged ESM editor bundle from
