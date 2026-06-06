@@ -136,7 +136,9 @@ function sanitizeValueBundlesForUpload(envelope) {
     if (!script || !shouldSyncScriptValuesForSync(script)) continue;
     if (!isPlainObject(bundle) || bundle.schema !== GM_VALUE_SYNC_SCHEMA || bundle.scriptId !== scriptId) continue;
     if (!isPlainObject(bundle.values)) continue;
-    const rebuilt = buildGmValueSyncBundleForSync(script, bundle.values);
+    const rebuilt = buildGmValueSyncBundleForSync(script, bundle.values, {
+      lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle)
+    });
     if (rebuilt.bundle) result[scriptId] = rebuilt.bundle;
   }
 
@@ -145,6 +147,13 @@ function sanitizeValueBundlesForUpload(envelope) {
 
 function getSyncEnvelopeValueBundles(envelope) {
   return isPlainObject(envelope?.valueBundles) ? envelope.valueBundles : {};
+}
+
+function getValueBundleLastUpdatedAt(bundle) {
+  if (!isPlainObject(bundle)) return undefined;
+  const timestamp = Number(bundle.lastValueUpdatedAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return undefined;
+  return Math.floor(timestamp);
 }
 
 function createEmptyRemoteValueBundleSelection() {
@@ -197,7 +206,9 @@ function selectApplicableRemoteValueBundles(remote, targetScripts = []) {
       continue;
     }
 
-    const rebuilt = buildGmValueSyncBundleForSync(script, bundle.values);
+    const rebuilt = buildGmValueSyncBundleForSync(script, bundle.values, {
+      lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle)
+    });
     result.warnings += Object.values(rebuilt.warningCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
     if (rebuilt.bundle) {
       result.valueBundles[scriptId] = rebuilt.bundle;
@@ -2209,6 +2220,12 @@ function _gmValueSyncByteLength(value) {
   return new TextEncoder().encode(JSON.stringify(value)).length;
 }
 
+function _gmValueSyncNormalizeTimestamp(value) {
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return undefined;
+  return Math.floor(timestamp);
+}
+
 function _gmValueSyncCountWarning(record, id) {
   _localHealthCount(record, id || 'unknown');
 }
@@ -2217,7 +2234,7 @@ function shouldSyncScriptValuesForSync(script) {
   return script?.settings?.syncValues === true;
 }
 
-function buildGmValueSyncBundleForSync(script, values) {
+function buildGmValueSyncBundleForSync(script, values, options = {}) {
   const warningCounts = {};
   if (!script?.id) {
     return { included: false, reason: 'missing-script', bundle: null, warningCounts };
@@ -2227,12 +2244,14 @@ function buildGmValueSyncBundleForSync(script, values) {
   }
 
   const sourceValues = values && typeof values === 'object' && !Array.isArray(values) ? values : {};
+  const lastValueUpdatedAt = _gmValueSyncNormalizeTimestamp(options.lastValueUpdatedAt);
   const bundle = {
     schema: GM_VALUE_SYNC_SCHEMA,
     scriptId: script.id,
     keyCount: 0,
     bytes: 0,
-    values: {}
+    values: {},
+    ...(lastValueUpdatedAt ? { lastValueUpdatedAt } : {})
   };
 
   for (const [rawKey, rawValue] of Object.entries(sourceValues).sort(([a], [b]) => a.localeCompare(b))) {
@@ -2261,8 +2280,7 @@ function buildGmValueSyncBundleForSync(script, values) {
 
     const nextValues = { ...bundle.values, [key]: cloned };
     const nextBundle = {
-      schema: GM_VALUE_SYNC_SCHEMA,
-      scriptId: script.id,
+      ...bundle,
       keyCount: Object.keys(nextValues).length,
       bytes: 0,
       values: nextValues
@@ -2308,7 +2326,12 @@ async function buildValueBundlesForScripts(scripts = []) {
     if (!shouldSyncScriptValuesForSync(script)) continue;
     optIns++;
     const values = await ScriptValues.getAll(script.id);
-    const result = buildGmValueSyncBundleForSync(script, values);
+    const metadata = typeof ScriptValues.getAllMetadata === 'function'
+      ? await ScriptValues.getAllMetadata(script.id)
+      : null;
+    const result = buildGmValueSyncBundleForSync(script, values, {
+      lastValueUpdatedAt: metadata?.lastUpdatedAt ?? null
+    });
     warnings += Object.values(result.warningCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
     if (result.bundle) valueBundles[script.id] = result.bundle;
   }

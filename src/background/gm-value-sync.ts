@@ -11,6 +11,7 @@ export interface GmValueSyncBundle {
   keyCount: number;
   bytes: number;
   values: Record<string, unknown>;
+  lastValueUpdatedAt?: number;
 }
 
 export interface GmValueSyncBuildResult {
@@ -30,6 +31,12 @@ function cloneJsonValue(value: unknown): unknown {
   return JSON.parse(json) as unknown;
 }
 
+function normalizeTimestamp(value: unknown): number | undefined {
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return undefined;
+  return Math.floor(timestamp);
+}
+
 export function shouldSyncScriptValues(script: Pick<Script, 'id' | 'settings'> | null | undefined): boolean {
   return script?.settings?.syncValues === true;
 }
@@ -41,6 +48,7 @@ export function buildGmValueSyncBundle(
     maxScriptBytes?: number;
     maxKeys?: number;
     maxKeyBytes?: number;
+    lastValueUpdatedAt?: number | null;
   } = {},
 ): GmValueSyncBuildResult {
   const warnings: GmValueSyncBuildResult['warnings'] = [];
@@ -54,6 +62,7 @@ export function buildGmValueSyncBundle(
   const maxScriptBytes = options.maxScriptBytes ?? GM_VALUE_SYNC_MAX_SCRIPT_BYTES;
   const maxKeys = options.maxKeys ?? GM_VALUE_SYNC_MAX_KEYS;
   const maxKeyBytes = options.maxKeyBytes ?? GM_VALUE_SYNC_MAX_KEY_BYTES;
+  const lastValueUpdatedAt = normalizeTimestamp(options.lastValueUpdatedAt);
   const sourceValues = values && typeof values === 'object' && !Array.isArray(values) ? values : {};
   const bundle: GmValueSyncBundle = {
     schema: GM_VALUE_SYNC_SCHEMA,
@@ -61,6 +70,7 @@ export function buildGmValueSyncBundle(
     keyCount: 0,
     bytes: 0,
     values: {},
+    ...(lastValueUpdatedAt ? { lastValueUpdatedAt } : {}),
   };
 
   for (const [rawKey, rawValue] of Object.entries(sourceValues).sort(([a], [b]) => a.localeCompare(b))) {

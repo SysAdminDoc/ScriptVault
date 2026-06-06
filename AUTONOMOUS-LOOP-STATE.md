@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 105 - 2026-06-06
+Last cycle: Cycle 106 - 2026-06-06
 
 ## Latest Result
 
@@ -555,13 +555,24 @@ Last cycle: Cycle 105 - 2026-06-06
   CloudSync/hardening/sync-cockpit tests, typecheck, the full check suite with
   1506 Vitest cases, build, high-severity audit, CWS remote-code scan, Monaco
   ESM scan, TS runtime check, forbidden-reference grep, and `git diff --check`.
+  Cycle 106 added aggregate last-write metadata for L-8 GM value sync: local
+  value writes now stamp rows with `updatedAt`, `ScriptValues.getAllMetadata()`
+  returns only value count plus the latest timestamp, and capped CloudSync
+  bundle rebuilds preserve optional `lastValueUpdatedAt` for upload/download
+  paths while legacy bundles remain valid. The new signal adds no value key
+  names or values and does not change the empty-local-only apply rule.
+  Verification used focused GM value sync/source CloudSync/storage/hardening/
+  sync-cockpit tests, typecheck, the full check suite with 1508 Vitest cases,
+  build, high-severity audit, CWS remote-code scan, Monaco ESM scan, TS runtime
+  check, forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 47. Cycle 105 added real-sync blocked-reason
-counts for non-empty local values and user-modified scripts. The next best
-local cycle is Cycle 106: add timestamp/last-write metadata or the next L-8
-safeguard needed before broader bidirectional GM value merges.
+Continue from `ROADMAP.md` Round 48. Cycle 106 added aggregate timestamp/
+last-write metadata for opt-in GM value bundles. The next best local cycle is
+Cycle 107: surface that timestamp signal safely in blocked preview/result/export
+evidence or add the next L-8 safeguard needed before broader bidirectional GM
+value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -570,8 +581,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 105 complete for 2026-06-06; roadmap continuation
-  points to Cycle 106 GM value sync timestamp metadata or the next available
+- Status: ScriptVault Cycle 106 complete for 2026-06-06; roadmap continuation
+  points to Cycle 107 GM value sync timestamp surfacing or the next available
   non-credential-gated L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

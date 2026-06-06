@@ -126,6 +126,19 @@ Cycle 105 adds real-sync blocked-reason summaries:
   value key names, values, URLs, local workspace handles, local paths, sync
   credentials, or provider account data.
 
-The next implementation slice should add per-key timestamps, a conflict preview,
-or another durable last-write signal before non-empty local and remote value
-bags can be merged bidirectionally.
+Cycle 106 adds aggregate last-write metadata:
+
+- Future local GM value writes record row-level `updatedAt` values on
+  `GM_setValue`/`ScriptValues.set` and `ScriptValues.setAll()`.
+- `ScriptValues.getAllMetadata()` exposes only aggregate value count and the
+  latest positive timestamp for a script's local value bag.
+- `scriptvault-gm-value-sync/v1` bundles may carry optional
+  `lastValueUpdatedAt`; upload and download sanitization rebuilds preserve the
+  normalized timestamp while legacy bundles without the field remain valid.
+- The timestamp is an advisory last-write signal only. It does not expose value
+  key names or values and does not change the empty-local-only apply rule.
+
+The next implementation slice should surface this timestamp safely in blocked
+merge previews/results/exports, add per-key timestamp support, or add another
+durable last-write signal before non-empty local and remote value bags can be
+merged bidirectionally.
