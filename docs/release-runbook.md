@@ -2,9 +2,9 @@
 
 **Audience:** ScriptVault publishers and release engineers.
 **Owners:** Phase 39.1 (custody), 39.2 (CWS API v2), 39.4 (locale audit), 39.49 (backlog buffer).
-**Last reviewed:** 2026-06-04.
+**Last reviewed:** 2026-06-06.
 
-This runbook codifies the current ScriptVault release path: build and test locally/CI, publish GitHub artifacts, then use the Chrome Web Store API v2 tooling in `publish.sh` for Chrome submission. It also records the target security-custody model for replacing local long-lived OAuth credentials with short-lived GitHub Actions OIDC -> GCP credentials in a later hardening pass.
+This runbook codifies the current ScriptVault release path: build and test locally/CI, publish GitHub artifacts, then use the Chrome Web Store API v2 tooling in `publish.sh` for Chrome submission. It also records the target security-custody model for replacing local long-lived OAuth credentials with service-account access through GitHub Actions OIDC -> GCP credentials in a later hardening pass.
 
 ---
 
@@ -37,15 +37,16 @@ If any gate fails, stop. Do not patch the test to make it green.
 - [Shai-Hulud 2.0 (Microsoft Security Blog, Dec 9 2025)](https://www.microsoft.com/en-us/security/blog/2025/12/09/shai-hulud-2-0-guidance-for-detecting-investigating-and-defending-against-the-supply-chain-attack/) - npm worm pattern that drove Trust Wallet's ~$8.5M loss via stolen CWS API key.
 - [Cyberhaven OAuth phishing (Sekoia, Dec 2024)](https://blog.sekoia.io/targeted-supply-chain-attack-against-chrome-browser-extensions/) - 36 extensions / 2.6M users compromised.
 
-**Current state:** `publish.sh` is a local/manual release step. It reads `.env` from the maintainer machine and uses `chrome-webstore-upload-cli@^4.0.0` against the Chrome Web Store API v2. No checked-in GitHub Actions workflow currently publishes to CWS.
+**Current state:** `publish.sh` is a local/manual release step. It reads `.env` from the maintainer machine and uses `chrome-webstore-upload-cli@^4.0.0` against the Chrome Web Store API v2. No checked-in GitHub Actions workflow currently publishes to CWS. The official CWS API v2 path supports service-account authorization from the Developer Dashboard; ScriptVault keeps local OAuth refresh-token publishing as the current maintainer fallback until service-account/OIDC custody is provisioned.
 
 **Target custody requirements:**
 
 | Asset | Current storage | Target storage | Rotation cadence |
 |---|---|---|---|
 | CWS publisher Google account | Publisher account with MFA | Hardware-key MFA only (TitanKey / YubiKey 5C series) | n/a - second factor is hardware |
-| CWS API client_id / client_secret | Local `.env` only; never committed | GCP Secret Manager, accessible only via OIDC from `SysAdminDoc/ScriptVault` `main` branch and release workflow | rotate every 90 days |
-| CWS refresh token | Local `.env` only; never committed | Replace with short-lived service-account/OIDC publish flow where possible | every publish run once OIDC lands |
+| CWS OAuth client_id / client_secret | Local `.env` only; never committed | Fallback-only credential in GCP Secret Manager, accessible only via OIDC from `SysAdminDoc/ScriptVault` `main` branch and release workflow | rotate every 90 days while still used |
+| CWS refresh token | Local `.env` only; never committed | Replace with service-account/OIDC publish flow | every publish run once OIDC lands |
+| CWS service account | Not provisioned | Developer Dashboard service-account grant, short-lived token minted through GitHub Actions OIDC -> GCP | audit annually |
 | GitHub Actions OIDC trust policy | Not implemented | Scoped to `repo:SysAdminDoc/ScriptVault`, `ref:refs/heads/main`, and the release workflow path | audit annually |
 | CRX signing private key (`.pem`) | local dev machine + hardware-backed encrypted backup | same, until signed-artifact pipeline lands | rotate only on compromise |
 | Codeberg mirror SSH deploy key | not provisioned | GitHub Secret, read+push to mirror only | rotate annually |
@@ -68,6 +69,18 @@ Verified current implementation:
 4. `publish.sh --draft` builds and uploads the ZIP with `chrome-webstore-upload upload --source ...`, then keeps the ZIP on disk for reviewer/manual fallback.
 5. `publish.sh` builds, uploads, and then runs `chrome-webstore-upload publish`.
 6. Removed v3/v1-era flags are not allowed: `--client-id`, `--client-secret`, `--refresh-token`, and `--auto-publish`.
+7. Optional rollout is controlled by `CWS_DEPLOY_PERCENTAGE` (integer 0-100, default 100), passed to `chrome-webstore-upload publish --deploy-percentage`.
+
+Pinned CWS API v2 endpoint contract:
+
+```text
+POST https://chromewebstore.googleapis.com/upload/v2/publishers/PUBLISHER_ID/items/EXTENSION_ID:upload
+POST https://chromewebstore.googleapis.com/v2/publishers/PUBLISHER_ID/items/EXTENSION_ID:publish
+POST https://chromewebstore.googleapis.com/v2/publishers/PUBLISHER_ID/items/EXTENSION_ID:setPublishedDeployPercentage
+GET https://chromewebstore.googleapis.com/v2/publishers/PUBLISHER_ID/items/EXTENSION_ID:fetchStatus
+```
+
+`npm run cws:check` verifies that active tooling uses the v2 host/path fragments and fails if active release scripts or this runbook reintroduce the old `www.googleapis.com/.../chromewebstore/v1.1` endpoints.
 
 Credential-free validation:
 
@@ -79,6 +92,12 @@ Credentialed upload-only validation, for maintainers with `.env`:
 
 ```bash
 bash publish.sh --draft
+```
+
+Credentialed staged rollout, for maintainers with `.env`:
+
+```bash
+CWS_DEPLOY_PERCENTAGE=25 bash publish.sh
 ```
 
 The CLI has no standalone status subcommand. For local/manual status evidence, run:
@@ -95,7 +114,7 @@ PUBLISHER_ID=... EXTENSION_ID=... CWS_ACCESS_TOKEN=... npm run release:store-sta
 
 Use `npm run release:store-status -- --require-live` for a credentialed release machine that must fail if the CWS live status cannot be queried. The command fails if CWS reports `takenDown`, warns on `warned`, and logs version drift between the local package and published/submitted CWS revisions.
 
-References: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/fregante/chrome-webstore-upload-cli/releases/tag/v4.0.0), [CWS API v2 announcement](https://developer.chrome.com/blog/cws-api-v2).
+References: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/fregante/chrome-webstore-upload-cli/releases/tag/v4.0.0), [CWS API v2 announcement](https://developer.chrome.com/blog/cws-api-v2), [CWS API v2 reference](https://developer.chrome.com/docs/webstore/api/reference/rest).
 
 ## 4. Release sequence
 

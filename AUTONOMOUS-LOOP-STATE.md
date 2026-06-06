@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 33 - 2026-06-06
+Last cycle: Cycle 34 - 2026-06-06
 
 ## Latest Result
 
@@ -37,17 +37,22 @@ Last cycle: Cycle 33 - 2026-06-06
   fan-out and wrapper callback semantics, plus a Playwright two-tab spec that
   records the unattended Chromium `allow-user-scripts-disabled` gate instead
   of hanging.
-- Verification used the live checkout: focused GM value remote tests,
-  `npm run check`, and `npm run build`.
+- Cycle 34 closed the CWS API v2 migration row by pinning v2 upload, publish,
+  fetchStatus, and rollout endpoint contracts in `npm run cws:check`, adding
+  optional `CWS_DEPLOY_PERCENTAGE` publish rollout control, and documenting
+  service-account/OIDC as the target with OAuth as the local fallback.
+- Verification used the live checkout: `npm run cws:check`, focused store
+  status tests, `npm run release:store-status -- --json`, `npm run check`, and
+  `npm run build`.
 
 ## Next Cycle Focus
 
 Continue top-down from `ROADMAP.md`. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
-`chrome.userScripts` is enabled for the unpacked extension. The next
-local implementer-actionable work is the Edge browser smoke row, unless a
-usable Chrome profile is available to rerun the GM value remote Playwright
-spec without the userScripts gate.
+`chrome.userScripts` is enabled for the unpacked extension, and the AMO
+submission row is blocked on maintainer credentials. The next local
+implementer-actionable work is N-6, the Monaco editor ESM migration planning
+note.
 
 ## Loop Pointer
 
