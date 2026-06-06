@@ -1527,7 +1527,15 @@ export interface ResponseMap {
     conflicts?: unknown[];
   }>;
   revokeSyncProvider: SuccessOrError;
-  syncNow: SuccessOrError | { skipped: true };
+  syncNow: SuccessOrError<{
+    valueBundleSync?: {
+      applied: number;
+      preserved: number;
+      conflictBlocked: number;
+      skippedUnavailable: number;
+      failures: number;
+    };
+  }> | { skipped: true };
   connectGoogleDrive: SuccessOrError<{ user?: { email?: string; name?: string } }>;
   disconnectGoogleDrive: SuccessResponse;
   connectDropbox: SuccessOrError<{ user?: { email?: string; name?: string } }>;

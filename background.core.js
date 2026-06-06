@@ -167,6 +167,17 @@ function createEmptyRemoteValueBundleApplyResult() {
   };
 }
 
+function summarizeRemoteValueBundleApplyResult(result) {
+  const summary = {
+    applied: result.applied,
+    preserved: Object.keys(result.preservedValueBundles).length,
+    conflictBlocked: result.skippedNonEmpty + result.skippedUserModified,
+    skippedUnavailable: result.skippedUnavailable,
+    failures: result.failures
+  };
+  return Object.values(summary).some(value => value > 0) ? summary : null;
+}
+
 function selectApplicableRemoteValueBundles(remote, targetScripts = []) {
   const sourceBundles = getSyncEnvelopeValueBundles(remote);
   if (Object.keys(sourceBundles).length === 0) return createEmptyRemoteValueBundleSelection();
@@ -3160,6 +3171,7 @@ const CloudSync = {
 
     const provider = this.providers[settings.syncProvider];
     if (!provider) return;
+    let valueBundleSync = null;
 
     // Load tombstones (IDs of locally-deleted scripts, to prevent sync re-importing them)
     const tombstoneData = await chrome.storage.local.get('syncTombstones');
@@ -3297,6 +3309,7 @@ const CloudSync = {
         remoteValueBundleSelection,
         postMergeScripts
       );
+      valueBundleSync = summarizeRemoteValueBundleApplyResult(remoteValueApplyResult);
       if (
         remoteValueApplyResult.applied > 0 ||
         remoteValueApplyResult.skippedNonEmpty > 0 ||
@@ -3347,7 +3360,10 @@ const CloudSync = {
     }
 
     await SettingsManager.set('lastSync', Date.now());
-    return { success: true };
+    return {
+      success: true,
+      ...(valueBundleSync ? { valueBundleSync } : {})
+    };
   },
   
   mergeData(local, remote) {

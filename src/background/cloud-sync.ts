@@ -97,6 +97,15 @@ interface SyncResult {
   success?: boolean;
   skipped?: boolean;
   error?: string;
+  valueBundleSync?: ValueBundleSyncSummary;
+}
+
+interface ValueBundleSyncSummary {
+  applied: number;
+  preserved: number;
+  conflictBlocked: number;
+  skippedUnavailable: number;
+  failures: number;
 }
 
 interface SyncPreviewSummary {
@@ -387,6 +396,19 @@ function createEmptyRemoteValueBundleApplyResult(): RemoteValueBundleApplyResult
     failures: 0,
     preservedValueBundles: {},
   };
+}
+
+function summarizeRemoteValueBundleApplyResult(
+  result: RemoteValueBundleApplyResult,
+): ValueBundleSyncSummary | null {
+  const summary: ValueBundleSyncSummary = {
+    applied: result.applied,
+    preserved: Object.keys(result.preservedValueBundles).length,
+    conflictBlocked: result.skippedNonEmpty + result.skippedUserModified,
+    skippedUnavailable: result.skippedUnavailable,
+    failures: result.failures,
+  };
+  return Object.values(summary).some((value) => value > 0) ? summary : null;
 }
 
 function selectApplicableRemoteValueBundles(
@@ -756,6 +778,7 @@ export const CloudSync = {
 
     const provider: CloudSyncProvider | undefined = this.providers[settings.syncProvider];
     if (!provider) return {};
+    let valueBundleSync: ValueBundleSyncSummary | null = null;
 
     // Load tombstones (IDs of locally-deleted scripts, to prevent sync re-importing them)
     const tombstoneData = await chrome.storage.local.get('syncTombstones');
@@ -891,6 +914,7 @@ export const CloudSync = {
         remoteValueBundleSelection,
         postMergeScripts,
       );
+      valueBundleSync = summarizeRemoteValueBundleApplyResult(remoteValueApplyResult);
       if (
         remoteValueApplyResult.applied > 0 ||
         remoteValueApplyResult.skippedNonEmpty > 0 ||
@@ -937,7 +961,10 @@ export const CloudSync = {
     }
 
     await SettingsManager.set('lastSync', Date.now());
-    return { success: true };
+    return {
+      success: true,
+      ...(valueBundleSync ? { valueBundleSync } : {}),
+    };
   },
 
   mergeData(local: SyncEnvelope, remote: SyncEnvelope): SyncEnvelope {

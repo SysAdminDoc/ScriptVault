@@ -72,6 +72,17 @@ Cycle 100 enables the first downloaded-bundle write path:
 - Dry-run previews report empty-local apply-ready and conflict-blocked bundle
   counts. They do not expose script IDs, value keys, or values.
 
+Cycle 101 adds aggregate real-sync outcome evidence:
+
+- Successful `syncNow` responses can include a `valueBundleSync` summary.
+- The summary reports only applied, preserved, conflict-blocked, unavailable,
+  and failed bundle counts.
+- The dashboard sync log appends those aggregate counts after real sync runs so
+  empty-local applies and blocked non-empty merges are visible to the user.
+- The result evidence does not include script IDs, script names, value key
+  names, values, URLs, local workspace handles, local paths, sync credentials,
+  or provider account data.
+
 The next implementation slice should add per-key timestamps, a conflict preview,
 or another durable last-write signal before non-empty local and remote value
 bags can be merged bidirectionally.

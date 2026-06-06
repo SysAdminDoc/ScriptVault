@@ -708,7 +708,16 @@ describe('source cloud sync module', () => {
     );
     const { CloudSync, ScriptValues, getRemoteData, scriptState } = harness;
 
-    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+    await expect(CloudSync.sync()).resolves.toEqual({
+      success: true,
+      valueBundleSync: {
+        applied: 0,
+        preserved: 1,
+        conflictBlocked: 1,
+        skippedUnavailable: 0,
+        failures: 0,
+      },
+    });
 
     expect(ScriptValues.setAll).not.toHaveBeenCalled();
     expect(scriptState[0].code).toContain('// remote');
@@ -768,7 +777,16 @@ describe('source cloud sync module', () => {
     );
     const { CloudSync, ScriptValues, getRemoteData, scriptState, valueState } = harness;
 
-    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+    await expect(CloudSync.sync()).resolves.toEqual({
+      success: true,
+      valueBundleSync: {
+        applied: 1,
+        preserved: 0,
+        conflictBlocked: 0,
+        skippedUnavailable: 0,
+        failures: 0,
+      },
+    });
 
     expect(ScriptValues.setAll).toHaveBeenCalledWith('script_values', { token: 'remote-token' });
     expect(valueState.script_values).toEqual({ token: 'remote-token' });

@@ -21,6 +21,8 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain("action: 'revokeSyncProvider'");
     expect(dashboardJs).toContain('summarizeSyncDisclosure');
     expect(dashboardJs).toContain('renderSyncPreview');
+    expect(dashboardJs).toContain('formatValueBundleSyncLog');
+    expect(dashboardJs).toContain('valueBundleSync');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {
