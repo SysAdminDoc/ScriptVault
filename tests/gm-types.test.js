@@ -44,6 +44,9 @@ describe('GM ambient declarations', () => {
     expect(existsSync(DECLARATION_PATH)).toBe(true);
     expect(declaration).toContain('declare const GM: GMAsyncApi;');
     expect(declaration).toContain('declare const GM_cookie: GMCookieCallbackApi;');
+    expect(declaration).toContain('cookie: GMCookiePromiseApi;');
+    expect(declaration).toContain('audio: GMAudioPromiseApi;');
+    expect(declaration).toContain('webRequest(rules: GMWebRequestRule | GMWebRequestRule[], listener?: GMWebRequestListener): Promise<void>;');
     expect(declaration).toContain('declare function GM_updateNotification');
     expect(declaration).toContain('declare function GM_getResourceURL(name: string, isBlobUrl?: boolean): Promise<string | null>;');
     expect(declaration).not.toContain('GM_closeTab');
@@ -101,6 +104,8 @@ async function main() {
   style.dataset.scriptvault = 'sample';
   const link = GM_addElement('a', { href: 'https://example.com', textContent: 'Open' });
   link?.click();
+  const asyncLink = await GM.addElement('a', { href: 'https://example.com/async' });
+  asyncLink?.click();
 
   const resourceUrl = await GM_getResourceURL('icon', true);
   const asyncResourceUrl = await GM.getResourceUrl('icon');
@@ -113,15 +118,25 @@ async function main() {
     console.log(cookies.at(0)?.name, error?.message);
   });
   await GM.cookies.list({ domain: 'example.com' });
+  await GM.cookie.list({ domain: 'example.com' });
 
   GM_audio.setMute({ mute: true }, error => console.log(error?.message));
   GM_audio.getState(state => {
     const muted: boolean | undefined = state?.muted;
     console.log(muted);
   });
+  await GM.audio.setMute({ mute: false });
+  const audioState = await GM.audio.getState();
+  console.log(audioState?.muted);
 
   GM_webRequest([{ selector: { url: '*://example.com/*' }, action: { cancel: true } }]);
+  await GM.webRequest([{ selector: { url: '*://example.com/*' }, action: { cancel: true } }]);
   GM_head('https://example.com', response => console.log(response.status));
+  await GM.head('https://example.com', response => console.log(response.status));
+  await GM.log('typed log');
+  await GM.focusTab();
+  const commands = await GM.getMenuCommands();
+  console.log(commands.length);
   GM_addValueChangeListener('count', (name, oldValue, newValue, remote) => {
     const changedRemotely: boolean = remote;
     console.log(name, oldValue, newValue, changedRemotely);

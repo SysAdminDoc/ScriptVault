@@ -254,6 +254,13 @@ interface GMAudioApi {
   removeStateChangeListener(listener: (state: GMAudioState) => void, callback?: (error?: Error) => void): void;
 }
 
+interface GMAudioPromiseApi {
+  setMute(details: boolean | GMAudioMuteDetails): Promise<void>;
+  getState(): Promise<GMAudioState | null>;
+  addStateChangeListener(listener: (state: GMAudioState) => void): Promise<void>;
+  removeStateChangeListener(listener: (state: GMAudioState) => void): Promise<void>;
+}
+
 interface GMWebRequestRule {
   selector?: Record<string, unknown>;
   action?: Record<string, unknown>;
@@ -277,15 +284,21 @@ interface GMAsyncApi {
   setValues(values: GMValueMap): Promise<void>;
   deleteValues(keys: string[]): Promise<void>;
   addStyle(css: string): Promise<HTMLStyleElement>;
+  addElement<K extends keyof HTMLElementTagNameMap>(tagName: K, attributes?: GMAddElementAttributes): Promise<HTMLElementTagNameMap[K] | null>;
+  addElement<K extends keyof HTMLElementTagNameMap>(parentNode: Node | null, tagName: K, attributes?: GMAddElementAttributes): Promise<HTMLElementTagNameMap[K] | null>;
   xmlHttpRequest<T = unknown>(details: GMXmlhttpRequestDetails<T>): GMXmlhttpRequestPromise<T>;
+  head<T = unknown>(url: string, callback?: (response: GMXmlhttpRequestResponse<T>) => void): Promise<void>;
   notification(details: string | GMNotificationDetails, ondone?: () => void): Promise<GMNotificationHandle | undefined>;
   setClipboard(data: string, type?: string): Promise<void>;
   openInTab(url: string, options?: boolean | GMOpenInTabOptions): Promise<GMTabHandle | null>;
+  focusTab(): Promise<void>;
   download(details: string | GMDownloadDetails, name?: string): Promise<void>;
+  log(...args: unknown[]): Promise<void>;
   getResourceText(name: string): Promise<string | null>;
   getResourceUrl(name: string, isBlobUrl?: boolean): Promise<string | null>;
   registerMenuCommand(caption: string, commandFunc: () => void, options?: string | GMMenuCommandOptions): Promise<string | null>;
   unregisterMenuCommand(commandId: string): Promise<void>;
+  getMenuCommands(): Promise<GMMenuCommand[]>;
   addValueChangeListener(
     key: string,
     listener: (name: string, oldValue: GMValue, newValue: GMValue, remote: boolean) => void,
@@ -296,6 +309,9 @@ interface GMAsyncApi {
   getTabs(): Promise<Record<string, Record<string, unknown>>>;
   loadScript(url: string, options?: GMLoadScriptOptions): Promise<void>;
   cookies: GMCookiePromiseApi;
+  cookie: GMCookiePromiseApi;
+  webRequest(rules: GMWebRequestRule | GMWebRequestRule[], listener?: GMWebRequestListener): Promise<void>;
+  audio: GMAudioPromiseApi;
 }
 
 declare const GM_info: GMInfo;
