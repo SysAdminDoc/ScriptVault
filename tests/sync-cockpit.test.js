@@ -23,6 +23,8 @@ function extractFunction(source, name) {
 function loadSyncPreviewExportApi() {
   return new Function(`
     ${extractFunction(dashboardJs, 'sanitizeSyncPreviewSummary')}
+    ${extractFunction(dashboardJs, 'sanitizeValueBundleTimestamp')}
+    ${extractFunction(dashboardJs, 'sanitizeValueBundleLastWriteHint')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleConflictPreview')}
     ${extractFunction(dashboardJs, 'buildSyncPreviewExport')}
     return { buildSyncPreviewExport };
@@ -48,11 +50,13 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('skippedNonEmpty');
     expect(dashboardJs).toContain('skippedUserModified');
     expect(dashboardJs).toContain('formatValueBundleConflictReason');
+    expect(dashboardJs).toContain('formatValueBundleLastWriteHint');
     expect(dashboardJs).toContain('GM value blocked merge preview');
     expect(dashboardJs).toContain('buildSyncPreviewExport');
     expect(dashboardJs).toContain('scriptvault-sync-preview/v1');
     expect(dashboardJs).toContain('valueBundleSync');
     expect(dashboardJs).toContain('valueBundleConflicts');
+    expect(dashboardJs).toContain('lastWriteHint');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {
@@ -94,6 +98,9 @@ describe('sync safety cockpit wiring', () => {
         overlappingKeyCount: 1,
         localOnlyKeyCount: 0,
         remoteOnlyKeyCount: 0,
+        localLastValueUpdatedAt: 1000.9,
+        remoteLastValueUpdatedAt: 2000.1,
+        lastWriteHint: 'remote-newer',
         scriptId: 'script_secret',
         key: 'token',
         values: { token: 'remote-secret' },
@@ -117,6 +124,9 @@ describe('sync safety cockpit wiring', () => {
           overlappingKeyCount: 1,
           localOnlyKeyCount: 0,
           remoteOnlyKeyCount: 0,
+          localLastValueUpdatedAt: 1000,
+          remoteLastValueUpdatedAt: 2000,
+          lastWriteHint: 'remote-newer',
         }],
       }),
     );

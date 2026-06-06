@@ -3903,6 +3903,33 @@
         return `${Math.max(0, number)} ${label}`;
     }
 
+    function sanitizeValueBundleTimestamp(value) {
+        const timestamp = Number(value);
+        if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+        return Math.floor(timestamp);
+    }
+
+    function sanitizeValueBundleLastWriteHint(value) {
+        const allowed = new Set([
+            'local-newer',
+            'remote-newer',
+            'same',
+            'local-timestamp-only',
+            'remote-timestamp-only',
+            'unknown',
+        ]);
+        return allowed.has(value) ? value : 'unknown';
+    }
+
+    function formatValueBundleLastWriteHint(hint) {
+        if (hint === 'local-newer') return 'last write local newer';
+        if (hint === 'remote-newer') return 'last write remote newer';
+        if (hint === 'same') return 'last write same timestamp';
+        if (hint === 'local-timestamp-only') return 'last write local timestamp only';
+        if (hint === 'remote-timestamp-only') return 'last write remote timestamp only';
+        return 'last write unknown';
+    }
+
     function sanitizeSyncPreviewSummary(summary) {
         const safe = {};
         const keys = [
@@ -3949,7 +3976,10 @@
             remoteBytes: Math.max(0, Number(conflict?.remoteBytes) || 0),
             overlappingKeyCount: conflict?.overlappingKeyCount == null ? null : Math.max(0, Number(conflict.overlappingKeyCount) || 0),
             localOnlyKeyCount: conflict?.localOnlyKeyCount == null ? null : Math.max(0, Number(conflict.localOnlyKeyCount) || 0),
-            remoteOnlyKeyCount: conflict?.remoteOnlyKeyCount == null ? null : Math.max(0, Number(conflict.remoteOnlyKeyCount) || 0)
+            remoteOnlyKeyCount: conflict?.remoteOnlyKeyCount == null ? null : Math.max(0, Number(conflict.remoteOnlyKeyCount) || 0),
+            localLastValueUpdatedAt: sanitizeValueBundleTimestamp(conflict?.localLastValueUpdatedAt),
+            remoteLastValueUpdatedAt: sanitizeValueBundleTimestamp(conflict?.remoteLastValueUpdatedAt),
+            lastWriteHint: sanitizeValueBundleLastWriteHint(conflict?.lastWriteHint)
         }));
     }
 
@@ -4010,7 +4040,7 @@
         if (valueBundleConflicts.length) {
             lines.push('GM value blocked merge preview:');
             for (const conflict of valueBundleConflicts.slice(0, 5)) {
-                lines.push(`- ${formatValueBundleConflictReason(conflict.reason)}: ${formatValueBundleConflictMetric(conflict.localKeyCount, 'local keys')}, ${formatValueBundleConflictMetric(conflict.remoteKeyCount, 'remote keys')}; ${formatValueBundleConflictMetric(conflict.overlappingKeyCount, 'overlap keys')}, ${formatValueBundleConflictMetric(conflict.localOnlyKeyCount, 'local-only keys')}, ${formatValueBundleConflictMetric(conflict.remoteOnlyKeyCount, 'remote-only keys')}; ${formatValueBundleConflictMetric(conflict.localBytes, 'local bytes')}, ${formatValueBundleConflictMetric(conflict.remoteBytes, 'remote bytes')}`);
+                lines.push(`- ${formatValueBundleConflictReason(conflict.reason)}: ${formatValueBundleConflictMetric(conflict.localKeyCount, 'local keys')}, ${formatValueBundleConflictMetric(conflict.remoteKeyCount, 'remote keys')}; ${formatValueBundleConflictMetric(conflict.overlappingKeyCount, 'overlap keys')}, ${formatValueBundleConflictMetric(conflict.localOnlyKeyCount, 'local-only keys')}, ${formatValueBundleConflictMetric(conflict.remoteOnlyKeyCount, 'remote-only keys')}; ${formatValueBundleConflictMetric(conflict.localBytes, 'local bytes')}, ${formatValueBundleConflictMetric(conflict.remoteBytes, 'remote bytes')}; ${formatValueBundleLastWriteHint(conflict.lastWriteHint)}`);
             }
         }
         if (Array.isArray(preview.conflicts) && preview.conflicts.length) {

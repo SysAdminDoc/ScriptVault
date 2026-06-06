@@ -1534,6 +1534,15 @@ export interface ResponseMap {
       overlappingKeyCount: number | null;
       localOnlyKeyCount: number | null;
       remoteOnlyKeyCount: number | null;
+      localLastValueUpdatedAt: number | null;
+      remoteLastValueUpdatedAt: number | null;
+      lastWriteHint:
+        | 'local-newer'
+        | 'remote-newer'
+        | 'same'
+        | 'local-timestamp-only'
+        | 'remote-timestamp-only'
+        | 'unknown';
     }[];
   }>;
   revokeSyncProvider: SuccessOrError;

@@ -138,7 +138,19 @@ Cycle 106 adds aggregate last-write metadata:
 - The timestamp is an advisory last-write signal only. It does not expose value
   key names or values and does not change the empty-local-only apply rule.
 
-The next implementation slice should surface this timestamp safely in blocked
-merge previews/results/exports, add per-key timestamp support, or add another
-durable last-write signal before non-empty local and remote value bags can be
-merged bidirectionally.
+Cycle 107 surfaces aggregate timestamp evidence in previews:
+
+- Blocked value-bundle dry-run preview entries can include
+  `localLastValueUpdatedAt`, `remoteLastValueUpdatedAt`, and a coarse
+  `lastWriteHint`.
+- The dashboard renders the hint in the blocked merge preview and the Download
+  Preview JSON export preserves only the sanitized timestamp fields and hint.
+- The preview/export still omit script IDs, script names, value key names,
+  values, URLs, local workspace handles, local paths, sync credentials, and
+  provider account data.
+- These fields are advisory conflict evidence only. They do not enable
+  non-empty merge writes.
+
+The next implementation slice should add real-sync aggregate timestamp
+summaries, per-key timestamp support, or another durable last-write signal before
+non-empty local and remote value bags can be merged bidirectionally.

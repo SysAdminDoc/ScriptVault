@@ -146,6 +146,14 @@ interface SyncPreviewConflict {
   reason: string;
 }
 
+type ValueBundleLastWriteHint =
+  | 'local-newer'
+  | 'remote-newer'
+  | 'same'
+  | 'local-timestamp-only'
+  | 'remote-timestamp-only'
+  | 'unknown';
+
 interface SyncPreviewValueBundleConflict {
   reason: 'local-values-present' | 'local-bundle-unavailable';
   localKeyCount: number | null;
@@ -155,6 +163,9 @@ interface SyncPreviewValueBundleConflict {
   overlappingKeyCount: number | null;
   localOnlyKeyCount: number | null;
   remoteOnlyKeyCount: number | null;
+  localLastValueUpdatedAt: number | null;
+  remoteLastValueUpdatedAt: number | null;
+  lastWriteHint: ValueBundleLastWriteHint;
 }
 
 interface SyncPreviewResult extends SyncResult {
@@ -519,6 +530,20 @@ function safeBundleMetric(value: unknown): number {
   return Math.max(0, Number(value) || 0);
 }
 
+function compareValueBundleLastWrite(
+  localTimestamp: number | null,
+  remoteTimestamp: number | null,
+): ValueBundleLastWriteHint {
+  if (localTimestamp && remoteTimestamp) {
+    if (localTimestamp > remoteTimestamp) return 'local-newer';
+    if (remoteTimestamp > localTimestamp) return 'remote-newer';
+    return 'same';
+  }
+  if (localTimestamp) return 'local-timestamp-only';
+  if (remoteTimestamp) return 'remote-timestamp-only';
+  return 'unknown';
+}
+
 function buildValueBundleConflictPreview(
   reason: SyncPreviewValueBundleConflict['reason'],
   remoteBundle: GmValueSyncBundle,
@@ -528,6 +553,10 @@ function buildValueBundleConflictPreview(
   const keyCounts = hasLocalBundle
     ? countValueBundleKeyOverlap(localBundle.values, remoteBundle.values)
     : null;
+  const localLastValueUpdatedAt = hasLocalBundle
+    ? getValueBundleLastUpdatedAt(localBundle) ?? null
+    : null;
+  const remoteLastValueUpdatedAt = getValueBundleLastUpdatedAt(remoteBundle) ?? null;
   return {
     reason,
     localKeyCount: hasLocalBundle ? safeBundleMetric(localBundle.keyCount) : null,
@@ -537,6 +566,9 @@ function buildValueBundleConflictPreview(
     overlappingKeyCount: keyCounts?.overlapping ?? null,
     localOnlyKeyCount: keyCounts?.localOnly ?? null,
     remoteOnlyKeyCount: keyCounts?.remoteOnly ?? null,
+    localLastValueUpdatedAt,
+    remoteLastValueUpdatedAt,
+    lastWriteHint: compareValueBundleLastWrite(localLastValueUpdatedAt, remoteLastValueUpdatedAt),
   };
 }
 
