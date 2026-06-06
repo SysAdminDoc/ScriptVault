@@ -6241,21 +6241,23 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Check Interval:</span>
-                        <select class="select-field" id="settingsCheckInterval">
+                        <select class="select-field" id="settingsCheckInterval" aria-describedby="settingsCheckIntervalError">
                             <option value="0">Never</option>
                             <option value="12">Every 12 Hours</option>
                             <option value="24" selected>Every Day</option>
                             <option value="168">Every Week</option>
                         </select>
+                        <span class="setting-error" id="settingsCheckIntervalError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Hide notification after:</span>
-                        <select class="select-field" id="settingsNotifyHideAfter">
+                        <select class="select-field" id="settingsNotifyHideAfter" aria-describedby="settingsNotifyHideAfterError">
                             <option value="0">Never</option>
                             <option value="5">5 Seconds</option>
                             <option value="15" selected>15 Seconds</option>
                             <option value="30">30 Seconds</option>
                         </select>
+                        <span class="setting-error" id="settingsNotifyHideAfterError" hidden></span>
                     </div>
                 </div>
             </div>
@@ -6266,11 +6268,12 @@
                 <div class="section-content">
                     <div class="setting-row">
                         <span class="label-text">Update Interval:</span>
-                        <select class="select-field" id="settingsExternalsInterval">
+                        <select class="select-field" id="settingsExternalsInterval" aria-describedby="settingsExternalsIntervalError">
                             <option value="0" selected>Never</option>
                             <option value="24">Every Day</option>
                             <option value="168">Every Week</option>
                         </select>
+                        <span class="setting-error" id="settingsExternalsIntervalError" hidden></span>
                     </div>
                 </div>
             </div>

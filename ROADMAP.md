@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 32 - editor select validation slice 2026-06-06.
+> **Roadmap version:** Round 33 - interval select validation slice 2026-06-06.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-05.
 > **Test suite:** 1437 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
-> **Source floor:** 400+ external URLs across Rounds 1-32. Every Now/Next item carries source IDs from the Appendix.
+> **Source floor:** 400+ external URLs across Rounds 1-33. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 32 - 2026-06-06.
+> Last researched: Round 33 - 2026-06-06.
 
 ---
 
@@ -40,7 +40,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P1 | **Effort:** L | **Source:** [S07, S08, S09]
 - **Problem:** `settings-defaults.json` has 72 keys, dashboard exposes 91 controls, and 51 saveable keys are missing from defaults/types. Invalid security-sensitive values can be saved without field-level validation.
 - **Deliverable:** Schema-driven defaults, type/range constraints, accessible text errors (WCAG 2.1 SC 3.3.1), and a parity gate in CI.
-- **Progress:** Schema classification and `npm run settings:schema:check` shipped 2026-06-06. Cycle 62 added S3 sync field validation metadata, native dashboard constraints, accessible error nodes, and blur/save validation for endpoint, region, bucket, and object key. Cycle 63 added sync credential validation metadata, native limits, accessible error nodes, and save-blocking validation for WebDAV URL/username/password, sync encryption passphrase, and S3 access/secret keys; WebDAV URL is required only for WebDAV, S3 access and secret keys are required only for S3, and sync encryption cannot be enabled without a passphrase. Cycle 64 added validation metadata, error nodes, and save-blocking allowed-option checks for editor font size, indentation width, and tab size. Remaining: continue UI constraints and field-specific errors for update interval selects, export/backup settings, and any other unvalidated dashboard-saved settings.
+- **Progress:** Schema classification and `npm run settings:schema:check` shipped 2026-06-06. Cycle 62 added S3 sync field validation metadata, native dashboard constraints, accessible error nodes, and blur/save validation for endpoint, region, bucket, and object key. Cycle 63 added sync credential validation metadata, native limits, accessible error nodes, and save-blocking validation for WebDAV URL/username/password, sync encryption passphrase, and S3 access/secret keys; WebDAV URL is required only for WebDAV, S3 access and secret keys are required only for S3, and sync encryption cannot be enabled without a passphrase. Cycle 64 added validation metadata, error nodes, and save-blocking allowed-option checks for editor font size, indentation width, and tab size. Cycle 65 added the same allowed-option validation for update check, notification hide delay, and externals update interval selects, and fixed `0`/"Never" values so they no longer collapse to fallback values. Remaining: continue UI constraints and field-specific errors for security selects, export/backup settings, and any other unvalidated dashboard-saved settings.
 - **Acceptance:** Every visible setting has schema-backed validation; invalid fields show inline errors and do not persist; `npm run test:a11y` covers malformed-input fixtures.
 
 ### N-2. GM.* Namespace Parity and Guarded GM.fetch
@@ -262,11 +262,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 62 | S3 settings validation | `src/config/settings-schema.json`, `pages/dashboard.html`, `pages/dashboard.js`, `scripts/check-settings-schema.mjs`, `tests/dashboard-a11y.test.js` | WCAG 2.1 SC 3.3.1 error identification, MDN constraint validation, and `aria-invalid` guidance still favor field-specific text errors and custom validity [S07, S08] | Added S3 endpoint/region/bucket/object-key validation metadata, native hints, accessible error nodes, blur hooks, and focused a11y/schema coverage |
 | 63 | Sync credential validation | `src/config/settings-schema.json`, `pages/dashboard.html`, `pages/dashboard.js`, `scripts/check-settings-schema.mjs`, `tests/dashboard-a11y.test.js` | WCAG 2.1 SC 3.3.1, MDN constraint validation, and MDN `aria-invalid` guidance still support custom validity plus field-specific error messages [S07, S08] | Added WebDAV, sync passphrase, and S3 credential validation metadata, error nodes, native length limits, blur hooks, and an encryption toggle guard |
 | 64 | Editor select validation | `src/config/settings-schema.json`, `pages/dashboard.html`, `pages/dashboard.js`, `scripts/check-settings-schema.mjs`, `tests/dashboard-a11y.test.js` | MDN documents `HTMLSelectElement.setCustomValidity()` and option values as the select contract; WCAG error identification still requires text errors for invalid choices [S07, S08] | Added validation metadata, error nodes, and save-blocking allowed-option checks for editor font size, indentation width, and tab size |
+| 65 | Interval select validation | `pages/dashboard.html`, `pages/dashboard.js`, `src/config/settings-schema.json`, `scripts/check-settings-schema.mjs`, `tests/dashboard-a11y.test.js` | MDN select option values plus `HTMLSelectElement.setCustomValidity()` support the same allowed-option validation contract [S07, S08] | Added validation metadata/error nodes for update check, notification delay, and externals intervals; preserved `0`/"Never" with nullish fallbacks and validator conversion |
 
 ## Continuation State
 
-- **Current cycle:** Round 32 Cycle 64 continued N-1 Settings Schema Parity and Accessible Validation. Editor font size, indentation width, and tab size now have schema validation metadata, accessible error nodes, and save-blocking allowed-option checks sourced from their live select options. Focused dashboard a11y/schema tests, settings schema check, TS runtime check, audit, full check suite, build, CWS scan, and `git diff --check` passed.
-- **Next implementation angle:** Cycle 65 should continue N-1 by fixing update/external interval select validation and zero-value normalization, especially `settingsCheckInterval` and `settingsExternalsInterval`, then continue remaining export/backup setting constraints with focused dashboard a11y/schema coverage.
+- **Current cycle:** Round 33 Cycle 65 continued N-1 Settings Schema Parity and Accessible Validation. Update check, notification hide delay, and externals update interval selects now have schema validation metadata, accessible error nodes, save-blocking allowed-option checks, and `0`/"Never" values preserved through load and save. Focused dashboard a11y/schema tests, settings schema check, TS runtime check, audit, full check suite, build, CWS scan, and `git diff --check` passed.
+- **Next implementation angle:** Cycle 66 should continue N-1 by applying allowed-option validation to the remaining security/action-menu selects whose option lists already exist in schema metadata, then continue export/backup setting constraints with focused dashboard a11y/schema coverage.
 - **Follow-up source checks:** Re-check CWS user-data/privacy expectations and File System Access handle persistence before editing local-save or local-workspace metadata.
 - **Suggested verification before implementation:** Run focused tests for setup-state banners, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching N-7, N-8, X-8, or X-9.
 

@@ -2,6 +2,20 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 65 interval select validation: N-1 continued through the
+update and externals interval selects. The same select-specific source signal
+from Cycle 64 applies: option `value` is the persisted selection contract, and
+`HTMLSelectElement.setCustomValidity()` supports custom validation messages for
+select controls. ScriptVault now requires validation metadata and dashboard
+`setting-error` nodes for `settingsCheckInterval`,
+`settingsNotifyHideAfter`, and `settingsExternalsInterval`. The dashboard
+stores raw select values until `validateSettingsValue()` confirms they are live
+options, then converts them to numbers. Loading settings now uses nullish
+fallbacks so `0`/"Never" remains visible, and saving no longer collapses
+`0` into the old fallback intervals. Remaining N-1 work should continue with
+security/action-menu selects that already have schema option lists but no
+save-blocking allowed-option validation.
+
 2026-06-06 Cycle 64 editor select validation: N-1 continued through a visible
 editor-settings slice. The source refresh confirmed that `HTMLSelectElement`
 supports `setCustomValidity()` with an empty string clearing the custom

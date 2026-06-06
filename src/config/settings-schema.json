@@ -423,6 +423,9 @@
       "help": "Controls check interval.",
       "elementId": "settingsCheckInterval",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "0",
@@ -761,6 +764,9 @@
       "help": "Controls update interval.",
       "elementId": "settingsExternalsInterval",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "0",
@@ -1062,6 +1068,9 @@
       "help": "Controls hide notification after.",
       "elementId": "settingsNotifyHideAfter",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "0",
