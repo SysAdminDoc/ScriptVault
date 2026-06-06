@@ -76,6 +76,8 @@ export interface ScriptMeta {
   priority: number;
   /** Userscripts (Safari) `@weight 1..999` injection priority — higher = earlier. */
   weight: number;
+  /** Default-off ScriptCat-compatible DOM-less background script marker. */
+  background: boolean;
 
   // Tags & compat
   antifeature: ScriptAntifeature[];

@@ -7,7 +7,7 @@
 >
 > **Roadmap version:** Round 15 - OSINT deep refresh 2026-06-05.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-05.
-> **Test suite:** 1372 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1397 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-15. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 15 - 2026-06-05.
@@ -38,7 +38,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 
 ### N-1. Settings Schema Parity and Accessible Validation
 - **Priority:** P1 | **Effort:** L | **Source:** [S07, S08, S09]
-- **Problem:** `settings-defaults.json` has 71 keys, dashboard exposes 91 controls, and 51 saveable keys are missing from defaults/types. Invalid security-sensitive values can be saved without field-level validation.
+- **Problem:** `settings-defaults.json` has 72 keys, dashboard exposes 91 controls, and 51 saveable keys are missing from defaults/types. Invalid security-sensitive values can be saved without field-level validation.
 - **Deliverable:** Schema-driven defaults, type/range constraints, accessible text errors (WCAG 2.1 SC 3.3.1), and a parity gate in CI.
 - **Progress:** Schema classification and `npm run settings:schema:check` shipped 2026-06-06. Remaining: UI constraints and field-specific error text.
 - **Acceptance:** Every visible setting has schema-backed validation; invalid fields show inline errors and do not persist; `npm run test:a11y` covers malformed-input fixtures.
@@ -84,6 +84,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P2 | **Effort:** XL | **Source:** [S04, S20, S21]
 - **Problem:** ScriptCat's killer feature is background/cron scripts without an open tab. ScriptVault's `@crontab` is tied to page lifecycle.
 - **Deliverable:** Default-off `experimentalBackgroundScripts`, parser support for `@background`, DOM-less wrapper variant, offscreen document runner, resource/time budget controls.
+- **Progress:** Cycle 37 added parser/type support for `@background`, the internal default-off `experimentalBackgroundScripts` setting, a dormant page-registration guard so `@background` scripts do not run as normal userscripts before the DOM-less runner exists, and `docs/background-scripts-design.md` to pin runner/API/safety gates.
 - **Risk:** Extension review scrutiny. Require review-only install (reuse quarantine flow).
 
 ### X-3. Navigation API Integration for SPA Support

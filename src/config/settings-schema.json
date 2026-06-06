@@ -126,6 +126,7 @@
       "lastUpdateCheck"
     ],
     "internal": [
+      "experimentalBackgroundScripts",
       "googleDriveConnected",
       "onedriveConnected"
     ],

@@ -268,6 +268,7 @@ function parseUserscript(code) {
     config: [],
     priority: 0,
     weight: 0,
+    background: false,
     crontab: ''
   };
 
@@ -387,6 +388,9 @@ function parseUserscript(code) {
         break;
       case 'top-level-await':
         meta['top-level-await'] = true;
+        break;
+      case 'background':
+        meta.background = true;
         break;
       case 'priority':
         meta.priority = parseInt(value, 10) || 0;
@@ -9042,6 +9046,18 @@ async function registerScript(script, { useUpdate = false } = {}) {
         try { await chrome.userScripts.unregister({ ids: [script.id] }); } catch (_) {}
       }
       scheduleCrontabAlarm(script);
+      return;
+    }
+
+    // DOM-less @background scripts need an offscreen/service-worker runner.
+    // Until that default-off runner exists, keep these scripts dormant instead
+    // of registering them as normal page-load userscripts.
+    if (meta.background) {
+      await chrome.alarms.clear(getCrontabAlarmName(script.id)).catch(() => {});
+      if (chrome.userScripts) {
+        try { await chrome.userScripts.unregister({ ids: [script.id] }); } catch (_) {}
+      }
+      debugLog(`Skipped @background script until experimentalBackgroundScripts runner ships: ${meta.name || script.id}`);
       return;
     }
 

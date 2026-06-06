@@ -101,6 +101,7 @@ const StorageModule = (() => {
     language: "auto",
     debugMode: false,
     experimentalESMUserscripts: false,
+    experimentalBackgroundScripts: false,
     dashboardVirtualizationThreshold: 500,
     injectIntoFrames: true,
     xhrTimeout: 3e4,

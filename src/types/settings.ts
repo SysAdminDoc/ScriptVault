@@ -81,6 +81,7 @@ export interface Settings {
   // Advanced
   debugMode: boolean;
   experimentalESMUserscripts: boolean;
+  experimentalBackgroundScripts: boolean;
   dashboardVirtualizationThreshold: number;
   injectIntoFrames: boolean;
   xhrTimeout: number;
