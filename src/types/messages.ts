@@ -38,7 +38,16 @@ interface SaveScript {
   trust?: {
     operation?: ScriptTrustReceipt['operation'];
     sourceUrl?: string;
+    sourceKind?: ScriptTrustReceipt['source']['sourceKind'];
+    sourceLabel?: string;
+    suppressMetadataSourceFallback?: boolean;
     recordReceipt?: boolean;
+    optionalPermissions?: {
+      requested?: string[];
+      granted?: string[];
+      denied?: string[];
+      unavailable?: string[];
+    } | null;
   };
 }
 interface SaveScriptResponse {
