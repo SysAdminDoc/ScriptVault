@@ -15,17 +15,18 @@ Before any release branch is created:
 1. **Tests green:** `npm run check` passes on `main`. CI must be green for the last commit.
 2. **Smoke test green:** `npm run smoke:dashboard` passes locally on Linux + Windows.
 3. **Dependency audit green:** `npm audit --audit-level=high --omit=optional` exits 0. High and critical advisories are blocking unless the release notes document a temporary false-positive exception.
-4. **CWS tooling green:** `npm run cws:check` confirms the installed `chrome-webstore-upload-cli` major, Node engine, removed flag usage, and credential names.
-5. **CWS remote-code evidence green:** `npm run cws:remote-code:check` confirms `docs/cws-remote-code-compliance.md`, release/store-copy references, package script wiring, CI wiring, and source/package inputs do not contain forbidden remote-code execution patterns.
-6. **Store permission copy green:** `npm run store-copy:check` confirms `manifest.json` and `manifest-firefox.json` permissions, host matches, web-accessible resources, sandbox pages, and AMO data-collection declarations are covered by `PRIVACY.md`, `docs/store-listing-copy.md`, and `AMO-SOURCE-README.md`.
-7. **Locale lint green:** `tests/manifest-locales.test.js` passes - no locale's `extName` exceeds 75 chars, no `extDescription` exceeds 132 chars, all locales share the `en` key set.
-8. **Version sources synced:** `manifest.json`, `manifest-firefox.json`, `package.json`, and `package-lock.json` all point to the same target version.
-9. **Rollback drill green:** `npm run release:rollback-drill` proves the previous public `chrome.storage.local` snapshot survives the current storage migration safety window.
-10. **Firefox AMO gate green:** `npm run firefox:package` exits with `web-ext lint: 0 errors, 0 notices` and writes `firefox-artifacts/scriptvault-firefox-vX.Y.Z.zip`, `firefox-artifacts/scriptvault-firefox-source-vX.Y.Z.zip`, and `firefox-artifacts/web-ext-lint.json`.
-11. **Edge package gate green:** `npm run build:edge:check` writes `edge-artifacts/scriptvault-edge-vX.Y.Z.zip` and `edge-artifacts/edge-build-X.Y.Z.json`, and `npm run support:matrix:check` validates that the browser support matrix is tied to that report.
-12. **Store status gate green:** `npm run release:store-status` validates rollback/trust/status command wiring, checks Firefox AMO lint/package evidence when present, and queries CWS API v2 `:fetchStatus` when `PUBLISHER_ID` plus `CWS_ACCESS_TOKEN` are provided.
-13. **Release artifact parity green:** `npm run release:check` passes locally; after the tag and GitHub Release are created, `npm run release:check:public` must pass.
-14. **CHANGELOG entry drafted:** one paragraph per shipped roadmap item, with `Phase X.Y` cross-references.
+4. **Optional dependency reach green:** `npm run optional-deps:check` confirms omitted optional packages are not imported or required by shipped source/package inputs.
+5. **CWS tooling green:** `npm run cws:check` confirms the installed `chrome-webstore-upload-cli` major, Node engine, removed flag usage, and credential names.
+6. **CWS remote-code evidence green:** `npm run cws:remote-code:check` confirms `docs/cws-remote-code-compliance.md`, release/store-copy references, package script wiring, CI wiring, and source/package inputs do not contain forbidden remote-code execution patterns.
+7. **Store permission copy green:** `npm run store-copy:check` confirms `manifest.json` and `manifest-firefox.json` permissions, host matches, web-accessible resources, sandbox pages, and AMO data-collection declarations are covered by `PRIVACY.md`, `docs/store-listing-copy.md`, and `AMO-SOURCE-README.md`.
+8. **Locale lint green:** `tests/manifest-locales.test.js` passes - no locale's `extName` exceeds 75 chars, no `extDescription` exceeds 132 chars, all locales share the `en` key set.
+9. **Version sources synced:** `manifest.json`, `manifest-firefox.json`, `package.json`, and `package-lock.json` all point to the same target version.
+10. **Rollback drill green:** `npm run release:rollback-drill` proves the previous public `chrome.storage.local` snapshot survives the current storage migration safety window.
+11. **Firefox AMO gate green:** `npm run firefox:package` exits with `web-ext lint: 0 errors, 0 notices` and writes `firefox-artifacts/scriptvault-firefox-vX.Y.Z.zip`, `firefox-artifacts/scriptvault-firefox-source-vX.Y.Z.zip`, and `firefox-artifacts/web-ext-lint.json`.
+12. **Edge package gate green:** `npm run build:edge:check` writes `edge-artifacts/scriptvault-edge-vX.Y.Z.zip` and `edge-artifacts/edge-build-X.Y.Z.json`, and `npm run support:matrix:check` validates that the browser support matrix is tied to that report.
+13. **Store status gate green:** `npm run release:store-status` validates rollback/trust/status command wiring, checks Firefox AMO lint/package evidence when present, and queries CWS API v2 `:fetchStatus` when `PUBLISHER_ID` plus `CWS_ACCESS_TOKEN` are provided.
+14. **Release artifact parity green:** `npm run release:check` passes locally; after the tag and GitHub Release are created, `npm run release:check:public` must pass.
+15. **CHANGELOG entry drafted:** one paragraph per shipped roadmap item, with `Phase X.Y` cross-references.
 
 If any gate fails, stop. Do not patch the test to make it green.
 
@@ -100,7 +101,7 @@ References: [chrome-webstore-upload-cli v4.0.0 release](https://github.com/frega
 1. **Cut release branch** off `main`: `git checkout -b release/vX.Y.Z`.
 2. **Bump versions** in `manifest.json`, `manifest-firefox.json`, `package.json`, `package-lock.json`. Use semver - patch for fixes, minor for additive features, major only for breaking changes.
 3. **Finalize CHANGELOG.md** entry for vX.Y.Z. Match the prose style of recent entries.
-4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run cws:check`, `npm run cws:remote-code:check`, `npm run store-copy:check`, `npm run firefox:package`, `npm run build:edge:check`, `npm run support:matrix:check`, `npm run release:rollback-drill`, `npm run release:store-status`, and `npm run release:check`.
+4. **Validate:** `npm run check`, `npm run smoke:dashboard`, `npm audit --audit-level=high --omit=optional`, `npm run optional-deps:check`, `npm run cws:check`, `npm run cws:remote-code:check`, `npm run store-copy:check`, `npm run firefox:package`, `npm run build:edge:check`, `npm run support:matrix:check`, `npm run release:rollback-drill`, `npm run release:store-status`, and `npm run release:check`.
 5. **Build:** `npm run build:prod` then `bash build.sh`. Verify the produced ZIP loads in a clean Chrome profile. For Firefox validation, inspect the Firefox package/source ZIP under `firefox-artifacts/`. For Edge validation, inspect `edge-artifacts/scriptvault-edge-vX.Y.Z.zip` and `edge-artifacts/edge-build-X.Y.Z.json`, then sideload `build-edge/` through `edge://extensions` on a release machine.
 6. **CWS remote-code package scan:** `npm run cws:remote-code:check -- --target ScriptVault-vX.Y.Z.zip`; keep the output beside `docs/cws-remote-code-compliance.md` before CWS draft upload.
 7. **Release trust gate:** `npm run release:trust`. For a public release with the maintainer signing key available, run `npm run release:trust:strict` with `RELEASE_SIGNING_PRIVATE_KEY_PATH` or `RELEASE_SIGNING_PRIVATE_KEY_PEM`.

@@ -329,7 +329,7 @@ Priorities/sizes preserve the source labels.
 
 ### Researcher Queue (Cycle 14 - 2026-06-04)
 
-- [ ] 🔬 `optional-dependency-reach-gate-2026-06-04` - rechecked the
+- [x] 🔬 `optional-dependency-reach-gate-2026-06-04` - rechecked the
   `npm audit --omit=optional` exemption against the current lockfile and shipped
   source. `package.json` has no direct `optionalDependencies`, but
   `package-lock.json` now contains 60 optional package records plus 43
@@ -341,6 +341,13 @@ Priorities/sizes preserve the source labels.
   dependencies are still resolved into the lockfile and simply not installed on
   disk, so the repo needs a gate that proves future shipped code or bundles do
   not start depending on an omitted package.
+  - Status: Shipped 2026-06-06. `npm run optional-deps:check` now parses
+    `package-lock.json` optional packages, optional dependencies, and
+    peer-optional edges, then scans shipped extension/package source inputs for
+    static `import`, dynamic `import()`, `require()`, and `require.resolve()`
+    reachability. The gate is wired into CI and `npm run check`; focused tests
+    pin the clean repo path, an intentionally failing optional-package import
+    fixture, and non-package DOM string references such as `canvas`.
 
 ### Researcher Queue (Cycle 15 - 2026-06-04)
 
@@ -775,11 +782,21 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
   - Progress: 2026-06-05 pinned all eight workflow action references to full 40-character SHAs resolved from their current trusted tags: `actions/checkout` v4, `actions/setup-node` v4, `browser-actions/setup-chrome` v1, `actions/attest` v4, and `actions/upload-artifact` v4. Each pin keeps a same-line version comment for human review and Dependabot action-update context. Added `scripts/check-github-actions-pins.mjs`, `npm run actions:pins:check`, focused regression tests, and a CI gate that fails mutable tags, branch refs, abbreviated SHAs, or missing version comments.
   - Verification: `git ls-remote` against each upstream action tag; `npm run actions:pins:check`; `npx vitest run tests/github-actions-pins.test.js --environment=node --reporter=verbose`; `npm run check`.
   - Complexity: S
-- [ ] P2 — `dependency-audit-policy.md` exempts `optional` deps via `--omit=optional`; verify no optional dep ships in the bundle
+- [x] P2 — `dependency-audit-policy.md` exempts `optional` deps via `--omit=optional`; verify no optional dep ships in the bundle
   - Why: the CI audit and dependency policy use `npm audit --audit-level=high --omit=optional` because optional deps are assumed not to ship. Current static evidence supports that assumption but does not enforce it: `package-lock.json` has 60 optional package records and 43 peer-optional edges, while a one-off scan over 116 shipped extension files found zero import/require hits for those optional-like package names. npm documents that omitted optional dependencies are still resolved into the lockfile and simply not installed on disk, and optional dependencies must be handled as absent by the program. Add a guard so a future dashboard/runtime import, generated bundle, or package change cannot silently make an omitted package part of shipped behavior.
   - Touches: new `scripts/check-optional-dep-reach.mjs`, `ci.yml` step, `docs/dependency-audit-policy.md`, package/source allowlist only for intentional tool-only false positives.
   - Acceptance: gate parses `package-lock.json` for `optional: true`, `optionalDependencies`, and `peerDependenciesMeta.*.optional`; scans shipped source and generated package inputs for static `import`, dynamic `import()`, and `require()` of those package specifiers or their scoped roots; fails with file/specifier evidence if a hit appears; passes today with zero import/require hits; documents any deliberately ignored DOM words such as `canvas` as non-package string matches, not allowlisted imports.
   - Verify: run the new script locally; add a fixture import of an optional package and confirm the gate fails; keep `npm audit --audit-level=high --omit=optional` green.
+  - Progress: 2026-06-06 added `scripts/check-optional-dep-reach.mjs`,
+    `npm run optional-deps:check`, CI coverage, and
+    `tests/optional-dep-reach.test.js`. The checker collects optional package
+    names from `optional: true`, `optionalDependencies`, and
+    `peerDependenciesMeta.*.optional`; scans Chrome/Firefox/Edge package input
+    source paths; fails with file, line, package, and specifier evidence; and
+    ignores harmless DOM/string references that are not import specifiers.
+  - Verification: `npm run optional-deps:check`;
+    `npx vitest run tests/optional-dep-reach.test.js --environment=node --reporter=verbose`;
+    `npm audit --audit-level=high --omit=optional`; `npm run check`.
   - Complexity: M
 - [ ] P2 — Settings discoverability/validation audit for the dashboard options surface
   - Why: the "no panel" part is now stale because `pages/dashboard.html` has a Settings tab with search/category filters and many advanced controls, but it is not schema-driven or consistently validated. Current evidence: `src/config/settings-defaults.json` has 71 default keys; the Settings tab has 91 `settings*` controls; dashboard save handlers can persist 80 keys; 51 saveable keys are absent from the defaults/`Settings` type, and 42 default keys have no Settings UI save path. Some absences are expected internal credentials/timestamps, but operator-facing defaults such as `allowInternalXhr`, `xhrTimeout`, `dashboardVirtualizationThreshold`, `experimentalESMUserscripts`, `syncInterval`, `notifyOnInstall`, `notifyOnUpdate`, and `showBadge` are not explicitly classified. `SettingsManager.set(...)` merges arbitrary keys into storage, and raw inputs such as badge color, lint max size, URL fields, denied hosts, custom CSS, and linter config save on blur without a shared constraint layer or per-field text errors. MDN documents native constraints, `checkValidity()` / `reportValidity()`, and `setCustomValidity()` for client-side validation; WCAG 2.1 SC 3.3.1 requires detected input errors to identify the field and describe the error in text.

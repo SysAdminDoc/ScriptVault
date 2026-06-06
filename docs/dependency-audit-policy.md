@@ -30,6 +30,26 @@ release. The default `high` floor is the resting state.
 | `docs/release-runbook.md` step 3 | Same command run locally before release   | Yes — pre-release gate. |
 | Engineer workstation  | `npm audit` (any level)                              | Advisory. |
 
+## Optional dependency reach guard
+
+`--omit=optional` is allowed only because shipped extension code is separately
+checked by `npm run optional-deps:check`. npm still resolves omitted optional
+dependencies into `package-lock.json`, and optional dependencies must be safe to
+miss at runtime. The ScriptVault policy is therefore:
+
+- Optional packages may exist in the lockfile for toolchain, browser-test, or
+  platform-native package reasons.
+- Shipped extension/package inputs must not statically import, dynamically
+  import, or `require()` package names that are optional or peer-optional in the
+  lockfile.
+- Non-package DOM text such as `canvas` is not an exception or allowlist entry;
+  it is simply outside the import/require reachability scan.
+
+The checker parses `package-lock.json` for `optional: true`,
+`optionalDependencies`, and `peerDependenciesMeta.*.optional`, then scans the
+source and generated package inputs that can feed Chrome, Firefox, and Edge
+extension bundles.
+
 ## Exception process
 
 When a High advisory has no upstream fix:
@@ -82,8 +102,12 @@ way to keep the muscle memory.
 
 - `npm audit --audit-level=high --omit=optional` in this repo currently
   exits 0 (clean) as of 2026-06-05.
-- The CI step at `.github/workflows/ci.yml` line 45 enforces the same
-  command on every push.
+- `npm run optional-deps:check` currently scans shipped source inputs and exits
+  0 with no optional dependency import/require reachability as of 2026-06-06.
+- The CI steps in `.github/workflows/ci.yml` enforce both commands on every
+  push.
 - `tests/dependabot-config.test.js` pins the required npm and GitHub Actions
   Dependabot update blocks, weekly schedules, bounded PR limits, and grouped
   minor/patch update policy.
+- `tests/optional-dep-reach.test.js` pins the optional dependency scanner and
+  a fixture that must fail when shipped source imports `canvas`.
