@@ -39,6 +39,12 @@ wrapper payload for eligible `@background` scripts while keeping
 payload and reports wrapper-construction failures, so the next cycle can expose
 dry-run diagnostics without executing script code.
 
+2026-06-06 Cycle 42 background runner dry-run action: the promoted runtime now
+handles `prepareBackgroundRunnerDryRun`. The action returns planner status,
+wrapper support, reviewed budget, and `executionEnabled: false`, omits wrapper
+code from the response, and performs no offscreen, service-worker, or wrapper
+execution.
+
 2026-06-04 Cycle 8 comprehensive feature-plan refresh: root-level
 `RESEARCH_FEATURE_PLAN.md` now holds the current implementation-oriented
 research plan for ScriptVault v3.11.0. It preserves `ROADMAP.md` as the open

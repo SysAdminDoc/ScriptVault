@@ -43,6 +43,10 @@ returns wrapper construction errors such as unsupported `@require`, and always
 reports `executionEnabled: false` until an offscreen/service-worker runner is
 wired.
 
+The runtime `prepareBackgroundRunnerDryRun` action exposes the same eligibility
+shape for support/dashboard diagnostics. It does not include wrapper code in the
+response and does not execute scripts.
+
 ## API Surface
 
 Initial allowed APIs should be limited to DOM-independent primitives:
@@ -107,6 +111,8 @@ Acceptance for the implementation pass:
   notification, log, and info APIs, and fails closed for DOM/page globals.
 - `prepareBackgroundRunnerPayload()` can build a wrapper payload for an
   eligible plan while still refusing execution.
+- `prepareBackgroundRunnerDryRun` reports planner/wrapper status without
+  returning wrapper code.
 - A later live smoke proves a scheduled background script can call
   `GM_notification` with no matching tab open.
 - Tests prove blocked DOM APIs, host-scope enforcement, timeouts, and disabled

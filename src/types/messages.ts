@@ -209,6 +209,11 @@ interface GetLocalHealthReport {
   action: 'getLocalHealthReport';
 }
 
+interface PrepareBackgroundRunnerDryRun {
+  action: 'prepareBackgroundRunnerDryRun';
+  scriptId: string;
+}
+
 type UserScriptsSetupState =
   | 'available'
   | 'firefox-user-scripts-permission'
@@ -297,6 +302,41 @@ interface LocalHealthReportResponse {
     audioWatchedTabs: { size: number; level: LocalHealthLevel };
   };
   warnings: Array<{ id: string; level: LocalHealthLevel; message: string }>;
+}
+
+interface BackgroundRunnerDryRunResponse {
+  scriptId: string;
+  status:
+    | 'not-background'
+    | 'script-disabled'
+    | 'gate-disabled'
+    | 'unsupported-grants'
+    | 'missing-trigger'
+    | 'ready'
+    | 'wrapper-unsupported';
+  reason: string;
+  executionEnabled: false;
+  plan: {
+    status: Exclude<BackgroundRunnerDryRunResponse['status'], 'wrapper-unsupported'>;
+    reason: string;
+    enabled: boolean;
+    triggers: string[];
+    unsupportedGrants: string[];
+    budget: {
+      timeoutMs: number;
+      maxConcurrentPerScript: number;
+      maxQueuedRunsPerScript: number;
+    };
+  };
+  wrapper: {
+    supported: boolean;
+    reason: string;
+  };
+  payload: {
+    wouldBuild: boolean;
+    includesCode: false;
+    source: 'scriptvault-background-runner';
+  };
 }
 
 // ─── Per-Script Settings ─────────────────────────────────────────────
@@ -1148,7 +1188,7 @@ export type BackgroundMessage =
   // Tab storage
   | GMGetTab | GMSaveTab | GMGetTabs
   // Settings
-  | GetSettings | GetSetting | SetSettings | ResetSettings | GetExtensionStatus | GetLocalHealthReport
+  | GetSettings | GetSetting | SetSettings | ResetSettings | GetExtensionStatus | GetLocalHealthReport | PrepareBackgroundRunnerDryRun
   // Per-script settings
   | GetScriptSettings | SetScriptSettings
   // Updates
@@ -1320,6 +1360,7 @@ export interface ResponseMap {
   resetSettings: unknown;
   getExtensionStatus: ExtensionStatusResponse;
   getLocalHealthReport: LocalHealthReportResponse;
+  prepareBackgroundRunnerDryRun: BackgroundRunnerDryRunResponse | ErrorResponse;
   repairRuntimeState: SuccessOrError<ExtensionStatusResponse>;
 
   // ── Version history ────────────────────────────────────────────────
