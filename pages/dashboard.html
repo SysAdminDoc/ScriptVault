@@ -6319,11 +6319,13 @@
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Region:</span>
-                            <input type="text" id="settingsS3Region" placeholder="us-east-1 (use 'auto' for Cloudflare R2)" class="input-field" aria-label="S3 region">
+                            <input type="text" id="settingsS3Region" placeholder="us-east-1 (use 'auto' for Cloudflare R2)" class="input-field" aria-label="S3 region" autocomplete="off" pattern="^(auto|[A-Za-z0-9][A-Za-z0-9._-]{0,63})$" aria-describedby="settingsS3RegionError">
+                            <span class="setting-error" id="settingsS3RegionError" hidden></span>
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Bucket:</span>
-                            <input type="text" id="settingsS3Bucket" placeholder="scriptvault-backups" class="input-field" aria-label="S3 bucket name">
+                            <input type="text" id="settingsS3Bucket" placeholder="scriptvault-backups" class="input-field" aria-label="S3 bucket name" autocomplete="off" pattern="^[a-zA-Z0-9][a-zA-Z0-9.-]{1,61}[a-zA-Z0-9]$" aria-describedby="settingsS3BucketError">
+                            <span class="setting-error" id="settingsS3BucketError" hidden></span>
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Access Key ID:</span>
@@ -6335,7 +6337,8 @@
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Object Key (optional):</span>
-                            <input type="text" id="settingsS3ObjectKey" placeholder="scriptvault-backup.json" class="input-field" aria-label="S3 object key override">
+                            <input type="text" id="settingsS3ObjectKey" placeholder="scriptvault-backup.json" class="input-field" aria-label="S3 object key override" autocomplete="off" maxlength="1024" aria-describedby="settingsS3ObjectKeyError">
+                            <span class="setting-error" id="settingsS3ObjectKeyError" hidden></span>
                         </div>
                         <div class="setting-row" style="font-size:11px;color:var(--text-muted);line-height:1.4">
                             Credentials are AWS SigV4-signed and sent only to the configured endpoint. Cloudflare R2 uses region "auto"; MinIO and Backblaze B2 use path-style addressing (default for non-AWS endpoints).

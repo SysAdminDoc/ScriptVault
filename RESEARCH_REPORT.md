@@ -2,6 +2,19 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 62 S3 settings validation: N-1 continued after the deep-audit
+security lane. The source refresh for WCAG 2.1 SC 3.3.1, MDN constraint
+validation, and MDN `aria-invalid` guidance still points to text error
+identification, `setCustomValidity()`, and field-level invalid state wiring.
+ScriptVault now applies that contract to S3 sync settings: endpoint, region,
+bucket, and object key have schema validation metadata, native dashboard
+constraints where applicable, accessible inline error nodes, and save-blocking
+blur validation. The S3 endpoint is required only when S3 is selected, must be
+HTTP(S), and may not include a path; region, bucket, and object key now surface
+field-specific error text. Remaining N-1 work is to continue auditing
+dashboard-saved sync, credential, and security fields for missing UI
+constraints and accessible errors.
+
 2026-06-06 Cycle 61 PublicAPI internal-host parity: N-9 EI-3 is closed and
 the full deep-audit P0 security lane is complete. The deep audit found that
 PublicAPI maintained a private `isInternalHost` copy that lagged

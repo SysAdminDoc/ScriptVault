@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 61 - 2026-06-06
+Last cycle: Cycle 62 - 2026-06-06
 
 ## Latest Result
 
@@ -164,6 +164,11 @@ Last cycle: Cycle 61 - 2026-06-06
   `src/background/internal-host-guard.ts`, so trusted origins, web install URLs,
   and webhook URLs share the same `.localhost`, TEST-NET, benchmarking, Class E,
   and IPv4-mapped IPv6 hex blocking policy as the main remote-fetch guard.
+- Cycle 62 continued N-1 Settings Schema Parity and Accessible Validation. S3
+  sync endpoint, region, bucket, and object key now have schema validation
+  metadata, native dashboard hints, accessible error nodes, and save-blocking
+  blur validation; the endpoint is required only for S3 and must not include a
+  path.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -205,23 +210,28 @@ Last cycle: Cycle 61 - 2026-06-06
   deep-audit security lane, then verified PublicAPI internal-host parity with
   focused PublicAPI/internal-host/source-parity tests, TS runtime
   generation/check, high-severity audit, full check suite, build, CWS
-  remote-code scan, and `git diff --check`.
+  remote-code scan, and `git diff --check`. Cycle 62 refreshed WCAG/MDN error
+  identification, constraint validation, and `aria-invalid` guidance, then
+  verified S3 settings validation with focused dashboard a11y/schema tests,
+  the settings schema gate, TS runtime generation/check, high-severity audit,
+  full check suite, build, CWS remote-code scan, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 29. The next best local cycle is Cycle 62:
-return to N-1 Settings Schema Parity and Accessible Validation. Start by
-auditing remaining dashboard-saved settings against `src/config/settings-schema.json`
-metadata and `pages/dashboard.html` controls, then ship the next missing UI
-constraints and field-specific error text with focused dashboard a11y/schema
-coverage. The live two-tab `GM_addValueChangeListener` smoke remains
-browser-profile gated until `chrome.userScripts` is enabled for the unpacked
-extension, AMO submission remains blocked on maintainer credentials, and Edge
-Partner Center upload/REST automation remain credential/listing gated.
+Continue from `ROADMAP.md` Round 30. The next best local cycle is Cycle 63:
+continue N-1 Settings Schema Parity and Accessible Validation by auditing
+remaining dashboard-saved sync, WebDAV, credential, and security text fields
+against `src/config/settings-schema.json` metadata and `pages/dashboard.html`
+controls, then ship the next missing UI constraints and field-specific error
+text with focused dashboard a11y/schema coverage. The live two-tab
+`GM_addValueChangeListener` smoke remains browser-profile gated until
+`chrome.userScripts` is enabled for the unpacked extension, AMO submission
+remains blocked on maintainer credentials, and Edge Partner Center upload/REST
+automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 61 complete for 2026-06-06; roadmap continuation
-  points to Cycle 62 N-1 settings validation continuation.
+- Status: ScriptVault Cycle 62 complete for 2026-06-06; roadmap continuation
+  points to Cycle 63 N-1 settings validation continuation.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

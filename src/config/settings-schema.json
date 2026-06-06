@@ -1158,7 +1158,12 @@
       "label": "Bucket",
       "help": "Controls bucket.",
       "elementId": "settingsS3Bucket",
-      "default": ""
+      "default": "",
+      "validation": {
+        "kind": "s3-bucket",
+        "requiredWhenProvider": "s3",
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9.-]{1,61}[a-zA-Z0-9]$"
+      }
     },
     "s3Endpoint": {
       "type": "string",
@@ -1169,7 +1174,9 @@
       "default": "",
       "validation": {
         "kind": "http-url",
-        "allowEmpty": true
+        "allowEmpty": true,
+        "requiredWhenProvider": "s3",
+        "noPath": true
       }
     },
     "s3ObjectKey": {
@@ -1178,7 +1185,12 @@
       "label": "Object Key (optional)",
       "help": "Controls object key (optional).",
       "elementId": "settingsS3ObjectKey",
-      "default": ""
+      "default": "",
+      "validation": {
+        "kind": "s3-object-key",
+        "allowEmpty": true,
+        "maxLength": 1024
+      }
     },
     "s3PathStyle": {
       "type": "string",
@@ -1193,7 +1205,12 @@
       "label": "Region",
       "help": "Controls region.",
       "elementId": "settingsS3Region",
-      "default": ""
+      "default": "",
+      "validation": {
+        "kind": "s3-region",
+        "requiredWhenProvider": "s3",
+        "pattern": "^(auto|[A-Za-z0-9][A-Za-z0-9._-]{0,63})$"
+      }
     },
     "s3SecretKey": {
       "type": "string",

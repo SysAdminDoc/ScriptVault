@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 29 - deep audit security closures complete 2026-06-06.
+> **Roadmap version:** Round 30 - S3 settings validation slice 2026-06-06.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-05.
 > **Test suite:** 1437 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
-> **Source floor:** 400+ external URLs across Rounds 1-29. Every Now/Next item carries source IDs from the Appendix.
+> **Source floor:** 400+ external URLs across Rounds 1-30. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 29 - 2026-06-06.
+> Last researched: Round 30 - 2026-06-06.
 
 ---
 
@@ -40,7 +40,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P1 | **Effort:** L | **Source:** [S07, S08, S09]
 - **Problem:** `settings-defaults.json` has 72 keys, dashboard exposes 91 controls, and 51 saveable keys are missing from defaults/types. Invalid security-sensitive values can be saved without field-level validation.
 - **Deliverable:** Schema-driven defaults, type/range constraints, accessible text errors (WCAG 2.1 SC 3.3.1), and a parity gate in CI.
-- **Progress:** Schema classification and `npm run settings:schema:check` shipped 2026-06-06. Remaining: UI constraints and field-specific error text.
+- **Progress:** Schema classification and `npm run settings:schema:check` shipped 2026-06-06. Cycle 62 added S3 sync field validation metadata, native dashboard constraints, accessible error nodes, and blur/save validation for endpoint, region, bucket, and object key. S3 endpoint is required only when S3 is selected and must not include a path; region, bucket, and object key now have field-specific error text. Remaining: continue UI constraints and field-specific errors for any unvalidated credential, sync, or security settings.
 - **Acceptance:** Every visible setting has schema-backed validation; invalid fields show inline errors and do not persist; `npm run test:a11y` covers malformed-input fixtures.
 
 ### N-2. GM.* Namespace Parity and Guarded GM.fetch
@@ -259,11 +259,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 59 | Deep audit security | `src/background/wrapper-builder.ts`, `src/background/core.ts`, generated runtime artifacts, `tests/wrapper-dom-security.test.js`, `docs/research-deep-audit-2026-06-06.md` | Local audit found `srcdoc` bypass in `GM_addElement`; iframe `srcdoc` is raw HTML rather than a normal URL attribute | Blocked `srcdoc` for direct attrs and sanitized `innerHTML`, regenerated runtime artifacts, and pinned the bypass regression |
 | 60 | Crontab execution isolation | `src/background/core.ts`, generated runtime artifacts, `tests/crontab-next-fire.test.js`, `docs/research-deep-audit-2026-06-06.md` | Local audit found scheduled scripts running through `chrome.scripting.executeScript` in `ISOLATED` world, which can expose extension APIs to userscript code | Moved scheduled execution to `chrome.userScripts.execute` in `USER_SCRIPT` world with a `MAIN`-world fallback only, removed the scheduled `new Function` path, and pinned the isolation regression |
 | 61 | PublicAPI internal-host parity | `src/modules/public-api.ts`, `modules/public-api.js`, `background.js`, `tests/public-api.test.js`, `tests/source-hardening-parity.test.js` | Local audit found PublicAPI's private internal-host copy missing `.localhost`, TEST-NET, benchmarking, Class E, and IPv4-mapped IPv6 hex cases already enforced by `InternalHostGuard` | Reused the canonical `isInternalHost` guard for trusted origins, web install URLs, and webhook URLs, regenerated runtime artifacts, and pinned behavior/source parity regressions |
+| 62 | S3 settings validation | `src/config/settings-schema.json`, `pages/dashboard.html`, `pages/dashboard.js`, `scripts/check-settings-schema.mjs`, `tests/dashboard-a11y.test.js` | WCAG 2.1 SC 3.3.1 error identification, MDN constraint validation, and `aria-invalid` guidance still favor field-specific text errors and custom validity [S07, S08] | Added S3 endpoint/region/bucket/object-key validation metadata, native hints, accessible error nodes, blur hooks, and focused a11y/schema coverage |
 
 ## Continuation State
 
-- **Current cycle:** Round 29 Cycle 61 closed the final deep-audit P0 security item. PublicAPI now reuses the canonical `InternalHostGuard` host classifier for trusted origins, web install URLs, and webhook URLs, so `.localhost`, TEST-NET, benchmarking, Class E, and IPv4-mapped IPv6 hex hosts cannot drift from the main fetch guard. Focused PublicAPI/internal-host/source-parity tests, TS runtime check, audit, full check suite, build, and CWS scan passed.
-- **Next implementation angle:** Cycle 62 should return to N-1 Settings Schema Parity and Accessible Validation: audit the remaining dashboard-saved settings against schema metadata, then ship the next missing UI constraints and field-specific error text with focused dashboard a11y/schema coverage.
+- **Current cycle:** Round 30 Cycle 62 continued N-1 Settings Schema Parity and Accessible Validation. S3 sync fields now have schema validation metadata, native dashboard constraints, accessible error nodes, and save-blocking blur validation for endpoint, region, bucket, and object key. Focused dashboard a11y/schema tests, settings schema check, TS runtime check, audit, full check suite, build, CWS scan, and `git diff --check` passed.
+- **Next implementation angle:** Cycle 63 should continue N-1 by auditing remaining dashboard-saved sync, WebDAV, credential, and security text fields against `src/config/settings-schema.json` and `pages/dashboard.html`, then ship the next missing UI constraints and field-specific error text with focused dashboard a11y/schema coverage.
 - **Follow-up source checks:** Re-check CWS user-data/privacy expectations and File System Access handle persistence before editing local-save or local-workspace metadata.
 - **Suggested verification before implementation:** Run focused tests for setup-state banners, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching N-7, N-8, X-8, or X-9.
 

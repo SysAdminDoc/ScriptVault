@@ -27,6 +27,9 @@ const REQUIRED_VALIDATION_KEYS = new Map([
   ['lintMaxSize', 'integer-range'],
   ['webdavUrl', 'http-url'],
   ['s3Endpoint', 'http-url'],
+  ['s3Region', 's3-region'],
+  ['s3Bucket', 's3-bucket'],
+  ['s3ObjectKey', 's3-object-key'],
   ['deniedHosts', 'host-list'],
   ['linterConfig', 'json-object'],
 ]);

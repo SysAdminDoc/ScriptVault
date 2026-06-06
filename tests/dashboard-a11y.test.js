@@ -432,6 +432,9 @@ describe("dashboard accessibility markup", () => {
       ["settingsLintMaxSize", "settingsLintMaxSizeError"],
       ["settingsWebdavUrl", "settingsWebdavUrlError"],
       ["settingsS3Endpoint", "settingsS3EndpointError"],
+      ["settingsS3Region", "settingsS3RegionError"],
+      ["settingsS3Bucket", "settingsS3BucketError"],
+      ["settingsS3ObjectKey", "settingsS3ObjectKeyError"],
       ["settingsDeniedHosts", "settingsDeniedHostsError"],
       ["settingsLinterConfig", "settingsLinterConfigError"],
       ["settingsWhitelistedPages", "settingsWhitelistedPagesError"],
@@ -456,6 +459,9 @@ describe("dashboard accessibility markup", () => {
     expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("max")).toBe("5000000");
     expect(doc.getElementById("settingsWebdavUrl")?.getAttribute("type")).toBe("url");
     expect(doc.getElementById("settingsS3Endpoint")?.getAttribute("type")).toBe("url");
+    expect(doc.getElementById("settingsS3Region")?.getAttribute("pattern")).toContain("auto");
+    expect(doc.getElementById("settingsS3Bucket")?.getAttribute("pattern")).toContain("[a-zA-Z0-9.-]");
+    expect(doc.getElementById("settingsS3ObjectKey")?.getAttribute("maxlength")).toBe("1024");
 
     expect(dashboardJs).toMatch(/function setSettingsFieldError/);
     expect(dashboardJs).toMatch(/input\.setAttribute\('aria-invalid', 'true'\)/);
@@ -464,6 +470,10 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toContain("Use a hex color like #22c55e.");
     expect(dashboardJs).toContain("Use a whole number from 1,000 to 5,000,000 bytes.");
     expect(dashboardJs).toContain("Use an http or https URL.");
+    expect(dashboardJs).toContain("S3 endpoint URL is required.");
+    expect(dashboardJs).toContain("Use auto or a region ID like us-east-1.");
+    expect(dashboardJs).toContain("Bucket name must be 3-63 characters using letters, numbers, dots, or dashes.");
+    expect(dashboardJs).toContain("S3 object key must be 1,024 characters or fewer.");
     expect(dashboardJs).toContain("Use valid JSON for the linter config.");
     expect(dashboardJs).toMatch(/function validatePatternLineList/);
     expect(dashboardJs).toMatch(/parseSettingsRegexLiteral\(line\)/);
@@ -472,6 +482,8 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toContain('Download pattern');
     expect(dashboardJs).toMatch(/if \(!validation\.ok\) \{\s*setSettingsFieldError\(input, validation\.error\);/);
     expect(dashboardJs).toMatch(/elements\.settingsLintMaxSize\?\.addEventListener\('blur', e => saveSetting\('lintMaxSize', e\.target\.value\)\)/);
+    expect(dashboardJs).toMatch(/elements\.settingsS3Bucket\?\.addEventListener\('blur', e => saveSetting\('s3Bucket', e\.target\.value\.trim\(\)\)\)/);
+    expect(dashboardJs).toMatch(/await saveSettingOrThrow\('s3Bucket', elements\.settingsS3Bucket\?\.value\.trim\(\) \|\| ''\)/);
   });
 
   test("find userscripts controller exposes polished loading, empty, and preview states", () => {

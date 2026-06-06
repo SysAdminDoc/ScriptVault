@@ -3260,6 +3260,9 @@
             lintMaxSize: elements.settingsLintMaxSize,
             webdavUrl: elements.settingsWebdavUrl,
             s3Endpoint: elements.settingsS3Endpoint,
+            s3Region: elements.settingsS3Region,
+            s3Bucket: elements.settingsS3Bucket,
+            s3ObjectKey: elements.settingsS3ObjectKey,
             deniedHosts: elements.settingsDeniedHosts,
             linterConfig: elements.settingsLinterConfig,
             whitelistedPages: elements.settingsWhitelistedPages,
@@ -3291,6 +3294,11 @@
         }
     }
 
+    function isS3ProviderSelected() {
+        const selected = elements.settingsSyncType?.value || normalizeSyncProvider(state.settings);
+        return coerceSyncProviderForRuntime(selected) === 's3';
+    }
+
     function isHttpUrl(value) {
         try {
             const parsed = new URL(value);
@@ -3298,6 +3306,44 @@
         } catch {
             return false;
         }
+    }
+
+    function validateS3Region(value) {
+        const region = String(value || '').trim();
+        if (!region) {
+            return isS3ProviderSelected()
+                ? { ok: false, error: 'S3 region is required. Use auto for Cloudflare R2.' }
+                : { ok: true, value: '' };
+        }
+        if (!/^(?:auto|[A-Za-z0-9][A-Za-z0-9._-]{0,63})$/.test(region)) {
+            return { ok: false, error: 'Use auto or a region ID like us-east-1.' };
+        }
+        return { ok: true, value: region };
+    }
+
+    function validateS3Bucket(value) {
+        const bucket = String(value || '').trim();
+        if (!bucket) {
+            return isS3ProviderSelected()
+                ? { ok: false, error: 'S3 bucket name is required.' }
+                : { ok: true, value: '' };
+        }
+        if (!/^[A-Za-z0-9][A-Za-z0-9.-]{1,61}[A-Za-z0-9]$/.test(bucket)) {
+            return { ok: false, error: 'Bucket name must be 3-63 characters using letters, numbers, dots, or dashes.' };
+        }
+        return { ok: true, value: bucket };
+    }
+
+    function validateS3ObjectKey(value) {
+        const key = String(value || '').trim();
+        if (!key) return { ok: true, value: '' };
+        if (key.length > 1024) {
+            return { ok: false, error: 'S3 object key must be 1,024 characters or fewer.' };
+        }
+        if (/[\x00-\x08\x0E-\x1F\x7F]/.test(key)) {
+            return { ok: false, error: 'S3 object key contains a control character.' };
+        }
+        return { ok: true, value: key };
     }
 
     function validateHostList(value) {
@@ -3362,14 +3408,35 @@
                 }
                 return { ok: true, value: size };
             }
-            case 'webdavUrl':
-            case 's3Endpoint': {
+            case 'webdavUrl': {
                 const url = String(value || '').trim();
                 if (url && !isHttpUrl(url)) {
                     return { ok: false, error: 'Use an http or https URL.' };
                 }
                 return { ok: true, value: url };
             }
+            case 's3Endpoint': {
+                const url = String(value || '').trim();
+                if (!url) {
+                    return isS3ProviderSelected()
+                        ? { ok: false, error: 'S3 endpoint URL is required.' }
+                        : { ok: true, value: '' };
+                }
+                if (!isHttpUrl(url)) {
+                    return { ok: false, error: 'Use an http or https URL.' };
+                }
+                const parsed = new URL(url);
+                if (parsed.pathname && parsed.pathname !== '/') {
+                    return { ok: false, error: 'S3 endpoint must not include a path; put the bucket in its own field.' };
+                }
+                return { ok: true, value: url };
+            }
+            case 's3Region':
+                return validateS3Region(value);
+            case 's3Bucket':
+                return validateS3Bucket(value);
+            case 's3ObjectKey':
+                return validateS3ObjectKey(value);
             case 'deniedHosts':
                 return validateHostList(value);
             case 'linterConfig': {
@@ -11615,6 +11682,10 @@
         elements.settingsWebdavUsername?.addEventListener('blur', e => saveSetting('webdavUsername', e.target.value.trim()));
         elements.settingsWebdavPassword?.addEventListener('blur', e => saveSetting('webdavPassword', e.target.value));
         elements.settingsSyncEncryptionPassphrase?.addEventListener('blur', e => saveSetting('syncEncryptionPassphrase', e.target.value));
+        elements.settingsS3Endpoint?.addEventListener('blur', e => saveSetting('s3Endpoint', e.target.value.trim()));
+        elements.settingsS3Region?.addEventListener('blur', e => saveSetting('s3Region', e.target.value.trim()));
+        elements.settingsS3Bucket?.addEventListener('blur', e => saveSetting('s3Bucket', e.target.value.trim()));
+        elements.settingsS3ObjectKey?.addEventListener('blur', e => saveSetting('s3ObjectKey', e.target.value.trim()));
         elements.settingsLintMaxSize?.addEventListener('blur', e => saveSetting('lintMaxSize', e.target.value));
 
         // Textarea inputs that save on blur
