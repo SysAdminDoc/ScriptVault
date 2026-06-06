@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 78 - 2026-06-06
+Last cycle: Cycle 79 - 2026-06-06
 
 ## Latest Result
 
@@ -244,6 +244,10 @@ Last cycle: Cycle 78 - 2026-06-06
   The Playwright spec opens the packaged sandbox URL, verifies a real Monaco
   editor and local ESM API in Chromium, and routes the ESM editor bundle request
   to prove the missing-bundle fallback still posts `monaco-load-error`.
+- Cycle 79 closed the current X-4 Monaco ESM migration with dashboard-level
+  adapter proof. The Playwright spec opens a seeded script through the dashboard
+  edit icon, proves the Monaco adapter is active, saves changed code through the
+  toolbar, reloads, and confirms the saved code returns through the adapter.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -351,23 +355,24 @@ Last cycle: Cycle 78 - 2026-06-06
   and `git diff --check`. Cycle 78 verified the real Chromium sandbox smoke
   with the focused Playwright Monaco ESM sandbox spec, package and ESM gates,
   high-severity audit, full check suite, build, CWS remote-code scan, and
-  `git diff --check`.
+  `git diff --check`. Cycle 79 verified the dashboard adapter smoke with
+  focused Monaco Playwright e2e specs, package and ESM gates, high-severity
+  audit, full check suite, build, CWS remote-code scan, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. The next best local cycle is Cycle 79:
-continue X-4 with a dashboard-level Monaco adapter smoke. Create or open a
-script in the dashboard editor, prove `editor.isMonaco === true`, edit/save
-through the adapter, reload, and confirm persistence. The live two-tab
-`GM_addValueChangeListener` smoke remains browser-profile gated until
-`chrome.userScripts` is enabled for the unpacked extension, AMO submission
-remains blocked on maintainer credentials, and Edge Partner Center upload/REST
-automation remain credential/listing gated.
+Continue from `ROADMAP.md` Round 40. The next best local cycle is Cycle 80:
+move to X-5 and add a `browser` namespace compatibility alias that maps to the
+reviewed `chrome.*` surface without widening privileged extension APIs. The
+live two-tab `GM_addValueChangeListener` smoke remains browser-profile gated
+until `chrome.userScripts` is enabled for the unpacked extension, AMO
+submission remains blocked on maintainer credentials, and Edge Partner Center
+upload/REST automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 78 complete for 2026-06-06; roadmap continuation
-  points to Cycle 79 X-4 dashboard-level Monaco adapter smoke or the next local
-  packaging audit.
+- Status: ScriptVault Cycle 79 complete for 2026-06-06; roadmap continuation
+  points to Cycle 80 X-5 browser namespace alias or the next local packaging
+  audit.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
