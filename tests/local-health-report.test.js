@@ -45,6 +45,27 @@ describe('local health report background action', () => {
     expect(backgroundCoreTs).not.toMatch(/backgroundScripts:[\s\S]{0,600}url/i);
   });
 
+  it('records the last registration sweep as aggregate setup evidence', () => {
+    expect(backgroundCoreTs).toContain("const REGISTRATION_SWEEP_SCHEMA = 'scriptvault-registration-sweep/v1';");
+    expect(backgroundCoreTs).toContain('let _lastRegistrationSweep = {');
+    expect(backgroundCoreTs).toContain('function recordRegistrationSweep(summary = {})');
+    expect(backgroundCoreTs).toContain("status: 'already-current'");
+    expect(backgroundCoreTs).toContain("? 'partial' : 'diff-registered'");
+    expect(backgroundCoreTs).toContain("status: failures.length > 0 ? 'partial' : 'registered'");
+    expect(backgroundCoreTs).toContain('registration: _lastRegistrationSweep');
+    expect(backgroundCoreTs).toContain("push('registrationSweepFailures', 'warning'");
+    expect(backgroundCoreTs).toContain("push('registrationSweepUnavailable', 'warning'");
+
+    const registrationBlock = backgroundCoreTs.match(/let _lastRegistrationSweep = \{[\s\S]*?\n\};/);
+    expect(registrationBlock?.[0]).not.toMatch(/scriptId|name|url/i);
+  });
+
+  it('promoted runtime preserves the aggregate registration sweep contract', () => {
+    expect(backgroundCoreJs).toContain('scriptvault-registration-sweep/v1');
+    expect(backgroundCoreJs).toContain('function recordRegistrationSweep(summary = {})');
+    expect(backgroundCoreJs).toContain('registration: _lastRegistrationSweep');
+  });
+
   it('declares an explicit privacy envelope for support-safe diagnostics', () => {
     expect(backgroundCoreTs).toMatch(/privacy:\s*\{[\s\S]{0,250}localOnly:\s*true/);
     expect(backgroundCoreTs).toMatch(/includesScriptSource:\s*false/);
@@ -63,6 +84,8 @@ describe('local health report support snapshot wiring', () => {
   it('types the action and response map for background callers', () => {
     expect(messagesTs).toMatch(/interface GetLocalHealthReport \{[\s\S]{0,80}action: 'getLocalHealthReport';/);
     expect(messagesTs).toMatch(/interface LocalHealthReportResponse \{[\s\S]{0,80}schema: 'scriptvault-local-health\/v1';/);
+    expect(messagesTs).toMatch(/registration:\s*\{[\s\S]{0,500}schema: 'scriptvault-registration-sweep\/v1';/);
+    expect(messagesTs).toMatch(/registration:\s*\{[\s\S]{0,700}failedScripts: number;/);
     expect(messagesTs).toMatch(/backgroundScripts:\s*\{[\s\S]{0,300}unsupportedGrantNames: string\[\];/);
     expect(messagesTs).toMatch(/GetExtensionStatus \| GetLocalHealthReport/);
     expect(messagesTs).toMatch(/getLocalHealthReport: LocalHealthReportResponse;/);

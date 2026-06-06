@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 44 - 2026-06-06
+Last cycle: Cycle 53 - 2026-06-06
 
 ## Latest Result
 
@@ -75,24 +75,79 @@ Last cycle: Cycle 44 - 2026-06-06
 - Cycle 44 added a CWS remote-code guard that fails future
   `offscreen_background_run` eval/new Function execution in extension contexts
   and documented that the DOM-less `@background` runner remains dry-run only.
+- Cycle 45 added the P1 UserScripts setup doctor and rehydration audit row,
+  tying Chrome 138+ Allow User Scripts, Firefox optional `userScripts`, host
+  grants, and update-time registration clearing to a test-backed product
+  surface.
+- Cycle 46 promoted developer workflow work into X-8: a safer
+  Chromium-only File System Access local workspace model that preserves
+  review/diff/rollback before any local file applies.
+- Cycle 47 corrected Greasy Fork publishing from a direct API assumption to a
+  store-safe browser-mediated prefilled-form handoff with no stored Greasy Fork
+  credentials, cookies, or CSRF values.
+- Cycle 48 decomposed X-8 and X-9 into implementation slices and added N-8,
+  the prerequisite editor/local-file `local-save` trust receipt contract.
+- Cycle 49 mapped compliant X-2 DOM-less background execution options. It kept
+  service-worker/offscreen eval blocked, rejected `chrome.userScripts.execute`,
+  `chrome.debugger`, native messaging, and cloud execution as the primary
+  no-open-tab path, and identified a sandboxed no-extension-API runner page as
+  the only local prototype candidate pending CWS reviewer-policy validation.
+- Cycle 50 expanded X-3 SPA navigation support from a feature note into an
+  implementation-ready `window.onurlchange` contract. The current wrapper
+  already listens to `window.navigation.navigate` and falls back to history,
+  popstate, and hashchange, but the next implementation pass must prove
+  Navigation API behavior, same-turn duplicate suppression, fallback coverage,
+  preserved `{ url, oldUrl }` event detail, and documentation examples.
+- Cycle 51 expanded N-8 local-save trust receipts into implementation slices.
+  The key finding is that `local-save` is already a valid receipt operation,
+  but the current dashboard editor save does not request a receipt and the
+  receipt builder falls back to userscript metadata URLs when `sourceUrl` is
+  empty. The implementation pass must add an explicit local-source override,
+  autosave coalescing, export/sync redaction gates, and path-specific receipt
+  tests for manual save, autosave, install/update, and future local-file
+  refreshes.
+- Cycle 52 expanded X-8 developer workspace/local file binding into a local-only
+  data model and UI plan. The key finding is that current imports are file input
+  and drag/drop only, while JSON/cloud export can carry script settings and
+  version history; therefore `FileSystemFileHandle`, absolute paths, and local
+  binding metadata must live in a separate local-only binding store and surface
+  only display-name/status summaries. The first X-8 release should be "Refresh
+  from local file" rather than automatic watch mode until real change detection
+  is implemented and tested.
+- Cycle 53 implemented N-7 aggregate registration-sweep evidence. The background
+  worker now records the last `registerAllScripts()` sweep across unavailable
+  setup, global-disabled skips, already-current diffs, stale cleanup, diff
+  registration, forced/full registration, and errors; local health reports and
+  support snapshots expose only setup/sweep counts and states, never script
+  names, script IDs, code, or URLs.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
+  Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
+  source refresh for Chrome File System Access, Chrome/Firefox `userScripts`,
+  CWS remote-code policy, Greasy Fork prefilled updates, Chrome offscreen
+  constraints, ScriptCat background-script behavior, and current Navigation API
+  route-event/browser-scope documentation. Cycle 51 refreshed File System
+  Access handle/user-gesture notes and CWS user-data/privacy disclosure
+  expectations; Cycle 52 refreshed stored-handle and permission-persistence
+  behavior for local workspace planning. Cycle 53 refreshed current Chrome and
+  MDN `userScripts` docs and verifies through the local health/userScripts
+  focused tests, TypeScript, TS runtime generation/check, full check suite, and
+  build.
 
 ## Next Cycle Focus
 
-Continue top-down from `ROADMAP.md`. The live two-tab
-`GM_addValueChangeListener` smoke remains browser-profile gated until
-`chrome.userScripts` is enabled for the unpacked extension, and the AMO
-submission row is blocked on maintainer credentials. The next local
-X-2 execution is blocked pending a Chrome Web Store-compliant execution
-architecture for DOM-less user code. Current safe work is complete through
-parser, planner, diagnostics, wrapper scaffold, dry-run action, support snapshot
-surfacing, and release guard. Edge Partner Center upload and REST automation
-remain credential/listing gated.
+Continue from `ROADMAP.md` Round 21. The next best local cycle is Cycle 54:
+start N-8 local-save trust receipts by extending the save trust payload/source
+schema, adding a dashboard editor-save helper, suppressing remote metadata
+fallback for local saves, and pinning manual-save/autosave/export redaction
+tests. The live two-tab `GM_addValueChangeListener` smoke remains
+browser-profile gated until `chrome.userScripts` is enabled for the unpacked
+extension, AMO submission remains blocked on maintainer credentials, and Edge
+Partner Center upload/REST automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 44 complete for 2026-06-06; blocked on compliant
-  `@background` execution architecture before further runner implementation.
+- Status: ScriptVault Cycle 53 complete for 2026-06-06; roadmap continuation
+  points to Cycle 54 local-save trust receipt implementation.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

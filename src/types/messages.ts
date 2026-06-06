@@ -265,6 +265,23 @@ interface LocalHealthReportResponse {
     level: LocalHealthLevel;
     error?: string;
   };
+  registration: {
+    schema: 'scriptvault-registration-sweep/v1';
+    generatedAt: string | null;
+    status: string;
+    mode: string;
+    forceReregister: boolean;
+    userScriptsAvailable: boolean | null;
+    setupState: UserScriptsSetupState | 'unknown';
+    enabledScripts: number;
+    alreadyRegisteredScripts: number;
+    registeredScripts: number;
+    skippedScripts: number;
+    staleUnregisteredScripts: number;
+    failedScripts: number;
+    staleUnregisterFailures: number;
+    requirePreloadCount: number;
+  };
   scripts: {
     total: number;
     enabled: number;

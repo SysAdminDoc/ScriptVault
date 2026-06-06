@@ -2,6 +2,17 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 53 setup rehydration evidence: N-7 moved from a
+setup-doctor planning row into support-safe runtime evidence. Current Chrome
+docs still require the per-extension Allow User Scripts toggle on Chrome 138+
+and note that registered user scripts are cleared on extension update; MDN
+still documents Firefox MV3 `userScripts` as optional-only. ScriptVault now
+records the last `registerAllScripts()` sweep as aggregate local health data
+covering setup unavailable, global-disabled, already-current, stale-cleaned,
+diff-registered, registered, partial, and error states. The support snapshot
+inherits this through the existing local health block and keeps the privacy
+envelope intact: no script source, names, IDs, or URLs.
+
 2026-06-06 Cycle 37 background-script groundwork: X-2 now has a local
 implementation contract in `docs/background-scripts-design.md`. The parser
 preserves `@background`, the global settings contract includes an internal
