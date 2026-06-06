@@ -70,6 +70,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P2 | **Effort:** S (research) | **Source:** [S17]
 - **Problem:** Monaco v0.53.0 deprecated AMD loading. ScriptVault bundles v0.52.2 with AMD.
 - **Deliverable:** Research note documenting ESM migration path for the sandboxed editor iframe, CSP compatibility, and Firefox fallback implications.
+- **Status:** Shipped 2026-06-06 in `docs/monaco-esm-migration-plan.md`. Decision: keep AMD for v3.12.0, migrate Chromium to a bundled local ESM editor in X-4, keep Firefox textarea-first until AMO lint and smoke evidence prove chunked Monaco workers are acceptable, and reject CDN/direct-unbundled ESM loading.
 
 ## Next (v3.13.0 - v3.14.0)
 
