@@ -2,6 +2,16 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 74 Monaco ESM prototype: X-4 now has a local ESM build path,
+but the sandbox has not switched away from AMD. `src/editor/monaco-esm-entry.ts`
+sets file-backed worker URLs, `esbuild.config.mjs --monaco-esm-only` emits
+`lib/monaco-esm/editor.js`, `editor.css`, a codicon font asset, and deterministic
+worker files, and `npm run monaco:esm:check` validates the post-build layout.
+The committed evidence in `docs/audit/monaco-esm-prototype-2026-06-06.json`
+shows the TypeScript worker at 12,156,466 bytes, so the next implementation
+decision is whether to accept a full Chromium-only worker package behind an
+explicit budget or slim the bundle before replacing the AMD sandbox loader.
+
 2026-06-06 Cycle 73 Monaco package guard: X-4 has its first implementation
 slice, but the ESM migration is not complete. Monaco AMD remains deprecated,
 so the next implementation work should prototype a local ESM bundle and worker

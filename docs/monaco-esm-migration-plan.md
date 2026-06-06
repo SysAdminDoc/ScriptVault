@@ -25,6 +25,9 @@ until the ESM worker chunks pass AMO lint.
   Chromium remains on the local AMD bundle, Firefox remains Monaco-free, and
   remote/CDN editor assets stay rejected until the X-4 migration deliberately
   replaces the guard with the ESM contract.
+- `npm run build:monaco:esm` now builds an ignored ESM prototype under
+  `lib/monaco-esm/` without switching the sandbox. `npm run monaco:esm:check`
+  validates the post-build editor, CSS, font, and worker outputs.
 
 ## Source Findings
 
@@ -90,12 +93,17 @@ textarea fallback as the supported Firefox editor.
 
 The X-4 implementation pass should add or update these gates:
 
-- `npm run build` writes `lib/monaco-esm/editor.js` and deterministic worker
-  chunks, and no longer copies the AMD `min/` tree for Chromium packages.
+- `npm run build` writes prototype `lib/monaco-esm/editor.js`,
+  `editor.css`, a codicon font asset, and deterministic worker chunks while
+  still copying the AMD `min/` tree for the current Chromium sandbox.
 - `npm run build:prod` packages only local Monaco ESM assets.
 - `npm run monaco:package:check` should be updated from the current AMD/Firefox
   fallback contract to the final ESM package contract in the same change that
   switches `pages/editor-sandbox.html`.
+- `npm run monaco:esm:check` should stay green after `npm run build` or
+  `npm run build:monaco:esm` and should be refreshed with
+  `--write docs/audit/monaco-esm-prototype-2026-06-06.json` when the prototype
+  output shape changes.
 - A static test fails if `pages/editor-sandbox.html` references
   `vs/loader.js`, `require.config`, or CDN Monaco URLs.
 - A browser smoke opens the dashboard editor, waits for `editor.isMonaco === true`,
@@ -118,6 +126,25 @@ The X-4 implementation pass should add or update these gates:
    includes the chunked ESM bundle.
 7. Only after those gates pass, update `package.json` to Monaco 0.55.x+ and
    handle the namespace/API drift in adapter or editor configuration tests.
+
+Cycle 74 completed steps 1 and 2 for the installed Monaco 0.52.2 package.
+`docs/audit/monaco-esm-prototype-2026-06-06.json` records:
+
+| Output | Bytes |
+| --- | ---: |
+| `lib/monaco-esm/editor.js` | 8,231,464 |
+| `lib/monaco-esm/editor.css` | 158,378 |
+| `lib/monaco-esm/assets/codicon-37A3DWZT.ttf` | 80,340 |
+| `lib/monaco-esm/workers/editor.worker.js` | 555,624 |
+| `lib/monaco-esm/workers/json.worker.js` | 856,164 |
+| `lib/monaco-esm/workers/css.worker.js` | 1,883,186 |
+| `lib/monaco-esm/workers/html.worker.js` | 1,264,765 |
+| `lib/monaco-esm/workers/ts.worker.js` | 12,156,466 |
+
+The sandbox still loads the AMD bundle. The next slice should decide whether
+the 12 MB TypeScript worker is acceptable for Chromium-only packaging or
+whether ScriptVault should produce a slimmer JavaScript/userscript-focused ESM
+bundle before switching `pages/editor-sandbox.html`.
 
 ## Non-Goals
 

@@ -8,12 +8,13 @@
  * Usage:
  *   node esbuild.config.mjs            # full build (background + monaco)
  *   node esbuild.config.mjs --bg-only  # background.js only
- *   node esbuild.config.mjs --monaco-only  # copy monaco only
+ *   node esbuild.config.mjs --monaco-only  # copy/build monaco only
+ *   node esbuild.config.mjs --monaco-esm-only  # build Monaco ESM prototype only
  *   node esbuild.config.mjs --watch    # rebuild background.js on changes
  *   node esbuild.config.mjs --prod     # minified production build
  */
 
-import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync, readdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { build } from "esbuild";
 import { generateGmTypes } from "./scripts/generate-gm-types.mjs";
@@ -24,6 +25,7 @@ const args = process.argv.slice(2);
 
 const bgOnly = args.includes("--bg-only");
 const monacoOnly = args.includes("--monaco-only");
+const monacoEsmOnly = args.includes("--monaco-esm-only");
 const watchMode = args.includes("--watch");
 const production = args.includes("--prod");
 const typeCheck = args.includes("--typecheck");
@@ -160,6 +162,50 @@ function copyMonaco() {
 }
 
 // ---------------------------------------------------------------------------
+// Build Monaco ESM prototype assets
+// ---------------------------------------------------------------------------
+
+async function buildMonacoEsm() {
+  const monacoEsmOutDir = join(ROOT, "lib", "monaco-esm");
+  const workersDir = join(monacoEsmOutDir, "workers");
+  const commonOptions = {
+    bundle: true,
+    target: "chrome120",
+    define: { "process.env.NODE_ENV": production ? '"production"' : '"development"' },
+    loader: { ".ttf": "file" },
+    assetNames: "assets/[name]-[hash]",
+    minify: production,
+    logLevel: "silent",
+  };
+
+  console.log("Building Monaco ESM prototype to lib/monaco-esm/...");
+  rmSync(monacoEsmOutDir, { recursive: true, force: true });
+  mkdirSync(workersDir, { recursive: true });
+
+  await build({
+    ...commonOptions,
+    entryPoints: [join(ROOT, "src", "editor", "monaco-esm-entry.ts")],
+    outfile: join(monacoEsmOutDir, "editor.js"),
+    format: "esm",
+  });
+
+  await build({
+    ...commonOptions,
+    entryPoints: {
+      "editor.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "editor", "editor.worker.js"),
+      "json.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "language", "json", "json.worker.js"),
+      "css.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "language", "css", "css.worker.js"),
+      "html.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "language", "html", "html.worker.js"),
+      "ts.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "language", "typescript", "ts.worker.js"),
+    },
+    outdir: workersDir,
+    format: "iife",
+  });
+
+  console.log("Done: lib/monaco-esm/editor.js and worker files updated.");
+}
+
+// ---------------------------------------------------------------------------
 // Watch mode
 // ---------------------------------------------------------------------------
 
@@ -230,6 +276,11 @@ async function main() {
     await runTypeCheck();
   }
 
+  if (monacoEsmOnly) {
+    await buildMonacoEsm();
+    return;
+  }
+
   if (watchMode) {
     await startWatch();
     return;
@@ -241,6 +292,7 @@ async function main() {
 
   if (!bgOnly) {
     copyMonaco();
+    await buildMonacoEsm();
   }
 }
 

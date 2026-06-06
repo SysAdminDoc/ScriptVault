@@ -5,9 +5,9 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 40 - Monaco package guard 2026-06-06.
+> **Roadmap version:** Round 40 - Monaco ESM prototype 2026-06-06.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-05.
-> **Test suite:** 1445 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1448 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 40 - 2026-06-06.
@@ -138,8 +138,8 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P2 | **Effort:** L | **Source:** [S17, S24]
 - **Problem:** Monaco AMD is deprecated. Staying on v0.52.x blocks LSP namespace (v0.55), new features, and security patches.
 - **Deliverable:** Migrate `lib/monaco/` to ESM build. Consider Monaco v0.55's LSP namespace for userscript IntelliSense.
-- **Progress:** Cycle 73 added `npm run monaco:package:check`, a static packaging contract for the current pre-migration state. The gate pins Chromium to the packaged local AMD bundle in `lib/monaco/`, keeps `pages/editor-sandbox.html` off remote/CDN editor assets, keeps Firefox packaging on the textarea-first Monaco-free path until AMO lint proof exists, and documents that the same gate must be updated when the X-4 ESM bundle switch lands.
-- **Acceptance for next implementation slice:** Prototype a local `lib/monaco-esm/editor.js` bundle without switching the sandbox yet, measure emitted worker assets, keep Firefox package output Monaco-free, and add bundle-size/worker-location evidence before replacing the AMD loader block.
+- **Progress:** Cycle 73 added `npm run monaco:package:check`, a static packaging contract for the current pre-migration state. The gate pins Chromium to the packaged local AMD bundle in `lib/monaco/`, keeps `pages/editor-sandbox.html` off remote/CDN editor assets, keeps Firefox packaging on the textarea-first Monaco-free path until AMO lint proof exists, and documents that the same gate must be updated when the X-4 ESM bundle switch lands. Cycle 74 added the first ESM prototype: `src/editor/monaco-esm-entry.ts`, `npm run build:monaco:esm`, ignored `lib/monaco-esm/` output, `npm run monaco:esm:check`, and committed size/layout evidence in `docs/audit/monaco-esm-prototype-2026-06-06.json`. The prototype emits `editor.js`, `editor.css`, a codicon font asset, and five workers; `ts.worker.js` is 12,156,466 bytes, so the sandbox remains on AMD until a Chromium package-size decision is made.
+- **Acceptance for next implementation slice:** Decide whether the prototype should ship with the full TypeScript worker or a slimmer JavaScript/userscript-focused worker set, then add the selected size/asset budget before replacing the AMD loader block.
 
 ### X-5. `browser` Namespace Cross-Browser Alias
 - **Priority:** P3 | **Effort:** S | **Source:** [S25]
@@ -279,11 +279,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 71 | Guarded GM.fetch | `src/background/core.ts`, `src/background/wrapper-builder.ts`, `background.core.js`, `background.js`, `scripts/generate-gm-types.mjs`, `lib/scriptvault.d.ts`, `tests/gm-namespace-parity.test.js`, `tests/gm-types.test.js`, `docs/gm-namespace-parity.md` | Tampermonkey/Violentmonkey GM API parity still depends on promise-style network helpers, but ScriptVault must keep network access behind `GM_xmlhttpRequest` policy [S10, S11, S12] | Added `GM.fetch`/`GM_fetch` over the existing XHR bridge, pinned that no background `GM_fetch` action exists, and closed N-2 |
 | 72 | SPA URL-change proof | `src/background/core.ts`, `src/background/wrapper-builder.ts`, generated runtime artifacts, `tests/urlchange-wrapper.test.js`, `README.md` | Navigation API route events plus history/popstate/hashchange fallbacks remain the least-permission page-level path for SPA userscript reruns [S85, S86, S87, S88] | Added a shared URL-change scheduler, microtask/frame rechecks, duplicate suppression, jsdom coverage, and README author examples for `window.onurlchange` |
 | 73 | Monaco package guard | `scripts/check-monaco-package-contract.mjs`, `tests/monaco-package-contract.test.js`, `package.json`, `docs/monaco-esm-migration-plan.md` | Monaco AMD remains deprecated, but the current v3.12 packaging contract must stay local and Firefox-safe until the ESM bundle is deliberately switched [S17, S24] | Added a static gate for local AMD Chromium packaging, remote/CDN sandbox rejection, Firefox Monaco exclusion, npm-check wiring, and plan drift |
+| 74 | Monaco ESM prototype | `src/editor/monaco-esm-entry.ts`, `esbuild.config.mjs`, `scripts/check-monaco-esm-prototype.mjs`, `tests/monaco-esm-build.test.js`, `docs/audit/monaco-esm-prototype-2026-06-06.json` | Monaco ESM needs a local bundled editor plus file-backed workers before the sandbox can leave AMD [S17, S24] | Added an ignored `lib/monaco-esm/` prototype build, deterministic worker outputs, font loader handling, post-build evidence checks, and size/layout evidence |
 
 ## Continuation State
 
-- **Current cycle:** Round 40 Cycle 73 started X-4 implementation by adding a Monaco package-contract gate. The current release remains on the packaged local AMD bundle for Chromium, Firefox remains textarea-first/Monaco-free for AMO validation, and remote/CDN editor assets are rejected by a dedicated checker wired into `npm run check`.
-- **Next implementation angle:** Cycle 74 should continue X-4 with a bounded ESM prototype slice: create the local bundle entrypoint and emitted worker layout without switching the sandbox, then record size/worker evidence. If the ESM slice proves too broad, run another local packaging/security audit and hoist the highest-value finding.
+- **Current cycle:** Round 40 Cycle 74 added the first Monaco ESM build prototype without switching `pages/editor-sandbox.html`. `npm run build:monaco:esm` writes ignored local ESM assets and deterministic worker files, `npm run monaco:esm:check` verifies the emitted layout, and the committed evidence records the large 12 MB TypeScript worker that must be accepted or slimmed before the AMD loader is replaced.
+- **Next implementation angle:** Cycle 75 should continue X-4 by choosing a size strategy: either gate the current full-worker Chromium-only ESM package with an explicit budget and sandbox smoke plan, or prototype a slimmer JavaScript/userscript-focused ESM bundle before switching the sandbox.
 - **Follow-up source checks:** Re-check CWS user-data/privacy expectations and File System Access handle persistence before editing local-save or local-workspace metadata.
 - **Suggested verification before implementation:** Run focused tests for setup-state banners, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching N-7, N-8, X-8, or X-9.
 
