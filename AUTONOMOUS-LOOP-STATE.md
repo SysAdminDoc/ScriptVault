@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 87 - 2026-06-06
+Last cycle: Cycle 88 - 2026-06-06
 
 ## Latest Result
 
@@ -399,18 +399,24 @@ Last cycle: Cycle 87 - 2026-06-06
   local-only publication receipt store/display, verified with focused Greasy
   Fork/local-workspace tests, Chromium publication receipt smoke, the full check
   suite, build, high-severity audit, CWS remote-code scan, Monaco ESM scan, TS
-  runtime check, and `git diff --check`.
+  runtime check, and `git diff --check`. Cycle 88 added Greasy Fork publication
+  receipt history management: the Info panel renders recent local receipts for
+  the current script, keeps submitted source and account/session data out of
+  stored rows, and provides a confirm-gated clear-history action. Verification
+  used focused Greasy Fork/local-workspace tests, Chromium receipt-history smoke,
+  the full check suite, build, high-severity audit, CWS remote-code scan, Monaco
+  ESM scan, TS runtime check, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. Cycle 87 continued X-9 with local
-publication receipts after user-confirmed Greasy Fork form submission: the
-dashboard records target URL, mode, Greasy Fork script ID, metadata, code length,
-and optional SHA-256 while omitting submitted source and account/session
-material, then reloads the latest receipt in the Info panel. The next best local
-cycle is Cycle 88: prove the prefilled form in Chromium with a logged-in Greasy
-Fork session if available, or harden fallback/receipt-history handling if live
-proof remains unavailable. The live two-tab
+Continue from `ROADMAP.md` Round 40. Cycle 88 continued X-9 with local
+publication receipt history management for Greasy Fork handoffs: the dashboard
+shows the latest receipt plus prior local receipts, makes the source/account
+redaction boundary explicit, and can clear only the local history for the
+current script. The next best local cycle is Cycle 89: prove the prefilled form
+in Chromium with a logged-in Greasy Fork session if available, or add
+copy/export receipt-summary fallback proof if live proof remains unavailable.
+The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
 remains blocked on maintainer credentials, and Edge Partner Center upload/REST
@@ -418,8 +424,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 87 complete for 2026-06-06; roadmap continuation
-  points to Cycle 88 X-9 live handoff proof or fallback/receipt-history
+- Status: ScriptVault Cycle 88 complete for 2026-06-06; roadmap continuation
+  points to Cycle 89 X-9 live handoff proof or fallback receipt-summary
   hardening.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
