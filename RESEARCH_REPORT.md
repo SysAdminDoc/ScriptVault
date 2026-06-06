@@ -2,6 +2,18 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 69 custom CSS validation: N-1 closed the last non-select
+schema-backed dashboard metadata gap. WCAG error identification and MDN
+constraint validation still point to text errors, native constraints, and
+custom validity for malformed free-form input. ScriptVault now requires
+validation metadata and a dashboard `setting-error` node for
+`settingsCustomCss`; the textarea has a 100,000-character native limit, and
+the save path rejects unsafe control characters or overlarge CSS while
+preserving intentional whitespace. The metadata query now reports no remaining
+non-select text/number/textarea schema-backed dashboard gaps. Remaining N-1
+work should run the acceptance recheck across dashboard-saved settings and
+utility export/backup controls, then close the roadmap row if no gaps remain.
+
 2026-06-06 Cycle 68 remaining select validation: N-1 closed the current
 schema-backed select validation backlog. The same select-specific source
 signal from Cycles 64-67 applies: option `value` is the persisted selection

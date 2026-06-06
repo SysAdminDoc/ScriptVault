@@ -35,6 +35,7 @@ const REQUIRED_VALIDATION_KEYS = new Map([
   ['checkConnect', 'select-option'],
   ['configMode', 'select-option'],
   ['contentScriptAPI', 'select-option'],
+  ['customCss', 'css-text'],
   ['defaultTabTypes', 'select-option'],
   ['downloadMode', 'select-option'],
   ['editorFontSize', 'select-option'],

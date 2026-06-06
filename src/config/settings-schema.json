@@ -533,7 +533,11 @@
       "label": "Custom Css",
       "help": "Controls custom css.",
       "elementId": "settingsCustomCss",
-      "defaultSource": "runtime"
+      "defaultSource": "runtime",
+      "validation": {
+        "kind": "css-text",
+        "maxLength": 100000
+      }
     },
     "dashboardVirtualizationThreshold": {
       "type": "number",
