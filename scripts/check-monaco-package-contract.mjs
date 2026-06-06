@@ -90,16 +90,24 @@ function checkEsbuild(files, failures) {
   if (!text) return;
 
   for (const needle of [
-    'function copyMonaco()',
     'async function buildMonacoEsm()',
-    '"node_modules", "monaco-editor", "min"',
-    '"lib", "monaco"',
     '"lib", "monaco-esm"',
-    'cpSync(src, dest, { recursive: true, force: true });',
+    '"src", "editor", "monaco-esm-entry.ts"',
+    'outfile: join(monacoEsmOutDir, "editor.js")',
     'await buildMonacoEsm();',
   ]) {
     if (!hasNeedle(text, needle)) {
-      addFailure(failures, path, 'Chromium build must keep the local Monaco AMD bundle and ESM prototype wiring', needle);
+      addFailure(failures, path, 'Chromium build must keep the local Monaco ESM bundle wiring', needle);
+    }
+  }
+
+  for (const forbidden of [
+    'function copyMonaco()',
+    '"node_modules", "monaco-editor", "min"',
+    'cpSync(src, dest, { recursive: true, force: true });',
+  ]) {
+    if (hasNeedle(text, forbidden)) {
+      addFailure(failures, path, 'Chromium build must not copy the deprecated Monaco AMD bundle after the ESM switch', forbidden);
     }
   }
 }
@@ -110,14 +118,14 @@ function checkSandbox(files, failures) {
   if (!text) return;
 
   for (const needle of [
-    "const LOCAL_VS_PATH = '../lib/monaco/vs';",
-    "loaderScript.src = LOCAL_VS_PATH + '/loader.js';",
-    'require.config({',
-    "require(['vs/editor/editor.main']",
+    "const LOCAL_ESM_ENTRY = '../lib/monaco-esm/editor.js';",
+    "const LOCAL_ESM_CSS = '../lib/monaco-esm/editor.css';",
+    'await import(LOCAL_ESM_ENTRY)',
+    'loadStylesheet(LOCAL_ESM_CSS)',
     "parent.postMessage({ type: 'monaco-load-error', reason: 'missing-bundle' }, '*')",
   ]) {
     if (!hasNeedle(text, needle)) {
-      addFailure(failures, path, 'sandbox must keep loading the packaged local Monaco AMD bundle for the current release', needle);
+      addFailure(failures, path, 'sandbox must load the packaged local Monaco ESM bundle', needle);
     }
   }
 
@@ -127,8 +135,10 @@ function checkSandbox(files, failures) {
     }
   }
 
-  if (hasNeedle(text, 'lib/monaco-esm/')) {
-    addFailure(failures, path, 'current package contract must not point the sandbox at the future ESM bundle before X-4 migration');
+  for (const forbidden of ['vs/loader.js', 'require.config', "require(['vs/editor/editor.main']", 'LOCAL_VS_PATH']) {
+    if (hasNeedle(text, forbidden)) {
+      addFailure(failures, path, 'sandbox must not reference the deprecated Monaco AMD loader after the ESM switch', forbidden);
+    }
   }
 }
 
@@ -161,7 +171,7 @@ function checkPlan(files, failures) {
   if (!text) return;
 
   for (const needle of [
-    'Keep ScriptVault on the packaged Monaco AMD bundle for v3.12.0',
+    'ScriptVault now loads Monaco from the packaged ESM bundle',
     'Do not load Monaco from a CDN',
     'Firefox remains textarea-first',
     'npm run monaco:package:check',

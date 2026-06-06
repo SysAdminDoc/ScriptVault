@@ -378,7 +378,7 @@ the existing Round 15 ROADMAP and companion research plan did not cover:
 
 ### EI-11. Pin `monaco-editor` Version Exactly
 - **Current behavior**: `package.json` uses `^0.52.0` (range) for
-  `monaco-editor`, but the package is vendored (copied to `lib/monaco/`).
+  `monaco-editor`, but the package is bundled into `lib/monaco-esm/`.
 - **Problem**: A fresh `npm ci` with a new lockfile could pull 0.53.x, which
   ships different editor code. `acorn` and `diff` are correctly pinned exact.
 - **Recommended change**: Change to exact pin: `"monaco-editor": "0.52.2"`.

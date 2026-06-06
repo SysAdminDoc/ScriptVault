@@ -3,18 +3,18 @@
  *
  * Replaces build-background.sh with a cross-platform Node.js build.
  * Concatenates background source modules in the correct dependency order
- * and optionally copies Monaco editor files for local bundling.
+ * and optionally builds Monaco editor files for local bundling.
  *
  * Usage:
- *   node esbuild.config.mjs            # full build (background + monaco)
+ *   node esbuild.config.mjs            # full build (background + Monaco ESM)
  *   node esbuild.config.mjs --bg-only  # background.js only
- *   node esbuild.config.mjs --monaco-only  # copy/build monaco only
- *   node esbuild.config.mjs --monaco-esm-only  # build Monaco ESM prototype only
+ *   node esbuild.config.mjs --monaco-only  # build Monaco ESM only
+ *   node esbuild.config.mjs --monaco-esm-only  # build Monaco ESM only
  *   node esbuild.config.mjs --watch    # rebuild background.js on changes
  *   node esbuild.config.mjs --prod     # minified production build
  */
 
-import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync, readdirSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { build } from "esbuild";
 import { generateGmTypes } from "./scripts/generate-gm-types.mjs";
@@ -143,26 +143,7 @@ async function buildBackground() {
 }
 
 // ---------------------------------------------------------------------------
-// Copy Monaco editor from node_modules to lib/monaco
-// ---------------------------------------------------------------------------
-
-function copyMonaco() {
-  const src = join(ROOT, "node_modules", "monaco-editor", "min");
-  const dest = join(ROOT, "lib", "monaco");
-
-  if (!existsSync(src)) {
-    console.warn("Warning: monaco-editor not found in node_modules. Run `npm install` first.");
-    return;
-  }
-
-  console.log("Copying Monaco editor to lib/monaco/...");
-  mkdirSync(dest, { recursive: true });
-  cpSync(src, dest, { recursive: true, force: true });
-  console.log("Done: lib/monaco/ updated.");
-}
-
-// ---------------------------------------------------------------------------
-// Build Monaco ESM prototype assets
+// Build Monaco ESM assets
 // ---------------------------------------------------------------------------
 
 async function buildMonacoEsm() {
@@ -178,7 +159,7 @@ async function buildMonacoEsm() {
     logLevel: "silent",
   };
 
-  console.log("Building Monaco ESM prototype to lib/monaco-esm/...");
+  console.log("Building Monaco ESM assets to lib/monaco-esm/...");
   rmSync(monacoEsmOutDir, { recursive: true, force: true });
   mkdirSync(workersDir, { recursive: true });
 
@@ -291,7 +272,6 @@ async function main() {
   }
 
   if (!bgOnly) {
-    copyMonaco();
     await buildMonacoEsm();
   }
 }

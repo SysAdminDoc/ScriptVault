@@ -45,8 +45,8 @@ describe('Monaco package contract check', () => {
   it('rejects remote Monaco or CDN assets in the sandbox page', () => {
     const files = liveFiles();
     files['pages/editor-sandbox.html'] = files['pages/editor-sandbox.html'].replace(
-      "const LOCAL_VS_PATH = '../lib/monaco/vs';",
-      "const LOCAL_VS_PATH = 'https://cdn.jsdelivr.net/npm/monaco-editor/min/vs';",
+      "const LOCAL_ESM_ENTRY = '../lib/monaco-esm/editor.js';",
+      "const LOCAL_ESM_ENTRY = 'https://cdn.jsdelivr.net/npm/monaco-editor/esm/vs/editor/editor.main.js';",
     );
 
     expect(messagesFor(files)).toContain('sandbox must not reference remote Monaco/CDN editor assets');
@@ -59,13 +59,20 @@ describe('Monaco package contract check', () => {
     expect(messagesFor(files)).toContain('Firefox build must not package Monaco until AMO lint proof exists');
   });
 
-  it('rejects missing Chromium local AMD copy wiring', () => {
+  it('rejects missing Chromium local ESM build wiring', () => {
     const files = liveFiles();
     files['esbuild.config.mjs'] = files['esbuild.config.mjs'].replace(
-      '"node_modules", "monaco-editor", "min"',
-      '"node_modules", "monaco-editor", "esm"',
+      '"src", "editor", "monaco-esm-entry.ts"',
+      '"src", "editor", "missing.ts"',
     );
 
-    expect(messagesFor(files)).toContain('Chromium build must keep the local Monaco AMD bundle and ESM prototype wiring');
+    expect(messagesFor(files)).toContain('Chromium build must keep the local Monaco ESM bundle wiring');
+  });
+
+  it('rejects accidental AMD loader references in the sandbox page', () => {
+    const files = liveFiles();
+    files['pages/editor-sandbox.html'] += "\n<script src=\"../lib/monaco/vs/loader.js\"></script>\nrequire.config({});\n";
+
+    expect(messagesFor(files)).toContain('sandbox must not reference the deprecated Monaco AMD loader after the ESM switch');
   });
 });

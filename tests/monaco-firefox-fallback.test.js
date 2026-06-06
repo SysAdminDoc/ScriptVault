@@ -53,10 +53,13 @@ describe('Firefox Monaco fallback', () => {
 
   it('sandbox reports missing Monaco bundles to the parent adapter', () => {
     expect(sandboxCode).toContain("parent.postMessage({ type: 'monaco-load-error', reason: 'missing-bundle' }, '*')");
+    expect(sandboxCode).toContain("const LOCAL_ESM_ENTRY = '../lib/monaco-esm/editor.js';");
+    expect(sandboxCode).not.toContain('vs/loader.js');
   });
 
   it('Firefox package still omits the Monaco bundle for AMO lint', () => {
     expect(buildFirefox).not.toContain('lib/monaco');
+    expect(buildFirefox).not.toContain('lib/monaco-esm');
     expect(buildFirefox).toContain('pages');
   });
 
