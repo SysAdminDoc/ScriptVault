@@ -2,6 +2,16 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 75 Monaco ESM size budget: X-4 now has an explicit size
+strategy. The prototype keeps the full JavaScript/TypeScript worker set for
+Chromium because that preserves userscript language-service behavior, but the
+growth is gated: `npm run monaco:esm:check` enforces total <= 26,000,000 bytes,
+gzip total <= 5,000,000 bytes, `editor.js` <= 9,000,000 bytes, and
+`ts.worker.js` <= 13,000,000 bytes. Current evidence is 25,186,387 bytes
+uncompressed and 4,279,263 bytes gzip-compressed. The next X-4 slice can start
+the sandbox switch only if it updates the package contract, adds AMD-removal
+tests, and proves fallback behavior when the ESM bundle is missing.
+
 2026-06-06 Cycle 74 Monaco ESM prototype: X-4 now has a local ESM build path,
 but the sandbox has not switched away from AMD. `src/editor/monaco-esm-entry.ts`
 sets file-backed worker URLs, `esbuild.config.mjs --monaco-esm-only` emits

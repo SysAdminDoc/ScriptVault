@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 74 - 2026-06-06
+Last cycle: Cycle 75 - 2026-06-06
 
 ## Latest Result
 
@@ -227,6 +227,10 @@ Last cycle: Cycle 74 - 2026-06-06
   CSS/font, and worker assets under `lib/monaco-esm/`; `npm run
   monaco:esm:check` validates the post-build layout; and committed evidence
   records the 12,156,466-byte TypeScript worker as the next size decision.
+- Cycle 75 selected the full-worker Chromium strategy for the Monaco ESM
+  prototype and added enforceable budgets. `npm run monaco:esm:check` now
+  records gzip sizes and fails if total, compressed, `editor.js`, or
+  `ts.worker.js` output grows past the documented budget.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -322,24 +326,25 @@ Last cycle: Cycle 74 - 2026-06-06
   same source set, then verified the ESM prototype with focused Monaco
   build/package tests, TypeScript, package and ESM prototype gates,
   high-severity audit, full check suite, build, CWS remote-code scan, and
-  `git diff --check`.
+  `git diff --check`. Cycle 75 verified the size strategy with focused Monaco
+  prototype-check/package tests, package and ESM gates, high-severity audit,
+  full check suite, build, CWS remote-code scan, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. The next best local cycle is Cycle 75:
-continue X-4 by choosing a size strategy for the ESM prototype. Either gate the
-current full-worker Chromium-only package with an explicit budget and sandbox
-smoke plan, or prototype a slimmer JavaScript/userscript-focused ESM bundle
-before replacing the AMD sandbox loader. The live two-tab
-`GM_addValueChangeListener` smoke remains browser-profile gated until
+Continue from `ROADMAP.md` Round 40. The next best local cycle is Cycle 76:
+continue X-4 by preparing the actual sandbox switch. Update the static package
+contract for ESM, add AMD-removal tests, and define a Chromium editor
+smoke/fallback proof before replacing `pages/editor-sandbox.html`. The live
+two-tab `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
 remains blocked on maintainer credentials, and Edge Partner Center upload/REST
 automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 74 complete for 2026-06-06; roadmap continuation
-  points to Cycle 75 X-4 Monaco ESM size strategy or the next local packaging
-  audit.
+- Status: ScriptVault Cycle 75 complete for 2026-06-06; roadmap continuation
+  points to Cycle 76 X-4 Monaco ESM sandbox-switch prep or the next local
+  packaging audit.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
