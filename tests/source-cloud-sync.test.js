@@ -69,6 +69,9 @@ async function loadFreshCloudSync(
         lastUpdatedAt: null,
       },
     ));
+    ScriptValues.getAllKeyMetadata = vi.fn(async (scriptId) => structuredClone(
+      metadataByScript[scriptId]?.keyMetadata || {},
+    ));
   }
 
   const provider = {
@@ -410,6 +413,10 @@ describe('source cloud sync module', () => {
         script_values: {
           valueCount: 2,
           lastUpdatedAt: 4242,
+          keyMetadata: {
+            alpha: { updatedAt: 4240 },
+            token: { updatedAt: 4242 },
+          },
         },
       },
     );
@@ -426,6 +433,10 @@ describe('source cloud sync module', () => {
         scriptId: 'script_values',
         keyCount: 2,
         lastValueUpdatedAt: 4242,
+        keyMetadata: {
+          alpha: { updatedAt: 4240 },
+          token: { updatedAt: 4242 },
+        },
         values: {
           alpha: { enabled: true },
           token: 'sync-token',

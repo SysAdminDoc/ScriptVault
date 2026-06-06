@@ -367,6 +367,10 @@ describe('ScriptValues', () => {
         valueCount: 2,
         lastUpdatedAt: 2000,
       });
+      expect(await ScriptValues.getAllKeyMetadata('s1')).toEqual({
+        count: { updatedAt: 2000 },
+        name: { updatedAt: 2000 },
+      });
     } finally {
       nowSpy.mockRestore();
     }

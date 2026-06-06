@@ -164,6 +164,23 @@ Cycle 108 adds aggregate timestamp evidence to real sync results:
 - These counters are advisory evidence only. They do not enable non-empty merge
   writes.
 
-The next implementation slice should add per-key timestamp support, stale-bundle
-diagnostics, or another durable last-write signal before non-empty local and
-remote value bags can be merged bidirectionally.
+Cycle 109 adds per-key timestamp metadata inside opt-in bundles:
+
+- Value rows keep their existing `updatedAt` timestamp, and
+  `ScriptValues.getAllKeyMetadata()` can return a `{ key: { updatedAt } }` map
+  for the local value bag.
+- `scriptvault-gm-value-sync/v1` bundles may include optional `keyMetadata`
+  entries for keys that are actually included in `values`.
+- `keyMetadata` is normalized and counted in the same per-script byte cap as the
+  values, so oversized metadata cannot bypass the bundle budget.
+- CloudSync upload and downloaded-bundle sanitization rebuild bundles through
+  the capped builder and preserve only valid per-key timestamps for included
+  keys.
+- Sanitized previews, preview exports, real-sync summaries, support-safe logs,
+  and dashboard text still omit value key names and values.
+- These fields are advisory merge inputs only. They do not enable non-empty
+  merge writes.
+
+The next implementation slice should add stale-bundle diagnostics, per-key
+conflict preview summaries, or another durable safeguard before non-empty local
+and remote value bags can be merged bidirectionally.

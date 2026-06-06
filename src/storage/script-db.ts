@@ -284,6 +284,21 @@ export const ValuesDAO = {
     });
   },
 
+  async getAllKeyMetadata(scriptId: string): Promise<Record<string, { updatedAt: number }>> {
+    await openScriptDB();
+    return withTransaction(Stores.values, 'readonly', async (tx) => {
+      const out: Record<string, { updatedAt: number }> = {};
+      const idx = tx.objectStore(Stores.values).index('by-script');
+      await forEachCursor<ScriptValueRow>(idx, (row) => {
+        const updatedAt = Number(row.updatedAt);
+        if (Number.isFinite(updatedAt) && updatedAt > 0) {
+          setRecordKey(out, row.key, { updatedAt: Math.floor(updatedAt) });
+        }
+      }, IDBKeyRange.only(scriptId));
+      return out;
+    });
+  },
+
   async list(scriptId: string): Promise<string[]> {
     const all = await this.getAll(scriptId);
     return Object.keys(all);

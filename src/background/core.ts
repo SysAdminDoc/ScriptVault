@@ -137,7 +137,8 @@ function sanitizeValueBundlesForUpload(envelope) {
     if (!isPlainObject(bundle) || bundle.schema !== GM_VALUE_SYNC_SCHEMA || bundle.scriptId !== scriptId) continue;
     if (!isPlainObject(bundle.values)) continue;
     const rebuilt = buildGmValueSyncBundleForSync(script, bundle.values, {
-      lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle)
+      lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle),
+      keyMetadata: getValueBundleKeyMetadata(bundle)
     });
     if (rebuilt.bundle) result[scriptId] = rebuilt.bundle;
   }
@@ -154,6 +155,27 @@ function getValueBundleLastUpdatedAt(bundle) {
   const timestamp = Number(bundle.lastValueUpdatedAt);
   if (!Number.isFinite(timestamp) || timestamp <= 0) return undefined;
   return Math.floor(timestamp);
+}
+
+function setValueBundleMetadataKey(record, key, value) {
+  Object.defineProperty(record, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true
+  });
+}
+
+function getValueBundleKeyMetadata(bundle) {
+  if (!isPlainObject(bundle) || !isPlainObject(bundle.keyMetadata)) return undefined;
+  const metadata = {};
+  for (const [key, entry] of Object.entries(bundle.keyMetadata)) {
+    const timestamp = isPlainObject(entry) ? Number(entry.updatedAt) : Number(entry);
+    if (Number.isFinite(timestamp) && timestamp > 0) {
+      setValueBundleMetadataKey(metadata, key, { updatedAt: Math.floor(timestamp) });
+    }
+  }
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
 function createEmptyRemoteValueBundleSelection() {
@@ -219,7 +241,8 @@ function selectApplicableRemoteValueBundles(remote, targetScripts = []) {
     }
 
     const rebuilt = buildGmValueSyncBundleForSync(script, bundle.values, {
-      lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle)
+      lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle),
+      keyMetadata: getValueBundleKeyMetadata(bundle)
     });
     result.warnings += Object.values(rebuilt.warningCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
     if (rebuilt.bundle) {
@@ -2276,6 +2299,22 @@ function _gmValueSyncNormalizeTimestamp(value) {
   return Math.floor(timestamp);
 }
 
+function _gmValueSyncSetMetadataKey(record, key, value) {
+  Object.defineProperty(record, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true
+  });
+}
+
+function _gmValueSyncNormalizeKeyMetadataEntry(value) {
+  const timestamp = value && typeof value === 'object'
+    ? _gmValueSyncNormalizeTimestamp(value.updatedAt)
+    : _gmValueSyncNormalizeTimestamp(value);
+  return timestamp ? { updatedAt: timestamp } : undefined;
+}
+
 function _gmValueSyncCountWarning(record, id) {
   _localHealthCount(record, id || 'unknown');
 }
@@ -2295,6 +2334,9 @@ function buildGmValueSyncBundleForSync(script, values, options = {}) {
 
   const sourceValues = values && typeof values === 'object' && !Array.isArray(values) ? values : {};
   const lastValueUpdatedAt = _gmValueSyncNormalizeTimestamp(options.lastValueUpdatedAt);
+  const sourceKeyMetadata = options.keyMetadata && typeof options.keyMetadata === 'object' && !Array.isArray(options.keyMetadata)
+    ? options.keyMetadata
+    : {};
   const bundle = {
     schema: GM_VALUE_SYNC_SCHEMA,
     scriptId: script.id,
@@ -2329,11 +2371,15 @@ function buildGmValueSyncBundleForSync(script, values, options = {}) {
     }
 
     const nextValues = { ...bundle.values, [key]: cloned };
+    const nextKeyMetadata = { ...(bundle.keyMetadata || {}) };
+    const keyMetadataEntry = _gmValueSyncNormalizeKeyMetadataEntry(sourceKeyMetadata[key]);
+    if (keyMetadataEntry) _gmValueSyncSetMetadataKey(nextKeyMetadata, key, keyMetadataEntry);
     const nextBundle = {
       ...bundle,
       keyCount: Object.keys(nextValues).length,
       bytes: 0,
-      values: nextValues
+      values: nextValues,
+      ...(Object.keys(nextKeyMetadata).length > 0 ? { keyMetadata: nextKeyMetadata } : {})
     };
     const nextBytes = _gmValueSyncByteLength(nextBundle);
     if (nextBytes > GM_VALUE_SYNC_MAX_SCRIPT_BYTES) {
@@ -2343,6 +2389,7 @@ function buildGmValueSyncBundleForSync(script, values, options = {}) {
 
     bundle.values = nextValues;
     bundle.keyCount = nextBundle.keyCount;
+    if (nextBundle.keyMetadata) bundle.keyMetadata = nextBundle.keyMetadata;
     bundle.bytes = nextBytes;
   }
 
@@ -2379,8 +2426,12 @@ async function buildValueBundlesForScripts(scripts = []) {
     const metadata = typeof ScriptValues.getAllMetadata === 'function'
       ? await ScriptValues.getAllMetadata(script.id)
       : null;
+    const keyMetadata = typeof ScriptValues.getAllKeyMetadata === 'function'
+      ? await ScriptValues.getAllKeyMetadata(script.id)
+      : null;
     const result = buildGmValueSyncBundleForSync(script, values, {
-      lastValueUpdatedAt: metadata?.lastUpdatedAt ?? null
+      lastValueUpdatedAt: metadata?.lastUpdatedAt ?? null,
+      keyMetadata
     });
     warnings += Object.values(result.warningCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
     if (result.bundle) valueBundles[script.id] = result.bundle;
