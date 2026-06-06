@@ -2,6 +2,20 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 58 local file refresh review: X-8 now has a review-only
+refresh flow instead of only a binding handle. Current Chrome guidance still
+requires permission rechecks for stored handles and user-gesture permission
+requests, and CWS guidance still treats locally handled sensitive data as
+disclosure-relevant. ScriptVault now exposes `Refresh File` and `Unbind` next
+to `Bind File`; refresh retrieves the stored local-only handle, calls
+`requestPermission({ mode: 'read' })` only from the user action when needed,
+updates permission/missing-file/read/apply/no-change summaries, shows a local
+diff review modal before changed code can apply, and saves accepted changes
+through the normal `saveScript` path with a `local-save`/`local-file` receipt.
+Remaining X-8 work is support-snapshot/local-health aggregate evidence and
+deeper behavior fixtures for denied permission, missing handle, parse failure,
+no-change, successful apply, receipt details, and registration.
+
 2026-06-06 Cycle 57 dashboard local file binding: X-8 now has the first
 user-facing File System Access entry point. Current Chrome guidance still
 requires picker feature detection and a user gesture, stored handles still need
