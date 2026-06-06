@@ -152,6 +152,28 @@ describe('script trust receipts', () => {
     });
   });
 
+  it('records local editor saves without treating remote metadata as the save source', async () => {
+    const receipt = await createScriptTrustReceipt({
+      operation: 'local-save',
+      code: '// ==UserScript==\n// @name Receipt Demo\n// ==/UserScript==\nconsole.log("local");',
+      meta: makeMeta({
+        source: 'https://registry.example.com/source/demo',
+        updateURL: 'https://cdn.example.com/demo.meta.js',
+        downloadURL: 'https://cdn.example.com/demo.user.js',
+      }),
+      sourceKind: 'local-editor',
+      sourceLabel: 'Dashboard editor',
+      suppressMetadataSourceFallback: true,
+    });
+
+    expect(receipt.source.installUrl).toBe('');
+    expect(receipt.source.installHost).toBe('local');
+    expect(receipt.source.sourceKind).toBe('local-editor');
+    expect(receipt.source.sourceLabel).toBe('Dashboard editor');
+    expect(receipt.source.updateUrl).toBe('https://cdn.example.com/demo.meta.js');
+    expect(receipt.source.downloadUrl).toBe('https://cdn.example.com/demo.user.js');
+  });
+
   it('records provenance bundle fetch failures when verification is attempted', async () => {
     const receipt = await createScriptTrustReceipt({
       operation: 'install',

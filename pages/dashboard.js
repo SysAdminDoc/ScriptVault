@@ -7333,7 +7333,7 @@
         if (!receipt || !receipt.hashes?.sha256) {
             return '<span class="panel-empty-inline">No receipt recorded yet</span>';
         }
-        const source = receipt.source?.installHost || receipt.source?.installUrl || 'local';
+        const source = receipt.source?.sourceLabel || receipt.source?.installHost || receipt.source?.installUrl || 'local';
         const diff = receipt.diff || {};
         const deps = receipt.dependencies || {};
         const provenanceHtml = renderProvenanceRows(deps.require || []);
@@ -7844,7 +7844,18 @@
         }
     }
 
-    async function saveCurrentScript() {
+    function buildEditorSaveTrustOptions(options = {}) {
+        const autosave = options.autosave === true;
+        return {
+            recordReceipt: true,
+            operation: 'local-save',
+            sourceKind: 'local-editor',
+            sourceLabel: autosave ? 'Dashboard autosave' : 'Dashboard editor',
+            suppressMetadataSourceFallback: true
+        };
+    }
+
+    async function saveCurrentScript(options = {}) {
         const savingScriptId = state.currentScriptId;
         if (!savingScriptId || !state.editor) return;
         markScriptSavePending(savingScriptId);
@@ -7857,7 +7868,13 @@
                 updateLineCount();
                 updateCursorPos();
             }
-            const saveResult = await chrome.runtime.sendMessage({ action: 'saveScript', scriptId: savingScriptId, code, markModified: true });
+            const saveResult = await chrome.runtime.sendMessage({
+                action: 'saveScript',
+                scriptId: savingScriptId,
+                code,
+                markModified: true,
+                trust: buildEditorSaveTrustOptions({ autosave: options.autosave === true })
+            });
             if (saveResult?.error) throw new Error(saveResult.error);
 
             // Reload script list FIRST, then mark as saved
@@ -8587,7 +8604,7 @@
             updateLineCount();
             if (s.autoSave) {
                 clearTimeout(autoSaveTimer);
-                autoSaveTimer = setTimeout(() => saveCurrentScript(), 2000);
+                autoSaveTimer = setTimeout(() => saveCurrentScript({ autosave: true }), 2000);
             }
             // Auto-trigger autocomplete on GM_ / GM. / @
             if (change.origin === '+input' && change.text.length === 1) {

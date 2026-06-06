@@ -2,6 +2,18 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 54 local-save trust receipts: N-8 moved from planning into
+the first implementation slice. Current CWS user-data guidance still expects
+clear disclosure for locally stored sensitive data, and Chrome File System
+Access guidance still requires user-gesture picker entry plus separate stored
+handle permission checks. ScriptVault now records dashboard editor saves as
+explicit `local-save` receipts with `local-editor` source metadata, suppresses
+metadata URL fallback for those local saves, preserves remote update/download
+URLs for review, and pins the manual/autosave payload contract in focused
+tests. Remaining N-8 work is autosave coalescing, no-code/history churn proof,
+export/cloud/support redaction coverage for future local workspace metadata,
+and save-path re-registration proof.
+
 2026-06-06 Cycle 53 setup rehydration evidence: N-7 moved from a
 setup-doctor planning row into support-safe runtime evidence. Current Chrome
 docs still require the per-extension Allow User Scripts toggle on Chrome 138+

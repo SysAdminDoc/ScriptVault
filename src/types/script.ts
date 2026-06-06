@@ -180,6 +180,12 @@ export interface ScriptTrustReceiptPermissionChangeSet {
   unchanged: string[];
 }
 
+export type ScriptTrustReceiptSourceKind =
+  | 'remote'
+  | 'local-editor'
+  | 'local-file'
+  | 'local-import';
+
 export interface ScriptTrustReceipt {
   schemaVersion: 1;
   operation: 'install' | 'update' | 'manual-update' | 'auto-update' | 'pending-update' | 'subscription-install' | 'reinstall' | 'downgrade' | 'local-save' | 'rollback-point';
@@ -190,6 +196,8 @@ export interface ScriptTrustReceipt {
     updateUrl: string;
     downloadUrl: string;
     homepageUrl: string;
+    sourceKind?: ScriptTrustReceiptSourceKind;
+    sourceLabel?: string;
   };
   hashes: {
     sha256: string;

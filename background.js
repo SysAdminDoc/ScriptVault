@@ -16736,6 +16736,22 @@ function _receiptHost(url) {
   }
 }
 
+const _TRUST_RECEIPT_SOURCE_KINDS = new Set(['remote', 'local-editor', 'local-file', 'local-import']);
+
+function _receiptSourceKind(value) {
+  const kind = typeof value === 'string' ? value.trim() : '';
+  return _TRUST_RECEIPT_SOURCE_KINDS.has(kind) ? kind : '';
+}
+
+function _receiptSourceLabel(value) {
+  const label = typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
+  return label ? label.slice(0, 80) : '';
+}
+
+function _isLocalReceiptSourceKind(kind) {
+  return typeof kind === 'string' && kind.startsWith('local-');
+}
+
 function _receiptLineCount(code) {
   if (!code) return 0;
   return code.split(/\r\n|\r|\n/).length;
@@ -17076,8 +17092,12 @@ async function _sha256Hex(text) {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '', previousScript = null, rollbackIndex = -1, fetchDependencyBody = null, fetchProvenanceBundle = null, optionalPermissions = null }) {
-  const installUrl = sourceUrl || meta.source || meta.downloadURL || meta.updateURL || '';
+async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '', previousScript = null, rollbackIndex = -1, sourceKind = '', sourceLabel = '', suppressMetadataSourceFallback = false, fetchDependencyBody = null, fetchProvenanceBundle = null, optionalPermissions = null }) {
+  const normalizedSourceKind = _receiptSourceKind(sourceKind);
+  const normalizedSourceLabel = _receiptSourceLabel(sourceLabel);
+  const shouldSuppressMetadataSourceFallback = suppressMetadataSourceFallback === true || _isLocalReceiptSourceKind(normalizedSourceKind);
+  const installUrl = sourceUrl || (shouldSuppressMetadataSourceFallback ? '' : meta.source || meta.downloadURL || meta.updateURL || '');
+  const installHost = installUrl ? _receiptHost(installUrl) : (_isLocalReceiptSourceKind(normalizedSourceKind) ? 'local' : '');
   const previousCode = previousScript?.code || '';
   const nextHash = await _sha256Hex(code);
   const previousHash = previousScript ? await _sha256Hex(previousCode) : '';
@@ -17101,10 +17121,12 @@ async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '',
     createdAt: Date.now(),
     source: {
       installUrl,
-      installHost: installUrl ? _receiptHost(installUrl) : '',
+      installHost,
       updateUrl: meta.updateURL || '',
       downloadUrl: meta.downloadURL || '',
-      homepageUrl: meta.homepage || meta.homepageURL || meta.website || ''
+      homepageUrl: meta.homepage || meta.homepageURL || meta.website || '',
+      sourceKind: normalizedSourceKind || undefined,
+      sourceLabel: normalizedSourceLabel || undefined
     },
     hashes: {
       sha256: nextHash,
@@ -20524,7 +20546,12 @@ async function handleMessage(message, sender) {
         // Mark as locally modified when saved from editor — prevents sync from overwriting
         if (data.markModified) scriptSettings.userModified = true;
         const receiptOptions = data.trust && typeof data.trust === 'object' ? data.trust : null;
-        const shouldRecordReceipt = !!receiptOptions?.recordReceipt || !!receiptOptions?.operation || !!receiptOptions?.sourceUrl;
+        const shouldRecordReceipt = !!receiptOptions?.recordReceipt
+          || !!receiptOptions?.operation
+          || !!receiptOptions?.sourceUrl
+          || !!receiptOptions?.sourceKind
+          || !!receiptOptions?.sourceLabel
+          || receiptOptions?.suppressMetadataSourceFallback === true;
         const previousScript = existing && existing.code !== data.code
           ? {
               ...existing,
@@ -20554,6 +20581,9 @@ async function handleMessage(message, sender) {
               code: data.code,
               meta: parsed.meta,
               sourceUrl: receiptOptions?.sourceUrl || '',
+              sourceKind: receiptOptions?.sourceKind || '',
+              sourceLabel: receiptOptions?.sourceLabel || '',
+              suppressMetadataSourceFallback: receiptOptions?.suppressMetadataSourceFallback === true,
               previousScript,
               rollbackIndex,
               fetchDependencyBody: fetchRequireScriptForTrustReceipt,

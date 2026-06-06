@@ -22,6 +22,24 @@ function hostFromUrl(url: string): string {
   }
 }
 
+const TRUST_RECEIPT_SOURCE_KINDS = new Set(['remote', 'local-editor', 'local-file', 'local-import']);
+
+function normalizeReceiptSourceKind(value: unknown): ScriptTrustReceipt['source']['sourceKind'] | undefined {
+  const kind = typeof value === 'string' ? value.trim() : '';
+  return TRUST_RECEIPT_SOURCE_KINDS.has(kind)
+    ? kind as ScriptTrustReceipt['source']['sourceKind']
+    : undefined;
+}
+
+function normalizeReceiptSourceLabel(value: unknown): string | undefined {
+  const label = typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
+  return label ? label.slice(0, 80) : undefined;
+}
+
+function isLocalReceiptSourceKind(kind?: ScriptTrustReceipt['source']['sourceKind']): boolean {
+  return typeof kind === 'string' && kind.startsWith('local-');
+}
+
 function lineCount(code: string): number {
   if (!code) return 0;
   return code.split(/\r\n|\r|\n/).length;
@@ -252,6 +270,9 @@ export async function createScriptTrustReceipt(options: {
   sourceUrl?: string;
   previousScript?: Script | null;
   rollbackIndex?: number;
+  sourceKind?: ScriptTrustReceipt['source']['sourceKind'];
+  sourceLabel?: string;
+  suppressMetadataSourceFallback?: boolean;
   fetchDependencyBody?: (url: string) => Promise<string | null | undefined>;
   fetchProvenanceBundle?: (url: string) => Promise<string | null | undefined>;
   /**
@@ -269,7 +290,13 @@ export async function createScriptTrustReceipt(options: {
   } | null;
 }): Promise<ScriptTrustReceipt> {
   const { operation, code, meta, previousScript = null } = options;
-  const sourceUrl = options.sourceUrl || meta.source || meta.downloadURL || meta.updateURL || '';
+  const sourceKind = normalizeReceiptSourceKind(options.sourceKind);
+  const sourceLabel = normalizeReceiptSourceLabel(options.sourceLabel);
+  const shouldSuppressMetadataSourceFallback = options.suppressMetadataSourceFallback === true
+    || isLocalReceiptSourceKind(sourceKind);
+  const sourceUrl = options.sourceUrl
+    || (shouldSuppressMetadataSourceFallback ? '' : meta.source || meta.downloadURL || meta.updateURL || '');
+  const installHost = sourceUrl ? hostFromUrl(sourceUrl) : (isLocalReceiptSourceKind(sourceKind) ? 'local' : '');
   const previousCode = previousScript?.code || '';
   const createdAt = Date.now();
   const requires = asArray(meta.require);
@@ -307,10 +334,12 @@ export async function createScriptTrustReceipt(options: {
     createdAt,
     source: {
       installUrl: sourceUrl,
-      installHost: sourceUrl ? hostFromUrl(sourceUrl) : '',
+      installHost,
       updateUrl: meta.updateURL || '',
       downloadUrl: meta.downloadURL || '',
       homepageUrl: meta.homepage || meta.homepageURL || meta.website || '',
+      sourceKind,
+      sourceLabel,
     },
     hashes: {
       sha256: await sha256Hex(code),
