@@ -59,6 +59,8 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('lastWriteHint');
     expect(dashboardJs).toContain('preservedRemoteNewer');
     expect(dashboardJs).toContain('timestamp hints');
+    expect(dashboardJs).toContain('overlappingRemoteNewerKeyCount');
+    expect(dashboardJs).toContain('overlap timestamps');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {
@@ -103,6 +105,15 @@ describe('sync safety cockpit wiring', () => {
         localLastValueUpdatedAt: 1000.9,
         remoteLastValueUpdatedAt: 2000.1,
         lastWriteHint: 'remote-newer',
+        overlappingRemoteNewerKeyCount: 1,
+        overlappingLocalNewerKeyCount: 0,
+        overlappingSameTimestampKeyCount: 0,
+        overlappingRemoteTimestampOnlyKeyCount: 0,
+        overlappingLocalTimestampOnlyKeyCount: 0,
+        overlappingUnknownTimestampKeyCount: 0,
+        keyMetadata: {
+          token: { updatedAt: 2000 },
+        },
         scriptId: 'script_secret',
         key: 'token',
         values: { token: 'remote-secret' },
@@ -129,6 +140,12 @@ describe('sync safety cockpit wiring', () => {
           localLastValueUpdatedAt: 1000,
           remoteLastValueUpdatedAt: 2000,
           lastWriteHint: 'remote-newer',
+          overlappingRemoteNewerKeyCount: 1,
+          overlappingLocalNewerKeyCount: 0,
+          overlappingSameTimestampKeyCount: 0,
+          overlappingRemoteTimestampOnlyKeyCount: 0,
+          overlappingLocalTimestampOnlyKeyCount: 0,
+          overlappingUnknownTimestampKeyCount: 0,
         }],
       }),
     );
@@ -144,6 +161,7 @@ describe('sync safety cockpit wiring', () => {
     expect(serialized).not.toContain('Secret Script');
     expect(serialized).not.toContain('token');
     expect(serialized).not.toContain('remote-secret');
+    expect(serialized).not.toContain('keyMetadata');
   });
 
   it('keeps Gist token storage disclosure honest', () => {

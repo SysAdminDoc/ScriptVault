@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 109 - 2026-06-06
+Last cycle: Cycle 110 - 2026-06-06
 
 ## Latest Result
 
@@ -597,13 +597,24 @@ Last cycle: Cycle 109 - 2026-06-06
   build, the full check suite with 1509 Vitest cases, high-severity audit, CWS
   remote-code scan, Monaco ESM scan, TS runtime check, forbidden-reference grep,
   and `git diff --check`.
+  Cycle 110 added per-key timestamp overlap summaries to blocked L-8 value
+  bundle previews: overlapping keys are counted by remote-newer, local-newer,
+  same timestamp, one-sided timestamp, or unknown timestamp hints, and the
+  dashboard Download Preview export keeps only those counts. The preview/export
+  still omit script IDs, script names, value key names, values, URLs, local
+  workspace handles, local paths, sync credentials, provider account data, and
+  raw `keyMetadata` maps. Non-empty writes remain disabled. Verification used
+  focused source CloudSync/sync-cockpit/hardening tests, typecheck, build, the
+  full check suite with 1509 Vitest cases, high-severity audit, CWS remote-code
+  scan, Monaco ESM scan, TS runtime check, forbidden-reference grep, and `git
+  diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 51. Cycle 109 added per-key timestamp metadata
-to opted-in GM value bundles. The next best local cycle is Cycle 110: add
-stale-bundle diagnostics, per-key conflict preview summaries, or the next L-8
-safeguard needed before broader bidirectional GM value merges.
+Continue from `ROADMAP.md` Round 52. Cycle 110 added per-key timestamp overlap
+counts to blocked value-bundle previews and exports. The next best local cycle
+is Cycle 111: add stale-bundle diagnostics or the next L-8 safeguard needed
+before broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -612,8 +623,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 109 complete for 2026-06-06; roadmap continuation
-  points to Cycle 110 GM value sync stale diagnostics or the next available
+- Status: ScriptVault Cycle 110 complete for 2026-06-06; roadmap continuation
+  points to Cycle 111 GM value sync stale diagnostics or the next available
   non-credential-gated L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

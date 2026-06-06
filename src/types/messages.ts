@@ -1543,6 +1543,12 @@ export interface ResponseMap {
         | 'local-timestamp-only'
         | 'remote-timestamp-only'
         | 'unknown';
+      overlappingRemoteNewerKeyCount: number | null;
+      overlappingLocalNewerKeyCount: number | null;
+      overlappingSameTimestampKeyCount: number | null;
+      overlappingRemoteTimestampOnlyKeyCount: number | null;
+      overlappingLocalTimestampOnlyKeyCount: number | null;
+      overlappingUnknownTimestampKeyCount: number | null;
     }[];
   }>;
   revokeSyncProvider: SuccessOrError;

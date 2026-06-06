@@ -181,6 +181,19 @@ Cycle 109 adds per-key timestamp metadata inside opt-in bundles:
 - These fields are advisory merge inputs only. They do not enable non-empty
   merge writes.
 
-The next implementation slice should add stale-bundle diagnostics, per-key
-conflict preview summaries, or another durable safeguard before non-empty local
-and remote value bags can be merged bidirectionally.
+Cycle 110 adds per-key timestamp summaries to blocked previews:
+
+- Blocked value-bundle preview entries count overlapping keys by timestamp
+  relationship: remote-newer, local-newer, same timestamp, remote timestamp
+  only, local timestamp only, or unknown.
+- The dashboard renders those counts and the Download Preview JSON export keeps
+  only the sanitized counts.
+- The preview/export still omit script IDs, script names, value key names,
+  values, URLs, local workspace handles, local paths, sync credentials, provider
+  account data, and raw `keyMetadata` maps.
+- These counts are advisory conflict evidence only. They do not enable
+  non-empty merge writes.
+
+The next implementation slice should add stale-bundle diagnostics or another
+durable safeguard before non-empty local and remote value bags can be merged
+bidirectionally.
