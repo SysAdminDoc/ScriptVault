@@ -88,6 +88,8 @@ export type {
   BackgroundScriptCandidate,
   BackgroundScriptPlan,
 } from './background-runner';
+export { buildBackgroundWrappedScript } from './background-wrapper';
+export type { BackgroundWrapperOptions } from './background-wrapper';
 
 export { updateBadge, updateBadgeForTab } from './badge';
 

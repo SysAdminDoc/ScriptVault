@@ -25,6 +25,13 @@ eligible, gate-disabled, missing-trigger, unsupported-grant, and disabled states
 The diagnostics stay inside the existing privacy envelope: no script source,
 names, identifiers, or URLs are included.
 
+2026-06-06 Cycle 40 restricted background wrapper scaffold:
+`src/background/background-wrapper.ts` now builds a DOM-less wrapper payload for
+future runner use without wiring execution. It rejects unsupported DOM/page/tab
+grants and `@require`, blocks page globals with throwing proxies, routes value,
+XHR, notification, log, and info calls through background messages, and records
+script errors through a runner-specific message.
+
 2026-06-04 Cycle 8 comprehensive feature-plan refresh: root-level
 `RESEARCH_FEATURE_PLAN.md` now holds the current implementation-oriented
 research plan for ScriptVault v3.11.0. It preserves `ROADMAP.md` as the open
