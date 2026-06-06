@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 27 - 2026-06-06
+Last cycle: Cycle 28 - 2026-06-06
 
 ## Latest Result
 
@@ -21,16 +21,17 @@ Last cycle: Cycle 27 - 2026-06-06
   TypeScript keys, and dashboard save handlers.
 - Cycle 27 added targeted Settings field validation for badge color, lint max
   size, WebDAV/S3 endpoint URLs, denied hosts, and linter JSON.
-- Verification used the live checkout: focused dashboard a11y coverage,
+- Cycle 28 added schema metadata for all classified visible settings plus
+  dashboard-saved credential controls.
+- Verification used the live checkout: focused settings schema coverage,
   `npm run settings:schema:check`, `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
 
 Continue top-down from `ROADMAP.md`. The next local implementer-actionable work
-is the remaining P1/P2 settings schema metadata slice: extend the
-classification schema with type/range/options/default/help metadata that can
-drive every visible Settings control, while preserving the targeted validation
-shipped in Cycle 27.
+is still in the Settings discoverability/validation row: consume the new schema
+metadata in the Settings UI where practical and add field-specific validation
+for allowlist/pattern text areas that still save raw text.
 
 ## Loop Pointer
 

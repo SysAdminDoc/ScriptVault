@@ -135,5 +135,1408 @@
       "onedriveUser"
     ],
     "deprecated": []
+  },
+  "metadata": {
+    "allowCommunication": {
+      "type": "string",
+      "control": "select",
+      "label": "Allow communication with cooperate pages",
+      "help": "Controls allow communication with cooperate pages.",
+      "elementId": "settingsAllowCommunication",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "version",
+          "label": "ScriptVault + script version"
+        },
+        {
+          "value": "minimal",
+          "label": "ScriptVault only"
+        },
+        {
+          "value": "none",
+          "label": "None"
+        }
+      ]
+    },
+    "allowCookies": {
+      "type": "string",
+      "control": "select",
+      "label": "Allow scripts to access cookies",
+      "help": "Controls allow scripts to access cookies.",
+      "elementId": "settingsAllowCookies",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "all",
+          "label": "All"
+        },
+        {
+          "value": "matching",
+          "label": "Matching only"
+        },
+        {
+          "value": "none",
+          "label": "None"
+        }
+      ]
+    },
+    "allowHighPrivilegeScriptApis": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Allow High Privilege Script Apis",
+      "help": "Controls allow high privilege script apis.",
+      "elementId": "settingsAllowHighPrivilegeScriptApis",
+      "default": false
+    },
+    "allowHttpHeaders": {
+      "type": "string",
+      "control": "select",
+      "label": "Allow HTTP headers to be modified by scripts",
+      "help": "Controls allow http headers to be modified by scripts.",
+      "elementId": "settingsAllowHttpHeaders",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "yes",
+          "label": "Yes"
+        },
+        {
+          "value": "no",
+          "label": "No"
+        }
+      ]
+    },
+    "allowInternalSyncEndpoints": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Allow Internal Sync Endpoints",
+      "help": "Controls allow internal sync endpoints.",
+      "elementId": "settingsAllowInternalSyncEndpoints",
+      "default": false
+    },
+    "allowInternalXhr": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Allow Internal XHR",
+      "help": "Controls allow internal xhr.",
+      "default": false
+    },
+    "allowLocalFiles": {
+      "type": "string",
+      "control": "select",
+      "label": "Allow scripts to access local files",
+      "help": "Controls allow scripts to access local files.",
+      "elementId": "settingsAllowLocalFiles",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "all",
+          "label": "All local files"
+        },
+        {
+          "value": "ask",
+          "label": "Ask"
+        },
+        {
+          "value": "none",
+          "label": "None"
+        }
+      ]
+    },
+    "anonymousStats": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Anonymous Stats",
+      "help": "Controls anonymous stats.",
+      "elementId": "settingsAnonymousStats",
+      "defaultSource": "runtime"
+    },
+    "autoReload": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Auto Reload",
+      "help": "Controls auto reload.",
+      "elementId": "settingsAutoReload",
+      "default": false
+    },
+    "autoSave": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Auto Save",
+      "help": "Controls auto save.",
+      "elementId": "settingsAutoSave",
+      "defaultSource": "runtime"
+    },
+    "autoUpdate": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Auto Update",
+      "help": "Controls auto update.",
+      "default": true
+    },
+    "autoUpdateMode": {
+      "type": "string",
+      "control": "checkbox",
+      "label": "Auto Update Mode",
+      "help": "Controls auto update mode.",
+      "elementId": "settingsSilentUpdate",
+      "default": "notify"
+    },
+    "badgeColor": {
+      "type": "string",
+      "control": "text",
+      "label": "Icon badge color",
+      "help": "Controls icon badge color.",
+      "elementId": "settingsBadgeColor",
+      "default": "#22c55e",
+      "validation": {
+        "kind": "hex-color",
+        "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+      }
+    },
+    "badgeInfo": {
+      "type": "string",
+      "control": "select",
+      "label": "Icon badge info",
+      "help": "Controls icon badge info.",
+      "elementId": "settingsBadgeInfo",
+      "default": "running",
+      "options": [
+        {
+          "value": "running",
+          "label": "All-time running instances"
+        },
+        {
+          "value": "active",
+          "label": "Active scripts only"
+        },
+        {
+          "value": "none",
+          "label": "None"
+        }
+      ]
+    },
+    "blacklist": {
+      "type": "array",
+      "control": "textarea",
+      "label": "Blacklist",
+      "help": "Controls blacklist.",
+      "default": []
+    },
+    "blacklistSource": {
+      "type": "string",
+      "control": "select",
+      "label": "Userscript Blacklist Source",
+      "help": "Controls userscript blacklist source.",
+      "elementId": "settingsBlacklistSource",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "remote_manual",
+          "label": "Remote + Manual"
+        },
+        {
+          "value": "remote",
+          "label": "Remote only"
+        },
+        {
+          "value": "manual",
+          "label": "Manual only"
+        },
+        {
+          "value": "disabled",
+          "label": "Disabled"
+        }
+      ]
+    },
+    "blacklistedPages": {
+      "type": "string",
+      "control": "textarea",
+      "label": "Blacklisted Pages",
+      "help": "Controls blacklisted pages.",
+      "elementId": "settingsBlacklistedPages",
+      "default": ""
+    },
+    "blockSeverity": {
+      "type": "number",
+      "control": "select",
+      "label": "Block From Severity Level",
+      "help": "Controls block from severity level.",
+      "elementId": "settingsBlockSeverity",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "1",
+          "label": "1"
+        },
+        {
+          "value": "2",
+          "label": "2"
+        },
+        {
+          "value": "3",
+          "label": "3"
+        },
+        {
+          "value": "4",
+          "label": "4"
+        },
+        {
+          "value": "5",
+          "label": "5"
+        }
+      ]
+    },
+    "checkConnect": {
+      "type": "string",
+      "control": "select",
+      "label": "Check @connect",
+      "help": "Controls check @connect.",
+      "elementId": "settingsCheckConnect",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "ask",
+          "label": "Ask if unknown"
+        },
+        {
+          "value": "allow",
+          "label": "Allow all"
+        },
+        {
+          "value": "deny",
+          "label": "Deny unknown"
+        }
+      ]
+    },
+    "checkInterval": {
+      "type": "number",
+      "control": "select",
+      "label": "Check Interval",
+      "help": "Controls check interval.",
+      "elementId": "settingsCheckInterval",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "0",
+          "label": "Never"
+        },
+        {
+          "value": "12",
+          "label": "Every 12 Hours"
+        },
+        {
+          "value": "24",
+          "label": "Every Day"
+        },
+        {
+          "value": "168",
+          "label": "Every Week"
+        }
+      ]
+    },
+    "configMode": {
+      "type": "string",
+      "control": "select",
+      "label": "Config mode",
+      "help": "Controls config mode.",
+      "elementId": "settingsConfigMode",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "beginner",
+          "label": "Beginner"
+        },
+        {
+          "value": "advanced",
+          "label": "Advanced"
+        }
+      ]
+    },
+    "contentScriptAPI": {
+      "type": "string",
+      "control": "select",
+      "label": "Content Script API",
+      "help": "Controls content script api.",
+      "elementId": "settingsContentScriptAPI",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "userscripts",
+          "label": "UserScripts API"
+        },
+        {
+          "value": "dynamic",
+          "label": "Dynamic Content Script"
+        }
+      ]
+    },
+    "contextMenuCommands": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Context Menu Commands",
+      "help": "Controls context menu commands.",
+      "elementId": "settingsContextMenuCommands",
+      "defaultSource": "runtime"
+    },
+    "contextMenuRunAt": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Context Menu Run At",
+      "help": "Controls context menu run at.",
+      "elementId": "settingsContextMenuRunAt",
+      "defaultSource": "runtime"
+    },
+    "customCss": {
+      "type": "string",
+      "control": "textarea",
+      "label": "Custom Css",
+      "help": "Controls custom css.",
+      "elementId": "settingsCustomCss",
+      "defaultSource": "runtime"
+    },
+    "dashboardVirtualizationThreshold": {
+      "type": "number",
+      "control": "number",
+      "label": "Dashboard Virtualization Threshold",
+      "help": "Controls dashboard virtualization threshold.",
+      "default": 500
+    },
+    "debugMode": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Debug Mode",
+      "help": "Controls debug mode.",
+      "elementId": "settingsDebugMode",
+      "default": false
+    },
+    "defaultTabTypes": {
+      "type": "string",
+      "control": "select",
+      "label": "Default tab types to run scripts in",
+      "help": "Controls default tab types to run scripts in.",
+      "elementId": "settingsDefaultTabTypes",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "all",
+          "label": "All tabs"
+        },
+        {
+          "value": "normal",
+          "label": "Normal tabs only"
+        },
+        {
+          "value": "incognito",
+          "label": "Incognito only"
+        }
+      ]
+    },
+    "deniedHosts": {
+      "type": "array",
+      "control": "textarea",
+      "label": "Denied Hosts",
+      "help": "Controls denied hosts.",
+      "default": [],
+      "validation": {
+        "kind": "host-list",
+        "allowWildcard": true
+      }
+    },
+    "downloadMode": {
+      "type": "string",
+      "control": "select",
+      "label": "Download Mode",
+      "help": "Controls download mode.",
+      "elementId": "settingsDownloadMode",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "default",
+          "label": "Default"
+        },
+        {
+          "value": "native",
+          "label": "Native"
+        },
+        {
+          "value": "browser",
+          "label": "Browser"
+        }
+      ]
+    },
+    "downloadWhitelist": {
+      "type": "string",
+      "control": "textarea",
+      "label": "Download Whitelist",
+      "help": "Controls download whitelist.",
+      "elementId": "settingsDownloadWhitelist",
+      "defaultSource": "runtime"
+    },
+    "editorAutoCloseBrackets": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Editor Auto Close Brackets",
+      "help": "Controls editor auto close brackets.",
+      "default": true
+    },
+    "editorAutoComplete": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Editor Auto Complete",
+      "help": "Controls editor auto complete.",
+      "default": true
+    },
+    "editorFontSize": {
+      "type": "number",
+      "control": "select",
+      "label": "Font Size",
+      "help": "Controls font size.",
+      "elementId": "settingsEditorFontSize",
+      "default": 13,
+      "options": [
+        {
+          "value": "80",
+          "label": "80%"
+        },
+        {
+          "value": "90",
+          "label": "90%"
+        },
+        {
+          "value": "100",
+          "label": "100%"
+        },
+        {
+          "value": "110",
+          "label": "110%"
+        },
+        {
+          "value": "120",
+          "label": "120%"
+        },
+        {
+          "value": "140",
+          "label": "140%"
+        }
+      ]
+    },
+    "editorHighlightActiveLine": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Editor Highlight Active Line",
+      "help": "Controls editor highlight active line.",
+      "default": true
+    },
+    "editorKeyMap": {
+      "type": "string",
+      "control": "text",
+      "label": "Editor Key Map",
+      "help": "Controls editor key map.",
+      "default": "default"
+    },
+    "editorLineWrapping": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Editor Line Wrapping",
+      "help": "Controls editor line wrapping.",
+      "default": false
+    },
+    "editorMatchBrackets": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Editor Match Brackets",
+      "help": "Controls editor match brackets.",
+      "default": true
+    },
+    "editorShowInvisibles": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Editor Show Invisibles",
+      "help": "Controls editor show invisibles.",
+      "default": false
+    },
+    "editorTabSize": {
+      "type": "number",
+      "control": "number",
+      "label": "Editor Tab Size",
+      "help": "Controls editor tab size.",
+      "default": 2
+    },
+    "editorTheme": {
+      "type": "string",
+      "control": "select",
+      "label": "Theme",
+      "help": "Controls theme.",
+      "elementId": "settingsEditorTheme",
+      "default": "material-darker",
+      "options": [
+        {
+          "value": "default",
+          "label": "Default"
+        },
+        {
+          "value": "monokai",
+          "label": "Monokai"
+        },
+        {
+          "value": "dracula",
+          "label": "Dracula"
+        },
+        {
+          "value": "material-darker",
+          "label": "Material Darker"
+        },
+        {
+          "value": "nord",
+          "label": "Nord"
+        },
+        {
+          "value": "ayu-dark",
+          "label": "Ayu Dark"
+        },
+        {
+          "value": "claude",
+          "label": "Claude"
+        }
+      ]
+    },
+    "enableContextMenu": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Enable Context Menu",
+      "help": "Controls enable context menu.",
+      "elementId": "settingsEnableContextMenu",
+      "defaultSource": "runtime"
+    },
+    "enableEditor": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Enable Editor",
+      "help": "Controls enable editor.",
+      "elementId": "settingsEnableEditor",
+      "defaultSource": "runtime"
+    },
+    "enableTags": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Enable Tags",
+      "help": "Controls enable tags.",
+      "elementId": "settingsEnableTags",
+      "defaultSource": "runtime"
+    },
+    "enabled": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Enabled",
+      "help": "Controls enabled.",
+      "default": true
+    },
+    "experimentalESMUserscripts": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Experimental ESMUserscripts",
+      "help": "Controls experimental esmuserscripts.",
+      "default": false
+    },
+    "externalsInterval": {
+      "type": "number",
+      "control": "select",
+      "label": "Update Interval",
+      "help": "Controls update interval.",
+      "elementId": "settingsExternalsInterval",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "0",
+          "label": "Never"
+        },
+        {
+          "value": "24",
+          "label": "Every Day"
+        },
+        {
+          "value": "168",
+          "label": "Every Week"
+        }
+      ]
+    },
+    "hideDisabledPopup": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Hide Disabled Popup",
+      "help": "Controls hide disabled popup.",
+      "elementId": "settingsHideDisabledPopup",
+      "defaultSource": "runtime"
+    },
+    "highlightMatches": {
+      "type": "string",
+      "control": "select",
+      "label": "Highlight selection matches",
+      "help": "Controls highlight selection matches.",
+      "elementId": "settingsHighlightMatches",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "cursor",
+          "label": "Cursor"
+        },
+        {
+          "value": "selection",
+          "label": "Selection"
+        },
+        {
+          "value": "none",
+          "label": "None"
+        }
+      ]
+    },
+    "highlightTrailingWhitespace": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Highlight Trailing Whitespace",
+      "help": "Controls highlight trailing whitespace.",
+      "elementId": "settingsHighlightTrailingWhitespace",
+      "defaultSource": "runtime"
+    },
+    "includeMode": {
+      "type": "string",
+      "control": "select",
+      "label": "Userscript @include Mode",
+      "help": "Controls userscript @include mode.",
+      "elementId": "settingsIncludeMode",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "default",
+          "label": "Default"
+        },
+        {
+          "value": "glob",
+          "label": "Glob"
+        },
+        {
+          "value": "regex",
+          "label": "Regex"
+        }
+      ]
+    },
+    "incognitoStorage": {
+      "type": "string",
+      "control": "select",
+      "label": "Store data in incognito mode",
+      "help": "Controls store data in incognito mode.",
+      "elementId": "settingsIncognitoStorage",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "temporary",
+          "label": "Temporary"
+        },
+        {
+          "value": "persistent",
+          "label": "Persistent"
+        },
+        {
+          "value": "none",
+          "label": "None"
+        }
+      ]
+    },
+    "indentWidth": {
+      "type": "number",
+      "control": "select",
+      "label": "Indentation Width",
+      "help": "Controls indentation width.",
+      "elementId": "settingsIndentWidth",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "2",
+          "label": "2"
+        },
+        {
+          "value": "4",
+          "label": "4"
+        },
+        {
+          "value": "8",
+          "label": "8"
+        }
+      ]
+    },
+    "indentWith": {
+      "type": "string",
+      "control": "select",
+      "label": "Indent with",
+      "help": "Controls indent with.",
+      "elementId": "settingsIndentWith",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "spaces",
+          "label": "Spaces"
+        },
+        {
+          "value": "tabs",
+          "label": "Tabs"
+        }
+      ]
+    },
+    "injectIntoFrames": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Inject Into Frames",
+      "help": "Controls inject into frames.",
+      "default": true
+    },
+    "keyMapping": {
+      "type": "string",
+      "control": "select",
+      "label": "Key Mapping",
+      "help": "Controls key mapping.",
+      "elementId": "settingsKeyMapping",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "default",
+          "label": "Windows"
+        },
+        {
+          "value": "vim",
+          "label": "Vim"
+        },
+        {
+          "value": "emacs",
+          "label": "Emacs"
+        },
+        {
+          "value": "sublime",
+          "label": "Sublime"
+        }
+      ]
+    },
+    "language": {
+      "type": "string",
+      "control": "text",
+      "label": "Language",
+      "help": "Controls language.",
+      "default": "auto"
+    },
+    "layout": {
+      "type": "string",
+      "control": "text",
+      "label": "Layout",
+      "help": "Controls layout.",
+      "default": "dark"
+    },
+    "lintMaxSize": {
+      "type": "string",
+      "control": "number",
+      "label": "Automatic syntax check max size",
+      "help": "Controls automatic syntax check max size.",
+      "elementId": "settingsLintMaxSize",
+      "defaultSource": "runtime",
+      "validation": {
+        "kind": "integer-range",
+        "min": 1000,
+        "max": 5000000,
+        "step": 1000
+      }
+    },
+    "lintOnType": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Lint On Type",
+      "help": "Controls lint on type.",
+      "elementId": "settingsLintOnType",
+      "defaultSource": "runtime"
+    },
+    "linterConfig": {
+      "type": "string",
+      "control": "textarea",
+      "label": "Linter Config",
+      "help": "Controls linter config.",
+      "elementId": "settingsLinterConfig",
+      "defaultSource": "runtime",
+      "validation": {
+        "kind": "json-object",
+        "allowEmpty": true
+      }
+    },
+    "loggingLevel": {
+      "type": "string",
+      "control": "select",
+      "label": "Logging Level",
+      "help": "Controls logging level.",
+      "elementId": "settingsLoggingLevel",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "off",
+          "label": "Off"
+        },
+        {
+          "value": "error",
+          "label": "Error"
+        },
+        {
+          "value": "warn",
+          "label": "Warning"
+        },
+        {
+          "value": "info",
+          "label": "Info"
+        },
+        {
+          "value": "debug",
+          "label": "Debug"
+        }
+      ]
+    },
+    "manualBlacklist": {
+      "type": "string",
+      "control": "textarea",
+      "label": "Manual Blacklist",
+      "help": "Controls manual blacklist.",
+      "elementId": "settingsManualBlacklist",
+      "defaultSource": "runtime"
+    },
+    "modifyCSP": {
+      "type": "string",
+      "control": "select",
+      "label": "Modify existing content security policy (CSP) headers",
+      "help": "Controls modify existing content security policy (csp) headers.",
+      "elementId": "settingsModifyCSP",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Auto"
+        },
+        {
+          "value": "yes",
+          "label": "Yes"
+        },
+        {
+          "value": "no",
+          "label": "No"
+        }
+      ]
+    },
+    "noSaveConfirm": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "No Save Confirm",
+      "help": "Controls no save confirm.",
+      "elementId": "settingsNoSaveConfirm",
+      "defaultSource": "runtime"
+    },
+    "notifyHideAfter": {
+      "type": "number",
+      "control": "select",
+      "label": "Hide notification after",
+      "help": "Controls hide notification after.",
+      "elementId": "settingsNotifyHideAfter",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "0",
+          "label": "Never"
+        },
+        {
+          "value": "5",
+          "label": "5 Seconds"
+        },
+        {
+          "value": "15",
+          "label": "15 Seconds"
+        },
+        {
+          "value": "30",
+          "label": "30 Seconds"
+        }
+      ]
+    },
+    "notifyOnError": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Notify On Error",
+      "help": "Controls notify on error.",
+      "default": false
+    },
+    "notifyOnInstall": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Notify On Install",
+      "help": "Controls notify on install.",
+      "default": true
+    },
+    "notifyOnUpdate": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Notify On Update",
+      "help": "Controls notify on update.",
+      "default": true
+    },
+    "pageFilterMode": {
+      "type": "string",
+      "control": "select",
+      "label": "Page Filter Mode",
+      "help": "Controls page filter mode.",
+      "elementId": "settingsPageFilterMode",
+      "default": "blacklist",
+      "options": [
+        {
+          "value": "blacklist",
+          "label": "Blacklist"
+        },
+        {
+          "value": "whitelist",
+          "label": "Whitelist"
+        }
+      ]
+    },
+    "popupColumns": {
+      "type": "number",
+      "control": "select",
+      "label": "Columns",
+      "help": "Controls columns.",
+      "elementId": "settingsPopupColumns",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "1",
+          "label": "1"
+        },
+        {
+          "value": "2",
+          "label": "2"
+        },
+        {
+          "value": "3",
+          "label": "3"
+        }
+      ]
+    },
+    "reindent": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Reindent",
+      "help": "Controls reindent.",
+      "elementId": "settingsReindent",
+      "defaultSource": "runtime"
+    },
+    "s3AccessKeyId": {
+      "type": "string",
+      "control": "text",
+      "label": "Access Key ID",
+      "help": "Controls access key id.",
+      "elementId": "settingsS3AccessKeyId",
+      "default": ""
+    },
+    "s3Bucket": {
+      "type": "string",
+      "control": "text",
+      "label": "Bucket",
+      "help": "Controls bucket.",
+      "elementId": "settingsS3Bucket",
+      "default": ""
+    },
+    "s3Endpoint": {
+      "type": "string",
+      "control": "url",
+      "label": "Endpoint",
+      "help": "Controls endpoint.",
+      "elementId": "settingsS3Endpoint",
+      "default": "",
+      "validation": {
+        "kind": "http-url",
+        "allowEmpty": true
+      }
+    },
+    "s3ObjectKey": {
+      "type": "string",
+      "control": "text",
+      "label": "Object Key (optional)",
+      "help": "Controls object key (optional).",
+      "elementId": "settingsS3ObjectKey",
+      "default": ""
+    },
+    "s3PathStyle": {
+      "type": "string",
+      "control": "text",
+      "label": "S3 Path Style",
+      "help": "Controls s3 path style.",
+      "defaultSource": "runtime"
+    },
+    "s3Region": {
+      "type": "string",
+      "control": "text",
+      "label": "Region",
+      "help": "Controls region.",
+      "elementId": "settingsS3Region",
+      "default": ""
+    },
+    "s3SecretKey": {
+      "type": "string",
+      "control": "password",
+      "label": "Secret Key",
+      "help": "Controls secret key.",
+      "elementId": "settingsS3SecretKey",
+      "default": ""
+    },
+    "sandboxMode": {
+      "type": "string",
+      "control": "select",
+      "label": "Sandbox Mode",
+      "help": "Controls sandbox mode.",
+      "elementId": "settingsSandboxMode",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "default",
+          "label": "Default"
+        },
+        {
+          "value": "raw",
+          "label": "Raw"
+        },
+        {
+          "value": "js",
+          "label": "JavaScript"
+        },
+        {
+          "value": "dom",
+          "label": "DOM"
+        }
+      ]
+    },
+    "scriptOrder": {
+      "type": "string",
+      "control": "select",
+      "label": "Userscript order",
+      "help": "Controls userscript order.",
+      "elementId": "settingsScriptOrder",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Auto"
+        },
+        {
+          "value": "name",
+          "label": "Name"
+        },
+        {
+          "value": "lastmod",
+          "label": "Last Modified"
+        },
+        {
+          "value": "position",
+          "label": "Position"
+        }
+      ]
+    },
+    "searchIntegration": {
+      "type": "string",
+      "control": "select",
+      "label": "Userscript Search integration",
+      "help": "Controls userscript search integration.",
+      "elementId": "settingsSearchIntegration",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "disabled",
+          "label": "Disabled"
+        },
+        {
+          "value": "greasyFork",
+          "label": "Greasy Fork"
+        },
+        {
+          "value": "openUserJS",
+          "label": "OpenUserJS"
+        }
+      ]
+    },
+    "showBadge": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Show Badge",
+      "help": "Controls show badge.",
+      "default": true
+    },
+    "showFixedSource": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Show Fixed Source",
+      "help": "Controls show fixed source.",
+      "elementId": "settingsShowFixedSource",
+      "defaultSource": "runtime"
+    },
+    "sri": {
+      "type": "string",
+      "control": "select",
+      "label": "Subresource Integrity",
+      "help": "Controls subresource integrity.",
+      "elementId": "settingsSRI",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "validate",
+          "label": "Validate if possible"
+        },
+        {
+          "value": "require",
+          "label": "Require"
+        },
+        {
+          "value": "ignore",
+          "label": "Ignore"
+        }
+      ]
+    },
+    "strictMode": {
+      "type": "string",
+      "control": "select",
+      "label": "strict mode",
+      "help": "Controls strict mode.",
+      "elementId": "settingsStrictMode",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "default",
+          "label": "Default"
+        },
+        {
+          "value": "enabled",
+          "label": "Enabled"
+        },
+        {
+          "value": "disabled",
+          "label": "Disabled"
+        }
+      ]
+    },
+    "syncEnabled": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Sync Enabled",
+      "help": "Controls sync enabled.",
+      "elementId": "settingsEnableSync",
+      "default": false
+    },
+    "syncEncryptionEnabled": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Sync Encryption Enabled",
+      "help": "Controls sync encryption enabled.",
+      "elementId": "settingsSyncEncryptionEnabled",
+      "default": false
+    },
+    "syncEncryptionKdfIterations": {
+      "type": "number",
+      "control": "number",
+      "label": "Sync Encryption Kdf Iterations",
+      "help": "Controls sync encryption kdf iterations.",
+      "default": 210000
+    },
+    "syncEncryptionPassphrase": {
+      "type": "string",
+      "control": "password",
+      "label": "Encryption passphrase",
+      "help": "Controls encryption passphrase.",
+      "elementId": "settingsSyncEncryptionPassphrase",
+      "default": ""
+    },
+    "syncInterval": {
+      "type": "number",
+      "control": "number",
+      "label": "Sync Interval",
+      "help": "Controls sync interval.",
+      "default": 3600000
+    },
+    "syncProvider": {
+      "type": "string",
+      "control": "text",
+      "label": "Sync Provider",
+      "help": "Controls sync provider.",
+      "default": "none"
+    },
+    "tabMode": {
+      "type": "string",
+      "control": "select",
+      "label": "TabMode",
+      "help": "Controls tabmode.",
+      "elementId": "settingsTabMode",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "indent",
+          "label": "Indent"
+        },
+        {
+          "value": "shift",
+          "label": "Shift"
+        },
+        {
+          "value": "default",
+          "label": "Default"
+        }
+      ]
+    },
+    "tabSize": {
+      "type": "number",
+      "control": "select",
+      "label": "Tab Size",
+      "help": "Controls tab size.",
+      "elementId": "settingsTabSize",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "2",
+          "label": "2"
+        },
+        {
+          "value": "4",
+          "label": "4"
+        },
+        {
+          "value": "8",
+          "label": "8"
+        }
+      ]
+    },
+    "theme": {
+      "type": "string",
+      "control": "text",
+      "label": "Theme",
+      "help": "Controls theme.",
+      "default": "dark"
+    },
+    "topLevelAwait": {
+      "type": "string",
+      "control": "select",
+      "label": "top-level await",
+      "help": "Controls top-level await.",
+      "elementId": "settingsTopLevelAwait",
+      "defaultSource": "runtime",
+      "options": [
+        {
+          "value": "default",
+          "label": "Default"
+        },
+        {
+          "value": "enabled",
+          "label": "Enabled"
+        },
+        {
+          "value": "disabled",
+          "label": "Disabled"
+        }
+      ]
+    },
+    "trashMode": {
+      "type": "string",
+      "control": "select",
+      "label": "Trash Mode",
+      "help": "Controls trash mode.",
+      "elementId": "settingsTrashMode",
+      "default": "30",
+      "options": [
+        {
+          "value": "disabled",
+          "label": "Disabled"
+        },
+        {
+          "value": "1",
+          "label": "1 day"
+        },
+        {
+          "value": "7",
+          "label": "7 days"
+        },
+        {
+          "value": "30",
+          "label": "30 days"
+        }
+      ]
+    },
+    "trimWhitespace": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Trim Whitespace",
+      "help": "Controls trim whitespace.",
+      "elementId": "settingsTrimWhitespace",
+      "defaultSource": "runtime"
+    },
+    "updateDisabled": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Update Disabled",
+      "help": "Controls update disabled.",
+      "elementId": "settingsUpdateDisabled",
+      "defaultSource": "runtime"
+    },
+    "updateInterval": {
+      "type": "number",
+      "control": "number",
+      "label": "Update Interval",
+      "help": "Controls update interval.",
+      "default": 86400000
+    },
+    "webdavPassword": {
+      "type": "string",
+      "control": "password",
+      "label": "Password",
+      "help": "Controls password.",
+      "elementId": "settingsWebdavPassword",
+      "default": ""
+    },
+    "webdavUrl": {
+      "type": "string",
+      "control": "url",
+      "label": "WebDAV URL",
+      "help": "Controls webdav url.",
+      "elementId": "settingsWebdavUrl",
+      "default": "",
+      "validation": {
+        "kind": "http-url",
+        "allowEmpty": true
+      }
+    },
+    "webdavUsername": {
+      "type": "string",
+      "control": "text",
+      "label": "Username",
+      "help": "Controls username.",
+      "elementId": "settingsWebdavUsername",
+      "default": ""
+    },
+    "whitelistedPages": {
+      "type": "string",
+      "control": "textarea",
+      "label": "Whitelisted Pages",
+      "help": "Controls whitelisted pages.",
+      "elementId": "settingsWhitelistedPages",
+      "default": ""
+    },
+    "wordWrap": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Word Wrap",
+      "help": "Controls word wrap.",
+      "elementId": "settingsWordWrap",
+      "defaultSource": "runtime"
+    },
+    "xhrTimeout": {
+      "type": "number",
+      "control": "number",
+      "label": "Xhr Timeout",
+      "help": "Controls xhr timeout.",
+      "default": 30000
+    }
   }
 }

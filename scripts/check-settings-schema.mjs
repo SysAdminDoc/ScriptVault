@@ -11,6 +11,25 @@ const ALLOWED_CLASSIFICATIONS = new Set([
   'derived',
   'deprecated',
 ]);
+const ALLOWED_METADATA_TYPES = new Set(['boolean', 'string', 'number', 'array', 'object']);
+const ALLOWED_METADATA_CONTROLS = new Set([
+  'checkbox',
+  'number',
+  'password',
+  'readonly',
+  'select',
+  'text',
+  'textarea',
+  'url',
+]);
+const REQUIRED_VALIDATION_KEYS = new Map([
+  ['badgeColor', 'hex-color'],
+  ['lintMaxSize', 'integer-range'],
+  ['webdavUrl', 'http-url'],
+  ['s3Endpoint', 'http-url'],
+  ['deniedHosts', 'host-list'],
+  ['linterConfig', 'json-object'],
+]);
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -70,6 +89,78 @@ function buildClassificationMap(schema) {
   return { classified, errors };
 }
 
+function valueType(value) {
+  if (Array.isArray(value)) return 'array';
+  if (value === null) return 'object';
+  return typeof value;
+}
+
+function validateMetadata(schema, classified, defaultKeys, defaults, dashboardSaveKeys) {
+  const errors = [];
+  const metadata = schema?.metadata || {};
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return {
+      metadata: {},
+      errors: ['Settings schema metadata must be an object keyed by setting name'],
+    };
+  }
+
+  const required = new Set([
+    ...[...classified.entries()]
+      .filter(([, classification]) => classification === 'visible')
+      .map(([key]) => key),
+    ...dashboardSaveKeys.filter((key) => classified.get(key) === 'credential'),
+  ]);
+
+  for (const key of [...required].sort()) {
+    const entry = metadata[key];
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      errors.push(`Setting "${key}" is missing schema metadata`);
+      continue;
+    }
+    if (!ALLOWED_METADATA_TYPES.has(entry.type)) {
+      errors.push(`Setting "${key}" metadata has invalid type "${entry.type}"`);
+    }
+    if (!ALLOWED_METADATA_CONTROLS.has(entry.control)) {
+      errors.push(`Setting "${key}" metadata has invalid control "${entry.control}"`);
+    }
+    if (typeof entry.label !== 'string' || !entry.label.trim()) {
+      errors.push(`Setting "${key}" metadata must include a non-empty label`);
+    }
+    if (typeof entry.help !== 'string' || !entry.help.trim()) {
+      errors.push(`Setting "${key}" metadata must include non-empty help text`);
+    }
+    if (defaultKeys.includes(key)) {
+      if (!Object.prototype.hasOwnProperty.call(entry, 'default')) {
+        errors.push(`Setting "${key}" metadata must include its default value`);
+      } else if (JSON.stringify(entry.default) !== JSON.stringify(defaults[key])) {
+        errors.push(`Setting "${key}" metadata default does not match src/config/settings-defaults.json`);
+      }
+      const actualType = valueType(defaults[key]);
+      if (entry.type !== actualType) {
+        errors.push(`Setting "${key}" metadata type "${entry.type}" does not match default type "${actualType}"`);
+      }
+    } else if (typeof entry.defaultSource !== 'string' || !entry.defaultSource.trim()) {
+      errors.push(`Setting "${key}" metadata must include defaultSource when no default exists`);
+    }
+    if (entry.control === 'select' && (!Array.isArray(entry.options) || entry.options.length === 0)) {
+      errors.push(`Setting "${key}" metadata select control must include options`);
+    }
+    const requiredValidation = REQUIRED_VALIDATION_KEYS.get(key);
+    if (requiredValidation && entry.validation?.kind !== requiredValidation) {
+      errors.push(`Setting "${key}" metadata must declare ${requiredValidation} validation`);
+    }
+  }
+
+  for (const key of Object.keys(metadata).sort()) {
+    if (!classified.has(key)) {
+      errors.push(`Metadata setting "${key}" is not classified`);
+    }
+  }
+
+  return { metadata, errors };
+}
+
 export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
   const paths = {
     defaults: resolve(rootDir, 'src/config/settings-defaults.json'),
@@ -88,7 +179,7 @@ export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
     return {
       ok: false,
       errors,
-      counts: { defaults: 0, typeKeys: 0, dashboardSaveKeys: 0, classified: 0 },
+      counts: { defaults: 0, typeKeys: 0, dashboardSaveKeys: 0, classified: 0, metadata: 0 },
     };
   }
 
@@ -112,6 +203,8 @@ export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
       errors.push(`Classified setting "${key}" is not present in defaults, Settings type, or dashboard save handlers`);
     }
   }
+  const { metadata, errors: metadataErrors } = validateMetadata(schema, classified, defaultKeys, defaults, dashboardSaveKeys);
+  errors.push(...metadataErrors);
 
   return {
     ok: errors.length === 0,
@@ -121,6 +214,7 @@ export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
       typeKeys: typeKeys.length,
       dashboardSaveKeys: dashboardSaveKeys.length,
       classified: classified.size,
+      metadata: Object.keys(metadata).length,
     },
     defaultKeys,
     typeKeys,
@@ -129,7 +223,7 @@ export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
 }
 
 export function formatSettingsSchemaReport(report) {
-  const summary = `${report.counts.defaults} defaults, ${report.counts.typeKeys} typed keys, ${report.counts.dashboardSaveKeys} dashboard-save keys, ${report.counts.classified} classified keys`;
+  const summary = `${report.counts.defaults} defaults, ${report.counts.typeKeys} typed keys, ${report.counts.dashboardSaveKeys} dashboard-save keys, ${report.counts.classified} classified keys, ${report.counts.metadata} metadata entries`;
   if (report.ok) {
     return `[settings-schema] OK: ${summary}.`;
   }
