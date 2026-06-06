@@ -207,6 +207,20 @@ Cycle 111 adds stale-bundle diagnostics to dry-run previews:
 - These counts are advisory evidence only. They do not enable non-empty merge
   writes.
 
-The next implementation slice should add a non-writing candidate merge plan or
-another durable safeguard before non-empty local and remote value bags can be
-merged bidirectionally.
+Cycle 112 adds non-writing candidate merge plans to blocked previews:
+
+- Blocked value-bundle preview entries include `candidateMergePlan` plus
+  `candidateRemoteKeyCount`, `candidateLocalKeyCount`,
+  `candidateSameTimestampKeyCount`, and `candidateManualKeyCount`.
+- Candidate counts are derived from the existing local-only, remote-only, and
+  per-key timestamp overlap counts. They are advisory only.
+- The dashboard preview and Download Preview export keep only the plan label and
+  aggregate counts. They still omit script IDs, script names, value key names,
+  values, URLs, local workspace handles, local paths, sync credentials, provider
+  account data, and raw `keyMetadata` maps.
+- The preview remains non-writing. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add candidate merge acceptance gates,
+manual-review diagnostics, or another durable safeguard before non-empty local
+and remote value bags can be merged bidirectionally.

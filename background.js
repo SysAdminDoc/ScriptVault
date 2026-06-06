@@ -16814,6 +16814,7 @@ function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {
     ? getValueBundleLastUpdatedAt(localBundle) ?? null
     : null;
   const remoteLastValueUpdatedAt = getValueBundleLastUpdatedAt(remoteBundle) ?? null;
+  const candidateMerge = buildValueBundleCandidateMergePlan(keyCounts);
   return {
     reason,
     localKeyCount: hasLocalBundle ? safeValueBundleMetric(localBundle.keyCount) : null,
@@ -16831,8 +16832,39 @@ function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {
     overlappingSameTimestampKeyCount: keyCounts?.overlappingSameTimestamp ?? null,
     overlappingRemoteTimestampOnlyKeyCount: keyCounts?.overlappingRemoteTimestampOnly ?? null,
     overlappingLocalTimestampOnlyKeyCount: keyCounts?.overlappingLocalTimestampOnly ?? null,
-    overlappingUnknownTimestampKeyCount: keyCounts?.overlappingUnknownTimestamp ?? null
+    overlappingUnknownTimestampKeyCount: keyCounts?.overlappingUnknownTimestamp ?? null,
+    candidateMergePlan: candidateMerge.plan,
+    candidateRemoteKeyCount: candidateMerge.remoteKeyCount,
+    candidateLocalKeyCount: candidateMerge.localKeyCount,
+    candidateSameTimestampKeyCount: candidateMerge.sameTimestampKeyCount,
+    candidateManualKeyCount: candidateMerge.manualKeyCount
   };
+}
+
+function buildValueBundleCandidateMergePlan(keyCounts) {
+  if (!keyCounts) {
+    return {
+      plan: 'unavailable',
+      remoteKeyCount: null,
+      localKeyCount: null,
+      sameTimestampKeyCount: null,
+      manualKeyCount: null
+    };
+  }
+  const remoteKeyCount = keyCounts.remoteOnly
+    + keyCounts.overlappingRemoteNewer
+    + keyCounts.overlappingRemoteTimestampOnly;
+  const localKeyCount = keyCounts.localOnly
+    + keyCounts.overlappingLocalNewer
+    + keyCounts.overlappingLocalTimestampOnly;
+  const sameTimestampKeyCount = keyCounts.overlappingSameTimestamp;
+  const manualKeyCount = keyCounts.overlappingUnknownTimestamp;
+  let plan = 'manual-review';
+  if (manualKeyCount > 0 || sameTimestampKeyCount > 0) plan = 'manual-review';
+  else if (remoteKeyCount > 0 && localKeyCount > 0) plan = 'timestamp-guided';
+  else if (remoteKeyCount > 0) plan = 'remote-preferred';
+  else if (localKeyCount > 0) plan = 'local-preferred';
+  return { plan, remoteKeyCount, localKeyCount, sameTimestampKeyCount, manualKeyCount };
 }
 
 function countValueBundleKeyOverlap(localValues, remoteValues, localKeyMetadata, remoteKeyMetadata) {

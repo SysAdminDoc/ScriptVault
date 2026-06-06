@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 111 - 2026-06-06
+Last cycle: Cycle 112 - 2026-06-06
 
 ## Latest Result
 
@@ -618,13 +618,23 @@ Last cycle: Cycle 111 - 2026-06-06
   tests, typecheck, build, the full check suite with 1509 Vitest cases,
   high-severity audit, CWS remote-code scan, Monaco ESM scan, TS runtime check,
   forbidden-reference grep, and `git diff --check`.
+  Cycle 112 added non-writing candidate merge plans to blocked L-8 value bundle
+  previews: preview entries and sanitized Download Preview exports now classify
+  the candidate merge shape and count remote-candidate, local-candidate,
+  same-timestamp, and manual-review keys. The preview/export still omit script
+  IDs, script names, value key names, values, URLs, local workspace handles,
+  local paths, sync credentials, provider account data, and raw `keyMetadata`
+  maps. Non-empty writes remain disabled. Verification used focused source
+  CloudSync/sync-cockpit/hardening tests, typecheck, build, the full check suite
+  with 1509 Vitest cases, high-severity audit, CWS remote-code scan, Monaco ESM
+  scan, TS runtime check, forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 53. Cycle 111 added stale-bundle diagnostics to
-GM value sync dry-run previews. The next best local cycle is Cycle 112: add a
-non-writing candidate merge plan or the next L-8 safeguard needed before broader
-bidirectional GM value merges.
+Continue from `ROADMAP.md` Round 54. Cycle 112 added non-writing candidate merge
+plans to GM value sync blocked previews. The next best local cycle is Cycle 113:
+add candidate merge acceptance gates, manual-review diagnostics, or the next L-8
+safeguard needed before broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -633,8 +643,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 111 complete for 2026-06-06; roadmap continuation
-  points to Cycle 112 GM value sync candidate merge planning or the next available
-  non-credential-gated L-8 safeguard.
+- Status: ScriptVault Cycle 112 complete for 2026-06-06; roadmap continuation
+  points to Cycle 113 GM value sync candidate merge acceptance gates,
+  manual-review diagnostics, or the next available non-credential-gated L-8
+  safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

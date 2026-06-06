@@ -789,6 +789,11 @@ describe('source cloud sync module', () => {
         overlappingRemoteTimestampOnlyKeyCount: 0,
         overlappingLocalTimestampOnlyKeyCount: 0,
         overlappingUnknownTimestampKeyCount: 0,
+        candidateMergePlan: 'timestamp-guided',
+        candidateRemoteKeyCount: 2,
+        candidateLocalKeyCount: 1,
+        candidateSameTimestampKeyCount: 0,
+        candidateManualKeyCount: 0,
       }),
     ]);
     expect(preview.valueBundleConflicts[0].localBytes).toBeGreaterThan(0);

@@ -1549,6 +1549,16 @@ export interface ResponseMap {
       overlappingRemoteTimestampOnlyKeyCount: number | null;
       overlappingLocalTimestampOnlyKeyCount: number | null;
       overlappingUnknownTimestampKeyCount: number | null;
+      candidateMergePlan:
+        | 'timestamp-guided'
+        | 'remote-preferred'
+        | 'local-preferred'
+        | 'manual-review'
+        | 'unavailable';
+      candidateRemoteKeyCount: number | null;
+      candidateLocalKeyCount: number | null;
+      candidateSameTimestampKeyCount: number | null;
+      candidateManualKeyCount: number | null;
     }[];
   }>;
   revokeSyncProvider: SuccessOrError;
