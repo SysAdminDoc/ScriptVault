@@ -71,6 +71,24 @@ export {
 export { buildWrappedScript } from './wrapper-builder';
 export type { RequireScript } from './wrapper-builder';
 
+export {
+  BACKGROUND_RUNNER_ALLOWED_GRANTS,
+  BACKGROUND_RUNNER_BUDGET_LIMITS,
+  DEFAULT_BACKGROUND_RUNNER_BUDGET,
+  getBackgroundRunnerTriggers,
+  getUnsupportedBackgroundGrants,
+  normalizeBackgroundGrant,
+  normalizeBackgroundRunnerBudget,
+  planBackgroundScript,
+} from './background-runner';
+export type {
+  BackgroundRunnerBudget,
+  BackgroundRunnerStatus,
+  BackgroundRunnerTrigger,
+  BackgroundScriptCandidate,
+  BackgroundScriptPlan,
+} from './background-runner';
+
 export { updateBadge, updateBadgeForTab } from './badge';
 
 export { autoReloadMatchingTabs } from './tab-reload';
