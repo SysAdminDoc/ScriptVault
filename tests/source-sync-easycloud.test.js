@@ -275,6 +275,8 @@ describe('source easycloud sync module', () => {
           userModified: true,
           mergeConflict: true,
           _registrationError: 'local registration failed',
+          localWorkspaceBindingId: 'binding-local',
+          localFilePath: 'C:\\Users\\--\\secret\\local.user.js',
         },
         createdAt: 1,
         updatedAt: 1,
@@ -294,6 +296,8 @@ describe('source easycloud sync module', () => {
     expect(body).not.toContain('userModified');
     expect(body).not.toContain('mergeConflict');
     expect(body).not.toContain('_registrationError');
+    expect(body).not.toContain('binding-local');
+    expect(body).not.toContain('secret\\\\local.user.js');
   });
 
   it('encrypts EasyCloud Drive uploads when sync encryption is enabled', async () => {

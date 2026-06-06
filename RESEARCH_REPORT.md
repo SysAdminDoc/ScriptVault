@@ -2,6 +2,21 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 56 local workspace binding store: X-8 now has the
+first local-only data model needed before a dashboard "Refresh from local file"
+flow can apply code. Current Chrome File System Access docs still allow
+persisting `FileSystemHandle` objects in IndexedDB, require permission rechecks
+through `queryPermission()`/`requestPermission()`, and document persistent
+permission behavior for stored handles; current CWS user-data guidance still
+treats locally stored sensitive data as disclosure-relevant. ScriptVault now
+keeps future local file handles in a separate `localWorkspaceBindings`
+IndexedDB store, exposes display-safe summaries without handles or absolute
+paths, deletes bindings when scripts/storage are cleared, and strips future
+local workspace settings from JSON exports, CloudSync, EasyCloud, and support
+snapshots. Remaining X-8 work is the feature-detected dashboard "Bind local
+file" action, permission-state summaries, review-only refresh apply, and
+behavior-level no-code/local-save history tests.
+
 2026-06-06 Cycle 55 autosave receipt coalescing: N-8 now has an
 implementation path for coalescing repeated editor autosaves without storing a
 session token in script data. The File System Access source refresh still

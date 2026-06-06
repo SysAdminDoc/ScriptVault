@@ -143,6 +143,7 @@ export const TS_RUNTIME_MODULES = [
     globalExports: [
       'SettingsManager',
       'ScriptStorage',
+      'LocalWorkspaceBindings',
       'ScriptValues',
       'TabStorage',
       'FolderStorage',

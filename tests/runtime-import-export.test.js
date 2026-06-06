@@ -212,6 +212,31 @@ describe('runtime import/export archive identity', () => {
     });
   });
 
+  it('redacts future local workspace binding metadata from script settings exports', async () => {
+    const script = makeScript('script_local_workspace', 'Local Workspace Script');
+    script.settings = {
+      notes: 'portable note',
+      localWorkspaceBindingId: 'binding-secret',
+      localWorkspace: { displayName: 'local.user.js', handle: { name: 'local.user.js' } },
+      localFilePath: 'C:\\Users\\--\\secret\\local.user.js',
+      absolutePath: 'C:\\Users\\--\\secret\\local.user.js',
+    };
+    const harness = createRuntimeHarness([script]);
+
+    const exported = await harness.exportAllScripts({ includeSettings: true });
+
+    expect(exported.scripts[0].settings).toEqual({ notes: 'portable note' });
+    expect(exported.scripts[0].redactedLocalWorkspaceSettingKeys).toEqual(expect.arrayContaining([
+      'localWorkspaceBindingId',
+      'localWorkspace',
+      'localFilePath',
+      'absolutePath',
+    ]));
+    expect(JSON.stringify(exported)).not.toContain('binding-secret');
+    expect(JSON.stringify(exported)).not.toContain('secret\\\\local.user.js');
+    expect(JSON.stringify(exported)).not.toContain('handle');
+  });
+
   it('restores JSON settings credentials only when archive metadata and import option both opt in', async () => {
     const harness = createRuntimeHarness();
     const data = {

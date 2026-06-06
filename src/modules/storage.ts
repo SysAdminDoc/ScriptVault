@@ -5,7 +5,7 @@
 import type { Script, Settings } from '../types/index';
 import { generateId } from '../shared/utils';
 import settingsDefaultsData from '../config/settings-defaults.json';
-import { ScriptsDAO, ValuesDAO } from '../storage/script-db';
+import { LocalWorkspaceBindingsDAO, ScriptsDAO, ValuesDAO } from '../storage/script-db';
 import { ensureV3Migration } from '../storage/migration-v3';
 
 // ============================================================================
@@ -402,6 +402,17 @@ export const ScriptStorage = {
     await this.set(newId, newScript);
     return newScript;
   },
+};
+
+export const LocalWorkspaceBindings = {
+  put: LocalWorkspaceBindingsDAO.put.bind(LocalWorkspaceBindingsDAO),
+  get: LocalWorkspaceBindingsDAO.get.bind(LocalWorkspaceBindingsDAO),
+  getHandle: LocalWorkspaceBindingsDAO.getHandle.bind(LocalWorkspaceBindingsDAO),
+  getByScript: LocalWorkspaceBindingsDAO.getByScript.bind(LocalWorkspaceBindingsDAO),
+  list: LocalWorkspaceBindingsDAO.list.bind(LocalWorkspaceBindingsDAO),
+  delete: LocalWorkspaceBindingsDAO.delete.bind(LocalWorkspaceBindingsDAO),
+  deleteForScript: LocalWorkspaceBindingsDAO.deleteForScript.bind(LocalWorkspaceBindingsDAO),
+  clear: LocalWorkspaceBindingsDAO.clear.bind(LocalWorkspaceBindingsDAO),
 };
 
 // ============================================================================
