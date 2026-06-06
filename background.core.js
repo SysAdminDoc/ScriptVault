@@ -1947,7 +1947,8 @@ async function buildManagedPolicyHealthSummary(scripts = []) {
     configuredInlineEntries: 0,
     configuredInvalidEntries: 0,
     cleanupEnabled: false,
-    installedManagedScripts: scripts.filter(script => script?.settings?.managed).length
+    installedManagedScripts: scripts.filter(script => script?.settings?.managed).length,
+    lastRun: null
   };
   if (!managed) return summary;
 
@@ -1957,16 +1958,20 @@ async function buildManagedPolicyHealthSummary(scripts = []) {
   } catch (_) {
     return {
       ...summary,
-      policyReadStatus: 'unavailable'
+      policyReadStatus: 'unavailable',
+      lastRun: await readManagedPolicyRunSummary()
     };
   }
 
-  const hasManagedScriptsKey = !!policy && Object.hasOwn(policy, 'managedScripts');
-  const hasCleanupKey = !!policy && Object.hasOwn(policy, 'managedScriptsCleanup');
+  const hasManagedScriptsKey = hasManagedScriptPolicyKey(policy, 'managedScripts');
+  const hasCleanupKey = hasManagedScriptPolicyKey(policy, 'managedScriptsCleanup');
   const items = Array.isArray(policy?.managedScripts) ? policy.managedScripts : [];
   summary.policyReadStatus = hasManagedScriptsKey || hasCleanupKey ? 'readable' : 'not-configured';
   summary.cleanupEnabled = policy?.managedScriptsCleanup === true;
   summary.configuredEntries = items.length;
+  if (summary.policyReadStatus !== 'not-configured') {
+    summary.lastRun = await readManagedPolicyRunSummary();
+  }
   if (hasManagedScriptsKey && !Array.isArray(policy?.managedScripts)) {
     summary.configuredInvalidEntries++;
   }
@@ -2158,6 +2163,13 @@ function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callb
   if (managedPolicy?.configuredEntries > 0 && managedPolicy?.installedManagedScripts === 0) {
     push('managedPolicyNotApplied', 'warning', `${managedPolicy.configuredEntries} managed policy entr${managedPolicy.configuredEntries === 1 ? 'y has' : 'ies have'} not produced an installed managed script yet`);
   }
+  const managedPolicyRunFailures = (managedPolicy?.lastRun?.failedEntries || 0) + (managedPolicy?.lastRun?.pruneFailedScripts || 0);
+  if (managedPolicyRunFailures > 0) {
+    push('managedPolicyRunFailures', 'warning', `${managedPolicyRunFailures} managed policy operation${managedPolicyRunFailures === 1 ? '' : 's'} failed during the last apply run`);
+  }
+  if (managedPolicy?.lastRun?.skippedInvalidEntries > 0) {
+    push('managedPolicyRunSkippedEntries', 'warning', `${managedPolicy.lastRun.skippedInvalidEntries} managed policy entr${managedPolicy.lastRun.skippedInvalidEntries === 1 ? 'y was' : 'ies were'} skipped during the last apply run`);
+  }
   for (const [id, block] of Object.entries(callbacks || {})) {
     if (block?.level === 'warning' || block?.level === 'critical') {
       push(id, block.level, `${id} is at ${block.percentOfCap}% of its cap`);
@@ -2263,7 +2275,8 @@ async function buildLocalHealthReport() {
       configuredInlineEntries: 0,
       configuredInvalidEntries: 0,
       cleanupEnabled: false,
-      installedManagedScripts: scripts.managedScripts
+      installedManagedScripts: scripts.managedScripts,
+      lastRun: null
     };
     collectionErrors.push({ id: 'managedPolicySummaryFailed', message: 'Managed policy health summary failed' });
   }
@@ -9045,6 +9058,101 @@ async function init() {
 }
 
 const MANAGED_SCRIPT_POLICY_KEYS = ['managedScripts', 'managedScriptsCleanup'];
+const MANAGED_SCRIPT_RUN_SCHEMA = 'scriptvault-managed-policy-run/v1';
+const MANAGED_SCRIPT_LAST_RUN_KEY = 'managedScriptsLastRun';
+
+function hasManagedScriptPolicyKey(policy, key) {
+  return !!policy && Object.hasOwn(policy, key);
+}
+
+function _managedScriptRunCount(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : 0;
+}
+
+function _managedScriptRunTimestamp(value) {
+  return typeof value === 'string' && value.length <= 40 ? value : '';
+}
+
+function buildManagedPolicyRunStatus(summary = {}) {
+  if (summary.policyReadStatus === 'unavailable') return 'unavailable';
+  const failures = (summary.failedEntries || 0) + (summary.pruneFailedScripts || 0);
+  if (failures > 0 && (summary.installedEntries || 0) === 0 && (summary.prunedScripts || 0) === 0) return 'failed';
+  if (failures > 0 || (summary.skippedInvalidEntries || 0) > 0) return 'partial';
+  if ((summary.prunedScripts || 0) > 0 && (summary.installedEntries || 0) === 0) return 'pruned';
+  if ((summary.attemptedEntries || 0) === 0 && (summary.configuredEntries || 0) === 0 && !summary.cleanupEnabled) return 'not-configured';
+  if ((summary.attemptedEntries || 0) === 0) return 'skipped';
+  return 'applied';
+}
+
+function createManagedPolicyRunSummary(policy = {}, policyReadStatus = 'readable') {
+  const items = Array.isArray(policy?.managedScripts) ? policy.managedScripts : [];
+  return {
+    schema: MANAGED_SCRIPT_RUN_SCHEMA,
+    startedAt: new Date().toISOString(),
+    finishedAt: '',
+    status: 'not-configured',
+    policyReadStatus,
+    configuredEntries: items.length,
+    attemptedEntries: 0,
+    installedEntries: 0,
+    failedEntries: 0,
+    skippedInvalidEntries: hasManagedScriptPolicyKey(policy, 'managedScripts') && !Array.isArray(policy?.managedScripts) ? 1 : 0,
+    prunedScripts: 0,
+    pruneFailedScripts: 0,
+    cleanupEnabled: policy?.managedScriptsCleanup === true
+  };
+}
+
+function sanitizeManagedPolicyRunSummary(summary = null) {
+  if (!summary || summary.schema !== MANAGED_SCRIPT_RUN_SCHEMA) return null;
+  const safe = {
+    schema: MANAGED_SCRIPT_RUN_SCHEMA,
+    startedAt: _managedScriptRunTimestamp(summary.startedAt),
+    finishedAt: _managedScriptRunTimestamp(summary.finishedAt),
+    status: String(summary.status || 'not-configured'),
+    policyReadStatus: String(summary.policyReadStatus || 'not-configured'),
+    configuredEntries: _managedScriptRunCount(summary.configuredEntries),
+    attemptedEntries: _managedScriptRunCount(summary.attemptedEntries),
+    installedEntries: _managedScriptRunCount(summary.installedEntries),
+    failedEntries: _managedScriptRunCount(summary.failedEntries),
+    skippedInvalidEntries: _managedScriptRunCount(summary.skippedInvalidEntries),
+    prunedScripts: _managedScriptRunCount(summary.prunedScripts),
+    pruneFailedScripts: _managedScriptRunCount(summary.pruneFailedScripts),
+    cleanupEnabled: summary.cleanupEnabled === true
+  };
+  const validStatuses = new Set(['not-configured', 'applied', 'partial', 'failed', 'pruned', 'skipped', 'unavailable']);
+  const validPolicyStatuses = new Set(['unsupported', 'not-configured', 'readable', 'unavailable', 'error']);
+  if (!validStatuses.has(safe.status)) safe.status = buildManagedPolicyRunStatus(safe);
+  if (!validPolicyStatuses.has(safe.policyReadStatus)) safe.policyReadStatus = 'not-configured';
+  return safe;
+}
+
+async function recordManagedPolicyRunSummary(summary = {}) {
+  const finished = {
+    ...summary,
+    finishedAt: new Date().toISOString(),
+    status: buildManagedPolicyRunStatus(summary)
+  };
+  const safe = sanitizeManagedPolicyRunSummary(finished);
+  if (!safe || !chrome.storage?.local) return safe;
+  try {
+    await chrome.storage.local.set({ [MANAGED_SCRIPT_LAST_RUN_KEY]: safe });
+  } catch (_) {
+    // The apply path should not fail only because diagnostics could not persist.
+  }
+  return safe;
+}
+
+async function readManagedPolicyRunSummary() {
+  if (!chrome.storage?.local) return null;
+  try {
+    const stored = await chrome.storage.local.get(MANAGED_SCRIPT_LAST_RUN_KEY);
+    return sanitizeManagedPolicyRunSummary(stored?.[MANAGED_SCRIPT_LAST_RUN_KEY]);
+  } catch (_) {
+    return null;
+  }
+}
 
 async function restrictManagedStorageAccess() {
   const managed = chrome.storage?.managed;
@@ -9104,11 +9212,17 @@ async function applyManagedScripts() {
   try {
     policy = await chrome.storage.managed.get(MANAGED_SCRIPT_POLICY_KEYS);
   } catch (e) {
-    // No managed policy attached or restricted-by-policy — silently skip.
+    await recordManagedPolicyRunSummary(createManagedPolicyRunSummary({}, 'unavailable'));
     return;
   }
+  const runSummary = createManagedPolicyRunSummary(policy, 'readable');
   const items = Array.isArray(policy?.managedScripts) ? policy.managedScripts : [];
-  if (items.length === 0 && !policy?.managedScriptsCleanup) return;
+  if (items.length === 0 && !policy?.managedScriptsCleanup) {
+    if (hasManagedScriptPolicyKey(policy, 'managedScripts') || hasManagedScriptPolicyKey(policy, 'managedScriptsCleanup')) {
+      await recordManagedPolicyRunSummary(runSummary);
+    }
+    return;
+  }
 
   const allScripts = await ScriptStorage.getAll();
   const installedByOrigin = new Map();
@@ -9121,10 +9235,23 @@ async function applyManagedScripts() {
   const policyManagedScriptIds = new Set();
 
   for (const item of items) {
-    if (!item || typeof item !== 'object') continue;
-    const originKey = await getManagedScriptOriginKey(item);
-    if (!originKey) continue;
+    if (!item || typeof item !== 'object') {
+      runSummary.skippedInvalidEntries++;
+      continue;
+    }
+    let originKey = null;
+    try {
+      originKey = await getManagedScriptOriginKey(item);
+    } catch (_) {
+      runSummary.skippedInvalidEntries++;
+      continue;
+    }
+    if (!originKey) {
+      runSummary.skippedInvalidEntries++;
+      continue;
+    }
     policyOriginKeys.add(originKey);
+    runSummary.attemptedEntries++;
 
     const url = typeof item.url === 'string' ? item.url.trim() : '';
     const code = typeof item.code === 'string' ? item.code : '';
@@ -9133,33 +9260,44 @@ async function applyManagedScripts() {
       try {
         res = await installFromUrl(url);
         if (res?.error) {
-          console.warn('[ScriptVault] Managed script install (URL) failed:', url, res.error);
+          runSummary.failedEntries++;
+          console.warn('[ScriptVault] Managed script install failed for a URL policy entry.');
           continue;
         }
       } catch (e) {
-        console.warn('[ScriptVault] Managed script fetch failed:', url, e?.message || e);
+        runSummary.failedEntries++;
+        console.warn('[ScriptVault] Managed script fetch failed for a URL policy entry.');
         continue;
       }
     } else if (code) {
       try {
         res = await installFromCode(code);
         if (res?.error) {
-          console.warn('[ScriptVault] Managed script install (inline) failed:', res.error);
+          runSummary.failedEntries++;
+          console.warn('[ScriptVault] Managed script install failed for an inline policy entry.');
           continue;
         }
       } catch (e) {
-        console.warn('[ScriptVault] Managed inline install failed:', e?.message || e);
+        runSummary.failedEntries++;
+        console.warn('[ScriptVault] Managed inline install failed for a policy entry.');
         continue;
       }
     } else {
+      runSummary.skippedInvalidEntries++;
       continue;
     }
 
     try {
       const managedScript = await markManagedScript(res, originKey);
-      if (managedScript?.id) policyManagedScriptIds.add(managedScript.id);
+      if (managedScript?.id) {
+        policyManagedScriptIds.add(managedScript.id);
+        runSummary.installedEntries++;
+      } else {
+        runSummary.failedEntries++;
+      }
     } catch (e) {
-      console.warn('[ScriptVault] Managed-flag tagging failed:', e?.message || e);
+      runSummary.failedEntries++;
+      console.warn('[ScriptVault] Managed script tagging failed for a policy entry.');
     }
   }
 
@@ -9172,13 +9310,17 @@ async function applyManagedScripts() {
       if (!policyOriginKeys.has(originKey) && !policyManagedScriptIds.has(script.id)) {
         try {
           await ScriptStorage.delete(script.id);
-          debugLog(`[ManagedScripts] Pruned ${script.meta?.name} (no longer in policy)`);
+          runSummary.prunedScripts++;
+          debugLog('[ManagedScripts] Pruned a managed script no longer in policy');
         } catch (e) {
-          console.warn('[ScriptVault] Managed prune failed:', script.id, e?.message || e);
+          runSummary.pruneFailedScripts++;
+          console.warn('[ScriptVault] Managed prune failed for a policy-managed script.');
         }
       }
     }
   }
+
+  await recordManagedPolicyRunSummary(runSummary);
 }
 
 // Re-run provisioning whenever the managed-storage area changes.

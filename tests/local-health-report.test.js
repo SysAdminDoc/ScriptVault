@@ -40,14 +40,18 @@ describe('local health report background action', () => {
     const block = backgroundCoreTs.match(/async function buildManagedPolicyHealthSummary\(scripts = \[\]\) \{[\s\S]*?\n\}/);
     expect(block).toBeTruthy();
     expect(backgroundCoreTs).toContain('managed.get(MANAGED_SCRIPT_POLICY_KEYS)');
+    expect(backgroundCoreTs).toContain('readManagedPolicyRunSummary()');
     expect(backgroundCoreTs).toContain('accessLevelControlAvailable');
     expect(backgroundCoreTs).toContain('configuredUrlEntries');
     expect(backgroundCoreTs).toContain('configuredInlineEntries');
     expect(backgroundCoreTs).toContain('configuredInvalidEntries');
     expect(backgroundCoreTs).toContain('installedManagedScripts: scripts.filter');
+    expect(backgroundCoreTs).toContain('lastRun: await readManagedPolicyRunSummary()');
     expect(backgroundCoreTs).toContain('managedPolicy,');
     expect(backgroundCoreTs).toContain("push('managedPolicyInvalidEntries', 'warning'");
     expect(backgroundCoreTs).toContain("push('managedPolicyNotApplied', 'warning'");
+    expect(backgroundCoreTs).toContain("push('managedPolicyRunFailures', 'warning'");
+    expect(backgroundCoreTs).toContain("push('managedPolicyRunSkippedEntries', 'warning'");
     expect(block[0]).not.toMatch(/originKey|managedOriginKey|scriptId|scriptName|name:|return\s+policy|entries:\s*items/i);
   });
 
@@ -125,6 +129,8 @@ describe('local health report support snapshot wiring', () => {
     expect(messagesTs).toMatch(/backgroundScripts:\s*\{[\s\S]{0,300}unsupportedGrantNames: string\[\];/);
     expect(messagesTs).toMatch(/managedScripts: number;/);
     expect(messagesTs).toMatch(/managedPolicy:\s*\{[\s\S]{0,400}configuredInlineEntries: number;/);
+    expect(messagesTs).toMatch(/lastRun: null \| \{[\s\S]{0,700}schema: 'scriptvault-managed-policy-run\/v1';/);
+    expect(messagesTs).toMatch(/lastRun: null \| \{[\s\S]{0,900}skippedInvalidEntries: number;/);
     expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,300}totalBindings: number;/);
     expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,700}refreshStatuses: Record<string, number>;/);
     expect(messagesTs).toMatch(/GetExtensionStatus \| GetLocalHealthReport/);

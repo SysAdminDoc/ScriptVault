@@ -28,3 +28,10 @@ contexts when the browser supports `setAccessLevel()`. Installed managed
 scripts receive a dashboard `Managed` badge and a local `settings.managed`
 marker. Inline policy entries are tracked by SHA-256 origin keys rather than by
 source snippets.
+
+The local health report includes aggregate managed-policy diagnostics for
+support: managed-storage availability, policy read status, configured entry
+counts, cleanup state, installed managed-script count, and the last apply run's
+attempt/install/failure/skip/prune counts. It does not include policy URLs,
+inline source, origin keys, script names, script IDs, raw errors, account data,
+or external beacons.

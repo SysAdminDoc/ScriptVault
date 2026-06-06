@@ -60,6 +60,20 @@ describe('enterprise policy provisioning runtime contract', () => {
     expect(coreSource).not.toContain('Date.now() - s.updatedAt < 30000');
   });
 
+  it('records only aggregate managed-policy apply run feedback', () => {
+    expect(coreSource).toContain("const MANAGED_SCRIPT_RUN_SCHEMA = 'scriptvault-managed-policy-run/v1';");
+    expect(coreSource).toContain("const MANAGED_SCRIPT_LAST_RUN_KEY = 'managedScriptsLastRun';");
+    expect(coreSource).toContain('async function recordManagedPolicyRunSummary(summary = {})');
+    expect(coreSource).toContain('attemptedEntries');
+    expect(coreSource).toContain('failedEntries');
+    expect(coreSource).toContain('skippedInvalidEntries');
+    expect(coreSource).toContain('pruneFailedScripts');
+    expect(coreSource).toContain('await recordManagedPolicyRunSummary(runSummary);');
+    expect(coreSource).not.toContain("console.warn('[ScriptVault] Managed script install (URL) failed:', url");
+    expect(coreSource).not.toContain("console.warn('[ScriptVault] Managed prune failed:', script.id");
+    expect(coreSource).not.toContain('Pruned ${script.meta?.name}');
+  });
+
   it('surfaces managed scripts in the dashboard and administrator docs', () => {
     expect(dashboardSource).toContain('data-managed-badge="true"');
     expect(dashboardSource).toContain('Installed or updated from enterprise managed policy.');

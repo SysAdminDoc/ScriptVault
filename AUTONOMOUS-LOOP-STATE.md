@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 91 - 2026-06-06
+Last cycle: Cycle 94 - 2026-06-06
 
 ## Latest Result
 
@@ -441,14 +441,23 @@ Last cycle: Cycle 91 - 2026-06-06
   local-health/support-snapshot tests, Chromium local-health smoke, the full
   check suite, build, high-severity audit, CWS remote-code scan, Monaco ESM
   scan, TS runtime check, forbidden-reference grep, and `git diff --check`.
+  Cycle 94 added support-safe apply-run feedback for enterprise policy
+  provisioning: the service worker records the last managed-policy apply run as
+  aggregate attempt, install, failure, skip, prune, and cleanup counts in local
+  storage, local health exposes those last-run counts as warning evidence, and
+  managed apply logs no longer include policy URLs, raw errors, script names, or
+  script IDs. Verification used focused enterprise/local-health/support-snapshot
+  tests, the full check suite, build, high-severity audit, CWS remote-code scan,
+  Monaco ESM scan, TS runtime check, forbidden-reference grep, and `git diff
+  --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. Cycle 93 added aggregate managed-policy
-health diagnostics without policy values or script identifiers. The next best
-local cycle is Cycle 94: audit the managed-policy cleanup/reapply path for safe
-operator feedback, then continue to the next non-credential-gated roadmap item
-if that is already covered.
+Continue from `ROADMAP.md` Round 40. Cycle 94 added aggregate managed-policy
+apply feedback without policy values or script identifiers. The next best local
+cycle is Cycle 95: move to the next non-credential-gated roadmap item, starting
+with an L-4 DNR response-header matching audit/prototype if current Chrome DNR
+capabilities and the existing `@webRequest` path support a safe slice.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -457,8 +466,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 93 complete for 2026-06-06; roadmap continuation
-  points to Cycle 94 managed-policy cleanup/reapply feedback / next
-  non-credential-gated roadmap item.
+- Status: ScriptVault Cycle 94 complete for 2026-06-06; roadmap continuation
+  points to Cycle 95 DNR response-header matching audit/prototype or the next
+  available non-credential-gated roadmap item.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

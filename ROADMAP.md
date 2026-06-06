@@ -5,9 +5,9 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 40 - X-9 session-check polish 2026-06-06.
-> **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-05.
-> **Test suite:** 1480 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Roadmap version:** Round 40 - managed policy apply feedback 2026-06-06.
+> **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
+> **Test suite:** 1489 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 40 - 2026-06-06.
@@ -198,6 +198,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Deliverable:** Read `chrome.storage.managed` policy keys for script URLs, auto-install on load, managed-script indicator.
 - **Progress:** Cycle 92 made the existing provisioning hook loadable through a Chrome/Edge `storage.managed_schema`, restricted managed storage to trusted extension contexts when supported, tags managed installs by returned script ID plus URL/hash origin key, adds the dashboard `Managed` indicator, and documents the administrator policy payload.
 - **Progress:** Cycle 93 added aggregate managed-policy local health evidence: managed storage support, access-level control availability, policy read status, configured URL/inline/invalid entry counts, cleanup toggle state, installed managed script count, and warning-only mismatch signals without policy URLs, inline source, origin keys, script names, or script IDs.
+- **Progress:** Cycle 94 added local-only managed-policy apply feedback: the service worker records the last apply run's aggregate attempt, install, failure, skip, prune, and cleanup counts, local health surfaces those counts as support-safe warning evidence, and managed apply logs no longer include policy URLs, raw errors, script names, or script IDs.
 
 ### L-2. Local Filesystem Script Loading (Watch Mode)
 - **Priority:** P3 | **Effort:** M | **Source:** [S29, S30]
