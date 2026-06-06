@@ -106,6 +106,10 @@ PUBLISHER_ID=${PUBLISHER_ID}
 CLIENT_ID=${CLIENT_ID}
 CLIENT_SECRET=${CLIENT_SECRET}
 REFRESH_TOKEN=${REFRESH_TOKEN}
+
+# Optional CWS API v2 rollout percentage for publish.sh.
+# Leave unset for the default 100% rollout.
+# CWS_DEPLOY_PERCENTAGE=100
 EOL
 
 echo ""

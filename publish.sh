@@ -42,6 +42,14 @@ if [ -z "$PUBLISHER_ID" ]; then
   exit 1
 fi
 
+# Optional rollout control. CWS API v2 supports deployment percentages on
+# publish; keep the default at 100 so existing release behavior is unchanged.
+CWS_DEPLOY_PERCENTAGE="${CWS_DEPLOY_PERCENTAGE:-100}"
+if ! [[ "$CWS_DEPLOY_PERCENTAGE" =~ ^([0-9]|[1-9][0-9]|100)$ ]]; then
+  echo "ERROR: CWS_DEPLOY_PERCENTAGE must be an integer from 0 to 100."
+  exit 1
+fi
+
 # ── Read version ─────────────────────────────────────────────────────────────
 VERSION=$(grep -o '"version": "[^"]*"' manifest.json | head -1 | cut -d'"' -f4)
 ZIP_NAME="ScriptVault-v${VERSION}.zip"
@@ -145,7 +153,8 @@ echo ""
 echo "[3/3] Publishing..."
 npx chrome-webstore-upload publish \
   --extension-id "$EXTENSION_ID" \
-  --publisher-id "$PUBLISHER_ID"
+  --publisher-id "$PUBLISHER_ID" \
+  --deploy-percentage "$CWS_DEPLOY_PERCENTAGE"
 
 # ── Cleanup ──────────────────────────────────────────────────────────────────
 rm -f "$ZIP_NAME"

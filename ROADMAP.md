@@ -64,6 +64,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P1 | **Effort:** S | **Source:** [S16]
 - **Problem:** Chrome Web Store API v1 sunsets October 15, 2026. Current publish tooling may use v1 patterns.
 - **Deliverable:** Verify and migrate all CWS publish tooling to API v2 (service account auth, programmatic rollout). Update `docs/release-runbook.md`.
+- **Status:** Shipped 2026-06-06. `publish.sh` uses `chrome-webstore-upload-cli@4` with `PUBLISHER_ID`, v2 upload/publish calls, and optional `CWS_DEPLOY_PERCENTAGE` rollout control. `npm run cws:check` now pins the active v2 upload, publish, rollout, and fetchStatus endpoint contract, fails on active v1.1 endpoint regressions, and records the service-account/OIDC target with OAuth as the current local fallback.
 
 ### N-6. Monaco Editor ESM Migration Planning
 - **Priority:** P2 | **Effort:** S (research) | **Source:** [S17]

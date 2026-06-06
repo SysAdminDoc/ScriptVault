@@ -103,6 +103,7 @@ if (cliBinPath) {
 if (help) {
   requirePattern('chrome-webstore-upload help', help, /upload,\s*publish/);
   requirePattern('chrome-webstore-upload help', help, /PUBLISHER_ID/);
+  requirePattern('chrome-webstore-upload help', help, /--deploy-percentage/);
   for (const removedFlag of ['--client-id', '--client-secret', '--refresh-token', '--auto-publish']) {
     if (help.includes(removedFlag)) fail(`CLI help still exposes removed v3 flag ${removedFlag}`);
   }
@@ -112,9 +113,11 @@ const publish = readText('publish.sh');
 for (const removedFlag of ['--client-id', '--client-secret', '--refresh-token', '--auto-publish']) {
   if (publish.includes(removedFlag)) fail(`publish.sh still references removed CLI flag ${removedFlag}`);
 }
+requirePattern('publish.sh', publish, /CWS_DEPLOY_PERCENTAGE="\$\{CWS_DEPLOY_PERCENTAGE:-100\}"/);
 requirePattern('publish.sh', publish, /chrome-webstore-upload upload[\s\S]*--source "\$ZIP_NAME"/);
 requirePattern('publish.sh', publish, /chrome-webstore-upload upload[\s\S]*--publisher-id "\$PUBLISHER_ID"/);
 requirePattern('publish.sh', publish, /chrome-webstore-upload publish[\s\S]*--publisher-id "\$PUBLISHER_ID"/);
+requirePattern('publish.sh', publish, /chrome-webstore-upload publish[\s\S]*--deploy-percentage "\$CWS_DEPLOY_PERCENTAGE"/);
 
 const publishCommand = publish.match(/chrome-webstore-upload publish\s*\\([\s\S]*?)(?:\n\n|# |$)/);
 if (publishCommand?.[1]?.includes('--source')) {
@@ -128,6 +131,51 @@ for (const name of ['EXTENSION_ID', 'PUBLISHER_ID', 'CLIENT_ID', 'CLIENT_SECRET'
 for (const staleName of ['CWS_CLIENT_ID', 'CWS_CLIENT_SECRET', 'CWS_REFRESH_TOKEN']) {
   if (setup.includes(staleName) || publish.includes(staleName)) {
     fail(`CWS tooling still references stale env name ${staleName}`);
+  }
+}
+
+const cwsModule = existsSync(join(projectRoot, 'node_modules', 'chrome-webstore-upload', 'distribution', 'index.js'))
+  ? readText('node_modules/chrome-webstore-upload/distribution/index.js')
+  : '';
+if (!cwsModule) {
+  fail('node_modules/chrome-webstore-upload is missing; run npm ci before npm run cws:check');
+} else {
+  for (const needle of [
+    'https://chromewebstore.googleapis.com',
+    '/upload/v2/',
+    '/v2/',
+    ':upload',
+    ':publish',
+    ':fetchStatus',
+    ':setPublishedDeployPercentage',
+  ]) {
+    if (!cwsModule.includes(needle)) fail(`installed chrome-webstore-upload module is missing CWS API v2 endpoint fragment ${needle}`);
+  }
+  for (const staleEndpoint of [
+    'www.googleapis.com/upload/chromewebstore/v1.1',
+    'www.googleapis.com/chromewebstore/v1.1',
+  ]) {
+    if (cwsModule.includes(staleEndpoint)) fail(`installed chrome-webstore-upload module still references stale endpoint ${staleEndpoint}`);
+  }
+}
+
+const runbook = readText('docs/release-runbook.md');
+for (const needle of [
+  'POST https://chromewebstore.googleapis.com/upload/v2/publishers/PUBLISHER_ID/items/EXTENSION_ID:upload',
+  'POST https://chromewebstore.googleapis.com/v2/publishers/PUBLISHER_ID/items/EXTENSION_ID:publish',
+  'POST https://chromewebstore.googleapis.com/v2/publishers/PUBLISHER_ID/items/EXTENSION_ID:setPublishedDeployPercentage',
+  'GET https://chromewebstore.googleapis.com/v2/publishers/PUBLISHER_ID/items/EXTENSION_ID:fetchStatus',
+  'CWS_DEPLOY_PERCENTAGE',
+  'service account',
+]) {
+  if (!runbook.includes(needle)) fail(`docs/release-runbook.md is missing CWS API v2 contract text: ${needle}`);
+}
+for (const staleEndpoint of [
+  'www.googleapis.com/upload/chromewebstore/v1.1',
+  'www.googleapis.com/chromewebstore/v1.1',
+]) {
+  if (runbook.includes(staleEndpoint) || publish.includes(staleEndpoint) || setup.includes(staleEndpoint)) {
+    fail(`active CWS release tooling still references stale endpoint ${staleEndpoint}`);
   }
 }
 
