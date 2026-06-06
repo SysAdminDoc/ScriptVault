@@ -45,6 +45,8 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('summarizeSyncDisclosure');
     expect(dashboardJs).toContain('renderSyncPreview');
     expect(dashboardJs).toContain('formatValueBundleSyncLog');
+    expect(dashboardJs).toContain('skippedNonEmpty');
+    expect(dashboardJs).toContain('skippedUserModified');
     expect(dashboardJs).toContain('formatValueBundleConflictReason');
     expect(dashboardJs).toContain('GM value blocked merge preview');
     expect(dashboardJs).toContain('buildSyncPreviewExport');

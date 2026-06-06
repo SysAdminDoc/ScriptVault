@@ -104,6 +104,8 @@ interface ValueBundleSyncSummary {
   applied: number;
   preserved: number;
   conflictBlocked: number;
+  skippedNonEmpty: number;
+  skippedUserModified: number;
   skippedUnavailable: number;
   failures: number;
 }
@@ -417,6 +419,8 @@ function summarizeRemoteValueBundleApplyResult(
     applied: result.applied,
     preserved: Object.keys(result.preservedValueBundles).length,
     conflictBlocked: result.skippedNonEmpty + result.skippedUserModified,
+    skippedNonEmpty: result.skippedNonEmpty,
+    skippedUserModified: result.skippedUserModified,
     skippedUnavailable: result.skippedUnavailable,
     failures: result.failures,
   };

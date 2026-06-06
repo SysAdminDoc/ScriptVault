@@ -799,6 +799,8 @@ describe('source cloud sync module', () => {
         applied: 0,
         preserved: 1,
         conflictBlocked: 1,
+        skippedNonEmpty: 1,
+        skippedUserModified: 0,
         skippedUnavailable: 0,
         failures: 0,
       },
@@ -810,6 +812,77 @@ describe('source cloud sync module', () => {
       token: 'remote-token',
     });
     expect(JSON.stringify(getRemoteData())).not.toContain('local-token');
+  });
+
+  it('reports user-modified GM value-bundle preserves separately during sync', async () => {
+    await chrome.storage.local.set({
+      syncTombstones: {},
+    });
+
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_values',
+          code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Values' },
+          settings: { syncValues: true, userModified: true },
+          syncBaseCode: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 20,
+        scripts: [
+          {
+            id: 'script_values',
+            code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// remote',
+            enabled: true,
+            position: 0,
+            settings: { syncValues: true },
+            updatedAt: 20,
+          },
+        ],
+        tombstones: {},
+        valueBundles: {
+          script_values: {
+            schema: 'scriptvault-gm-value-sync/v1',
+            scriptId: 'script_values',
+            keyCount: 1,
+            bytes: 100,
+            values: { token: 'remote-token' },
+          },
+        },
+      },
+      {},
+      {
+        script_values: {},
+      },
+    );
+    const { CloudSync, ScriptValues, getRemoteData, scriptState } = harness;
+
+    await expect(CloudSync.sync()).resolves.toEqual({
+      success: true,
+      valueBundleSync: {
+        applied: 0,
+        preserved: 1,
+        conflictBlocked: 1,
+        skippedNonEmpty: 0,
+        skippedUserModified: 1,
+        skippedUnavailable: 0,
+        failures: 0,
+      },
+    });
+
+    expect(ScriptValues.setAll).not.toHaveBeenCalled();
+    expect(scriptState[0].settings.userModified).toBe(true);
+    expect(scriptState[0].code).toContain('// local');
+    expect(getRemoteData().valueBundles.script_values.values).toEqual({
+      token: 'remote-token',
+    });
   });
 
   it('applies remote GM value bundles during sync when local values are empty', async () => {
@@ -868,6 +941,8 @@ describe('source cloud sync module', () => {
         applied: 1,
         preserved: 0,
         conflictBlocked: 0,
+        skippedNonEmpty: 0,
+        skippedUserModified: 0,
         skippedUnavailable: 0,
         failures: 0,
       },
