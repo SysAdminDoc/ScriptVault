@@ -251,6 +251,14 @@ window.__svTag  = GM_info.script.tag;
     expect(window.__svTag).toBeUndefined();
   });
 
+  it('does not expose the browser namespace alias in userscript wrappers', () => {
+    const wrapped = buildWrappedScript(makeScript('window.__browserAliasProbe = typeof browser;'));
+
+    expect(wrapped).not.toContain('installBrowserNamespaceAlias');
+    expect(wrapped).not.toContain('window.browser');
+    expect(wrapped).not.toContain('globalThis.browser');
+  });
+
   it('window.onurlchange wrapper uses a page-scoped dispatcher instead of stacking history patches', () => {
     const script = makeScript('');
     script.meta.grant = ['window.onurlchange'];

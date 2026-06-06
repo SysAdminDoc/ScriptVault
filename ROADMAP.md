@@ -5,9 +5,9 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 40 - Monaco ESM dashboard smoke 2026-06-06.
+> **Roadmap version:** Round 40 - browser namespace alias 2026-06-06.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-05.
-> **Test suite:** 1454 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1460 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 40 - 2026-06-06.
@@ -147,6 +147,9 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P3 | **Effort:** S | **Source:** [S25]
 - **Problem:** Chrome 148 exposes `browser` namespace alongside `chrome`. Reduces cross-browser divergence.
 - **Deliverable:** Evaluate adopting `browser.*` with thin polyfill for Chrome <148.
+- **Status:** Shipped 2026-06-06.
+- **Progress:** Cycle 80 added `installBrowserNamespaceAlias()` to the promoted shared utilities and runtime generator so extension-owned globals with `chrome.runtime` get a non-enumerable `browser` alias when no native namespace exists. The dashboard compatibility layer now treats Chromium `browser.runtime` as Chrome unless Firefox user-agent or Gecko manifest metadata is present. Tests pin native-browser preservation, inert page globals, generated auto-install, Chromium detection, Gecko detection, and the userscript-wrapper boundary.
+- **Acceptance:** Complete: alias installs only where `chrome.runtime` already exists, native `browser` is preserved, Chromium with `browser.runtime` stays classified as Chrome, Firefox is still detected by UA/manifest, and generated userscript wrappers do not install or assign `window.browser`.
 
 ### X-6. Trusted Types Documentation
 - **Priority:** P3 | **Effort:** S | **Source:** [S26]
@@ -287,11 +290,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 77 | Monaco ESM fallback harness | `tests/monaco-esm-sandbox-loader.test.js`, `pages/editor-sandbox.html` | Browser-profile proof can be blocked, but the loader/fallback contract still needs deterministic coverage [S17, S24] | Added a VM/DOM harness that executes the sandbox script, validates ESM path requests, `ready` posting, and missing-bundle fallback routing |
 | 78 | Monaco ESM Chromium sandbox smoke | `tests/e2e/monaco-esm-sandbox.spec.js`, `tests/e2e/helpers/extension-fixture.js` | The ESM sandbox switch must run in a real Chromium extension page, not only jsdom/VM harnesses [S17, S24] | Added a Playwright extension-page smoke for the packaged sandbox ready path and routed missing-bundle fallback path |
 | 79 | Monaco adapter dashboard smoke | `tests/e2e/monaco-adapter-dashboard.spec.js` | The ESM editor must persist real dashboard edits through the CodeMirror-compatible Monaco adapter [S17, S24] | Added a Playwright dashboard smoke for edit-open, adapter readiness, toolbar save, reload, and adapter value persistence |
+| 80 | `browser` namespace alias | `src/shared/utils.ts`, `shared/utils.js`, `scripts/generate-ts-runtime-modules.mjs`, `pages/dashboard-firefox-compat.js`, focused tests | Chrome 148 exposes `browser`, so Chrome/Firefox code should converge without exposing extension APIs to userscript/page worlds [S25] | Added a generated extension-context alias, fixed Chromium-vs-Firefox detection when `browser.runtime` exists, and pinned wrapper boundary coverage |
 
 ## Continuation State
 
-- **Current cycle:** Round 40 Cycle 79 closed X-4 for the current ESM migration with a dashboard-level Monaco adapter save/reload smoke.
-- **Next implementation angle:** Cycle 80 should move to X-5 and add the `browser` namespace compatibility alias behind the existing extension API boundaries, with tests proving `browser.*` maps to the reviewed `chrome.*` surface without widening privileged APIs.
+- **Current cycle:** Round 40 Cycle 80 closed X-5 with a generated extension-context `browser` namespace alias and Chromium/Firefox detection safeguards.
+- **Next implementation angle:** Cycle 81 should move to X-6 with Trusted Types documentation for userscript authors and Help/README guidance that explains USER_SCRIPT isolation, MAIN-world limitations, and safe wrapper patterns without adding runtime code.
 - **Follow-up source checks:** Re-check CWS user-data/privacy expectations and File System Access handle persistence before editing local-save or local-workspace metadata.
 - **Suggested verification before implementation:** Run focused tests for setup-state banners, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching N-7, N-8, X-8, or X-9.
 
