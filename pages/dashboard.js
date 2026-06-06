@@ -3883,6 +3883,18 @@
         return `; GM values: ${applied} applied, ${preserved} preserved, ${blocked} blocked, ${unavailable} unavailable, ${failures} failed`;
     }
 
+    function formatValueBundleConflictReason(reason) {
+        if (reason === 'local-values-present') return 'local values present';
+        if (reason === 'local-bundle-unavailable') return 'local value snapshot unavailable';
+        return 'blocked';
+    }
+
+    function formatValueBundleConflictMetric(value, label) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return `unknown ${label}`;
+        return `${Math.max(0, number)} ${label}`;
+    }
+
     function renderSyncPreview(preview) {
         if (!elements.syncPreviewSummary) return;
         if (!preview?.success) {
@@ -3900,6 +3912,13 @@
         ];
         if ((summary.localValueOptIns || 0) > 0 || (summary.localValueBundles || 0) > 0 || (summary.remoteValueBundles || 0) > 0) {
             lines.push(`GM values: ${summary.localValueOptIns || 0} local opt-ins, ${summary.localValueBundles || 0} local bundles, ${summary.remoteValueBundles || 0} remote bundles (${summary.remoteValueBundlesApplyReady || 0} empty-local apply-ready, ${summary.remoteValueBundlesConflictBlocked || 0} conflict-blocked, ${summary.remoteValueBundlesIgnored || 0} ignored).`);
+        }
+        const valueBundleConflicts = Array.isArray(preview.valueBundleConflicts) ? preview.valueBundleConflicts : [];
+        if (valueBundleConflicts.length) {
+            lines.push('GM value blocked merge preview:');
+            for (const conflict of valueBundleConflicts.slice(0, 5)) {
+                lines.push(`- ${formatValueBundleConflictReason(conflict.reason)}: ${formatValueBundleConflictMetric(conflict.localKeyCount, 'local keys')}, ${formatValueBundleConflictMetric(conflict.remoteKeyCount, 'remote keys')}; ${formatValueBundleConflictMetric(conflict.localBytes, 'local bytes')}, ${formatValueBundleConflictMetric(conflict.remoteBytes, 'remote bytes')}`);
+            }
         }
         if (Array.isArray(preview.conflicts) && preview.conflicts.length) {
             lines.push('');

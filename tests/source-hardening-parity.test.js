@@ -218,8 +218,10 @@ describe('source hardening parity guards', () => {
       expect(text).toContain('selectApplicableRemoteValueBundles');
       expect(text).toContain('applyRemoteValueBundlesWhenLocalEmpty');
       expect(text).toContain('summarizeRemoteValueBundleApplyResult');
+      expect(text).toContain('buildValueBundleConflictPreview');
       expect(text).toContain('getSyncEnvelopeValueBundles');
       expect(text).toContain('valueBundleSync');
+      expect(text).toContain('valueBundleConflicts');
       expect(text).toContain('valueBundleApplyEnabled');
       expect(text).toContain('valueBundleApplyMode');
       expect(text).toContain('wouldApplyValues');

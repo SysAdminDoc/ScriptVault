@@ -16628,23 +16628,46 @@ function selectApplicableRemoteValueBundles(remote, targetScripts = []) {
 function countRemoteValueBundlesApplyReady(selection, local) {
   let ready = 0;
   let conflictBlocked = 0;
+  const conflicts = [];
   const localBundles = getSyncEnvelopeValueBundles(local);
   const localScriptIds = new Set(
     Array.isArray(local?.scripts) ? local.scripts.map(script => script.id) : []
   );
 
-  for (const [scriptId] of Object.entries(selection.valueBundles)) {
+  const addConflict = (reason, remoteBundle, localBundle) => {
+    conflictBlocked++;
+    if (conflicts.length < 20) {
+      conflicts.push(buildValueBundleConflictPreview(reason, remoteBundle, localBundle));
+    }
+  };
+
+  for (const [scriptId, remoteBundle] of Object.entries(selection.valueBundles)) {
     const localBundle = localBundles[scriptId];
     if (!isPlainObject(localBundle) && localScriptIds.has(scriptId)) {
-      conflictBlocked++;
+      addConflict('local-bundle-unavailable', remoteBundle, localBundle);
     } else if (!isPlainObject(localBundle) || Number(localBundle.keyCount) === 0) {
       ready++;
     } else {
-      conflictBlocked++;
+      addConflict('local-values-present', remoteBundle, localBundle);
     }
   }
 
-  return { ready, conflictBlocked };
+  return { ready, conflictBlocked, conflicts };
+}
+
+function safeValueBundleMetric(value) {
+  return Math.max(0, Number(value) || 0);
+}
+
+function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {
+  const hasLocalBundle = isPlainObject(localBundle);
+  return {
+    reason,
+    localKeyCount: hasLocalBundle ? safeValueBundleMetric(localBundle.keyCount) : null,
+    remoteKeyCount: safeValueBundleMetric(remoteBundle.keyCount),
+    localBytes: hasLocalBundle ? safeValueBundleMetric(localBundle.bytes) : null,
+    remoteBytes: safeValueBundleMetric(remoteBundle.bytes)
+  };
 }
 
 async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts = []) {
@@ -19572,7 +19595,8 @@ const CloudSync = {
       lastSync: options.lastSync || null,
       remoteFound: !!remote,
       summary,
-      conflicts
+      conflicts,
+      valueBundleConflicts: remoteValueBundleApplyReadiness.conflicts
     };
   },
 

@@ -143,6 +143,14 @@ interface SyncPreviewConflict {
   reason: string;
 }
 
+interface SyncPreviewValueBundleConflict {
+  reason: 'local-values-present' | 'local-bundle-unavailable';
+  localKeyCount: number | null;
+  remoteKeyCount: number;
+  localBytes: number | null;
+  remoteBytes: number;
+}
+
 interface SyncPreviewResult extends SyncResult {
   dryRun?: boolean;
   noWrites?: boolean;
@@ -152,6 +160,7 @@ interface SyncPreviewResult extends SyncResult {
   remoteFound?: boolean;
   summary?: SyncPreviewSummary;
   conflicts?: SyncPreviewConflict[];
+  valueBundleConflicts?: SyncPreviewValueBundleConflict[];
 }
 
 interface MergeResult {
@@ -453,26 +462,57 @@ function selectApplicableRemoteValueBundles(
 function countRemoteValueBundlesApplyReady(
   selection: RemoteValueBundleSelection,
   local: SyncEnvelope | null | undefined,
-): { ready: number; conflictBlocked: number } {
+): { ready: number; conflictBlocked: number; conflicts: SyncPreviewValueBundleConflict[] } {
   let ready = 0;
   let conflictBlocked = 0;
+  const conflicts: SyncPreviewValueBundleConflict[] = [];
   const localBundles = getSyncEnvelopeValueBundles(local);
   const localScriptIds = new Set(
     Array.isArray(local?.scripts) ? local.scripts.map((script) => script.id) : [],
   );
 
-  for (const [scriptId] of Object.entries(selection.valueBundles)) {
+  const addConflict = (
+    reason: SyncPreviewValueBundleConflict['reason'],
+    remoteBundle: GmValueSyncBundle,
+    localBundle: unknown,
+  ) => {
+    conflictBlocked += 1;
+    if (conflicts.length < 20) {
+      conflicts.push(buildValueBundleConflictPreview(reason, remoteBundle, localBundle));
+    }
+  };
+
+  for (const [scriptId, remoteBundle] of Object.entries(selection.valueBundles)) {
     const localBundle = localBundles[scriptId];
     if (!isPlainRecord(localBundle) && localScriptIds.has(scriptId)) {
-      conflictBlocked += 1;
+      addConflict('local-bundle-unavailable', remoteBundle, localBundle);
     } else if (!isPlainRecord(localBundle) || Number(localBundle.keyCount) === 0) {
       ready += 1;
     } else {
-      conflictBlocked += 1;
+      addConflict('local-values-present', remoteBundle, localBundle);
     }
   }
 
-  return { ready, conflictBlocked };
+  return { ready, conflictBlocked, conflicts };
+}
+
+function safeBundleMetric(value: unknown): number {
+  return Math.max(0, Number(value) || 0);
+}
+
+function buildValueBundleConflictPreview(
+  reason: SyncPreviewValueBundleConflict['reason'],
+  remoteBundle: GmValueSyncBundle,
+  localBundle: unknown,
+): SyncPreviewValueBundleConflict {
+  const hasLocalBundle = isPlainRecord(localBundle);
+  return {
+    reason,
+    localKeyCount: hasLocalBundle ? safeBundleMetric(localBundle.keyCount) : null,
+    remoteKeyCount: safeBundleMetric(remoteBundle.keyCount),
+    localBytes: hasLocalBundle ? safeBundleMetric(localBundle.bytes) : null,
+    remoteBytes: safeBundleMetric(remoteBundle.bytes),
+  };
 }
 
 async function applyRemoteValueBundlesWhenLocalEmpty(
@@ -769,6 +809,7 @@ export const CloudSync = {
       remoteFound: !!remote,
       summary,
       conflicts,
+      valueBundleConflicts: remoteValueBundleApplyReadiness.conflicts,
     };
   },
 

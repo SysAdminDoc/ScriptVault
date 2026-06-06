@@ -1525,6 +1525,13 @@ export interface ResponseMap {
     remoteFound?: boolean;
     summary?: Record<string, unknown>;
     conflicts?: unknown[];
+    valueBundleConflicts?: {
+      reason: 'local-values-present' | 'local-bundle-unavailable';
+      localKeyCount: number | null;
+      remoteKeyCount: number;
+      localBytes: number | null;
+      remoteBytes: number;
+    }[];
   }>;
   revokeSyncProvider: SuccessOrError;
   syncNow: SuccessOrError<{
