@@ -2,6 +2,15 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 78 Monaco ESM Chromium sandbox smoke: X-4 now has real browser
+runtime proof for the packaged sandbox page. `tests/e2e/monaco-esm-sandbox.spec.js`
+launches the unpacked extension through the existing Playwright fixture, opens
+`pages/editor-sandbox.html`, waits for a real `.monaco-editor`, verifies the
+local ESM stylesheet and `ScriptVaultMonacoEsm` API, and routes
+`lib/monaco-esm/editor.js` to confirm the existing missing-bundle path posts
+`monaco-load-error`. The remaining X-4 gap is dashboard adapter proof for
+open/edit/save/reload persistence.
+
 2026-06-06 Cycle 77 Monaco ESM fallback harness: X-4 now has deterministic
 coverage for the ESM sandbox loader even before a live Chromium profile smoke.
 `tests/monaco-esm-sandbox-loader.test.js` executes the real inline sandbox

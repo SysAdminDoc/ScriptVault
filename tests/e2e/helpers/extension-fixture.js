@@ -14,6 +14,8 @@ function assertExtensionFiles() {
     'pages/dashboard.html',
     'pages/install.html',
     'lib/codemirror/codemirror.min.js',
+    'lib/monaco-esm/editor.css',
+    'lib/monaco-esm/editor.js',
   ];
   const missing = requiredFiles.filter(file => !existsSync(join(extensionPath, file)));
   if (missing.length > 0) {
