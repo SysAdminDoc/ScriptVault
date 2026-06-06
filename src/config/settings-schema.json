@@ -1150,7 +1150,12 @@
       "label": "Access Key ID",
       "help": "Controls access key id.",
       "elementId": "settingsS3AccessKeyId",
-      "default": ""
+      "default": "",
+      "validation": {
+        "kind": "s3-access-key-id",
+        "requiredWhenProvider": "s3",
+        "maxLength": 256
+      }
     },
     "s3Bucket": {
       "type": "string",
@@ -1218,7 +1223,12 @@
       "label": "Secret Key",
       "help": "Controls secret key.",
       "elementId": "settingsS3SecretKey",
-      "default": ""
+      "default": "",
+      "validation": {
+        "kind": "credential-secret",
+        "requiredWhenProvider": "s3",
+        "maxLength": 1024
+      }
     },
     "sandboxMode": {
       "type": "string",
@@ -1382,7 +1392,12 @@
       "label": "Encryption passphrase",
       "help": "Controls encryption passphrase.",
       "elementId": "settingsSyncEncryptionPassphrase",
-      "default": ""
+      "default": "",
+      "validation": {
+        "kind": "credential-secret",
+        "requiredWhen": "syncEncryptionEnabled",
+        "maxLength": 4096
+      }
     },
     "syncInterval": {
       "type": "number",
@@ -1526,7 +1541,11 @@
       "label": "Password",
       "help": "Controls password.",
       "elementId": "settingsWebdavPassword",
-      "default": ""
+      "default": "",
+      "validation": {
+        "kind": "credential-secret",
+        "maxLength": 4096
+      }
     },
     "webdavUrl": {
       "type": "string",
@@ -1537,7 +1556,8 @@
       "default": "",
       "validation": {
         "kind": "http-url",
-        "allowEmpty": true
+        "allowEmpty": true,
+        "requiredWhenProvider": "webdav"
       }
     },
     "webdavUsername": {
@@ -1546,7 +1566,11 @@
       "label": "Username",
       "help": "Controls username.",
       "elementId": "settingsWebdavUsername",
-      "default": ""
+      "default": "",
+      "validation": {
+        "kind": "credential-text",
+        "maxLength": 1024
+      }
     },
     "whitelistedPages": {
       "type": "string",

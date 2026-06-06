@@ -2,6 +2,21 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 63 sync credential validation: N-1 continued through the
+remaining sync credential fields. The source refresh again confirmed the same
+form-validation contract: WCAG 2.1 SC 3.3.1 requires identified input errors,
+MDN documents `setCustomValidity()` as the custom validity message that blocks
+submission/saves until cleared, and MDN `aria-invalid` guidance expects custom
+validation to pair invalid state with user-facing error messaging. ScriptVault
+now applies that pattern to WebDAV URL, WebDAV username/password, sync
+encryption passphrase, and S3 access/secret keys. WebDAV URL is required only
+when WebDAV is selected; S3 access and secret keys are required only when S3 is
+selected; sync encryption cannot be enabled without a passphrase; and the
+credential fields reject unsafe control characters or excessive length before
+persisting. Remaining N-1 work is to continue auditing dashboard-saved editor,
+security, update, and export settings for missing UI constraints and accessible
+errors.
+
 2026-06-06 Cycle 62 S3 settings validation: N-1 continued after the deep-audit
 security lane. The source refresh for WCAG 2.1 SC 3.3.1, MDN constraint
 validation, and MDN `aria-invalid` guidance still points to text error

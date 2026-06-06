@@ -430,10 +430,15 @@ describe("dashboard accessibility markup", () => {
     const validatedFields = [
       ["settingsBadgeColor", "settingsBadgeColorError"],
       ["settingsLintMaxSize", "settingsLintMaxSizeError"],
+      ["settingsSyncEncryptionPassphrase", "settingsSyncEncryptionPassphraseError"],
       ["settingsWebdavUrl", "settingsWebdavUrlError"],
+      ["settingsWebdavUsername", "settingsWebdavUsernameError"],
+      ["settingsWebdavPassword", "settingsWebdavPasswordError"],
       ["settingsS3Endpoint", "settingsS3EndpointError"],
       ["settingsS3Region", "settingsS3RegionError"],
       ["settingsS3Bucket", "settingsS3BucketError"],
+      ["settingsS3AccessKeyId", "settingsS3AccessKeyIdError"],
+      ["settingsS3SecretKey", "settingsS3SecretKeyError"],
       ["settingsS3ObjectKey", "settingsS3ObjectKeyError"],
       ["settingsDeniedHosts", "settingsDeniedHostsError"],
       ["settingsLinterConfig", "settingsLinterConfigError"],
@@ -458,9 +463,14 @@ describe("dashboard accessibility markup", () => {
     expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("min")).toBe("1000");
     expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("max")).toBe("5000000");
     expect(doc.getElementById("settingsWebdavUrl")?.getAttribute("type")).toBe("url");
+    expect(doc.getElementById("settingsWebdavUsername")?.getAttribute("maxlength")).toBe("1024");
+    expect(doc.getElementById("settingsWebdavPassword")?.getAttribute("maxlength")).toBe("4096");
+    expect(doc.getElementById("settingsSyncEncryptionPassphrase")?.getAttribute("maxlength")).toBe("4096");
     expect(doc.getElementById("settingsS3Endpoint")?.getAttribute("type")).toBe("url");
     expect(doc.getElementById("settingsS3Region")?.getAttribute("pattern")).toContain("auto");
     expect(doc.getElementById("settingsS3Bucket")?.getAttribute("pattern")).toContain("[a-zA-Z0-9.-]");
+    expect(doc.getElementById("settingsS3AccessKeyId")?.getAttribute("maxlength")).toBe("256");
+    expect(doc.getElementById("settingsS3SecretKey")?.getAttribute("maxlength")).toBe("1024");
     expect(doc.getElementById("settingsS3ObjectKey")?.getAttribute("maxlength")).toBe("1024");
 
     expect(dashboardJs).toMatch(/function setSettingsFieldError/);
@@ -470,9 +480,16 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toContain("Use a hex color like #22c55e.");
     expect(dashboardJs).toContain("Use a whole number from 1,000 to 5,000,000 bytes.");
     expect(dashboardJs).toContain("Use an http or https URL.");
+    expect(dashboardJs).toContain("WebDAV URL is required.");
+    expect(dashboardJs).toContain("label: 'Sync encryption passphrase'");
+    expect(dashboardJs).toContain("label: 'WebDAV username'");
+    expect(dashboardJs).toContain("contains a control character.");
     expect(dashboardJs).toContain("S3 endpoint URL is required.");
     expect(dashboardJs).toContain("Use auto or a region ID like us-east-1.");
     expect(dashboardJs).toContain("Bucket name must be 3-63 characters using letters, numbers, dots, or dashes.");
+    expect(dashboardJs).toContain("label: 'S3 access key ID'");
+    expect(dashboardJs).toContain("label: 'S3 secret access key'");
+    expect(dashboardJs).toContain("must not contain spaces.");
     expect(dashboardJs).toContain("S3 object key must be 1,024 characters or fewer.");
     expect(dashboardJs).toContain("Use valid JSON for the linter config.");
     expect(dashboardJs).toMatch(/function validatePatternLineList/);
@@ -483,7 +500,10 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/if \(!validation\.ok\) \{\s*setSettingsFieldError\(input, validation\.error\);/);
     expect(dashboardJs).toMatch(/elements\.settingsLintMaxSize\?\.addEventListener\('blur', e => saveSetting\('lintMaxSize', e\.target\.value\)\)/);
     expect(dashboardJs).toMatch(/elements\.settingsS3Bucket\?\.addEventListener\('blur', e => saveSetting\('s3Bucket', e\.target\.value\.trim\(\)\)\)/);
+    expect(dashboardJs).toMatch(/elements\.settingsS3AccessKeyId\?\.addEventListener\('blur', e => saveSetting\('s3AccessKeyId', e\.target\.value\.trim\(\)\)\)/);
+    expect(dashboardJs).toMatch(/e\.target\.checked = false;\s*setSettingsFieldError\(elements\.settingsSyncEncryptionPassphrase, validation\.error\);/);
     expect(dashboardJs).toMatch(/await saveSettingOrThrow\('s3Bucket', elements\.settingsS3Bucket\?\.value\.trim\(\) \|\| ''\)/);
+    expect(dashboardJs).toMatch(/await saveSettingOrThrow\('s3AccessKeyId', elements\.settingsS3AccessKeyId\?\.value\.trim\(\) \|\| ''\)/);
   });
 
   test("find userscripts controller exposes polished loading, empty, and preview states", () => {

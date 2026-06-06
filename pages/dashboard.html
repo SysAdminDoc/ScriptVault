@@ -6307,7 +6307,8 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Encryption passphrase:</span>
-                        <input type="password" class="input-field" id="settingsSyncEncryptionPassphrase" style="width:260px" aria-label="Sync encryption passphrase" autocomplete="new-password">
+                        <input type="password" class="input-field" id="settingsSyncEncryptionPassphrase" style="width:260px" aria-label="Sync encryption passphrase" autocomplete="new-password" maxlength="4096" aria-describedby="settingsSyncEncryptionPassphraseError">
+                        <span class="setting-error" id="settingsSyncEncryptionPassphraseError" hidden></span>
                     </div>
 
                     <!-- S3-compatible Settings (hidden by default) -->
@@ -6329,11 +6330,13 @@
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Access Key ID:</span>
-                            <input type="text" id="settingsS3AccessKeyId" autocomplete="off" class="input-field" aria-label="S3 access key ID">
+                            <input type="text" id="settingsS3AccessKeyId" autocomplete="off" class="input-field" aria-label="S3 access key ID" maxlength="256" aria-describedby="settingsS3AccessKeyIdError">
+                            <span class="setting-error" id="settingsS3AccessKeyIdError" hidden></span>
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Secret Key:</span>
-                            <input type="password" id="settingsS3SecretKey" autocomplete="new-password" class="input-field" aria-label="S3 secret access key">
+                            <input type="password" id="settingsS3SecretKey" autocomplete="new-password" class="input-field" aria-label="S3 secret access key" maxlength="1024" aria-describedby="settingsS3SecretKeyError">
+                            <span class="setting-error" id="settingsS3SecretKeyError" hidden></span>
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Object Key (optional):</span>
@@ -6354,11 +6357,13 @@
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Username:</span>
-                            <input type="text" class="input-field" id="settingsWebdavUsername" style="width:200px" aria-label="WebDAV username" autocomplete="username">
+                            <input type="text" class="input-field" id="settingsWebdavUsername" style="width:200px" aria-label="WebDAV username" autocomplete="username" maxlength="1024" aria-describedby="settingsWebdavUsernameError">
+                            <span class="setting-error" id="settingsWebdavUsernameError" hidden></span>
                         </div>
                         <div class="setting-row">
                             <span class="label-text">Password:</span>
-                            <input type="password" class="input-field" id="settingsWebdavPassword" style="width:200px" aria-label="WebDAV password" autocomplete="current-password">
+                            <input type="password" class="input-field" id="settingsWebdavPassword" style="width:200px" aria-label="WebDAV password" autocomplete="current-password" maxlength="4096" aria-describedby="settingsWebdavPasswordError">
+                            <span class="setting-error" id="settingsWebdavPasswordError" hidden></span>
                         </div>
                     </div>
                     
