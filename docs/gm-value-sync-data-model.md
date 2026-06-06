@@ -107,6 +107,16 @@ Cycle 103 adds a sanitized preview export:
   value key names, values, URLs, local workspace handles, local paths, sync
   credentials, and provider account data.
 
+Cycle 104 adds key-overlap counts for blocked merges:
+
+- Blocked value-bundle preview entries now include overlapping, local-only, and
+  remote-only key counts.
+- The counts are computed from local and remote value bags only inside the
+  preview path; the exposed preview and export still omit the key names and
+  values.
+- The extra counts are advisory metadata only. They do not enable non-empty
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add per-key timestamps, a conflict preview,
 or another durable last-write signal before non-empty local and remote value
 bags can be merged bidirectionally.

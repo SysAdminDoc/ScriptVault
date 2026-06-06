@@ -248,13 +248,37 @@ function safeValueBundleMetric(value) {
 
 function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {
   const hasLocalBundle = isPlainObject(localBundle);
+  const keyCounts = hasLocalBundle
+    ? countValueBundleKeyOverlap(localBundle.values, remoteBundle.values)
+    : null;
   return {
     reason,
     localKeyCount: hasLocalBundle ? safeValueBundleMetric(localBundle.keyCount) : null,
     remoteKeyCount: safeValueBundleMetric(remoteBundle.keyCount),
     localBytes: hasLocalBundle ? safeValueBundleMetric(localBundle.bytes) : null,
-    remoteBytes: safeValueBundleMetric(remoteBundle.bytes)
+    remoteBytes: safeValueBundleMetric(remoteBundle.bytes),
+    overlappingKeyCount: keyCounts?.overlapping ?? null,
+    localOnlyKeyCount: keyCounts?.localOnly ?? null,
+    remoteOnlyKeyCount: keyCounts?.remoteOnly ?? null
   };
+}
+
+function countValueBundleKeyOverlap(localValues, remoteValues) {
+  const localKeys = new Set(isPlainObject(localValues) ? Object.keys(localValues) : []);
+  const remoteKeys = new Set(isPlainObject(remoteValues) ? Object.keys(remoteValues) : []);
+  let overlapping = 0;
+  let localOnly = 0;
+  let remoteOnly = 0;
+
+  for (const key of localKeys) {
+    if (remoteKeys.has(key)) overlapping++;
+    else localOnly++;
+  }
+  for (const key of remoteKeys) {
+    if (!localKeys.has(key)) remoteOnly++;
+  }
+
+  return { overlapping, localOnly, remoteOnly };
 }
 
 async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts = []) {

@@ -3943,7 +3943,10 @@
             localKeyCount: conflict?.localKeyCount == null ? null : Math.max(0, Number(conflict.localKeyCount) || 0),
             remoteKeyCount: Math.max(0, Number(conflict?.remoteKeyCount) || 0),
             localBytes: conflict?.localBytes == null ? null : Math.max(0, Number(conflict.localBytes) || 0),
-            remoteBytes: Math.max(0, Number(conflict?.remoteBytes) || 0)
+            remoteBytes: Math.max(0, Number(conflict?.remoteBytes) || 0),
+            overlappingKeyCount: conflict?.overlappingKeyCount == null ? null : Math.max(0, Number(conflict.overlappingKeyCount) || 0),
+            localOnlyKeyCount: conflict?.localOnlyKeyCount == null ? null : Math.max(0, Number(conflict.localOnlyKeyCount) || 0),
+            remoteOnlyKeyCount: conflict?.remoteOnlyKeyCount == null ? null : Math.max(0, Number(conflict.remoteOnlyKeyCount) || 0)
         }));
     }
 
@@ -4004,7 +4007,7 @@
         if (valueBundleConflicts.length) {
             lines.push('GM value blocked merge preview:');
             for (const conflict of valueBundleConflicts.slice(0, 5)) {
-                lines.push(`- ${formatValueBundleConflictReason(conflict.reason)}: ${formatValueBundleConflictMetric(conflict.localKeyCount, 'local keys')}, ${formatValueBundleConflictMetric(conflict.remoteKeyCount, 'remote keys')}; ${formatValueBundleConflictMetric(conflict.localBytes, 'local bytes')}, ${formatValueBundleConflictMetric(conflict.remoteBytes, 'remote bytes')}`);
+                lines.push(`- ${formatValueBundleConflictReason(conflict.reason)}: ${formatValueBundleConflictMetric(conflict.localKeyCount, 'local keys')}, ${formatValueBundleConflictMetric(conflict.remoteKeyCount, 'remote keys')}; ${formatValueBundleConflictMetric(conflict.overlappingKeyCount, 'overlap keys')}, ${formatValueBundleConflictMetric(conflict.localOnlyKeyCount, 'local-only keys')}, ${formatValueBundleConflictMetric(conflict.remoteOnlyKeyCount, 'remote-only keys')}; ${formatValueBundleConflictMetric(conflict.localBytes, 'local bytes')}, ${formatValueBundleConflictMetric(conflict.remoteBytes, 'remote bytes')}`);
             }
         }
         if (Array.isArray(preview.conflicts) && preview.conflicts.length) {

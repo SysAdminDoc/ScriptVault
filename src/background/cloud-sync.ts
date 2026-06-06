@@ -149,6 +149,9 @@ interface SyncPreviewValueBundleConflict {
   remoteKeyCount: number;
   localBytes: number | null;
   remoteBytes: number;
+  overlappingKeyCount: number | null;
+  localOnlyKeyCount: number | null;
+  remoteOnlyKeyCount: number | null;
 }
 
 interface SyncPreviewResult extends SyncResult {
@@ -506,13 +509,40 @@ function buildValueBundleConflictPreview(
   localBundle: unknown,
 ): SyncPreviewValueBundleConflict {
   const hasLocalBundle = isPlainRecord(localBundle);
+  const keyCounts = hasLocalBundle
+    ? countValueBundleKeyOverlap(localBundle.values, remoteBundle.values)
+    : null;
   return {
     reason,
     localKeyCount: hasLocalBundle ? safeBundleMetric(localBundle.keyCount) : null,
     remoteKeyCount: safeBundleMetric(remoteBundle.keyCount),
     localBytes: hasLocalBundle ? safeBundleMetric(localBundle.bytes) : null,
     remoteBytes: safeBundleMetric(remoteBundle.bytes),
+    overlappingKeyCount: keyCounts?.overlapping ?? null,
+    localOnlyKeyCount: keyCounts?.localOnly ?? null,
+    remoteOnlyKeyCount: keyCounts?.remoteOnly ?? null,
   };
+}
+
+function countValueBundleKeyOverlap(
+  localValues: unknown,
+  remoteValues: unknown,
+): { overlapping: number; localOnly: number; remoteOnly: number } {
+  const localKeys = new Set(isPlainRecord(localValues) ? Object.keys(localValues) : []);
+  const remoteKeys = new Set(isPlainRecord(remoteValues) ? Object.keys(remoteValues) : []);
+  let overlapping = 0;
+  let localOnly = 0;
+  let remoteOnly = 0;
+
+  for (const key of localKeys) {
+    if (remoteKeys.has(key)) overlapping += 1;
+    else localOnly += 1;
+  }
+  for (const key of remoteKeys) {
+    if (!localKeys.has(key)) remoteOnly += 1;
+  }
+
+  return { overlapping, localOnly, remoteOnly };
 }
 
 async function applyRemoteValueBundlesWhenLocalEmpty(
