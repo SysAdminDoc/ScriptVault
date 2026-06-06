@@ -692,7 +692,7 @@ Important integrations, permissions, storage, and data flows:
     version comments, Dependabot watches GitHub Actions, and
     `npm run actions:pins:check` gates future drift.
 
-- [ ] P1 - Add settings schema parity and accessible validation
+- [x] P1 - Add settings schema parity and accessible validation
   - Why: settings defaults, types, controls, and save handlers drift.
   - Evidence: `settings-defaults.json` count, dashboard control/save-handler
     scan, ROADMAP Cycle 17.
@@ -707,8 +707,10 @@ Important integrations, permissions, storage, and data flows:
     entries with checker enforcement for visible and dashboard credential
     controls. Added accessible validation for multiline pattern lists.
     Added dashboard DOM cross-checks for metadata element IDs, control types,
-    select options, and validation error nodes. Remaining work is using the
-    checked metadata to generate or initialize more Settings UI.
+    select options, and validation error nodes.
+  - Status: Closed 2026-06-06. Metadata-driven UI generation remains a later
+    refactor candidate; the current acceptance is covered by gates and
+    dashboard validation.
   - Verify: schema parity tests, malformed-input tests, `npm run test:a11y`.
 
 - [x] P2 - Add optional dependency reach gate
