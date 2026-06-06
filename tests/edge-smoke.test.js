@@ -6,6 +6,7 @@ const edgeSmoke = readFileSync(resolve(process.cwd(), 'scripts/smoke-edge-sidelo
 const edgeBuilder = readFileSync(resolve(process.cwd(), 'scripts/build-edge.mjs'), 'utf8');
 const matrixGenerator = readFileSync(resolve(process.cwd(), 'scripts/generate-browser-support-matrix.mjs'), 'utf8');
 const edgeSubmission = readFileSync(resolve(process.cwd(), 'docs/edge-submission.md'), 'utf8');
+const edgeSmokeEvidence = JSON.parse(readFileSync(resolve(process.cwd(), 'docs/audit/edge-smoke-3.11.0.json'), 'utf8'));
 
 describe('Microsoft Edge sideload smoke wiring', () => {
   it('exposes a maintainer-runnable Edge smoke command', () => {
@@ -32,8 +33,27 @@ describe('Microsoft Edge sideload smoke wiring', () => {
   it('records Edge smoke evidence in the Edge readiness report and support matrix', () => {
     expect(edgeBuilder).toContain("browserSmokeCommand: 'npm run smoke:edge'");
     expect(edgeBuilder).toContain('browserSmokeEvidence: `edge-artifacts/edge-smoke-${version}.json`');
+    expect(matrixGenerator).toContain('docs/audit/edge-smoke-${version}.json');
+    expect(matrixGenerator).toContain('browserSmokePassed');
     expect(matrixGenerator).toContain('browserSmokeCommand');
     expect(matrixGenerator).toContain('browserSmokeEvidence');
+  });
+
+  it('keeps committed Edge smoke evidence tied to a passing live run', () => {
+    expect(edgeSmokeEvidence).toMatchObject({
+      version: '3.11.0',
+      status: 'passed',
+      checks: {
+        edgeUserScriptsToggle: { present: true, enabledAfter: true },
+        dashboard: { title: 'ScriptVault Dashboard', manifestVersion: '3.11.0' },
+        popup: { popupWidthOk: true, popupOverflowOk: true },
+        scriptRoundTrip: {
+          status: { userScriptsAvailable: true, setupState: 'available' },
+          target: { ok: true, marker: 'ok' },
+        },
+      },
+    });
+    expect(edgeSmokeEvidence.edgeVersion).toMatch(/^Edg\//);
   });
 
   it('documents the local smoke without overstating Edge publication state', () => {

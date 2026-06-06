@@ -78,6 +78,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P2 | **Effort:** M | **Source:** [S18, S19]
 - **Problem:** Edge package and report exist, but no Partner Center listing or Edge browser smoke.
 - **Deliverable:** Edge sideload smoke, Partner Center upload, Edge Add-ons REST API v1.1 CI/CD integration.
+- **Progress:** Cycle 36 ran `npm run smoke:edge` on Microsoft Edge 146.0.3856.97, enabled the temporary profile's Allow User Scripts toggle, loaded the staged package, verified dashboard/popup rendering, saved/toggled a smoke userscript, and confirmed it executed on a local target page. Committed sanitized evidence in `docs/audit/edge-smoke-3.11.0.json` and updated the support matrix generator to surface live smoke evidence. Partner Center upload and Edge Add-ons REST automation remain credential/listing gated.
 
 ### X-2. DOM-less @background Scripts
 - **Priority:** P2 | **Effort:** XL | **Source:** [S04, S20, S21]

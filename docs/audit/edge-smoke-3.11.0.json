@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-06T01:56:05.538Z",
+  "version": "3.11.0",
+  "status": "passed",
+  "edgeVersion": "Edg/146.0.3856.97",
+  "checks": {
+    "edgeUserScriptsToggle": {
+      "present": true,
+      "enabledBefore": false,
+      "enabledAfter": true
+    },
+    "dashboard": {
+      "title": "ScriptVault Dashboard",
+      "manifestVersion": "3.11.0",
+      "activeTab": "Installed Userscripts",
+      "selectedTab": "true",
+      "hasNewScriptButton": true,
+      "hasSearch": true
+    },
+    "popup": {
+      "title": "ScriptVault",
+      "hasActionButton": true,
+      "popupWidthOk": true,
+      "popupOverflowOk": true,
+      "bodyWidth": 360,
+      "bodyScrollWidth": 360
+    },
+    "scriptRoundTrip": {
+      "status": {
+        "userScriptsAvailable": true,
+        "setupRequired": false,
+        "setupState": "available",
+        "chromeVersion": 146
+      },
+      "savedScript": {
+        "id": "scriptvault_edge_smoke",
+        "name": "ScriptVault Edge Smoke",
+        "enabledAfterSave": true
+      },
+      "toggle": {
+        "disabled": true,
+        "enabled": true
+      },
+      "target": {
+        "ok": true,
+        "marker": "ok",
+        "title": "ScriptVault Edge smoke target"
+      }
+    }
+  },
+  "extensionErrors": [
+    {
+      "scope": "dashboard",
+      "type": "console.error",
+      "text": "Failed to load resource: net::ERR_FILE_NOT_FOUND",
+      "location": {
+        "url": "chrome-extension://<temporary-edge-extension-id>/modules/script-config.js"
+      }
+    }
+  ],
+  "notes": [
+    "Live local smoke launched Microsoft Edge from C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe.",
+    "The temporary Edge profile exposed the Allow User Scripts toggle and the smoke enabled it before saving the fixture userscript.",
+    "The script round-trip saved, disabled, re-enabled, and executed the smoke userscript on a local 127.0.0.1 page.",
+    "One non-fatal dashboard console.error was captured for modules/script-config.js; the smoke only treats runtime exceptions as fatal unless --strict-console is requested."
+  ]
+}

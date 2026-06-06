@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 35 - 2026-06-06
+Last cycle: Cycle 36 - 2026-06-06
 
 ## Latest Result
 
@@ -45,7 +45,12 @@ Last cycle: Cycle 35 - 2026-06-06
   `docs/monaco-esm-migration-plan.md`, pinning the current AMD/sandbox state,
   a local bundled ESM target, CSP constraints, Firefox AMO fallback rules, and
   validation gates for the later implementation pass.
-- Verification used the live checkout: focused Monaco plan tests,
+- Cycle 36 ran and recorded the dedicated Edge sideload smoke on Microsoft Edge
+  146.0.3856.97, added committed sanitized smoke evidence, and taught the
+  browser support matrix generator to surface that live Edge proof without
+  depending on ignored artifacts.
+- Verification used the live checkout: `npm run smoke:edge`, focused Edge
+  smoke tests, `npm run support:matrix`, `npm run support:matrix:check`,
   `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
@@ -54,8 +59,9 @@ Continue top-down from `ROADMAP.md`. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, and the AMO
 submission row is blocked on maintainer credentials. The next local
-implementer-actionable work is X-1, the dedicated Edge browser smoke before
-elevating support.
+implementer-actionable work is X-2, DOM-less `@background` script design and
+implementation scoping, unless Edge Partner Center credentials/listing IDs are
+available to continue the external publication half of X-1.
 
 ## Loop Pointer
 
