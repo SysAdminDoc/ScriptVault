@@ -809,7 +809,7 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
     `npx vitest run tests/optional-dep-reach.test.js --environment=node --reporter=verbose`;
     `npm audit --audit-level=high --omit=optional`; `npm run check`.
   - Complexity: M
-- [ ] P2 — Settings discoverability/validation audit for the dashboard options surface
+- [x] P2 — Settings discoverability/validation audit for the dashboard options surface
   - Why: the "no panel" part is now stale because `pages/dashboard.html` has a Settings tab with search/category filters and many advanced controls, but it is not schema-driven or consistently validated. Current evidence: `src/config/settings-defaults.json` has 71 default keys; the Settings tab has 91 `settings*` controls; dashboard save handlers can persist 80 keys; 51 saveable keys are absent from the defaults/`Settings` type, and 42 default keys have no Settings UI save path. Some absences are expected internal credentials/timestamps, but operator-facing defaults such as `allowInternalXhr`, `xhrTimeout`, `dashboardVirtualizationThreshold`, `experimentalESMUserscripts`, `syncInterval`, `notifyOnInstall`, `notifyOnUpdate`, and `showBadge` are not explicitly classified. `SettingsManager.set(...)` merges arbitrary keys into storage, and raw inputs such as badge color, lint max size, URL fields, denied hosts, custom CSS, and linter config save on blur without a shared constraint layer or per-field text errors. MDN documents native constraints, `checkValidity()` / `reportValidity()`, and `setCustomValidity()` for client-side validation; WCAG 2.1 SC 3.3.1 requires detected input errors to identify the field and describe the error in text.
   - Touches: `src/config/settings-defaults.json`, `src/types/settings.ts`, `src/modules/storage.ts` / generated storage, `pages/dashboard.html`, `pages/dashboard.js`, dashboard a11y/settings tests, and a defaults/validation table doc.
   - Acceptance: every persisted setting is classified as visible, internal, credential, timestamp, derived, or deprecated; saveable dashboard keys all exist in the schema or an explicit extension allowlist; visible controls declare type/range/options/default/help copy from the schema; invalid badge colors, numeric values, URLs, JSON config, host lists, and allowlist text show field-specific text errors and do not persist silently coerced values; security-sensitive settings keep explicit advanced labels.
@@ -839,8 +839,10 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
   - Progress: 2026-06-06 made the settings schema an active dashboard contract:
     metadata entries with `elementId` are now checked against
     `pages/dashboard.html` for control type, select option values, and
-    validation error-node wiring. Remaining work is using the checked metadata
-    to generate or initialize more Settings UI.
+    validation error-node wiring.
+  - Status: Closed 2026-06-06. Metadata-driven UI generation remains a later
+    refactor candidate; the original validation acceptance is now covered by
+    schema, dashboard, and accessibility gates.
   - Complexity: L
 
 ---

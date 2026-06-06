@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 30 - 2026-06-06
+Last cycle: Cycle 31 - 2026-06-06
 
 ## Latest Result
 
@@ -29,15 +29,18 @@ Last cycle: Cycle 30 - 2026-06-06
 - Cycle 30 made settings metadata an active dashboard contract by checking
   metadata element IDs against dashboard control types, select options, and
   validation error-node wiring.
+- Cycle 31 closed the Settings discoverability/validation roadmap row after an
+  acceptance recheck.
 - Verification used the live checkout: focused settings schema coverage,
   `npm run settings:schema:check`, `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
 
 Continue top-down from `ROADMAP.md`. The next local implementer-actionable work
-is still in the Settings discoverability/validation row: use the checked
-metadata to generate or initialize more of the Settings UI where practical,
-then reassess whether the row can close or should move to the next roadmap item.
+is the GM namespace parity and guarded `GM.fetch` decision row: table-driven
+alias parity, explicit callback-only classifications, cookie singular/plural
+coverage, and a conservative fetch-shaped decision that reuses existing guarded
+network policy if implemented.
 
 ## Loop Pointer
 
