@@ -831,6 +831,11 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
     options, and the high-risk validation descriptors. Remaining work is UI
     consumption of the metadata and field-specific validation for
     allowlist/pattern text areas.
+  - Progress: 2026-06-06 added accessible validation for whitelisted pages,
+    blacklisted pages, manual blacklist, and download whitelist text areas.
+    The dashboard now blocks malformed regex literals plus whitespace/control
+    character mistakes in those multiline pattern lists before persisting them.
+    Remaining work is UI consumption of the settings metadata.
   - Complexity: L
 
 ---

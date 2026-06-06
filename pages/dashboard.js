@@ -3254,7 +3254,11 @@
             webdavUrl: elements.settingsWebdavUrl,
             s3Endpoint: elements.settingsS3Endpoint,
             deniedHosts: elements.settingsDeniedHosts,
-            linterConfig: elements.settingsLinterConfig
+            linterConfig: elements.settingsLinterConfig,
+            whitelistedPages: elements.settingsWhitelistedPages,
+            blacklistedPages: elements.settingsBlacklistedPages,
+            manualBlacklist: elements.settingsManualBlacklist,
+            downloadWhitelist: elements.settingsDownloadWhitelist
         };
         return keyToElement[key] || null;
     }
@@ -3303,6 +3307,38 @@
             : { ok: true, value: hosts };
     }
 
+    function parseSettingsRegexLiteral(pattern) {
+        const match = String(pattern || '').match(/^\/(.+)\/([gimsuy]*)$/);
+        if (!match) return null;
+        try {
+            return new RegExp(match[1], match[2]);
+        } catch {
+            return false;
+        }
+    }
+
+    function validatePatternLineList(value, label) {
+        const lines = String(value || '').split(/\r?\n/);
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line) continue;
+            if (/[\x00-\x08\x0E-\x1F\x7F]/.test(line)) {
+                return { ok: false, error: `${label} contains a control character that cannot be matched safely.` };
+            }
+            if (line.startsWith('/')) {
+                const parsed = parseSettingsRegexLiteral(line);
+                if (parsed === false || parsed === null) {
+                    return { ok: false, error: `${label} regex "${line}" is not valid.` };
+                }
+                continue;
+            }
+            if (/\s/.test(line)) {
+                return { ok: false, error: `${label} entry "${line}" must not contain spaces.` };
+            }
+        }
+        return { ok: true, value: String(value || '') };
+    }
+
     function validateSettingsValue(key, value) {
         switch (key) {
             case 'badgeColor': {
@@ -3343,6 +3379,15 @@
                 }
             }
             default:
+                if (key === 'whitelistedPages' || key === 'blacklistedPages') {
+                    return validatePatternLineList(value, 'Page pattern');
+                }
+                if (key === 'manualBlacklist') {
+                    return validatePatternLineList(value, 'Blacklist pattern');
+                }
+                if (key === 'downloadWhitelist') {
+                    return validatePatternLineList(value, 'Download pattern');
+                }
                 return { ok: true, value };
         }
     }
