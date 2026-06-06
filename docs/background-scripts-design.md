@@ -47,6 +47,11 @@ The runtime `prepareBackgroundRunnerDryRun` action exposes the same eligibility
 shape for support/dashboard diagnostics. It does not include wrapper code in the
 response and does not execute scripts.
 
+Dashboard support snapshots call the dry-run action only when the user opts into
+the sensitive script-inventory category. The snapshot stores sanitized status,
+budget, wrapper-support, and `executionEnabled: false` fields; it does not store
+wrapper code.
+
 ## API Surface
 
 Initial allowed APIs should be limited to DOM-independent primitives:
@@ -113,6 +118,8 @@ Acceptance for the implementation pass:
   eligible plan while still refusing execution.
 - `prepareBackgroundRunnerDryRun` reports planner/wrapper status without
   returning wrapper code.
+- Support snapshots include sanitized dry-run results only behind the
+  script-inventory opt-in.
 - A later live smoke proves a scheduled background script can call
   `GM_notification` with no matching tab open.
 - Tests prove blocked DOM APIs, host-scope enforcement, timeouts, and disabled

@@ -4771,6 +4771,53 @@
       ]);
     }
 
+    function sanitizeBackgroundRunnerDryRun(result, fallbackScriptId) {
+        return {
+            scriptId: result?.scriptId || fallbackScriptId || '',
+            status: result?.status || (result?.error ? 'error' : 'unknown'),
+            reason: result?.reason || result?.error || '',
+            executionEnabled: false,
+            plan: result?.plan ? {
+                status: result.plan.status,
+                enabled: !!result.plan.enabled,
+                triggers: Array.isArray(result.plan.triggers) ? result.plan.triggers : [],
+                unsupportedGrants: Array.isArray(result.plan.unsupportedGrants) ? result.plan.unsupportedGrants : [],
+                budget: result.plan.budget || null
+            } : undefined,
+            wrapper: result?.wrapper ? {
+                supported: !!result.wrapper.supported,
+                reason: result.wrapper.reason || ''
+            } : undefined,
+            payload: result?.payload ? {
+                wouldBuild: !!result.payload.wouldBuild,
+                includesCode: false,
+                source: result.payload.source === 'scriptvault-background-runner'
+                    ? 'scriptvault-background-runner'
+                    : undefined
+            } : undefined
+        };
+    }
+
+    async function collectBackgroundRunnerDryRuns() {
+        const backgroundScripts = state.scripts.filter(script => script.metadata?.background || script.meta?.background);
+        const results = await Promise.all(backgroundScripts.map(async script => {
+            try {
+                const result = await chrome.runtime.sendMessage({
+                    action: 'prepareBackgroundRunnerDryRun',
+                    scriptId: script.id
+                });
+                return sanitizeBackgroundRunnerDryRun(result, script.id);
+            } catch (error) {
+                return sanitizeBackgroundRunnerDryRun({ error: error?.message || 'Dry run failed' }, script.id);
+            }
+        }));
+        return {
+            count: results.length,
+            executionEnabled: false,
+            results
+        };
+    }
+
     async function buildAndDownloadSupportSnapshot(enabledCategories) {
         if (elements.supportSnapshotStatus) {
             elements.supportSnapshotStatus.textContent = 'Collecting diagnostics…';
@@ -4972,6 +5019,7 @@
                         syncLock: !!script.settings?.syncLock
                     };
                 });
+                snapshot.backgroundRunnerDryRuns = await collectBackgroundRunnerDryRuns();
             }
 
             const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });

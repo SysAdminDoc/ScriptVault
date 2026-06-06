@@ -45,6 +45,12 @@ wrapper support, reviewed budget, and `executionEnabled: false`, omits wrapper
 code from the response, and performs no offscreen, service-worker, or wrapper
 execution.
 
+2026-06-06 Cycle 43 support snapshot background dry-runs: dashboard support
+snapshots now call `prepareBackgroundRunnerDryRun` for `@background` scripts
+only when the user opts into the sensitive script-inventory category. Snapshot
+entries contain sanitized planner, wrapper, budget, and `executionEnabled:
+false` fields, with `includesCode: false` and no script execution.
+
 2026-06-04 Cycle 8 comprehensive feature-plan refresh: root-level
 `RESEARCH_FEATURE_PLAN.md` now holds the current implementation-oriented
 research plan for ScriptVault v3.11.0. It preserves `ROADMAP.md` as the open
