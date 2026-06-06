@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 65 - 2026-06-06
+Last cycle: Cycle 66 - 2026-06-06
 
 ## Latest Result
 
@@ -182,6 +182,11 @@ Last cycle: Cycle 65 - 2026-06-06
   Update check, notification hide delay, and externals update interval selects
   now have validation metadata, accessible error nodes, save-blocking
   allowed-option checks, and `0`/"Never" values preserved through load/save.
+- Cycle 66 continued N-1 Settings Schema Parity and Accessible Validation.
+  Content script API, sandbox mode, CSP modification mode, and HTTP header
+  modification mode now have validation metadata, accessible error nodes, and
+  save-blocking allowed-option checks before security-sensitive modes are
+  persisted.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -241,15 +246,22 @@ Last cycle: Cycle 65 - 2026-06-06
   select validation and zero-value normalization with focused dashboard
   a11y/schema tests, the settings schema gate, TS runtime generation/check,
   high-severity audit, full check suite, build, CWS remote-code scan, and
-  `git diff --check`.
+  `git diff --check`. Cycle 66 reused the MDN select custom-validity and
+  option-value guidance, then verified security select validation with focused
+  dashboard a11y/schema tests, the settings schema gate, TS runtime
+  generation/check, high-severity audit, full check suite, build, CWS
+  remote-code scan, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 33. The next best local cycle is Cycle 66:
+Continue from `ROADMAP.md` Round 34. The next best local cycle is Cycle 67:
 continue N-1 Settings Schema Parity and Accessible Validation by applying
 allowed-option validation to the remaining security/action-menu selects whose
-option lists already exist in schema metadata, then continue export/backup
-setting constraints with focused dashboard a11y/schema coverage. The live
+option lists already exist in schema metadata, starting with default tab types,
+local file access, cookie access, communication access, SRI, include/check-connect
+toggles, incognito behavior, page filtering, block behavior, strict mode, and
+top-level await; then continue export/backup setting constraints with focused
+dashboard a11y/schema coverage. The live
 two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -258,7 +270,7 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 65 complete for 2026-06-06; roadmap continuation
-  points to Cycle 66 N-1 settings validation continuation.
+- Status: ScriptVault Cycle 66 complete for 2026-06-06; roadmap continuation
+  points to Cycle 67 N-1 settings validation continuation.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

@@ -24,11 +24,15 @@ const ALLOWED_METADATA_CONTROLS = new Set([
 ]);
 const REQUIRED_VALIDATION_KEYS = new Map([
   ['badgeColor', 'hex-color'],
+  ['allowHttpHeaders', 'select-option'],
   ['checkInterval', 'select-option'],
+  ['contentScriptAPI', 'select-option'],
   ['editorFontSize', 'select-option'],
   ['externalsInterval', 'select-option'],
   ['indentWidth', 'select-option'],
+  ['modifyCSP', 'select-option'],
   ['notifyHideAfter', 'select-option'],
+  ['sandboxMode', 'select-option'],
   ['tabSize', 'select-option'],
   ['lintMaxSize', 'integer-range'],
   ['webdavUrl', 'http-url'],

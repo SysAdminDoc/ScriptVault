@@ -429,6 +429,10 @@ describe("dashboard accessibility markup", () => {
     const doc = parseDashboard();
     const validatedFields = [
       ["settingsBadgeColor", "settingsBadgeColorError"],
+      ["settingsContentScriptAPI", "settingsContentScriptAPIError"],
+      ["settingsSandboxMode", "settingsSandboxModeError"],
+      ["settingsModifyCSP", "settingsModifyCSPError"],
+      ["settingsAllowHttpHeaders", "settingsAllowHttpHeadersError"],
       ["settingsLintMaxSize", "settingsLintMaxSizeError"],
       ["settingsCheckInterval", "settingsCheckIntervalError"],
       ["settingsNotifyHideAfter", "settingsNotifyHideAfterError"],
@@ -471,6 +475,10 @@ describe("dashboard accessibility markup", () => {
     expect(doc.getElementById("settingsCheckInterval")?.querySelector('option[value="0"]')?.textContent).toContain("Never");
     expect(doc.getElementById("settingsNotifyHideAfter")?.querySelector('option[value="0"]')?.textContent).toContain("Never");
     expect(doc.getElementById("settingsExternalsInterval")?.querySelector('option[value="0"]')?.textContent).toContain("Never");
+    expect(doc.getElementById("settingsContentScriptAPI")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsSandboxMode")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsModifyCSP")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsAllowHttpHeaders")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsEditorFontSize")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsIndentWidth")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsTabSize")?.tagName).toBe("SELECT");
@@ -498,6 +506,10 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/case 'editorFontSize':\s*return validateSelectOptionValue\('editorFontSize', value, 'editor font size', \{ number: true \}\)/);
     expect(dashboardJs).toMatch(/case 'indentWidth':\s*return validateSelectOptionValue\('indentWidth', value, 'indentation width', \{ number: true \}\)/);
     expect(dashboardJs).toMatch(/case 'tabSize':\s*return validateSelectOptionValue\('tabSize', value, 'tab size', \{ number: true \}\)/);
+    expect(dashboardJs).toMatch(/case 'contentScriptAPI':\s*return validateSelectOptionValue\('contentScriptAPI', value, 'content script API'\)/);
+    expect(dashboardJs).toMatch(/case 'sandboxMode':\s*return validateSelectOptionValue\('sandboxMode', value, 'sandbox mode'\)/);
+    expect(dashboardJs).toMatch(/case 'modifyCSP':\s*return validateSelectOptionValue\('modifyCSP', value, 'CSP modification mode'\)/);
+    expect(dashboardJs).toMatch(/case 'allowHttpHeaders':\s*return validateSelectOptionValue\('allowHttpHeaders', value, 'HTTP header modification mode'\)/);
     expect(dashboardJs).toContain("Use an http or https URL.");
     expect(dashboardJs).toContain("WebDAV URL is required.");
     expect(dashboardJs).toContain("label: 'Sync encryption passphrase'");
