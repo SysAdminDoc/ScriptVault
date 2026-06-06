@@ -2,6 +2,19 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 55 autosave receipt coalescing: N-8 now has an
+implementation path for coalescing repeated editor autosaves without storing a
+session token in script data. The File System Access source refresh still
+requires user-gesture picker entry, stored-handle permission rechecks, and
+local-only handle storage; the CWS source refresh still treats locally stored
+sensitive data as disclosure-relevant. ScriptVault now keeps autosave coalesce
+keys in dashboard open-tab state and the background worker's in-memory map,
+reuses the first rollback history entry during a coalescing window, clears that
+state on manual/non-coalesced saves, and verifies the token is absent from
+script records while the save path continues through `reregisterScript()`.
+Remaining N-8/X-8 work is export/cloud/support redaction fixtures for future
+local workspace binding metadata and the local-only binding-store skeleton.
+
 2026-06-06 Cycle 54 local-save trust receipts: N-8 moved from planning into
 the first implementation slice. Current CWS user-data guidance still expects
 clear disclosure for locally stored sensitive data, and Chrome File System
@@ -10,9 +23,9 @@ handle permission checks. ScriptVault now records dashboard editor saves as
 explicit `local-save` receipts with `local-editor` source metadata, suppresses
 metadata URL fallback for those local saves, preserves remote update/download
 URLs for review, and pins the manual/autosave payload contract in focused
-tests. Remaining N-8 work is autosave coalescing, no-code/history churn proof,
-export/cloud/support redaction coverage for future local workspace metadata,
-and save-path re-registration proof.
+tests. Remaining N-8 work after the following coalescing pass is behavior-level
+no-code/history churn proof, export/cloud/support redaction coverage for future
+local workspace metadata, and local workspace binding-store groundwork.
 
 2026-06-06 Cycle 53 setup rehydration evidence: N-7 moved from a
 setup-doctor planning row into support-safe runtime evidence. Current Chrome

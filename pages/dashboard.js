@@ -7844,15 +7844,42 @@
         }
     }
 
+    function createEditorLocalSaveSessionId() {
+        const bytes = new Uint32Array(2);
+        try {
+            crypto.getRandomValues(bytes);
+        } catch {
+            bytes[0] = Math.floor(Math.random() * 0xffffffff);
+            bytes[1] = Math.floor(Math.random() * 0xffffffff);
+        }
+        return `editor-${Date.now().toString(36)}-${bytes[0].toString(36)}${bytes[1].toString(36)}`;
+    }
+
+    function ensureEditorLocalSaveSessionId(scriptId) {
+        if (!scriptId || !state.openTabs[scriptId]) return '';
+        if (!state.openTabs[scriptId].localSaveSessionId) {
+            state.openTabs[scriptId].localSaveSessionId = createEditorLocalSaveSessionId();
+        }
+        return state.openTabs[scriptId].localSaveSessionId;
+    }
+
     function buildEditorSaveTrustOptions(options = {}) {
         const autosave = options.autosave === true;
-        return {
+        const trust = {
             recordReceipt: true,
             operation: 'local-save',
             sourceKind: 'local-editor',
             sourceLabel: autosave ? 'Dashboard autosave' : 'Dashboard editor',
             suppressMetadataSourceFallback: true
         };
+        if (autosave) {
+            const coalesceKey = ensureEditorLocalSaveSessionId(state.currentScriptId);
+            if (coalesceKey) {
+                trust.coalesceKey = coalesceKey;
+                trust.coalesceWindowMs = 30000;
+            }
+        }
+        return trust;
     }
 
     async function saveCurrentScript(options = {}) {
