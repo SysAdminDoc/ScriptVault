@@ -1530,6 +1530,7 @@
         elements.tbtnBindLocalFile = document.getElementById('tbtnBindLocalFile');
         elements.tbtnRefreshLocalFile = document.getElementById('tbtnRefreshLocalFile');
         elements.tbtnUnbindLocalFile = document.getElementById('tbtnUnbindLocalFile');
+        elements.tbtnPublishGreasyFork = document.getElementById('tbtnPublishGreasyFork');
         elements.tbtnDebug = document.getElementById('tbtnDebug');
         elements.tbtnShare = document.getElementById('tbtnShare');
 
@@ -7211,6 +7212,234 @@
 
         return provenance;
     }
+
+    const GREASY_FORK_PREFILL_BASE_URL = 'https://greasyfork.org/en';
+    const GREASY_FORK_NEW_PREFILL_URL = `${GREASY_FORK_PREFILL_BASE_URL}/script_versions/prefill`;
+    const GREASY_FORK_PREFILL_CODE_FIELD = 'script_version[code]';
+    const GREASY_FORK_PREFILL_FORM_ENCTYPE = 'multipart/form-data';
+
+    function lastMetadataValue(value) {
+        if (Array.isArray(value)) {
+            return value.slice().reverse().find(item => typeof item === 'string' && item.trim()) || '';
+        }
+        return typeof value === 'string' ? value : '';
+    }
+
+    function isUnsafePublishMetadataKey(key) {
+        return key === '__proto__' || key === 'constructor' || key === 'prototype';
+    }
+
+    function parseUserscriptMetadataForPublish(code) {
+        const metadata = Object.create(null);
+        const source = typeof code === 'string' ? code : '';
+        const match = source.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/);
+        if (!match) {
+            return { metadata, hasMetadataBlock: false };
+        }
+
+        const lines = match[1].split(/\r?\n/);
+        for (const rawLine of lines) {
+            const line = rawLine.match(/^\s*\/\/\s*@([^\s]+)(?:\s+(.*))?$/);
+            if (!line) continue;
+            const key = String(line[1] || '').split(':')[0];
+            const value = String(line[2] || '').trim();
+            if (!key || !value) continue;
+            if (isUnsafePublishMetadataKey(key)) continue;
+            if (metadata[key] === undefined) {
+                metadata[key] = value;
+            } else if (Array.isArray(metadata[key])) {
+                metadata[key].push(value);
+            } else {
+                metadata[key] = [metadata[key], value];
+            }
+        }
+
+        return { metadata, hasMetadataBlock: true };
+    }
+
+    function extractGreasyForkScriptIdFromUrl(rawUrl) {
+        if (!rawUrl || typeof rawUrl !== 'string') return '';
+        try {
+            const url = new URL(rawUrl);
+            const host = url.hostname.replace(/^www\./, '').toLowerCase();
+            if (!['greasyfork.org', 'update.greasyfork.org', 'sleazyfork.org', 'update.sleazyfork.org'].includes(host)) {
+                return '';
+            }
+            const match = url.pathname.match(/(?:^|\/)scripts\/(\d+)(?=\/|-|$)/i);
+            return match ? match[1] : '';
+        } catch (_error) {
+            return '';
+        }
+    }
+
+    function buildGreasyForkPublishPreflight(script, code) {
+        const source = typeof code === 'string' ? code : '';
+        const parsed = parseUserscriptMetadataForPublish(source);
+        const metadata = parsed.metadata;
+        const storedMetadata = script?.metadata || script?.meta || {};
+        const candidates = [
+            metadata.updateURL,
+            metadata.downloadURL,
+            metadata.homepageURL,
+            metadata.homepage,
+            storedMetadata.updateURL,
+            storedMetadata.downloadURL,
+            storedMetadata.homepageURL,
+            storedMetadata.homepage
+        ].map(lastMetadataValue).filter(Boolean);
+        const scriptId = candidates.map(extractGreasyForkScriptIdFromUrl).find(Boolean) || '';
+        const missing = [];
+        const warnings = [];
+        if (!parsed.hasMetadataBlock) missing.push('metadata block');
+        if (!lastMetadataValue(metadata.name)) missing.push('@name');
+        if (!lastMetadataValue(metadata.namespace)) missing.push('@namespace');
+        if (!lastMetadataValue(metadata.version)) missing.push('@version');
+        if (!lastMetadataValue(metadata.license)) warnings.push('@license is missing');
+        if (!lastMetadataValue(metadata.updateURL)) warnings.push('@updateURL is missing');
+        if (!lastMetadataValue(metadata.downloadURL)) warnings.push('@downloadURL is missing');
+        if (!scriptId) warnings.push('No Greasy Fork script ID found; this will open the new-script handoff.');
+
+        const targetUrl = scriptId
+            ? `${GREASY_FORK_PREFILL_BASE_URL}/scripts/${encodeURIComponent(scriptId)}/versions/prefill`
+            : GREASY_FORK_NEW_PREFILL_URL;
+
+        return {
+            ok: missing.length === 0 && source.length > 0,
+            mode: scriptId ? 'update' : 'new',
+            scriptId,
+            targetUrl,
+            code: source,
+            codeLength: source.length,
+            metadata: {
+                name: lastMetadataValue(metadata.name),
+                namespace: lastMetadataValue(metadata.namespace),
+                version: lastMetadataValue(metadata.version),
+                license: lastMetadataValue(metadata.license),
+                updateURL: lastMetadataValue(metadata.updateURL),
+                downloadURL: lastMetadataValue(metadata.downloadURL)
+            },
+            missing,
+            warnings,
+            form: {
+                method: 'POST',
+                enctype: GREASY_FORK_PREFILL_FORM_ENCTYPE,
+                codeField: GREASY_FORK_PREFILL_CODE_FIELD
+            }
+        };
+    }
+
+    function submitGreasyForkPublishHandoff(preflight) {
+        if (!preflight?.ok || !preflight.targetUrl || typeof preflight.code !== 'string') return false;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = preflight.targetUrl;
+        form.enctype = GREASY_FORK_PREFILL_FORM_ENCTYPE;
+        form.target = '_blank';
+        form.rel = 'noopener noreferrer';
+        form.setAttribute('rel', 'noopener noreferrer');
+        form.style.display = 'none';
+
+        const input = document.createElement('textarea');
+        input.name = GREASY_FORK_PREFILL_CODE_FIELD;
+        input.value = preflight.code;
+        form.appendChild(input);
+
+        document.body.appendChild(form);
+        form.submit();
+        setTimeout(() => form.remove(), 1000);
+        return true;
+    }
+
+    function downloadGreasyForkPublishCode(preflight) {
+        if (!preflight || typeof preflight.code !== 'string') return false;
+        const safeName = (preflight.metadata?.name || 'script')
+            .replace(/[\\/:*?"<>|]+/g, '-')
+            .replace(/\s+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 80) || 'script';
+        const blob = new Blob([preflight.code], { type: 'text/javascript' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `${safeName}.user.js`;
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return true;
+    }
+
+    function showGreasyForkPublishPreview(preflight) {
+        const metadataRows = [
+            ['Mode', preflight.mode === 'update' ? `Update script ${preflight.scriptId}` : 'New script'],
+            ['Target', preflight.targetUrl],
+            ['Name', preflight.metadata.name || '-'],
+            ['Namespace', preflight.metadata.namespace || '-'],
+            ['Version', preflight.metadata.version || '-'],
+            ['License', preflight.metadata.license || '-'],
+            ['Update URL', preflight.metadata.updateURL || '-'],
+            ['Download URL', preflight.metadata.downloadURL || '-'],
+            ['Code size', formatBytes(preflight.codeLength)]
+        ];
+        const warningsHtml = preflight.warnings.length
+            ? `<div class="panel-empty-inline" style="margin-bottom:10px">${escapeHtml(preflight.warnings.join(' | '))}</div>`
+            : '';
+        const missingHtml = preflight.missing.length
+            ? `<div class="panel-empty-inline" style="margin-bottom:10px;color:var(--danger)">Missing required metadata: ${escapeHtml(preflight.missing.join(', '))}</div>`
+            : '';
+        const rowsHtml = metadataRows.map(([label, value]) => `
+            <div class="info-item">
+                <span class="info-label">${escapeHtml(label)}</span>
+                <span class="info-value">${escapeHtml(value)}</span>
+            </div>
+        `).join('');
+        const html = `
+            ${missingHtml}
+            ${warningsHtml}
+            <div class="info-grid" style="margin-bottom:12px">${rowsHtml}</div>
+            <textarea class="input-field" readonly rows="12" spellcheck="false" style="font-family:monospace;resize:vertical">${escapeHtml(preflight.code)}</textarea>
+        `;
+        showModal('Greasy Fork publish handoff', html, [
+            {
+                label: 'Copy code',
+                callback: async () => {
+                    await navigator.clipboard.writeText(preflight.code);
+                    showToast('Code copied', 'success');
+                }
+            },
+            {
+                label: 'Download file',
+                callback: () => {
+                    downloadGreasyForkPublishCode(preflight);
+                    showToast('Script file downloaded', 'success');
+                }
+            },
+            {
+                label: preflight.mode === 'update' ? 'Open update form' : 'Open new-script form',
+                class: 'btn-primary',
+                callback: () => {
+                    if (!preflight.ok) {
+                        showToast('Fix required metadata before opening the handoff', 'warning');
+                        return;
+                    }
+                    if (submitGreasyForkPublishHandoff(preflight)) {
+                        showToast('Greasy Fork handoff opened', 'success');
+                    } else {
+                        showToast('Unable to open Greasy Fork handoff', 'error');
+                    }
+                }
+            }
+        ]);
+    }
+
+    function openGreasyForkPublishHandoff() {
+        const script = getCurrentScript();
+        if (!script || !state.editor) {
+            showToast('Open a script in the editor first', 'warning');
+            return;
+        }
+        const code = state.editor.getValue();
+        const preflight = buildGreasyForkPublishPreflight(script, code);
+        showGreasyForkPublishPreview(preflight);
+    }
     
     // Generate site icons HTML for sites column
     function generateSiteIconsHtml(domains) {
@@ -8124,6 +8353,11 @@
             }
             elements.editorSavedAt.textContent = detail;
             elements.editorSavedAt.title = detail;
+        }
+
+        if (elements.tbtnPublishGreasyFork) {
+            elements.tbtnPublishGreasyFork.disabled = !script;
+            elements.tbtnPublishGreasyFork.setAttribute('aria-label', 'Publish to Greasy Fork');
         }
 
         if (elements.btnEditorSave) {
@@ -11502,6 +11736,9 @@
         });
         elements.tbtnUnbindLocalFile?.addEventListener('click', event => {
             runButtonTask(event.currentTarget, unbindCurrentScriptLocalFile, { busyLabel: 'Unbinding...' });
+        });
+        elements.tbtnPublishGreasyFork?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, openGreasyForkPublishHandoff, { busyLabel: 'Preparing...' });
         });
         elements.btnEditorToggle?.addEventListener('click', () => {
             const script = state.scripts.find(s => s.id === state.currentScriptId);
