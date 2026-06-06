@@ -1125,6 +1125,7 @@ ${req.code}
   function _isUnsafeElementAttribute(name, value) {
     const lowerName = String(name || '').trim().toLowerCase();
     if (!lowerName || lowerName.startsWith('on')) return true;
+    if (lowerName === 'srcdoc') return true;
     if (!_urlAttrs.has(lowerName)) return false;
     const normalizedValue = String(value ?? '').replace(/[\\u0000-\\u0020\\u007f\\ufffd]+/g, '').toLowerCase();
     return /^(javascript|vbscript|data|blob|file):/.test(normalizedValue);

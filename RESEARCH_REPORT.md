@@ -2,6 +2,16 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 59 deep-audit security closure: N-9 was added from
+`docs/research-deep-audit-2026-06-06.md` so the newly identified P0 findings
+are tracked in the active roadmap. The first closure hardens `GM_addElement`:
+`srcdoc` is now treated as unsafe in both `src/background/wrapper-builder.ts`
+and `src/background/core.ts`, regenerated runtime artifacts carry the same
+guard, and `tests/wrapper-dom-security.test.js` proves direct attributes and
+sanitized `innerHTML` iframes cannot retain `srcdoc`. Remaining N-9 work is
+the `@crontab` isolated-world escalation and PublicAPI internal-host guard
+drift from the deep audit.
+
 2026-06-06 Cycle 58 local file refresh review: X-8 now has a review-only
 refresh flow instead of only a binding handle. Current Chrome guidance still
 requires permission rechecks for stored handles and user-gesture permission
