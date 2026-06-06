@@ -137,6 +137,14 @@ interface SyncPreviewSummary {
   remoteValueBundlesConflictBlocked: number;
   remoteValueBundlesIgnored: number;
   remoteValueBundleWarnings: number;
+  localValueBundlesWithTimestamps: number;
+  localValueBundlesMissingTimestamps: number;
+  localValueBundlesOlderThanLastSync: number;
+  localValueBundlesNewerThanLastSync: number;
+  remoteValueBundlesWithTimestamps: number;
+  remoteValueBundlesMissingTimestamps: number;
+  remoteValueBundlesOlderThanLastSync: number;
+  remoteValueBundlesNewerThanLastSync: number;
   valueBundleApplyEnabled: boolean;
   valueBundleApplyMode: 'empty-local-only';
   wouldUpload: boolean;
@@ -436,6 +444,36 @@ function getValueBundleLastUpdatedAt(bundle: unknown): number | undefined {
   const timestamp = Number(bundle.lastValueUpdatedAt);
   if (!Number.isFinite(timestamp) || timestamp <= 0) return undefined;
   return Math.floor(timestamp);
+}
+
+function summarizeValueBundleTimestampFreshness(
+  bundles: Record<string, unknown>,
+  lastSync: number | null | undefined,
+): {
+  withTimestamps: number;
+  missingTimestamps: number;
+  olderThanLastSync: number;
+  newerThanLastSync: number;
+} {
+  const summary = {
+    withTimestamps: 0,
+    missingTimestamps: 0,
+    olderThanLastSync: 0,
+    newerThanLastSync: 0,
+  };
+  const lastSyncTimestamp = Number(lastSync);
+  const hasLastSync = Number.isFinite(lastSyncTimestamp) && lastSyncTimestamp > 0;
+  for (const bundle of Object.values(bundles)) {
+    const updatedAt = getValueBundleLastUpdatedAt(bundle);
+    if (!updatedAt) {
+      summary.missingTimestamps += 1;
+      continue;
+    }
+    summary.withTimestamps += 1;
+    if (hasLastSync && updatedAt < lastSyncTimestamp) summary.olderThanLastSync += 1;
+    if (hasLastSync && updatedAt > lastSyncTimestamp) summary.newerThanLastSync += 1;
+  }
+  return summary;
 }
 
 function setValueBundleMetadataKey(
@@ -955,6 +993,14 @@ export const CloudSync = {
       remoteValueBundleSelection,
       local,
     );
+    const localValueBundleFreshness = summarizeValueBundleTimestampFreshness(
+      getSyncEnvelopeValueBundles(local),
+      options.lastSync,
+    );
+    const remoteValueBundleFreshness = summarizeValueBundleTimestampFreshness(
+      getSyncEnvelopeValueBundles(remote),
+      options.lastSync,
+    );
     const ids = new Set<string>([...localById.keys(), ...remoteById.keys()]);
     const summary: SyncPreviewSummary = {
       localScripts: localScripts.length,
@@ -975,6 +1021,14 @@ export const CloudSync = {
       remoteValueBundlesConflictBlocked: remoteValueBundleApplyReadiness.conflictBlocked,
       remoteValueBundlesIgnored: remoteValueBundleSelection.ignored,
       remoteValueBundleWarnings: remoteValueBundleSelection.warnings,
+      localValueBundlesWithTimestamps: localValueBundleFreshness.withTimestamps,
+      localValueBundlesMissingTimestamps: localValueBundleFreshness.missingTimestamps,
+      localValueBundlesOlderThanLastSync: localValueBundleFreshness.olderThanLastSync,
+      localValueBundlesNewerThanLastSync: localValueBundleFreshness.newerThanLastSync,
+      remoteValueBundlesWithTimestamps: remoteValueBundleFreshness.withTimestamps,
+      remoteValueBundlesMissingTimestamps: remoteValueBundleFreshness.missingTimestamps,
+      remoteValueBundlesOlderThanLastSync: remoteValueBundleFreshness.olderThanLastSync,
+      remoteValueBundlesNewerThanLastSync: remoteValueBundleFreshness.newerThanLastSync,
       valueBundleApplyEnabled: true,
       valueBundleApplyMode: 'empty-local-only',
       wouldUpload: false,

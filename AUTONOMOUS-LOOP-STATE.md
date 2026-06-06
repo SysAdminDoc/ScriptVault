@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 110 - 2026-06-06
+Last cycle: Cycle 111 - 2026-06-06
 
 ## Latest Result
 
@@ -608,13 +608,23 @@ Last cycle: Cycle 110 - 2026-06-06
   full check suite with 1509 Vitest cases, high-severity audit, CWS remote-code
   scan, Monaco ESM scan, TS runtime check, forbidden-reference grep, and `git
   diff --check`.
+  Cycle 111 added aggregate stale-bundle diagnostics for L-8 dry-run previews:
+  preview summaries now count timestamped versus missing local/remote value
+  bundles, plus older/newer-than-last-sync local/remote bundles when `lastSync`
+  is known. The dashboard preview renders those counts without script IDs,
+  script names, value key names, values, URLs, local workspace handles, local
+  paths, sync credentials, or provider account data. Non-empty writes remain
+  disabled. Verification used focused source CloudSync/sync-cockpit/hardening
+  tests, typecheck, build, the full check suite with 1509 Vitest cases,
+  high-severity audit, CWS remote-code scan, Monaco ESM scan, TS runtime check,
+  forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 52. Cycle 110 added per-key timestamp overlap
-counts to blocked value-bundle previews and exports. The next best local cycle
-is Cycle 111: add stale-bundle diagnostics or the next L-8 safeguard needed
-before broader bidirectional GM value merges.
+Continue from `ROADMAP.md` Round 53. Cycle 111 added stale-bundle diagnostics to
+GM value sync dry-run previews. The next best local cycle is Cycle 112: add a
+non-writing candidate merge plan or the next L-8 safeguard needed before broader
+bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -623,8 +633,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 110 complete for 2026-06-06; roadmap continuation
-  points to Cycle 111 GM value sync stale diagnostics or the next available
+- Status: ScriptVault Cycle 111 complete for 2026-06-06; roadmap continuation
+  points to Cycle 112 GM value sync candidate merge planning or the next available
   non-credential-gated L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

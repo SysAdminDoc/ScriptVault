@@ -223,6 +223,7 @@ describe('source hardening parity guards', () => {
       expect(text).toContain('preserveRemoteValueBundle');
       expect(text).toContain('countValueBundleKeyOverlap');
       expect(text).toContain('getValueBundleKeyUpdatedAt');
+      expect(text).toContain('summarizeValueBundleTimestampFreshness');
       expect(text).toContain('getSyncEnvelopeValueBundles');
       expect(text).toContain('valueBundleSync');
       expect(text).toContain('valueBundleConflicts');

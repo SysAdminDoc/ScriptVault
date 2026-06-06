@@ -162,6 +162,28 @@ function getValueBundleLastUpdatedAt(bundle) {
   return Math.floor(timestamp);
 }
 
+function summarizeValueBundleTimestampFreshness(bundles, lastSync) {
+  const summary = {
+    withTimestamps: 0,
+    missingTimestamps: 0,
+    olderThanLastSync: 0,
+    newerThanLastSync: 0
+  };
+  const lastSyncTimestamp = Number(lastSync);
+  const hasLastSync = Number.isFinite(lastSyncTimestamp) && lastSyncTimestamp > 0;
+  for (const bundle of Object.values(bundles || {})) {
+    const updatedAt = getValueBundleLastUpdatedAt(bundle);
+    if (!updatedAt) {
+      summary.missingTimestamps++;
+      continue;
+    }
+    summary.withTimestamps++;
+    if (hasLastSync && updatedAt < lastSyncTimestamp) summary.olderThanLastSync++;
+    if (hasLastSync && updatedAt > lastSyncTimestamp) summary.newerThanLastSync++;
+  }
+  return summary;
+}
+
 function setValueBundleMetadataKey(record, key, value) {
   Object.defineProperty(record, key, {
     value,
@@ -3291,6 +3313,14 @@ const CloudSync = {
       remoteValueBundleSelection,
       local
     );
+    const localValueBundleFreshness = summarizeValueBundleTimestampFreshness(
+      getSyncEnvelopeValueBundles(local),
+      options.lastSync
+    );
+    const remoteValueBundleFreshness = summarizeValueBundleTimestampFreshness(
+      getSyncEnvelopeValueBundles(remote),
+      options.lastSync
+    );
     const ids = new Set([...localById.keys(), ...remoteById.keys()]);
     const summary = {
       localScripts: localScripts.length,
@@ -3311,6 +3341,14 @@ const CloudSync = {
       remoteValueBundlesConflictBlocked: remoteValueBundleApplyReadiness.conflictBlocked,
       remoteValueBundlesIgnored: remoteValueBundleSelection.ignored,
       remoteValueBundleWarnings: remoteValueBundleSelection.warnings,
+      localValueBundlesWithTimestamps: localValueBundleFreshness.withTimestamps,
+      localValueBundlesMissingTimestamps: localValueBundleFreshness.missingTimestamps,
+      localValueBundlesOlderThanLastSync: localValueBundleFreshness.olderThanLastSync,
+      localValueBundlesNewerThanLastSync: localValueBundleFreshness.newerThanLastSync,
+      remoteValueBundlesWithTimestamps: remoteValueBundleFreshness.withTimestamps,
+      remoteValueBundlesMissingTimestamps: remoteValueBundleFreshness.missingTimestamps,
+      remoteValueBundlesOlderThanLastSync: remoteValueBundleFreshness.olderThanLastSync,
+      remoteValueBundlesNewerThanLastSync: remoteValueBundleFreshness.newerThanLastSync,
       valueBundleApplyEnabled: true,
       valueBundleApplyMode: 'empty-local-only',
       wouldUpload: false,

@@ -194,6 +194,19 @@ Cycle 110 adds per-key timestamp summaries to blocked previews:
 - These counts are advisory conflict evidence only. They do not enable
   non-empty merge writes.
 
-The next implementation slice should add stale-bundle diagnostics or another
-durable safeguard before non-empty local and remote value bags can be merged
-bidirectionally.
+Cycle 111 adds stale-bundle diagnostics to dry-run previews:
+
+- Dry-run summaries count local and remote value bundles with aggregate
+  timestamps versus missing timestamps.
+- When `lastSync` is known, dry-run summaries also count local and remote value
+  bundles older than last sync and newer than last sync.
+- The dashboard preview renders those counts as aggregate timestamp diagnostics.
+- The preview/export still omit script IDs, script names, value key names,
+  values, URLs, local workspace handles, local paths, sync credentials, and
+  provider account data.
+- These counts are advisory evidence only. They do not enable non-empty merge
+  writes.
+
+The next implementation slice should add a non-writing candidate merge plan or
+another durable safeguard before non-empty local and remote value bags can be
+merged bidirectionally.
