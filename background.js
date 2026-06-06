@@ -16569,6 +16569,17 @@ function createEmptyRemoteValueBundleSelection() {
   return { valueBundles: {}, ignored: 0, warnings: 0 };
 }
 
+function createEmptyRemoteValueBundleApplyResult() {
+  return {
+    applied: 0,
+    skippedNonEmpty: 0,
+    skippedUserModified: 0,
+    skippedUnavailable: 0,
+    failures: 0,
+    preservedValueBundles: {}
+  };
+}
+
 function selectApplicableRemoteValueBundles(remote, targetScripts = []) {
   const sourceBundles = getSyncEnvelopeValueBundles(remote);
   if (Object.keys(sourceBundles).length === 0) return createEmptyRemoteValueBundleSelection();
@@ -16597,6 +16608,71 @@ function selectApplicableRemoteValueBundles(remote, targetScripts = []) {
       result.valueBundles[scriptId] = rebuilt.bundle;
     } else {
       result.ignored++;
+    }
+  }
+
+  return result;
+}
+
+function countRemoteValueBundlesApplyReady(selection, local) {
+  let ready = 0;
+  let conflictBlocked = 0;
+  const localBundles = getSyncEnvelopeValueBundles(local);
+  const localScriptIds = new Set(
+    Array.isArray(local?.scripts) ? local.scripts.map(script => script.id) : []
+  );
+
+  for (const [scriptId] of Object.entries(selection.valueBundles)) {
+    const localBundle = localBundles[scriptId];
+    if (!isPlainObject(localBundle) && localScriptIds.has(scriptId)) {
+      conflictBlocked++;
+    } else if (!isPlainObject(localBundle) || Number(localBundle.keyCount) === 0) {
+      ready++;
+    } else {
+      conflictBlocked++;
+    }
+  }
+
+  return { ready, conflictBlocked };
+}
+
+async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts = []) {
+  const result = createEmptyRemoteValueBundleApplyResult();
+  const bundles = Object.entries(selection.valueBundles);
+  if (bundles.length === 0) return result;
+
+  if (
+    typeof ScriptValues === 'undefined' ||
+    typeof ScriptValues?.getAll !== 'function' ||
+    typeof ScriptValues?.setAll !== 'function'
+  ) {
+    result.skippedUnavailable = bundles.length;
+    result.preservedValueBundles = Object.fromEntries(bundles);
+    return result;
+  }
+
+  const scriptsById = new Map(currentScripts.map(script => [script.id, script]));
+
+  for (const [scriptId, bundle] of bundles) {
+    const currentScript = scriptsById.get(scriptId);
+    if (currentScript?.settings?.userModified) {
+      result.skippedUserModified++;
+      result.preservedValueBundles[scriptId] = bundle;
+      continue;
+    }
+
+    try {
+      const localValues = await ScriptValues.getAll(scriptId);
+      if (Object.keys(localValues || {}).length > 0) {
+        result.skippedNonEmpty++;
+        result.preservedValueBundles[scriptId] = bundle;
+        continue;
+      }
+      await ScriptValues.setAll(scriptId, bundle.values);
+      result.applied++;
+    } catch (_) {
+      result.failures++;
+      result.preservedValueBundles[scriptId] = bundle;
     }
   }
 
@@ -19396,6 +19472,10 @@ const CloudSync = {
     const remoteValueBundleSelection = remote
       ? selectApplicableRemoteValueBundles(remote, this.mergeData(local, remote).scripts)
       : createEmptyRemoteValueBundleSelection();
+    const remoteValueBundleApplyReadiness = countRemoteValueBundlesApplyReady(
+      remoteValueBundleSelection,
+      local
+    );
     const ids = new Set([...localById.keys(), ...remoteById.keys()]);
     const summary = {
       localScripts: localScripts.length,
@@ -19412,9 +19492,12 @@ const CloudSync = {
       remoteValueBundles: Object.keys(remote?.valueBundles || {}).length,
       valueBundleWarnings: Math.max(0, Number(options.valueBundleWarnings) || 0),
       remoteValueBundlesApplicable: Object.keys(remoteValueBundleSelection.valueBundles).length,
+      remoteValueBundlesApplyReady: remoteValueBundleApplyReadiness.ready,
+      remoteValueBundlesConflictBlocked: remoteValueBundleApplyReadiness.conflictBlocked,
       remoteValueBundlesIgnored: remoteValueBundleSelection.ignored,
       remoteValueBundleWarnings: remoteValueBundleSelection.warnings,
-      valueBundleApplyEnabled: false,
+      valueBundleApplyEnabled: true,
+      valueBundleApplyMode: 'empty-local-only',
       wouldUpload: false,
       wouldDownload: false,
       wouldUploadValues: false,
@@ -19468,7 +19551,7 @@ const CloudSync = {
     summary.wouldUpload = summary.localOnly > 0 || summary.localNewer > 0 || summary.conflicts > 0 || !remote;
     summary.wouldDownload = summary.remoteOnly > 0 || summary.remoteNewer > 0 || summary.conflicts > 0;
     summary.wouldUploadValues = summary.localValueBundles > 0;
-    summary.wouldApplyValues = summary.valueBundleApplyEnabled && summary.remoteValueBundlesApplicable > 0;
+    summary.wouldApplyValues = summary.valueBundleApplyEnabled && summary.remoteValueBundlesApplyReady > 0;
 
     return {
       dryRun: true,
@@ -19535,7 +19618,8 @@ const CloudSync = {
           applicable: Object.keys(remoteValueBundleSelection.valueBundles).length,
           ignored: remoteValueBundleSelection.ignored,
           warnings: remoteValueBundleSelection.warnings,
-          applyEnabled: false
+          applyEnabled: true,
+          applyMode: 'empty-local-only'
         });
       }
 
@@ -19622,6 +19706,26 @@ const CloudSync = {
       // Rebuild the upload envelope from the current post-merge ScriptStorage state
       // so the remote gets 3-way merge results, updated syncBaseCode, and conflict markers.
       const postMergeScripts = await ScriptStorage.getAll();
+      const remoteValueApplyResult = await applyRemoteValueBundlesWhenLocalEmpty(
+        remoteValueBundleSelection,
+        postMergeScripts
+      );
+      if (
+        remoteValueApplyResult.applied > 0 ||
+        remoteValueApplyResult.skippedNonEmpty > 0 ||
+        remoteValueApplyResult.skippedUserModified > 0 ||
+        remoteValueApplyResult.skippedUnavailable > 0 ||
+        remoteValueApplyResult.failures > 0
+      ) {
+        debugLog('[CloudSync] Remote GM value bundles apply result:', {
+          applied: remoteValueApplyResult.applied,
+          skippedNonEmpty: remoteValueApplyResult.skippedNonEmpty,
+          skippedUserModified: remoteValueApplyResult.skippedUserModified,
+          skippedUnavailable: remoteValueApplyResult.skippedUnavailable,
+          failures: remoteValueApplyResult.failures,
+          preserved: Object.keys(remoteValueApplyResult.preservedValueBundles).length
+        });
+      }
       const uploadScripts = postMergeScripts.map(s => ({
         id: s.id,
         code: s.code,
@@ -19632,12 +19736,16 @@ const CloudSync = {
         syncBaseCode: s.syncBaseCode ?? null
       }));
       const postMergeValueBundleData = await buildValueBundlesForScripts(uploadScripts);
+      const uploadValueBundles = {
+        ...postMergeValueBundleData.valueBundles,
+        ...remoteValueApplyResult.preservedValueBundles
+      };
       const uploadData = {
         version: 1,
         timestamp: Date.now(),
         scripts: uploadScripts,
         tombstones: mergedTombstones,
-        ...(Object.keys(postMergeValueBundleData.valueBundles).length > 0 ? { valueBundles: postMergeValueBundleData.valueBundles } : {})
+        ...(Object.keys(uploadValueBundles).length > 0 ? { valueBundles: uploadValueBundles } : {})
       };
       if (signal?.aborted) throw new Error('Sync aborted');
       await provider.upload(await prepareSyncEnvelopeForRemoteUpload(uploadData, settings), settings, { signal });

@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 41 - GM value sync remote apply gate 2026-06-06.
+> **Roadmap version:** Round 42 - GM value sync empty-local apply 2026-06-06.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1502 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1503 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 41 - 2026-06-06.
+> Last researched: Round 42 - 2026-06-06.
 
 ---
 
@@ -237,7 +237,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P3 | **Effort:** L | **Source:** [S37]
 - **Problem:** VM's most-requested sync feature (#48) is syncing per-script GM storage values.
 - **Deliverable:** Optional per-script "sync values" toggle with size caps.
-- **Progress:** Cycle 96 added the first opt-in data-model slice: `script.settings.syncValues === true` is now a sync-safe per-script marker, the new `scriptvault-gm-value-sync/v1` bundle builder enforces JSON-only values plus 64 KiB per-script, 128-key, and 256-byte key caps, CloudSync/EasyCloud tests prove the marker can sync while actual GM values stay out of provider envelopes, and `docs/gm-value-sync-data-model.md` records the remaining provider-wiring and conflict rules. Cycle 97 added local support diagnostics for that path before provider writes: the local health report now counts opt-in scripts, ready/empty bundles, aggregate warning IDs, value-read failures, syncable key totals, estimated bytes, and active caps while explicitly reporting `providerWritesEnabled: false` and excluding values, value key names, script IDs, script names, URLs, local workspace handles, local paths, sync credentials, and provider account data. Cycle 98 wired CloudSync preview/upload for opt-in GM value bundles: local envelopes can include a top-level `valueBundles` object built only through the capped bundle builder, upload sanitization rebuilds bundles before provider writes, dry-run previews count local/remote value bundles, and downloaded remote value bundles remain unapplied until conflict handling is ready. Cycle 99 added the conservative downloaded-bundle apply gate: remote `valueBundles` are validated against the post-merge script set, schema/scriptId/value shape, and `syncValues === true`; dry-run previews and the dashboard count eligible, ignored, and warning bundles while keeping `valueBundleApplyEnabled: false` and `wouldApplyValues: false`.
+- **Progress:** Cycle 96 added the first opt-in data-model slice: `script.settings.syncValues === true` is now a sync-safe per-script marker, the new `scriptvault-gm-value-sync/v1` bundle builder enforces JSON-only values plus 64 KiB per-script, 128-key, and 256-byte key caps, CloudSync/EasyCloud tests prove the marker can sync while actual GM values stay out of provider envelopes, and `docs/gm-value-sync-data-model.md` records the remaining provider-wiring and conflict rules. Cycle 97 added local support diagnostics for that path before provider writes: the local health report now counts opt-in scripts, ready/empty bundles, aggregate warning IDs, value-read failures, syncable key totals, estimated bytes, and active caps while explicitly reporting `providerWritesEnabled: false` and excluding values, value key names, script IDs, script names, URLs, local workspace handles, local paths, sync credentials, and provider account data. Cycle 98 wired CloudSync preview/upload for opt-in GM value bundles: local envelopes can include a top-level `valueBundles` object built only through the capped bundle builder, upload sanitization rebuilds bundles before provider writes, dry-run previews count local/remote value bundles, and downloaded remote value bundles remain unapplied until conflict handling is ready. Cycle 99 added the conservative downloaded-bundle apply gate: remote `valueBundles` are validated against the post-merge script set, schema/scriptId/value shape, and `syncValues === true`; dry-run previews and the dashboard count eligible, ignored, and warning bundles while keeping `valueBundleApplyEnabled: false` and `wouldApplyValues: false`. Cycle 100 enabled the first write path only for empty local value bags: valid remote bundles are applied with `ScriptValues.setAll()` after script merge, while non-empty local bags, user-modified scripts, unavailable storage, or write failures preserve the remote bundle in the next upload instead of overwriting it.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -321,8 +321,8 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 
 ## Continuation State
 
-- **Current cycle:** Round 41 Cycle 99 added the non-writing remote GM value-bundle apply gate for L-8. CloudSync now identifies eligible downloaded bundles after script merge, ignores malformed or non-opted bundles, reports aggregate counts in dry-run previews, and keeps local GM value writes disabled until conflict handling is ready.
-- **Next implementation angle:** Cycle 100 should continue L-8 with a conservative first apply rule, such as applying a valid downloaded bundle only when the target script is still opted in and local GM storage is empty, or add the per-key timestamp/conflict evidence needed before broader bidirectional value merges.
+- **Current cycle:** Round 42 Cycle 100 added the first L-8 remote GM value apply path for empty local value bags and preserves remote bundles when local values are non-empty or writes cannot safely complete.
+- **Next implementation angle:** Cycle 101 should continue L-8 with per-key timestamp/conflict evidence, conflict preview/export for blocked value merges, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 

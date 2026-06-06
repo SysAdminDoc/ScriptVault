@@ -3888,7 +3888,7 @@
             `A real sync would ${summary.wouldDownload ? 'download remote changes' : 'not download remote changes'} and ${summary.wouldUpload ? 'upload a merged backup' : 'not upload a merged backup'}.`
         ];
         if ((summary.localValueOptIns || 0) > 0 || (summary.localValueBundles || 0) > 0 || (summary.remoteValueBundles || 0) > 0) {
-            lines.push(`GM values: ${summary.localValueOptIns || 0} local opt-ins, ${summary.localValueBundles || 0} local bundles, ${summary.remoteValueBundles || 0} remote bundles (${summary.remoteValueBundlesApplicable || 0} eligible, ${summary.remoteValueBundlesIgnored || 0} ignored); apply is disabled until conflict handling is ready.`);
+            lines.push(`GM values: ${summary.localValueOptIns || 0} local opt-ins, ${summary.localValueBundles || 0} local bundles, ${summary.remoteValueBundles || 0} remote bundles (${summary.remoteValueBundlesApplyReady || 0} empty-local apply-ready, ${summary.remoteValueBundlesConflictBlocked || 0} conflict-blocked, ${summary.remoteValueBundlesIgnored || 0} ignored).`);
         }
         if (Array.isArray(preview.conflicts) && preview.conflicts.length) {
             lines.push('');

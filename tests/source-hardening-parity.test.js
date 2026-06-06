@@ -216,10 +216,12 @@ describe('source hardening parity guards', () => {
 
     for (const text of [core, cloudSync]) {
       expect(text).toContain('selectApplicableRemoteValueBundles');
+      expect(text).toContain('applyRemoteValueBundlesWhenLocalEmpty');
       expect(text).toContain('getSyncEnvelopeValueBundles');
       expect(text).toContain('valueBundleApplyEnabled');
+      expect(text).toContain('valueBundleApplyMode');
       expect(text).toContain('wouldApplyValues');
-      expect(text).toContain('applyEnabled: false');
+      expect(text).toContain("applyMode: 'empty-local-only'");
       const gateStart = text.indexOf('function selectApplicableRemoteValueBundles');
       const gateEnd = text.indexOf('async function', gateStart);
       expect(gateStart).toBeGreaterThanOrEqual(0);
