@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 26 - 2026-06-06
+Last cycle: Cycle 27 - 2026-06-06
 
 ## Latest Result
 
@@ -19,15 +19,18 @@ Last cycle: Cycle 26 - 2026-06-06
   `npm audit --omit=optional` policy is backed by a shipped-source import scan.
 - Cycle 26 added a settings schema classification gate covering defaults,
   TypeScript keys, and dashboard save handlers.
-- Verification used the live checkout: `npm run settings:schema:check`, focused
-  settings schema tests, `npm run check`, and `npm run build`.
+- Cycle 27 added targeted Settings field validation for badge color, lint max
+  size, WebDAV/S3 endpoint URLs, denied hosts, and linter JSON.
+- Verification used the live checkout: focused dashboard a11y coverage,
+  `npm run settings:schema:check`, `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
 
-Continue top-down from `ROADMAP.md`. The next local implementer-actionable row is
-the remaining P2 settings field-level validation slice: native constraints,
-field-specific accessible text errors, and save-blocking validation for badge
-color, lint size, provider URLs, host lists, and linter JSON.
+Continue top-down from `ROADMAP.md`. The next local implementer-actionable work
+is the remaining P1/P2 settings schema metadata slice: extend the
+classification schema with type/range/options/default/help metadata that can
+drive every visible Settings control, while preserving the targeted validation
+shipped in Cycle 27.
 
 ## Loop Pointer
 

@@ -32,7 +32,12 @@ a classification, or when the schema keeps a stale key that no longer appears in
 any checked surface. It is wired into `npm run check` and CI so future settings
 UI or storage edits cannot add unclassified persisted state.
 
-This is the schema-parity foundation for the next settings validation pass. The
-field-level UI work should build on this inventory by adding native constraints,
-custom text errors, and save-blocking validation for badge colors, numeric
-limits, provider URLs, host lists, and JSON fields.
+Field-level validation has started on the highest-risk settings. Badge color,
+lint maximum size, WebDAV/S3 endpoint URLs, denied hosts, and linter JSON now
+have native constraints where applicable, text error nodes wired through
+`aria-describedby`, `aria-invalid`, `setCustomValidity()`, and a shared
+save-blocking validator in `pages/dashboard.js`.
+
+Remaining work: extend the schema from classification-only metadata into
+type/range/options/default/help metadata that can drive every visible Settings
+control, not just the targeted high-risk fields.

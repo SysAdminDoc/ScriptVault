@@ -425,6 +425,46 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/elements\.btnExportFile\?\.click\(\)/);
   });
 
+  test("settings validation fields expose text errors and block invalid saves", () => {
+    const doc = parseDashboard();
+    const validatedFields = [
+      ["settingsBadgeColor", "settingsBadgeColorError"],
+      ["settingsLintMaxSize", "settingsLintMaxSizeError"],
+      ["settingsWebdavUrl", "settingsWebdavUrlError"],
+      ["settingsS3Endpoint", "settingsS3EndpointError"],
+      ["settingsDeniedHosts", "settingsDeniedHostsError"],
+      ["settingsLinterConfig", "settingsLinterConfigError"],
+    ];
+
+    validatedFields.forEach(([fieldId, errorId]) => {
+      const field = doc.getElementById(fieldId);
+      const error = doc.getElementById(errorId);
+      expect(field).not.toBeNull();
+      expect(error).not.toBeNull();
+      expect(field?.getAttribute("aria-describedby")).toContain(errorId);
+      expect(error?.classList.contains("setting-error")).toBe(true);
+      expect(error?.hasAttribute("hidden")).toBe(true);
+    });
+
+    expect(doc.getElementById("settingsBadgeColor")?.getAttribute("pattern")).toContain("[0-9a-fA-F]");
+    expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("type")).toBe("number");
+    expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("min")).toBe("1000");
+    expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("max")).toBe("5000000");
+    expect(doc.getElementById("settingsWebdavUrl")?.getAttribute("type")).toBe("url");
+    expect(doc.getElementById("settingsS3Endpoint")?.getAttribute("type")).toBe("url");
+
+    expect(dashboardJs).toMatch(/function setSettingsFieldError/);
+    expect(dashboardJs).toMatch(/input\.setAttribute\('aria-invalid', 'true'\)/);
+    expect(dashboardJs).toMatch(/input\.setCustomValidity\?\.\(message\)/);
+    expect(dashboardJs).toMatch(/function validateSettingsValue/);
+    expect(dashboardJs).toContain("Use a hex color like #22c55e.");
+    expect(dashboardJs).toContain("Use a whole number from 1,000 to 5,000,000 bytes.");
+    expect(dashboardJs).toContain("Use an http or https URL.");
+    expect(dashboardJs).toContain("Use valid JSON for the linter config.");
+    expect(dashboardJs).toMatch(/if \(!validation\.ok\) \{\s*setSettingsFieldError\(input, validation\.error\);/);
+    expect(dashboardJs).toMatch(/elements\.settingsLintMaxSize\?\.addEventListener\('blur', e => saveSetting\('lintMaxSize', e\.target\.value\)\)/);
+  });
+
   test("find userscripts controller exposes polished loading, empty, and preview states", () => {
     expect(dashboardHtml).toContain("Search script directories");
     expect(dashboardHtml).not.toContain("Search for userscripts by entering a domain or keyword above");

@@ -409,6 +409,11 @@ Priorities/sizes preserve the source labels.
     persisted/typed/dashboard-saved settings as visible, credential, timestamp,
     internal, derived, or deprecated and fails future drift. The remaining work
     is field-level validation and accessible text errors.
+  - Progress: 2026-06-06 added shared dashboard validation for badge color,
+    lint max size, WebDAV/S3 endpoint URLs, denied hosts, and linter JSON.
+    These fields now expose text error nodes, `aria-invalid`, native input
+    constraints where applicable, `setCustomValidity()`, and save-blocking
+    checks used by both blur autosaves and section Save buttons.
 
 ### Researcher Queue (Cycle 18 - 2026-06-04)
 
@@ -815,6 +820,11 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
     pin clean, missing-key, stale-key, and CLI failure paths. Next slice should
     add field-level constraints and accessible save-blocking validation for
     badge color, lint size, provider URLs, host lists, and linter JSON.
+  - Progress: 2026-06-06 shipped the targeted field-validation slice for badge
+    color, lint size, WebDAV/S3 URLs, denied hosts, and linter JSON. Focused
+    dashboard a11y coverage pins error markup, native constraints, shared
+    validation hooks, and raw lint-size validation before coercion. Remaining
+    work is schema-backed metadata for every visible Settings control.
   - Complexity: L
 
 ---
