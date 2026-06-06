@@ -12359,14 +12359,37 @@ ${req.code}
       }
 
       let _lastUrl = location.href;
+      let _pendingUrlChangeCheck = false;
+      let _lastDispatchedPair = '';
+      function __emitUrlChange(newUrl, oldUrl) {
+        const pair = oldUrl + '\\n' + newUrl;
+        if (pair === _lastDispatchedPair) return;
+        _lastDispatchedPair = pair;
+        const detail = { url: newUrl, oldUrl };
+        // Fan out to every wrapper that subscribed.
+        window.dispatchEvent(new CustomEvent('__sv_urlchange__', { detail }));
+      }
       function __checkUrlChange() {
         const newUrl = location.href;
         if (newUrl !== _lastUrl) {
           const oldUrl = _lastUrl;
           _lastUrl = newUrl;
-          const detail = { url: newUrl, oldUrl };
-          // Fan out to every wrapper that subscribed.
-          window.dispatchEvent(new CustomEvent('__sv_urlchange__', { detail }));
+          __emitUrlChange(newUrl, oldUrl);
+        }
+      }
+      function __scheduleUrlChangeCheck(reason) {
+        if (!_pendingUrlChangeCheck) {
+          _pendingUrlChangeCheck = true;
+          Promise.resolve().then(() => {
+            _pendingUrlChangeCheck = false;
+            __checkUrlChange();
+          });
+        }
+        const frameCheck = () => __checkUrlChange();
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(frameCheck);
+        } else {
+          setTimeout(frameCheck, 0);
         }
       }
 
@@ -12386,7 +12409,7 @@ ${req.code}
             // by the time __checkUrlChange reads it. The navigate event
             // fires BEFORE the document URL updates for traverse-style
             // navigations, but always before render.
-            Promise.resolve().then(__checkUrlChange);
+            __scheduleUrlChangeCheck('navigate');
           });
         } catch (_e) { /* fall through to polling shim */ }
       }
@@ -12395,14 +12418,14 @@ ${req.code}
       const _origReplaceState = history.replaceState;
       history.pushState = function () {
         _origPushState.apply(this, arguments);
-        __checkUrlChange();
+        __scheduleUrlChangeCheck('pushState');
       };
       history.replaceState = function () {
         _origReplaceState.apply(this, arguments);
-        __checkUrlChange();
+        __scheduleUrlChangeCheck('replaceState');
       };
-      window.addEventListener('popstate', __checkUrlChange);
-      window.addEventListener('hashchange', __checkUrlChange);
+      window.addEventListener('popstate', () => __scheduleUrlChangeCheck('popstate'));
+      window.addEventListener('hashchange', () => __scheduleUrlChangeCheck('hashchange'));
     }
 
     // Per-script subscription to the page-level event. Detaches itself if the
