@@ -403,6 +403,12 @@ Priorities/sizes preserve the source labels.
   hosts, custom CSS, and linter config rely on blur-time saves without a shared
   constraint layer or per-field text errors. This should become a schema-parity
   and accessible-validation gate, not a broad UI rewrite.
+  - Progress: 2026-06-06 added `src/config/settings-schema.json`,
+    `scripts/check-settings-schema.mjs`, `npm run settings:schema:check`, CI
+    coverage, and `docs/settings-schema.md`. The gate classifies all 123 known
+    persisted/typed/dashboard-saved settings as visible, credential, timestamp,
+    internal, derived, or deprecated and fails future drift. The remaining work
+    is field-level validation and accessible text errors.
 
 ### Researcher Queue (Cycle 18 - 2026-06-04)
 
@@ -803,6 +809,12 @@ userscript-manager competitive landscape. They do not overlap the PASS3 NF-/EI-/
   - Touches: `src/config/settings-defaults.json`, `src/types/settings.ts`, `src/modules/storage.ts` / generated storage, `pages/dashboard.html`, `pages/dashboard.js`, dashboard a11y/settings tests, and a defaults/validation table doc.
   - Acceptance: every persisted setting is classified as visible, internal, credential, timestamp, derived, or deprecated; saveable dashboard keys all exist in the schema or an explicit extension allowlist; visible controls declare type/range/options/default/help copy from the schema; invalid badge colors, numeric values, URLs, JSON config, host lists, and allowlist text show field-specific text errors and do not persist silently coerced values; security-sensitive settings keep explicit advanced labels.
   - Verify: add a schema parity test comparing `settings-defaults.json`, `Settings`, dashboard controls, and save handlers; add validation fixtures for malformed badge color, lint size, WebDAV/S3 URLs, denied hosts, and linter JSON; run `npm run test:a11y`, focused settings tests, and a manual Settings tab walk-through.
+  - Progress: 2026-06-06 shipped the schema parity and classification slice:
+    `settings:schema:check` compares settings defaults, `Settings` type keys,
+    and dashboard save handlers against `settings-schema.json`; focused tests
+    pin clean, missing-key, stale-key, and CLI failure paths. Next slice should
+    add field-level constraints and accessible save-blocking validation for
+    badge color, lint size, provider URLs, host lists, and linter JSON.
   - Complexity: L
 
 ---

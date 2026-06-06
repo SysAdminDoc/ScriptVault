@@ -687,6 +687,9 @@ Important integrations, permissions, storage, and data flows:
   - Acceptance: every persisted setting is classified; visible controls get
     schema-backed type/default/validation/help; invalid fields show text errors
     and do not persist.
+  - Progress: 2026-06-06 shipped schema classification and parity checking via
+    `src/config/settings-schema.json` and `npm run settings:schema:check`; next
+    work remains UI constraints plus field-specific accessible error text.
   - Verify: schema parity tests, malformed-input tests, `npm run test:a11y`.
 
 - [x] P2 - Add optional dependency reach gate
