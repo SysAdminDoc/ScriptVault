@@ -2,6 +2,20 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 67 action behavior select validation: N-1 continued through
+the remaining security/action behavior selects that already had schema option
+lists. The same select-specific source signal from Cycles 64-66 applies:
+option `value` is the persisted selection contract, and
+`HTMLSelectElement.setCustomValidity()` supports custom validation messages
+for select controls. ScriptVault now requires validation metadata and
+dashboard `setting-error` nodes for default tab type, local file, cookie,
+communication, SRI, include, @connect, incognito, page filter, block severity,
+strict mode, and top-level await selects. The dashboard validates each value
+against its live option list before persisting; block severity now stores the
+raw select value until validation accepts and converts it to a number.
+Remaining N-1 work should continue with the general/action/editor/download
+select controls that still lack validation metadata.
+
 2026-06-06 Cycle 66 security select validation: N-1 continued through the
 security-facing mode selects. The same select-specific source signal from
 Cycles 64-65 applies: option `value` is the persisted selection contract, and
