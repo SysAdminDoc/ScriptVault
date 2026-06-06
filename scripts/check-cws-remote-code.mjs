@@ -68,6 +68,11 @@ const SCAN_RULES = [
     message: 'remote fetch() response later evaluated as code',
     pattern: /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*await\s*(?:\(\s*await\s*)?fetch\s*\(\s*["'`]https?:\/\/[\s\S]{0,500}?\b(?:eval|Function|new\s+Function)\s*\(\s*\1\s*\)/gi,
   },
+  {
+    id: 'background-runner-extension-eval',
+    message: '@background runner code execution in an extension context',
+    pattern: /\boffscreen_background_run\b[\s\S]{0,1200}\b(?:eval|Function|new\s+Function)\s*\(/gi,
+  },
 ];
 
 const DOC_REQUIREMENTS = [
@@ -79,6 +84,7 @@ const DOC_REQUIREMENTS = [
       'Remote data, configuration, and resources',
       'User-configured sync',
       'Extension service worker and extension pages do not execute remote logic directly',
+      '@background runner remains dry-run only',
       'npm run cws:remote-code:check',
     ],
   },

@@ -55,6 +55,17 @@ describe('CWS remote-code scanner', () => {
     expect(result.failures).toEqual([]);
   });
 
+  it('flags @background runner execution in extension contexts', () => {
+    const rules = ruleIdsFor(`
+      chrome.runtime.onMessage.addListener((msg) => {
+        if (msg.type === 'offscreen_background_run') {
+          new Function(msg.code)();
+        }
+      });
+    `, 'offscreen.js');
+    expect(rules).toContain('background-runner-extension-eval');
+  });
+
   it('keeps the sandboxed editor page on the documented allowlist', () => {
     const result = scanRemoteCodeEntries([{
       path: 'pages/editor-sandbox.html',

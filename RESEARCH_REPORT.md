@@ -51,6 +51,13 @@ only when the user opts into the sensitive script-inventory category. Snapshot
 entries contain sanitized planner, wrapper, budget, and `executionEnabled:
 false` fields, with `includesCode: false` and no script execution.
 
+2026-06-06 Cycle 44 CWS execution guard: `npm run cws:remote-code:check` now
+fails future `offscreen_background_run` eval/new Function wiring in extension
+contexts, and `docs/cws-remote-code-compliance.md` records that the DOM-less
+`@background` runner remains dry-run only. Actual offscreen/service-worker
+execution is blocked until a Chrome Web Store-compliant execution architecture
+is selected and documented.
+
 2026-06-04 Cycle 8 comprehensive feature-plan refresh: root-level
 `RESEARCH_FEATURE_PLAN.md` now holds the current implementation-oriented
 research plan for ScriptVault v3.11.0. It preserves `ROADMAP.md` as the open
