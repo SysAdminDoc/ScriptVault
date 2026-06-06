@@ -22,6 +22,14 @@ const ALLOWED_METADATA_CONTROLS = new Set([
   'textarea',
   'url',
 ]);
+const DASHBOARD_CONTROLS_REQUIRING_VALIDATION = new Set([
+  'number',
+  'password',
+  'select',
+  'text',
+  'textarea',
+  'url',
+]);
 const REQUIRED_VALIDATION_KEYS = new Map([
   ['badgeColor', 'hex-color'],
   ['allowCommunication', 'select-option'],
@@ -194,6 +202,9 @@ function validateMetadata(schema, classified, defaultKeys, defaults, dashboardSa
     const requiredValidation = REQUIRED_VALIDATION_KEYS.get(key);
     if (requiredValidation && entry.validation?.kind !== requiredValidation) {
       errors.push(`Setting "${key}" metadata must declare ${requiredValidation} validation`);
+    }
+    if (entry.elementId && DASHBOARD_CONTROLS_REQUIRING_VALIDATION.has(entry.control) && !entry.validation) {
+      errors.push(`Setting "${key}" dashboard ${entry.control} control requires validation metadata`);
     }
   }
 
