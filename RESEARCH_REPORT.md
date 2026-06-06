@@ -2,6 +2,15 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 79 Monaco adapter dashboard smoke: X-4 is complete for the
+current ESM migration. `tests/e2e/monaco-adapter-dashboard.spec.js` launches the
+unpacked extension, suppresses one-time profile banners through normal stored
+state or dismiss controls, seeds a script, opens it from the dashboard edit
+icon, proves `window._monacoEditorAdapter.isMonaco === true`, saves changed code
+through `#btnEditorSave`, reloads, and confirms the saved code comes back
+through the adapter. A future Monaco version bump remains separate dependency
+work rather than part of the ESM switch.
+
 2026-06-06 Cycle 78 Monaco ESM Chromium sandbox smoke: X-4 now has real browser
 runtime proof for the packaged sandbox page. `tests/e2e/monaco-esm-sandbox.spec.js`
 launches the unpacked extension through the existing Playwright fixture, opens
