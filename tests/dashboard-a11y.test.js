@@ -429,6 +429,7 @@ describe("dashboard accessibility markup", () => {
     const doc = parseDashboard();
     const validatedFields = [
       ["settingsBadgeColor", "settingsBadgeColorError"],
+      ["settingsCustomCss", "settingsCustomCssError"],
       ["settingsContentScriptAPI", "settingsContentScriptAPIError"],
       ["settingsSandboxMode", "settingsSandboxModeError"],
       ["settingsModifyCSP", "settingsModifyCSPError"],
@@ -498,6 +499,7 @@ describe("dashboard accessibility markup", () => {
     expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("type")).toBe("number");
     expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("min")).toBe("1000");
     expect(doc.getElementById("settingsLintMaxSize")?.getAttribute("max")).toBe("5000000");
+    expect(doc.getElementById("settingsCustomCss")?.getAttribute("maxlength")).toBe("100000");
     expect(doc.getElementById("settingsCheckInterval")?.querySelector('option[value="0"]')?.textContent).toContain("Never");
     expect(doc.getElementById("settingsNotifyHideAfter")?.querySelector('option[value="0"]')?.textContent).toContain("Never");
     expect(doc.getElementById("settingsExternalsInterval")?.querySelector('option[value="0"]')?.textContent).toContain("Never");
@@ -550,6 +552,8 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/input\.setCustomValidity\?\.\(message\)/);
     expect(dashboardJs).toMatch(/function validateSettingsValue/);
     expect(dashboardJs).toContain("Use a hex color like #22c55e.");
+    expect(dashboardJs).toContain("Custom CSS must be 100,000 characters or fewer.");
+    expect(dashboardJs).toContain("Custom CSS contains a control character.");
     expect(dashboardJs).toContain("Use a whole number from 1,000 to 5,000,000 bytes.");
     expect(dashboardJs).toContain("Choose a listed ${label}.");
     expect(dashboardJs).toMatch(/case 'checkInterval':\s*return validateSelectOptionValue\('checkInterval', value, 'userscript update check interval', \{ number: true \}\)/);

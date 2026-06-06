@@ -3257,6 +3257,7 @@
     function getSettingsInputForKey(key) {
         const keyToElement = {
             badgeColor: elements.settingsBadgeColor,
+            customCss: elements.settingsCustomCss,
             contentScriptAPI: elements.settingsContentScriptAPI,
             sandboxMode: elements.settingsSandboxMode,
             modifyCSP: elements.settingsModifyCSP,
@@ -3536,6 +3537,16 @@
                     return { ok: false, error: 'Use a hex color like #22c55e.' };
                 }
                 return { ok: true, value: color };
+            }
+            case 'customCss': {
+                const css = String(value ?? '');
+                if (css.length > 100000) {
+                    return { ok: false, error: 'Custom CSS must be 100,000 characters or fewer.' };
+                }
+                if (hasUnsafeControlCharacters(css)) {
+                    return { ok: false, error: 'Custom CSS contains a control character.' };
+                }
+                return { ok: true, value: css };
             }
             case 'lintMaxSize': {
                 const size = Number(value);

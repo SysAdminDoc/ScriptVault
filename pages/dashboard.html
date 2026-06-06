@@ -6115,7 +6115,8 @@
                         <span class="help-icon" title="Add custom CSS to the dashboard">?</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsCustomCss" placeholder="/* Custom CSS for the dashboard */" style="min-height: 100px;"></textarea>
+                        <textarea class="textarea-field" id="settingsCustomCss" placeholder="/* Custom CSS for the dashboard */" style="min-height: 100px;" maxlength="100000" aria-describedby="settingsCustomCssError"></textarea>
+                        <span class="setting-error" id="settingsCustomCssError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Show update notification:</span>
