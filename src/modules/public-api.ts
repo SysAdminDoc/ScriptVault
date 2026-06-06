@@ -2,6 +2,8 @@
 // Allows other extensions and web pages to interact with ScriptVault.
 // Designed for service worker (no DOM dependencies).
 
+import { isInternalHost } from '../background/internal-host-guard';
+
 /* ------------------------------------------------------------------ */
 /*  Local Types                                                        */
 /* ------------------------------------------------------------------ */
@@ -184,60 +186,6 @@ function getRuntimeHooks(): RuntimeHooks {
   return globalThis as RuntimeHooks;
 }
 
-function isInternalIPv4(ip: string): boolean {
-  const parts = ip.split('.').map((part) => parseInt(part, 10));
-  if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part) || part < 0 || part > 255)) {
-    return true;
-  }
-  const [a, b, c, d] = parts as [number, number, number, number];
-  if (a === 0) return true;
-  if (a === 10) return true;
-  if (a === 127) return true;
-  if (a === 169 && b === 254) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 100 && b >= 64 && b <= 127) return true;
-  if (a === 255 && b === 255 && c === 255 && d === 255) return true;
-  return false;
-}
-
-function isInternalHost(rawHost: string): boolean {
-  if (!rawHost || typeof rawHost !== 'string') return true;
-  let host = rawHost.toLowerCase();
-  if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
-
-  if (
-    host === 'localhost' ||
-    host === 'localhost.localdomain' ||
-    host === 'ip6-localhost' ||
-    host === 'ip6-loopback'
-  ) {
-    return true;
-  }
-
-  if (host.includes(':')) {
-    if (
-      host === '::1' ||
-      host === '::' ||
-      host === '::0' ||
-      host === '0:0:0:0:0:0:0:0' ||
-      host === '0:0:0:0:0:0:0:1'
-    ) {
-      return true;
-    }
-    if (/^fe[89ab][0-9a-f]?:/.test(host)) return true;
-    if (/^f[cd][0-9a-f]{0,2}:/.test(host)) return true;
-    const v4Mapped = host.match(/^::ffff:([0-9.]+)$/);
-    return v4Mapped ? isInternalIPv4(v4Mapped[1]!) : false;
-  }
-
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
-    return isInternalIPv4(host);
-  }
-
-  return false;
-}
-
 function normalizeTrustedOrigin(origin: unknown): string {
   if (typeof origin !== 'string') throw new Error('Trusted origin must be a string');
   const trimmed = origin.trim();
@@ -333,7 +281,15 @@ function isInternalWebhookUrl(url: string): string | null {
   const host = parsed.hostname || '';
   if (!host) return 'empty hostname';
   if (!isInternalHost(host)) return null;
-  if (host === 'localhost' || host.endsWith('.localdomain')) return 'localhost alias';
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localdomain') ||
+    host === 'ip6-localhost' ||
+    host === 'ip6-loopback' ||
+    host.endsWith('.localhost')
+  ) {
+    return 'localhost alias';
+  }
   if (host.includes(':')) return 'IPv6 loopback/internal';
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return 'IPv4 private/loopback/CGNAT';
   return 'internal host';
