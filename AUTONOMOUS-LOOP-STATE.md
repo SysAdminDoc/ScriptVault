@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 43 - 2026-06-06
+Last cycle: Cycle 44 - 2026-06-06
 
 ## Latest Result
 
@@ -72,8 +72,11 @@ Last cycle: Cycle 43 - 2026-06-06
 - Cycle 43 exposed sanitized background runner dry-runs in support snapshots
   behind the existing script-inventory opt-in, preserving `includesCode: false`
   and no execution.
-- Verification used the live checkout: focused support snapshot/dry-run tests,
-  TypeScript, `npm run check`, and `npm run build`.
+- Cycle 44 added a CWS remote-code guard that fails future
+  `offscreen_background_run` eval/new Function execution in extension contexts
+  and documented that the DOM-less `@background` runner remains dry-run only.
+- Verification used the live checkout: focused CWS scanner tests,
+  `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
 
@@ -81,13 +84,15 @@ Continue top-down from `ROADMAP.md`. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, and the AMO
 submission row is blocked on maintainer credentials. The next local
-implementer-actionable work remains X-2. The next local slice is wiring
-offscreen/service-worker execution behind the default-off gate, starting with a
-disabled-by-default runner entrypoint and no-open-tab tests. Edge Partner Center
-upload and REST automation remain credential/listing gated.
+X-2 execution is blocked pending a Chrome Web Store-compliant execution
+architecture for DOM-less user code. Current safe work is complete through
+parser, planner, diagnostics, wrapper scaffold, dry-run action, support snapshot
+surfacing, and release guard. Edge Partner Center upload and REST automation
+remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 43 complete for 2026-06-06.
+- Status: ScriptVault Cycle 44 complete for 2026-06-06; blocked on compliant
+  `@background` execution architecture before further runner implementation.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

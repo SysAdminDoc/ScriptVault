@@ -52,6 +52,11 @@ the sensitive script-inventory category. The snapshot stores sanitized status,
 budget, wrapper-support, and `executionEnabled: false` fields; it does not store
 wrapper code.
 
+Execution is intentionally blocked until a Chrome Web Store-compliant execution
+architecture is approved. The release remote-code gate fails any future
+`offscreen_background_run` handler that evaluates wrapper code inside the
+extension offscreen document or service worker.
+
 ## API Surface
 
 Initial allowed APIs should be limited to DOM-independent primitives:

@@ -27,6 +27,11 @@ URLs used for installs, updates, dependencies, script search, OAuth, and sync
 are data/configuration inputs for those user-selected workflows, not remote
 extension application code.
 
+The planned DOM-less @background runner remains dry-run only. Current code can
+parse, classify, and report runner eligibility, but extension service worker,
+extension pages, and the offscreen document do not execute `@background` script
+bodies or wrapper payloads.
+
 ## Remote-code-capable flow map
 
 | Flow | Allowed policy bucket | Runtime path | Guardrails |
@@ -39,6 +44,7 @@ extension application code.
 | Sandboxed editor page | sandboxed editor page | `pages/editor-sandbox.html`, `pages/monaco-adapter.js` | Monaco loads from packaged `lib/monaco/` assets. The sandbox page has no extension API access and is isolated by the manifest `sandbox` declaration. |
 | OAuth provider calls | Remote data, configuration, and resources | `modules/sync-providers.js`, `modules/sync-easycloud.js` | Google Drive, Dropbox, OneDrive, and Easy Cloud endpoints exchange auth and file data for user-enabled sync. Responses are parsed as JSON/data, not evaluated as extension code. |
 | User-configured sync | User-configured sync | `modules/sync-providers.js`, `modules/sync-easycloud.js`, `src/background/cloud-sync.ts` | WebDAV/S3/OAuth sync uses user-provided endpoints or provider APIs to move settings, scripts, and backup data. Sync endpoints are guarded against internal-host access unless the user explicitly opts in. |
+| DOM-less `@background` runner | Dry-run only | `src/background/background-runner*.ts`, `src/background/background-wrapper.ts`, generated `background.js` | Parser, planner, dry-run, support snapshots, and wrapper payload assembly are present for review. No offscreen/service-worker/user-code execution path is wired. The CWS scanner fails future `offscreen_background_run` eval/new Function wiring unless a compliant execution architecture is reviewed first. |
 | Extension service worker and extension pages | Packaged local extension code only | `manifest.json`, `background.js`, `content.js`, `pages/*.js`, `offscreen.js` | Chrome package scan fails remote script tags, remote workers, remote `importScripts`, dynamic remote `import()`, and direct fetched-string eval/new Function patterns outside the documented userscript/sandbox paths. |
 
 ## Package scanner
@@ -64,6 +70,8 @@ The scanner reads source/package text files or ZIP entries and fails on:
 - DOM-created script elements with remote `.js` sources.
 - `eval`, `Function`, or `new Function` calls directly fed by a remote
   `fetch("https://...")` response.
+- `@background` offscreen runner handlers that execute wrapper code in an
+  extension context.
 
 The scanner also checks that this memo, `docs/store-listing-copy.md`,
 `docs/release-runbook.md`, `package.json`, and CI keep the CWS evidence command
