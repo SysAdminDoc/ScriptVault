@@ -12,6 +12,13 @@ function extractCronSource(src) {
   return src.slice(start, end);
 }
 
+function extractCrontabExecutionSource(src) {
+  const start = src.indexOf('async function executeCrontabScriptInTab');
+  const end = src.indexOf('/** Create/refresh chrome alarms', start);
+  if (start < 0 || end < 0) throw new Error('Unable to extract crontab execution source');
+  return src.slice(start, end);
+}
+
 function createCronHarness() {
   const alarms = [];
   const debug = [];
@@ -120,6 +127,17 @@ describe('@crontab next-fire engine', () => {
     expect(cronSource).not.toContain('parseCronToMinutes');
     expect(cronSource).not.toContain('periodInMinutes');
     expect(cronSource).toContain('chrome.alarms.create(alarmName, { when: next.when })');
+  });
+
+  it('executes scheduled scripts outside the extension isolated world', () => {
+    const executionSource = extractCrontabExecutionSource(backgroundCore);
+
+    expect(executionSource).toContain('chrome.userScripts.execute');
+    expect(executionSource).toContain("world: 'USER_SCRIPT'");
+    expect(executionSource).toContain('chrome.scripting.executeScript');
+    expect(executionSource).toContain("world: 'MAIN'");
+    expect(executionSource).not.toContain("world: 'ISOLATED'");
+    expect(executionSource).not.toContain('new Function');
   });
 });
 

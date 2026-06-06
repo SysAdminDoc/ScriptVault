@@ -2,6 +2,17 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 60 crontab execution isolation: N-9 EI-2 is closed. The
+deep audit found that scheduled `@crontab` scripts were executed with
+`chrome.scripting.executeScript` in `ISOLATED` world, which can give
+userscript code access to extension APIs. The scheduler now prefers
+`chrome.userScripts.execute` in `USER_SCRIPT` world, matching the normal
+userscript execution boundary, and falls back only to `chrome.scripting` in
+`MAIN` world. The scheduled path no longer uses `new Function`, and
+`tests/crontab-next-fire.test.js` pins `USER_SCRIPT`, `MAIN`, and the absence
+of `ISOLATED`/`new Function` in the crontab execution block. The remaining
+N-9 closure is PublicAPI internal-host guard drift.
+
 2026-06-06 Cycle 59 deep-audit security closure: N-9 was added from
 `docs/research-deep-audit-2026-06-06.md` so the newly identified P0 findings
 are tracked in the active roadmap. The first closure hardens `GM_addElement`:
