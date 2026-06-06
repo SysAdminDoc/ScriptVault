@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 58 - 2026-06-06
+Last cycle: Cycle 59 - 2026-06-06
 
 ## Latest Result
 
@@ -149,6 +149,11 @@ Last cycle: Cycle 58 - 2026-06-06
   permission, stale-handle, read, cancel, and apply-failure states, shows a diff
   review before changed code can apply, and saves accepted changes with a
   `local-save`/`local-file` receipt.
+- Cycle 59 added the N-9 deep-audit security closure lane and fixed EI-1:
+  `GM_addElement` now rejects `srcdoc` for direct attributes and sanitized
+  `innerHTML` iframes in both the focused wrapper source and core runtime
+  source, with generated artifacts refreshed and DOM security tests pinning the
+  bypass.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -180,24 +185,26 @@ Last cycle: Cycle 58 - 2026-06-06
   guidance plus CWS local user-data disclosure expectations, then verified with
   focused local-workspace/local-save/storage tests, TS runtime generation/check,
   high-severity audit, full check suite, build, and CWS remote-code scan.
+  Cycle 59 consumed the new deep-audit local research plan, then verified the
+  `GM_addElement` `srcdoc` hardening with focused DOM security tests, TS runtime
+  generation/check, high-severity audit, full check suite, build, and CWS
+  remote-code scan.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 26. The next best local cycle is Cycle 59:
-continue X-8 evidence hardening with support-snapshot/local-health aggregate
-counts for bound scripts and permission/error states, deeper fixtures for
-denied permission, missing handle, parse failure, no-change, successful apply,
-receipt details, and registration behavior, and another export/support check
-that handles and absolute paths never leave local storage. The live two-tab
-`GM_addValueChangeListener` smoke remains browser-profile gated until
-`chrome.userScripts` is enabled for the unpacked extension, AMO submission
-remains blocked on maintainer credentials, and Edge Partner Center upload/REST
-automation remain credential/listing gated.
+Continue from `ROADMAP.md` Round 27. The next best local cycle is Cycle 60:
+continue N-9 with the next P0 security closure. Start with the `@crontab`
+isolated-world escalation analysis/fix so scheduled userscripts cannot access
+extension APIs; if that requires a larger execution change than one safe batch,
+take the adjacent PublicAPI internal-host guard drift in the same security
+lane. The live two-tab `GM_addValueChangeListener` smoke remains browser-profile
+gated until `chrome.userScripts` is enabled for the unpacked extension, AMO
+submission remains blocked on maintainer credentials, and Edge Partner Center
+upload/REST automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 58 complete for 2026-06-06; roadmap continuation
-  points to Cycle 59 local-workspace support evidence and deeper behavior
-  fixtures.
+- Status: ScriptVault Cycle 59 complete for 2026-06-06; roadmap continuation
+  points to Cycle 60 deep-audit P0 security closures.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

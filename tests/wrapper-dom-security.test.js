@@ -126,6 +126,7 @@ describe('wrapper DOM API hardening', () => {
       Reflect.deleteProperty(window.navigator, 'sendBeacon');
     }
     Reflect.deleteProperty(window, '__gmDirect');
+    Reflect.deleteProperty(window, '__gmFrame');
     Reflect.deleteProperty(window, '__gmHtml');
     Reflect.deleteProperty(window, '__scriptRan');
     for (const k of [
@@ -142,8 +143,11 @@ window.__gmDirect = GM_addElement('a', {
   'data-id': 'javascript:not-a-url',
   textContent: 'direct'
 });
+window.__gmFrame = GM_addElement('iframe', {
+  srcdoc: '<script>window.__scriptRan = true</script>'
+});
 window.__gmHtml = GM_addElement('div', {
-  innerHTML: '<a href="\\u0000javascript:alert(1)" onclick="window.__scriptRan = true" data-id="javascript:not-a-url">html</a><img src="data:text/html,boom"><script>window.__scriptRan = true</script>'
+  innerHTML: '<a href="\\u0000javascript:alert(1)" onclick="window.__scriptRan = true" data-id="javascript:not-a-url">html</a><img src="data:text/html,boom"><iframe srcdoc="<script>window.__scriptRan = true</script>"></iframe><script>window.__scriptRan = true</script>'
 });
 `));
 
@@ -155,13 +159,17 @@ window.__gmHtml = GM_addElement('div', {
     expect(window.__gmDirect.getAttribute('href')).toBeNull();
     expect(window.__gmDirect.getAttribute('onclick')).toBeNull();
     expect(window.__gmDirect.getAttribute('data-id')).toBe('javascript:not-a-url');
+    expect(window.__gmFrame).toBeInstanceOf(HTMLIFrameElement);
+    expect(window.__gmFrame.getAttribute('srcdoc')).toBeNull();
 
     const htmlAnchor = window.__gmHtml.querySelector('a');
     const htmlImage = window.__gmHtml.querySelector('img');
+    const htmlFrame = window.__gmHtml.querySelector('iframe');
     expect(htmlAnchor.getAttribute('href')).toBeNull();
     expect(htmlAnchor.getAttribute('onclick')).toBeNull();
     expect(htmlAnchor.getAttribute('data-id')).toBe('javascript:not-a-url');
     expect(htmlImage.getAttribute('src')).toBeNull();
+    expect(htmlFrame.getAttribute('srcdoc')).toBeNull();
     expect(window.__gmHtml.querySelector('script')).toBeNull();
     expect(window.__scriptRan).toBeUndefined();
   });

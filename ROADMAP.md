@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 26 - local file refresh review 2026-06-06.
+> **Roadmap version:** Round 27 - deep audit security closure 2026-06-06.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-05.
 > **Test suite:** 1432 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
-> **Source floor:** 400+ external URLs across Rounds 1-26. Every Now/Next item carries source IDs from the Appendix.
+> **Source floor:** 400+ external URLs across Rounds 1-27. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 26 - 2026-06-06.
+> Last researched: Round 27 - 2026-06-06.
 
 ---
 
@@ -91,6 +91,14 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Progress:** Cycle 54 shipped the local editor save receipt path: typed save trust payloads accept `sourceKind`, `sourceLabel`, `suppressMetadataSourceFallback`, and optional permission outcomes; both receipt builders suppress metadata URL fallback for local sources; dashboard manual saves and autosaves request local receipts; the receipt panel shows the local source label; and focused tests cover dashboard wiring plus local receipt source behavior. Cycle 55 added autosave coalescing: dashboard autosaves send an ephemeral coalesce key/window, the background save path reuses the original rollback history entry during that window, manual/non-coalesced saves clear the in-memory state, the key is absent from script types, and the path still calls `reregisterScript(script)`. Cycle 56 added the local-only binding-store skeleton, deletes bindings with their script, returns summaries without handles/paths, strips future local workspace settings from JSON exports, and pins CloudSync, EasyCloud, and support snapshot redaction. Cycle 57 added the first dashboard `Bind File` action: it is hidden/disabled without `showOpenFilePicker`, calls the picker directly from the click handler, stores the handle only in local IndexedDB, renders display-name/permission summaries, and does not read/apply code or write save history. Cycle 58 added `Refresh File` and `Unbind`: refresh retrieves the stored handle, requests read permission only from the user action, updates stale/error/no-change summaries, shows a review diff for changed files, and applies through a `local-save`/`local-file` receipt only after user acceptance.
 - **Acceptance:** Focused tests prove dashboard manual save sends the local-save trust payload, `saveScript` local-save writes a new receipt when code changes, `receipt.source.installHost` is `local` or blank rather than the script's `@downloadURL` host, rollback metadata points to the previous version, the five-entry cap remains enforced, no-code saves do not churn history, autosave bursts coalesce, future file-handle/local-path metadata is excluded from JSON export, cloud export, EasyCloud sync, and support snapshots, and the path still uses `reregisterScript()` rather than a full registration sweep. Manual editor save, autosave, drag/drop install, install-page update, and future File System Access refresh tests must prove which receipt operation each path records.
 - **Risk:** Autosave can create noisy receipts and version history churn. Coalesce repeated autosaves for the same script until the user closes the editor, manually saves, or applies a local-file diff.
+
+### N-9. Deep Audit Security Closures
+- **Priority:** P0 | **Effort:** S-M | **Source:** Local deep audit (`docs/research-deep-audit-2026-06-06.md`)
+- **Local evidence:** The deep audit identified three immediate security closures: `GM_addElement` `srcdoc` bypass, `@crontab` isolated-world escalation, and `PublicAPI.isInternalHost` drift from `InternalHostGuard`.
+- **Problem:** These findings can affect script/page isolation or trusted-origin install safety, so they outrank polish/evidence work until closed.
+- **Progress:** Cycle 59 closed EI-1 by blocking `srcdoc` in `GM_addElement` direct attributes and sanitized `innerHTML`, updating both `src/background/wrapper-builder.ts` and `src/background/core.ts`, regenerating runtime artifacts, and adding a DOM security regression.
+- **Remaining:** EI-2 `@crontab` world escalation and EI-3 PublicAPI internal-host guard drift.
+- **Acceptance:** Each closure has source and generated runtime coverage, focused regression tests, full `npm run check`, `npm run build`, and `npm run cws:remote-code:check`.
 
 ## Next (v3.13.0 - v3.14.0)
 
@@ -247,11 +255,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 56 | Local workspace binding store | `src/storage/idb.ts`, `src/storage/script-db.ts`, `src/modules/storage.ts`, `src/background/core.ts`, `modules/storage.js`, `tests/storage.test.js`, export/sync/support tests | File handles are serializable to IndexedDB; permission must be rechecked with `queryPermission()`/`requestPermission()`; local sensitive data remains disclosure-relevant [S81, S89, S91] | Added local-only binding storage plus JSON export, CloudSync, EasyCloud, and support-snapshot redaction fixtures |
 | 57 | Dashboard local file binding | `pages/dashboard.html`, `pages/dashboard.js`, `tests/local-workspace-dashboard.test.js` | File picker support must be feature-detected and invoked from a user gesture; stored handles require permission-state rechecks; local sensitive data still needs clear disclosure [S81, S89, S91] | Added the feature-detected `Bind File` control, local IndexedDB handle persistence, permission summary chip, and no-save/no-code binding tests |
 | 58 | Local file refresh review | `pages/dashboard.html`, `pages/dashboard.js`, `tests/local-workspace-dashboard.test.js` | Stored handles may need `requestPermission()` from a user gesture before reads; local files should be reviewed before applying executable code [S81, S89, S91] | Added `Refresh File` and `Unbind`, review-diff apply, permission reconnect/error summaries, no-change handling, and `local-file` receipt tests |
+| 59 | Deep audit security | `src/background/wrapper-builder.ts`, `src/background/core.ts`, generated runtime artifacts, `tests/wrapper-dom-security.test.js`, `docs/research-deep-audit-2026-06-06.md` | Local audit found `srcdoc` bypass in `GM_addElement`; iframe `srcdoc` is raw HTML rather than a normal URL attribute | Blocked `srcdoc` for direct attrs and sanitized `innerHTML`, regenerated runtime artifacts, and pinned the bypass regression |
 
 ## Continuation State
 
-- **Current cycle:** Round 26 Cycle 58 implemented the first X-8 local-file refresh review flow. Bound scripts can refresh from the stored handle, reconnect read permission from the refresh action, see no-change/error/stale-file summaries, review changed local code in a diff modal, apply through `saveScript` with a `local-file` receipt only after acceptance, or unbind without touching script records.
-- **Next implementation angle:** Cycle 59 should continue X-8 evidence hardening: add support-snapshot/local-health aggregate counts for bound scripts and permission/error states, add deeper fixtures for denied permission, missing handle, parse failure, no-change, and successful apply receipt/registration behavior, and keep handle/path data out of every export/support surface.
+- **Current cycle:** Round 27 Cycle 59 closed the first deep-audit P0 security item. `GM_addElement` now rejects `srcdoc` for direct attributes and sanitized `innerHTML`, so iframe `srcdoc` cannot inject raw HTML through the wrapper. Focused DOM security tests, TS runtime check, audit, full check suite, build, and CWS scan passed.
+- **Next implementation angle:** Cycle 60 should continue N-9 with the next P0 security closure: analyze and fix `@crontab` isolated-world escalation so scheduled userscripts cannot access extension APIs; if that path requires a larger execution change than one safe batch, take the adjacent EI-3 PublicAPI internal-host guard drift in the same security lane.
 - **Follow-up source checks:** Re-check CWS user-data/privacy expectations and File System Access handle persistence before editing local-save or local-workspace metadata.
 - **Suggested verification before implementation:** Run focused tests for setup-state banners, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching N-7, N-8, X-8, or X-9.
 
