@@ -33,6 +33,10 @@ Registration and local-health diagnostics consume the same planner status so
 users and support exports can explain why a background script is dormant without
 recording script names, source, or URLs.
 
+`src/background/background-wrapper.ts` owns the initial restricted wrapper
+scaffold. It builds a DOM-less wrapper string for the future runner but is not
+called by registration or alarms yet.
+
 ## API Surface
 
 Initial allowed APIs should be limited to DOM-independent primitives:
@@ -47,6 +51,11 @@ Initial allowed APIs should be limited to DOM-independent primitives:
 DOM APIs, page globals, tab-scoped helpers, and page-injection helpers must stay
 unavailable in the DOM-less wrapper. The wrapper should fail closed with a clear
 runtime error instead of silently falling back to page context.
+
+The current wrapper scaffold rejects unsupported DOM/page/tab grants and
+`@require` dependencies before code generation. Inside the generated code,
+`window`, `document`, `unsafeWindow`, `location`, storage globals, and
+`navigator` are blocked proxy objects that throw on access.
 
 ## Scheduling
 
@@ -88,6 +97,8 @@ Acceptance for the implementation pass:
   unsupported, no trigger exists, or budgets exceed reviewed limits.
 - Local health reports aggregate dormant/eligible/background grant counts
   without script identifiers or URLs.
+- `buildBackgroundWrappedScript()` exposes only the reviewed value, XHR,
+  notification, log, and info APIs, and fails closed for DOM/page globals.
 - A later live smoke proves a scheduled background script can call
   `GM_notification` with no matching tab open.
 - Tests prove blocked DOM APIs, host-scope enforcement, timeouts, and disabled

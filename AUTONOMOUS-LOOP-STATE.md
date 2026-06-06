@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 39 - 2026-06-06
+Last cycle: Cycle 40 - 2026-06-06
 
 ## Latest Result
 
@@ -60,9 +60,11 @@ Last cycle: Cycle 39 - 2026-06-06
 - Cycle 39 wired planner status into registration logging and local-health
   diagnostics, preserving aggregate-only support data for dormant background
   scripts with no script names, source, or URLs.
-- Verification used the live checkout: focused local-health/background contract
-  tests, TypeScript, TS runtime generation/check, `npm run check`, and
-  `npm run build`.
+- Cycle 40 added the restricted DOM-less wrapper scaffold with fail-closed page
+  globals, reviewed GM value/XHR/notification/log/info APIs, and explicit
+  rejection for unsupported DOM/page/tab grants and `@require`.
+- Verification used the live checkout: focused background wrapper tests,
+  TypeScript, `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
 
@@ -70,13 +72,14 @@ Continue top-down from `ROADMAP.md`. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, and the AMO
 submission row is blocked on maintainer credentials. The next local
-implementer-actionable work remains X-2. The next local slice is the restricted
-DOM-less wrapper scaffold: no page globals, only the reviewed GM value/XHR/
-notification/log/info surface, and fail-closed errors for DOM/tab/page APIs.
-Edge Partner Center upload and REST automation remain credential/listing gated.
+implementer-actionable work remains X-2. The next local slice is a non-executing
+runner bridge that can assemble an eligible plan plus wrapper payload and report
+why execution remains disabled; after that, wire offscreen/service-worker
+execution behind the default-off gate. Edge Partner Center upload and REST
+automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 39 complete for 2026-06-06.
+- Status: ScriptVault Cycle 40 complete for 2026-06-06.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
