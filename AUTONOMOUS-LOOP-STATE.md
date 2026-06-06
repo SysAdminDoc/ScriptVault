@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 96 - 2026-06-06
+Last cycle: Cycle 97 - 2026-06-06
 
 ## Latest Result
 
@@ -468,14 +468,24 @@ Last cycle: Cycle 96 - 2026-06-06
   sync/cloud-sync/EasyCloud/parity tests, the full check suite, build,
   high-severity audit, CWS remote-code scan, Monaco ESM scan, TS runtime check,
   forbidden-reference grep, and `git diff --check`.
+  Cycle 97 added the L-8 GM value-sync support diagnostics prerequisite: local
+  health now reports aggregate opt-in script counts, ready/empty bundle counts,
+  cap/JSON warning IDs, value-read failures, syncable key totals, estimated
+  bytes, and active caps while keeping provider value writes disabled and
+  excluding GM values, value key names, script IDs, script names, URLs, local
+  workspace handles, local paths, sync credentials, and provider account data.
+  Verification used focused local-health/support-snapshot/GM value-sync tests,
+  the full check suite, build, high-severity audit, CWS remote-code scan, Monaco
+  ESM scan, TS runtime check, forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. Cycle 96 added the L-8 opt-in/capped GM
-value sync data model but did not wire values into providers. The next best
-local cycle is Cycle 97: wire the bundle builder into CloudSync preview/upload
-with conservative opt-in behavior, or add the local support diagnostics needed
-before provider writes if the live code shows a safer prerequisite.
+Continue from `ROADMAP.md` Round 40. Cycle 97 added support-safe GM value-sync
+readiness diagnostics but did not wire values into providers. The next best
+local cycle is Cycle 98: wire the bundle builder into CloudSync preview/upload
+with conservative per-script opt-in behavior, or add the next smallest
+non-credential-gated L-8 prerequisite if provider upload still shows an unsafe
+conflict or redaction gap.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -484,8 +494,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 96 complete for 2026-06-06; roadmap continuation
-  points to Cycle 97 GM value sync provider wiring/support diagnostics or the
-  next available non-credential-gated roadmap item.
+- Status: ScriptVault Cycle 97 complete for 2026-06-06; roadmap continuation
+  points to Cycle 98 GM value sync CloudSync preview/upload wiring or the next
+  available non-credential-gated L-8 prerequisite.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

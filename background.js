@@ -18122,6 +18122,10 @@ const LOCAL_HEALTH_STORAGE_WARNING_PERCENT = 85;
 const LOCAL_HEALTH_STORAGE_CRITICAL_PERCENT = 95;
 const LOCAL_HEALTH_CALLBACK_WARNING_PERCENT = 80;
 const LOCAL_WORKSPACE_REFRESH_STALE_MS = 30 * 24 * 60 * 60 * 1000;
+const GM_VALUE_SYNC_SCHEMA = 'scriptvault-gm-value-sync/v1';
+const GM_VALUE_SYNC_MAX_SCRIPT_BYTES = 64 * 1024;
+const GM_VALUE_SYNC_MAX_KEYS = 128;
+const GM_VALUE_SYNC_MAX_KEY_BYTES = 256;
 const REGISTRATION_SWEEP_SCHEMA = 'scriptvault-registration-sweep/v1';
 const BACKGROUND_RUNNER_ALLOWED_GRANTS = new Set([
   'none',
@@ -18390,6 +18394,135 @@ function buildLocalHealthScriptSummary(scripts = [], settings = {}) {
   return summary;
 }
 
+function createEmptyGmValueSyncHealthSummary(overrides = {}) {
+  return {
+    schema: GM_VALUE_SYNC_SCHEMA,
+    available: true,
+    providerWritesEnabled: false,
+    optInScripts: 0,
+    readyBundles: 0,
+    emptyBundles: 0,
+    scriptsWithWarnings: 0,
+    valueReadFailures: 0,
+    totalKeys: 0,
+    totalBytes: 0,
+    maxScriptBytes: GM_VALUE_SYNC_MAX_SCRIPT_BYTES,
+    maxKeys: GM_VALUE_SYNC_MAX_KEYS,
+    maxKeyBytes: GM_VALUE_SYNC_MAX_KEY_BYTES,
+    warningCounts: {},
+    privacy: {
+      includesValues: false,
+      includesValueKeys: false,
+      includesScriptIds: false,
+      includesScriptNames: false,
+      includesUrls: false,
+      includesFileHandles: false,
+      includesLocalPaths: false
+    },
+    ...overrides
+  };
+}
+
+function _gmValueSyncByteLength(value) {
+  return new TextEncoder().encode(JSON.stringify(value)).length;
+}
+
+function _gmValueSyncCountWarning(record, id) {
+  _localHealthCount(record, id || 'unknown');
+}
+
+function buildGmValueSyncReadinessForValues(scriptId, values) {
+  const warningCounts = {};
+  const sourceValues = values && typeof values === 'object' && !Array.isArray(values) ? values : {};
+  let keyCount = 0;
+  let bytes = 0;
+  let includedValues = {};
+
+  for (const [rawKey, rawValue] of Object.entries(sourceValues).sort(([a], [b]) => a.localeCompare(b))) {
+    const key = String(rawKey);
+    if (keyCount >= GM_VALUE_SYNC_MAX_KEYS) {
+      _gmValueSyncCountWarning(warningCounts, 'maxKeysExceeded');
+      break;
+    }
+    if (_gmValueSyncByteLength(key) > GM_VALUE_SYNC_MAX_KEY_BYTES) {
+      _gmValueSyncCountWarning(warningCounts, 'keyTooLarge');
+      continue;
+    }
+
+    let cloned;
+    try {
+      const json = JSON.stringify(rawValue);
+      if (json === undefined) {
+        _gmValueSyncCountWarning(warningCounts, 'valueNotJsonSerializable');
+        continue;
+      }
+      cloned = JSON.parse(json);
+    } catch (_) {
+      _gmValueSyncCountWarning(warningCounts, 'valueNotJsonSerializable');
+      continue;
+    }
+
+    const nextValues = { ...includedValues, [key]: cloned };
+    const nextBundle = {
+      schema: GM_VALUE_SYNC_SCHEMA,
+      scriptId: String(scriptId || ''),
+      keyCount: Object.keys(nextValues).length,
+      bytes: 0,
+      values: nextValues
+    };
+    const nextBytes = _gmValueSyncByteLength(nextBundle);
+    if (nextBytes > GM_VALUE_SYNC_MAX_SCRIPT_BYTES) {
+      _gmValueSyncCountWarning(warningCounts, 'scriptValueCapExceeded');
+      continue;
+    }
+
+    includedValues = nextValues;
+    keyCount = nextBundle.keyCount;
+    bytes = nextBytes;
+  }
+
+  return {
+    reason: keyCount > 0 ? 'included' : 'empty',
+    keyCount,
+    bytes,
+    warningCounts
+  };
+}
+
+async function buildGmValueSyncHealthSummary(scripts = []) {
+  const summary = createEmptyGmValueSyncHealthSummary({
+    available: typeof ScriptValues !== 'undefined' && typeof ScriptValues?.getAll === 'function'
+  });
+  if (!summary.available) return summary;
+
+  for (const script of scripts) {
+    if (script?.settings?.syncValues !== true) continue;
+    summary.optInScripts++;
+    let values;
+    try {
+      values = await ScriptValues.getAll(script.id);
+    } catch (_) {
+      summary.valueReadFailures++;
+      _gmValueSyncCountWarning(summary.warningCounts, 'valueReadFailed');
+      continue;
+    }
+
+    const readiness = buildGmValueSyncReadinessForValues(script.id, values);
+    if (readiness.reason === 'included') summary.readyBundles++;
+    else summary.emptyBundles++;
+    summary.totalKeys += readiness.keyCount;
+    summary.totalBytes += readiness.bytes;
+
+    const warningTotal = Object.values(readiness.warningCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
+    if (warningTotal > 0) summary.scriptsWithWarnings++;
+    for (const [id, count] of Object.entries(readiness.warningCounts)) {
+      summary.warningCounts[id] = (summary.warningCounts[id] || 0) + (Number(count) || 0);
+    }
+  }
+
+  return summary;
+}
+
 async function buildManagedPolicyHealthSummary(scripts = []) {
   const managed = chrome.storage?.managed;
   const summary = {
@@ -18564,7 +18697,7 @@ async function buildLocalWorkspaceHealthSummaryFromStore() {
   return buildLocalWorkspaceHealthSummary(await LocalWorkspaceBindings.list());
 }
 
-function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, localWorkspace, managedPolicy, collectionErrors }) {
+function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, localWorkspace, managedPolicy, gmValueSync, collectionErrors }) {
   const warnings = [];
   const push = (id, level, message) => warnings.push({ id, level, message });
 
@@ -18623,6 +18756,15 @@ function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callb
   }
   if (managedPolicy?.lastRun?.skippedInvalidEntries > 0) {
     push('managedPolicyRunSkippedEntries', 'warning', `${managedPolicy.lastRun.skippedInvalidEntries} managed policy entr${managedPolicy.lastRun.skippedInvalidEntries === 1 ? 'y was' : 'ies were'} skipped during the last apply run`);
+  }
+  if (gmValueSync?.optInScripts > 0 && gmValueSync?.providerWritesEnabled === false) {
+    push('gmValueSyncProviderWritesPending', 'info', `${gmValueSync.optInScripts} script${gmValueSync.optInScripts === 1 ? '' : 's'} opted into GM value sync; provider value writes are not enabled yet`);
+  }
+  if (gmValueSync?.scriptsWithWarnings > 0) {
+    push('gmValueSyncBundleWarnings', 'warning', `${gmValueSync.scriptsWithWarnings} GM value sync opt-in script${gmValueSync.scriptsWithWarnings === 1 ? '' : 's'} have values excluded by sync caps or JSON validation`);
+  }
+  if (gmValueSync?.valueReadFailures > 0) {
+    push('gmValueSyncValueReadFailures', 'warning', `${gmValueSync.valueReadFailures} GM value sync opt-in script${gmValueSync.valueReadFailures === 1 ? '' : 's'} could not be inspected for sync readiness`);
   }
   for (const [id, block] of Object.entries(callbacks || {})) {
     if (block?.level === 'warning' || block?.level === 'critical') {
@@ -18735,8 +18877,16 @@ async function buildLocalHealthReport() {
     collectionErrors.push({ id: 'managedPolicySummaryFailed', message: 'Managed policy health summary failed' });
   }
 
+  let gmValueSync = null;
+  try {
+    gmValueSync = await buildGmValueSyncHealthSummary(scriptList);
+  } catch (_) {
+    gmValueSync = createEmptyGmValueSyncHealthSummary({ available: false });
+    collectionErrors.push({ id: 'gmValueSyncSummaryFailed', message: 'GM value sync readiness summary failed' });
+  }
+
   const callbacks = buildLocalHealthCallbackSummary();
-  const warnings = buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, localWorkspace, managedPolicy, collectionErrors });
+  const warnings = buildLocalHealthWarningList({ runtime, storage, scripts, updates, callbacks, localWorkspace, managedPolicy, gmValueSync, collectionErrors });
 
   return {
     schema: LOCAL_HEALTH_SCHEMA,
@@ -18764,6 +18914,7 @@ async function buildLocalHealthReport() {
     registration: _lastRegistrationSweep,
     scripts,
     managedPolicy,
+    gmValueSync,
     localWorkspace,
     updates,
     callbacks,

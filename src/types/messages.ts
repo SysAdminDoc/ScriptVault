@@ -346,6 +346,31 @@ interface LocalHealthReportResponse {
       cleanupEnabled: boolean;
     };
   };
+  gmValueSync: {
+    schema: 'scriptvault-gm-value-sync/v1';
+    available: boolean;
+    providerWritesEnabled: boolean;
+    optInScripts: number;
+    readyBundles: number;
+    emptyBundles: number;
+    scriptsWithWarnings: number;
+    valueReadFailures: number;
+    totalKeys: number;
+    totalBytes: number;
+    maxScriptBytes: number;
+    maxKeys: number;
+    maxKeyBytes: number;
+    warningCounts: Record<string, number>;
+    privacy: {
+      includesValues: boolean;
+      includesValueKeys: boolean;
+      includesScriptIds: boolean;
+      includesScriptNames: boolean;
+      includesUrls: boolean;
+      includesFileHandles: boolean;
+      includesLocalPaths: boolean;
+    };
+  };
   localWorkspace: {
     available: boolean;
     totalBindings: number;
