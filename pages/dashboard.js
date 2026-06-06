@@ -3872,6 +3872,17 @@
         }
     }
 
+    function formatValueBundleSyncLog(valueBundleSync) {
+        if (!valueBundleSync || typeof valueBundleSync !== 'object') return '';
+        const applied = Number(valueBundleSync.applied) || 0;
+        const preserved = Number(valueBundleSync.preserved) || 0;
+        const blocked = Number(valueBundleSync.conflictBlocked) || 0;
+        const unavailable = Number(valueBundleSync.skippedUnavailable) || 0;
+        const failures = Number(valueBundleSync.failures) || 0;
+        if (applied + preserved + blocked + unavailable + failures <= 0) return '';
+        return `; GM values: ${applied} applied, ${preserved} preserved, ${blocked} blocked, ${unavailable} unavailable, ${failures} failed`;
+    }
+
     function renderSyncPreview(preview) {
         if (!elements.syncPreviewSummary) return;
         if (!preview?.success) {
@@ -12802,8 +12813,9 @@
                 try {
                     const r = await chrome.runtime.sendMessage({ action: 'syncNow' });
                     if (elements.syncLog) {
+                        const valueBundleLog = r?.success ? formatValueBundleSyncLog(r.valueBundleSync) : '';
                         elements.syncLog.value = (elements.syncLog.value || '') +
-                            `[${new Date().toLocaleTimeString()}] ${r?.success ? 'Sync completed' : (r?.error || 'Failed')}\n`;
+                            `[${new Date().toLocaleTimeString()}] ${r?.success ? `Sync completed${valueBundleLog}` : (r?.error || 'Failed')}\n`;
                     }
                     if (r?.success) {
                         state.settings.lastSync = Date.now();
