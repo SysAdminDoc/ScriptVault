@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 85 - 2026-06-06
+Last cycle: Cycle 86 - 2026-06-06
 
 ## Latest Result
 
@@ -391,17 +391,23 @@ Last cycle: Cycle 85 - 2026-06-06
   refresh acceptance hardening with focused local-workspace, local-health,
   local-save, reregister, and TS runtime tests, high-severity audit, full check
   suite, build, CWS remote-code scan, dashboard modal smoke, and `git diff
-  --check`.
+  --check`. Cycle 86 refreshed Greasy Fork's documented read-only API and
+  prefilled-update guidance, then verified the dashboard publish-handoff
+  preflight with focused Greasy Fork/local-workspace tests, the full check
+  suite, build, high-severity audit, CWS remote-code scan, Monaco ESM scan, and
+  `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. Cycle 85 continued X-8 with local refresh
-acceptance hardening: oversized bound files are rejected before text reads,
-parse failures get their own status, and accepted local applies still go
-through `saveScript`/`reregisterScript()`. The next best local cycle is Cycle
-86: continue X-8 with a Chromium bind-refresh-apply smoke if file-picker
-automation is workable, or move to X-9 publish-handoff preflight scaffolding.
-The live two-tab
+Continue from `ROADMAP.md` Round 40. Cycle 86 continued X-9 with Greasy Fork
+publish-handoff preflight scaffolding: the editor can validate the current
+buffer, distinguish new vs update prefill targets, preview the exact code and
+target URL, open a user-initiated multipart form handoff, and fall back to
+copy/download without any background publish endpoint. The next best local
+cycle is Cycle 87: prove the prefilled form in Chromium when a logged-in Greasy
+Fork session is available, then add local post-submit receipt confirmation; if
+live proof is blocked, keep the fallback path and ship the next receipt/test
+slice. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
 remains blocked on maintainer credentials, and Edge Partner Center upload/REST
@@ -409,8 +415,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 85 complete for 2026-06-06; roadmap continuation
-  points to Cycle 86 X-8 Chromium smoke coverage or X-9 publish-handoff
-  preflight scaffolding.
+- Status: ScriptVault Cycle 86 complete for 2026-06-06; roadmap continuation
+  points to Cycle 87 X-9 live handoff proof and local publication receipt
+  confirmation.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
