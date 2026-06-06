@@ -17848,6 +17848,7 @@ const LOCAL_HEALTH_SLOW_SCRIPT_MS = 200;
 const LOCAL_HEALTH_STORAGE_WARNING_PERCENT = 85;
 const LOCAL_HEALTH_STORAGE_CRITICAL_PERCENT = 95;
 const LOCAL_HEALTH_CALLBACK_WARNING_PERCENT = 80;
+const REGISTRATION_SWEEP_SCHEMA = 'scriptvault-registration-sweep/v1';
 const BACKGROUND_RUNNER_ALLOWED_GRANTS = new Set([
   'none',
   'GM_getValue',
@@ -17885,6 +17886,45 @@ function _localHealthRoundPercent(value) {
 
 function _localHealthSanitizeError(error) {
   return error?.message || String(error || 'unknown error');
+}
+
+let _lastRegistrationSweep = {
+  schema: REGISTRATION_SWEEP_SCHEMA,
+  generatedAt: null,
+  status: 'not-run',
+  mode: 'none',
+  forceReregister: false,
+  userScriptsAvailable: null,
+  setupState: 'unknown',
+  enabledScripts: 0,
+  alreadyRegisteredScripts: 0,
+  registeredScripts: 0,
+  skippedScripts: 0,
+  staleUnregisteredScripts: 0,
+  failedScripts: 0,
+  staleUnregisterFailures: 0,
+  requirePreloadCount: 0
+};
+
+function recordRegistrationSweep(summary = {}) {
+  _lastRegistrationSweep = {
+    schema: REGISTRATION_SWEEP_SCHEMA,
+    generatedAt: new Date().toISOString(),
+    status: summary.status || 'unknown',
+    mode: summary.mode || 'unknown',
+    forceReregister: summary.forceReregister === true,
+    userScriptsAvailable: typeof summary.userScriptsAvailable === 'boolean' ? summary.userScriptsAvailable : null,
+    setupState: summary.setupState || 'unknown',
+    enabledScripts: Math.max(0, Number(summary.enabledScripts) || 0),
+    alreadyRegisteredScripts: Math.max(0, Number(summary.alreadyRegisteredScripts) || 0),
+    registeredScripts: Math.max(0, Number(summary.registeredScripts) || 0),
+    skippedScripts: Math.max(0, Number(summary.skippedScripts) || 0),
+    staleUnregisteredScripts: Math.max(0, Number(summary.staleUnregisteredScripts) || 0),
+    failedScripts: Math.max(0, Number(summary.failedScripts) || 0),
+    staleUnregisterFailures: Math.max(0, Number(summary.staleUnregisterFailures) || 0),
+    requirePreloadCount: Math.max(0, Number(summary.requirePreloadCount) || 0)
+  };
+  return _lastRegistrationSweep;
 }
 
 function normalizeBackgroundGrant(grant) {
@@ -18107,6 +18147,12 @@ function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callb
   if (scripts?.registrationErrors > 0) {
     push('registrationErrors', 'warning', `${scripts.registrationErrors} script registration error${scripts.registrationErrors === 1 ? '' : 's'} recorded`);
   }
+  if (_lastRegistrationSweep?.failedScripts > 0) {
+    push('registrationSweepFailures', 'warning', `${_lastRegistrationSweep.failedScripts} script registration${_lastRegistrationSweep.failedScripts === 1 ? '' : 's'} failed in the last sweep`);
+  }
+  if (_lastRegistrationSweep?.status === 'unavailable') {
+    push('registrationSweepUnavailable', 'warning', 'The last registration sweep could not run because userScripts is unavailable');
+  }
   if (scripts?.scriptsWithExecutionErrors > 0) {
     push('executionErrors', 'warning', `${scripts.scriptsWithExecutionErrors} script${scripts.scriptsWithExecutionErrors === 1 ? '' : 's'} have recorded execution errors`);
   }
@@ -18230,6 +18276,7 @@ async function buildLocalHealthReport() {
       apiProbeError: runtime.apiProbeError || ''
     },
     storage,
+    registration: _lastRegistrationSweep,
     scripts,
     updates,
     callbacks,
@@ -25222,6 +25269,13 @@ async function registerAllScripts(forceReregister = false) {
     const availability = await probeUserScriptsAvailability();
     if (!availability.userScriptsAvailable) {
       logUserScriptsSetupWarning(availability);
+      recordRegistrationSweep({
+        status: 'unavailable',
+        mode: 'probe',
+        forceReregister,
+        userScriptsAvailable: false,
+        setupState: availability.setupState
+      });
       return;
     }
 
@@ -25240,6 +25294,14 @@ async function registerAllScripts(forceReregister = false) {
           const settings = await SettingsManager.get();
           if (!settings.enabled) {
             debugLog(`Skipping re-registration: scripts globally disabled`);
+            recordRegistrationSweep({
+              status: 'global-disabled',
+              mode: 'diff',
+              forceReregister,
+              userScriptsAvailable: true,
+              setupState: availability.setupState,
+              alreadyRegisteredScripts: existing.length
+            });
             return;
           }
           const scripts = await ScriptStorage.getAll();
@@ -25253,9 +25315,20 @@ async function registerAllScripts(forceReregister = false) {
           const stale = existing
             .map(s => s.id)
             .filter(id => !enabledIds.has(id));
+          let staleUnregisterFailures = 0;
 
           if (missing.length === 0 && stale.length === 0) {
             debugLog(`Skipping re-registration: ${existing.length} scripts already registered, no diff`);
+            recordRegistrationSweep({
+              status: 'already-current',
+              mode: 'diff',
+              forceReregister,
+              userScriptsAvailable: true,
+              setupState: availability.setupState,
+              enabledScripts: enabledScripts.length,
+              alreadyRegisteredScripts: existing.length,
+              skippedScripts: enabledScripts.length
+            });
             return;
           }
 
@@ -25264,11 +25337,26 @@ async function registerAllScripts(forceReregister = false) {
             try {
               await chrome.userScripts.unregister({ ids: stale });
             } catch (e) {
+              staleUnregisterFailures++;
               console.warn('[ScriptVault] Failed to unregister stale scripts:', e?.message || e);
             }
           }
 
-          if (missing.length === 0) return;
+          if (missing.length === 0) {
+            recordRegistrationSweep({
+              status: staleUnregisterFailures > 0 ? 'partial' : 'stale-cleaned',
+              mode: 'diff',
+              forceReregister,
+              userScriptsAvailable: true,
+              setupState: availability.setupState,
+              enabledScripts: enabledScripts.length,
+              alreadyRegisteredScripts: existing.length,
+              skippedScripts: enabledScripts.length,
+              staleUnregisteredScripts: stale.length,
+              staleUnregisterFailures
+            });
+            return;
+          }
 
           // Preload @require deps for the missing subset in parallel
           const missingRequires = new Set();
@@ -25292,6 +25380,21 @@ async function registerAllScripts(forceReregister = false) {
           if (diffFailures.length > 0) {
             console.warn(`[ScriptVault] ${diffFailures.length} missing script(s) failed to register:`, diffFailures.map(r => r.reason?.message || r.reason));
           }
+          recordRegistrationSweep({
+            status: diffFailures.length > 0 || staleUnregisterFailures > 0 ? 'partial' : 'diff-registered',
+            mode: 'diff',
+            forceReregister,
+            userScriptsAvailable: true,
+            setupState: availability.setupState,
+            enabledScripts: enabledScripts.length,
+            alreadyRegisteredScripts: existing.length,
+            registeredScripts: missing.length - diffFailures.length,
+            skippedScripts: enabledScripts.length - missing.length,
+            staleUnregisteredScripts: stale.length,
+            failedScripts: diffFailures.length,
+            staleUnregisterFailures,
+            requirePreloadCount: missingRequires.size
+          });
           return;
         }
       } catch (e) {
@@ -25307,6 +25410,13 @@ async function registerAllScripts(forceReregister = false) {
     
     if (!settings.enabled) {
       debugLog('Scripts globally disabled');
+      recordRegistrationSweep({
+        status: 'global-disabled',
+        mode: forceReregister ? 'force' : 'full',
+        forceReregister,
+        userScriptsAvailable: true,
+        setupState: availability.setupState
+      });
       return;
     }
     
@@ -25349,7 +25459,25 @@ async function registerAllScripts(forceReregister = false) {
     if (failures.length > 0) {
       console.warn(`[ScriptVault] ${failures.length} script(s) failed to register:`, failures.map(r => r.reason?.message || r.reason));
     }
+    recordRegistrationSweep({
+      status: failures.length > 0 ? 'partial' : 'registered',
+      mode: forceReregister ? 'force' : 'full',
+      forceReregister,
+      userScriptsAvailable: true,
+      setupState: availability.setupState,
+      enabledScripts: enabledScripts.length,
+      registeredScripts: enabledScripts.length - failures.length,
+      failedScripts: failures.length,
+      requirePreloadCount: allRequires.size
+    });
   } catch (e) {
+    recordRegistrationSweep({
+      status: 'error',
+      mode: forceReregister ? 'force' : 'full',
+      forceReregister,
+      userScriptsAvailable: null,
+      setupState: 'unknown'
+    });
     console.error('[ScriptVault] Failed to register scripts:', e);
   }
 }
