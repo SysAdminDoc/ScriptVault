@@ -2958,6 +2958,16 @@ const SETTINGS_CREDENTIAL_KEYS = [
   's3SecretKey'
 ];
 
+const LOCAL_WORKSPACE_SCRIPT_SETTING_KEYS = [
+  'localWorkspace',
+  'localWorkspaceBinding',
+  'localWorkspaceBindingId',
+  'localWorkspaceBindings',
+  'localFileHandle',
+  'localFilePath',
+  'absolutePath'
+];
+
 function cloneSettingsForTransfer(value) {
   if (!value || typeof value !== 'object') return {};
   if (typeof structuredClone === 'function') {
@@ -2972,6 +2982,21 @@ function cloneSettingsForTransfer(value) {
   } catch (_e) {
     return { ...value };
   }
+}
+
+function redactLocalWorkspaceScriptSettings(settings) {
+  const sanitized = cloneSettingsForTransfer(settings);
+  const redactedLocalWorkspaceSettingKeys = [];
+  for (const key of LOCAL_WORKSPACE_SCRIPT_SETTING_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(sanitized, key)) {
+      delete sanitized[key];
+      redactedLocalWorkspaceSettingKeys.push(key);
+    }
+  }
+  return {
+    settings: sanitized,
+    redactedLocalWorkspaceSettingKeys
+  };
 }
 
 function redactSettingsCredentials(settings, options = {}) {
@@ -3035,7 +3060,11 @@ async function exportAllScripts(options = {}) {
       updatedAt: s.updatedAt
     };
     if (includeSettings && s.settings && typeof s.settings === 'object') {
-      entry.settings = { ...s.settings };
+      const localWorkspaceRedaction = redactLocalWorkspaceScriptSettings(s.settings);
+      entry.settings = localWorkspaceRedaction.settings;
+      if (localWorkspaceRedaction.redactedLocalWorkspaceSettingKeys.length > 0) {
+        entry.redactedLocalWorkspaceSettingKeys = localWorkspaceRedaction.redactedLocalWorkspaceSettingKeys;
+      }
     }
     if (s.versionHistory && s.versionHistory.length > 0) {
       entry.versionHistory = s.versionHistory;

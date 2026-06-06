@@ -34,9 +34,12 @@ import { withTransaction } from './transaction';
 // backups:
 //   keyPath: 'id'
 //   indexes: by-created (createdAt)
+// localWorkspaceBindings:
+//   keyPath: 'bindingId'
+//   indexes: by-script (scriptId)
 //
-// All stores ship in v1; future schema changes bump DB_VERSION and add an
-// `if (oldVersion < N)` block in `upgradeSchema()`.
+// Stores that shipped in v1 are created under `oldVersion < 1`. New stores
+// bump DB_VERSION and add an `if (oldVersion < N)` block in `upgradeSchema()`.
 
 export interface ScriptStatsRecord {
   scriptId: string;
@@ -59,6 +62,35 @@ export interface BackupRecord {
   byteSize: number;
   data: ArrayBuffer;
   meta?: Record<string, unknown>;
+}
+
+export interface LocalWorkspaceBindingRecord {
+  bindingId: string;
+  scriptId: string;
+  handle?: unknown;
+  displayName: string;
+  lastKnownSha256?: string;
+  lastKnownSize?: number;
+  lastKnownModified?: number;
+  permissionState?: PermissionState | 'unknown';
+  createdAt: number;
+  updatedAt: number;
+  lastRefreshAt?: number | null;
+  lastErrorKind?: string;
+}
+
+export interface LocalWorkspaceBindingSummary {
+  bindingId: string;
+  scriptId: string;
+  displayName: string;
+  lastKnownSha256?: string;
+  lastKnownSize?: number;
+  lastKnownModified?: number;
+  permissionState?: PermissionState | 'unknown';
+  createdAt: number;
+  updatedAt: number;
+  lastRefreshAt?: number | null;
+  lastErrorKind?: string;
 }
 
 function setRecordKey<T>(record: Record<string, T>, key: string, value: T): void {
@@ -91,6 +123,10 @@ function upgradeSchema(
 
     const backups = db.createObjectStore(Stores.backups, { keyPath: 'id' });
     backups.createIndex('by-created', 'createdAt', { unique: false });
+  }
+  if (oldVersion < 2 && !db.objectStoreNames.contains(Stores.localWorkspaceBindings)) {
+    const bindings = db.createObjectStore(Stores.localWorkspaceBindings, { keyPath: 'bindingId' });
+    bindings.createIndex('by-script', 'scriptId', { unique: false });
   }
 }
 
@@ -134,28 +170,33 @@ export const ScriptsDAO = {
     // Wipe both the script row and any associated values/stats in one txn so
     // a SW kill mid-delete leaves no orphans.
     await withTransaction(
-      [Stores.scripts, Stores.values, Stores.stats] as StoreName[],
-      'readwrite',
-      async (tx) => {
-        await reqToPromise(tx.objectStore(Stores.scripts).delete(id));
-        await reqToPromise(tx.objectStore(Stores.stats).delete(id));
-        const valuesIdx = tx.objectStore(Stores.values).index('by-script');
-        await forEachCursor<ScriptValueRow>(valuesIdx, (_v, _k, primaryKey) => {
-          tx.objectStore(Stores.values).delete(primaryKey);
-        }, IDBKeyRange.only(id));
-      },
-    );
+        [Stores.scripts, Stores.values, Stores.stats, Stores.localWorkspaceBindings] as StoreName[],
+        'readwrite',
+        async (tx) => {
+          await reqToPromise(tx.objectStore(Stores.scripts).delete(id));
+          await reqToPromise(tx.objectStore(Stores.stats).delete(id));
+          const valuesIdx = tx.objectStore(Stores.values).index('by-script');
+          await forEachCursor<ScriptValueRow>(valuesIdx, (_v, _k, primaryKey) => {
+            tx.objectStore(Stores.values).delete(primaryKey);
+          }, IDBKeyRange.only(id));
+          const bindingIdx = tx.objectStore(Stores.localWorkspaceBindings).index('by-script');
+          await forEachCursor<LocalWorkspaceBindingRecord>(bindingIdx, (_v, _k, primaryKey) => {
+            tx.objectStore(Stores.localWorkspaceBindings).delete(primaryKey);
+          }, IDBKeyRange.only(id));
+        },
+      );
   },
 
   async clear(): Promise<void> {
     await openScriptDB();
     await withTransaction(
-      [Stores.scripts, Stores.values, Stores.stats] as StoreName[],
+      [Stores.scripts, Stores.values, Stores.stats, Stores.localWorkspaceBindings] as StoreName[],
       'readwrite',
       async (tx) => {
         await reqToPromise(tx.objectStore(Stores.scripts).clear());
         await reqToPromise(tx.objectStore(Stores.values).clear());
         await reqToPromise(tx.objectStore(Stores.stats).clear());
+        await reqToPromise(tx.objectStore(Stores.localWorkspaceBindings).clear());
       },
     );
   },
@@ -263,6 +304,123 @@ export const ValuesDAO = {
   async byteSize(scriptId: string): Promise<number> {
     const all = await this.getAll(scriptId);
     return new TextEncoder().encode(JSON.stringify(all)).length;
+  },
+};
+
+// ----------------------------------------------------------------------------
+// Local workspace bindings DAO
+// ----------------------------------------------------------------------------
+
+function summarizeLocalWorkspaceBinding(row: LocalWorkspaceBindingRecord): LocalWorkspaceBindingSummary {
+  const {
+    bindingId,
+    scriptId,
+    displayName,
+    lastKnownSha256,
+    lastKnownSize,
+    lastKnownModified,
+    permissionState,
+    createdAt,
+    updatedAt,
+    lastRefreshAt,
+    lastErrorKind,
+  } = row;
+  return {
+    bindingId,
+    scriptId,
+    displayName,
+    lastKnownSha256,
+    lastKnownSize,
+    lastKnownModified,
+    permissionState,
+    createdAt,
+    updatedAt,
+    lastRefreshAt: lastRefreshAt ?? null,
+    lastErrorKind,
+  };
+}
+
+export const LocalWorkspaceBindingsDAO = {
+  async put(record: LocalWorkspaceBindingRecord): Promise<LocalWorkspaceBindingSummary> {
+    const now = Date.now();
+    const row: LocalWorkspaceBindingRecord = {
+      ...record,
+      displayName: String(record.displayName || '').slice(0, 160),
+      createdAt: record.createdAt || now,
+      updatedAt: now,
+      lastRefreshAt: record.lastRefreshAt ?? null,
+    };
+    await openScriptDB();
+    await withTransaction(Stores.localWorkspaceBindings, 'readwrite', async (tx) => {
+      await reqToPromise(tx.objectStore(Stores.localWorkspaceBindings).put(row));
+    });
+    return summarizeLocalWorkspaceBinding(row);
+  },
+
+  async get(bindingId: string): Promise<LocalWorkspaceBindingSummary | null> {
+    await openScriptDB();
+    return withTransaction(Stores.localWorkspaceBindings, 'readonly', async (tx) => {
+      const row = await reqToPromise(
+        tx.objectStore(Stores.localWorkspaceBindings).get(bindingId) as IDBRequest<LocalWorkspaceBindingRecord | undefined>,
+      );
+      return row ? summarizeLocalWorkspaceBinding(row) : null;
+    });
+  },
+
+  async getHandle(bindingId: string): Promise<unknown | null> {
+    await openScriptDB();
+    return withTransaction(Stores.localWorkspaceBindings, 'readonly', async (tx) => {
+      const row = await reqToPromise(
+        tx.objectStore(Stores.localWorkspaceBindings).get(bindingId) as IDBRequest<LocalWorkspaceBindingRecord | undefined>,
+      );
+      return row?.handle ?? null;
+    });
+  },
+
+  async getByScript(scriptId: string): Promise<LocalWorkspaceBindingSummary[]> {
+    await openScriptDB();
+    return withTransaction(Stores.localWorkspaceBindings, 'readonly', async (tx) => {
+      const out: LocalWorkspaceBindingSummary[] = [];
+      const idx = tx.objectStore(Stores.localWorkspaceBindings).index('by-script');
+      await forEachCursor<LocalWorkspaceBindingRecord>(idx, (row) => {
+        out.push(summarizeLocalWorkspaceBinding(row));
+      }, IDBKeyRange.only(scriptId));
+      return out;
+    });
+  },
+
+  async list(): Promise<LocalWorkspaceBindingSummary[]> {
+    await openScriptDB();
+    return withTransaction(Stores.localWorkspaceBindings, 'readonly', async (tx) => {
+      const rows = await reqToPromise(
+        tx.objectStore(Stores.localWorkspaceBindings).getAll() as IDBRequest<LocalWorkspaceBindingRecord[]>,
+      );
+      return (rows ?? []).map(summarizeLocalWorkspaceBinding);
+    });
+  },
+
+  async delete(bindingId: string): Promise<void> {
+    await openScriptDB();
+    await withTransaction(Stores.localWorkspaceBindings, 'readwrite', async (tx) => {
+      await reqToPromise(tx.objectStore(Stores.localWorkspaceBindings).delete(bindingId));
+    });
+  },
+
+  async deleteForScript(scriptId: string): Promise<void> {
+    await openScriptDB();
+    await withTransaction(Stores.localWorkspaceBindings, 'readwrite', async (tx) => {
+      const idx = tx.objectStore(Stores.localWorkspaceBindings).index('by-script');
+      await forEachCursor<LocalWorkspaceBindingRecord>(idx, (_row, _k, primaryKey) => {
+        tx.objectStore(Stores.localWorkspaceBindings).delete(primaryKey);
+      }, IDBKeyRange.only(scriptId));
+    });
+  },
+
+  async clear(): Promise<void> {
+    await openScriptDB();
+    await withTransaction(Stores.localWorkspaceBindings, 'readwrite', async (tx) => {
+      await reqToPromise(tx.objectStore(Stores.localWorkspaceBindings).clear());
+    });
   },
 };
 

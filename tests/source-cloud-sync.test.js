@@ -275,6 +275,8 @@ describe('source cloud sync module', () => {
             userModified: false,
             sourceIdentityChanged: true,
             _failedRequires: ['https://cdn.example.com/missing.js'],
+            localWorkspaceBindingId: 'binding-local',
+            localFilePath: 'C:\\Users\\--\\secret\\local.user.js',
           },
           createdAt: 1,
           updatedAt: 1,
@@ -329,6 +331,8 @@ describe('source cloud sync module', () => {
       runAt: 'document-start',
       userMatches: ['https://example.com/*'],
     });
+    expect(JSON.stringify(uploaded)).not.toContain('binding-local');
+    expect(JSON.stringify(uploaded)).not.toContain('secret\\\\local.user.js');
   });
 
   it('previews sync conflicts and direction without writing local or remote data', async () => {

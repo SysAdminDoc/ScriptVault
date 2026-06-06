@@ -10,6 +10,7 @@ const fn = new Function('chrome', 'console', storageCode + `
   return {
     SettingsManager,
     ScriptStorage,
+    LocalWorkspaceBindings,
     ScriptValues,
     FolderStorage,
     TabStorage,
@@ -21,6 +22,7 @@ const fn = new Function('chrome', 'console', storageCode + `
 const {
   SettingsManager,
   ScriptStorage,
+  LocalWorkspaceBindings,
   ScriptValues,
   FolderStorage,
   TabStorage,
@@ -75,6 +77,7 @@ describe('generated storage artifact', () => {
     expect(storageCode).toContain('const StorageModule = (() => {');
     expect(storageCode).toContain('const SettingsManager = StorageModule.SettingsManager;');
     expect(storageCode).toContain('const ScriptStorage = StorageModule.ScriptStorage;');
+    expect(storageCode).toContain('const LocalWorkspaceBindings = StorageModule.LocalWorkspaceBindings;');
   });
 
   it('does not register duplicate notification click/close listeners', () => {
@@ -223,10 +226,20 @@ describe('ScriptStorage', () => {
 
     await ScriptStorage.set(script.id, script);
     await ScriptValues.set(script.id, 'draft', true);
+    await LocalWorkspaceBindings.put({
+      bindingId: 'binding_alpha',
+      scriptId: script.id,
+      handle: { kind: 'file', name: 'alpha.user.js' },
+      displayName: 'alpha.user.js',
+      permissionState: 'granted',
+      createdAt: 1,
+      updatedAt: 1,
+    });
     await ScriptStorage.delete(script.id);
 
     expect(await ScriptStorage.get(script.id)).toBeNull();
     expect(await ScriptValues.get(script.id, 'draft', false)).toBe(false);
+    expect(await LocalWorkspaceBindings.getByScript(script.id)).toEqual([]);
   });
 
   it('clear() removes scripts and all stored values', async () => {
@@ -234,12 +247,21 @@ describe('ScriptStorage', () => {
     await ScriptStorage.set('beta', makeScript('beta'));
     await ScriptValues.set('alpha', 'draft', true);
     await ScriptValues.set('beta', 'count', 2);
+    await LocalWorkspaceBindings.put({
+      bindingId: 'binding_alpha',
+      scriptId: 'alpha',
+      handle: { kind: 'file', name: 'alpha.user.js' },
+      displayName: 'alpha.user.js',
+      createdAt: 1,
+      updatedAt: 1,
+    });
 
     await ScriptStorage.clear();
 
     expect(await ScriptStorage.getAll()).toEqual([]);
     expect(await ScriptValues.get('alpha', 'draft', false)).toBe(false);
     expect(await ScriptValues.get('beta', 'count', 0)).toBe(0);
+    expect(await LocalWorkspaceBindings.list()).toEqual([]);
   });
 
   it('notifies the MatchSet hook after script mutations', async () => {
@@ -256,6 +278,59 @@ describe('ScriptStorage', () => {
     setScriptChangeListener(null);
     await ScriptStorage.set('gamma', makeScript('gamma'));
     expect(listener).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('LocalWorkspaceBindings', () => {
+  it('stores handles locally while returning display-safe summaries', async () => {
+    const handle = { kind: 'file', name: 'alpha.user.js', absolutePath: 'C:\\Users\\--\\secret\\alpha.user.js' };
+
+    const summary = await LocalWorkspaceBindings.put({
+      bindingId: 'binding_alpha',
+      scriptId: 'alpha',
+      handle,
+      displayName: 'alpha.user.js',
+      lastKnownSha256: 'a'.repeat(64),
+      lastKnownSize: 128,
+      lastKnownModified: 1700000000000,
+      permissionState: 'prompt',
+      createdAt: 1,
+      updatedAt: 1,
+      lastRefreshAt: null,
+      lastErrorKind: 'permission-prompt',
+    });
+
+    expect(summary).toMatchObject({
+      bindingId: 'binding_alpha',
+      scriptId: 'alpha',
+      displayName: 'alpha.user.js',
+      lastKnownSize: 128,
+      permissionState: 'prompt',
+    });
+    expect(summary).not.toHaveProperty('handle');
+    expect(summary).not.toHaveProperty('absolutePath');
+    expect(await LocalWorkspaceBindings.getHandle('binding_alpha')).toEqual(handle);
+
+    const byScript = await LocalWorkspaceBindings.getByScript('alpha');
+    expect(byScript).toHaveLength(1);
+    expect(byScript[0]).not.toHaveProperty('handle');
+  });
+
+  it('deletes local bindings independently from script records', async () => {
+    await ScriptStorage.set('alpha', makeScript('alpha'));
+    await LocalWorkspaceBindings.put({
+      bindingId: 'binding_alpha',
+      scriptId: 'alpha',
+      handle: { kind: 'file', name: 'alpha.user.js' },
+      displayName: 'alpha.user.js',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+
+    await LocalWorkspaceBindings.delete('binding_alpha');
+
+    expect(await LocalWorkspaceBindings.get('binding_alpha')).toBeNull();
+    expect(await ScriptStorage.get('alpha')).toMatchObject({ id: 'alpha' });
   });
 });
 

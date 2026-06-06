@@ -103,6 +103,12 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(dashboardJs).not.toMatch(/backgroundRunnerDryRuns[\s\S]{0,900}\bcode\b/);
   });
 
+  it('script inventory omits local workspace handles and absolute paths', () => {
+    const block = dashboardJs.match(/snapshot\.scripts = state\.scripts\.map\(script => \{[\s\S]*?\n\s*\}\);/);
+    expect(block).toBeTruthy();
+    expect(block[0]).not.toMatch(/localWorkspace|localFile|absolutePath|FileSystemFileHandle|\bhandle\b/);
+  });
+
   it('diagnostics block conditionally attaches activity/error/network', () => {
     expect(dashboardJs).toMatch(/if \(enabledCategories\.has\('activityLog'\)\) diagnosticsBlock\.activityLog/);
     expect(dashboardJs).toMatch(/if \(enabledCategories\.has\('errorLog'\)\) \{[\s\S]{0,150}diagnosticsBlock\.errorLog/);

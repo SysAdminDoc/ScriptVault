@@ -29,6 +29,7 @@ const StorageModule = (() => {
   var storage_exports = {};
   __export(storage_exports, {
     FolderStorage: () => FolderStorage,
+    LocalWorkspaceBindings: () => LocalWorkspaceBindings,
     ScriptStorage: () => ScriptStorage,
     ScriptValues: () => ScriptValues,
     SettingsManager: () => SettingsManager,
@@ -122,12 +123,13 @@ const StorageModule = (() => {
 
   // src/storage/idb.ts
   var DB_NAME = "scriptvault";
-  var DB_VERSION = 1;
+  var DB_VERSION = 2;
   var Stores = {
     scripts: "scripts",
     values: "values",
     stats: "stats",
-    backups: "backups"
+    backups: "backups",
+    localWorkspaceBindings: "localWorkspaceBindings"
   };
   var _db = null;
   var _opening = null;
@@ -268,6 +270,10 @@ const StorageModule = (() => {
       const backups = db.createObjectStore(Stores.backups, { keyPath: "id" });
       backups.createIndex("by-created", "createdAt", { unique: false });
     }
+    if (oldVersion < 2 && !db.objectStoreNames.contains(Stores.localWorkspaceBindings)) {
+      const bindings = db.createObjectStore(Stores.localWorkspaceBindings, { keyPath: "bindingId" });
+      bindings.createIndex("by-script", "scriptId", { unique: false });
+    }
   }
   async function openScriptDB() {
     return openDB({ name: DB_NAME, version: DB_VERSION, upgrade: upgradeSchema });
@@ -296,7 +302,7 @@ const StorageModule = (() => {
     async delete(id) {
       await openScriptDB();
       await withTransaction(
-        [Stores.scripts, Stores.values, Stores.stats],
+        [Stores.scripts, Stores.values, Stores.stats, Stores.localWorkspaceBindings],
         "readwrite",
         async (tx) => {
           await reqToPromise(tx.objectStore(Stores.scripts).delete(id));
@@ -305,18 +311,23 @@ const StorageModule = (() => {
           await forEachCursor(valuesIdx, (_v, _k, primaryKey) => {
             tx.objectStore(Stores.values).delete(primaryKey);
           }, IDBKeyRange.only(id));
+          const bindingIdx = tx.objectStore(Stores.localWorkspaceBindings).index("by-script");
+          await forEachCursor(bindingIdx, (_v, _k, primaryKey) => {
+            tx.objectStore(Stores.localWorkspaceBindings).delete(primaryKey);
+          }, IDBKeyRange.only(id));
         }
       );
     },
     async clear() {
       await openScriptDB();
       await withTransaction(
-        [Stores.scripts, Stores.values, Stores.stats],
+        [Stores.scripts, Stores.values, Stores.stats, Stores.localWorkspaceBindings],
         "readwrite",
         async (tx) => {
           await reqToPromise(tx.objectStore(Stores.scripts).clear());
           await reqToPromise(tx.objectStore(Stores.values).clear());
           await reqToPromise(tx.objectStore(Stores.stats).clear());
+          await reqToPromise(tx.objectStore(Stores.localWorkspaceBindings).clear());
         }
       );
     },
@@ -409,6 +420,110 @@ const StorageModule = (() => {
     async byteSize(scriptId) {
       const all = await this.getAll(scriptId);
       return new TextEncoder().encode(JSON.stringify(all)).length;
+    }
+  };
+  function summarizeLocalWorkspaceBinding(row) {
+    const {
+      bindingId,
+      scriptId,
+      displayName,
+      lastKnownSha256,
+      lastKnownSize,
+      lastKnownModified,
+      permissionState,
+      createdAt,
+      updatedAt,
+      lastRefreshAt,
+      lastErrorKind
+    } = row;
+    return {
+      bindingId,
+      scriptId,
+      displayName,
+      lastKnownSha256,
+      lastKnownSize,
+      lastKnownModified,
+      permissionState,
+      createdAt,
+      updatedAt,
+      lastRefreshAt: lastRefreshAt ?? null,
+      lastErrorKind
+    };
+  }
+  var LocalWorkspaceBindingsDAO = {
+    async put(record) {
+      const now = Date.now();
+      const row = {
+        ...record,
+        displayName: String(record.displayName || "").slice(0, 160),
+        createdAt: record.createdAt || now,
+        updatedAt: now,
+        lastRefreshAt: record.lastRefreshAt ?? null
+      };
+      await openScriptDB();
+      await withTransaction(Stores.localWorkspaceBindings, "readwrite", async (tx) => {
+        await reqToPromise(tx.objectStore(Stores.localWorkspaceBindings).put(row));
+      });
+      return summarizeLocalWorkspaceBinding(row);
+    },
+    async get(bindingId) {
+      await openScriptDB();
+      return withTransaction(Stores.localWorkspaceBindings, "readonly", async (tx) => {
+        const row = await reqToPromise(
+          tx.objectStore(Stores.localWorkspaceBindings).get(bindingId)
+        );
+        return row ? summarizeLocalWorkspaceBinding(row) : null;
+      });
+    },
+    async getHandle(bindingId) {
+      await openScriptDB();
+      return withTransaction(Stores.localWorkspaceBindings, "readonly", async (tx) => {
+        const row = await reqToPromise(
+          tx.objectStore(Stores.localWorkspaceBindings).get(bindingId)
+        );
+        return row?.handle ?? null;
+      });
+    },
+    async getByScript(scriptId) {
+      await openScriptDB();
+      return withTransaction(Stores.localWorkspaceBindings, "readonly", async (tx) => {
+        const out = [];
+        const idx = tx.objectStore(Stores.localWorkspaceBindings).index("by-script");
+        await forEachCursor(idx, (row) => {
+          out.push(summarizeLocalWorkspaceBinding(row));
+        }, IDBKeyRange.only(scriptId));
+        return out;
+      });
+    },
+    async list() {
+      await openScriptDB();
+      return withTransaction(Stores.localWorkspaceBindings, "readonly", async (tx) => {
+        const rows = await reqToPromise(
+          tx.objectStore(Stores.localWorkspaceBindings).getAll()
+        );
+        return (rows ?? []).map(summarizeLocalWorkspaceBinding);
+      });
+    },
+    async delete(bindingId) {
+      await openScriptDB();
+      await withTransaction(Stores.localWorkspaceBindings, "readwrite", async (tx) => {
+        await reqToPromise(tx.objectStore(Stores.localWorkspaceBindings).delete(bindingId));
+      });
+    },
+    async deleteForScript(scriptId) {
+      await openScriptDB();
+      await withTransaction(Stores.localWorkspaceBindings, "readwrite", async (tx) => {
+        const idx = tx.objectStore(Stores.localWorkspaceBindings).index("by-script");
+        await forEachCursor(idx, (_row, _k, primaryKey) => {
+          tx.objectStore(Stores.localWorkspaceBindings).delete(primaryKey);
+        }, IDBKeyRange.only(scriptId));
+      });
+    },
+    async clear() {
+      await openScriptDB();
+      await withTransaction(Stores.localWorkspaceBindings, "readwrite", async (tx) => {
+        await reqToPromise(tx.objectStore(Stores.localWorkspaceBindings).clear());
+      });
     }
   };
 
@@ -763,6 +878,16 @@ const StorageModule = (() => {
       return newScript;
     }
   };
+  var LocalWorkspaceBindings = {
+    put: LocalWorkspaceBindingsDAO.put.bind(LocalWorkspaceBindingsDAO),
+    get: LocalWorkspaceBindingsDAO.get.bind(LocalWorkspaceBindingsDAO),
+    getHandle: LocalWorkspaceBindingsDAO.getHandle.bind(LocalWorkspaceBindingsDAO),
+    getByScript: LocalWorkspaceBindingsDAO.getByScript.bind(LocalWorkspaceBindingsDAO),
+    list: LocalWorkspaceBindingsDAO.list.bind(LocalWorkspaceBindingsDAO),
+    delete: LocalWorkspaceBindingsDAO.delete.bind(LocalWorkspaceBindingsDAO),
+    deleteForScript: LocalWorkspaceBindingsDAO.deleteForScript.bind(LocalWorkspaceBindingsDAO),
+    clear: LocalWorkspaceBindingsDAO.clear.bind(LocalWorkspaceBindingsDAO)
+  };
   var ScriptValues = {
     cache: /* @__PURE__ */ Object.create(null),
     listeners: /* @__PURE__ */ new Map(),
@@ -1092,6 +1217,7 @@ const StorageModule = (() => {
 
 const SettingsManager = StorageModule.SettingsManager;
 const ScriptStorage = StorageModule.ScriptStorage;
+const LocalWorkspaceBindings = StorageModule.LocalWorkspaceBindings;
 const ScriptValues = StorageModule.ScriptValues;
 const TabStorage = StorageModule.TabStorage;
 const FolderStorage = StorageModule.FolderStorage;

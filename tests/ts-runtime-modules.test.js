@@ -140,6 +140,7 @@ describe('TS runtime module generator', () => {
         globalExports: expect.arrayContaining([
           'SettingsManager',
           'ScriptStorage',
+          'LocalWorkspaceBindings',
           'ScriptValues',
           'TabStorage',
           'FolderStorage',
@@ -217,6 +218,7 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const StorageModule = (() => {');
     expect(text).toContain('const SettingsManager = StorageModule.SettingsManager;');
     expect(text).toContain('const ScriptStorage = StorageModule.ScriptStorage;');
+    expect(text).toContain('const LocalWorkspaceBindings = StorageModule.LocalWorkspaceBindings;');
     expect(text).toContain('const setScriptChangeListener = StorageModule.setScriptChangeListener;');
     expect(text).not.toContain('const debugLog = StorageModule.debugLog;');
   });
