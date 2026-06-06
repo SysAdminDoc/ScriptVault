@@ -11,6 +11,7 @@ import type { WebRequestRule } from './dnr-rules';
 import type { Settings } from '../types/settings';
 import { ScriptStorage, ScriptValues, SettingsManager, debugLog } from '../modules/storage';
 import { ResourceCache } from '../modules/resources';
+import { planBackgroundScript } from './background-runner';
 import {
   isValidMatchPattern,
   isRegexPattern,
@@ -211,9 +212,10 @@ export async function registerScript(script: Script, options: { useUpdate?: bool
     const settings: ScriptSettings = script.settings || {};
 
     if (meta.background) {
+      const backgroundPlan = planBackgroundScript(script, await SettingsManager.get() as unknown as Settings);
       await chrome.alarms.clear(`crontab_${script.id}`).catch(() => undefined);
       await chrome.userScripts.unregister({ ids: [script.id] }).catch(() => undefined);
-      debugLog(`Skipped @background script until experimentalBackgroundScripts runner ships: ${meta.name || script.id}`);
+      debugLog(`Skipped @background script (${backgroundPlan.status}): ${backgroundPlan.reason}`);
       return;
     }
 

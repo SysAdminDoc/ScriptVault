@@ -25,6 +25,7 @@ describe('local health report background action', () => {
     expect(block).toBeTruthy();
     expect(backgroundCoreTs).toContain('navigator.storage.estimate');
     expect(backgroundCoreTs).toContain('ScriptStorage.getAll()');
+    expect(backgroundCoreTs).toContain('SettingsManager.get()');
     expect(backgroundCoreTs).toContain('UpdateSystem.getPendingUpdates()');
     expect(backgroundCoreTs).toContain('UpdateSystem.getRecentUpdates()');
     expect(backgroundCoreTs).toContain('self._notifCallbacks?.size');
@@ -32,6 +33,16 @@ describe('local health report background action', () => {
     expect(backgroundCoreTs).toContain('self._audioWatchedTabs?.size');
     expect(backgroundCoreTs).toContain('buildLocalHealthWarningList');
     expect(block[0]).not.toMatch(/\bfetch\s*\(/);
+  });
+
+  it('summarizes dormant background-script planner state without script identifiers', () => {
+    expect(backgroundCoreTs).toContain('function planBackgroundScript(script, settings = {})');
+    expect(backgroundCoreTs).toContain('backgroundScripts: {');
+    expect(backgroundCoreTs).toContain('unsupportedGrantNames');
+    expect(backgroundCoreTs).toContain("push('backgroundScriptsDormant', 'info'");
+    expect(backgroundCoreTs).toContain('experimentalBackgroundScripts is disabled.');
+    expect(backgroundCoreTs).not.toMatch(/backgroundScripts:[\s\S]{0,600}name/);
+    expect(backgroundCoreTs).not.toMatch(/backgroundScripts:[\s\S]{0,600}url/i);
   });
 
   it('declares an explicit privacy envelope for support-safe diagnostics', () => {
@@ -52,6 +63,7 @@ describe('local health report support snapshot wiring', () => {
   it('types the action and response map for background callers', () => {
     expect(messagesTs).toMatch(/interface GetLocalHealthReport \{[\s\S]{0,80}action: 'getLocalHealthReport';/);
     expect(messagesTs).toMatch(/interface LocalHealthReportResponse \{[\s\S]{0,80}schema: 'scriptvault-local-health\/v1';/);
+    expect(messagesTs).toMatch(/backgroundScripts:\s*\{[\s\S]{0,300}unsupportedGrantNames: string\[\];/);
     expect(messagesTs).toMatch(/GetExtensionStatus \| GetLocalHealthReport/);
     expect(messagesTs).toMatch(/getLocalHealthReport: LocalHealthReportResponse;/);
   });

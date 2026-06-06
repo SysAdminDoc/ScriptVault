@@ -271,6 +271,16 @@ interface LocalHealthReportResponse {
     sourceIdentityChanged: number;
     userModified: number;
     syncLocked: number;
+    backgroundScripts: {
+      total: number;
+      dormant: number;
+      eligible: number;
+      gateDisabled: number;
+      missingTrigger: number;
+      unsupportedGrants: number;
+      scriptDisabled: number;
+      unsupportedGrantNames: string[];
+    };
     slowScriptThresholdMs: number;
     staleRemoteThresholdDays: number;
   };

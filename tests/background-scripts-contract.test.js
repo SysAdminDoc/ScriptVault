@@ -41,7 +41,8 @@ describe('DOM-less @background contract', () => {
 
     for (const source of [core, registration]) {
       expect(source).toContain('if (meta.background)');
-      expect(source).toContain('Skipped @background script until experimentalBackgroundScripts runner ships');
+      expect(source).toContain('planBackgroundScript(script');
+      expect(source).toContain('Skipped @background script (${backgroundPlan.status}): ${backgroundPlan.reason}');
       expect(source).toContain('chrome.userScripts.unregister({ ids: [script.id] })');
     }
   });

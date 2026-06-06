@@ -29,6 +29,9 @@ the gate.
 `src/background/background-runner.ts` owns the current pure planning contract.
 It does not execute script code. It classifies candidates as gated, missing a
 trigger, blocked by unsupported grants, or ready for a future runner.
+Registration and local-health diagnostics consume the same planner status so
+users and support exports can explain why a background script is dormant without
+recording script names, source, or URLs.
 
 ## API Surface
 
@@ -83,6 +86,8 @@ Acceptance for the implementation pass:
 - Page registration skips `@background` scripts while the runner is dormant.
 - `planBackgroundScript()` blocks the runner when the gate is off, grants are
   unsupported, no trigger exists, or budgets exceed reviewed limits.
+- Local health reports aggregate dormant/eligible/background grant counts
+  without script identifiers or URLs.
 - A later live smoke proves a scheduled background script can call
   `GM_notification` with no matching tab open.
 - Tests prove blocked DOM APIs, host-scope enforcement, timeouts, and disabled
