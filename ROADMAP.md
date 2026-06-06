@@ -7,7 +7,7 @@
 >
 > **Roadmap version:** Round 15 - OSINT deep refresh 2026-06-05.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-05.
-> **Test suite:** 1408 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1412 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-15. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 15 - 2026-06-05.
@@ -84,7 +84,7 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P2 | **Effort:** XL | **Source:** [S04, S20, S21]
 - **Problem:** ScriptCat's killer feature is background/cron scripts without an open tab. ScriptVault's `@crontab` is tied to page lifecycle.
 - **Deliverable:** Default-off `experimentalBackgroundScripts`, parser support for `@background`, DOM-less wrapper variant, offscreen document runner, resource/time budget controls.
-- **Progress:** Cycle 37 added parser/type support for `@background`, the internal default-off `experimentalBackgroundScripts` setting, a dormant page-registration guard so `@background` scripts do not run as normal userscripts before the DOM-less runner exists, and `docs/background-scripts-design.md` to pin runner/API/safety gates. Cycle 38 added `src/background/background-runner.ts` as a pure planner for gate status, supported triggers, restricted GM grants, and reviewed budget limits; no code execution is enabled yet. Cycle 39 wired planner status into registration logging and local-health diagnostics so dormant background scripts are explainable without exposing script names, source, or URLs. Cycle 40 added `src/background/background-wrapper.ts`, a non-wired DOM-less wrapper scaffold that exposes only reviewed GM value/XHR/notification/log/info APIs and fails closed for DOM/page globals.
+- **Progress:** Cycle 37 added parser/type support for `@background`, the internal default-off `experimentalBackgroundScripts` setting, a dormant page-registration guard so `@background` scripts do not run as normal userscripts before the DOM-less runner exists, and `docs/background-scripts-design.md` to pin runner/API/safety gates. Cycle 38 added `src/background/background-runner.ts` as a pure planner for gate status, supported triggers, restricted GM grants, and reviewed budget limits; no code execution is enabled yet. Cycle 39 wired planner status into registration logging and local-health diagnostics so dormant background scripts are explainable without exposing script names, source, or URLs. Cycle 40 added `src/background/background-wrapper.ts`, a non-wired DOM-less wrapper scaffold that exposes only reviewed GM value/XHR/notification/log/info APIs and fails closed for DOM/page globals. Cycle 41 added `src/background/background-runner-bridge.ts` to assemble eligible plans plus wrapper payloads while still reporting `executionEnabled: false`.
 - **Risk:** Extension review scrutiny. Require review-only install (reuse quarantine flow).
 
 ### X-3. Navigation API Integration for SPA Support
