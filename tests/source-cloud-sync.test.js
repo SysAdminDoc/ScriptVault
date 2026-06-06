@@ -711,6 +711,7 @@ describe('source cloud sync module', () => {
             scriptId: 'script_values',
             keyCount: 2,
             bytes: 100,
+            lastValueUpdatedAt: 2000,
             values: {
               sharedKeyName: 'remote-value-456',
               remoteKeyName: true,
@@ -723,6 +724,12 @@ describe('source cloud sync module', () => {
         script_values: {
           sharedKeyName: 'local-value-123',
           localKeyName: true,
+        },
+      },
+      {
+        script_values: {
+          valueCount: 2,
+          lastUpdatedAt: 1000,
         },
       },
     );
@@ -746,6 +753,9 @@ describe('source cloud sync module', () => {
         overlappingKeyCount: 1,
         localOnlyKeyCount: 1,
         remoteOnlyKeyCount: 1,
+        localLastValueUpdatedAt: 1000,
+        remoteLastValueUpdatedAt: 2000,
+        lastWriteHint: 'remote-newer',
       }),
     ]);
     expect(preview.valueBundleConflicts[0].localBytes).toBeGreaterThan(0);

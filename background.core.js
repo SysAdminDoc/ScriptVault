@@ -259,11 +259,26 @@ function safeValueBundleMetric(value) {
   return Math.max(0, Number(value) || 0);
 }
 
+function compareValueBundleLastWrite(localTimestamp, remoteTimestamp) {
+  if (localTimestamp && remoteTimestamp) {
+    if (localTimestamp > remoteTimestamp) return 'local-newer';
+    if (remoteTimestamp > localTimestamp) return 'remote-newer';
+    return 'same';
+  }
+  if (localTimestamp) return 'local-timestamp-only';
+  if (remoteTimestamp) return 'remote-timestamp-only';
+  return 'unknown';
+}
+
 function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {
   const hasLocalBundle = isPlainObject(localBundle);
   const keyCounts = hasLocalBundle
     ? countValueBundleKeyOverlap(localBundle.values, remoteBundle.values)
     : null;
+  const localLastValueUpdatedAt = hasLocalBundle
+    ? getValueBundleLastUpdatedAt(localBundle) ?? null
+    : null;
+  const remoteLastValueUpdatedAt = getValueBundleLastUpdatedAt(remoteBundle) ?? null;
   return {
     reason,
     localKeyCount: hasLocalBundle ? safeValueBundleMetric(localBundle.keyCount) : null,
@@ -272,7 +287,10 @@ function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {
     remoteBytes: safeValueBundleMetric(remoteBundle.bytes),
     overlappingKeyCount: keyCounts?.overlapping ?? null,
     localOnlyKeyCount: keyCounts?.localOnly ?? null,
-    remoteOnlyKeyCount: keyCounts?.remoteOnly ?? null
+    remoteOnlyKeyCount: keyCounts?.remoteOnly ?? null,
+    localLastValueUpdatedAt,
+    remoteLastValueUpdatedAt,
+    lastWriteHint: compareValueBundleLastWrite(localLastValueUpdatedAt, remoteLastValueUpdatedAt)
   };
 }
 
