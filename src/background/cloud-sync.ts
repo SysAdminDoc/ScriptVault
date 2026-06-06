@@ -6,6 +6,11 @@
 import type { Script, ScriptMeta, ScriptSettings } from '../types/index';
 import type { Settings, SyncProvider } from '../types/settings';
 import { SyncCrypto, type RemoteSyncEnvelope } from '../modules/sync-crypto';
+import {
+  buildGmValueSyncBundle,
+  shouldSyncScriptValues,
+  type GmValueSyncBundle,
+} from './gm-value-sync';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -30,6 +35,10 @@ declare const ScriptStorage: {
   getAll(): Promise<Script[]>;
   set(id: string, script: Script): Promise<void>;
   delete(id: string): Promise<void>;
+};
+
+declare const ScriptValues: {
+  getAll(scriptId: string): Promise<Record<string, unknown>>;
 };
 
 declare const SettingsManager: {
@@ -79,6 +88,7 @@ interface SyncEnvelope {
   timestamp: number;
   scripts: SyncScript[];
   tombstones: Record<string, unknown>;
+  valueBundles?: Record<string, GmValueSyncBundle>;
 }
 
 interface SyncResult {
@@ -97,8 +107,13 @@ interface SyncPreviewSummary {
   unchanged: number;
   tombstoned: number;
   conflicts: number;
+  localValueOptIns: number;
+  localValueBundles: number;
+  remoteValueBundles: number;
+  valueBundleWarnings: number;
   wouldUpload: boolean;
   wouldDownload: boolean;
+  wouldUploadValues: boolean;
 }
 
 interface SyncPreviewConflict {
@@ -274,10 +289,18 @@ function sanitizeSyncScriptForEnvelope(script: SyncScript): SyncScript {
 }
 
 function sanitizeSyncEnvelopeForUpload(envelope: SyncEnvelope): SyncEnvelope {
-  return {
+  const scripts = (envelope.scripts || []).map((script) => sanitizeSyncScriptForEnvelope(script));
+  const valueBundles = sanitizeValueBundlesForUpload({
     ...envelope,
-    scripts: (envelope.scripts || []).map((script) => sanitizeSyncScriptForEnvelope(script)),
+    scripts,
+  });
+  const sanitized: SyncEnvelope = {
+    ...envelope,
+    scripts,
   };
+  delete sanitized.valueBundles;
+  if (Object.keys(valueBundles).length > 0) sanitized.valueBundles = valueBundles;
+  return sanitized;
 }
 
 async function readSyncEnvelopeFromRemote(
@@ -295,6 +318,53 @@ async function prepareSyncEnvelopeForRemoteUpload(
     sanitizeSyncEnvelopeForUpload(envelope),
     settings,
   ) as Promise<SyncEnvelope | RemoteSyncEnvelope>;
+}
+
+function sanitizeValueBundlesForUpload(envelope: SyncEnvelope): Record<string, GmValueSyncBundle> {
+  const result: Record<string, GmValueSyncBundle> = {};
+  const scriptsById = new Map<string, SyncScript>(
+    (envelope.scripts || []).map((script) => [script.id, script]),
+  );
+  const sourceBundles = envelope.valueBundles && typeof envelope.valueBundles === 'object'
+    ? envelope.valueBundles
+    : {};
+
+  for (const [scriptId, bundle] of Object.entries(sourceBundles)) {
+    const script = scriptsById.get(scriptId);
+    if (!script || !shouldSyncScriptValues(script)) continue;
+    if (!bundle || bundle.schema !== 'scriptvault-gm-value-sync/v1' || bundle.scriptId !== scriptId) continue;
+    if (!bundle.values || typeof bundle.values !== 'object' || Array.isArray(bundle.values)) continue;
+    const rebuilt = buildGmValueSyncBundle(script, bundle.values);
+    if (rebuilt.bundle) result[scriptId] = rebuilt.bundle;
+  }
+
+  return result;
+}
+
+async function buildValueBundlesForScripts(scripts: Script[] | SyncScript[]): Promise<{
+  valueBundles: Record<string, GmValueSyncBundle>;
+  optIns: number;
+  warnings: number;
+}> {
+  const valueBundles: Record<string, GmValueSyncBundle> = {};
+  let optIns = 0;
+  let warnings = 0;
+  if (typeof ScriptValues === 'undefined' || typeof ScriptValues?.getAll !== 'function') {
+    const hasOptIns = scripts.some((script) => shouldSyncScriptValues(script));
+    if (hasOptIns) throw new Error('GM value storage is unavailable for opted-in value sync');
+    return { valueBundles, optIns, warnings };
+  }
+
+  for (const script of scripts) {
+    if (!shouldSyncScriptValues(script)) continue;
+    optIns++;
+    const values = await ScriptValues.getAll(script.id);
+    const result = buildGmValueSyncBundle(script, values);
+    warnings += result.warnings.length;
+    if (result.bundle) valueBundles[script.id] = result.bundle;
+  }
+
+  return { valueBundles, optIns, warnings };
 }
 
 // ---------------------------------------------------------------------------
@@ -336,24 +406,29 @@ export const CloudSync = {
   async _buildLocalData(tombstones: Record<string, unknown> = {}): Promise<{
     scripts: Script[];
     localData: SyncEnvelope;
+    valueBundleWarnings: number;
   }> {
     const scripts = await ScriptStorage.getAll();
+    const syncScripts = scripts.map((s): SyncScript => ({
+      id: s.id,
+      code: s.code,
+      enabled: s.enabled,
+      position: s.position,
+      settings: cloneSyncSafeScriptSettings(s.settings),
+      updatedAt: s.updatedAt,
+      syncBaseCode: s.syncBaseCode ?? null,
+      name: s.meta?.name || s.id,
+    }));
+    const { valueBundles, warnings } = await buildValueBundlesForScripts(syncScripts);
     return {
       scripts,
+      valueBundleWarnings: warnings,
       localData: {
         version: 1,
         timestamp: Date.now(),
-        scripts: scripts.map((s): SyncScript => ({
-          id: s.id,
-          code: s.code,
-          enabled: s.enabled,
-          position: s.position,
-          settings: cloneSyncSafeScriptSettings(s.settings),
-          updatedAt: s.updatedAt,
-          syncBaseCode: s.syncBaseCode ?? null,
-          name: s.meta?.name || s.id,
-        })),
+        scripts: syncScripts,
         tombstones,
+        ...(Object.keys(valueBundles).length > 0 ? { valueBundles } : {}),
       },
     };
   },
@@ -377,7 +452,7 @@ export const CloudSync = {
     const tombstoneData = await chrome.storage.local.get('syncTombstones');
     const tombstones: Record<string, unknown> =
       (tombstoneData['syncTombstones'] as Record<string, unknown> | undefined) ?? {};
-    const { localData } = await this._buildLocalData(tombstones);
+    const { localData, valueBundleWarnings } = await this._buildLocalData(tombstones);
 
     let remoteData: SyncEnvelope | null = null;
     try {
@@ -399,6 +474,7 @@ export const CloudSync = {
         provider: selectedProvider,
         providerLabel: provider.name || selectedProvider,
         lastSync: settings.lastSync || null,
+        valueBundleWarnings,
       }),
     };
   },
@@ -406,7 +482,7 @@ export const CloudSync = {
   previewData(
     local: SyncEnvelope,
     remote: SyncEnvelope | null,
-    options: { provider?: string; providerLabel?: string; lastSync?: number | null } = {},
+    options: { provider?: string; providerLabel?: string; lastSync?: number | null; valueBundleWarnings?: number } = {},
   ): SyncPreviewResult {
     const localScripts = Array.isArray(local?.scripts) ? local.scripts : [];
     const remoteScripts = Array.isArray(remote?.scripts) ? remote.scripts : [];
@@ -427,8 +503,13 @@ export const CloudSync = {
       unchanged: 0,
       tombstoned: 0,
       conflicts: 0,
+      localValueOptIns: localScripts.filter((script) => shouldSyncScriptValues(script)).length,
+      localValueBundles: Object.keys(local?.valueBundles ?? {}).length,
+      remoteValueBundles: Object.keys(remote?.valueBundles ?? {}).length,
+      valueBundleWarnings: Math.max(0, Number(options.valueBundleWarnings) || 0),
       wouldUpload: false,
       wouldDownload: false,
+      wouldUploadValues: false,
     };
     const conflicts: SyncPreviewConflict[] = [];
 
@@ -479,6 +560,7 @@ export const CloudSync = {
       summary.localOnly > 0 || summary.localNewer > 0 || summary.conflicts > 0 || !remote;
     summary.wouldDownload =
       summary.remoteOnly > 0 || summary.remoteNewer > 0 || summary.conflicts > 0;
+    summary.wouldUploadValues = summary.localValueBundles > 0;
 
     return {
       dryRun: true,
@@ -505,18 +587,23 @@ export const CloudSync = {
 
     // Get local data
     const scripts = await ScriptStorage.getAll();
+    const localSyncScripts = scripts.map((s): SyncScript => ({
+      id: s.id,
+      code: s.code,
+      enabled: s.enabled,
+      position: s.position,
+      settings: cloneSyncSafeScriptSettings(s.settings),
+      updatedAt: s.updatedAt
+    }));
+    const localValueBundleData = await buildValueBundlesForScripts(localSyncScripts);
     const localData: SyncEnvelope = {
       version: 1,
       timestamp: Date.now(),
-      scripts: scripts.map((s): SyncScript => ({
-        id: s.id,
-        code: s.code,
-        enabled: s.enabled,
-        position: s.position,
-        settings: cloneSyncSafeScriptSettings(s.settings),
-        updatedAt: s.updatedAt
-      })),
-      tombstones
+      scripts: localSyncScripts,
+      tombstones,
+      ...(Object.keys(localValueBundleData.valueBundles).length > 0
+        ? { valueBundles: localValueBundleData.valueBundles }
+        : {}),
     };
 
     // Get remote data
@@ -607,10 +694,29 @@ export const CloudSync = {
         await updateBadgeIfAvailable();
       }
 
-      // Upload merged data (includes tombstones)
-      merged.timestamp = Date.now();
-      merged.tombstones = mergedTombstones;
-      await provider.upload(await prepareSyncEnvelopeForRemoteUpload(merged, settings), settings);
+      // Rebuild the upload envelope from current local state so value bundles
+      // reflect post-merge opt-ins and current GM storage.
+      const postMergeScripts = await ScriptStorage.getAll();
+      const uploadScripts = postMergeScripts.map((s): SyncScript => ({
+        id: s.id,
+        code: s.code,
+        enabled: s.enabled,
+        position: s.position,
+        settings: cloneSyncSafeScriptSettings(s.settings),
+        updatedAt: s.updatedAt,
+        syncBaseCode: s.syncBaseCode ?? null,
+      }));
+      const postMergeValueBundleData = await buildValueBundlesForScripts(uploadScripts);
+      const uploadData: SyncEnvelope = {
+        version: 1,
+        timestamp: Date.now(),
+        scripts: uploadScripts,
+        tombstones: mergedTombstones,
+        ...(Object.keys(postMergeValueBundleData.valueBundles).length > 0
+          ? { valueBundles: postMergeValueBundleData.valueBundles }
+          : {}),
+      };
+      await provider.upload(await prepareSyncEnvelopeForRemoteUpload(uploadData, settings), settings);
     } else {
       // First sync, just upload (include tombstones so remote gets deletion info)
       await provider.upload(await prepareSyncEnvelopeForRemoteUpload(localData, settings), settings);
