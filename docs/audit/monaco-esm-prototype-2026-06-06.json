@@ -1,0 +1,39 @@
+{
+  "generatedAt": "2026-06-06T19:55:50.865Z",
+  "root": "lib/monaco-esm",
+  "outputs": [
+    {
+      "path": "lib/monaco-esm/assets/codicon-37A3DWZT.ttf",
+      "bytes": 80340
+    },
+    {
+      "path": "lib/monaco-esm/editor.css",
+      "bytes": 158378
+    },
+    {
+      "path": "lib/monaco-esm/editor.js",
+      "bytes": 8231464
+    },
+    {
+      "path": "lib/monaco-esm/workers/css.worker.js",
+      "bytes": 1883186
+    },
+    {
+      "path": "lib/monaco-esm/workers/editor.worker.js",
+      "bytes": 555624
+    },
+    {
+      "path": "lib/monaco-esm/workers/html.worker.js",
+      "bytes": 1264765
+    },
+    {
+      "path": "lib/monaco-esm/workers/json.worker.js",
+      "bytes": 856164
+    },
+    {
+      "path": "lib/monaco-esm/workers/ts.worker.js",
+      "bytes": 12156466
+    }
+  ],
+  "failures": []
+}

@@ -11,6 +11,7 @@ edge-artifacts/
 release-artifacts/
 background.js
 lib/monaco/
+lib/monaco-esm/
 
 # Signing keys
 scriptvault.pem

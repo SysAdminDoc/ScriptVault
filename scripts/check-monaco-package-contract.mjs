@@ -60,6 +60,24 @@ function checkPackageJson(files, failures) {
     );
   }
 
+  if (packageJson.scripts?.['build:monaco:esm'] !== 'node esbuild.config.mjs --monaco-esm-only') {
+    addFailure(
+      failures,
+      path,
+      'package.json must expose npm run build:monaco:esm for the local ESM prototype',
+      '"build:monaco:esm": "node esbuild.config.mjs --monaco-esm-only"',
+    );
+  }
+
+  if (packageJson.scripts?.['monaco:esm:check'] !== 'node scripts/check-monaco-esm-prototype.mjs') {
+    addFailure(
+      failures,
+      path,
+      'package.json must expose npm run monaco:esm:check for post-build ESM evidence',
+      '"monaco:esm:check": "node scripts/check-monaco-esm-prototype.mjs"',
+    );
+  }
+
   const checkScript = packageJson.scripts?.check || '';
   if (!checkScript.includes('npm run monaco:package:check')) {
     addFailure(failures, path, 'npm run check must include npm run monaco:package:check');
@@ -73,13 +91,15 @@ function checkEsbuild(files, failures) {
 
   for (const needle of [
     'function copyMonaco()',
+    'async function buildMonacoEsm()',
     '"node_modules", "monaco-editor", "min"',
     '"lib", "monaco"',
+    '"lib", "monaco-esm"',
     'cpSync(src, dest, { recursive: true, force: true });',
-    'if (!bgOnly) {\n    copyMonaco();\n  }',
+    'await buildMonacoEsm();',
   ]) {
     if (!hasNeedle(text, needle)) {
-      addFailure(failures, path, 'Chromium build must keep copying the local Monaco AMD bundle', needle);
+      addFailure(failures, path, 'Chromium build must keep the local Monaco AMD bundle and ESM prototype wiring', needle);
     }
   }
 }
@@ -145,7 +165,11 @@ function checkPlan(files, failures) {
     'Do not load Monaco from a CDN',
     'Firefox remains textarea-first',
     'npm run monaco:package:check',
+    'npm run build:monaco:esm',
+    'npm run monaco:esm:check',
+    'docs/audit/monaco-esm-prototype-2026-06-06.json',
     'lib/monaco-esm/editor.js',
+    'lib/monaco-esm/workers/ts.worker.js',
   ]) {
     if (!hasNeedle(text, needle)) {
       addFailure(failures, path, 'Monaco migration plan must document the current packaging guard and future ESM target', needle);
