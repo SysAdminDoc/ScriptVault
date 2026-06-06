@@ -2,6 +2,14 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 85 local refresh acceptance hardening: X-8 now rejects
+oversized bound local files before reading text and preserves distinct
+too-large and parse-failed refresh states. Current File System Access and File
+API guidance supports reading `File.size` before `File.text()`, so the refresh
+path can fail early without loading oversized local code into memory. The apply
+path still goes through `saveScript`, which preserves the existing parser,
+rollback receipt, and `reregisterScript()` behavior.
+
 2026-06-06 Cycle 84 local workspace health evidence: X-8 now has aggregate
 local-workspace diagnostics in the local health report. Current File System
 Access guidance still supports stored handles plus permission rechecks, so the
