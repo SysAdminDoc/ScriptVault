@@ -41,6 +41,8 @@ interface SaveScript {
     sourceKind?: ScriptTrustReceipt['source']['sourceKind'];
     sourceLabel?: string;
     suppressMetadataSourceFallback?: boolean;
+    coalesceKey?: string;
+    coalesceWindowMs?: number;
     recordReceipt?: boolean;
     optionalPermissions?: {
       requested?: string[];

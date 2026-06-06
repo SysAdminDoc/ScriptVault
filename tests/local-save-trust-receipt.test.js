@@ -14,6 +14,9 @@ describe('local save trust receipt wiring', () => {
     expect(dashboard).toContain("sourceKind: 'local-editor'");
     expect(dashboard).toContain("sourceLabel: autosave ? 'Dashboard autosave' : 'Dashboard editor'");
     expect(dashboard).toContain('suppressMetadataSourceFallback: true');
+    expect(dashboard).toContain('function ensureEditorLocalSaveSessionId');
+    expect(dashboard).toContain('trust.coalesceKey = coalesceKey');
+    expect(dashboard).toContain('trust.coalesceWindowMs = 30000');
     expect(dashboard).toContain('trust: buildEditorSaveTrustOptions({ autosave: options.autosave === true })');
     expect(dashboard).toContain('saveCurrentScript({ autosave: true })');
   });
@@ -26,6 +29,8 @@ describe('local save trust receipt wiring', () => {
     expect(messages).toContain('sourceKind?: ScriptTrustReceipt');
     expect(messages).toContain('sourceLabel?: string');
     expect(messages).toContain('suppressMetadataSourceFallback?: boolean');
+    expect(messages).toContain('coalesceKey?: string');
+    expect(messages).toContain('coalesceWindowMs?: number');
     expect(messages).toContain('optionalPermissions?:');
 
     expect(receipt).toContain('suppressMetadataSourceFallback?: boolean');
@@ -37,5 +42,20 @@ describe('local save trust receipt wiring', () => {
     expect(core).toContain('sourceKind: receiptOptions?.sourceKind ||');
     expect(core).toContain('sourceLabel: receiptOptions?.sourceLabel ||');
     expect(core).toContain('receiptOptions?.suppressMetadataSourceFallback === true');
+  });
+
+  it('keeps autosave coalescing ephemeral and outside script records', () => {
+    const core = read('src/background/core.ts');
+    const scriptTypes = read('src/types/script.ts');
+
+    expect(core).toContain('const _localSaveReceiptCoalescing = new Map()');
+    expect(core).toContain('receiptOptions?.coalesceKey');
+    expect(core).toContain('versionHistory[coalesceState.rollbackIndex]');
+    expect(core).toContain('historyEntry && previousScript && !coalescedHistoryEntry');
+    expect(core).toContain('_clearLocalSaveCoalescingForScript(id)');
+    expect(core).toContain('await reregisterScript(script)');
+
+    expect(scriptTypes).not.toContain('coalesceKey');
+    expect(scriptTypes).not.toContain('localSaveSessionId');
   });
 });

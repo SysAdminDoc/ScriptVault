@@ -16752,6 +16752,28 @@ function _isLocalReceiptSourceKind(kind) {
   return typeof kind === 'string' && kind.startsWith('local-');
 }
 
+const _localSaveReceiptCoalescing = new Map();
+
+function _localSaveCoalesceKey(scriptId, value) {
+  const key = typeof value === 'string' ? value.trim().slice(0, 120) : '';
+  return scriptId && key ? `${scriptId}\n${key}` : '';
+}
+
+function _localSaveCoalesceWindowMs(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return Math.min(Math.max(Math.trunc(numeric), 1000), 5 * 60 * 1000);
+}
+
+function _clearLocalSaveCoalescingForScript(scriptId) {
+  if (!scriptId) return;
+  for (const [key, state] of _localSaveReceiptCoalescing.entries()) {
+    if (state?.scriptId === scriptId) {
+      _localSaveReceiptCoalescing.delete(key);
+    }
+  }
+}
+
 function _receiptLineCount(code) {
   if (!code) return 0;
   return code.split(/\r\n|\r|\n/).length;
@@ -20552,7 +20574,7 @@ async function handleMessage(message, sender) {
           || !!receiptOptions?.sourceKind
           || !!receiptOptions?.sourceLabel
           || receiptOptions?.suppressMetadataSourceFallback === true;
-        const previousScript = existing && existing.code !== data.code
+        let previousScript = existing && existing.code !== data.code
           ? {
               ...existing,
               meta: { ...existing.meta },
@@ -20563,7 +20585,41 @@ async function handleMessage(message, sender) {
         const versionHistory = Array.isArray(existing?.versionHistory) ? [...existing.versionHistory] : [];
         let historyEntry = null;
         let rollbackIndex = -1;
-        if (shouldRecordReceipt && previousScript) {
+        const now = Date.now();
+        const coalesceStorageKey = _localSaveCoalesceKey(id, receiptOptions?.coalesceKey);
+        const coalesceWindowMs = _localSaveCoalesceWindowMs(receiptOptions?.coalesceWindowMs);
+        const canCoalesceLocalSave = !!previousScript
+          && !!coalesceStorageKey
+          && coalesceWindowMs > 0
+          && receiptOptions?.operation === 'local-save'
+          && receiptOptions?.sourceKind === 'local-editor';
+        if (shouldRecordReceipt && !canCoalesceLocalSave) {
+          _clearLocalSaveCoalescingForScript(id);
+        }
+        let coalescedHistoryEntry = null;
+        if (shouldRecordReceipt && canCoalesceLocalSave) {
+          const coalesceState = _localSaveReceiptCoalescing.get(coalesceStorageKey);
+          const candidate = coalesceState?.scriptId === id && coalesceState.expiresAt >= now
+            ? versionHistory[coalesceState.rollbackIndex]
+            : null;
+          if (candidate && typeof candidate.code === 'string') {
+            const parsedPrevious = parseUserscript(candidate.code);
+            coalescedHistoryEntry = candidate;
+            rollbackIndex = coalesceState.rollbackIndex;
+            previousScript = {
+              ...existing,
+              code: candidate.code,
+              meta: parsedPrevious?.error ? { ...existing.meta } : { ...parsedPrevious.meta },
+              updatedAt: candidate.updatedAt || existing.updatedAt || now,
+              trustReceipt: candidate.trustReceipt || existing.trustReceipt
+            };
+            coalesceState.expiresAt = now + coalesceWindowMs;
+            coalesceState.updatedAt = now;
+          } else {
+            _localSaveReceiptCoalescing.delete(coalesceStorageKey);
+          }
+        }
+        if (shouldRecordReceipt && previousScript && !coalescedHistoryEntry) {
           historyEntry = {
             version: existing.meta.version,
             code: existing.code,
@@ -20574,6 +20630,14 @@ async function handleMessage(message, sender) {
             versionHistory.splice(0, versionHistory.length - 5);
           }
           rollbackIndex = versionHistory.indexOf(historyEntry);
+          if (canCoalesceLocalSave && rollbackIndex >= 0) {
+            _localSaveReceiptCoalescing.set(coalesceStorageKey, {
+              scriptId: id,
+              rollbackIndex,
+              expiresAt: now + coalesceWindowMs,
+              updatedAt: now
+            });
+          }
         }
         const trustReceipt = shouldRecordReceipt
           ? await createScriptTrustReceipt({
@@ -20599,7 +20663,7 @@ async function handleMessage(message, sender) {
         if (provenanceFailure) {
           return { error: provenanceFailure.message };
         }
-        if (historyEntry && previousScript) {
+        if (historyEntry && previousScript && !coalescedHistoryEntry) {
           historyEntry.trustReceipt = previousScript.trustReceipt || await createScriptTrustReceipt({
             operation: 'rollback-point',
             code: previousScript.code,
