@@ -117,6 +117,15 @@ Cycle 104 adds key-overlap counts for blocked merges:
 - The extra counts are advisory metadata only. They do not enable non-empty
   merge writes or change the empty-local-only apply rule.
 
+Cycle 105 adds real-sync blocked-reason summaries:
+
+- Successful `syncNow` responses can report `skippedNonEmpty` and
+  `skippedUserModified` alongside the aggregate `conflictBlocked` count.
+- The dashboard sync log displays those two blocked reasons after real syncs.
+- These are aggregate counts only. They do not include script IDs, script names,
+  value key names, values, URLs, local workspace handles, local paths, sync
+  credentials, or provider account data.
+
 The next implementation slice should add per-key timestamps, a conflict preview,
 or another durable last-write signal before non-empty local and remote value
 bags can be merged bidirectionally.

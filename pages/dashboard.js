@@ -3882,10 +3882,13 @@
         const applied = Number(valueBundleSync.applied) || 0;
         const preserved = Number(valueBundleSync.preserved) || 0;
         const blocked = Number(valueBundleSync.conflictBlocked) || 0;
+        const nonEmpty = Number(valueBundleSync.skippedNonEmpty) || 0;
+        const userModified = Number(valueBundleSync.skippedUserModified) || 0;
         const unavailable = Number(valueBundleSync.skippedUnavailable) || 0;
         const failures = Number(valueBundleSync.failures) || 0;
         if (applied + preserved + blocked + unavailable + failures <= 0) return '';
-        return `; GM values: ${applied} applied, ${preserved} preserved, ${blocked} blocked, ${unavailable} unavailable, ${failures} failed`;
+        const blockedDetail = blocked > 0 ? `${blocked} blocked (${nonEmpty} non-empty, ${userModified} user-modified)` : '0 blocked';
+        return `; GM values: ${applied} applied, ${preserved} preserved, ${blockedDetail}, ${unavailable} unavailable, ${failures} failed`;
     }
 
     function formatValueBundleConflictReason(reason) {

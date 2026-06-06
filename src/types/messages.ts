@@ -1542,6 +1542,8 @@ export interface ResponseMap {
       applied: number;
       preserved: number;
       conflictBlocked: number;
+      skippedNonEmpty: number;
+      skippedUserModified: number;
       skippedUnavailable: number;
       failures: number;
     };
