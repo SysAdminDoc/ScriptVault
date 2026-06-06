@@ -734,7 +734,7 @@ describe('source cloud sync module', () => {
           },
         },
       },
-      {},
+      { lastSync: 1500 },
       {
         script_values: {
           sharedKeyName: 'local-value-123',
@@ -762,6 +762,14 @@ describe('source cloud sync module', () => {
         remoteValueBundlesApplyReady: 0,
         remoteValueBundlesConflictBlocked: 1,
         wouldApplyValues: false,
+        localValueBundlesWithTimestamps: 1,
+        localValueBundlesMissingTimestamps: 0,
+        localValueBundlesOlderThanLastSync: 1,
+        localValueBundlesNewerThanLastSync: 0,
+        remoteValueBundlesWithTimestamps: 1,
+        remoteValueBundlesMissingTimestamps: 0,
+        remoteValueBundlesOlderThanLastSync: 0,
+        remoteValueBundlesNewerThanLastSync: 1,
       }),
     );
     expect(preview.valueBundleConflicts).toEqual([

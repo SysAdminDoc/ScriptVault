@@ -61,6 +61,8 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('timestamp hints');
     expect(dashboardJs).toContain('overlappingRemoteNewerKeyCount');
     expect(dashboardJs).toContain('overlap timestamps');
+    expect(dashboardJs).toContain('localValueBundlesWithTimestamps');
+    expect(dashboardJs).toContain('GM value timestamps');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {
@@ -89,6 +91,10 @@ describe('sync safety cockpit wiring', () => {
         remoteValueBundlesConflictBlocked: 1,
         valueBundleApplyEnabled: true,
         valueBundleApplyMode: 'empty-local-only',
+        localValueBundlesWithTimestamps: 1,
+        localValueBundlesMissingTimestamps: 0,
+        remoteValueBundlesWithTimestamps: 1,
+        remoteValueBundlesMissingTimestamps: 0,
         wouldUpload: true,
         leakedName: 'Secret Script',
       },
@@ -154,6 +160,8 @@ describe('sync safety cockpit wiring', () => {
       remoteValueBundlesConflictBlocked: 1,
       valueBundleApplyEnabled: true,
       valueBundleApplyMode: 'empty-local-only',
+      localValueBundlesWithTimestamps: 1,
+      remoteValueBundlesWithTimestamps: 1,
       wouldUpload: true,
     }));
     const serialized = JSON.stringify(exported);
