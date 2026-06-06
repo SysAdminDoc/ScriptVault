@@ -39,6 +39,66 @@ export function sanitizeUrl(url: string): string | null {
   return trimmed;
 }
 
+type BrowserAliasRoot = Record<string, unknown> & {
+  browser?: unknown;
+  chrome?: unknown;
+};
+
+export interface BrowserNamespaceAliasStatus {
+  installed: boolean;
+  source: 'native-browser' | 'chrome-alias' | 'unavailable' | 'locked';
+  reason?: string;
+}
+
+function hasExtensionRuntime(api: unknown): boolean {
+  if (!api || (typeof api !== 'object' && typeof api !== 'function')) return false;
+  const runtime = (api as { runtime?: unknown }).runtime;
+  if (!runtime || (typeof runtime !== 'object' && typeof runtime !== 'function')) return false;
+  const rt = runtime as { id?: unknown; sendMessage?: unknown; getURL?: unknown };
+  return typeof rt.id === 'string' ||
+    typeof rt.sendMessage === 'function' ||
+    typeof rt.getURL === 'function';
+}
+
+/**
+ * Install a Chrome-to-browser namespace alias only inside an extension-owned
+ * global that already has chrome.runtime. This keeps user/page worlds from
+ * gaining any API they did not already have.
+ */
+export function installBrowserNamespaceAlias(
+  root: BrowserAliasRoot = globalThis as unknown as BrowserAliasRoot,
+): BrowserNamespaceAliasStatus {
+  if (hasExtensionRuntime(root.browser)) {
+    return { installed: false, source: root.browser === root.chrome ? 'chrome-alias' : 'native-browser' };
+  }
+
+  const chromeApi = root.chrome;
+  if (!hasExtensionRuntime(chromeApi)) {
+    return { installed: false, source: 'unavailable', reason: 'chrome.runtime unavailable' };
+  }
+
+  const descriptor = Object.getOwnPropertyDescriptor(root, 'browser');
+  if (descriptor && !descriptor.configurable) {
+    if ('value' in descriptor && (descriptor.value === undefined || descriptor.value === chromeApi)) {
+      return { installed: false, source: descriptor.value === chromeApi ? 'chrome-alias' : 'unavailable' };
+    }
+    return { installed: false, source: 'locked', reason: 'browser property is not configurable' };
+  }
+
+  try {
+    Object.defineProperty(root, 'browser', {
+      configurable: true,
+      enumerable: false,
+      writable: false,
+      value: chromeApi,
+    });
+    return { installed: true, source: 'chrome-alias' };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { installed: false, source: 'locked', reason: message };
+  }
+}
+
 export type InstallSourceTone = 'good' | 'neutral' | 'warn';
 
 export interface InstallSourceClassification {

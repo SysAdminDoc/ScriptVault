@@ -23,6 +23,7 @@ describe('TS runtime module generator', () => {
           'escapeHtml',
           'generateId',
           'sanitizeUrl',
+          'installBrowserNamespaceAlias',
           'classifyInstallSource',
           'formatBytes',
         ]),
@@ -230,6 +231,8 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('Generated from src/shared/utils.ts');
     expect(text).toContain('const SharedUtils = (() => {');
     expect(text).toContain('const escapeHtml = SharedUtils.escapeHtml;');
+    expect(text).toContain('const installBrowserNamespaceAlias = SharedUtils.installBrowserNamespaceAlias;');
+    expect(text).toContain('installBrowserNamespaceAlias(globalThis);');
     expect(text).toContain('const classifyInstallSource = SharedUtils.classifyInstallSource;');
   });
 

@@ -1,6 +1,13 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
-import { classifyInstallSource, escapeHtml, formatBytes, generateId, sanitizeUrl } from '../src/shared/utils.ts';
+import {
+  classifyInstallSource,
+  escapeHtml,
+  formatBytes,
+  generateId,
+  installBrowserNamespaceAlias,
+  sanitizeUrl,
+} from '../src/shared/utils.ts';
 import { ScriptAnalyzer } from '../src/bg/analyzer.ts';
 import { ResourceCache } from '../src/modules/resources.ts';
 import { XhrManager } from '../src/modules/xhr.ts';
@@ -134,6 +141,34 @@ describe('source utils', () => {
     expect(formatBytes(0)).toBe('0 B');
     expect(formatBytes(1024)).toBe('1 KB');
     expect(formatBytes(1024 ** 4)).toBe('1 TB');
+  });
+
+  it('maps browser to chrome only for extension-owned globals', () => {
+    const chromeApi = { runtime: { id: 'ext-id', sendMessage() {} }, tabs: { query() {} } };
+    const root = { chrome: chromeApi };
+
+    const result = installBrowserNamespaceAlias(root);
+
+    expect(result).toEqual({ installed: true, source: 'chrome-alias' });
+    expect(root.browser).toBe(chromeApi);
+    expect(Object.getOwnPropertyDescriptor(root, 'browser')).toMatchObject({
+      enumerable: false,
+      writable: false,
+      configurable: true,
+    });
+  });
+
+  it('preserves native browser namespaces and inert page globals', () => {
+    const nativeBrowser = { runtime: { id: 'native-browser' } };
+    expect(installBrowserNamespaceAlias({
+      browser: nativeBrowser,
+      chrome: { runtime: { id: 'chrome-api' } },
+    })).toEqual({ installed: false, source: 'native-browser' });
+
+    expect(installBrowserNamespaceAlias({ chrome: {} })).toMatchObject({
+      installed: false,
+      source: 'unavailable',
+    });
   });
 });
 

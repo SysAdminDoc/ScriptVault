@@ -70,6 +70,47 @@ describe('Firefox dashboard compatibility layer', () => {
     });
   });
 
+  it('treats a Chromium browser namespace as Chrome, not Firefox', () => {
+    const chromiumApi = {
+      runtime: {
+        id: 'chromium-test',
+        getManifest: () => ({ version: '3.11.0' }),
+      },
+      storage: { session: {} },
+    };
+    const compat = loadFirefoxCompat({
+      chrome: chromiumApi,
+      browser: chromiumApi,
+      userAgent: 'Mozilla/5.0 Chrome/148.0.0.0 Safari/537.36',
+    });
+
+    expect(Boolean(compat.isFirefox)).toBe(false);
+    expect(compat.isChrome).toBe(true);
+    expect(compat.getRuntimeDescriptor()).toMatchObject({
+      browserName: 'chrome',
+      browserLabel: 'Chrome',
+      browserVersion: '148.0.0.0',
+    });
+  });
+
+  it('uses Gecko manifest metadata as a Firefox signal when user agent is unavailable', () => {
+    const compat = loadFirefoxCompat({
+      browser: {
+        runtime: {
+          id: 'firefox-test',
+          getManifest: () => ({
+            version: '3.11.0',
+            browser_specific_settings: { gecko: { id: 'scriptvault@example.com' } },
+          }),
+        },
+      },
+      userAgent: '',
+    });
+
+    expect(Boolean(compat.isFirefox)).toBe(true);
+    expect(compat.isChrome).toBe(false);
+  });
+
   it('reports Firefox build metadata and WebDAV-only sync support', () => {
     const compat = loadFirefoxCompat({
       chrome: {

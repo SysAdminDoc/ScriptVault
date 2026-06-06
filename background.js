@@ -37,6 +37,7 @@ const SharedUtils = (() => {
     escapeHtml: () => escapeHtml,
     formatBytes: () => formatBytes,
     generateId: () => generateId,
+    installBrowserNamespaceAlias: () => installBrowserNamespaceAlias,
     sanitizeUrl: () => sanitizeUrl
   });
   module.exports = __toCommonJS(utils_exports);
@@ -58,6 +59,41 @@ const SharedUtils = (() => {
     if (trimmed.startsWith("//")) return trimmed;
     if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return null;
     return trimmed;
+  }
+  function hasExtensionRuntime(api) {
+    if (!api || typeof api !== "object" && typeof api !== "function") return false;
+    const runtime = api.runtime;
+    if (!runtime || typeof runtime !== "object" && typeof runtime !== "function") return false;
+    const rt = runtime;
+    return typeof rt.id === "string" || typeof rt.sendMessage === "function" || typeof rt.getURL === "function";
+  }
+  function installBrowserNamespaceAlias(root = globalThis) {
+    if (hasExtensionRuntime(root.browser)) {
+      return { installed: false, source: root.browser === root.chrome ? "chrome-alias" : "native-browser" };
+    }
+    const chromeApi = root.chrome;
+    if (!hasExtensionRuntime(chromeApi)) {
+      return { installed: false, source: "unavailable", reason: "chrome.runtime unavailable" };
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(root, "browser");
+    if (descriptor && !descriptor.configurable) {
+      if ("value" in descriptor && (descriptor.value === void 0 || descriptor.value === chromeApi)) {
+        return { installed: false, source: descriptor.value === chromeApi ? "chrome-alias" : "unavailable" };
+      }
+      return { installed: false, source: "locked", reason: "browser property is not configurable" };
+    }
+    try {
+      Object.defineProperty(root, "browser", {
+        configurable: true,
+        enumerable: false,
+        writable: false,
+        value: chromeApi
+      });
+      return { installed: true, source: "chrome-alias" };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { installed: false, source: "locked", reason: message };
+    }
   }
   function classifyInstallSource(url) {
     if (typeof url !== "string" || !url.trim()) {
@@ -120,8 +156,13 @@ const SharedUtils = (() => {
 const escapeHtml = SharedUtils.escapeHtml;
 const generateId = SharedUtils.generateId;
 const sanitizeUrl = SharedUtils.sanitizeUrl;
+const installBrowserNamespaceAlias = SharedUtils.installBrowserNamespaceAlias;
 const classifyInstallSource = SharedUtils.classifyInstallSource;
 const formatBytes = SharedUtils.formatBytes;
+
+try {
+  installBrowserNamespaceAlias(globalThis);
+} catch (_) {}
 
 // ============================================================================
 // SHARED SETTINGS DEFAULTS

@@ -10,20 +10,31 @@ const FirefoxCompat = (() => {
     // =========================================
     // Browser Detection
     // =========================================
-    const _isFirefox = (typeof browser !== 'undefined' && browser.runtime?.id) ||
-        /Firefox\//.test(navigator.userAgent);
+    const _userAgent = navigator.userAgent || '';
+    const _runtimeManifest = (() => {
+        const runtime = (typeof browser !== 'undefined' && browser.runtime) ||
+            (typeof chrome !== 'undefined' && chrome.runtime);
+        try {
+            return runtime?.getManifest?.() || {};
+        } catch (_) {
+            return {};
+        }
+    })();
+    const _isFirefox = /Firefox\//.test(_userAgent) ||
+        !!_runtimeManifest.browser_specific_settings?.gecko;
 
     const _isChrome = !_isFirefox && (
         (typeof chrome !== 'undefined' && !!chrome.runtime?.id) ||
-        /Chrome\//.test(navigator.userAgent)
+        (typeof browser !== 'undefined' && !!browser.runtime?.id) ||
+        /(?:Chrome|Chromium|Edg)\//.test(_userAgent)
     );
 
     const _browserName = _isFirefox ? 'firefox' : _isChrome ? 'chrome' : 'unknown';
     const _browserVersion = (() => {
-        const ua = navigator.userAgent || '';
+        const ua = _userAgent;
         const firefox = ua.match(/Firefox\/([\d.]+)/);
         if (firefox) return firefox[1];
-        const chromium = ua.match(/(?:Chrome|Chromium)\/([\d.]+)/);
+        const chromium = ua.match(/(?:Chrome|Chromium|Edg)\/([\d.]+)/);
         if (chromium) return chromium[1];
         return '';
     })();

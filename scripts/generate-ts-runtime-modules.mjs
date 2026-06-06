@@ -20,9 +20,11 @@ export const TS_RUNTIME_MODULES = [
       'escapeHtml',
       'generateId',
       'sanitizeUrl',
+      'installBrowserNamespaceAlias',
       'classifyInstallSource',
       'formatBytes',
     ],
+    autoInstallBrowserAlias: true,
   },
   {
     id: 'sync-providers',
@@ -253,6 +255,12 @@ export async function buildTsRuntimeModuleText(definition, options = {}) {
       ...definition.globalExports.flatMap((name) => [
         `const ${name} = ${moduleName}.${name};`,
       ]),
+      ...(definition.autoInstallBrowserAlias ? [
+        '',
+        'try {',
+        '  installBrowserNamespaceAlias(globalThis);',
+        '} catch (_) {}',
+      ] : []),
       '',
     ].join('\n');
   }

@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import vm from 'node:vm';
 
 const code = readFileSync(resolve(process.cwd(), 'shared/utils.js'), 'utf8');
 
 function createUtils() {
-  const fn = new Function('crypto', `${code}\nreturn { escapeHtml, generateId, sanitizeUrl, classifyInstallSource, formatBytes };`);
-  return fn({ randomUUID: () => 'uuid-123' });
+  const root = {};
+  const fn = new Function('crypto', 'globalThis', `${code}\nreturn { escapeHtml, generateId, sanitizeUrl, installBrowserNamespaceAlias, classifyInstallSource, formatBytes };`);
+  return fn({ randomUUID: () => 'uuid-123' }, root);
 }
 
 describe('generated shared utilities runtime', () => {
@@ -16,6 +18,23 @@ describe('generated shared utilities runtime', () => {
     expect(utils.escapeHtml('<tag "x">')).toBe('&lt;tag &quot;x&quot;&gt;');
     expect(utils.generateId()).toBe('script_uuid-123');
     expect(utils.formatBytes(1024 ** 4)).toBe('1 TB');
+    expect(typeof utils.installBrowserNamespaceAlias).toBe('function');
+  });
+
+  it('auto-installs browser alias in generated extension contexts', () => {
+    const chromeApi = { runtime: { id: 'ext-id', sendMessage() {} } };
+    const sandbox = {
+      chrome: chromeApi,
+      crypto: { randomUUID: () => 'uuid-123' },
+    };
+    vm.runInNewContext(code, sandbox);
+
+    expect(sandbox.browser).toBe(chromeApi);
+    expect(Object.getOwnPropertyDescriptor(sandbox, 'browser')).toMatchObject({
+      enumerable: false,
+      writable: false,
+      configurable: true,
+    });
   });
 
   it('sanitizes dangerous URL schemes after control-character stripping', () => {

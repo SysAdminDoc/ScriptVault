@@ -2,6 +2,16 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 80 browser namespace alias: X-5 is complete. The promoted
+shared utilities now expose `installBrowserNamespaceAlias()`, and the runtime
+generator auto-installs it only when the loaded global already has
+`chrome.runtime`. Chrome <148 extension contexts get a non-enumerable
+`browser` alias to the existing `chrome` object, native `browser` namespaces are
+preserved, inert page globals stay unchanged, and the userscript wrapper is
+covered to ensure it never assigns `window.browser`. The dashboard compatibility
+detector now classifies Chromium with `browser.runtime` as Chrome unless Firefox
+UA or Gecko manifest metadata is present.
+
 2026-06-06 Cycle 79 Monaco adapter dashboard smoke: X-4 is complete for the
 current ESM migration. `tests/e2e/monaco-adapter-dashboard.spec.js` launches the
 unpacked extension, suppresses one-time profile banners through normal stored
