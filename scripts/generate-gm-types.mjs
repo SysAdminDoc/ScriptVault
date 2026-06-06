@@ -287,6 +287,7 @@ interface GMAsyncApi {
   addElement<K extends keyof HTMLElementTagNameMap>(tagName: K, attributes?: GMAddElementAttributes): Promise<HTMLElementTagNameMap[K] | null>;
   addElement<K extends keyof HTMLElementTagNameMap>(parentNode: Node | null, tagName: K, attributes?: GMAddElementAttributes): Promise<HTMLElementTagNameMap[K] | null>;
   xmlHttpRequest<T = unknown>(details: GMXmlhttpRequestDetails<T>): GMXmlhttpRequestPromise<T>;
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   head<T = unknown>(url: string, callback?: (response: GMXmlhttpRequestResponse<T>) => void): Promise<void>;
   notification(details: string | GMNotificationDetails, ondone?: () => void): Promise<GMNotificationHandle | undefined>;
   setClipboard(data: string, type?: string): Promise<void>;
@@ -331,6 +332,7 @@ declare function GM_addValueChangeListener(
 ): number | null;
 declare function GM_removeValueChangeListener(listenerId: number): boolean;
 declare function GM_xmlhttpRequest<T = unknown>(details: GMXmlhttpRequestDetails<T>): GMXmlhttpRequestHandle;
+declare function GM_fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 declare function GM_head<T = unknown>(url: string, callback?: (response: GMXmlhttpRequestResponse<T>) => void): void;
 declare function GM_setClipboard(data: string, type?: string): void;
 declare function GM_notification(

@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 38 - settings validation acceptance closure 2026-06-06.
+> **Roadmap version:** Round 39 - guarded GM.fetch closure 2026-06-06.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-05.
 > **Test suite:** 1438 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
-> **Source floor:** 400+ external URLs across Rounds 1-38. Every Now/Next item carries source IDs from the Appendix.
+> **Source floor:** 400+ external URLs across Rounds 1-39. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 38 - 2026-06-06.
+> Last researched: Round 39 - 2026-06-06.
 
 ---
 
@@ -48,6 +48,9 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P2 | **Effort:** M | **Source:** [S10, S11, S12]
 - **Problem:** Wrapper exports many `GM_*` callbacks but fewer `GM.*` promise aliases. Missing: `GM.addElement`, `GM.audio`, `GM.cookie`, `GM.focusTab`, `GM.getMenuCommands`, `GM.head`, `GM.log`, `GM.webRequest`. No `GM.fetch`. Scripts written for Tampermonkey/Violentmonkey's GM.* style fail silently.
 - **Deliverable:** Generated alias parity table with drift test. `GM.fetch` only if it reuses existing `GM_xmlhttpRequest` host-scope, `@connect`, abort, redirect, and internal-host policy.
+- **Status:** Shipped 2026-06-06.
+- **Progress:** Cycle 32 added the direct `GM.*` aliases and the drift test while deferring `GM.fetch` until its network contract could reuse `GM_xmlhttpRequest`. Cycle 71 shipped `GM.fetch` and `GM_fetch` as a guarded compatibility surface over the existing XHR bridge, preserving `@connect`, host-scope, abort, redirect, no-cache, and internal-host checks without adding a new background `GM_fetch` action. Ambient declarations and the generated runtime artifacts now include the fetch surface, and the parity test asserts that future changes keep it on the guarded XHR path.
+- **Acceptance:** `GM.fetch` returns a Fetch `Response`, supports abort signals and RequestInit headers/body/credentials/cache/redirect inputs, can be granted as `GM.fetch` without widening direct `GM_xmlhttpRequest`, and remains covered by GM namespace/type/runtime generation checks.
 
 ### N-3. GM_addValueChangeListener Cross-Tab `remote` Semantics
 - **Priority:** P2 | **Effort:** S | **Source:** [S10, S11]
@@ -269,11 +272,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 68 | Remaining select validation | `pages/dashboard.html`, `pages/dashboard.js`, `src/config/settings-schema.json`, `scripts/check-settings-schema.mjs`, `tests/dashboard-a11y.test.js` | MDN select option values plus `HTMLSelectElement.setCustomValidity()` support the same allowed-option validation contract, and WCAG error identification expects text feedback for invalid choices [S07, S08] | Added validation metadata, error nodes, and save-blocking allowed-option checks for all remaining schema-backed selects; popup columns now validates before numeric conversion |
 | 69 | Custom CSS validation | `pages/dashboard.html`, `pages/dashboard.js`, `src/config/settings-schema.json`, `scripts/check-settings-schema.mjs`, `tests/dashboard-a11y.test.js` | WCAG error identification and MDN constraint validation support text errors, native length constraints, and custom validity for malformed free-form text [S07, S08] | Added validation metadata, maxlength, accessible error text, and save-blocking validation for custom CSS; whitespace is preserved while unsafe control characters and overlarge CSS are rejected |
 | 70 | Settings validation acceptance gate | `scripts/check-settings-schema.mjs`, `tests/settings-schema.test.js`, `src/config/settings-schema.json`, `pages/dashboard.html`, `pages/dashboard.js` | WCAG error identification and MDN constraint validation still require user-facing errors for malformed input controls [S07, S08] | Added the durable dashboard-backed validation-metadata requirement and closed N-1 after the repository schema passed it |
+| 71 | Guarded GM.fetch | `src/background/core.ts`, `src/background/wrapper-builder.ts`, `background.core.js`, `background.js`, `scripts/generate-gm-types.mjs`, `lib/scriptvault.d.ts`, `tests/gm-namespace-parity.test.js`, `tests/gm-types.test.js`, `docs/gm-namespace-parity.md` | Tampermonkey/Violentmonkey GM API parity still depends on promise-style network helpers, but ScriptVault must keep network access behind `GM_xmlhttpRequest` policy [S10, S11, S12] | Added `GM.fetch`/`GM_fetch` over the existing XHR bridge, pinned that no background `GM_fetch` action exists, and closed N-2 |
 
 ## Continuation State
 
-- **Current cycle:** Round 38 Cycle 70 closed N-1 Settings Schema Parity and Accessible Validation by adding a durable schema gate that requires validation metadata for every dashboard-backed input control that can accept malformed values. Focused settings schema/dashboard tests, settings schema check, TS runtime check, audit, full check suite, build, CWS scan, and `git diff --check` passed.
-- **Next implementation angle:** Cycle 71 should continue N-2 by evaluating guarded `GM.fetch` against the existing `GM_xmlhttpRequest` host-scope, `@connect`, abort, redirect, and internal-host policy. If the contract is still too broad for implementation, add an explicit design/test plan and parity gate for the remaining `GM.*` namespace aliases.
+- **Current cycle:** Round 39 Cycle 71 closed N-2 GM.* Namespace Parity and Guarded GM.fetch by adding `GM.fetch`/`GM_fetch` over the existing `GM_xmlhttpRequest` bridge without introducing a new background fetch action. Focused GM parity/type/wrapper tests, generator checks, settings schema check, high-severity audit, full check suite, build, CWS scan, TS runtime check, and `git diff --check` passed.
+- **Next implementation angle:** Cycle 72 should move to X-3 SPA navigation support proof: add deterministic wrapper coverage for Navigation API `navigate` events, fallback history/popstate/hashchange paths, same-turn duplicate suppression, preserved `{ url, oldUrl }` details, and author-facing documentation examples.
 - **Follow-up source checks:** Re-check CWS user-data/privacy expectations and File System Access handle persistence before editing local-save or local-workspace metadata.
 - **Suggested verification before implementation:** Run focused tests for setup-state banners, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching N-7, N-8, X-8, or X-9.
 

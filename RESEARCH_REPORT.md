@@ -2,6 +2,18 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 71 guarded GM.fetch closure: N-2 is complete. The
+Tampermonkey and Violentmonkey GM API source signal still supports
+promise-style GM namespace parity, but ScriptVault's network safety boundary
+requires all privileged cross-origin fetches to pass through the existing
+`GM_xmlhttpRequest` host-scope, `@connect`, redirect, abort, no-cache, and
+internal-host checks. ScriptVault now exposes `GM.fetch` and direct `GM_fetch`
+as a Fetch `Response` wrapper over `_GM_xmlhttpRequestPromise` rather than a
+new background action. The parity test asserts that both wrapper sources keep
+`GM.fetch` on the XHR bridge and that `src/background/core.ts` has no
+`case 'GM_fetch'`; the generated ambient declarations include both `GM.fetch`
+and `GM_fetch`.
+
 2026-06-06 Cycle 70 settings validation acceptance closure: N-1 is complete.
 The source signal remains WCAG error identification plus MDN constraint
 validation: dashboard controls that can accept malformed values need

@@ -47,6 +47,8 @@ describe('GM ambient declarations', () => {
     expect(declaration).toContain('cookie: GMCookiePromiseApi;');
     expect(declaration).toContain('audio: GMAudioPromiseApi;');
     expect(declaration).toContain('webRequest(rules: GMWebRequestRule | GMWebRequestRule[], listener?: GMWebRequestListener): Promise<void>;');
+    expect(declaration).toContain('fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;');
+    expect(declaration).toContain('declare function GM_fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;');
     expect(declaration).toContain('declare function GM_updateNotification');
     expect(declaration).toContain('declare function GM_getResourceURL(name: string, isBlobUrl?: boolean): Promise<string | null>;');
     expect(declaration).not.toContain('GM_closeTab');
@@ -82,6 +84,11 @@ async function main() {
   const asyncResponse = GM.xmlHttpRequest<{ ok: boolean }>({ url: 'https://example.com/api' });
   asyncResponse.abort();
   await asyncResponse;
+
+  const fetchResponse = await GM.fetch('https://example.com/api', { method: 'POST', body: 'x' });
+  const fetchJson: unknown = await fetchResponse.json();
+  const directFetchResponse = await GM_fetch(new URL('https://example.com/api'));
+  console.log(fetchResponse.status, directFetchResponse.url, fetchJson);
 
   const tab = GM_openInTab('https://example.com', { active: true });
   tab?.close();

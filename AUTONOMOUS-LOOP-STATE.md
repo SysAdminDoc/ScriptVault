@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 70 - 2026-06-06
+Last cycle: Cycle 71 - 2026-06-06
 
 ## Latest Result
 
@@ -208,6 +208,11 @@ Last cycle: Cycle 70 - 2026-06-06
   settings schema gate now requires validation metadata for every
   dashboard-backed input control that can accept malformed values, while
   checkboxes and readonly controls remain exempt.
+- Cycle 71 closed N-2 GM.* Namespace Parity and Guarded GM.fetch. The wrapper
+  now exposes `GM.fetch` and direct `GM_fetch` through the existing
+  `GM_xmlhttpRequest` bridge, preserving host-scope, `@connect`, abort,
+  redirect, no-cache, and internal-host policy without adding a new background
+  fetch action.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -287,17 +292,19 @@ Last cycle: Cycle 70 - 2026-06-06
   WCAG/MDN validation guidance, then verified the N-1 acceptance gate with
   focused settings schema/dashboard tests, the settings schema gate, TS runtime
   generation/check, high-severity audit, full check suite, build, CWS
-  remote-code scan, and `git diff --check`.
+  remote-code scan, and `git diff --check`. Cycle 71 reused the
+  Tampermonkey/Violentmonkey GM API parity sources and verified guarded
+  `GM.fetch` with focused GM parity/type/wrapper tests, GM type generation and
+  check, TS runtime generation/check, settings schema gate, high-severity
+  audit, full check suite, build, CWS remote-code scan, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 38. The next best local cycle is Cycle 71:
-continue N-2 by evaluating guarded `GM.fetch` against the existing
-`GM_xmlhttpRequest` host-scope, `@connect`, abort, redirect, and internal-host
-policy. If the contract is still too broad for implementation, add an explicit
-design/test plan and parity gate for the remaining `GM.*` namespace aliases.
-The live
-two-tab
+Continue from `ROADMAP.md` Round 39. The next best local cycle is Cycle 72:
+move to X-3 SPA navigation support proof by adding deterministic wrapper
+coverage for Navigation API `navigate` events, history/popstate/hashchange
+fallbacks, same-turn duplicate suppression, preserved `{ url, oldUrl }`
+details, and author-facing documentation examples. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
 remains blocked on maintainer credentials, and Edge Partner Center upload/REST
@@ -305,7 +312,7 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 70 complete for 2026-06-06; roadmap continuation
-  points to Cycle 71 N-2 guarded GM.fetch continuation.
+- Status: ScriptVault Cycle 71 complete for 2026-06-06; roadmap continuation
+  points to Cycle 72 X-3 SPA navigation support proof.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

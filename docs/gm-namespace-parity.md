@@ -16,12 +16,16 @@ existing runtime policy:
 - `GM.head`
 - `GM.log`
 - `GM.webRequest`
+- `GM.fetch`
 
 `GM.webRequest` remains declarativeNetRequest-backed in Manifest V3. It accepts
 the same rule input as `GM_webRequest`, but runtime match callbacks are still
 not supported by Chrome MV3 DNR.
 
-`GM.fetch` remains deferred. A fetch-shaped API must reuse the existing
-`GM_xmlhttpRequest` host-scope checks, `@connect` enforcement, abort behavior,
-redirect handling, and internal-host guard before it can ship without widening
-network access.
+`GM.fetch` is shipped as a guarded compatibility alias, not a separate network
+backend. The wrapper builds a Fetch `Response` from the existing
+`GM_xmlhttpRequest` bridge, so it inherits the same host-scope checks,
+`@connect` enforcement, abort behavior, redirect handling, no-cache handling,
+and internal-host guard. Scripts may declare `@grant GM.fetch` for the fetch
+surface or keep using `@grant GM_xmlhttpRequest`; direct `GM_xmlhttpRequest`
+continues to require its own grant.
