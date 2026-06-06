@@ -274,6 +274,25 @@ describe('PublicAPI', () => {
       ).rejects.toThrow();
     });
 
+    it('reuses the canonical internal-host guard for webhook URLs', async () => {
+      await PublicAPI.init();
+      const blockedUrls = [
+        'https://evil.localhost/hook',
+        'https://192.0.2.1/hook',
+        'https://198.51.100.5/hook',
+        'https://203.0.113.254/hook',
+        'https://198.18.0.1/hook',
+        'https://240.0.0.1/hook',
+        'https://[::ffff:c0a8:0101]/hook',
+      ];
+
+      for (const url of blockedUrls) {
+        await expect(
+          PublicAPI.setWebhook('script.installed', { url, enabled: true })
+        ).rejects.toThrow(/internal|loopback|localhost/i);
+      }
+    });
+
     it('still accepts public hostnames', async () => {
       await PublicAPI.init();
       await PublicAPI.setWebhook('script.installed', {
@@ -347,6 +366,25 @@ describe('PublicAPI', () => {
       expect(PublicAPI.getTrustedOrigins()).toEqual(['https://safe.example']);
     });
 
+    it('rejects canonical internal-host guard drift cases for trusted origins', async () => {
+      await PublicAPI.init();
+      await PublicAPI.setTrustedOrigins(['https://safe.example']);
+      const blockedOrigins = [
+        'https://evil.localhost',
+        'https://192.0.2.1',
+        'https://198.51.100.5',
+        'https://203.0.113.254',
+        'https://198.18.0.1',
+        'https://240.0.0.1',
+        'https://[::ffff:c0a8:0101]',
+      ];
+
+      for (const origin of blockedOrigins) {
+        await expect(PublicAPI.setTrustedOrigins([origin])).rejects.toThrow(/internal|loopback/i);
+      }
+      expect(PublicAPI.getTrustedOrigins()).toEqual(['https://safe.example']);
+    });
+
     it('drops legacy malformed trusted origins on load', async () => {
       globalThis.__resetStorageMock();
       await chrome.storage.local.set({
@@ -401,6 +439,31 @@ describe('PublicAPI', () => {
         data: {
           type: 'scriptvault:install',
           url: 'https://localhost/script.user.js',
+        },
+        source,
+      });
+      await flushPromises();
+
+      expect(source.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'scriptvault:install:response',
+          error: 'Internal URLs are not allowed',
+        }),
+        'https://trusted.example',
+      );
+    });
+
+    it('rejects PublicAPI install URLs covered by the canonical internal-host guard', async () => {
+      const source = { postMessage: vi.fn() };
+
+      await PublicAPI.init();
+      await PublicAPI.setPermissions({ installScript: 'allow' });
+      await PublicAPI.setTrustedOrigins(['https://trusted.example']);
+      PublicAPI.handleWebMessage({
+        origin: 'https://trusted.example',
+        data: {
+          type: 'scriptvault:install',
+          url: 'https://evil.localhost/script.user.js',
         },
         source,
       });

@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 28 - deep audit crontab isolation closure 2026-06-06.
+> **Roadmap version:** Round 29 - deep audit security closures complete 2026-06-06.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-05.
-> **Test suite:** 1433 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
-> **Source floor:** 400+ external URLs across Rounds 1-28. Every Now/Next item carries source IDs from the Appendix.
+> **Test suite:** 1437 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 27/27 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Source floor:** 400+ external URLs across Rounds 1-29. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 28 - 2026-06-06.
+> Last researched: Round 29 - 2026-06-06.
 
 ---
 
@@ -96,8 +96,9 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Priority:** P0 | **Effort:** S-M | **Source:** Local deep audit (`docs/research-deep-audit-2026-06-06.md`)
 - **Local evidence:** The deep audit identified three immediate security closures: `GM_addElement` `srcdoc` bypass, `@crontab` isolated-world escalation, and `PublicAPI.isInternalHost` drift from `InternalHostGuard`.
 - **Problem:** These findings can affect script/page isolation or trusted-origin install safety, so they outrank polish/evidence work until closed.
-- **Progress:** Cycle 59 closed EI-1 by blocking `srcdoc` in `GM_addElement` direct attributes and sanitized `innerHTML`, updating both `src/background/wrapper-builder.ts` and `src/background/core.ts`, regenerating runtime artifacts, and adding a DOM security regression. Cycle 60 closed EI-2 by moving scheduled `@crontab` execution to `chrome.userScripts.execute` in `USER_SCRIPT` world when available, falling back only to `chrome.scripting.executeScript` in `MAIN` world, removing the scheduled `ISOLATED`/`new Function` path, and pinning the scheduler regression.
-- **Remaining:** EI-3 PublicAPI internal-host guard drift.
+- **Status:** Shipped 2026-06-06. All three closures are complete.
+- **Progress:** Cycle 59 closed EI-1 by blocking `srcdoc` in `GM_addElement` direct attributes and sanitized `innerHTML`, updating both `src/background/wrapper-builder.ts` and `src/background/core.ts`, regenerating runtime artifacts, and adding a DOM security regression. Cycle 60 closed EI-2 by moving scheduled `@crontab` execution to `chrome.userScripts.execute` in `USER_SCRIPT` world when available, falling back only to `chrome.scripting.executeScript` in `MAIN` world, removing the scheduled `ISOLATED`/`new Function` path, and pinning the scheduler regression. Cycle 61 closed EI-3 by making `src/modules/public-api.ts` import the canonical `isInternalHost` from `src/background/internal-host-guard.ts`, regenerating `modules/public-api.js` and `background.js`, and adding trusted-origin, webhook, install URL, and source-parity regressions for `.localhost`, TEST-NET, benchmarking, Class E, and IPv4-mapped IPv6 hex hosts.
+- **Remaining:** None.
 - **Acceptance:** Each closure has source and generated runtime coverage, focused regression tests, full `npm run check`, `npm run build`, and `npm run cws:remote-code:check`.
 
 ## Next (v3.13.0 - v3.14.0)
@@ -257,11 +258,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 58 | Local file refresh review | `pages/dashboard.html`, `pages/dashboard.js`, `tests/local-workspace-dashboard.test.js` | Stored handles may need `requestPermission()` from a user gesture before reads; local files should be reviewed before applying executable code [S81, S89, S91] | Added `Refresh File` and `Unbind`, review-diff apply, permission reconnect/error summaries, no-change handling, and `local-file` receipt tests |
 | 59 | Deep audit security | `src/background/wrapper-builder.ts`, `src/background/core.ts`, generated runtime artifacts, `tests/wrapper-dom-security.test.js`, `docs/research-deep-audit-2026-06-06.md` | Local audit found `srcdoc` bypass in `GM_addElement`; iframe `srcdoc` is raw HTML rather than a normal URL attribute | Blocked `srcdoc` for direct attrs and sanitized `innerHTML`, regenerated runtime artifacts, and pinned the bypass regression |
 | 60 | Crontab execution isolation | `src/background/core.ts`, generated runtime artifacts, `tests/crontab-next-fire.test.js`, `docs/research-deep-audit-2026-06-06.md` | Local audit found scheduled scripts running through `chrome.scripting.executeScript` in `ISOLATED` world, which can expose extension APIs to userscript code | Moved scheduled execution to `chrome.userScripts.execute` in `USER_SCRIPT` world with a `MAIN`-world fallback only, removed the scheduled `new Function` path, and pinned the isolation regression |
+| 61 | PublicAPI internal-host parity | `src/modules/public-api.ts`, `modules/public-api.js`, `background.js`, `tests/public-api.test.js`, `tests/source-hardening-parity.test.js` | Local audit found PublicAPI's private internal-host copy missing `.localhost`, TEST-NET, benchmarking, Class E, and IPv4-mapped IPv6 hex cases already enforced by `InternalHostGuard` | Reused the canonical `isInternalHost` guard for trusted origins, web install URLs, and webhook URLs, regenerated runtime artifacts, and pinned behavior/source parity regressions |
 
 ## Continuation State
 
-- **Current cycle:** Round 28 Cycle 60 closed the second deep-audit P0 security item. Scheduled `@crontab` scripts now prefer `chrome.userScripts.execute` in `USER_SCRIPT` world and fall back only to `chrome.scripting.executeScript` in `MAIN` world, so the prior scheduled `ISOLATED`/`new Function` extension-world path is gone. Focused crontab tests, TS runtime check, audit, full check suite, build, and CWS scan passed.
-- **Next implementation angle:** Cycle 61 should continue N-9 with the remaining P0 security closure: reconcile `PublicAPI.isInternalHost` with `InternalHostGuard` so trusted-origin install safety does not drift across code paths.
+- **Current cycle:** Round 29 Cycle 61 closed the final deep-audit P0 security item. PublicAPI now reuses the canonical `InternalHostGuard` host classifier for trusted origins, web install URLs, and webhook URLs, so `.localhost`, TEST-NET, benchmarking, Class E, and IPv4-mapped IPv6 hex hosts cannot drift from the main fetch guard. Focused PublicAPI/internal-host/source-parity tests, TS runtime check, audit, full check suite, build, and CWS scan passed.
+- **Next implementation angle:** Cycle 62 should return to N-1 Settings Schema Parity and Accessible Validation: audit the remaining dashboard-saved settings against schema metadata, then ship the next missing UI constraints and field-specific error text with focused dashboard a11y/schema coverage.
 - **Follow-up source checks:** Re-check CWS user-data/privacy expectations and File System Access handle persistence before editing local-save or local-workspace metadata.
 - **Suggested verification before implementation:** Run focused tests for setup-state banners, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching N-7, N-8, X-8, or X-9.
 

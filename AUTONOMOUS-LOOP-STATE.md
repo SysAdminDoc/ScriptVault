@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 60 - 2026-06-06
+Last cycle: Cycle 61 - 2026-06-06
 
 ## Latest Result
 
@@ -159,6 +159,11 @@ Last cycle: Cycle 60 - 2026-06-06
   `chrome.scripting.executeScript` in `MAIN` world, removing the prior scheduled
   `ISOLATED`/`new Function` extension-world path and pinning that boundary in
   the crontab regression suite.
+- Cycle 61 fixed N-9 EI-3 and completed the deep-audit P0 security lane.
+  PublicAPI now imports the canonical `isInternalHost` classifier from
+  `src/background/internal-host-guard.ts`, so trusted origins, web install URLs,
+  and webhook URLs share the same `.localhost`, TEST-NET, benchmarking, Class E,
+  and IPv4-mapped IPv6 hex blocking policy as the main remote-fetch guard.
 - Verification used the live checkout: focused CWS scanner tests,
   `npm run cws:remote-code:check`, `npm run check`, and `npm run build`.
   Cycles 48-52 were roadmap-only and verified by repo/code inspection plus external
@@ -196,24 +201,27 @@ Last cycle: Cycle 60 - 2026-06-06
   remote-code scan. Cycle 60 continued that local deep-audit plan, then verified
   the `@crontab` execution-world hardening with focused crontab tests, TS
   runtime generation/check, high-severity audit, full check suite, build, CWS
+  remote-code scan, and `git diff --check`. Cycle 61 completed that local
+  deep-audit security lane, then verified PublicAPI internal-host parity with
+  focused PublicAPI/internal-host/source-parity tests, TS runtime
+  generation/check, high-severity audit, full check suite, build, CWS
   remote-code scan, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 28. The next best local cycle is Cycle 61:
-continue N-9 with the remaining P0 security closure. Start with the PublicAPI
-internal-host guard drift from `docs/research-deep-audit-2026-06-06.md`, compare
-`modules/public-api.js` / `src/modules/public-api.ts` against
-`src/background/internal-host-guard.ts`, and make trusted-origin install safety
-reuse the same canonical internal-host policy. The live two-tab
-`GM_addValueChangeListener` smoke remains browser-profile gated until
-`chrome.userScripts` is enabled for the unpacked extension, AMO submission
-remains blocked on maintainer credentials, and Edge Partner Center upload/REST
-automation remain credential/listing gated.
+Continue from `ROADMAP.md` Round 29. The next best local cycle is Cycle 62:
+return to N-1 Settings Schema Parity and Accessible Validation. Start by
+auditing remaining dashboard-saved settings against `src/config/settings-schema.json`
+metadata and `pages/dashboard.html` controls, then ship the next missing UI
+constraints and field-specific error text with focused dashboard a11y/schema
+coverage. The live two-tab `GM_addValueChangeListener` smoke remains
+browser-profile gated until `chrome.userScripts` is enabled for the unpacked
+extension, AMO submission remains blocked on maintainer credentials, and Edge
+Partner Center upload/REST automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 60 complete for 2026-06-06; roadmap continuation
-  points to Cycle 61 deep-audit P0 security closure.
+- Status: ScriptVault Cycle 61 complete for 2026-06-06; roadmap continuation
+  points to Cycle 62 N-1 settings validation continuation.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

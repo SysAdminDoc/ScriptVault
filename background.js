@@ -11804,6 +11804,55 @@ const PublicAPI = (() => {
     default: () => public_api_default
   });
   module.exports = __toCommonJS(public_api_exports);
+
+  // src/background/internal-host-guard.ts
+  function isInternalIPv4(ip) {
+    const parts = ip.split(".").map((p) => parseInt(p, 10));
+    if (parts.length !== 4 || parts.some((p) => !Number.isFinite(p) || p < 0 || p > 255)) return true;
+    const [a, b, c, d] = parts;
+    if (a === 0) return true;
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a === 192 && b === 0 && c === 2) return true;
+    if (a === 198 && b === 51 && c === 100) return true;
+    if (a === 203 && b === 0 && c === 113) return true;
+    if (a === 198 && (b === 18 || b === 19)) return true;
+    if (a >= 240) return true;
+    return false;
+  }
+  function isInternalHost(rawHost) {
+    if (typeof rawHost !== "string" || !rawHost) return true;
+    let h = rawHost.toLowerCase();
+    if (h.startsWith("[") && h.endsWith("]")) h = h.slice(1, -1);
+    if (h === "localhost" || h === "localhost.localdomain" || h === "ip6-localhost" || h === "ip6-loopback" || h.endsWith(".localhost")) {
+      return true;
+    }
+    if (h.includes(":")) {
+      if (h === "::1" || h === "::" || h === "::0" || h === "0:0:0:0:0:0:0:0" || h === "0:0:0:0:0:0:0:1") return true;
+      if (/^fe[89ab][0-9a-f]?:/.test(h)) return true;
+      if (/^f[cd][0-9a-f]{0,2}:/.test(h)) return true;
+      const v4MappedDotted = h.match(/^::ffff:([0-9.]+)$/);
+      if (v4MappedDotted) return isInternalIPv4(v4MappedDotted[1]);
+      const v4MappedHex = h.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+      if (v4MappedHex) {
+        const hi = parseInt(v4MappedHex[1], 16);
+        const lo = parseInt(v4MappedHex[2], 16);
+        const dotted = [hi >> 8 & 255, hi & 255, lo >> 8 & 255, lo & 255].join(".");
+        return isInternalIPv4(dotted);
+      }
+      return false;
+    }
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) {
+      return isInternalIPv4(h);
+    }
+    return false;
+  }
+
+  // src/modules/public-api.ts
   var API_VERSION = "1.0.0";
   var STORAGE_KEY_PERMS = "publicapi_permissions";
   var STORAGE_KEY_AUDIT = "publicapi_audit";
@@ -11829,43 +11878,6 @@ const PublicAPI = (() => {
   var SCRIPT_SIZE_ERROR = "Script file exceeds maximum allowed size (5 MB)";
   function getRuntimeHooks() {
     return globalThis;
-  }
-  function isInternalIPv4(ip) {
-    const parts = ip.split(".").map((part) => parseInt(part, 10));
-    if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part) || part < 0 || part > 255)) {
-      return true;
-    }
-    const [a, b, c, d] = parts;
-    if (a === 0) return true;
-    if (a === 10) return true;
-    if (a === 127) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true;
-    if (a === 255 && b === 255 && c === 255 && d === 255) return true;
-    return false;
-  }
-  function isInternalHost(rawHost) {
-    if (!rawHost || typeof rawHost !== "string") return true;
-    let host = rawHost.toLowerCase();
-    if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
-    if (host === "localhost" || host === "localhost.localdomain" || host === "ip6-localhost" || host === "ip6-loopback") {
-      return true;
-    }
-    if (host.includes(":")) {
-      if (host === "::1" || host === "::" || host === "::0" || host === "0:0:0:0:0:0:0:0" || host === "0:0:0:0:0:0:0:1") {
-        return true;
-      }
-      if (/^fe[89ab][0-9a-f]?:/.test(host)) return true;
-      if (/^f[cd][0-9a-f]{0,2}:/.test(host)) return true;
-      const v4Mapped = host.match(/^::ffff:([0-9.]+)$/);
-      return v4Mapped ? isInternalIPv4(v4Mapped[1]) : false;
-    }
-    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
-      return isInternalIPv4(host);
-    }
-    return false;
   }
   function normalizeTrustedOrigin(origin) {
     if (typeof origin !== "string") throw new Error("Trusted origin must be a string");
@@ -11951,7 +11963,9 @@ const PublicAPI = (() => {
     const host = parsed.hostname || "";
     if (!host) return "empty hostname";
     if (!isInternalHost(host)) return null;
-    if (host === "localhost" || host.endsWith(".localdomain")) return "localhost alias";
+    if (host === "localhost" || host.endsWith(".localdomain") || host === "ip6-localhost" || host === "ip6-loopback" || host.endsWith(".localhost")) {
+      return "localhost alias";
+    }
     if (host.includes(":")) return "IPv6 loopback/internal";
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return "IPv4 private/loopback/CGNAT";
     return "internal host";

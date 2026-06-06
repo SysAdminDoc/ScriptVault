@@ -109,6 +109,15 @@ describe('source hardening parity guards', () => {
     expect(providers).toContain('assertSyncResponseAllowed(response, guardOptions);');
   });
 
+  it('keeps PublicAPI trusted-origin and install URL checks on the canonical internal-host guard', () => {
+    const publicApi = source('src/modules/public-api.ts');
+    expect(publicApi).toContain("import { isInternalHost } from '../background/internal-host-guard';");
+    expect(publicApi).not.toContain('function isInternalIPv4(');
+    expect(publicApi).not.toContain('function isInternalHost(');
+    expect(publicApi).toContain('if (!parsed.hostname || isInternalHost(parsed.hostname))');
+    expect(publicApi).toContain('if (isInternalHost(parsedUrl.hostname))');
+  });
+
   it('keeps portable settings exports from carrying sync credentials by default', () => {
     const core = source('src/background/core.ts');
     const importExport = source('src/background/import-export.ts');

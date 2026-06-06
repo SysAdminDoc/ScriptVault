@@ -2,6 +2,18 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 61 PublicAPI internal-host parity: N-9 EI-3 is closed and
+the full deep-audit P0 security lane is complete. The deep audit found that
+PublicAPI maintained a private `isInternalHost` copy that lagged
+`InternalHostGuard`, leaving trusted origins and browser-mediated install URLs
+with weaker SSRF protection. `src/modules/public-api.ts` now imports the
+canonical `isInternalHost` from `src/background/internal-host-guard.ts`, and
+the generated `modules/public-api.js`/`background.js` artifacts carry that
+same policy. Focused regressions now prove trusted origins, web install URLs,
+and webhooks reject `.localhost`, TEST-NET, benchmarking, Class E, and
+IPv4-mapped IPv6 hex hosts, and `tests/source-hardening-parity.test.js` keeps
+PublicAPI from reintroducing a private classifier.
+
 2026-06-06 Cycle 60 crontab execution isolation: N-9 EI-2 is closed. The
 deep audit found that scheduled `@crontab` scripts were executed with
 `chrome.scripting.executeScript` in `ISOLATED` world, which can give
