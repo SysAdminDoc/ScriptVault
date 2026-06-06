@@ -5133,6 +5133,26 @@
         };
     }
 
+    function sanitizeLocalHealthForSupportSnapshot(report, options = {}) {
+        if (report?.schema !== 'scriptvault-local-health/v1') return undefined;
+        const sanitized = {
+            ...report,
+            privacy: {
+                ...(report.privacy || {}),
+                includesScriptSource: false,
+                includesScriptNames: false,
+                includesUrls: false,
+                includesFileHandles: false,
+                includesLocalPaths: false,
+                includesExternalBeacons: false
+            }
+        };
+        if (!options.includeLocalWorkspace) {
+            delete sanitized.localWorkspace;
+        }
+        return sanitized;
+    }
+
     async function buildAndDownloadSupportSnapshot(enabledCategories) {
         if (elements.supportSnapshotStatus) {
             elements.supportSnapshotStatus.textContent = 'Collecting diagnostics…';
@@ -5244,7 +5264,9 @@
                         .map(c => ({ id: c.id, label: c.label, sensitive: !!c.sensitive }))
                 },
                 runtime: runtimeStatus,
-                localHealth: localHealthReport?.schema === 'scriptvault-local-health/v1' ? localHealthReport : undefined,
+                localHealth: sanitizeLocalHealthForSupportSnapshot(localHealthReport, {
+                    includeLocalWorkspace: enabledCategories.has('scriptInventory')
+                }),
                 counts: enabledCategories.has('counts') ? {
                     scripts: state.scripts.length,
                     enabledScripts: state.scripts.filter(script => script.enabled !== false).length,

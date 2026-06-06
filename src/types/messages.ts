@@ -254,6 +254,8 @@ interface LocalHealthReportResponse {
     includesScriptSource: boolean;
     includesScriptNames: boolean;
     includesUrls: boolean;
+    includesFileHandles: boolean;
+    includesLocalPaths: boolean;
     includesExternalBeacons: boolean;
   };
   runtime: {
@@ -316,6 +318,20 @@ interface LocalHealthReportResponse {
     };
     slowScriptThresholdMs: number;
     staleRemoteThresholdDays: number;
+  };
+  localWorkspace: {
+    available: boolean;
+    totalBindings: number;
+    boundScripts: number;
+    permissionStates: Record<'granted' | 'prompt' | 'denied' | 'unknown', number>;
+    refreshStatuses: Record<string, number>;
+    errorStates: Record<string, number>;
+    refreshedBindings: number;
+    neverRefreshed: number;
+    staleRefreshes: number;
+    staleRefreshThresholdDays: number;
+    mostRecentRefreshAgeDays: number | null;
+    oldestRefreshAgeDays: number | null;
   };
   updates: {
     pendingUpdates: number;

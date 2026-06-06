@@ -103,6 +103,14 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(dashboardJs).not.toMatch(/backgroundRunnerDryRuns[\s\S]{0,900}\bcode\b/);
   });
 
+  it('local workspace health is stripped unless script inventory is enabled', () => {
+    expect(dashboardJs).toContain('function sanitizeLocalHealthForSupportSnapshot(report, options = {})');
+    expect(dashboardJs).toContain('delete sanitized.localWorkspace');
+    expect(dashboardJs).toMatch(/includeLocalWorkspace:\s*enabledCategories\.has\('scriptInventory'\)/);
+    expect(dashboardJs).toContain('includesFileHandles: false');
+    expect(dashboardJs).toContain('includesLocalPaths: false');
+  });
+
   it('script inventory omits local workspace handles and absolute paths', () => {
     const block = dashboardJs.match(/snapshot\.scripts = state\.scripts\.map\(script => \{[\s\S]*?\n\s*\}\);/);
     expect(block).toBeTruthy();

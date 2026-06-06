@@ -35,6 +35,22 @@ describe('local health report background action', () => {
     expect(block[0]).not.toMatch(/\bfetch\s*\(/);
   });
 
+  it('summarizes local workspace bindings without file handles, paths, or script identifiers', () => {
+    const block = backgroundCoreTs.match(/function buildLocalWorkspaceHealthSummary\(bindings = \[\]\) \{[\s\S]*?\n\}/);
+    expect(block).toBeTruthy();
+    expect(backgroundCoreTs).toContain('LocalWorkspaceBindings.list()');
+    expect(backgroundCoreTs).toContain('localWorkspace,');
+    expect(backgroundCoreTs).toContain('permissionStates');
+    expect(backgroundCoreTs).toContain('refreshStatuses');
+    expect(backgroundCoreTs).toContain('errorStates');
+    expect(backgroundCoreTs).toContain('staleRefreshThresholdDays');
+    expect(backgroundCoreTs).toContain("push('localWorkspacePermissionDenied', 'warning'");
+    expect(backgroundCoreTs).toContain("push('localWorkspaceRefreshErrors', 'warning'");
+    expect(backgroundCoreTs).toContain('includesFileHandles: false');
+    expect(backgroundCoreTs).toContain('includesLocalPaths: false');
+    expect(block[0]).not.toMatch(/displayName|bindingId|handle|absolutePath|lastKnownSha256/);
+  });
+
   it('summarizes dormant background-script planner state without script identifiers', () => {
     expect(backgroundCoreTs).toContain('function planBackgroundScript(script, settings = {})');
     expect(backgroundCoreTs).toContain('backgroundScripts: {');
@@ -71,6 +87,8 @@ describe('local health report background action', () => {
     expect(backgroundCoreTs).toMatch(/includesScriptSource:\s*false/);
     expect(backgroundCoreTs).toMatch(/includesScriptNames:\s*false/);
     expect(backgroundCoreTs).toMatch(/includesUrls:\s*false/);
+    expect(backgroundCoreTs).toMatch(/includesFileHandles:\s*false/);
+    expect(backgroundCoreTs).toMatch(/includesLocalPaths:\s*false/);
     expect(backgroundCoreTs).toMatch(/includesExternalBeacons:\s*false/);
   });
 });
@@ -78,7 +96,7 @@ describe('local health report background action', () => {
 describe('local health report support snapshot wiring', () => {
   it('adds the aggregate health report to the always-on support snapshot runtime payload', () => {
     expect(dashboardJs).toContain("chrome.runtime.sendMessage({ action: 'getLocalHealthReport' })");
-    expect(dashboardJs).toMatch(/localHealth:\s*localHealthReport\?\.schema === 'scriptvault-local-health\/v1' \? localHealthReport : undefined/);
+    expect(dashboardJs).toMatch(/localHealth:\s*sanitizeLocalHealthForSupportSnapshot\(localHealthReport/);
   });
 
   it('types the action and response map for background callers', () => {
@@ -87,6 +105,8 @@ describe('local health report support snapshot wiring', () => {
     expect(messagesTs).toMatch(/registration:\s*\{[\s\S]{0,500}schema: 'scriptvault-registration-sweep\/v1';/);
     expect(messagesTs).toMatch(/registration:\s*\{[\s\S]{0,700}failedScripts: number;/);
     expect(messagesTs).toMatch(/backgroundScripts:\s*\{[\s\S]{0,300}unsupportedGrantNames: string\[\];/);
+    expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,300}totalBindings: number;/);
+    expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,700}refreshStatuses: Record<string, number>;/);
     expect(messagesTs).toMatch(/GetExtensionStatus \| GetLocalHealthReport/);
     expect(messagesTs).toMatch(/getLocalHealthReport: LocalHealthReportResponse;/);
   });
