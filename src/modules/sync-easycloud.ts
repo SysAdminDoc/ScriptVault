@@ -317,6 +317,7 @@ const SYNC_SAFE_SCRIPT_SETTING_KEYS = new Set<string>([
   'userExcludes',
   'pinned',
   'perfBudget',
+  'syncValues',
   'tags',
 ]);
 

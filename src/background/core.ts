@@ -57,6 +57,7 @@ const SYNC_SAFE_SCRIPT_SETTING_KEYS = new Set([
   'userConfig',
   'pinned',
   'perfBudget',
+  'syncValues',
   'tags',
 ]);
 

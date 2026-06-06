@@ -41,6 +41,15 @@ export type { InternalHostCheckResult, InternalHostReason } from './internal-hos
 export { createScriptTrustReceipt, sha256Hex } from './trust-receipt';
 
 export { CloudSync } from './cloud-sync';
+export {
+  GM_VALUE_SYNC_MAX_KEY_BYTES,
+  GM_VALUE_SYNC_MAX_KEYS,
+  GM_VALUE_SYNC_MAX_SCRIPT_BYTES,
+  GM_VALUE_SYNC_SCHEMA,
+  buildGmValueSyncBundle,
+  shouldSyncScriptValues,
+} from './gm-value-sync';
+export type { GmValueSyncBuildResult, GmValueSyncBundle } from './gm-value-sync';
 
 export {
   exportAllScripts,

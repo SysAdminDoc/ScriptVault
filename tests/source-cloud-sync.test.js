@@ -272,6 +272,7 @@ describe('source cloud sync module', () => {
           settings: {
             runAt: 'document-idle',
             notes: 'local note',
+            syncValues: true,
             userModified: false,
             sourceIdentityChanged: true,
             _failedRequires: ['https://cdn.example.com/missing.js'],
@@ -293,6 +294,7 @@ describe('source cloud sync module', () => {
             position: 0,
             settings: {
               runAt: 'document-start',
+              syncValues: true,
               userMatches: ['https://example.com/*'],
               userModified: true,
               mergeConflict: true,
@@ -329,8 +331,11 @@ describe('source cloud sync module', () => {
     expect(provider.upload).toHaveBeenCalled();
     expect(uploaded.scripts[0].settings).toEqual({
       runAt: 'document-start',
+      syncValues: true,
       userMatches: ['https://example.com/*'],
     });
+    expect(uploaded.scripts[0]).not.toHaveProperty('values');
+    expect(uploaded.scripts[0]).not.toHaveProperty('storage');
     expect(JSON.stringify(uploaded)).not.toContain('binding-local');
     expect(JSON.stringify(uploaded)).not.toContain('secret\\\\local.user.js');
   });
