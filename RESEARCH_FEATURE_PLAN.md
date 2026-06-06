@@ -723,7 +723,7 @@ Important integrations, permissions, storage, and data flows:
     wiring, dependency-policy documentation, and focused pass/fail fixtures.
   - Verify: scanner pass today; fixture optional import fails.
 
-- [ ] P2 - Complete GM namespace parity and GM.fetch decision
+- [x] P2 - Complete GM namespace parity and GM.fetch decision
   - Why: callback APIs outnumber `GM.*` aliases and compatibility drift is
     likely for TM/VM scripts.
   - Evidence: `src/background/wrapper-builder.ts` alias/export map; TM/VM docs.
@@ -732,6 +732,10 @@ Important integrations, permissions, storage, and data flows:
   - Acceptance: alias parity is generated or table-driven; `GM.cookie` and
     `GM.cookies` are intentional; `GM.fetch` reuses existing guarded network
     policy or is explicitly deferred with docs.
+  - Status: Shipped 2026-06-06 with direct promise aliases for the missing
+    namespace helpers, singular/plural cookie coverage, generated GM types,
+    `docs/gm-namespace-parity.md`, and focused parity/type tests. `GM.fetch`
+    is explicitly deferred until the guarded network contract is implemented.
   - Verify: alias/type tests, grant tests, network-policy tests,
     `npm run gm-types:check`, `npm run readme:check`.
 

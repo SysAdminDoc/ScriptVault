@@ -11644,6 +11644,7 @@ ${req.code}
     setValues: (vals) => Promise.resolve(GM_setValues(vals)),
     deleteValues: (keys) => Promise.resolve(GM_deleteValues(keys)),
     addStyle: (css) => Promise.resolve(GM_addStyle(css)),
+    addElement: (...args) => Promise.resolve(GM_addElement(...args)),
     xmlHttpRequest: (d) => {
       let control;
       const promise = new Promise((res, rej) => {
@@ -11661,11 +11662,15 @@ ${req.code}
     notification: (d, ondone) => Promise.resolve(GM_notification(d, ondone)),
     setClipboard: (t, type) => Promise.resolve(GM_setClipboard(t, type)),
     openInTab: (u, o) => Promise.resolve(GM_openInTab(u, o)),
+    focusTab: () => Promise.resolve(GM_focusTab()),
     download: (d) => Promise.resolve(GM_download(d)),
+    head: (url, callback) => Promise.resolve(GM_head(url, callback)),
+    log: (...args) => Promise.resolve(GM_log(...args)),
     getResourceText: (n) => GM_getResourceText(n),
     getResourceUrl: (n) => GM_getResourceURL(n),
     registerMenuCommand: (c, cb, o) => Promise.resolve(GM_registerMenuCommand(c, cb, o)),
     unregisterMenuCommand: (id) => Promise.resolve(GM_unregisterMenuCommand(id)),
+    getMenuCommands: () => Promise.resolve(GM_getMenuCommands()),
     addValueChangeListener: (k, cb) => Promise.resolve(GM_addValueChangeListener(k, cb)),
     removeValueChangeListener: (id) => Promise.resolve(GM_removeValueChangeListener(id)),
     getTab: () => new Promise(r => GM_getTab(r)),
@@ -11676,6 +11681,20 @@ ${req.code}
       list: (d) => new Promise((res, rej) => GM_cookie.list(d, (cookies, err) => err ? rej(err) : res(cookies))),
       set: (d) => new Promise((res, rej) => GM_cookie.set(d, (err) => err ? rej(err) : res())),
       delete: (d) => new Promise((res, rej) => GM_cookie.delete(d, (err) => err ? rej(err) : res()))
+    },
+    cookie: {
+      list: (d) => new Promise((res, rej) => GM_cookie.list(d, (cookies, err) => err ? rej(err) : res(cookies))),
+      set: (d) => new Promise((res, rej) => GM_cookie.set(d, (err) => err ? rej(err) : res())),
+      delete: (d) => new Promise((res, rej) => GM_cookie.delete(d, (err) => err ? rej(err) : res()))
+    },
+    webRequest: (rules, listener) => Promise.resolve(GM_webRequest(rules, listener)),
+    get audio() {
+      return {
+        setMute: (details) => new Promise((resolve, reject) => GM_audio.setMute(details, err => err ? reject(err) : resolve())),
+        getState: () => new Promise((resolve, reject) => GM_audio.getState((state, err) => err ? reject(err) : resolve(state))),
+        addStateChangeListener: (listener) => new Promise((resolve, reject) => GM_audio.addStateChangeListener(listener, err => err ? reject(err) : resolve())),
+        removeStateChangeListener: (listener) => new Promise((resolve, reject) => GM_audio.removeStateChangeListener(listener, err => err ? reject(err) : resolve()))
+      };
     }
   };
 

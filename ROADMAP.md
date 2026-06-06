@@ -718,12 +718,20 @@ Priorities/sizes preserve the source labels.
   - Why: listener exists but cross-tab firing and VM's 5th `remote` arg are unverified (needs live validation).
   - Acceptance: two-tab test — write in A, listener in B fires with `remote=true`.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-6.
-- [ ] P3 — `GM.*` namespace completeness + `GM.fetch`
+- [x] P3 — `GM.*` namespace completeness + `GM.fetch`
   - Why: `src/background/wrapper-builder.ts` currently defines 34 `window.GM_*` exports but only 25 top-level `GM.*` properties. Existing callback APIs have no promise namespace alias for `GM.addElement`, `GM.audio`, `GM.cookie`, `GM.focusTab`, `GM.getMenuCommands`, `GM.head`, `GM.log`, and `GM.webRequest`; the wrapper exposes plural `GM.cookies` while grant/permission code already accepts singular `GM.cookie`; and no `GM.fetch` / `GM_fetch` path exists. Violentmonkey documents Greasemonkey4-compatible `GM.*` aliases, Tampermonkey documents `GM.xmlHttpRequest` as the promise form with `@connect`, and ScriptVault's existing `GM_xmlhttpRequest` handler already enforces `@connect` plus pre/post internal-host checks, so namespace parity should be generated and fetch-shaped behavior must reuse that policy.
   - Evidence: `src/background/wrapper-builder.ts:1328-1393`; `src/background/wrapper-builder.ts:1393-1592`; `src/background/core.ts:5635-5778`; `tests/gm-types.test.js:79-124`; `tests/install-optional-permissions.test.js:81-93`; Violentmonkey GM API (`https://violentmonkey.github.io/api/gm/`); Tampermonkey GM_xmlhttpRequest docs (`https://www.tampermonkey.net/documentation.php?ext=d2&q=GM_xmlhttpRequest`); Tampermonkey GM.fetch proposal/streaming discussion (`https://github.com/Tampermonkey/tampermonkey/issues/1278`).
   - Touches: `src/background/wrapper-builder.ts`, generated `background.core.js`, GM type declarations/tests, optional-permission grant mapping, README/API docs, and network-policy tests if `GM.fetch` is added.
   - Acceptance: a wrapper parity test derives the `GM.*` namespace from the available `GM_*` table or an explicit alias map and fails on future drift; all shipped callback APIs either expose a documented promise alias or are explicitly classified as callback-only/non-aliasable; `GM.cookie` and `GM.cookies` compatibility is intentional and tested; any `GM.fetch` alias returns a documented fetch-like result while enforcing the same `@connect`, host-scope, abort, redirect, and internal-host behavior as `GM_xmlhttpRequest`.
   - Verify: focused wrapper/type tests for each added alias; a grant-mapping test for singular/plural cookie aliases; network tests proving denied `@connect`, internal-host preflight, and redirect-to-internal-host failures apply to `GM.fetch`; `npm run readme:check`.
+  - Progress: 2026-06-06 added promise aliases for `GM.addElement`,
+    `GM.audio`, singular `GM.cookie`, `GM.focusTab`, `GM.getMenuCommands`,
+    `GM.head`, `GM.log`, and `GM.webRequest` in the authoritative core source
+    and wrapper mirror. Ambient GM types now expose the aliases, generated
+    runtime artifacts are updated, and `tests/gm-namespace-parity.test.js`
+    pins alias drift plus the documented `GM.fetch` deferral. `GM.fetch`
+    remains intentionally unshipped until a fetch-shaped API can reuse the full
+    guarded `GM_xmlhttpRequest` network contract.
   - Source: docs/archive/RESEARCH_FEATURE_PLAN_PASS3.md EI-7.
 
 <!-- Append future research-driven items here, preserving Source pointers. -->

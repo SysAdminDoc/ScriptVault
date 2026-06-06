@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 31 - 2026-06-06
+Last cycle: Cycle 32 - 2026-06-06
 
 ## Latest Result
 
@@ -31,16 +31,18 @@ Last cycle: Cycle 31 - 2026-06-06
   validation error-node wiring.
 - Cycle 31 closed the Settings discoverability/validation roadmap row after an
   acceptance recheck.
-- Verification used the live checkout: focused settings schema coverage,
-  `npm run settings:schema:check`, `npm run check`, and `npm run build`.
+- Cycle 32 shipped GM namespace alias parity and documented the `GM.fetch`
+  deferral until the guarded network contract is implemented.
+- Verification used the live checkout: focused GM parity/type checks,
+  `npm run gm-types:check`, `npm run ts-runtime:check`, `npm run check`, and
+  `npm run build`.
 
 ## Next Cycle Focus
 
 Continue top-down from `ROADMAP.md`. The next local implementer-actionable work
-is the GM namespace parity and guarded `GM.fetch` decision row: table-driven
-alias parity, explicit callback-only classifications, cookie singular/plural
-coverage, and a conservative fetch-shaped decision that reuses existing guarded
-network policy if implemented.
+is the `GM_addValueChangeListener` `remote` flag and cross-tab fan-out row:
+prove the two-tab behavior with live validation or add the closest reliable
+automated coverage if the browser path is unavailable.
 
 ## Loop Pointer
 
