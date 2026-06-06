@@ -66,7 +66,7 @@ describe('dashboard local workspace binding', () => {
     expect(dashboardJs).toContain("typeof window.showOpenFilePicker === 'function'");
     expect(dashboardJs).toContain("typeof indexedDB !== 'undefined'");
     expect(dashboardJs).toContain("const LOCAL_WORKSPACE_DB_NAME = 'scriptvault'");
-    expect(dashboardJs).toContain('const LOCAL_WORKSPACE_DB_VERSION = 2');
+    expect(dashboardJs).toContain('const LOCAL_WORKSPACE_DB_VERSION = 3');
     expect(dashboardJs).toContain("const LOCAL_WORKSPACE_STORE = 'localWorkspaceBindings'");
     expect(dashboardJs).toContain('const LOCAL_WORKSPACE_MAX_SCRIPT_BYTES = 5 * 1024 * 1024');
     expect(dashboardJs).toContain("db.createObjectStore(LOCAL_WORKSPACE_STORE, { keyPath: 'bindingId' })");

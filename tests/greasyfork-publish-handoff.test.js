@@ -53,9 +53,12 @@ describe('Greasy Fork publish handoff preflight', () => {
     expect(defaultToolbarRule).toContain('flex-wrap: wrap');
 
     expect(dashboardJs).toContain("elements.tbtnPublishGreasyFork = document.getElementById('tbtnPublishGreasyFork')");
+    expect(dashboardJs).toContain("elements.infoPublicationReceipt = document.getElementById('infoPublicationReceipt')");
     expect(dashboardJs).toContain("runButtonTask(event.currentTarget, openGreasyForkPublishHandoff");
     expect(dashboardJs).toContain("showModal('Greasy Fork publish handoff'");
     expect(dashboardJs).not.toContain("action: 'publishGreasyFork'");
+
+    expect(dashboardHtml).toContain('id="infoPublicationReceipt"');
   });
 
   it('extracts existing Greasy Fork script IDs from script and update hosts', () => {
@@ -164,8 +167,9 @@ describe('Greasy Fork publish handoff preflight', () => {
   it('uses only a user-initiated form handoff for Greasy Fork publishing', () => {
     const submitFn = extractFunction(dashboardJs, 'submitGreasyForkPublishHandoff');
     const previewFn = extractFunction(dashboardJs, 'showGreasyForkPublishPreview');
+    const confirmationFn = extractFunction(dashboardJs, 'showGreasyForkPublicationConfirmation');
     const openFn = extractFunction(dashboardJs, 'openGreasyForkPublishHandoff');
-    const handoffSource = `${submitFn}\n${previewFn}\n${openFn}`;
+    const handoffSource = `${submitFn}\n${previewFn}\n${confirmationFn}\n${openFn}`;
 
     expect(submitFn).toContain("form.method = 'POST'");
     expect(submitFn).toContain('form.enctype = GREASY_FORK_PREFILL_FORM_ENCTYPE');
@@ -174,11 +178,87 @@ describe('Greasy Fork publish handoff preflight', () => {
     expect(submitFn).toContain("form.setAttribute('rel', 'noopener noreferrer')");
     expect(previewFn).toContain('downloadGreasyForkPublishCode(preflight)');
     expect(previewFn).toContain('navigator.clipboard.writeText(preflight.code)');
+    expect(previewFn).toContain('showGreasyForkPublicationConfirmation(preflight)');
+    expect(confirmationFn).toContain('recordGreasyForkSubmittedPublication(preflight)');
 
     expect(handoffSource).not.toMatch(/\bfetch\s*\(/);
     expect(handoffSource).not.toMatch(/XMLHttpRequest|GM_xmlhttpRequest/);
     expect(handoffSource).not.toMatch(/chrome\.runtime\.sendMessage/);
     expect(handoffSource).not.toMatch(/api\.greasyfork\.org/);
     expect(handoffSource).not.toMatch(/document\.cookie|csrf|credentials\s*:/i);
+  });
+
+  it('records local-only publication receipts without storing submitted code', () => {
+    const constantsStart = dashboardJs.indexOf('const GREASY_FORK_PREFILL_BASE_URL');
+    const functionsEnd = dashboardJs.indexOf('    function showGreasyForkPublishPreview', constantsStart);
+    const api = new Function(`
+      ${dashboardJs.slice(constantsStart, functionsEnd)}
+      return {
+        buildGreasyForkPublicationReceiptRecord,
+        summarizeGreasyForkPublicationReceipt
+      };
+    `)();
+
+    const preflight = {
+      ok: true,
+      scriptRecordId: 'script-1',
+      mode: 'update',
+      scriptId: '456',
+      targetUrl: 'https://greasyfork.org/en/scripts/456/versions/prefill',
+      code: 'console.log("do not persist");',
+      codeLength: 30,
+      metadata: {
+        name: 'Receipt Demo',
+        namespace: 'scriptvault/tests',
+        version: '1.2.3',
+        license: 'MIT',
+        updateURL: 'https://update.greasyfork.org/scripts/456/demo.meta.js',
+        downloadURL: 'https://update.greasyfork.org/scripts/456/demo.user.js'
+      }
+    };
+
+    const row = api.buildGreasyForkPublicationReceiptRecord(preflight, {
+      receiptId: 'receipt-1',
+      codeSha256: 'a'.repeat(64),
+      confirmedAt: 123,
+      createdAt: 123
+    });
+    const summary = api.summarizeGreasyForkPublicationReceipt(row);
+    const rebuilt = api.buildGreasyForkPublicationReceiptRecord(row, {
+      receiptId: row.receiptId,
+      scriptId: row.scriptId,
+      codeSha256: row.codeSha256,
+      confirmedAt: row.confirmedAt,
+      createdAt: row.createdAt
+    });
+
+    expect(row).toMatchObject({
+      receiptId: 'receipt-1',
+      scriptId: 'script-1',
+      kind: 'greasy-fork-publication',
+      status: 'submitted-confirmed',
+      mode: 'update',
+      greasyForkScriptId: '456',
+      targetUrl: 'https://greasyfork.org/en/scripts/456/versions/prefill',
+      codeLength: 30,
+      codeSha256: 'a'.repeat(64)
+    });
+    expect(summary).toMatchObject({
+      receiptId: 'receipt-1',
+      scriptId: 'script-1',
+      metadata: { name: 'Receipt Demo', version: '1.2.3' }
+    });
+    expect(rebuilt.greasyForkScriptId).toBe('456');
+
+    const serialized = JSON.stringify(row);
+    expect(serialized).not.toContain('do not persist');
+    expect(serialized).not.toMatch(/FileSystemFileHandle|\bhandle\b|absolutePath|localFilePath|document\.cookie|csrf|credentials/i);
+
+    expect(dashboardJs).toContain("const PUBLICATION_RECEIPTS_STORE = 'publicationReceipts'");
+    expect(dashboardJs).toContain('const MAX_PUBLICATION_RECEIPTS_PER_SCRIPT = 10');
+    expect(dashboardJs).toContain("db.createObjectStore(PUBLICATION_RECEIPTS_STORE, { keyPath: 'receiptId' })");
+    expect(dashboardJs).toContain("receipts.createIndex('by-script', 'scriptId', { unique: false })");
+    expect(dashboardJs).toContain('trimGreasyForkPublicationReceiptsForScript');
+    expect(dashboardJs).toContain('void refreshGreasyForkPublicationReceiptForScript(scriptId)');
   });
 });
