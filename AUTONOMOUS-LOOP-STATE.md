@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 82 - 2026-06-06
+Last cycle: Cycle 83 - 2026-06-06
 
 ## Latest Result
 
@@ -377,16 +377,21 @@ Last cycle: Cycle 82 - 2026-06-06
   refreshed current Chrome alarms guidance and verified subscription feed
   refresh scheduling with focused subscription/dashboard/schema tests, settings
   schema gate, TS runtime generation/check, high-severity audit, full check
-  suite, build, CWS remote-code scan, and `git diff --check`.
+  suite, build, CWS remote-code scan, and `git diff --check`. Cycle 83
+  refreshed File System Access stored-handle/permission guidance and verified
+  local workspace refresh status summaries with focused local-workspace,
+  storage, and support-redaction tests, TS runtime generation/check,
+  high-severity audit, full check suite, build, CWS remote-code scan, and
+  `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 40. Cycle 82 closed X-7 with subscription
-feed refresh scheduling, visible interval controls, and feed health labels. The
-next best local cycle is Cycle 83: continue X-8 by auditing local workspace
-refresh/watch acceptance gaps, especially dashboard state coverage for
-permission-reconnect, stale-handle, and review-only apply flows before adding
-runtime changes. The live two-tab
+Continue from `ROADMAP.md` Round 40. Cycle 83 continued X-8 with explicit local
+workspace refresh status summaries in the editor chip. The next best local
+cycle is Cycle 84: continue X-8 by adding aggregate support/local-health
+evidence for local workspace bindings, keeping handles and absolute paths out
+of exports while surfacing counts, permission states, and last refresh status.
+The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
 remains blocked on maintainer credentials, and Edge Partner Center upload/REST
@@ -394,8 +399,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 82 complete for 2026-06-06; roadmap continuation
-  points to Cycle 83 X-8 local workspace refresh/watch acceptance gaps or the
+- Status: ScriptVault Cycle 83 complete for 2026-06-06; roadmap continuation
+  points to Cycle 84 X-8 local workspace support/local-health evidence or the
   next local packaging audit.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

@@ -5251,7 +5251,8 @@ const StorageModule = (() => {
       createdAt,
       updatedAt,
       lastRefreshAt,
-      lastErrorKind
+      lastErrorKind,
+      lastStatusKind
     } = row;
     return {
       bindingId,
@@ -5264,7 +5265,8 @@ const StorageModule = (() => {
       createdAt,
       updatedAt,
       lastRefreshAt: lastRefreshAt ?? null,
-      lastErrorKind
+      lastErrorKind,
+      lastStatusKind
     };
   }
   var LocalWorkspaceBindingsDAO = {

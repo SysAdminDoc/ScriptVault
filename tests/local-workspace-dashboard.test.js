@@ -74,6 +74,7 @@ describe('dashboard local workspace binding', () => {
     const summarize = extractFunction(dashboardJs, 'summarizeDashboardLocalWorkspaceBinding');
     expect(summarize).not.toMatch(/\bhandle\b/);
     expect(summarize).not.toMatch(/absolutePath|localFilePath/);
+    expect(summarize).toContain('lastStatusKind');
   });
 
   it('calls showOpenFilePicker directly from the click handler before later async work', () => {
@@ -94,6 +95,7 @@ describe('dashboard local workspace binding', () => {
     expect(bindFn).not.toContain('state.editor.setValue');
     expect(bindFn).toContain('putDashboardLocalWorkspaceBinding');
     expect(bindFn).toContain('localWorkspaceBinding: summary');
+    expect(bindFn).toContain("lastStatusKind: 'bound'");
   });
 
   it('requests permission only from refresh and reviews changed files before saveScript', () => {
@@ -110,6 +112,25 @@ describe('dashboard local workspace binding', () => {
     expect(saveFn).toContain("operation: 'local-save'");
     expect(saveFn).toContain("sourceKind: 'local-file'");
     expect(saveFn).toContain('suppressMetadataSourceFallback: true');
+    expect(saveFn).toContain("lastStatusKind: 'applied'");
+    expect(refreshFn).toContain("lastStatusKind: 'unchanged'");
+    expect(refreshFn).toContain("lastStatusKind: 'review-cancelled'");
+    expect(refreshFn).toContain("lastErrorKind: 'permission-denied'");
+    expect(refreshFn).toContain("lastErrorKind: 'apply-failed'");
+  });
+
+  it('summarizes local workspace refresh status in the editor chip', () => {
+    const statusFn = extractFunction(dashboardJs, 'formatLocalWorkspaceRefreshStatus');
+    const controlsFn = extractFunction(dashboardJs, 'refreshLocalWorkspaceControls');
+
+    expect(statusFn).toContain("case 'applied': return 'applied'");
+    expect(statusFn).toContain("case 'unchanged': return 'unchanged'");
+    expect(statusFn).toContain("case 'review-cancelled': return 'review cancelled'");
+    expect(statusFn).toContain("case 'file-missing': return 'file missing'");
+    expect(statusFn).toContain("case 'handle-missing': return 'rebind needed'");
+    expect(statusFn).toContain("case 'load-failed': return 'status unavailable'");
+    expect(controlsFn).toContain('formatLocalWorkspaceRefreshStatus(binding)');
+    expect(controlsFn).toContain('Local: ${binding.displayName} (${permission}; ${refreshStatus}');
   });
 
   it('unbind removes only the local binding record', () => {

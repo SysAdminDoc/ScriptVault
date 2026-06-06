@@ -7477,7 +7477,8 @@
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
             lastRefreshAt: row.lastRefreshAt ?? null,
-            lastErrorKind: row.lastErrorKind || ''
+            lastErrorKind: row.lastErrorKind || '',
+            lastStatusKind: row.lastStatusKind || ''
         };
     }
 
@@ -7533,7 +7534,8 @@
             displayName: String(record.displayName || '').slice(0, 160),
             createdAt: record.createdAt || now,
             updatedAt: now,
-            lastRefreshAt: record.lastRefreshAt ?? null
+            lastRefreshAt: record.lastRefreshAt ?? null,
+            lastStatusKind: record.lastStatusKind || ''
         };
         await withDashboardLocalWorkspaceStore('readwrite', store => localWorkspaceRequest(store.put(row)));
         return summarizeDashboardLocalWorkspaceBinding(row);
@@ -7595,6 +7597,25 @@
         }
     }
 
+    function formatLocalWorkspaceRefreshStatus(binding) {
+        const kind = binding?.lastErrorKind || binding?.lastStatusKind || '';
+        switch (kind) {
+            case 'bound': return 'bound';
+            case 'applied': return 'applied';
+            case 'unchanged': return 'unchanged';
+            case 'review-cancelled': return 'review cancelled';
+            case 'permission-denied': return 'permission denied';
+            case 'file-missing': return 'file missing';
+            case 'handle-missing': return 'rebind needed';
+            case 'read-failed': return 'read failed';
+            case 'apply-failed': return 'apply failed';
+            case 'load-failed': return 'status unavailable';
+            case 'cancelled': return 'cancelled';
+            default:
+                return binding?.lastRefreshAt ? `checked ${formatTime(binding.lastRefreshAt)}` : 'not refreshed yet';
+        }
+    }
+
     function refreshLocalWorkspaceControls(script = getCurrentScript()) {
         const supported = isLocalWorkspaceFileAccessSupported();
         const tabData = script?.id ? ensureOpenTabStatus(script.id, script) : null;
@@ -7636,7 +7657,8 @@
         const permission = formatLocalWorkspacePermission(binding.permissionState);
         const size = typeof binding.lastKnownSize === 'number' ? `, ${formatBytes(binding.lastKnownSize)}` : '';
         const modified = binding.lastKnownModified ? `, modified ${formatTime(binding.lastKnownModified)}` : '';
-        const label = `Bound: ${binding.displayName} (${permission}${size}${modified})`;
+        const refreshStatus = formatLocalWorkspaceRefreshStatus(binding);
+        const label = `Local: ${binding.displayName} (${permission}; ${refreshStatus}${size}${modified})`;
         elements.editorLocalWorkspaceStatus.hidden = false;
         elements.editorLocalWorkspaceStatus.textContent = label;
         elements.editorLocalWorkspaceStatus.title = label;
@@ -7666,7 +7688,8 @@
                     createdAt: 0,
                     updatedAt: 0,
                     lastRefreshAt: null,
-                    lastErrorKind: 'load-failed'
+                    lastErrorKind: 'load-failed',
+                    lastStatusKind: ''
                 }
             }, state.scripts.find(s => s.id === scriptId) || null);
             if (scriptId === state.currentScriptId) refreshLocalWorkspaceControls();
@@ -7729,7 +7752,8 @@
                 createdAt: existing?.createdAt || Date.now(),
                 updatedAt: Date.now(),
                 lastRefreshAt: null,
-                lastErrorKind: ''
+                lastErrorKind: '',
+                lastStatusKind: 'bound'
             });
             patchOpenTabStatus(script.id, { localWorkspaceBinding: summary }, script);
             updateEditorHeader(script);
@@ -7879,7 +7903,8 @@
             lastKnownModified: fileMeta.lastKnownModified,
             permissionState: bindingSummary.permissionState || 'granted',
             lastRefreshAt: Date.now(),
-            lastErrorKind: ''
+            lastErrorKind: '',
+            lastStatusKind: 'applied'
         }, updatedScript);
         markScriptSaved(script.id, Date.now());
         updateStats();
@@ -7901,6 +7926,7 @@
                 localWorkspaceBinding: {
                     ...bindingSummary,
                     lastErrorKind: 'handle-missing',
+                    lastStatusKind: '',
                     updatedAt: Date.now()
                 }
             }, script);
@@ -7917,7 +7943,8 @@
             await updateLocalWorkspaceBindingAfterRefresh(bindingRecord, {
                 permissionState,
                 lastRefreshAt: Date.now(),
-                lastErrorKind: 'permission-denied'
+                lastErrorKind: 'permission-denied',
+                lastStatusKind: ''
             }, script);
             showToast('Local file permission was not granted', 'warning');
             return;
@@ -7931,7 +7958,8 @@
             await updateLocalWorkspaceBindingAfterRefresh(bindingRecord, {
                 permissionState,
                 lastRefreshAt: Date.now(),
-                lastErrorKind: errorKind
+                lastErrorKind: errorKind,
+                lastStatusKind: ''
             }, script);
             showToast(errorKind === 'file-missing' ? 'Local file is missing' : 'Failed to read local file', 'error');
             return;
@@ -7945,7 +7973,8 @@
                 lastKnownModified: fileRead.lastKnownModified,
                 permissionState,
                 lastRefreshAt: Date.now(),
-                lastErrorKind: ''
+                lastErrorKind: '',
+                lastStatusKind: 'unchanged'
             }, script);
             showToast('Local file unchanged', 'info');
             return;
@@ -7962,7 +7991,8 @@
                 lastKnownModified: fileRead.lastKnownModified,
                 permissionState,
                 lastRefreshAt: Date.now(),
-                lastErrorKind: 'review-cancelled'
+                lastErrorKind: '',
+                lastStatusKind: 'review-cancelled'
             }, script);
             showToast('Local file refresh cancelled', 'info');
             return;
@@ -7981,7 +8011,8 @@
                 lastKnownModified: fileRead.lastKnownModified,
                 permissionState,
                 lastRefreshAt: Date.now(),
-                lastErrorKind: 'apply-failed'
+                lastErrorKind: 'apply-failed',
+                lastStatusKind: ''
             }, script);
             showToast(error?.message || 'Failed to apply local file', 'error');
         }

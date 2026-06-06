@@ -2,6 +2,15 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 83 local workspace refresh status: X-8 now has clearer
+dashboard status for the review-only local-file refresh flow. Current File
+System Access guidance still supports storing handles in IndexedDB while
+re-checking permission before access, so the editor chip now distinguishes
+bound, unchanged, applied, review-cancelled, rebind-needed, file-missing,
+permission-denied, read-failed, and apply-failed states without exposing handles
+or absolute paths. The remaining X-8 gap is aggregate support/local-health
+evidence for binding counts, permission states, and last refresh status.
+
 2026-06-06 Cycle 82 subscription refresh scheduling: X-7 is complete. Current
 Chrome alarms guidance still supports `chrome.alarms` as the MV3-safe periodic
 work primitive, with same-name alarm replacement and a 30-second minimum
