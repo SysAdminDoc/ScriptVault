@@ -298,6 +298,7 @@ describe('LocalWorkspaceBindings', () => {
       updatedAt: 1,
       lastRefreshAt: null,
       lastErrorKind: 'permission-prompt',
+      lastStatusKind: 'bound',
     });
 
     expect(summary).toMatchObject({
@@ -306,6 +307,7 @@ describe('LocalWorkspaceBindings', () => {
       displayName: 'alpha.user.js',
       lastKnownSize: 128,
       permissionState: 'prompt',
+      lastStatusKind: 'bound',
     });
     expect(summary).not.toHaveProperty('handle');
     expect(summary).not.toHaveProperty('absolutePath');

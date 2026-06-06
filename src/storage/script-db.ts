@@ -77,6 +77,7 @@ export interface LocalWorkspaceBindingRecord {
   updatedAt: number;
   lastRefreshAt?: number | null;
   lastErrorKind?: string;
+  lastStatusKind?: string;
 }
 
 export interface LocalWorkspaceBindingSummary {
@@ -91,6 +92,7 @@ export interface LocalWorkspaceBindingSummary {
   updatedAt: number;
   lastRefreshAt?: number | null;
   lastErrorKind?: string;
+  lastStatusKind?: string;
 }
 
 function setRecordKey<T>(record: Record<string, T>, key: string, value: T): void {
@@ -324,6 +326,7 @@ function summarizeLocalWorkspaceBinding(row: LocalWorkspaceBindingRecord): Local
     updatedAt,
     lastRefreshAt,
     lastErrorKind,
+    lastStatusKind,
   } = row;
   return {
     bindingId,
@@ -337,6 +340,7 @@ function summarizeLocalWorkspaceBinding(row: LocalWorkspaceBindingRecord): Local
     updatedAt,
     lastRefreshAt: lastRefreshAt ?? null,
     lastErrorKind,
+    lastStatusKind,
   };
 }
 
