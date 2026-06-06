@@ -330,6 +330,21 @@ interface LocalHealthReportResponse {
     configuredInvalidEntries: number;
     cleanupEnabled: boolean;
     installedManagedScripts: number;
+    lastRun: null | {
+      schema: 'scriptvault-managed-policy-run/v1';
+      startedAt: string;
+      finishedAt: string;
+      status: 'not-configured' | 'applied' | 'partial' | 'failed' | 'pruned' | 'skipped' | 'unavailable';
+      policyReadStatus: 'unsupported' | 'not-configured' | 'readable' | 'unavailable' | 'error';
+      configuredEntries: number;
+      attemptedEntries: number;
+      installedEntries: number;
+      failedEntries: number;
+      skippedInvalidEntries: number;
+      prunedScripts: number;
+      pruneFailedScripts: number;
+      cleanupEnabled: boolean;
+    };
   };
   localWorkspace: {
     available: boolean;
