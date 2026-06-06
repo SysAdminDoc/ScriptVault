@@ -356,7 +356,12 @@
       "label": "Blacklisted Pages",
       "help": "Controls blacklisted pages.",
       "elementId": "settingsBlacklistedPages",
-      "default": ""
+      "default": "",
+      "validation": {
+        "kind": "pattern-line-list",
+        "regexLiterals": true,
+        "allowGlob": true
+      }
     },
     "blockSeverity": {
       "type": "number",
@@ -572,7 +577,12 @@
       "label": "Download Whitelist",
       "help": "Controls download whitelist.",
       "elementId": "settingsDownloadWhitelist",
-      "defaultSource": "runtime"
+      "defaultSource": "runtime",
+      "validation": {
+        "kind": "pattern-line-list",
+        "regexLiterals": true,
+        "allowPlainSuffix": true
+      }
     },
     "editorAutoCloseBrackets": {
       "type": "boolean",
@@ -1001,7 +1011,12 @@
       "label": "Manual Blacklist",
       "help": "Controls manual blacklist.",
       "elementId": "settingsManualBlacklist",
-      "defaultSource": "runtime"
+      "defaultSource": "runtime",
+      "validation": {
+        "kind": "pattern-line-list",
+        "regexLiterals": true,
+        "allowGlob": true
+      }
     },
     "modifyCSP": {
       "type": "string",
@@ -1521,7 +1536,12 @@
       "label": "Whitelisted Pages",
       "help": "Controls whitelisted pages.",
       "elementId": "settingsWhitelistedPages",
-      "default": ""
+      "default": "",
+      "validation": {
+        "kind": "pattern-line-list",
+        "regexLiterals": true,
+        "allowGlob": true
+      }
     },
     "wordWrap": {
       "type": "boolean",

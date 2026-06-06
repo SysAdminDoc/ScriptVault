@@ -6645,15 +6645,16 @@
                         <span class="label-text">Whitelisted Pages:</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsWhitelistedPages" placeholder="/https?:\/\/greasyfork\.org\/.*/" style="min-height: 100px; font-family: monospace;">/https?:\/\/greasyfork\.org\/.*/
+                        <textarea class="textarea-field" id="settingsWhitelistedPages" placeholder="/https?:\/\/greasyfork\.org\/.*/" style="min-height: 100px; font-family: monospace;" aria-describedby="settingsWhitelistedPagesError">/https?:\/\/greasyfork\.org\/.*/
 http://xkcd.com/970/
 /https?:\/\/chromewebstore\.google\.com\/.*/</textarea>
+                        <span class="setting-error" id="settingsWhitelistedPagesError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Blacklisted Pages:</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsBlacklistedPages" placeholder="*example.org/*" style="min-height: 120px; font-family: monospace;">*example.org/*
+                        <textarea class="textarea-field" id="settingsBlacklistedPages" placeholder="*example.org/*" style="min-height: 120px; font-family: monospace;" aria-describedby="settingsBlacklistedPagesError">*example.org/*
 *paypal.tld/*
 *stripe.com/*
 https://*deutsche-bank-24.tld/*
@@ -6662,6 +6663,7 @@ https://*bankofamerica.tld/*
 *://www.facebook.com/plugins/*
 *://platform.twitter.com/widgets/*
 https://vscode.dev/?connectTo=tampermonkey</textarea>
+                        <span class="setting-error" id="settingsBlacklistedPagesError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnSaveSecurity">Save</button>
@@ -6715,7 +6717,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <span class="label-text">Manual Userscript and @require Blacklist:</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsManualBlacklist" placeholder="/^https?:\/\/example\.com(:[0-9]{1,5})?\/.*/" style="min-height: 100px; font-family: monospace;">/^https?:\/\/example\.com(:[0-9]{1,5})?\/.*/ </textarea>
+                        <textarea class="textarea-field" id="settingsManualBlacklist" placeholder="/^https?:\/\/example\.com(:[0-9]{1,5})?\/.*/" style="min-height: 100px; font-family: monospace;" aria-describedby="settingsManualBlacklistError">/^https?:\/\/example\.com(:[0-9]{1,5})?\/.*/ </textarea>
+                        <span class="setting-error" id="settingsManualBlacklistError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnSaveBlackCheck">Save</button>
@@ -6741,7 +6744,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <span class="help-icon" title="Regex patterns for allowed file extensions">?</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsDownloadWhitelist" style="min-height: 180px; font-family: monospace;">/^[^\.].*$/
+                        <textarea class="textarea-field" id="settingsDownloadWhitelist" style="min-height: 180px; font-family: monospace;" aria-describedby="settingsDownloadWhitelistError">/^[^\.].*$/
 /\.(mp[34a]|m4[ab]|m3u|wma|wav|aac|og[ag]|cda|flac)$/
 /\.(avi|mkv|flv|divx|mpe?g|webm)$/
 /\.(jpe?g|jpe|png|gif|bmp|tiff?|webp|hei[cf]|avif|jxl|svg|eps|ai|ico|dds|psd|xcf|raw|cr2|nef|arw)$/
@@ -6752,6 +6755,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
 /\.(zip|tgz|tar|bin)$/
 /\.r(ar|[0-9]{2,2})$/
 .rss</textarea>
+                        <span class="setting-error" id="settingsDownloadWhitelistError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnSaveDownloads">Save</button>

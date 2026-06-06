@@ -434,6 +434,10 @@ describe("dashboard accessibility markup", () => {
       ["settingsS3Endpoint", "settingsS3EndpointError"],
       ["settingsDeniedHosts", "settingsDeniedHostsError"],
       ["settingsLinterConfig", "settingsLinterConfigError"],
+      ["settingsWhitelistedPages", "settingsWhitelistedPagesError"],
+      ["settingsBlacklistedPages", "settingsBlacklistedPagesError"],
+      ["settingsManualBlacklist", "settingsManualBlacklistError"],
+      ["settingsDownloadWhitelist", "settingsDownloadWhitelistError"],
     ];
 
     validatedFields.forEach(([fieldId, errorId]) => {
@@ -461,6 +465,11 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toContain("Use a whole number from 1,000 to 5,000,000 bytes.");
     expect(dashboardJs).toContain("Use an http or https URL.");
     expect(dashboardJs).toContain("Use valid JSON for the linter config.");
+    expect(dashboardJs).toMatch(/function validatePatternLineList/);
+    expect(dashboardJs).toMatch(/parseSettingsRegexLiteral\(line\)/);
+    expect(dashboardJs).toContain('Page pattern');
+    expect(dashboardJs).toContain('Blacklist pattern');
+    expect(dashboardJs).toContain('Download pattern');
     expect(dashboardJs).toMatch(/if \(!validation\.ok\) \{\s*setSettingsFieldError\(input, validation\.error\);/);
     expect(dashboardJs).toMatch(/elements\.settingsLintMaxSize\?\.addEventListener\('blur', e => saveSetting\('lintMaxSize', e\.target\.value\)\)/);
   });

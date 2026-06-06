@@ -45,8 +45,9 @@ Field-level validation has started on the highest-risk settings. Badge color,
 lint maximum size, WebDAV/S3 endpoint URLs, denied hosts, and linter JSON now
 have native constraints where applicable, text error nodes wired through
 `aria-describedby`, `aria-invalid`, `setCustomValidity()`, and a shared
-save-blocking validator in `pages/dashboard.js`.
+save-blocking validator in `pages/dashboard.js`. Page allowlist/blacklist,
+manual blacklist, and download whitelist text areas also expose text errors and
+block malformed regex literals or unsafe multiline entries before persistence.
 
-Remaining work: have the Settings UI consume this metadata directly and extend
-field-specific validation beyond the targeted high-risk fields to the
-allowlist/pattern text areas.
+Remaining work: have the Settings UI consume this metadata directly instead of
+keeping the schema as a checked inventory.

@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 28 - 2026-06-06
+Last cycle: Cycle 29 - 2026-06-06
 
 ## Latest Result
 
@@ -23,15 +23,18 @@ Last cycle: Cycle 28 - 2026-06-06
   size, WebDAV/S3 endpoint URLs, denied hosts, and linter JSON.
 - Cycle 28 added schema metadata for all classified visible settings plus
   dashboard-saved credential controls.
-- Verification used the live checkout: focused settings schema coverage,
+- Cycle 29 added accessible validation for Settings pattern-list text areas:
+  whitelisted pages, blacklisted pages, manual blacklist, and download
+  whitelist.
+- Verification used the live checkout: focused dashboard a11y coverage,
   `npm run settings:schema:check`, `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
 
 Continue top-down from `ROADMAP.md`. The next local implementer-actionable work
 is still in the Settings discoverability/validation row: consume the new schema
-metadata in the Settings UI where practical and add field-specific validation
-for allowlist/pattern text areas that still save raw text.
+metadata in the Settings UI where practical, so the schema becomes an active
+UI contract instead of only a checked inventory.
 
 ## Loop Pointer
 
