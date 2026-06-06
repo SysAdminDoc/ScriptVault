@@ -78,6 +78,35 @@ describe('@webRequest JSON validation', () => {
     expect(meta.webRequest[1].action.redirect).toBe('https://x.test/');
   });
 
+  it('accepts Chrome DNR response-header conditions and header mutation actions', () => {
+    const code = wrap([
+      [
+        'webRequest',
+        '{"selector":{"url":"||example.com","responseHeaders":[{"header":"content-type","values":["text/html*"]}],"excludedResponseHeaders":[{"header":"x-scriptvault-skip"}]},"action":{"setResponseHeaders":{"x-scriptvault":"matched","x-remove":null}}}',
+      ],
+    ]);
+    const { meta } = parseUserscript(code);
+    expect(meta.webRequest).toHaveLength(1);
+    expect(meta.webRequest[0].selector.responseHeaders[0]).toEqual({
+      header: 'content-type',
+      values: ['text/html*'],
+    });
+    expect(meta.webRequest[0].selector.excludedResponseHeaders[0]).toEqual({
+      header: 'x-scriptvault-skip',
+    });
+    expect(meta.webRequest[0].action.setResponseHeaders['x-scriptvault']).toBe('matched');
+    expect(meta.webRequest[0].action.setResponseHeaders['x-remove']).toBeNull();
+  });
+
+  it('drops malformed response-header conditions', () => {
+    const code = wrap([[
+      'webRequest',
+      '{"selector":{"include":["*://example.com/*"],"responseHeaders":[{"values":["missing-header"]}]},"action":"cancel"}',
+    ]]);
+    const { meta } = parseUserscript(code);
+    expect(meta.webRequest).toBeNull();
+  });
+
   it('drops entries that are not objects', () => {
     const code = wrap([['webRequest', '[null, 42, "string", {"action":"cancel"}]']]);
     const { meta } = parseUserscript(code);

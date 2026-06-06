@@ -120,6 +120,58 @@ const ARRAY_KEYS: ReadonlySet<string> = new Set<string>([
   'incompatible',
 ]);
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+}
+
+function isHeaderConditionArray(value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+  return value.every((entry) => {
+    if (!isPlainObject(entry)) return false;
+    if (typeof entry['header'] !== 'string' || !entry['header'].trim()) return false;
+    if (entry['values'] != null && !isStringArray(entry['values'])) return false;
+    if (entry['excludedValues'] != null && !isStringArray(entry['excludedValues'])) return false;
+    return true;
+  });
+}
+
+function isHeaderMutationMap(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  return Object.entries(value).every(([name, headerValue]) => (
+    !!name.trim() && (headerValue === null || typeof headerValue === 'string')
+  ));
+}
+
+function isRedirectTarget(value: unknown): boolean {
+  if (typeof value === 'string') return value.length > 0;
+  if (!isPlainObject(value)) return false;
+  return typeof value['url'] === 'string' || typeof value['regexSubstitution'] === 'string';
+}
+
+function isValidWebRequestAction(action: unknown): boolean {
+  if (typeof action === 'string') return action.length > 0;
+  if (!isPlainObject(action)) return false;
+  if (typeof action['cancel'] === 'boolean') return true;
+  if (action['redirect'] != null && isRedirectTarget(action['redirect'])) return true;
+  if (action['setRequestHeaders'] != null && isHeaderMutationMap(action['setRequestHeaders'])) return true;
+  if (action['setResponseHeaders'] != null && isHeaderMutationMap(action['setResponseHeaders'])) return true;
+  return false;
+}
+
+function isValidWebRequestSelector(selector: unknown): boolean {
+  if (selector == null || typeof selector === 'string') return true;
+  if (!isPlainObject(selector)) return false;
+  if (selector['include'] != null && !isStringArray(selector['include'])) return false;
+  if (selector['exclude'] != null && !isStringArray(selector['exclude'])) return false;
+  if (selector['responseHeaders'] != null && !isHeaderConditionArray(selector['responseHeaders'])) return false;
+  if (selector['excludedResponseHeaders'] != null && !isHeaderConditionArray(selector['excludedResponseHeaders'])) return false;
+  return true;
+}
+
 function parseAntifeatureDirective(value: string, locale = ''): ScriptAntifeature | null {
   const trimmed: string = value.trim();
   if (!trimmed) return null;
@@ -304,31 +356,11 @@ export function parseUserscript(code: string): ParseResult {
               const obj = entry as Record<string, unknown>;
               const action = obj['action'];
               const selector = obj['selector'];
-              // action: must be a string (e.g. 'cancel') or a shape with
-              // cancel:boolean / redirect:string. Anything else is dropped.
-              let validAction = false;
-              if (typeof action === 'string' && action.length > 0) {
-                validAction = true;
-              } else if (action && typeof action === 'object') {
-                const a = action as Record<string, unknown>;
-                const cancel = a['cancel'];
-                const redirect = a['redirect'];
-                if (typeof cancel === 'boolean' || typeof redirect === 'string') {
-                  validAction = true;
-                }
-              }
-              if (!validAction) continue;
-              // selector: must be an object with optional include/exclude
-              // string-array properties. Missing selector defaults to a
-              // catch-all wildcard rule, which is intentional per spec.
-              if (selector != null && typeof selector !== 'object') continue;
-              if (selector && typeof selector === 'object') {
-                const s = selector as Record<string, unknown>;
-                const include = s['include'];
-                const exclude = s['exclude'];
-                if (include != null && !Array.isArray(include)) continue;
-                if (exclude != null && !Array.isArray(exclude)) continue;
-              }
+              // action: string commands and reviewed DNR header mutation maps.
+              if (!isValidWebRequestAction(action)) continue;
+              // selector: URL/include/exclude filters plus Chrome 128+
+              // responseHeaders/excludedResponseHeaders HeaderInfo arrays.
+              if (!isValidWebRequestSelector(selector)) continue;
               validated.push(entry as WebRequestRule);
             }
             meta.webRequest = validated.length > 0 ? validated : null;

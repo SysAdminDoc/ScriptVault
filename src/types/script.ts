@@ -98,9 +98,33 @@ export type RunAt =
   | 'document-idle'
   | 'context-menu';
 
+export interface WebRequestHeaderCondition {
+  header: string;
+  values?: string[];
+  excludedValues?: string[];
+}
+
+export interface WebRequestRuleSelector {
+  url?: string | Array<string | { include?: string; exclude?: string }>;
+  include?: string | string[];
+  exclude?: string | string[];
+  tab?: number | number[];
+  type?: string | string[];
+  responseHeaders?: WebRequestHeaderCondition[];
+  excludedResponseHeaders?: WebRequestHeaderCondition[];
+}
+
+export interface WebRequestRuleAction {
+  cancel?: boolean;
+  redirect?: string | { url?: string; regexSubstitution?: string };
+  setRequestHeaders?: Record<string, string | null>;
+  setResponseHeaders?: Record<string, string | null>;
+}
+
 export interface WebRequestRule {
-  selector: { include?: string[]; exclude?: string[] };
-  action: string | { cancel?: boolean; redirect?: string };
+  priority?: number;
+  selector?: string | WebRequestRuleSelector;
+  action: string | WebRequestRuleAction;
 }
 
 /** Per-script user settings */

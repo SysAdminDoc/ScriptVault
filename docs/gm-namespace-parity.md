@@ -19,8 +19,10 @@ existing runtime policy:
 - `GM.fetch`
 
 `GM.webRequest` remains declarativeNetRequest-backed in Manifest V3. It accepts
-the same rule input as `GM_webRequest`, but runtime match callbacks are still
-not supported by Chrome MV3 DNR.
+the same rule input as `GM_webRequest`, including Chrome 128+
+`responseHeaders` and `excludedResponseHeaders` selector conditions for
+response-header-based DNR matching. Runtime match callbacks are still not
+supported by Chrome MV3 DNR.
 
 `GM.fetch` is shipped as a guarded compatibility alias, not a separate network
 backend. The wrapper builds a Fetch `Response` from the existing

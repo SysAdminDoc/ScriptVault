@@ -201,6 +201,58 @@ self.SessionState = SessionState;
 // Userscript Parser
 // ============================================================================
 
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isStringArray(value) {
+  return Array.isArray(value) && value.every(entry => typeof entry === 'string');
+}
+
+function isHeaderConditionArray(value) {
+  if (!Array.isArray(value)) return false;
+  return value.every(entry => {
+    if (!isPlainObject(entry)) return false;
+    if (typeof entry.header !== 'string' || !entry.header.trim()) return false;
+    if (entry.values != null && !isStringArray(entry.values)) return false;
+    if (entry.excludedValues != null && !isStringArray(entry.excludedValues)) return false;
+    return true;
+  });
+}
+
+function isHeaderMutationMap(value) {
+  if (!isPlainObject(value)) return false;
+  return Object.entries(value).every(([name, headerValue]) => (
+    !!name.trim() && (headerValue === null || typeof headerValue === 'string')
+  ));
+}
+
+function isRedirectTarget(value) {
+  if (typeof value === 'string') return value.length > 0;
+  if (!isPlainObject(value)) return false;
+  return typeof value.url === 'string' || typeof value.regexSubstitution === 'string';
+}
+
+function isValidWebRequestAction(action) {
+  if (typeof action === 'string') return action.length > 0;
+  if (!isPlainObject(action)) return false;
+  if (typeof action.cancel === 'boolean') return true;
+  if (action.redirect != null && isRedirectTarget(action.redirect)) return true;
+  if (action.setRequestHeaders != null && isHeaderMutationMap(action.setRequestHeaders)) return true;
+  if (action.setResponseHeaders != null && isHeaderMutationMap(action.setResponseHeaders)) return true;
+  return false;
+}
+
+function isValidWebRequestSelector(selector) {
+  if (selector == null || typeof selector === 'string') return true;
+  if (!isPlainObject(selector)) return false;
+  if (selector.include != null && !isStringArray(selector.include)) return false;
+  if (selector.exclude != null && !isStringArray(selector.exclude)) return false;
+  if (selector.responseHeaders != null && !isHeaderConditionArray(selector.responseHeaders)) return false;
+  if (selector.excludedResponseHeaders != null && !isHeaderConditionArray(selector.excludedResponseHeaders)) return false;
+  return true;
+}
+
 function parseAntifeatureDirective(value, locale = '') {
   const trimmed = String(value || '').trim();
   if (!trimmed) return null;
@@ -422,20 +474,8 @@ function parseUserscript(code) {
             if (!entry || typeof entry !== 'object') continue;
             const action = entry.action;
             const selector = entry.selector;
-            let validAction = false;
-            if (typeof action === 'string' && action.length > 0) {
-              validAction = true;
-            } else if (action && typeof action === 'object') {
-              if (typeof action.cancel === 'boolean' || typeof action.redirect === 'string') {
-                validAction = true;
-              }
-            }
-            if (!validAction) continue;
-            if (selector != null && typeof selector !== 'object') continue;
-            if (selector && typeof selector === 'object') {
-              if (selector.include != null && !Array.isArray(selector.include)) continue;
-              if (selector.exclude != null && !Array.isArray(selector.exclude)) continue;
-            }
+            if (!isValidWebRequestAction(action)) continue;
+            if (!isValidWebRequestSelector(selector)) continue;
             validated.push(entry);
           }
           meta.webRequest = validated.length > 0 ? validated : null;
@@ -10743,6 +10783,25 @@ function _dnrExcludedRequestDomains(rule) {
     .filter(host => host && host !== '*');
 }
 
+function _normalizeDnrHeaderConditions(value) {
+  if (!Array.isArray(value)) return [];
+  const conditions = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const header = String(entry.header || '').trim();
+    if (!header) continue;
+    const condition = { header };
+    if (Array.isArray(entry.values)) {
+      condition.values = entry.values.map(String).filter(Boolean);
+    }
+    if (Array.isArray(entry.excludedValues)) {
+      condition.excludedValues = entry.excludedValues.map(String).filter(Boolean);
+    }
+    conditions.push(condition);
+  }
+  return conditions;
+}
+
 function _extractDnrFilterHost(filter) {
   if (typeof filter !== 'string') return '';
   const raw = filter.trim();
@@ -10854,6 +10913,12 @@ function _translateWebRequestRule(rule, ruleId, options = {}) {
   }
   if (sel.tab) dnr.condition.tabIds = Array.isArray(sel.tab) ? sel.tab : [sel.tab];
   if (sel.type) dnr.condition.resourceTypes = Array.isArray(sel.type) ? sel.type : [sel.type];
+  if (typeof sel !== 'string') {
+    const responseHeaders = _normalizeDnrHeaderConditions(sel.responseHeaders);
+    if (responseHeaders.length > 0) dnr.condition.responseHeaders = responseHeaders;
+    const excludedResponseHeaders = _normalizeDnrHeaderConditions(sel.excludedResponseHeaders);
+    if (excludedResponseHeaders.length > 0) dnr.condition.excludedResponseHeaders = excludedResponseHeaders;
+  }
   if (Array.isArray(options.initiatorDomains) && options.initiatorDomains.length > 0) {
     dnr.condition.initiatorDomains = options.initiatorDomains;
   }
