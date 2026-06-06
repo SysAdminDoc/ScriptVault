@@ -1643,6 +1643,11 @@ const BACKGROUND_RUNNER_GRANT_ALIASES = {
   'GM.info': 'GM_info',
   'GM.log': 'GM_log'
 };
+const DEFAULT_BACKGROUND_RUNNER_BUDGET = {
+  timeoutMs: 30_000,
+  maxConcurrentPerScript: 1,
+  maxQueuedRunsPerScript: 3
+};
 
 function _localHealthRoundPercent(value) {
   return Math.round(value * 10) / 10;
@@ -1672,6 +1677,10 @@ function getBackgroundRunnerTriggers(meta) {
   return typeof meta?.crontab === 'string' && meta.crontab.trim() ? ['crontab'] : [];
 }
 
+function normalizeBackgroundRunnerBudget() {
+  return { ...DEFAULT_BACKGROUND_RUNNER_BUDGET };
+}
+
 function planBackgroundScript(script, settings = {}) {
   const meta = script?.meta || null;
   const triggers = getBackgroundRunnerTriggers(meta);
@@ -1682,6 +1691,44 @@ function planBackgroundScript(script, settings = {}) {
   if (unsupportedGrants.length > 0) return { status: 'unsupported-grants', reason: 'Script requests GM grants that are not available in DOM-less background context.', triggers, unsupportedGrants };
   if (triggers.length === 0) return { status: 'missing-trigger', reason: 'Background script has no supported automatic trigger.', triggers, unsupportedGrants };
   return { status: 'ready', reason: 'Background script is eligible for the DOM-less runner.', triggers, unsupportedGrants };
+}
+
+function getBackgroundWrapperDryRunSupport(script) {
+  if (!script?.meta?.background) return { supported: false, reason: 'Background wrapper requires @background metadata.' };
+  if (Array.isArray(script.meta.require) && script.meta.require.length > 0) {
+    return { supported: false, reason: 'Background wrapper does not support @require dependencies yet.' };
+  }
+  const unsupportedGrants = getUnsupportedBackgroundGrants(script.meta);
+  if (unsupportedGrants.length > 0) {
+    return { supported: false, reason: `Background wrapper does not support grants: ${unsupportedGrants.join(', ')}` };
+  }
+  return { supported: true, reason: 'Background wrapper payload can be assembled.' };
+}
+
+function buildBackgroundRunnerDryRun(script, settings = {}) {
+  const plan = planBackgroundScript(script, settings);
+  const wrapper = getBackgroundWrapperDryRunSupport(script);
+  const payloadReady = plan.status === 'ready' && wrapper.supported;
+  return {
+    scriptId: script?.id || '',
+    status: payloadReady ? 'ready' : (plan.status === 'ready' ? 'wrapper-unsupported' : plan.status),
+    reason: payloadReady ? 'Background runner payload can be prepared; execution remains disabled.' : (plan.status === 'ready' ? wrapper.reason : plan.reason),
+    executionEnabled: false,
+    plan: {
+      status: plan.status,
+      reason: plan.reason,
+      enabled: plan.status === 'ready',
+      triggers: plan.triggers,
+      unsupportedGrants: plan.unsupportedGrants,
+      budget: normalizeBackgroundRunnerBudget()
+    },
+    wrapper,
+    payload: {
+      wouldBuild: payloadReady,
+      includesCode: false,
+      source: 'scriptvault-background-runner'
+    }
+  };
 }
 
 async function buildLocalHealthStorageSummary() {
@@ -4631,6 +4678,13 @@ async function handleMessage(message, sender) {
 
       case 'getLocalHealthReport':
         return await buildLocalHealthReport();
+
+      case 'prepareBackgroundRunnerDryRun': {
+        const script = await ScriptStorage.get(data.scriptId);
+        if (!script) return { error: 'Script not found' };
+        const settings = await SettingsManager.get();
+        return buildBackgroundRunnerDryRun(script, settings);
+      }
 
       case 'repairRuntimeState': {
         try {
