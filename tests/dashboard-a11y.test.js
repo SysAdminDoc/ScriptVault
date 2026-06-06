@@ -433,6 +433,18 @@ describe("dashboard accessibility markup", () => {
       ["settingsSandboxMode", "settingsSandboxModeError"],
       ["settingsModifyCSP", "settingsModifyCSPError"],
       ["settingsAllowHttpHeaders", "settingsAllowHttpHeadersError"],
+      ["settingsDefaultTabTypes", "settingsDefaultTabTypesError"],
+      ["settingsAllowLocalFiles", "settingsAllowLocalFilesError"],
+      ["settingsAllowCookies", "settingsAllowCookiesError"],
+      ["settingsAllowCommunication", "settingsAllowCommunicationError"],
+      ["settingsSRI", "settingsSRIError"],
+      ["settingsIncludeMode", "settingsIncludeModeError"],
+      ["settingsCheckConnect", "settingsCheckConnectError"],
+      ["settingsIncognitoStorage", "settingsIncognitoStorageError"],
+      ["settingsPageFilterMode", "settingsPageFilterModeError"],
+      ["settingsBlockSeverity", "settingsBlockSeverityError"],
+      ["settingsStrictMode", "settingsStrictModeError"],
+      ["settingsTopLevelAwait", "settingsTopLevelAwaitError"],
       ["settingsLintMaxSize", "settingsLintMaxSizeError"],
       ["settingsCheckInterval", "settingsCheckIntervalError"],
       ["settingsNotifyHideAfter", "settingsNotifyHideAfterError"],
@@ -479,6 +491,18 @@ describe("dashboard accessibility markup", () => {
     expect(doc.getElementById("settingsSandboxMode")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsModifyCSP")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsAllowHttpHeaders")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsDefaultTabTypes")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsAllowLocalFiles")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsAllowCookies")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsAllowCommunication")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsSRI")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsIncludeMode")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsCheckConnect")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsIncognitoStorage")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsPageFilterMode")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsBlockSeverity")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsStrictMode")?.tagName).toBe("SELECT");
+    expect(doc.getElementById("settingsTopLevelAwait")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsEditorFontSize")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsIndentWidth")?.tagName).toBe("SELECT");
     expect(doc.getElementById("settingsTabSize")?.tagName).toBe("SELECT");
@@ -510,6 +534,19 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/case 'sandboxMode':\s*return validateSelectOptionValue\('sandboxMode', value, 'sandbox mode'\)/);
     expect(dashboardJs).toMatch(/case 'modifyCSP':\s*return validateSelectOptionValue\('modifyCSP', value, 'CSP modification mode'\)/);
     expect(dashboardJs).toMatch(/case 'allowHttpHeaders':\s*return validateSelectOptionValue\('allowHttpHeaders', value, 'HTTP header modification mode'\)/);
+    expect(dashboardJs).toMatch(/case 'defaultTabTypes':\s*return validateSelectOptionValue\('defaultTabTypes', value, 'default tab type mode'\)/);
+    expect(dashboardJs).toMatch(/case 'allowLocalFiles':\s*return validateSelectOptionValue\('allowLocalFiles', value, 'local file access mode'\)/);
+    expect(dashboardJs).toMatch(/case 'allowCookies':\s*return validateSelectOptionValue\('allowCookies', value, 'cookie access mode'\)/);
+    expect(dashboardJs).toMatch(/case 'allowCommunication':\s*return validateSelectOptionValue\('allowCommunication', value, 'page communication mode'\)/);
+    expect(dashboardJs).toMatch(/case 'sri':\s*return validateSelectOptionValue\('sri', value, 'SRI mode'\)/);
+    expect(dashboardJs).toMatch(/case 'includeMode':\s*return validateSelectOptionValue\('includeMode', value, '@include matching mode'\)/);
+    expect(dashboardJs).toMatch(/case 'checkConnect':\s*return validateSelectOptionValue\('checkConnect', value, '@connect check mode'\)/);
+    expect(dashboardJs).toMatch(/case 'incognitoStorage':\s*return validateSelectOptionValue\('incognitoStorage', value, 'incognito storage mode'\)/);
+    expect(dashboardJs).toMatch(/case 'pageFilterMode':\s*return validateSelectOptionValue\('pageFilterMode', value, 'page filter mode'\)/);
+    expect(dashboardJs).toMatch(/case 'blockSeverity':\s*return validateSelectOptionValue\('blockSeverity', value, 'block severity level', \{ number: true \}\)/);
+    expect(dashboardJs).toMatch(/case 'strictMode':\s*return validateSelectOptionValue\('strictMode', value, 'strict mode'\)/);
+    expect(dashboardJs).toMatch(/case 'topLevelAwait':\s*return validateSelectOptionValue\('topLevelAwait', value, 'top-level await mode'\)/);
+    expect(dashboardJs).toMatch(/settingsBlockSeverity: \['blockSeverity', 'value'\]/);
     expect(dashboardJs).toContain("Use an http or https URL.");
     expect(dashboardJs).toContain("WebDAV URL is required.");
     expect(dashboardJs).toContain("label: 'Sync encryption passphrase'");

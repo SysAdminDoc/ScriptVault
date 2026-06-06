@@ -145,6 +145,9 @@
       "help": "Controls allow communication with cooperate pages.",
       "elementId": "settingsAllowCommunication",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "version",
@@ -167,6 +170,9 @@
       "help": "Controls allow scripts to access cookies.",
       "elementId": "settingsAllowCookies",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "all",
@@ -233,6 +239,9 @@
       "help": "Controls allow scripts to access local files.",
       "elementId": "settingsAllowLocalFiles",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "all",
@@ -374,6 +383,9 @@
       "help": "Controls block from severity level.",
       "elementId": "settingsBlockSeverity",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "1",
@@ -404,6 +416,9 @@
       "help": "Controls check @connect.",
       "elementId": "settingsCheckConnect",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "ask",
@@ -533,6 +548,9 @@
       "help": "Controls default tab types to run scripts in.",
       "elementId": "settingsDefaultTabTypes",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "all",
@@ -833,6 +851,9 @@
       "help": "Controls userscript @include mode.",
       "elementId": "settingsIncludeMode",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "default",
@@ -855,6 +876,9 @@
       "help": "Controls store data in incognito mode.",
       "elementId": "settingsIncognitoStorage",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "temporary",
@@ -1127,6 +1151,9 @@
       "help": "Controls page filter mode.",
       "elementId": "settingsPageFilterMode",
       "default": "blacklist",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "blacklist",
@@ -1353,6 +1380,9 @@
       "help": "Controls subresource integrity.",
       "elementId": "settingsSRI",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "validate",
@@ -1375,6 +1405,9 @@
       "help": "Controls strict mode.",
       "elementId": "settingsStrictMode",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "default",
@@ -1501,6 +1534,9 @@
       "help": "Controls top-level await.",
       "elementId": "settingsTopLevelAwait",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "default",

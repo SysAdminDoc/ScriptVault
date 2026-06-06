@@ -3261,6 +3261,18 @@
             sandboxMode: elements.settingsSandboxMode,
             modifyCSP: elements.settingsModifyCSP,
             allowHttpHeaders: elements.settingsAllowHttpHeaders,
+            defaultTabTypes: elements.settingsDefaultTabTypes,
+            allowLocalFiles: elements.settingsAllowLocalFiles,
+            allowCookies: elements.settingsAllowCookies,
+            allowCommunication: elements.settingsAllowCommunication,
+            sri: elements.settingsSRI,
+            includeMode: elements.settingsIncludeMode,
+            checkConnect: elements.settingsCheckConnect,
+            incognitoStorage: elements.settingsIncognitoStorage,
+            pageFilterMode: elements.settingsPageFilterMode,
+            blockSeverity: elements.settingsBlockSeverity,
+            strictMode: elements.settingsStrictMode,
+            topLevelAwait: elements.settingsTopLevelAwait,
             lintMaxSize: elements.settingsLintMaxSize,
             checkInterval: elements.settingsCheckInterval,
             notifyHideAfter: elements.settingsNotifyHideAfter,
@@ -3538,6 +3550,30 @@
                 return validateSelectOptionValue('modifyCSP', value, 'CSP modification mode');
             case 'allowHttpHeaders':
                 return validateSelectOptionValue('allowHttpHeaders', value, 'HTTP header modification mode');
+            case 'defaultTabTypes':
+                return validateSelectOptionValue('defaultTabTypes', value, 'default tab type mode');
+            case 'allowLocalFiles':
+                return validateSelectOptionValue('allowLocalFiles', value, 'local file access mode');
+            case 'allowCookies':
+                return validateSelectOptionValue('allowCookies', value, 'cookie access mode');
+            case 'allowCommunication':
+                return validateSelectOptionValue('allowCommunication', value, 'page communication mode');
+            case 'sri':
+                return validateSelectOptionValue('sri', value, 'SRI mode');
+            case 'includeMode':
+                return validateSelectOptionValue('includeMode', value, '@include matching mode');
+            case 'checkConnect':
+                return validateSelectOptionValue('checkConnect', value, '@connect check mode');
+            case 'incognitoStorage':
+                return validateSelectOptionValue('incognitoStorage', value, 'incognito storage mode');
+            case 'pageFilterMode':
+                return validateSelectOptionValue('pageFilterMode', value, 'page filter mode');
+            case 'blockSeverity':
+                return validateSelectOptionValue('blockSeverity', value, 'block severity level', { number: true });
+            case 'strictMode':
+                return validateSelectOptionValue('strictMode', value, 'strict mode');
+            case 'topLevelAwait':
+                return validateSelectOptionValue('topLevelAwait', value, 'top-level await mode');
             case 'webdavUrl': {
                 const url = String(value || '').trim();
                 if (!url) {
@@ -11776,7 +11812,7 @@
             
             // BlackCheck
             settingsBlacklistSource: ['blacklistSource', 'value'],
-            settingsBlockSeverity: ['blockSeverity', 'value', v => parseInt(v) || 1],
+            settingsBlockSeverity: ['blockSeverity', 'value'],
             
             // Downloads
             settingsDownloadMode: ['downloadMode', 'value'],

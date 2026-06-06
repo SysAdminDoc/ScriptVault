@@ -6585,79 +6585,88 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Default tab types to run scripts in:</span>
-                        <select class="select-field" id="settingsDefaultTabTypes">
+                        <select class="select-field" id="settingsDefaultTabTypes" aria-describedby="settingsDefaultTabTypesError">
                             <option value="all" selected>All tabs</option>
                             <option value="normal">Normal tabs only</option>
                             <option value="incognito">Incognito only</option>
                         </select>
+                        <span class="setting-error" id="settingsDefaultTabTypesError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Allow scripts to access local files:</span>
-                        <select class="select-field" id="settingsAllowLocalFiles">
+                        <select class="select-field" id="settingsAllowLocalFiles" aria-describedby="settingsAllowLocalFilesError">
                             <option value="all" selected>All local files</option>
                             <option value="ask">Ask</option>
                             <option value="none">None</option>
                         </select>
+                        <span class="setting-error" id="settingsAllowLocalFilesError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Allow scripts to access cookies:</span>
-                        <select class="select-field" id="settingsAllowCookies">
+                        <select class="select-field" id="settingsAllowCookies" aria-describedby="settingsAllowCookiesError">
                             <option value="all" selected>All</option>
                             <option value="matching">Matching only</option>
                             <option value="none">None</option>
                         </select>
+                        <span class="setting-error" id="settingsAllowCookiesError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <label><input type="checkbox" id="settingsAllowHighPrivilegeScriptApis"> Allow cross-scope privileged script APIs</label>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Allow communication with cooperate pages:</span>
-                        <select class="select-field" id="settingsAllowCommunication">
+                        <select class="select-field" id="settingsAllowCommunication" aria-describedby="settingsAllowCommunicationError">
                             <option value="version" selected>ScriptVault + script version</option>
                             <option value="minimal">ScriptVault only</option>
                             <option value="none">None</option>
                         </select>
+                        <span class="setting-error" id="settingsAllowCommunicationError" hidden></span>
                         <span class="help-icon" title="External message communication">?</span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Subresource Integrity:</span>
-                        <select class="select-field" id="settingsSRI">
+                        <select class="select-field" id="settingsSRI" aria-describedby="settingsSRIError">
                             <option value="validate" selected>Validate if possible</option>
                             <option value="require">Require</option>
                             <option value="ignore">Ignore</option>
                         </select>
+                        <span class="setting-error" id="settingsSRIError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Userscript @include Mode:</span>
-                        <select class="select-field" id="settingsIncludeMode">
+                        <select class="select-field" id="settingsIncludeMode" aria-describedby="settingsIncludeModeError">
                             <option value="default" selected>Default</option>
                             <option value="glob">Glob</option>
                             <option value="regex">Regex</option>
                         </select>
+                        <span class="setting-error" id="settingsIncludeModeError" hidden></span>
                         <span class="help-icon" title="Pattern matching mode for @include">?</span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Check @connect:</span>
-                        <select class="select-field" id="settingsCheckConnect">
+                        <select class="select-field" id="settingsCheckConnect" aria-describedby="settingsCheckConnectError">
                             <option value="ask" selected>Ask if unknown</option>
                             <option value="allow">Allow all</option>
                             <option value="deny">Deny unknown</option>
                         </select>
+                        <span class="setting-error" id="settingsCheckConnectError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Store data in incognito mode:</span>
-                        <select class="select-field" id="settingsIncognitoStorage">
+                        <select class="select-field" id="settingsIncognitoStorage" aria-describedby="settingsIncognitoStorageError">
                             <option value="temporary" selected>Temporary</option>
                             <option value="persistent">Persistent</option>
                             <option value="none">None</option>
                         </select>
+                        <span class="setting-error" id="settingsIncognitoStorageError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Page Filter Mode:</span>
-                        <select class="select-field" id="settingsPageFilterMode">
+                        <select class="select-field" id="settingsPageFilterMode" aria-describedby="settingsPageFilterModeError">
                             <option value="blacklist" selected>Blacklist</option>
                             <option value="whitelist">Whitelist</option>
                         </select>
+                        <span class="setting-error" id="settingsPageFilterModeError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Whitelisted Pages:</span>
@@ -6723,13 +6732,14 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Block From Severity Level:</span>
-                        <select class="select-field" id="settingsBlockSeverity">
+                        <select class="select-field" id="settingsBlockSeverity" aria-describedby="settingsBlockSeverityError">
                             <option value="1">1</option>
                             <option value="2">2</option>
                             <option value="3">3</option>
                             <option value="4" selected>4</option>
                             <option value="5">5</option>
                         </select>
+                        <span class="setting-error" id="settingsBlockSeverityError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Manual Userscript and @require Blacklist:</span>
@@ -6787,19 +6797,21 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div class="setting-row">
                         <span class="label-text">strict mode:</span>
-                        <select class="select-field" id="settingsStrictMode">
+                        <select class="select-field" id="settingsStrictMode" aria-describedby="settingsStrictModeError">
                             <option value="default" selected>Default</option>
                             <option value="enabled">Enabled</option>
                             <option value="disabled">Disabled</option>
                         </select>
+                        <span class="setting-error" id="settingsStrictModeError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">top-level await:</span>
-                        <select class="select-field" id="settingsTopLevelAwait">
+                        <select class="select-field" id="settingsTopLevelAwait" aria-describedby="settingsTopLevelAwaitError">
                             <option value="default" selected>Default</option>
                             <option value="enabled">Enabled</option>
                             <option value="disabled">Disabled</option>
                         </select>
+                        <span class="setting-error" id="settingsTopLevelAwaitError" hidden></span>
                     </div>
                 </div>
             </div>
