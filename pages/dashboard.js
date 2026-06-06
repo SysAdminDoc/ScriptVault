@@ -3257,6 +3257,10 @@
     function getSettingsInputForKey(key) {
         const keyToElement = {
             badgeColor: elements.settingsBadgeColor,
+            contentScriptAPI: elements.settingsContentScriptAPI,
+            sandboxMode: elements.settingsSandboxMode,
+            modifyCSP: elements.settingsModifyCSP,
+            allowHttpHeaders: elements.settingsAllowHttpHeaders,
             lintMaxSize: elements.settingsLintMaxSize,
             checkInterval: elements.settingsCheckInterval,
             notifyHideAfter: elements.settingsNotifyHideAfter,
@@ -3526,6 +3530,14 @@
                 return validateSelectOptionValue('indentWidth', value, 'indentation width', { number: true });
             case 'tabSize':
                 return validateSelectOptionValue('tabSize', value, 'tab size', { number: true });
+            case 'contentScriptAPI':
+                return validateSelectOptionValue('contentScriptAPI', value, 'content script API');
+            case 'sandboxMode':
+                return validateSelectOptionValue('sandboxMode', value, 'sandbox mode');
+            case 'modifyCSP':
+                return validateSelectOptionValue('modifyCSP', value, 'CSP modification mode');
+            case 'allowHttpHeaders':
+                return validateSelectOptionValue('allowHttpHeaders', value, 'HTTP header modification mode');
             case 'webdavUrl': {
                 const url = String(value || '').trim();
                 if (!url) {

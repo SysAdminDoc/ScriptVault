@@ -197,6 +197,9 @@
       "help": "Controls allow http headers to be modified by scripts.",
       "elementId": "settingsAllowHttpHeaders",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "yes",
@@ -470,6 +473,9 @@
       "help": "Controls content script api.",
       "elementId": "settingsContentScriptAPI",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "userscripts",
@@ -1038,6 +1044,9 @@
       "help": "Controls modify existing content security policy (csp) headers.",
       "elementId": "settingsModifyCSP",
       "default": "auto",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "auto",
@@ -1252,6 +1261,9 @@
       "help": "Controls sandbox mode.",
       "elementId": "settingsSandboxMode",
       "defaultSource": "runtime",
+      "validation": {
+        "kind": "select-option"
+      },
       "options": [
         {
           "value": "default",

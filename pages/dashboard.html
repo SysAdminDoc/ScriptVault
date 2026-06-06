@@ -6548,36 +6548,40 @@
                 <div class="section-content">
                     <div class="setting-row">
                         <span class="label-text">Content Script API:</span>
-                        <select class="select-field" id="settingsContentScriptAPI">
+                        <select class="select-field" id="settingsContentScriptAPI" aria-describedby="settingsContentScriptAPIError">
                             <option value="userscripts" selected>UserScripts API</option>
                             <option value="dynamic">Dynamic Content Script</option>
                         </select>
+                        <span class="setting-error" id="settingsContentScriptAPIError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Sandbox Mode:</span>
-                        <select class="select-field" id="settingsSandboxMode">
+                        <select class="select-field" id="settingsSandboxMode" aria-describedby="settingsSandboxModeError">
                             <option value="default" selected>Default</option>
                             <option value="raw">Raw</option>
                             <option value="js">JavaScript</option>
                             <option value="dom">DOM</option>
                         </select>
+                        <span class="setting-error" id="settingsSandboxModeError" hidden></span>
                         <span class="help-icon" title="Script execution environment">?</span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Modify existing content security policy (CSP) headers:</span>
-                        <select class="select-field" id="settingsModifyCSP">
+                        <select class="select-field" id="settingsModifyCSP" aria-describedby="settingsModifyCSPError">
                             <option value="auto" selected>Auto</option>
                             <option value="yes">Yes</option>
                             <option value="no">No</option>
                         </select>
+                        <span class="setting-error" id="settingsModifyCSPError" hidden></span>
                         <span class="help-icon" title="Allow scripts to bypass CSP restrictions">?</span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Allow HTTP headers to be modified by scripts:</span>
-                        <select class="select-field" id="settingsAllowHttpHeaders">
+                        <select class="select-field" id="settingsAllowHttpHeaders" aria-describedby="settingsAllowHttpHeadersError">
                             <option value="yes" selected>Yes</option>
                             <option value="no">No</option>
                         </select>
+                        <span class="setting-error" id="settingsAllowHttpHeadersError" hidden></span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Default tab types to run scripts in:</span>

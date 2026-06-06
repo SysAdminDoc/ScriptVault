@@ -2,6 +2,19 @@
 
 Status: consolidated docs index plus 2026-06-03 deep research pass.
 
+2026-06-06 Cycle 66 security select validation: N-1 continued through the
+security-facing mode selects. The same select-specific source signal from
+Cycles 64-65 applies: option `value` is the persisted selection contract, and
+`HTMLSelectElement.setCustomValidity()` supports custom validation messages
+for select controls. ScriptVault now requires validation metadata and
+dashboard `setting-error` nodes for `settingsContentScriptAPI`,
+`settingsSandboxMode`, `settingsModifyCSP`, and
+`settingsAllowHttpHeaders`. The dashboard save path validates content script
+API, sandbox mode, CSP modification mode, and HTTP header modification mode
+against the live option lists before persisting. Remaining N-1 work should
+continue with the action-menu/security selects that already have schema option
+lists but no save-blocking allowed-option validation.
+
 2026-06-06 Cycle 65 interval select validation: N-1 continued through the
 update and externals interval selects. The same select-specific source signal
 from Cycle 64 applies: option `value` is the persisted selection contract, and
