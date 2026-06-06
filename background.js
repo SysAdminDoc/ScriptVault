@@ -27734,8 +27734,10 @@ ${req.code}
   }
   
   // GM_xmlhttpRequest - Full implementation with all events (like Violentmonkey)
-  function GM_xmlhttpRequest(details) {
-    if (!hasGrant('GM_xmlhttpRequest') && !hasGrant('GM.xmlHttpRequest')) {
+  function GM_xmlhttpRequest(details, options) {
+    const allowFetchGrant = options && options.allowFetchGrant === true;
+    if (!hasGrant('GM_xmlhttpRequest') && !hasGrant('GM.xmlHttpRequest') &&
+        !(allowFetchGrant && (hasGrant('GM_fetch') || hasGrant('GM.fetch')))) {
       if (details.onerror) details.onerror({ error: 'Permission denied', status: 0 });
       return { abort: () => {} };
     }
@@ -27864,6 +27866,141 @@ ${req.code}
     });
     
     return control;
+  }
+
+  function _GM_xmlhttpRequestPromise(d, options) {
+    let control;
+    const promise = new Promise((res, rej) => {
+      control = GM_xmlhttpRequest({
+        ...d,
+        onload: (r) => { if (d.onload) d.onload(r); res(r); },
+        onerror: (e) => { if (d.onerror) d.onerror(e); rej(e.error || e); },
+        ontimeout: (e) => { if (d.ontimeout) d.ontimeout(e); rej(new Error('timeout')); },
+        onabort: (e) => { if (d.onabort) d.onabort(e); rej(new Error('aborted')); }
+      }, options);
+    });
+    promise.abort = () => { if (control && typeof control.abort === 'function') control.abort(); };
+    return promise;
+  }
+
+  function _gmFetchAbortError() {
+    if (typeof DOMException === 'function') return new DOMException('The operation was aborted.', 'AbortError');
+    const err = new Error('The operation was aborted.');
+    err.name = 'AbortError';
+    return err;
+  }
+
+  function _gmFetchHeadersToRecord(headers) {
+    const out = {};
+    if (!headers) return out;
+    if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+      headers.forEach((value, key) => { out[key] = value; });
+      return out;
+    }
+    if (Array.isArray(headers)) {
+      for (const entry of headers) {
+        if (Array.isArray(entry) && entry.length >= 2) out[String(entry[0])] = String(entry[1]);
+      }
+      return out;
+    }
+    if (typeof headers === 'object') {
+      for (const key of Object.keys(headers)) {
+        if (headers[key] !== undefined) out[key] = String(headers[key]);
+      }
+    }
+    return out;
+  }
+
+  function _gmFetchParseResponseHeaders(raw) {
+    const headers = typeof Headers !== 'undefined' ? new Headers() : {};
+    if (!raw || typeof raw !== 'string') return headers;
+    for (const line of raw.split(/\\r?\\n/)) {
+      const idx = line.indexOf(':');
+      if (idx <= 0) continue;
+      const name = line.slice(0, idx).trim();
+      const value = line.slice(idx + 1).trim();
+      if (!name) continue;
+      if (headers instanceof Headers) headers.append(name, value);
+      else headers[name] = headers[name] ? headers[name] + ', ' + value : value;
+    }
+    return headers;
+  }
+
+  async function GM_fetch(input, init = {}) {
+    if (!hasGrant('GM_fetch') && !hasGrant('GM.fetch') &&
+        !hasGrant('GM_xmlhttpRequest') && !hasGrant('GM.xmlHttpRequest')) {
+      throw new Error('GM.fetch requires @grant GM.fetch or @grant GM_xmlhttpRequest');
+    }
+    if (typeof Response !== 'function') {
+      throw new Error('GM.fetch requires Response support in this browser context');
+    }
+
+    const request = typeof Request !== 'undefined' && input instanceof Request ? input : null;
+    const fetchInit = init || {};
+    const method = String(fetchInit.method || (request && request.method) || 'GET').toUpperCase();
+    const url = request ? request.url : String(input);
+    const requestHeaders = request ? _gmFetchHeadersToRecord(request.headers) : {};
+    const initHeaders = _gmFetchHeadersToRecord(fetchInit.headers);
+    const headers = { ...requestHeaders, ...initHeaders };
+    const hasInitBody = Object.prototype.hasOwnProperty.call(fetchInit, 'body');
+    let body = hasInitBody ? fetchInit.body : undefined;
+    if (!hasInitBody && request && method !== 'GET' && method !== 'HEAD') {
+      try {
+        body = await request.clone().arrayBuffer();
+      } catch (e) {
+        body = undefined;
+      }
+    }
+
+    const signal = fetchInit.signal;
+    if (signal && signal.aborted) throw _gmFetchAbortError();
+
+    const xhrPromise = _GM_xmlhttpRequestPromise({
+      method,
+      url,
+      headers,
+      data: body,
+      responseType: 'arraybuffer',
+      anonymous: (fetchInit.credentials || (request && request.credentials)) === 'omit',
+      noCache: fetchInit.cache === 'no-store' || fetchInit.cache === 'reload' || (request && (request.cache === 'no-store' || request.cache === 'reload')),
+      redirect: fetchInit.redirect || (request && request.redirect)
+    }, { allowFetchGrant: true });
+
+    let abortHandler;
+    if (signal && typeof signal.addEventListener === 'function') {
+      abortHandler = () => {
+        if (typeof xhrPromise.abort === 'function') xhrPromise.abort();
+      };
+      signal.addEventListener('abort', abortHandler, { once: true });
+    }
+
+    let xhrResponse;
+    try {
+      xhrResponse = await xhrPromise;
+    } catch (error) {
+      if (signal && signal.aborted) throw _gmFetchAbortError();
+      throw error;
+    } finally {
+      if (signal && abortHandler && typeof signal.removeEventListener === 'function') {
+        signal.removeEventListener('abort', abortHandler);
+      }
+    }
+
+    if (signal && signal.aborted) throw _gmFetchAbortError();
+    const status = Number(xhrResponse && xhrResponse.status);
+    const responseStatus = status >= 200 && status <= 599 ? status : 200;
+    const bodyValue = xhrResponse && xhrResponse.response != null
+      ? xhrResponse.response
+      : ((xhrResponse && xhrResponse.responseText) || '');
+    const fetchResponse = new Response(bodyValue, {
+      status: responseStatus,
+      statusText: (xhrResponse && xhrResponse.statusText) || '',
+      headers: _gmFetchParseResponseHeaders((xhrResponse && xhrResponse.responseHeaders) || '')
+    });
+    try {
+      Object.defineProperty(fetchResponse, 'url', { value: (xhrResponse && xhrResponse.finalUrl) || url, configurable: true });
+    } catch (e) {}
+    return fetchResponse;
   }
   
   // GM_addValueChangeListener - Watch for value changes (like Tampermonkey)
@@ -28450,20 +28587,8 @@ ${req.code}
     deleteValues: (keys) => Promise.resolve(GM_deleteValues(keys)),
     addStyle: (css) => Promise.resolve(GM_addStyle(css)),
     addElement: (...args) => Promise.resolve(GM_addElement(...args)),
-    xmlHttpRequest: (d) => {
-      let control;
-      const promise = new Promise((res, rej) => {
-        control = GM_xmlhttpRequest({
-          ...d,
-          onload: (r) => { if (d.onload) d.onload(r); res(r); },
-          onerror: (e) => { if (d.onerror) d.onerror(e); rej(e.error || e); },
-          ontimeout: (e) => { if (d.ontimeout) d.ontimeout(e); rej(new Error('timeout')); },
-          onabort: (e) => { if (d.onabort) d.onabort(e); rej(new Error('aborted')); }
-        });
-      });
-      promise.abort = () => control.abort();
-      return promise;
-    },
+    xmlHttpRequest: (d) => _GM_xmlhttpRequestPromise(d),
+    fetch: GM_fetch,
     notification: (d, ondone) => Promise.resolve(GM_notification(d, ondone)),
     setClipboard: (t, type) => Promise.resolve(GM_setClipboard(t, type)),
     openInTab: (u, o) => Promise.resolve(GM_openInTab(u, o)),
@@ -28514,6 +28639,7 @@ ${req.code}
   window.GM_deleteValues = GM_deleteValues;
   window.GM_addStyle = GM_addStyle;
   window.GM_xmlhttpRequest = GM_xmlhttpRequest;
+  window.GM_fetch = GM_fetch;
   window.GM_head = GM_head;
   window.GM_setClipboard = GM_setClipboard;
   window.GM_notification = GM_notification;

@@ -33,15 +33,23 @@ describe('GM namespace parity', () => {
     }
   });
 
-  it('keeps GM.fetch deferred until the guarded network contract is implemented', () => {
-    for (const [, path] of SOURCES) {
+  it('keeps GM.fetch on the guarded GM_xmlhttpRequest network contract', () => {
+    for (const [label, path] of SOURCES) {
       const source = readSource(path);
-      expect(source).not.toContain('GM_fetch');
-      expect(source).not.toMatch(/\bfetch:\s*\(/);
+      expect(source, `${label} missing GM.fetch implementation`).toContain('async function GM_fetch');
+      expect(source, `${label} missing GM.fetch namespace alias`).toContain('fetch: GM_fetch');
+      expect(source, `${label} missing direct GM_fetch export`).toContain('window.GM_fetch = GM_fetch');
+      expect(source, `${label} missing guarded XHR grant reuse`).toContain('allowFetchGrant');
+      expect(source, `${label} missing existing XHR bridge reuse`).toContain("_GM_xmlhttpRequestPromise({");
     }
 
+    const core = readSource('src/background/core.ts');
+    expect(core).not.toContain("case 'GM_fetch'");
+    expect(core).toContain("case 'GM_xmlhttpRequest'");
+
     const docs = readSource('docs/gm-namespace-parity.md');
-    expect(docs).toContain('`GM.fetch` remains deferred');
+    expect(docs).toContain('`GM.fetch` is shipped as a guarded compatibility alias');
+    expect(docs).toContain('host-scope checks');
     expect(docs).toContain('GM_xmlhttpRequest');
   });
 });
