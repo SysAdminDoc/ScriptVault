@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 34 - 2026-06-06
+Last cycle: Cycle 35 - 2026-06-06
 
 ## Latest Result
 
@@ -41,9 +41,12 @@ Last cycle: Cycle 34 - 2026-06-06
   fetchStatus, and rollout endpoint contracts in `npm run cws:check`, adding
   optional `CWS_DEPLOY_PERCENTAGE` publish rollout control, and documenting
   service-account/OIDC as the target with OAuth as the local fallback.
-- Verification used the live checkout: `npm run cws:check`, focused store
-  status tests, `npm run release:store-status -- --json`, `npm run check`, and
-  `npm run build`.
+- Cycle 35 closed the Monaco ESM migration planning row with
+  `docs/monaco-esm-migration-plan.md`, pinning the current AMD/sandbox state,
+  a local bundled ESM target, CSP constraints, Firefox AMO fallback rules, and
+  validation gates for the later implementation pass.
+- Verification used the live checkout: focused Monaco plan tests,
+  `npm run check`, and `npm run build`.
 
 ## Next Cycle Focus
 
@@ -51,8 +54,8 @@ Continue top-down from `ROADMAP.md`. The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, and the AMO
 submission row is blocked on maintainer credentials. The next local
-implementer-actionable work is N-6, the Monaco editor ESM migration planning
-note.
+implementer-actionable work is X-1, the dedicated Edge browser smoke before
+elevating support.
 
 ## Loop Pointer
 
