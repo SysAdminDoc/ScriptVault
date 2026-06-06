@@ -96,6 +96,17 @@ Cycle 102 adds blocked-merge dry-run preview evidence:
 - The preview remains non-writing. It does not change the empty-local-only apply
   rule and does not merge non-empty local and remote value bags.
 
+Cycle 103 adds a sanitized preview export:
+
+- The dashboard stores only a sanitized copy of the latest successful sync
+  preview for the Download Preview action.
+- The exported JSON uses schema `scriptvault-sync-preview/v1` and includes the
+  provider label, dry-run/no-writes flags, safe summary counts, and sanitized
+  `valueBundleConflicts` entries.
+- The export omits normal script conflict IDs/names, script IDs, script names,
+  value key names, values, URLs, local workspace handles, local paths, sync
+  credentials, and provider account data.
+
 The next implementation slice should add per-key timestamps, a conflict preview,
 or another durable last-write signal before non-empty local and remote value
 bags can be merged bidirectionally.
