@@ -22,7 +22,10 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('summarizeSyncDisclosure');
     expect(dashboardJs).toContain('renderSyncPreview');
     expect(dashboardJs).toContain('formatValueBundleSyncLog');
+    expect(dashboardJs).toContain('formatValueBundleConflictReason');
+    expect(dashboardJs).toContain('GM value blocked merge preview');
     expect(dashboardJs).toContain('valueBundleSync');
+    expect(dashboardJs).toContain('valueBundleConflicts');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {

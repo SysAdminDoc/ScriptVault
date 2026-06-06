@@ -83,6 +83,19 @@ Cycle 101 adds aggregate real-sync outcome evidence:
   names, values, URLs, local workspace handles, local paths, sync credentials,
   or provider account data.
 
+Cycle 102 adds blocked-merge dry-run preview evidence:
+
+- Dry-run previews can include `valueBundleConflicts` entries when a remote GM
+  value bundle is valid but cannot be applied because the local value bag is
+  non-empty or the local value-bundle snapshot is unavailable.
+- Each preview entry contains only a reason plus local/remote key counts and
+  local/remote byte counts.
+- Preview entries do not include script IDs, script names, value key names,
+  values, URLs, local workspace handles, local paths, sync credentials, or
+  provider account data.
+- The preview remains non-writing. It does not change the empty-local-only apply
+  rule and does not merge non-empty local and remote value bags.
+
 The next implementation slice should add per-key timestamps, a conflict preview,
 or another durable last-write signal before non-empty local and remote value
 bags can be merged bidirectionally.

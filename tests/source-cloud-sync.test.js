@@ -656,6 +656,82 @@ describe('source cloud sync module', () => {
     expect(ScriptValues.setAll).not.toHaveBeenCalled();
   });
 
+  it('previews blocked GM value-bundle merge details without identifiers or values', async () => {
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_values',
+          code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Values' },
+          settings: { syncValues: true },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 10,
+        scripts: [
+          {
+            id: 'script_values',
+            code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n',
+            enabled: true,
+            position: 0,
+            settings: { syncValues: true },
+            updatedAt: 10,
+          },
+        ],
+        tombstones: {},
+        valueBundles: {
+          script_values: {
+            schema: 'scriptvault-gm-value-sync/v1',
+            scriptId: 'script_values',
+            keyCount: 1,
+            bytes: 100,
+            values: { token: 'remote-token' },
+          },
+        },
+      },
+      {},
+      {
+        script_values: {
+          token: 'local-token',
+        },
+      },
+    );
+    const { CloudSync, ScriptValues, provider } = harness;
+
+    const preview = await CloudSync.preview('googledrive');
+
+    expect(preview.summary).toEqual(
+      expect.objectContaining({
+        remoteValueBundlesApplicable: 1,
+        remoteValueBundlesApplyReady: 0,
+        remoteValueBundlesConflictBlocked: 1,
+        wouldApplyValues: false,
+      }),
+    );
+    expect(preview.valueBundleConflicts).toEqual([
+      expect.objectContaining({
+        reason: 'local-values-present',
+        localKeyCount: 1,
+        remoteKeyCount: 1,
+      }),
+    ]);
+    expect(preview.valueBundleConflicts[0].localBytes).toBeGreaterThan(0);
+    expect(preview.valueBundleConflicts[0].remoteBytes).toBeGreaterThan(0);
+    const serializedPreview = JSON.stringify(preview.valueBundleConflicts);
+    expect(serializedPreview).not.toContain('script_values');
+    expect(serializedPreview).not.toContain('Values');
+    expect(serializedPreview).not.toContain('token');
+    expect(serializedPreview).not.toContain('local-token');
+    expect(serializedPreview).not.toContain('remote-token');
+    expect(provider.upload).not.toHaveBeenCalled();
+    expect(ScriptValues.setAll).not.toHaveBeenCalled();
+  });
+
   it('preserves remote GM value bundles during sync when local values are non-empty', async () => {
     await chrome.storage.local.set({
       syncTombstones: {},
