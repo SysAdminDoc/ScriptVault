@@ -60,7 +60,18 @@ Cycle 99 adds the downloaded-bundle apply gate without enabling local writes:
 - Real sync runs check remote bundle eligibility for aggregate diagnostics but
   still do not call a local GM value write path.
 
-The next implementation slice can apply downloaded bundles only for scripts with
-the opt-in flag and a conflict-safe value state. A first apply pass should stay
-limited to an empty-local-store case, or wait for per-key timestamps or another
-durable last-write signal before merging non-empty local and remote values.
+Cycle 100 enables the first downloaded-bundle write path:
+
+- A valid remote bundle can be applied only after the script merge has completed
+  and the current script still has `script.settings.syncValues === true`.
+- The apply path reads local GM storage first and calls `ScriptValues.setAll()`
+  only when the local value bag is empty.
+- If local values are non-empty, the script is locally user-modified, value
+  storage is unavailable, or a value write fails, the remote bundle is preserved
+  in the upload envelope instead of being overwritten by the local bundle.
+- Dry-run previews report empty-local apply-ready and conflict-blocked bundle
+  counts. They do not expose script IDs, value keys, or values.
+
+The next implementation slice should add per-key timestamps, a conflict preview,
+or another durable last-write signal before non-empty local and remote value
+bags can be merged bidirectionally.
