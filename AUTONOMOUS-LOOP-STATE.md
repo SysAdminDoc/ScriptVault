@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 122 - 2026-06-07
+Last cycle: Cycle 123 - 2026-06-07
 
 ## Latest Result
 
@@ -735,13 +735,24 @@ Last cycle: Cycle 122 - 2026-06-07
   CloudSync/sync-cockpit/parity tests, typecheck, build, the full check suite
   with 1511 Vitest cases, high-severity audit, CWS remote-code scan, Monaco ESM
   scan, TS runtime check, forbidden-reference grep, and `git diff --check`.
+  Cycle 123 added aggregate merge simulation totals for L-8 dry-run previews:
+  summaries and sanitized exports now count ready-preview-only, manual-review,
+  and unavailable candidate merge simulation states, and the dashboard preview
+  renders those totals separately from candidate gate counts. The evidence
+  remains aggregate only and omits script IDs, script names, value key names,
+  values, URLs, local workspace handles, local paths, sync credentials, provider
+  account data, and raw `keyMetadata` maps. Non-empty writes remain disabled.
+  Verification used focused source CloudSync/sync-cockpit/parity tests,
+  typecheck, build, the full check suite with 1511 Vitest cases, high-severity
+  audit, CWS remote-code scan, Monaco ESM scan, TS runtime check,
+  forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 64. Cycle 122 added preview-only GM value sync
-merge simulation markers. The next best local cycle is Cycle 123: add
-accepted-result export drift guards, merge simulation aggregate totals, or the
-next L-8 safeguard needed before broader bidirectional GM value merges.
+Continue from `ROADMAP.md` Round 65. Cycle 123 added aggregate GM value sync
+merge simulation totals. The next best local cycle is Cycle 124: add
+accepted-result export drift guards, merge simulation result totals, or the next
+L-8 safeguard needed before broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -750,9 +761,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 122 complete for 2026-06-07; roadmap continuation
-  points to Cycle 123 GM value sync accepted-result export drift guards, merge
-  simulation aggregate totals, or the next available non-credential-gated L-8
+- Status: ScriptVault Cycle 123 complete for 2026-06-07; roadmap continuation
+  points to Cycle 124 GM value sync accepted-result export drift guards, merge
+  simulation result totals, or the next available non-credential-gated L-8
   safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

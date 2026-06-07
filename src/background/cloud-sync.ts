@@ -160,6 +160,9 @@ interface SyncPreviewSummary {
   remoteValueBundleCandidateMergesReady: number;
   remoteValueBundleCandidateMergesManualReview: number;
   remoteValueBundleCandidateMergesUnavailable: number;
+  remoteValueBundleMergeSimulationReadyPreviewOnly: number;
+  remoteValueBundleMergeSimulationManualReview: number;
+  remoteValueBundleMergeSimulationUnavailable: number;
   remoteValueBundleCandidateMergesBlockedSameTimestamp: number;
   remoteValueBundleCandidateMergesBlockedUnknownTimestamp: number;
   remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: number;
@@ -1349,6 +1352,9 @@ export const CloudSync = {
       remoteValueBundleCandidateMergesReady: remoteValueBundleApplyReadiness.candidateMergeReady,
       remoteValueBundleCandidateMergesManualReview: remoteValueBundleApplyReadiness.candidateMergeManualReview,
       remoteValueBundleCandidateMergesUnavailable: remoteValueBundleApplyReadiness.candidateMergeUnavailable,
+      remoteValueBundleMergeSimulationReadyPreviewOnly: remoteValueBundleApplyReadiness.candidateMergeReady,
+      remoteValueBundleMergeSimulationManualReview: remoteValueBundleApplyReadiness.candidateMergeManualReview,
+      remoteValueBundleMergeSimulationUnavailable: remoteValueBundleApplyReadiness.candidateMergeUnavailable,
       remoteValueBundleCandidateMergesBlockedSameTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedSameTimestamp,
       remoteValueBundleCandidateMergesBlockedUnknownTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedUnknownTimestamp,
       remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedOneSidedTimestamp,
