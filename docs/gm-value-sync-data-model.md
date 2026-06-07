@@ -508,6 +508,18 @@ Cycle 138 adds timestamp dashboard log clamping:
 - This is dashboard rendering hardening only. It does not enable non-empty
   local/remote merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add write-failure retry diagnostics,
-accepted-write retry preview evidence, or another durable safeguard before
-non-empty local and remote value bags can be merged bidirectionally.
+Cycle 139 adds write retry-ready diagnostics:
+
+- Real sync results now include aggregate `writeFailureRetryReady` evidence only
+  when a remote bundle reached the empty-local write path and `ScriptValues.setAll`
+  failed.
+- Read failures remain generic failures and do not count as write retry-ready.
+- The dashboard sync log renders the aggregate retry-ready count, clamps injected
+  values to preserved/failure budgets, and still omits script IDs, script names,
+  value keys, values, and raw key metadata.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add accepted-write retry preview evidence,
+write-retry history hardening, or another durable safeguard before non-empty
+local and remote value bags can be merged bidirectionally.

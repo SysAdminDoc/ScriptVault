@@ -174,6 +174,13 @@ function expectReadyPreservedCandidateResultInvariants(valueBundleSync) {
     .toBe(valueBundleSync.preservedCandidateResultKeyTotal);
 }
 
+function expectWriteFailureRetryReadyInvariants(valueBundleSync) {
+  expect(valueBundleSync.writeFailureRetryReady).toBe(valueBundleSync.failures);
+  expect(valueBundleSync.writeFailureRetryReady).toBeLessThanOrEqual(valueBundleSync.preserved);
+  expect(valueBundleSync.preservedCandidateMergeReady)
+    .toBeGreaterThanOrEqual(valueBundleSync.writeFailureRetryReady);
+}
+
 function expectUnknownPreservedTimestampInvariants(valueBundleSync) {
   expect(valueBundleSync.preservedTimestampUnknown).toBe(valueBundleSync.preserved);
   expect(valueBundleSync.preservedRemoteNewer).toBe(0);
@@ -1543,6 +1550,7 @@ describe('source cloud sync module', () => {
         skippedUserModified: 0,
         skippedUnavailable: 0,
         failures: 1,
+        writeFailureRetryReady: 1,
         preservedRemoteNewer: 0,
         preservedLocalNewer: 0,
         preservedSameTimestamp: 0,
@@ -1565,6 +1573,7 @@ describe('source cloud sync module', () => {
     });
     expectPreservedCandidateSummaryInvariants(result.valueBundleSync);
     expectReadyPreservedCandidateResultInvariants(result.valueBundleSync);
+    expectWriteFailureRetryReadyInvariants(result.valueBundleSync);
     expectUnknownPreservedTimestampInvariants(result.valueBundleSync);
 
     expect(ScriptValues.setAll).toHaveBeenCalledWith('script_values', { token: 'remote-token' });

@@ -16675,6 +16675,7 @@ function createEmptyRemoteValueBundleApplyResult() {
     skippedUserModified: 0,
     skippedUnavailable: 0,
     failures: 0,
+    writeFailureRetryReady: 0,
     preservedValueBundles: {},
     preservedRemoteNewer: 0,
     preservedLocalNewer: 0,
@@ -16706,6 +16707,9 @@ function summarizeRemoteValueBundleApplyResult(result) {
     skippedUserModified: result.skippedUserModified,
     skippedUnavailable: result.skippedUnavailable,
     failures: result.failures,
+    ...(result.writeFailureRetryReady > 0
+      ? { writeFailureRetryReady: result.writeFailureRetryReady }
+      : {}),
     preservedRemoteNewer: result.preservedRemoteNewer,
     preservedLocalNewer: result.preservedLocalNewer,
     preservedSameTimestamp: result.preservedSameTimestamp,
@@ -17118,17 +17122,27 @@ async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts =
       continue;
     }
 
+    let localValues = null;
     try {
-      const localValues = await ScriptValues.getAll(scriptId);
-      if (Object.keys(localValues || {}).length > 0) {
-        result.skippedNonEmpty++;
-        preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
-        continue;
-      }
+      localValues = await ScriptValues.getAll(scriptId);
+    } catch (_) {
+      result.failures++;
+      preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
+      continue;
+    }
+
+    if (Object.keys(localValues || {}).length > 0) {
+      result.skippedNonEmpty++;
+      preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
+      continue;
+    }
+
+    try {
       await ScriptValues.setAll(scriptId, bundle.values);
       result.applied++;
     } catch (_) {
       result.failures++;
+      result.writeFailureRetryReady++;
       preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
     }
   }
