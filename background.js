@@ -16747,6 +16747,11 @@ function countRemoteValueBundlesApplyReady(selection, local) {
   let candidateMergeReady = 0;
   let candidateMergeManualReview = 0;
   let candidateMergeUnavailable = 0;
+  let candidateMergeBlockedSameTimestamp = 0;
+  let candidateMergeBlockedUnknownTimestamp = 0;
+  let candidateMergeBlockedOneSidedTimestamp = 0;
+  let candidateMergeBlockedUnavailable = 0;
+  let candidateMergeBlockedNoCandidateKeys = 0;
   const conflicts = [];
   const localBundles = getSyncEnvelopeValueBundles(local);
   const localScriptIds = new Set(
@@ -16759,6 +16764,11 @@ function countRemoteValueBundlesApplyReady(selection, local) {
     if (preview.candidateMergeGate === 'ready') candidateMergeReady++;
     else if (preview.candidateMergeGate === 'unavailable') candidateMergeUnavailable++;
     else candidateMergeManualReview++;
+    if (preview.candidateMergeBlockReason === 'same-timestamp') candidateMergeBlockedSameTimestamp++;
+    else if (preview.candidateMergeBlockReason === 'unknown-timestamp') candidateMergeBlockedUnknownTimestamp++;
+    else if (preview.candidateMergeBlockReason === 'one-sided-timestamp') candidateMergeBlockedOneSidedTimestamp++;
+    else if (preview.candidateMergeBlockReason === 'local-bundle-unavailable') candidateMergeBlockedUnavailable++;
+    else if (preview.candidateMergeBlockReason === 'no-candidate-keys') candidateMergeBlockedNoCandidateKeys++;
     if (conflicts.length < 20) {
       conflicts.push(preview);
     }
@@ -16781,7 +16791,12 @@ function countRemoteValueBundlesApplyReady(selection, local) {
     conflicts,
     candidateMergeReady,
     candidateMergeManualReview,
-    candidateMergeUnavailable
+    candidateMergeUnavailable,
+    candidateMergeBlockedSameTimestamp,
+    candidateMergeBlockedUnknownTimestamp,
+    candidateMergeBlockedOneSidedTimestamp,
+    candidateMergeBlockedUnavailable,
+    candidateMergeBlockedNoCandidateKeys
   };
 }
 
@@ -19880,6 +19895,11 @@ const CloudSync = {
       remoteValueBundleCandidateMergesReady: remoteValueBundleApplyReadiness.candidateMergeReady,
       remoteValueBundleCandidateMergesManualReview: remoteValueBundleApplyReadiness.candidateMergeManualReview,
       remoteValueBundleCandidateMergesUnavailable: remoteValueBundleApplyReadiness.candidateMergeUnavailable,
+      remoteValueBundleCandidateMergesBlockedSameTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedSameTimestamp,
+      remoteValueBundleCandidateMergesBlockedUnknownTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedUnknownTimestamp,
+      remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedOneSidedTimestamp,
+      remoteValueBundleCandidateMergesBlockedUnavailable: remoteValueBundleApplyReadiness.candidateMergeBlockedUnavailable,
+      remoteValueBundleCandidateMergesBlockedNoCandidateKeys: remoteValueBundleApplyReadiness.candidateMergeBlockedNoCandidateKeys,
       valueBundleApplyEnabled: true,
       valueBundleApplyMode: 'empty-local-only',
       wouldUpload: false,

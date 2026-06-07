@@ -237,6 +237,21 @@ Cycle 113 adds an advisory candidate merge acceptance gate:
 - The gate is advisory only. It does not enable non-empty local/remote merge
   writes or change the empty-local-only apply rule.
 
-The next implementation slice should add manual-review diagnostics, candidate
-merge result dry-run evidence, or another durable safeguard before non-empty
-local and remote value bags can be merged bidirectionally.
+Cycle 114 adds manual-review reason diagnostics:
+
+- Dry-run summaries count candidate merge block reasons for same timestamps,
+  unknown timestamps, one-sided timestamps, unavailable local snapshots, and
+  no-candidate cases.
+- The dashboard preview and Download Preview export carry only those aggregate
+  reason counts.
+- A focused manual-review fixture pins that unknown per-key timestamp overlaps
+  are counted without exposing script IDs, script names, value key names,
+  values, URLs, local workspace handles, local paths, sync credentials, provider
+  account data, or raw `keyMetadata` maps.
+- These diagnostics are advisory only. They do not enable non-empty
+  local/remote merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add candidate merge result dry-run
+evidence, real-sync preserved-bundle acceptance summaries, or another durable
+safeguard before non-empty local and remote value bags can be merged
+bidirectionally.

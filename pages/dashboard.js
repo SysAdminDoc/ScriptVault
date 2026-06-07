@@ -3986,6 +3986,11 @@
             'remoteValueBundleCandidateMergesReady',
             'remoteValueBundleCandidateMergesManualReview',
             'remoteValueBundleCandidateMergesUnavailable',
+            'remoteValueBundleCandidateMergesBlockedSameTimestamp',
+            'remoteValueBundleCandidateMergesBlockedUnknownTimestamp',
+            'remoteValueBundleCandidateMergesBlockedOneSidedTimestamp',
+            'remoteValueBundleCandidateMergesBlockedUnavailable',
+            'remoteValueBundleCandidateMergesBlockedNoCandidateKeys',
         ];
         for (const key of keys) {
             safe[key] = Math.max(0, Number(summary?.[key]) || 0);
@@ -4086,6 +4091,7 @@
             lines.push(`GM values: ${summary.localValueOptIns || 0} local opt-ins, ${summary.localValueBundles || 0} local bundles, ${summary.remoteValueBundles || 0} remote bundles (${summary.remoteValueBundlesApplyReady || 0} empty-local apply-ready, ${summary.remoteValueBundlesConflictBlocked || 0} conflict-blocked, ${summary.remoteValueBundlesIgnored || 0} ignored).`);
             lines.push(`GM value timestamps: ${summary.localValueBundlesWithTimestamps || 0} local timestamped, ${summary.localValueBundlesMissingTimestamps || 0} local missing, ${summary.remoteValueBundlesWithTimestamps || 0} remote timestamped, ${summary.remoteValueBundlesMissingTimestamps || 0} remote missing; older than last sync ${summary.localValueBundlesOlderThanLastSync || 0} local/${summary.remoteValueBundlesOlderThanLastSync || 0} remote, newer ${summary.localValueBundlesNewerThanLastSync || 0} local/${summary.remoteValueBundlesNewerThanLastSync || 0} remote.`);
             lines.push(`GM value candidate merge gate: ${summary.remoteValueBundleCandidateMergesReady || 0} ready, ${summary.remoteValueBundleCandidateMergesManualReview || 0} manual review, ${summary.remoteValueBundleCandidateMergesUnavailable || 0} unavailable.`);
+            lines.push(`GM value manual review reasons: ${summary.remoteValueBundleCandidateMergesBlockedSameTimestamp || 0} same timestamp, ${summary.remoteValueBundleCandidateMergesBlockedUnknownTimestamp || 0} unknown timestamp, ${summary.remoteValueBundleCandidateMergesBlockedOneSidedTimestamp || 0} one-sided timestamp, ${summary.remoteValueBundleCandidateMergesBlockedUnavailable || 0} unavailable local snapshot, ${summary.remoteValueBundleCandidateMergesBlockedNoCandidateKeys || 0} no candidate keys.`);
         }
         const valueBundleConflicts = Array.isArray(preview.valueBundleConflicts) ? preview.valueBundleConflicts : [];
         if (valueBundleConflicts.length) {
