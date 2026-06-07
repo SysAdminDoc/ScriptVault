@@ -828,6 +828,16 @@ Cycle 164 pins support summary count-order coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 165 pins support summary warning-total coverage:
+
+- Support-snapshot redaction tests now pin the summary warning total to
+  sanitized `gmValueSync.warningCounts` values.
+- Every warning total count flows through `sanitizeSupportSnapshotCount()`.
+- Warning totals render only as capped/excluded aggregate value wording, and the
+  summary rejects raw local-health warning iteration.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add retry-resolution history type/schema
-coverage, support summary warning-total coverage, or another durable safeguard
+coverage, support summary fallback-state coverage, or another durable safeguard
 before non-empty local and remote value bags can be merged bidirectionally.

@@ -453,6 +453,15 @@ describe('exportSupportSnapshot modal flow', () => {
     }
   });
 
+  it('support summary warning total uses only sanitized warning-count values', () => {
+    const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
+    expect(summaryBlock).toBeTruthy();
+    expect(summaryBlock[0]).toContain('const gmValueSync = sanitized?.gmValueSync;');
+    expect(summaryBlock[0]).toContain('const warningTotal = Object.values(gmValueSync.warningCounts || {}).reduce((sum, count) => sum + sanitizeSupportSnapshotCount(count), 0);');
+    expect(summaryBlock[0]).toContain("parts.push(`${numberFormatter.format(warningTotal)} capped or excluded value${warningTotal === 1 ? '' : 's'}`);");
+    expect(summaryBlock[0]).not.toMatch(/Object\.values\(localHealthReport|Object\.keys\(gmValueSync\.warningCounts|Object\.entries\(gmValueSync\.warningCounts/);
+  });
+
   it('support summary reads only reviewed GM value sync fields after sanitization', () => {
     const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
     expect(summaryBlock).toBeTruthy();
