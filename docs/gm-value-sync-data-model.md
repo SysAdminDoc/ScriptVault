@@ -451,6 +451,15 @@ Cycle 132 adds failure-only sync log safeguards:
 - This is dashboard rendering coverage only. It does not enable non-empty
   local/remote merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add unavailable preserved-candidate result
-invariants, failure-only source coverage, or another durable safeguard before non-empty
+Cycle 133 adds unavailable preserved-candidate result invariants:
+
+- A source CloudSync assertion helper now pins that unavailable preserved
+  candidates map to the unavailable block reason.
+- The same helper proves unavailable preserved candidates carry zero result,
+  auto-selected, review, and accepted-ready key totals.
+- This is regression coverage only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add failure-only source coverage,
+result-summary parity guards, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
