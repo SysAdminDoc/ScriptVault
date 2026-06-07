@@ -305,6 +305,23 @@ describe('exportSupportSnapshot modal flow', () => {
     }
   });
 
+  it('GM value sync warning-count support export reads only reviewed warning ids', () => {
+    const warningBlock = getFunctionBlock('sanitizeGmValueSyncWarningCountsForSupportSnapshot', 'sanitizeGmValueSyncRetryResolutionForSupportSnapshot');
+    const setBlock = warningBlock.match(/const allowedWarningIds = new Set\(\[\n([\s\S]*?)\n\s*\]\);/);
+    expect(setBlock).toBeTruthy();
+    const warningIds = [...setBlock[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+    expect(warningIds).toEqual([
+      'maxKeysExceeded',
+      'keyTooLarge',
+      'valueNotJsonSerializable',
+      'scriptValueCapExceeded',
+      'valueReadFailed'
+    ]);
+    expect(warningBlock).toContain('for (const id of allowedWarningIds)');
+    expect(warningBlock).toContain('const count = sanitizeSupportSnapshotCount(warningCounts?.[id]);');
+    expect(warningBlock).not.toMatch(/\.\.\.warningCounts|Object\.keys\(warningCounts|Object\.entries\(warningCounts/);
+  });
+
   it('GM value sync retry resolution is summarized before support snapshot export', () => {
     const resolutionBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryResolutionForSupportSnapshot\(retryResolution\) \{[\s\S]*?function sanitizeGmValueSyncRetryHistoryForSupportSnapshot/);
     expect(resolutionBlock).toBeTruthy();
