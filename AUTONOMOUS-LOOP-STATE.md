@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 177 - 2026-06-07
+Last cycle: Cycle 178 - 2026-06-07
 
 ## Latest Result
 
@@ -1271,12 +1271,21 @@ Last cycle: Cycle 177 - 2026-06-07
   check suite with 1550 Vitest cases, high-severity audit, CWS remote-code scan,
   Monaco ESM scan, TS runtime check, forbidden-reference grep, and
   `git diff --check`.
+  Cycle 178 added retry-history timestamp retention coverage for L-8:
+  support-snapshot redaction tests now pin retry-history and
+  retry-resolution-history timestamp export to the retained-history helper so
+  timestamps are nulled when no retained entries remain. Stored and exported
+  diagnostics remain aggregate-only, and non-empty writes remain disabled.
+  Verification used focused support-snapshot tests, typecheck, build, the full
+  check suite with 1551 Vitest cases, high-severity audit, CWS remote-code scan,
+  Monaco ESM scan, TS runtime check, forbidden-reference grep, and
+  `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 92. Cycle 177 added GM value sync support
-nested-field drift coverage. The next best local cycle is Cycle 178: add
-retry-history timestamp bucket coverage, support summary warning-count nested
+Continue from `ROADMAP.md` Round 92. Cycle 178 added GM value sync retry-history
+timestamp retention coverage. The next best local cycle is Cycle 179: add
+support summary warning-count nested coverage, retry-resolution timestamp range
 coverage, or the next L-8 safeguard needed before broader bidirectional GM value
 merges.
 The live two-tab
@@ -1287,9 +1296,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 177 complete for 2026-06-07; roadmap continuation
-  points to Cycle 178 GM value sync retry-history timestamp bucket coverage,
-  support summary warning-count nested coverage, or the next available
+- Status: ScriptVault Cycle 178 complete for 2026-06-07; roadmap continuation
+  points to Cycle 179 GM value sync support summary warning-count nested
+  coverage, retry-resolution timestamp range coverage, or the next available
   non-credential-gated L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

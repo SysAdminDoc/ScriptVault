@@ -5,9 +5,9 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 92 - GM value sync support nested-field coverage 2026-06-07.
+> **Roadmap version:** Round 92 - GM value sync retry-history timestamp retention coverage 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1550 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1551 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 92 - 2026-06-07.
@@ -450,6 +450,10 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   support snapshot redaction suite now pins the exact nested last-result,
   retry-resolution, retry-resolution-history, and retry-history fields that the
   pre-export GM value summary may read after sanitization.
+- **Cycle 178 update:** Added retry-history timestamp retention coverage. The
+  support snapshot redaction suite now pins retained retry-history and
+  retry-resolution-history timestamp export to the shared retained-history helper
+  so timestamps are nulled when no retained entries remain.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -566,11 +570,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 127 | GM value-sync last-result timestamp sanitizer coverage | `pages/dashboard.js`, `tests/support-snapshot-redaction.test.js` | Support exports should normalize last-result timestamps through the reviewed helper [S47, S98] | Routed last-result timestamp export through `sanitizeSupportSnapshotTimestamp()` and pinned the shared-helper path |
 | 128 | GM value-sync retry-age unknown bucket coverage | `src/background/core.ts`, `background.core.js`, `tests/local-health-report.test.js` | Retry-ready diagnostics with missing timestamps should not be labeled fresh [S47, S98] | Classified null/undefined retry ages as `unknown` and pinned the local-health last-result gating path |
 | 129 | GM value-sync support nested-field coverage | `tests/support-snapshot-redaction.test.js` | Pre-export support summaries should read only reviewed nested sanitized fields [S47, S98] | Pinned nested last-result, retry-resolution, retry-resolution-history, and retry-history field allowlists |
+| 130 | GM value-sync retry-history timestamp retention coverage | `tests/support-snapshot-redaction.test.js` | Support exports should not retain retry-history timestamps when retained history is empty [S47, S98] | Pinned retained-history timestamp helper use for retry and retry-resolution histories |
 
 ## Continuation State
 
-- **Current cycle:** Round 92 Cycle 177 added GM value sync support nested-field drift coverage.
-- **Next implementation angle:** Cycle 178 should continue L-8 with retry-history timestamp bucket coverage, support summary warning-count nested coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 92 Cycle 178 added GM value sync retry-history timestamp retention coverage.
+- **Next implementation angle:** Cycle 179 should continue L-8 with support summary warning-count nested coverage, retry-resolution timestamp range coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 

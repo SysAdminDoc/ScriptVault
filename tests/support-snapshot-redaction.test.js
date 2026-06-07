@@ -391,6 +391,21 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(historyBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('GM value sync retry history timestamps require retained entries before support export', () => {
+    const timestampBlock = getFunctionBlock('sanitizeSupportSnapshotRetainedHistoryTimestamp', 'sanitizeGmValueRetryAgeBucketForSupportSnapshot');
+    const retryHistoryBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryHistoryForSupportSnapshot\(retryHistory\) \{[\s\S]*?function sanitizeGmValueSyncLastResultForSupportSnapshot/);
+    const resolutionHistoryBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryResolutionHistoryForSupportSnapshot\(retryResolutionHistory\) \{[\s\S]*?function sanitizeGmValueSyncRetryHistoryForSupportSnapshot/);
+    expect(retryHistoryBlock).toBeTruthy();
+    expect(resolutionHistoryBlock).toBeTruthy();
+    expect(timestampBlock).toContain('if (entries <= 0) return null;');
+    expect(timestampBlock).toContain('return sanitizeSupportSnapshotTimestamp(value);');
+    expect(retryHistoryBlock[0]).toContain('const latestTimestamp = sanitizeSupportSnapshotRetainedHistoryTimestamp(retryHistory.latestTimestamp, entries);');
+    expect(retryHistoryBlock[0]).toContain('let oldestTimestamp = sanitizeSupportSnapshotRetainedHistoryTimestamp(retryHistory.oldestTimestamp, entries);');
+    expect(resolutionHistoryBlock[0]).toContain('const latestTimestamp = sanitizeSupportSnapshotRetainedHistoryTimestamp(retryResolutionHistory.latestTimestamp, entries);');
+    expect(resolutionHistoryBlock[0]).toContain('let oldestTimestamp = sanitizeSupportSnapshotRetainedHistoryTimestamp(retryResolutionHistory.oldestTimestamp, entries);');
+    expect(`${retryHistoryBlock[0]}\n${resolutionHistoryBlock[0]}`).not.toMatch(/sanitizeSupportSnapshotTimestamp\((retryHistory|retryResolutionHistory)\.(latestTimestamp|oldestTimestamp)\)/);
+  });
+
   it('support summary surfaces only aggregate GM value sync retry health', () => {
     const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
     expect(summaryBlock).toBeTruthy();
