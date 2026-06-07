@@ -330,7 +330,7 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(buckets).toEqual(['none', 'fresh', 'recent', 'stale', 'old', 'unknown']);
     expect(bucketBlock).toContain("return allowed.has(value) ? value : 'unknown';");
     expect(dashboardJs).toContain('retryAgeBucket: writeFailureRetryReady > 0');
-    expect(dashboardJs).toContain('resolutionAgeBucket: sanitizeGmValueRetryAgeBucketForSupportSnapshot(retryResolution.resolutionAgeBucket)');
+    expect(dashboardJs).toContain("const resolutionAgeBucket = resolutionAgeMinutes != null\n            ? sanitizeGmValueRetryAgeBucketForSupportSnapshot(retryResolution.resolutionAgeBucket)\n            : 'unknown';");
   });
 
   it('GM value sync last-result support export clamps retry-ready evidence', () => {
@@ -369,6 +369,14 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(resolutionBlock[0]).toContain('if (latestRetryTimestamp != null && latestRetryTimestamp > timestamp) latestRetryTimestamp = timestamp;');
     expect(resolutionBlock[0]).toContain('latestRetryTimestamp,');
     expect(resolutionBlock[0]).not.toContain('latestRetryTimestamp: sanitizeSupportSnapshotTimestamp(retryResolution.latestRetryTimestamp)');
+  });
+
+  it('GM value sync retry resolution age bucket is gated by retained age minutes before support export', () => {
+    const resolutionBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryResolutionForSupportSnapshot\(retryResolution\) \{[\s\S]*?function sanitizeGmValueSyncRetryHistoryForSupportSnapshot/);
+    expect(resolutionBlock).toBeTruthy();
+    expect(resolutionBlock[0]).toContain("const resolutionAgeBucket = resolutionAgeMinutes != null\n            ? sanitizeGmValueRetryAgeBucketForSupportSnapshot(retryResolution.resolutionAgeBucket)\n            : 'unknown';");
+    expect(resolutionBlock[0]).toContain('resolutionAgeBucket,');
+    expect(resolutionBlock[0]).not.toContain('resolutionAgeBucket: sanitizeGmValueRetryAgeBucketForSupportSnapshot(retryResolution.resolutionAgeBucket)');
   });
 
   it('GM value sync retry history is summarized before support snapshot export', () => {

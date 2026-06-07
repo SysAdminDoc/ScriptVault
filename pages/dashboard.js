@@ -5558,6 +5558,9 @@
         const resolutionAgeMinutes = retryResolution.resolutionAgeMinutes != null
             ? sanitizeSupportSnapshotCount(retryResolution.resolutionAgeMinutes)
             : null;
+        const resolutionAgeBucket = resolutionAgeMinutes != null
+            ? sanitizeGmValueRetryAgeBucketForSupportSnapshot(retryResolution.resolutionAgeBucket)
+            : 'unknown';
         let latestRetryTimestamp = sanitizeSupportSnapshotTimestamp(retryResolution.latestRetryTimestamp);
         if (latestRetryTimestamp != null && latestRetryTimestamp > timestamp) latestRetryTimestamp = timestamp;
         return {
@@ -5568,7 +5571,7 @@
             priorRetryReadyWrites,
             latestRetryTimestamp,
             resolutionAgeMinutes,
-            resolutionAgeBucket: sanitizeGmValueRetryAgeBucketForSupportSnapshot(retryResolution.resolutionAgeBucket),
+            resolutionAgeBucket,
             privacy: {
                 includesValues: false,
                 includesValueKeys: false,
