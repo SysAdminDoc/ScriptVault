@@ -774,6 +774,17 @@ Cycle 159 pins support warning-count schema drift coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 160 pins retry-age bucket schema drift coverage:
+
+- Support-snapshot redaction tests now extract the reviewed retry-age bucket
+  allowlist from `sanitizeGmValueRetryAgeBucketForSupportSnapshot()`.
+- The only exported bucket values are `none`, `fresh`, `recent`, `stale`,
+  `old`, and `unknown`.
+- Unknown bucket input must collapse to `unknown`, and both retry-ready
+  last-result output and retry-resolution output use the same sanitizer.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add retry-resolution retention cleanup,
-retry-age bucket schema drift coverage, or another durable safeguard before
+support summary phrase drift coverage, or another durable safeguard before
 non-empty local and remote value bags can be merged bidirectionally.

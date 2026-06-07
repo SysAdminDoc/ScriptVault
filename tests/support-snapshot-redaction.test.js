@@ -322,6 +322,17 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(warningBlock).not.toMatch(/\.\.\.warningCounts|Object\.keys\(warningCounts|Object\.entries\(warningCounts/);
   });
 
+  it('GM value sync retry-age support export accepts only reviewed buckets', () => {
+    const bucketBlock = getFunctionBlock('sanitizeGmValueRetryAgeBucketForSupportSnapshot', 'formatGmValueRetryAgeBucket');
+    const setBlock = bucketBlock.match(/const allowed = new Set\(\[([^\]]+)\]\);/);
+    expect(setBlock).toBeTruthy();
+    const buckets = [...setBlock[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+    expect(buckets).toEqual(['none', 'fresh', 'recent', 'stale', 'old', 'unknown']);
+    expect(bucketBlock).toContain("return allowed.has(value) ? value : 'unknown';");
+    expect(dashboardJs).toContain('retryAgeBucket: writeFailureRetryReady > 0');
+    expect(dashboardJs).toContain('resolutionAgeBucket: sanitizeGmValueRetryAgeBucketForSupportSnapshot(retryResolution.resolutionAgeBucket)');
+  });
+
   it('GM value sync retry resolution is summarized before support snapshot export', () => {
     const resolutionBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryResolutionForSupportSnapshot\(retryResolution\) \{[\s\S]*?function sanitizeGmValueSyncRetryHistoryForSupportSnapshot/);
     expect(resolutionBlock).toBeTruthy();
