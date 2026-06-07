@@ -817,6 +817,17 @@ Cycle 163 pins support summary phrase drift coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 164 pins support summary count-order coverage:
+
+- Support-snapshot redaction tests now pin the reviewed order of GM value
+  pre-export summary evidence.
+- The order remains baseline opt-in, ready-bundle, and key/byte counts first,
+  then retry-ready writes, retry-resolution applies, recent resolution history,
+  stale resolution history, recent retry history, stale retry history, warning
+  total, and the final joined summary output.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add retry-resolution history type/schema
-coverage, support summary count-order coverage, or another durable safeguard
+coverage, support summary warning-total coverage, or another durable safeguard
 before non-empty local and remote value bags can be merged bidirectionally.
