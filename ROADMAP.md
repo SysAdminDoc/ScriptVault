@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 82 - GM value sync retry preview evidence 2026-06-07.
+> **Roadmap version:** Round 83 - GM value sync retry support diagnostics 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
 > **Test suite:** 1521 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 82 - 2026-06-07.
+> Last researched: Round 83 - 2026-06-07.
 
 ---
 
@@ -277,6 +277,10 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   empty-local write, proving the preserved remote bundle is still advertised as
   apply-ready on the next dry run while preview output omits identifiers, value
   keys, and values.
+- **Cycle 141 update:** Added support-safe retry-ready diagnostics by persisting
+  sanitized aggregate `valueBundleSync` counts in the last sync result and
+  surfacing `lastResult.writeFailureRetryReady` through local health/support
+  snapshots without provider error text, identifiers, value keys, or values.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -360,8 +364,8 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 
 ## Continuation State
 
-- **Current cycle:** Round 82 Cycle 140 added GM value sync retry preview evidence.
-- **Next implementation angle:** Cycle 141 should continue L-8 with write-retry history hardening, retry-ready support snapshot summaries, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 83 Cycle 141 added GM value sync retry support diagnostics.
+- **Next implementation angle:** Cycle 142 should continue L-8 with write-retry history hardening, last-result dashboard polish, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 

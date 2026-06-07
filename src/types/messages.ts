@@ -360,6 +360,19 @@ interface LocalHealthReportResponse {
     maxScriptBytes: number;
     maxKeys: number;
     maxKeyBytes: number;
+    lastResult: null | {
+      schema: 'scriptvault-gm-value-sync-result/v1';
+      timestamp: number | null;
+      ok: boolean;
+      skipped: boolean;
+      hasError: boolean;
+      applied: number;
+      preserved: number;
+      conflictBlocked: number;
+      skippedUnavailable: number;
+      failures: number;
+      writeFailureRetryReady: number;
+    };
     warningCounts: Record<string, number>;
     privacy: {
       includesValues: boolean;

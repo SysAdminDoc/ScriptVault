@@ -530,6 +530,17 @@ Cycle 140 adds retry preview evidence:
 - This is regression coverage only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 141 adds retry-ready support diagnostics:
+
+- Last sync result persistence now stores sanitized aggregate `valueBundleSync`
+  counts, including clamped `writeFailureRetryReady` evidence.
+- Local health and the always-on support snapshot path expose only aggregate
+  last-result counts and a retry-ready warning. They do not expose provider
+  error text, script IDs, script names, value keys, values, URLs, file handles,
+  local paths, or raw key metadata.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add write-retry history hardening,
-retry-ready support snapshot summaries, or another durable safeguard before
-non-empty local and remote value bags can be merged bidirectionally.
+last-result dashboard polish, or another durable safeguard before non-empty
+local and remote value bags can be merged bidirectionally.
