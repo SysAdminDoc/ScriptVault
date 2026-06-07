@@ -18930,6 +18930,13 @@ function buildGmValueSyncRetryResolutionRecord(history, record = {}) {
   };
 }
 
+function shouldRemoveGmValueSyncRetryResolutionRecord(record) {
+  if (!record || typeof record !== 'object' || record.schema !== GM_VALUE_SYNC_RETRY_RESOLUTION_SCHEMA) return true;
+  const timestamp = Number(record.timestamp);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return true;
+  return _isGmValueSyncRetryHistoryEntryStale({ timestamp });
+}
+
 async function persistLastSyncResult(result = {}) {
   try {
     const lastSyncResult = buildLastSyncResultRecord(result);
@@ -18938,12 +18945,18 @@ async function persistLastSyncResult(result = {}) {
       data = await chrome.storage.local.get(['gmValueSyncRetryHistory', 'gmValueSyncRetryResolution']);
     } catch (_) {}
     const gmValueSyncRetryResolution = buildGmValueSyncRetryResolutionRecord(data?.gmValueSyncRetryHistory, lastSyncResult);
+    const removeStaleRetryResolution = !gmValueSyncRetryResolution && shouldRemoveGmValueSyncRetryResolutionRecord(data?.gmValueSyncRetryResolution);
     const gmValueSyncRetryHistory = updateGmValueSyncRetryHistory(data?.gmValueSyncRetryHistory, lastSyncResult);
     await chrome.storage.local.set({
       lastSyncResult,
       gmValueSyncRetryHistory,
       ...(gmValueSyncRetryResolution ? { gmValueSyncRetryResolution } : {})
     });
+    if (removeStaleRetryResolution) {
+      try {
+        await chrome.storage.local.remove('gmValueSyncRetryResolution');
+      } catch (_) {}
+    }
   } catch (_e) { /* non-critical */ }
 }
 

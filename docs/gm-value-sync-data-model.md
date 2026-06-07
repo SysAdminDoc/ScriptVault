@@ -642,6 +642,17 @@ Cycle 148 adds retry-resolution health summaries:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add retry-resolution stale cleanup,
-resolution-history support evidence, or another durable safeguard before
-non-empty local and remote value bags can be merged bidirectionally.
+Cycle 149 adds stale retry-resolution cleanup:
+
+- When sync result persistence does not write a fresh retry-resolution record, it
+  removes stale or malformed `gmValueSyncRetryResolution` records from local
+  extension storage.
+- This keeps retry-resolution evidence on the same seven-day retention boundary
+  as retry history and prevents hidden local diagnostics from retaining old
+  aggregate resolution evidence indefinitely.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add resolution-history support evidence,
+retry-resolution export hardening, or another durable safeguard before non-empty
+local and remote value bags can be merged bidirectionally.
