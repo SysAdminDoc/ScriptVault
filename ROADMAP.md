@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 90 - GM value sync retry-resolution health summaries 2026-06-07.
+> **Roadmap version:** Round 91 - GM value sync retry-resolution stale cleanup 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
 > **Test suite:** 1525 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 90 - 2026-06-07.
+> Last researched: Round 91 - 2026-06-07.
 
 ---
 
@@ -322,6 +322,11 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   counts, timestamps, age buckets, and privacy flags; and the Support Snapshot
   card reports resolution evidence without exposing script IDs, value key names,
   values, provider account data, credentials, or raw key metadata.
+- **Cycle 149 update:** Added stale retry-resolution cleanup. Sync result
+  persistence now removes stale or malformed `gmValueSyncRetryResolution`
+  records when no new clean retry-resolution record is written, so hidden local
+  diagnostics cannot retain old resolution evidence indefinitely while the
+  health/support export path remains aggregate-only.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -409,11 +414,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 98 | GM value-sync stale retry cleanup | `src/background/core.ts`, `src/types/messages.ts`, generated runtime artifacts, `pages/dashboard.js`, focused local-health/support tests | Chrome storage APIs support extension-local JSON state, and CWS user-data guidance favors minimal aggregate diagnostics for support exports [S89, S97] | Added seven-day retry-history retention, stale-entry pruning on sync persistence, local-health retained/stale counts, and support-snapshot allowlisting |
 | 99 | GM value-sync retry resolution drill | `tests/source-cloud-sync.test.js` | Empty-local-only retries should prove a transient write failure resolves on a later sync without widening stored or exported diagnostics [S89, S97] | Extended the write-failure fixture through a second sync that applies the preserved remote bundle and keeps retry result output identifier/value-free |
 | 100 | GM value-sync retry-resolution health summaries | `src/background/core.ts`, `src/types/messages.ts`, generated runtime artifacts, `pages/dashboard.js`, focused local-health/support tests | Support diagnostics need aggregate proof that retry-ready failures later cleared without exporting scripts, values, account data, or provider errors [S89, S97] | Added local retry-resolution records, support-safe health/export summaries, age buckets, and clear-all cleanup for resolution evidence |
+| 101 | GM value-sync retry-resolution stale cleanup | `src/background/core.ts`, generated runtime artifacts, `tests/local-health-report.test.js` | Local diagnostic records should keep the same retention boundary as support-safe history evidence [S89, S97] | Removed stale or malformed retry-resolution records during sync result persistence when no fresh resolution is written |
 
 ## Continuation State
 
-- **Current cycle:** Round 90 Cycle 148 added GM value sync retry-resolution health summaries.
-- **Next implementation angle:** Cycle 149 should continue L-8 with retry-resolution stale cleanup, resolution-history support evidence, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 91 Cycle 149 added GM value sync retry-resolution stale cleanup.
+- **Next implementation angle:** Cycle 150 should continue L-8 with resolution-history support evidence, retry-resolution export hardening, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 

@@ -77,10 +77,12 @@ describe('local health report background action', () => {
     expect(backgroundCoreTs).toContain('GM_VALUE_SYNC_RETRY_HISTORY_RETENTION_DAYS = 7');
     expect(backgroundCoreTs).toContain('_isGmValueSyncRetryHistoryEntryStale');
     expect(backgroundCoreTs).toContain('buildGmValueSyncRetryResolutionRecord');
+    expect(backgroundCoreTs).toContain('shouldRemoveGmValueSyncRetryResolutionRecord');
     expect(backgroundCoreTs).toContain('readGmValueSyncRetryResolutionForHealth');
     expect(backgroundCoreTs).toContain('updateGmValueSyncRetryHistory');
     expect(backgroundCoreTs).toContain('readGmValueSyncRetryHistoryForHealth');
     expect(backgroundCoreTs).toContain('gmValueSyncRetryResolution');
+    expect(backgroundCoreTs).toContain("chrome.storage.local.remove('gmValueSyncRetryResolution')");
     expect(backgroundCoreTs).toContain('gmValueSyncRetryHistory');
     expect(backgroundCoreTs).toContain('ScriptValues.getAll(script.id)');
     expect(backgroundCoreTs).toContain('gmValueSync,');
