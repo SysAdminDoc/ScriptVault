@@ -1571,6 +1571,7 @@ export interface ResponseMap {
         | 'unknown-timestamp'
         | 'one-sided-timestamp'
         | 'no-candidate-keys';
+      candidateMergeSimulation: 'ready-preview-only' | 'manual-review' | 'unavailable';
     }[];
   }>;
   revokeSyncProvider: SuccessOrError;

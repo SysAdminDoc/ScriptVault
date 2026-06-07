@@ -29,6 +29,7 @@ function loadSyncPreviewExportApi() {
     ${extractFunction(dashboardJs, 'sanitizeValueBundleCandidateMergePlan')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleCandidateMergeGate')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleCandidateMergeBlockReason')}
+    ${extractFunction(dashboardJs, 'sanitizeValueBundleCandidateMergeSimulation')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleConflictPreview')}
     ${extractFunction(dashboardJs, 'buildSyncPreviewExport')}
     return { buildSyncPreviewExport };
@@ -101,6 +102,7 @@ const SYNC_PREVIEW_EXPORT_VALUE_BUNDLE_CONFLICT_KEYS = [
   'candidateMergeBlockReason',
   'candidateMergeGate',
   'candidateMergePlan',
+  'candidateMergeSimulation',
   'candidateOneSidedTimestampKeyCount',
   'candidateRemoteKeyCount',
   'candidateResultKeyCount',
@@ -159,6 +161,7 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('GM value timestamps');
     expect(dashboardJs).toContain('candidateMergePlan');
     expect(dashboardJs).toContain('candidateMergeGate');
+    expect(dashboardJs).toContain('candidateMergeSimulation');
     expect(dashboardJs).toContain('remote candidate keys');
     expect(dashboardJs).toContain('candidate merge gate');
     expect(dashboardJs).toContain('manual review reasons');
@@ -244,6 +247,7 @@ describe('sync safety cockpit wiring', () => {
         candidateReviewKeyCount: -8,
         candidateMergeGate: 'ready',
         candidateMergeBlockReason: 'none',
+        candidateMergeSimulation: 'ready-preview-only',
         keyMetadata: {
           token: { updatedAt: 2000 },
         },
@@ -290,6 +294,7 @@ describe('sync safety cockpit wiring', () => {
           candidateReviewKeyCount: 0,
           candidateMergeGate: 'ready',
           candidateMergeBlockReason: 'none',
+          candidateMergeSimulation: 'ready-preview-only',
         }],
       }),
     );
@@ -344,6 +349,7 @@ describe('sync safety cockpit wiring', () => {
         remoteKeyCount: 1,
         candidateMergeGate: 'manual-review',
         candidateMergeBlockReason: 'unknown-timestamp',
+        candidateMergeSimulation: 'manual-review',
         scriptId: 'script_secret',
         key: 'token',
         values: { token: 'secret' },
