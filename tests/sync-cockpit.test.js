@@ -418,6 +418,32 @@ describe('sync safety cockpit wiring', () => {
     expect(summary).not.toContain('keyMetadata');
   });
 
+  it('sanitizes failure-only GM value sync log counts', () => {
+    const { formatValueBundleSyncLog } = loadValueBundleSyncLogApi();
+
+    const summary = formatValueBundleSyncLog({
+      applied: -4,
+      preserved: 0,
+      conflictBlocked: -3,
+      skippedNonEmpty: 99,
+      skippedUserModified: 99,
+      skippedUnavailable: 1.9,
+      failures: 2.8,
+      scriptId: 'script_secret',
+      values: { token: 'remote-secret' },
+    });
+
+    expect(summary).toContain('GM values: 0 applied, 0 preserved, 0 blocked');
+    expect(summary).toContain('1 unavailable, 2 failed');
+    expect(summary).not.toContain('99');
+    expect(summary).not.toContain('-4');
+    expect(summary).not.toContain('2.8');
+    expect(summary).not.toContain('script_secret');
+    expect(summary).not.toContain('token');
+    expect(summary).not.toContain('remote-secret');
+    expect(formatValueBundleSyncLog({ failures: -1, skippedUnavailable: -1 })).toBe('');
+  });
+
   it('clamps candidate merge result summaries to aggregate result totals', () => {
     const { buildSyncPreviewExport } = loadSyncPreviewExportApi();
 

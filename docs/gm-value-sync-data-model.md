@@ -441,6 +441,16 @@ Cycle 131 adds unavailable preserved-candidate log coverage:
 - This is dashboard rendering coverage only. It does not enable non-empty
   local/remote merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add sync-result failure log safeguards,
-unavailable preserved-candidate result invariants, or another durable safeguard before non-empty
+Cycle 132 adds failure-only sync log safeguards:
+
+- A sync cockpit formatter fixture now pins failure-only real-sync log
+  sanitization for GM value sync summaries.
+- Fractional unavailable/failure counts are floored, negative activity counts
+  are dropped, blocked sub-reasons stay hidden when no blocked bundles exist,
+  and injected script IDs, value keys, and values remain ignored.
+- This is dashboard rendering coverage only. It does not enable non-empty
+  local/remote merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add unavailable preserved-candidate result
+invariants, failure-only source coverage, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
