@@ -2362,6 +2362,7 @@ function _gmValueSyncRetryAgeMinutes(timestamp) {
 }
 
 function _gmValueSyncRetryAgeBucket(ageMinutes) {
+  if (ageMinutes == null) return 'unknown';
   if (!Number.isFinite(Number(ageMinutes))) return 'unknown';
   if (ageMinutes < 15) return 'fresh';
   if (ageMinutes < 6 * 60) return 'recent';
