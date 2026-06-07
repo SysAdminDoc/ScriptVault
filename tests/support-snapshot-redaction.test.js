@@ -131,6 +131,8 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(lastResultBlock[0]).toContain('retryAgeBucket');
     expect(lastResultBlock[0]).toContain("retryAgeBucket: writeFailureRetryReady > 0");
     expect(dashboardJs).toContain('function sanitizeGmValueRetryAgeBucketForSupportSnapshot(value)');
+    expect(dashboardJs).toContain('function sanitizeSupportSnapshotRetainedHistoryTotal(value, entries)');
+    expect(dashboardJs).toContain('function sanitizeSupportSnapshotRetainedHistoryTimestamp(value, entries)');
     expect(block[0]).not.toContain('...gmValueSync');
     expect(lastResultBlock[0]).not.toContain('...lastResult');
     expect(`${block[0]}\n${lastResultBlock[0]}`).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
@@ -142,6 +144,8 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(resolutionBlock[0]).toContain("schema: 'scriptvault-gm-value-sync-retry-resolution/v1'");
     expect(resolutionBlock[0]).toContain('priorRetryReadyEntries');
     expect(resolutionBlock[0]).toContain('priorRetryReadyWrites');
+    expect(resolutionBlock[0]).toContain('if (priorRetryReadyEntries <= 0 || priorRetryReadyWrites <= 0) return null;');
+    expect(resolutionBlock[0]).toContain('if (!timestamp) return null;');
     expect(resolutionBlock[0]).toContain('latestRetryTimestamp');
     expect(resolutionBlock[0]).toContain('resolutionAgeBucket');
     expect(resolutionBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
@@ -154,6 +158,8 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(historyBlock[0]).toContain('retentionDays');
     expect(historyBlock[0]).toContain('staleEntriesPruned');
     expect(historyBlock[0]).toContain('totalWriteFailureRetryReady');
+    expect(historyBlock[0]).toContain('const totalWriteFailureRetryReady = sanitizeSupportSnapshotRetainedHistoryTotal(retryHistory.totalWriteFailureRetryReady, entries);');
+    expect(historyBlock[0]).toContain('if (latestTimestamp != null && oldestTimestamp != null && oldestTimestamp > latestTimestamp) oldestTimestamp = latestTimestamp;');
     expect(historyBlock[0]).toContain('latestTimestamp');
     expect(historyBlock[0]).toContain('oldestTimestamp');
     expect(historyBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
@@ -166,6 +172,10 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(historyBlock[0]).toContain('totalApplied');
     expect(historyBlock[0]).toContain('totalPriorRetryReadyEntries');
     expect(historyBlock[0]).toContain('totalPriorRetryReadyWrites');
+    expect(historyBlock[0]).toContain('const totalApplied = sanitizeSupportSnapshotRetainedHistoryTotal(retryResolutionHistory.totalApplied, entries);');
+    expect(historyBlock[0]).toContain('const totalPriorRetryReadyEntries = sanitizeSupportSnapshotRetainedHistoryTotal(retryResolutionHistory.totalPriorRetryReadyEntries, entries);');
+    expect(historyBlock[0]).toContain('const totalPriorRetryReadyWrites = sanitizeSupportSnapshotRetainedHistoryTotal(retryResolutionHistory.totalPriorRetryReadyWrites, entries);');
+    expect(historyBlock[0]).toContain('if (latestTimestamp != null && oldestTimestamp != null && oldestTimestamp > latestTimestamp) oldestTimestamp = latestTimestamp;');
     expect(historyBlock[0]).toContain('staleEntriesPruned');
     expect(historyBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });

@@ -668,6 +668,18 @@ Cycle 150 adds bounded resolution-history support evidence:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add retry-resolution export hardening,
-resolution-history stale cleanup, or another durable safeguard before non-empty
+Cycle 151 hardens retry-resolution support snapshot export:
+
+- A single `gmValueSyncRetryResolution` support block is exported only when it
+  has applied-count evidence, prior retry-ready entry/write evidence, and a
+  valid timestamp.
+- Retained retry-history and retry-resolution-history aggregate totals are
+  forced to zero when the retained entry count sanitizes to zero, so malformed
+  local-health input cannot overstate recent support evidence.
+- Oldest/latest retry-history timestamp ranges are normalized before export.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add resolution-history stale cleanup,
+retry-resolution source invariants, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
