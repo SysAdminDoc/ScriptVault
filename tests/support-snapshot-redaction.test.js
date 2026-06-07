@@ -362,6 +362,15 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(resolutionBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('GM value sync retry resolution latest retry timestamp is range-normalized before support export', () => {
+    const resolutionBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryResolutionForSupportSnapshot\(retryResolution\) \{[\s\S]*?function sanitizeGmValueSyncRetryHistoryForSupportSnapshot/);
+    expect(resolutionBlock).toBeTruthy();
+    expect(resolutionBlock[0]).toContain('let latestRetryTimestamp = sanitizeSupportSnapshotTimestamp(retryResolution.latestRetryTimestamp);');
+    expect(resolutionBlock[0]).toContain('if (latestRetryTimestamp != null && latestRetryTimestamp > timestamp) latestRetryTimestamp = timestamp;');
+    expect(resolutionBlock[0]).toContain('latestRetryTimestamp,');
+    expect(resolutionBlock[0]).not.toContain('latestRetryTimestamp: sanitizeSupportSnapshotTimestamp(retryResolution.latestRetryTimestamp)');
+  });
+
   it('GM value sync retry history is summarized before support snapshot export', () => {
     const historyBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryHistoryForSupportSnapshot\(retryHistory\) \{[\s\S]*?function sanitizeGmValueSyncLastResultForSupportSnapshot/);
     expect(historyBlock).toBeTruthy();

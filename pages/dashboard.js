@@ -5558,13 +5558,15 @@
         const resolutionAgeMinutes = retryResolution.resolutionAgeMinutes != null
             ? sanitizeSupportSnapshotCount(retryResolution.resolutionAgeMinutes)
             : null;
+        let latestRetryTimestamp = sanitizeSupportSnapshotTimestamp(retryResolution.latestRetryTimestamp);
+        if (latestRetryTimestamp != null && latestRetryTimestamp > timestamp) latestRetryTimestamp = timestamp;
         return {
             schema: 'scriptvault-gm-value-sync-retry-resolution/v1',
             timestamp,
             applied,
             priorRetryReadyEntries,
             priorRetryReadyWrites,
-            latestRetryTimestamp: sanitizeSupportSnapshotTimestamp(retryResolution.latestRetryTimestamp),
+            latestRetryTimestamp,
             resolutionAgeMinutes,
             resolutionAgeBucket: sanitizeGmValueRetryAgeBucketForSupportSnapshot(retryResolution.resolutionAgeBucket),
             privacy: {

@@ -971,7 +971,16 @@ Cycle 178 pins retry-history timestamp retention coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 179 pins retry-resolution timestamp range hardening:
+
+- Support snapshot retry-resolution export now clamps an injected
+  `latestRetryTimestamp` down to the resolution timestamp before export.
+- Support-snapshot redaction tests pin the normalized range so impossible retry
+  timestamp evidence cannot survive support export sanitization.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add support summary warning-count nested
-coverage, retry-resolution timestamp range coverage, or another durable
+coverage, retry-resolution age-bucket gating coverage, or another durable
 safeguard before non-empty local and remote value bags can be merged
 bidirectionally.
