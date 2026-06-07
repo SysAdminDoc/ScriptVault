@@ -325,6 +325,19 @@ Cycle 120 adds an export schema drift guard:
 - This guard catches accidental export schema expansion or field loss before a
   future merge implementation can depend on preview output.
 
-The next implementation slice should add acceptance-invariant result evidence,
-merge apply dry-run simulation, or another durable safeguard before non-empty
-local and remote value bags can be merged bidirectionally.
+Cycle 121 adds accepted-result evidence:
+
+- Dry-run summaries now include
+  `remoteValueBundleCandidateAcceptedResultKeyTotal`, counting only ready
+  candidate result keys.
+- Real `syncNow` value-bundle summaries now include
+  `preservedCandidateAcceptedResultKeyTotal`, again counting only ready
+  preserved candidate result keys.
+- Dashboard preview/export rendering and the sync log show the accepted-ready
+  count beside total, auto-selected, and review key totals.
+- These are aggregate-only evidence fields. They do not enable non-empty
+  local/remote merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add merge apply dry-run simulation,
+accepted-result export drift guards, or another durable safeguard before
+non-empty local and remote value bags can be merged bidirectionally.

@@ -231,6 +231,7 @@ function createEmptyRemoteValueBundleApplyResult() {
     preservedCandidateResultKeyTotal: 0,
     preservedCandidateAutoSelectedKeyTotal: 0,
     preservedCandidateReviewKeyTotal: 0,
+    preservedCandidateAcceptedResultKeyTotal: 0,
     preservedCandidateBlockedSameTimestamp: 0,
     preservedCandidateBlockedUnknownTimestamp: 0,
     preservedCandidateBlockedOneSidedTimestamp: 0,
@@ -260,6 +261,7 @@ function summarizeRemoteValueBundleApplyResult(result) {
     preservedCandidateResultKeyTotal: result.preservedCandidateResultKeyTotal,
     preservedCandidateAutoSelectedKeyTotal: result.preservedCandidateAutoSelectedKeyTotal,
     preservedCandidateReviewKeyTotal: result.preservedCandidateReviewKeyTotal,
+    preservedCandidateAcceptedResultKeyTotal: result.preservedCandidateAcceptedResultKeyTotal,
     preservedCandidateBlockedSameTimestamp: result.preservedCandidateBlockedSameTimestamp,
     preservedCandidateBlockedUnknownTimestamp: result.preservedCandidateBlockedUnknownTimestamp,
     preservedCandidateBlockedOneSidedTimestamp: result.preservedCandidateBlockedOneSidedTimestamp,
@@ -320,6 +322,7 @@ function countRemoteValueBundlesApplyReady(selection, local) {
   let candidateResultKeyTotal = 0;
   let candidateAutoSelectedKeyTotal = 0;
   let candidateReviewKeyTotal = 0;
+  let candidateAcceptedResultKeyTotal = 0;
   const conflicts = [];
   const localBundles = getSyncEnvelopeValueBundles(local);
   const localScriptIds = new Set(
@@ -329,8 +332,10 @@ function countRemoteValueBundlesApplyReady(selection, local) {
   const addConflict = (reason, remoteBundle, localBundle) => {
     conflictBlocked++;
     const preview = buildValueBundleConflictPreview(reason, remoteBundle, localBundle);
-    if (preview.candidateMergeGate === 'ready') candidateMergeReady++;
-    else if (preview.candidateMergeGate === 'unavailable') candidateMergeUnavailable++;
+    if (preview.candidateMergeGate === 'ready') {
+      candidateMergeReady++;
+      candidateAcceptedResultKeyTotal += preview.candidateResultKeyCount ?? 0;
+    } else if (preview.candidateMergeGate === 'unavailable') candidateMergeUnavailable++;
     else candidateMergeManualReview++;
     if (preview.candidateMergeBlockReason === 'same-timestamp') candidateMergeBlockedSameTimestamp++;
     else if (preview.candidateMergeBlockReason === 'unknown-timestamp') candidateMergeBlockedUnknownTimestamp++;
@@ -370,7 +375,8 @@ function countRemoteValueBundlesApplyReady(selection, local) {
     candidateMergeBlockedNoCandidateKeys,
     candidateResultKeyTotal,
     candidateAutoSelectedKeyTotal,
-    candidateReviewKeyTotal
+    candidateReviewKeyTotal,
+    candidateAcceptedResultKeyTotal
   };
 }
 
@@ -425,6 +431,9 @@ function countPreservedValueBundleCandidateMerge(result, localBundle, remoteBund
   result.preservedCandidateResultKeyTotal += candidateResult.resultKeyCount ?? 0;
   result.preservedCandidateAutoSelectedKeyTotal += candidateResult.autoSelectedKeyCount ?? 0;
   result.preservedCandidateReviewKeyTotal += candidateResult.reviewKeyCount ?? 0;
+  if (candidateGate.gate === 'ready') {
+    result.preservedCandidateAcceptedResultKeyTotal += candidateResult.resultKeyCount ?? 0;
+  }
 }
 
 function preserveRemoteValueBundle(result, scriptId, remoteBundle, localBundle) {
@@ -3534,6 +3543,7 @@ const CloudSync = {
       remoteValueBundleCandidateResultKeyTotal: remoteValueBundleApplyReadiness.candidateResultKeyTotal,
       remoteValueBundleCandidateAutoSelectedKeyTotal: remoteValueBundleApplyReadiness.candidateAutoSelectedKeyTotal,
       remoteValueBundleCandidateReviewKeyTotal: remoteValueBundleApplyReadiness.candidateReviewKeyTotal,
+      remoteValueBundleCandidateAcceptedResultKeyTotal: remoteValueBundleApplyReadiness.candidateAcceptedResultKeyTotal,
       valueBundleApplyEnabled: true,
       valueBundleApplyMode: 'empty-local-only',
       wouldUpload: false,
