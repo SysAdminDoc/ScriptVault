@@ -100,6 +100,37 @@ describe('local health report background action', () => {
     expect(block[0]).not.toMatch(/return\s+\{[\s\S]{0,400}(values|key|scriptId|name|url):/i);
   });
 
+  it('pins retry-resolution source invariants before support export', () => {
+    const resolutionBlock = backgroundCoreTs.match(/function buildGmValueSyncRetryResolutionRecord\(history, record = \{\}\) \{[\s\S]*?function shouldRemoveGmValueSyncRetryResolutionRecord/);
+    const historyEntriesBlock = backgroundCoreTs.match(/function sanitizeGmValueSyncRetryResolutionHistoryEntries\(history, options = \{\}\) \{[\s\S]*?function updateGmValueSyncRetryResolutionHistory/);
+    const updateHistoryBlock = backgroundCoreTs.match(/function updateGmValueSyncRetryResolutionHistory\(history, record\) \{[\s\S]*?async function persistLastSyncResult/);
+    const persistBlock = backgroundCoreTs.match(/async function persistLastSyncResult\(result = \{\}\) \{[\s\S]*?let _lastRegistrationSweep/);
+    expect(resolutionBlock).toBeTruthy();
+    expect(historyEntriesBlock).toBeTruthy();
+    expect(updateHistoryBlock).toBeTruthy();
+    expect(persistBlock).toBeTruthy();
+
+    expect(resolutionBlock[0]).toContain('if (!record?.ok) return null;');
+    expect(resolutionBlock[0]).toContain('valueBundleSync.applied <= 0');
+    expect(resolutionBlock[0]).toContain('valueBundleSync.failures > 0');
+    expect(resolutionBlock[0]).toContain('valueBundleSync.writeFailureRetryReady > 0');
+    expect(resolutionBlock[0]).toContain('const entries = sanitizeGmValueSyncRetryHistoryEntries(history, { limit: false });');
+    expect(resolutionBlock[0]).toContain("const retryReadyEntries = entries.filter(entry => entry.status === 'retry-ready');");
+    expect(resolutionBlock[0]).toContain('if (retryReadyEntries.length === 0) return null;');
+    expect(resolutionBlock[0]).toContain('priorRetryReadyWrites');
+
+    expect(historyEntriesBlock[0]).toContain('includeStale = options.includeStale === true');
+    expect(historyEntriesBlock[0]).toContain('.filter(entry => includeStale || !_isGmValueSyncRetryHistoryEntryStale(entry, now))');
+    expect(updateHistoryBlock[0]).toContain('const entries = sanitizeGmValueSyncRetryResolutionHistoryEntries(history);');
+    expect(updateHistoryBlock[0]).toContain('const entry = sanitizeGmValueSyncRetryResolutionHistoryEntry(record);');
+    expect(updateHistoryBlock[0]).toContain('.slice(0, GM_VALUE_SYNC_RETRY_HISTORY_LIMIT)');
+    expect(persistBlock[0]).toContain("chrome.storage.local.get(['gmValueSyncRetryHistory', 'gmValueSyncRetryResolution', 'gmValueSyncRetryResolutionHistory'])");
+    expect(persistBlock[0]).toContain('const gmValueSyncRetryResolutionHistory = updateGmValueSyncRetryResolutionHistory(data?.gmValueSyncRetryResolutionHistory, gmValueSyncRetryResolution);');
+    expect(persistBlock[0]).toContain('gmValueSyncRetryResolutionHistory,');
+    expect(`${resolutionBlock[0]}\n${historyEntriesBlock[0]}\n${updateHistoryBlock[0]}`)
+      .not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
   it('summarizes local workspace bindings without file handles, paths, or script identifiers', () => {
     const block = backgroundCoreTs.match(/function buildLocalWorkspaceHealthSummary\(bindings = \[\]\) \{[\s\S]*?\n\}/);
     expect(block).toBeTruthy();
