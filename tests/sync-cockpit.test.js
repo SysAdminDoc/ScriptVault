@@ -61,6 +61,7 @@ const SYNC_PREVIEW_EXPORT_SUMMARY_KEYS = [
   'remoteNewer',
   'remoteOnly',
   'remoteScripts',
+  'remoteValueBundleCandidateAcceptedResultKeyTotal',
   'remoteValueBundleCandidateAutoSelectedKeyTotal',
   'remoteValueBundleCandidateMergesBlockedNoCandidateKeys',
   'remoteValueBundleCandidateMergesBlockedOneSidedTimestamp',
@@ -162,6 +163,7 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('candidate merge gate');
     expect(dashboardJs).toContain('manual review reasons');
     expect(dashboardJs).toContain('candidate result keys');
+    expect(dashboardJs).toContain('accepted ready');
     expect(dashboardJs).toContain('preservedCandidateMergeReady');
     expect(dashboardJs).toContain('preservedCandidateBlockedUnknownTimestamp');
     expect(dashboardJs).toContain('sanitizePreviewCount');
@@ -208,6 +210,7 @@ describe('sync safety cockpit wiring', () => {
         remoteValueBundleCandidateResultKeyTotal: 3.9,
         remoteValueBundleCandidateAutoSelectedKeyTotal: 3.2,
         remoteValueBundleCandidateReviewKeyTotal: -8,
+        remoteValueBundleCandidateAcceptedResultKeyTotal: 3.6,
         wouldUpload: true,
         leakedName: 'Secret Script',
       },
@@ -308,6 +311,7 @@ describe('sync safety cockpit wiring', () => {
       remoteValueBundleCandidateResultKeyTotal: 3,
       remoteValueBundleCandidateAutoSelectedKeyTotal: 3,
       remoteValueBundleCandidateReviewKeyTotal: 0,
+      remoteValueBundleCandidateAcceptedResultKeyTotal: 3,
       wouldUpload: true,
     }));
     const serialized = JSON.stringify(exported);

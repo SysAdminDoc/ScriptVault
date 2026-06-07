@@ -781,6 +781,7 @@ describe('source cloud sync module', () => {
         remoteValueBundleCandidateResultKeyTotal: 3,
         remoteValueBundleCandidateAutoSelectedKeyTotal: 3,
         remoteValueBundleCandidateReviewKeyTotal: 0,
+        remoteValueBundleCandidateAcceptedResultKeyTotal: 3,
       }),
     );
     expect(preview.valueBundleConflicts).toEqual([
@@ -899,6 +900,7 @@ describe('source cloud sync module', () => {
         remoteValueBundleCandidateResultKeyTotal: 1,
         remoteValueBundleCandidateAutoSelectedKeyTotal: 0,
         remoteValueBundleCandidateReviewKeyTotal: 1,
+        remoteValueBundleCandidateAcceptedResultKeyTotal: 0,
       }),
     );
     expect(preview.valueBundleConflicts).toEqual([
@@ -1010,6 +1012,7 @@ describe('source cloud sync module', () => {
         preservedCandidateResultKeyTotal: 1,
         preservedCandidateAutoSelectedKeyTotal: 0,
         preservedCandidateReviewKeyTotal: 1,
+        preservedCandidateAcceptedResultKeyTotal: 0,
         preservedCandidateBlockedSameTimestamp: 0,
         preservedCandidateBlockedUnknownTimestamp: 1,
         preservedCandidateBlockedOneSidedTimestamp: 0,
@@ -1105,6 +1108,7 @@ describe('source cloud sync module', () => {
         preservedCandidateResultKeyTotal: 1,
         preservedCandidateAutoSelectedKeyTotal: 1,
         preservedCandidateReviewKeyTotal: 0,
+        preservedCandidateAcceptedResultKeyTotal: 1,
         preservedCandidateBlockedSameTimestamp: 0,
         preservedCandidateBlockedUnknownTimestamp: 0,
         preservedCandidateBlockedOneSidedTimestamp: 0,
@@ -1193,6 +1197,7 @@ describe('source cloud sync module', () => {
         preservedCandidateResultKeyTotal: 0,
         preservedCandidateAutoSelectedKeyTotal: 0,
         preservedCandidateReviewKeyTotal: 0,
+        preservedCandidateAcceptedResultKeyTotal: 0,
         preservedCandidateBlockedSameTimestamp: 0,
         preservedCandidateBlockedUnknownTimestamp: 0,
         preservedCandidateBlockedOneSidedTimestamp: 0,

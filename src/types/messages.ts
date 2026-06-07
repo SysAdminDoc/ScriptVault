@@ -1595,6 +1595,7 @@ export interface ResponseMap {
       preservedCandidateResultKeyTotal: number;
       preservedCandidateAutoSelectedKeyTotal: number;
       preservedCandidateReviewKeyTotal: number;
+      preservedCandidateAcceptedResultKeyTotal: number;
       preservedCandidateBlockedSameTimestamp: number;
       preservedCandidateBlockedUnknownTimestamp: number;
       preservedCandidateBlockedOneSidedTimestamp: number;

@@ -3898,6 +3898,7 @@
         const candidateResultKeys = Number(valueBundleSync.preservedCandidateResultKeyTotal) || 0;
         const candidateAutoKeys = Number(valueBundleSync.preservedCandidateAutoSelectedKeyTotal) || 0;
         const candidateReviewKeys = Number(valueBundleSync.preservedCandidateReviewKeyTotal) || 0;
+        const candidateAcceptedResultKeys = Number(valueBundleSync.preservedCandidateAcceptedResultKeyTotal) || 0;
         const candidateSameTimestamp = Number(valueBundleSync.preservedCandidateBlockedSameTimestamp) || 0;
         const candidateUnknownTimestamp = Number(valueBundleSync.preservedCandidateBlockedUnknownTimestamp) || 0;
         const candidateOneSidedTimestamp = Number(valueBundleSync.preservedCandidateBlockedOneSidedTimestamp) || 0;
@@ -3909,7 +3910,7 @@
             ? `; timestamp hints: ${remoteNewer} remote-newer, ${localNewer} local-newer, ${sameTimestamp} same, ${remoteOnlyTimestamp} remote-only, ${localOnlyTimestamp} local-only, ${unknownTimestamp} unknown`
             : '';
         const candidateDetail = preserved > 0
-            ? `; candidate gates: ${candidateReady} ready, ${candidateManual} manual review, ${candidateUnavailable} unavailable; candidate result keys: ${candidateResultKeys} total, ${candidateAutoKeys} auto-selected, ${candidateReviewKeys} review; candidate review reasons: ${candidateSameTimestamp} same timestamp, ${candidateUnknownTimestamp} unknown timestamp, ${candidateOneSidedTimestamp} one-sided timestamp, ${candidateUnavailableSnapshot} unavailable local snapshot, ${candidateNoKeys} no candidate keys`
+            ? `; candidate gates: ${candidateReady} ready, ${candidateManual} manual review, ${candidateUnavailable} unavailable; candidate result keys: ${candidateResultKeys} total, ${candidateAutoKeys} auto-selected, ${candidateReviewKeys} review, ${candidateAcceptedResultKeys} accepted ready; candidate review reasons: ${candidateSameTimestamp} same timestamp, ${candidateUnknownTimestamp} unknown timestamp, ${candidateOneSidedTimestamp} one-sided timestamp, ${candidateUnavailableSnapshot} unavailable local snapshot, ${candidateNoKeys} no candidate keys`
             : '';
         return `; GM values: ${applied} applied, ${preserved} preserved, ${blockedDetail}, ${unavailable} unavailable, ${failures} failed${timestampDetail}${candidateDetail}`;
     }
@@ -4012,6 +4013,7 @@
             'remoteValueBundleCandidateResultKeyTotal',
             'remoteValueBundleCandidateAutoSelectedKeyTotal',
             'remoteValueBundleCandidateReviewKeyTotal',
+            'remoteValueBundleCandidateAcceptedResultKeyTotal',
         ];
         for (const key of keys) {
             safe[key] = sanitizePreviewCount(summary?.[key]);
@@ -4116,7 +4118,7 @@
             lines.push(`GM value timestamps: ${summary.localValueBundlesWithTimestamps || 0} local timestamped, ${summary.localValueBundlesMissingTimestamps || 0} local missing, ${summary.remoteValueBundlesWithTimestamps || 0} remote timestamped, ${summary.remoteValueBundlesMissingTimestamps || 0} remote missing; older than last sync ${summary.localValueBundlesOlderThanLastSync || 0} local/${summary.remoteValueBundlesOlderThanLastSync || 0} remote, newer ${summary.localValueBundlesNewerThanLastSync || 0} local/${summary.remoteValueBundlesNewerThanLastSync || 0} remote.`);
             lines.push(`GM value candidate merge gate: ${summary.remoteValueBundleCandidateMergesReady || 0} ready, ${summary.remoteValueBundleCandidateMergesManualReview || 0} manual review, ${summary.remoteValueBundleCandidateMergesUnavailable || 0} unavailable.`);
             lines.push(`GM value manual review reasons: ${summary.remoteValueBundleCandidateMergesBlockedSameTimestamp || 0} same timestamp, ${summary.remoteValueBundleCandidateMergesBlockedUnknownTimestamp || 0} unknown timestamp, ${summary.remoteValueBundleCandidateMergesBlockedOneSidedTimestamp || 0} one-sided timestamp, ${summary.remoteValueBundleCandidateMergesBlockedUnavailable || 0} unavailable local snapshot, ${summary.remoteValueBundleCandidateMergesBlockedNoCandidateKeys || 0} no candidate keys.`);
-            lines.push(`GM value candidate result keys: ${summary.remoteValueBundleCandidateResultKeyTotal || 0} total, ${summary.remoteValueBundleCandidateAutoSelectedKeyTotal || 0} auto-selected, ${summary.remoteValueBundleCandidateReviewKeyTotal || 0} needing review.`);
+            lines.push(`GM value candidate result keys: ${summary.remoteValueBundleCandidateResultKeyTotal || 0} total, ${summary.remoteValueBundleCandidateAutoSelectedKeyTotal || 0} auto-selected, ${summary.remoteValueBundleCandidateReviewKeyTotal || 0} needing review, ${summary.remoteValueBundleCandidateAcceptedResultKeyTotal || 0} accepted ready.`);
         }
         const valueBundleConflicts = Array.isArray(preview.valueBundleConflicts) ? preview.valueBundleConflicts : [];
         if (valueBundleConflicts.length) {

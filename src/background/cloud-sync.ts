@@ -122,6 +122,7 @@ interface ValueBundleSyncSummary {
   preservedCandidateResultKeyTotal: number;
   preservedCandidateAutoSelectedKeyTotal: number;
   preservedCandidateReviewKeyTotal: number;
+  preservedCandidateAcceptedResultKeyTotal: number;
   preservedCandidateBlockedSameTimestamp: number;
   preservedCandidateBlockedUnknownTimestamp: number;
   preservedCandidateBlockedOneSidedTimestamp: number;
@@ -167,6 +168,7 @@ interface SyncPreviewSummary {
   remoteValueBundleCandidateResultKeyTotal: number;
   remoteValueBundleCandidateAutoSelectedKeyTotal: number;
   remoteValueBundleCandidateReviewKeyTotal: number;
+  remoteValueBundleCandidateAcceptedResultKeyTotal: number;
   valueBundleApplyEnabled: boolean;
   valueBundleApplyMode: 'empty-local-only';
   wouldUpload: boolean;
@@ -285,6 +287,7 @@ interface RemoteValueBundleApplyResult {
   preservedCandidateResultKeyTotal: number;
   preservedCandidateAutoSelectedKeyTotal: number;
   preservedCandidateReviewKeyTotal: number;
+  preservedCandidateAcceptedResultKeyTotal: number;
   preservedCandidateBlockedSameTimestamp: number;
   preservedCandidateBlockedUnknownTimestamp: number;
   preservedCandidateBlockedOneSidedTimestamp: number;
@@ -599,6 +602,7 @@ function createEmptyRemoteValueBundleApplyResult(): RemoteValueBundleApplyResult
     preservedCandidateResultKeyTotal: 0,
     preservedCandidateAutoSelectedKeyTotal: 0,
     preservedCandidateReviewKeyTotal: 0,
+    preservedCandidateAcceptedResultKeyTotal: 0,
     preservedCandidateBlockedSameTimestamp: 0,
     preservedCandidateBlockedUnknownTimestamp: 0,
     preservedCandidateBlockedOneSidedTimestamp: 0,
@@ -630,6 +634,7 @@ function summarizeRemoteValueBundleApplyResult(
     preservedCandidateResultKeyTotal: result.preservedCandidateResultKeyTotal,
     preservedCandidateAutoSelectedKeyTotal: result.preservedCandidateAutoSelectedKeyTotal,
     preservedCandidateReviewKeyTotal: result.preservedCandidateReviewKeyTotal,
+    preservedCandidateAcceptedResultKeyTotal: result.preservedCandidateAcceptedResultKeyTotal,
     preservedCandidateBlockedSameTimestamp: result.preservedCandidateBlockedSameTimestamp,
     preservedCandidateBlockedUnknownTimestamp: result.preservedCandidateBlockedUnknownTimestamp,
     preservedCandidateBlockedOneSidedTimestamp: result.preservedCandidateBlockedOneSidedTimestamp,
@@ -699,6 +704,7 @@ function countRemoteValueBundlesApplyReady(
   candidateResultKeyTotal: number;
   candidateAutoSelectedKeyTotal: number;
   candidateReviewKeyTotal: number;
+  candidateAcceptedResultKeyTotal: number;
 } {
   let ready = 0;
   let conflictBlocked = 0;
@@ -713,6 +719,7 @@ function countRemoteValueBundlesApplyReady(
   let candidateResultKeyTotal = 0;
   let candidateAutoSelectedKeyTotal = 0;
   let candidateReviewKeyTotal = 0;
+  let candidateAcceptedResultKeyTotal = 0;
   const conflicts: SyncPreviewValueBundleConflict[] = [];
   const localBundles = getSyncEnvelopeValueBundles(local);
   const localScriptIds = new Set(
@@ -726,8 +733,10 @@ function countRemoteValueBundlesApplyReady(
   ) => {
     conflictBlocked += 1;
     const preview = buildValueBundleConflictPreview(reason, remoteBundle, localBundle);
-    if (preview.candidateMergeGate === 'ready') candidateMergeReady += 1;
-    else if (preview.candidateMergeGate === 'unavailable') candidateMergeUnavailable += 1;
+    if (preview.candidateMergeGate === 'ready') {
+      candidateMergeReady += 1;
+      candidateAcceptedResultKeyTotal += preview.candidateResultKeyCount ?? 0;
+    } else if (preview.candidateMergeGate === 'unavailable') candidateMergeUnavailable += 1;
     else candidateMergeManualReview += 1;
     if (preview.candidateMergeBlockReason === 'same-timestamp') candidateMergeBlockedSameTimestamp += 1;
     else if (preview.candidateMergeBlockReason === 'unknown-timestamp') candidateMergeBlockedUnknownTimestamp += 1;
@@ -768,6 +777,7 @@ function countRemoteValueBundlesApplyReady(
     candidateResultKeyTotal,
     candidateAutoSelectedKeyTotal,
     candidateReviewKeyTotal,
+    candidateAcceptedResultKeyTotal,
   };
 }
 
@@ -833,6 +843,9 @@ function countPreservedValueBundleCandidateMerge(
   result.preservedCandidateResultKeyTotal += candidateResult.resultKeyCount ?? 0;
   result.preservedCandidateAutoSelectedKeyTotal += candidateResult.autoSelectedKeyCount ?? 0;
   result.preservedCandidateReviewKeyTotal += candidateResult.reviewKeyCount ?? 0;
+  if (candidateGate.gate === 'ready') {
+    result.preservedCandidateAcceptedResultKeyTotal += candidateResult.resultKeyCount ?? 0;
+  }
 }
 
 function preserveRemoteValueBundle(
@@ -1329,6 +1342,7 @@ export const CloudSync = {
       remoteValueBundleCandidateResultKeyTotal: remoteValueBundleApplyReadiness.candidateResultKeyTotal,
       remoteValueBundleCandidateAutoSelectedKeyTotal: remoteValueBundleApplyReadiness.candidateAutoSelectedKeyTotal,
       remoteValueBundleCandidateReviewKeyTotal: remoteValueBundleApplyReadiness.candidateReviewKeyTotal,
+      remoteValueBundleCandidateAcceptedResultKeyTotal: remoteValueBundleApplyReadiness.candidateAcceptedResultKeyTotal,
       valueBundleApplyEnabled: true,
       valueBundleApplyMode: 'empty-local-only',
       wouldUpload: false,
