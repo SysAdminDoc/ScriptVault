@@ -838,6 +838,17 @@ Cycle 165 pins support summary warning-total coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add retry-resolution history type/schema
-coverage, support summary fallback-state coverage, or another durable safeguard
+Cycle 166 pins retry-resolution history type/schema coverage:
+
+- Local-health source-contract tests now extract the typed
+  `retryResolutionHistory` response fields from `src/types/messages.ts`.
+- The type schema must keep only reviewed aggregate fields and the reviewed
+  privacy keys for support-safe retry-resolution history diagnostics.
+- The typed block must not add identifiers, value keys, provider account data,
+  credentials, raw key metadata, or error text.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add support summary fallback-state
+coverage, retry-resolution typed privacy coverage, or another durable safeguard
 before non-empty local and remote value bags can be merged bidirectionally.
