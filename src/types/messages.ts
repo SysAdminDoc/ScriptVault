@@ -1589,6 +1589,12 @@ export interface ResponseMap {
       preservedRemoteTimestampOnly: number;
       preservedLocalTimestampOnly: number;
       preservedTimestampUnknown: number;
+      preservedCandidateMergeReady: number;
+      preservedCandidateMergeManualReview: number;
+      preservedCandidateMergeUnavailable: number;
+      preservedCandidateResultKeyTotal: number;
+      preservedCandidateAutoSelectedKeyTotal: number;
+      preservedCandidateReviewKeyTotal: number;
     };
   }> | { skipped: true };
   connectGoogleDrive: SuccessOrError<{ user?: { email?: string; name?: string } }>;

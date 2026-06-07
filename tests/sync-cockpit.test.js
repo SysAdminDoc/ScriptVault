@@ -72,6 +72,7 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('candidate merge gate');
     expect(dashboardJs).toContain('manual review reasons');
     expect(dashboardJs).toContain('candidate result keys');
+    expect(dashboardJs).toContain('preservedCandidateMergeReady');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {

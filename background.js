@@ -16681,7 +16681,13 @@ function createEmptyRemoteValueBundleApplyResult() {
     preservedSameTimestamp: 0,
     preservedRemoteTimestampOnly: 0,
     preservedLocalTimestampOnly: 0,
-    preservedTimestampUnknown: 0
+    preservedTimestampUnknown: 0,
+    preservedCandidateMergeReady: 0,
+    preservedCandidateMergeManualReview: 0,
+    preservedCandidateMergeUnavailable: 0,
+    preservedCandidateResultKeyTotal: 0,
+    preservedCandidateAutoSelectedKeyTotal: 0,
+    preservedCandidateReviewKeyTotal: 0
   };
 }
 
@@ -16699,7 +16705,13 @@ function summarizeRemoteValueBundleApplyResult(result) {
     preservedSameTimestamp: result.preservedSameTimestamp,
     preservedRemoteTimestampOnly: result.preservedRemoteTimestampOnly,
     preservedLocalTimestampOnly: result.preservedLocalTimestampOnly,
-    preservedTimestampUnknown: result.preservedTimestampUnknown
+    preservedTimestampUnknown: result.preservedTimestampUnknown,
+    preservedCandidateMergeReady: result.preservedCandidateMergeReady,
+    preservedCandidateMergeManualReview: result.preservedCandidateMergeManualReview,
+    preservedCandidateMergeUnavailable: result.preservedCandidateMergeUnavailable,
+    preservedCandidateResultKeyTotal: result.preservedCandidateResultKeyTotal,
+    preservedCandidateAutoSelectedKeyTotal: result.preservedCandidateAutoSelectedKeyTotal,
+    preservedCandidateReviewKeyTotal: result.preservedCandidateReviewKeyTotal
   };
   return Object.values(summary).some(value => value > 0) ? summary : null;
 }
@@ -16836,9 +16848,31 @@ function countPreservedValueBundleTimestampHint(result, localBundle, remoteBundl
   else result.preservedTimestampUnknown++;
 }
 
+function countPreservedValueBundleCandidateMerge(result, localBundle, remoteBundle) {
+  const hasLocalBundle = isPlainObject(localBundle);
+  const keyCounts = hasLocalBundle
+    ? countValueBundleKeyOverlap(
+      localBundle.values,
+      remoteBundle.values,
+      getValueBundleKeyMetadata(localBundle),
+      getValueBundleKeyMetadata(remoteBundle)
+    )
+    : null;
+  const candidateMerge = buildValueBundleCandidateMergePlan(keyCounts);
+  const candidateGate = buildValueBundleCandidateMergeGate(keyCounts, candidateMerge);
+  const candidateResult = buildValueBundleCandidateMergeResult(keyCounts, candidateMerge, candidateGate);
+  if (candidateGate.gate === 'ready') result.preservedCandidateMergeReady++;
+  else if (candidateGate.gate === 'unavailable') result.preservedCandidateMergeUnavailable++;
+  else result.preservedCandidateMergeManualReview++;
+  result.preservedCandidateResultKeyTotal += candidateResult.resultKeyCount ?? 0;
+  result.preservedCandidateAutoSelectedKeyTotal += candidateResult.autoSelectedKeyCount ?? 0;
+  result.preservedCandidateReviewKeyTotal += candidateResult.reviewKeyCount ?? 0;
+}
+
 function preserveRemoteValueBundle(result, scriptId, remoteBundle, localBundle) {
   result.preservedValueBundles[scriptId] = remoteBundle;
   countPreservedValueBundleTimestampHint(result, localBundle, remoteBundle);
+  countPreservedValueBundleCandidateMerge(result, localBundle, remoteBundle);
 }
 
 function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {

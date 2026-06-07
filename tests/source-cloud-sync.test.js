@@ -998,6 +998,12 @@ describe('source cloud sync module', () => {
         preservedRemoteTimestampOnly: 0,
         preservedLocalTimestampOnly: 0,
         preservedTimestampUnknown: 0,
+        preservedCandidateMergeReady: 0,
+        preservedCandidateMergeManualReview: 1,
+        preservedCandidateMergeUnavailable: 0,
+        preservedCandidateResultKeyTotal: 1,
+        preservedCandidateAutoSelectedKeyTotal: 0,
+        preservedCandidateReviewKeyTotal: 1,
       },
     });
 
@@ -1082,6 +1088,12 @@ describe('source cloud sync module', () => {
         preservedRemoteTimestampOnly: 0,
         preservedLocalTimestampOnly: 0,
         preservedTimestampUnknown: 0,
+        preservedCandidateMergeReady: 1,
+        preservedCandidateMergeManualReview: 0,
+        preservedCandidateMergeUnavailable: 0,
+        preservedCandidateResultKeyTotal: 1,
+        preservedCandidateAutoSelectedKeyTotal: 1,
+        preservedCandidateReviewKeyTotal: 0,
       },
     });
 
@@ -1159,6 +1171,12 @@ describe('source cloud sync module', () => {
         preservedRemoteTimestampOnly: 0,
         preservedLocalTimestampOnly: 0,
         preservedTimestampUnknown: 0,
+        preservedCandidateMergeReady: 0,
+        preservedCandidateMergeManualReview: 0,
+        preservedCandidateMergeUnavailable: 0,
+        preservedCandidateResultKeyTotal: 0,
+        preservedCandidateAutoSelectedKeyTotal: 0,
+        preservedCandidateReviewKeyTotal: 0,
       },
     });
 

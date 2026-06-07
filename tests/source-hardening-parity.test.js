@@ -221,6 +221,7 @@ describe('source hardening parity guards', () => {
       expect(text).toContain('buildValueBundleConflictPreview');
       expect(text).toContain('compareValueBundleLastWrite');
       expect(text).toContain('preserveRemoteValueBundle');
+      expect(text).toContain('countPreservedValueBundleCandidateMerge');
       expect(text).toContain('countValueBundleKeyOverlap');
       expect(text).toContain('buildValueBundleCandidateMergePlan');
       expect(text).toContain('buildValueBundleCandidateMergeGate');
@@ -238,6 +239,7 @@ describe('source hardening parity guards', () => {
       expect(text).toContain('remoteValueBundleCandidateMergesReady');
       expect(text).toContain('remoteValueBundleCandidateMergesBlockedUnknownTimestamp');
       expect(text).toContain('remoteValueBundleCandidateResultKeyTotal');
+      expect(text).toContain('preservedCandidateMergeReady');
       expect(text).toContain('preservedRemoteNewer');
       expect(text).toContain('valueBundleApplyEnabled');
       expect(text).toContain('valueBundleApplyMode');
