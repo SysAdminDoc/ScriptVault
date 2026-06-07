@@ -343,6 +343,12 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(lastResultBlock).toContain("retryAgeBucket: writeFailureRetryReady > 0\n                ? sanitizeGmValueRetryAgeBucketForSupportSnapshot(lastResult.retryAgeBucket)\n                : 'none'");
   });
 
+  it('GM value sync last-result support export sanitizes timestamps through the shared helper', () => {
+    const lastResultBlock = getFunctionBlock('sanitizeGmValueSyncLastResultForSupportSnapshot', 'sanitizeGmValueSyncForSupportSnapshot');
+    expect(lastResultBlock).toContain('timestamp: sanitizeSupportSnapshotTimestamp(lastResult.timestamp),');
+    expect(lastResultBlock).not.toContain('Number.isFinite(Number(lastResult.timestamp))');
+  });
+
   it('GM value sync retry resolution is summarized before support snapshot export', () => {
     const resolutionBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryResolutionForSupportSnapshot\(retryResolution\) \{[\s\S]*?function sanitizeGmValueSyncRetryHistoryForSupportSnapshot/);
     expect(resolutionBlock).toBeTruthy();

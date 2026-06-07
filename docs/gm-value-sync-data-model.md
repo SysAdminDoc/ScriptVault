@@ -933,7 +933,16 @@ Cycle 174 pins support unchecked-state wording coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add last-result timestamp sanitization
-coverage, support summary sanitized-field drift coverage, or another durable
+Cycle 175 pins last-result timestamp sanitizer coverage:
+
+- Support snapshot last-result export now routes timestamp normalization through
+  `sanitizeSupportSnapshotTimestamp()`.
+- Support-snapshot redaction tests pin the shared-helper path and reject a
+  reintroduced inline timestamp sanitizer in the last-result export block.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add support summary sanitized-field drift
+coverage, last-result retry-age timestamp gating coverage, or another durable
 safeguard before non-empty local and remote value bags can be merged
 bidirectionally.

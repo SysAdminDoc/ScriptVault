@@ -5662,7 +5662,7 @@
             : null;
         return {
             schema: 'scriptvault-gm-value-sync-result/v1',
-            timestamp: Number.isFinite(Number(lastResult.timestamp)) ? Math.max(0, Math.floor(Number(lastResult.timestamp))) : null,
+            timestamp: sanitizeSupportSnapshotTimestamp(lastResult.timestamp),
             ok: lastResult.ok === true,
             skipped: lastResult.skipped === true,
             hasError: lastResult.hasError === true,
