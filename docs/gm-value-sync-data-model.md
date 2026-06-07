@@ -680,6 +680,17 @@ Cycle 151 hardens retry-resolution support snapshot export:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add resolution-history stale cleanup,
-retry-resolution source invariants, or another durable safeguard before non-empty
+Cycle 152 pins retry-resolution source invariants:
+
+- Source-contract coverage now requires retry-resolution records to come only
+  from successful clean apply results after prior retry-ready history.
+- Failed results, still-retry-ready results, and results without prior
+  retry-ready history must not create retry-resolution evidence.
+- Retry-resolution history must flow through the persistence-time sanitizer so
+  stale entries are pruned before local-health and support export summaries.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add retry-resolution support UX polish,
+stale-history pruning evidence, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.

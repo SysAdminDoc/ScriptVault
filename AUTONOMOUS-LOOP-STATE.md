@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 151 - 2026-06-07
+Last cycle: Cycle 152 - 2026-06-07
 
 ## Latest Result
 
@@ -1049,12 +1049,21 @@ Last cycle: Cycle 151 - 2026-06-07
   the full check suite with 1526 Vitest cases, high-severity audit, CWS
   remote-code scan, Monaco ESM scan, TS runtime check, forbidden-reference grep,
   and `git diff --check`.
+  Cycle 152 added retry-resolution source invariant coverage for L-8:
+  local-health source-contract tests now pin that retry-resolution records
+  require successful clean applies after prior retry-ready history, reject
+  failed or still-retry-ready results, and prune retry-resolution history through
+  persistence before support export. Stored and exported diagnostics remain
+  aggregate-only, and non-empty writes remain disabled. Verification used
+  focused local-health tests, typecheck, build, the full check suite with 1527
+  Vitest cases, high-severity audit, CWS remote-code scan, Monaco ESM scan, TS
+  runtime check, forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 92. Cycle 151 added GM value sync
-retry-resolution export hardening. The next best local cycle is Cycle 152: add
-resolution-history stale cleanup, retry-resolution source invariants, or the next L-8 safeguard needed before
+Continue from `ROADMAP.md` Round 92. Cycle 152 added GM value sync
+retry-resolution source invariants. The next best local cycle is Cycle 153: add
+retry-resolution support UX polish, stale-history pruning evidence, or the next L-8 safeguard needed before
 broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
@@ -1064,9 +1073,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 151 complete for 2026-06-07; roadmap continuation
-  points to Cycle 152 GM value sync resolution-history stale cleanup,
-  retry-resolution source invariants, or the next available non-credential-gated
+- Status: ScriptVault Cycle 152 complete for 2026-06-07; roadmap continuation
+  points to Cycle 153 GM value sync retry-resolution support UX polish,
+  stale-history pruning evidence, or the next available non-credential-gated
   L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
