@@ -74,6 +74,9 @@ const SYNC_PREVIEW_EXPORT_SUMMARY_KEYS = [
   'remoteValueBundleCandidateMergesUnavailable',
   'remoteValueBundleCandidateResultKeyTotal',
   'remoteValueBundleCandidateReviewKeyTotal',
+  'remoteValueBundleMergeSimulationManualReview',
+  'remoteValueBundleMergeSimulationReadyPreviewOnly',
+  'remoteValueBundleMergeSimulationUnavailable',
   'remoteValueBundleWarnings',
   'remoteValueBundles',
   'remoteValueBundlesApplicable',
@@ -164,6 +167,7 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('candidateMergeSimulation');
     expect(dashboardJs).toContain('remote candidate keys');
     expect(dashboardJs).toContain('candidate merge gate');
+    expect(dashboardJs).toContain('GM value merge simulation');
     expect(dashboardJs).toContain('manual review reasons');
     expect(dashboardJs).toContain('candidate result keys');
     expect(dashboardJs).toContain('accepted ready');
@@ -205,6 +209,9 @@ describe('sync safety cockpit wiring', () => {
         remoteValueBundleCandidateMergesReady: 1,
         remoteValueBundleCandidateMergesManualReview: 0,
         remoteValueBundleCandidateMergesUnavailable: 0,
+        remoteValueBundleMergeSimulationReadyPreviewOnly: 1,
+        remoteValueBundleMergeSimulationManualReview: 0,
+        remoteValueBundleMergeSimulationUnavailable: 0,
         remoteValueBundleCandidateMergesBlockedSameTimestamp: 0,
         remoteValueBundleCandidateMergesBlockedUnknownTimestamp: 0,
         remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: 0,
@@ -308,6 +315,9 @@ describe('sync safety cockpit wiring', () => {
       remoteValueBundleCandidateMergesReady: 1,
       remoteValueBundleCandidateMergesManualReview: 0,
       remoteValueBundleCandidateMergesUnavailable: 0,
+      remoteValueBundleMergeSimulationReadyPreviewOnly: 1,
+      remoteValueBundleMergeSimulationManualReview: 0,
+      remoteValueBundleMergeSimulationUnavailable: 0,
       remoteValueBundleCandidateMergesBlockedSameTimestamp: 0,
       remoteValueBundleCandidateMergesBlockedUnknownTimestamp: 0,
       remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: 0,

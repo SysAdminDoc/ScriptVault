@@ -348,6 +348,15 @@ Cycle 122 adds a preview-only merge simulation marker:
 - The label is advisory and non-writing. It does not enable non-empty
   local/remote merge writes or change the empty-local-only apply rule.
 
+Cycle 123 adds merge simulation aggregate totals:
+
+- Dry-run summaries and sanitized exports now include ready-preview-only,
+  manual-review, and unavailable candidate merge simulation counts.
+- The dashboard preview renders those totals separately from the existing
+  candidate gate counts.
+- The totals are aliases of the current advisory gate state; they do not enable
+  non-empty local/remote merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add accepted-result export drift guards,
-merge simulation aggregate totals, or another durable safeguard before non-empty
+merge simulation result totals, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
