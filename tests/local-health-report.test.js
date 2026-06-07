@@ -326,6 +326,17 @@ describe('local health report background action', () => {
     expect(lastResultTypeBlock[0]).not.toMatch(/privacy|scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('classifies missing GM value retry-age timestamps as unknown', () => {
+    const bucketBlock = backgroundCoreTs.match(/function _gmValueSyncRetryAgeBucket\(ageMinutes\) \{[\s\S]*?\n\}/);
+    const lastResultBlock = backgroundCoreTs.match(/function sanitizeGmValueSyncLastResultForHealth\(record\) \{[\s\S]*?async function readGmValueSyncLastResultForHealth/);
+    expect(bucketBlock).toBeTruthy();
+    expect(lastResultBlock).toBeTruthy();
+    expect(bucketBlock[0]).toContain("if (ageMinutes == null) return 'unknown';");
+    expect(bucketBlock[0]).toContain("if (!Number.isFinite(Number(ageMinutes))) return 'unknown';");
+    expect(lastResultBlock[0]).toContain('const retryAgeMinutes = writeFailureRetryReady > 0 ? _gmValueSyncRetryAgeMinutes(timestamp) : null;');
+    expect(lastResultBlock[0]).toContain("retryAgeBucket: writeFailureRetryReady > 0 ? _gmValueSyncRetryAgeBucket(retryAgeMinutes) : 'none'");
+  });
+
   it('summarizes local workspace bindings without file handles, paths, or script identifiers', () => {
     const block = backgroundCoreTs.match(/function buildLocalWorkspaceHealthSummary\(bindings = \[\]\) \{[\s\S]*?\n\}/);
     expect(block).toBeTruthy();

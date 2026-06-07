@@ -942,7 +942,16 @@ Cycle 175 pins last-result timestamp sanitizer coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 176 pins retry-age unknown bucket coverage:
+
+- Local-health retry-age bucket classification now treats null/undefined retry
+  age as `unknown` instead of falling through to `fresh`.
+- Source-contract coverage pins the last-result retry-ready gating path so a
+  missing timestamp cannot present as fresh retry evidence.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add support summary sanitized-field drift
-coverage, last-result retry-age timestamp gating coverage, or another durable
+coverage, retry-history timestamp bucket coverage, or another durable
 safeguard before non-empty local and remote value bags can be merged
 bidirectionally.
