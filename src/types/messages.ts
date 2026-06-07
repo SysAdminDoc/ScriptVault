@@ -1595,6 +1595,11 @@ export interface ResponseMap {
       preservedCandidateResultKeyTotal: number;
       preservedCandidateAutoSelectedKeyTotal: number;
       preservedCandidateReviewKeyTotal: number;
+      preservedCandidateBlockedSameTimestamp: number;
+      preservedCandidateBlockedUnknownTimestamp: number;
+      preservedCandidateBlockedOneSidedTimestamp: number;
+      preservedCandidateBlockedUnavailable: number;
+      preservedCandidateBlockedNoCandidateKeys: number;
     };
   }> | { skipped: true };
   connectGoogleDrive: SuccessOrError<{ user?: { email?: string; name?: string } }>;

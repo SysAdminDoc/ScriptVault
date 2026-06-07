@@ -1004,6 +1004,11 @@ describe('source cloud sync module', () => {
         preservedCandidateResultKeyTotal: 1,
         preservedCandidateAutoSelectedKeyTotal: 0,
         preservedCandidateReviewKeyTotal: 1,
+        preservedCandidateBlockedSameTimestamp: 0,
+        preservedCandidateBlockedUnknownTimestamp: 1,
+        preservedCandidateBlockedOneSidedTimestamp: 0,
+        preservedCandidateBlockedUnavailable: 0,
+        preservedCandidateBlockedNoCandidateKeys: 0,
       },
     });
 
@@ -1094,6 +1099,11 @@ describe('source cloud sync module', () => {
         preservedCandidateResultKeyTotal: 1,
         preservedCandidateAutoSelectedKeyTotal: 1,
         preservedCandidateReviewKeyTotal: 0,
+        preservedCandidateBlockedSameTimestamp: 0,
+        preservedCandidateBlockedUnknownTimestamp: 0,
+        preservedCandidateBlockedOneSidedTimestamp: 0,
+        preservedCandidateBlockedUnavailable: 0,
+        preservedCandidateBlockedNoCandidateKeys: 0,
       },
     });
 
@@ -1177,6 +1187,11 @@ describe('source cloud sync module', () => {
         preservedCandidateResultKeyTotal: 0,
         preservedCandidateAutoSelectedKeyTotal: 0,
         preservedCandidateReviewKeyTotal: 0,
+        preservedCandidateBlockedSameTimestamp: 0,
+        preservedCandidateBlockedUnknownTimestamp: 0,
+        preservedCandidateBlockedOneSidedTimestamp: 0,
+        preservedCandidateBlockedUnavailable: 0,
+        preservedCandidateBlockedNoCandidateKeys: 0,
       },
     });
 
