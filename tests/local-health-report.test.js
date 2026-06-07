@@ -234,6 +234,36 @@ describe('local health report background action', () => {
     expect(resolutionTypeBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('pins retry-history typed privacy schema', () => {
+    const retryHistoryTypeBlock = messagesTs.match(/retryHistory:\s*\{[\s\S]*?warningCounts:/);
+    expect(retryHistoryTypeBlock).toBeTruthy();
+    const fieldKeys = [...retryHistoryTypeBlock[0].matchAll(/^\s{6}([A-Za-z0-9_]+):/gm)].map((match) => match[1]);
+    expect(fieldKeys).toEqual([
+      'schema',
+      'limit',
+      'retentionDays',
+      'entries',
+      'retryReadyEntries',
+      'failedNoRetryEntries',
+      'staleEntriesPruned',
+      'totalWriteFailureRetryReady',
+      'latestTimestamp',
+      'oldestTimestamp',
+      'privacy'
+    ]);
+    const privacyKeys = [...retryHistoryTypeBlock[0].matchAll(/^\s{8}([A-Za-z0-9_]+): boolean;/gm)].map((match) => match[1]);
+    expect(privacyKeys).toEqual([
+      'includesValues',
+      'includesValueKeys',
+      'includesScriptIds',
+      'includesScriptNames',
+      'includesUrls',
+      'includesFileHandles',
+      'includesLocalPaths'
+    ]);
+    expect(retryHistoryTypeBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
   it('summarizes local workspace bindings without file handles, paths, or script identifiers', () => {
     const block = backgroundCoreTs.match(/function buildLocalWorkspaceHealthSummary\(bindings = \[\]\) \{[\s\S]*?\n\}/);
     expect(block).toBeTruthy();

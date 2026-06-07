@@ -870,7 +870,17 @@ Cycle 168 pins retry-resolution typed privacy coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 169 pins retry-history typed privacy coverage:
+
+- Local-health source-contract tests now extract the typed `retryHistory`
+  response fields from `src/types/messages.ts`.
+- The type schema must keep only reviewed aggregate fields and reviewed privacy
+  keys for support-safe retry-ready history diagnostics.
+- The typed block must not add identifiers, value keys, provider account data,
+  credentials, raw key metadata, or error text.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add support summary unavailable-state
-wording coverage, retry-history typed privacy coverage, or another durable
-safeguard before non-empty local and remote value bags can be merged
-bidirectionally.
+wording coverage, GM value typed privacy coverage, or another durable safeguard
+before non-empty local and remote value bags can be merged bidirectionally.
