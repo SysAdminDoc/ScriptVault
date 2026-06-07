@@ -429,6 +429,18 @@ Cycle 130 adds unavailable preserved-candidate coverage:
 - This is regression coverage only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 131 adds unavailable preserved-candidate log coverage:
+
+- A sync cockpit formatter fixture now renders the unavailable preserved
+  candidate path as aggregate-only real-sync log evidence.
+- The fixture pins preserved/failure counts, unknown timestamp evidence,
+  unavailable candidate gate counts, zero candidate result totals, and the
+  unavailable local snapshot review reason.
+- Injected script IDs, script names, value keys, values, and raw key metadata
+  remain ignored by the formatter.
+- This is dashboard rendering coverage only. It does not enable non-empty
+  local/remote merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add sync-result failure log safeguards,
-unavailable preserved-candidate dashboard rendering coverage, or another durable safeguard before non-empty
+unavailable preserved-candidate result invariants, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.

@@ -377,6 +377,47 @@ describe('sync safety cockpit wiring', () => {
     expect(summary).not.toContain('-2');
   });
 
+  it('renders unavailable preserved candidate sync logs as aggregate evidence', () => {
+    const { formatValueBundleSyncLog } = loadValueBundleSyncLogApi();
+
+    const summary = formatValueBundleSyncLog({
+      applied: 0,
+      preserved: 1,
+      conflictBlocked: 0,
+      skippedUnavailable: 0,
+      failures: 1,
+      preservedTimestampUnknown: 1,
+      preservedCandidateMergeUnavailable: 1,
+      preservedCandidateResultKeyTotal: 0,
+      preservedCandidateAutoSelectedKeyTotal: 0,
+      preservedCandidateReviewKeyTotal: 0,
+      preservedCandidateAcceptedResultKeyTotal: 0,
+      preservedCandidateBlockedUnavailable: 1,
+      scriptId: 'script_secret',
+      name: 'Secret Script',
+      values: { token: 'remote-secret' },
+      keyMetadata: { token: { updatedAt: 20 } },
+    });
+
+    expect(summary).toContain('GM values: 0 applied, 1 preserved, 0 blocked');
+    expect(summary).toContain('0 unavailable, 1 failed');
+    expect(summary).toContain(
+      'timestamp hints: 0 remote-newer, 0 local-newer, 0 same, 0 remote-only, 0 local-only, 1 unknown',
+    );
+    expect(summary).toContain('candidate gates: 0 ready, 0 manual review, 1 unavailable');
+    expect(summary).toContain(
+      'candidate result keys: 0 total, 0 auto-selected, 0 review, 0 accepted ready',
+    );
+    expect(summary).toContain(
+      'candidate review reasons: 0 same timestamp, 0 unknown timestamp, 0 one-sided timestamp, 1 unavailable local snapshot, 0 no candidate keys',
+    );
+    expect(summary).not.toContain('script_secret');
+    expect(summary).not.toContain('Secret Script');
+    expect(summary).not.toContain('token');
+    expect(summary).not.toContain('remote-secret');
+    expect(summary).not.toContain('keyMetadata');
+  });
+
   it('clamps candidate merge result summaries to aggregate result totals', () => {
     const { buildSyncPreviewExport } = loadSyncPreviewExportApi();
 
