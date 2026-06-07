@@ -483,6 +483,7 @@ describe('sync safety cockpit wiring', () => {
       conflictBlocked: 0,
       skippedUnavailable: 0,
       failures: 1,
+      writeFailureRetryReady: 1,
       preservedTimestampUnknown: 1,
       preservedCandidateMergeReady: 1,
       preservedCandidateResultKeyTotal: 1,
@@ -503,11 +504,31 @@ describe('sync safety cockpit wiring', () => {
     expect(summary).toContain(
       'candidate result keys: 1 total, 1 auto-selected, 0 review, 1 accepted ready',
     );
+    expect(summary).toContain('retry diagnostics: 1 write retry-ready');
     expect(summary).not.toContain('script_secret');
     expect(summary).not.toContain('Secret Script');
     expect(summary).not.toContain('token');
     expect(summary).not.toContain('remote-secret');
     expect(summary).not.toContain('keyMetadata');
+  });
+
+  it('clamps write-failure retry diagnostics in sync log output', () => {
+    const { formatValueBundleSyncLog } = loadValueBundleSyncLogApi();
+
+    const summary = formatValueBundleSyncLog({
+      preserved: 1,
+      failures: 2,
+      writeFailureRetryReady: 99,
+      scriptId: 'script_secret',
+      values: { token: 'remote-secret' },
+    });
+
+    expect(summary).toContain('0 unavailable, 2 failed');
+    expect(summary).toContain('retry diagnostics: 1 write retry-ready');
+    expect(summary).not.toContain('99');
+    expect(summary).not.toContain('script_secret');
+    expect(summary).not.toContain('token');
+    expect(summary).not.toContain('remote-secret');
   });
 
   it('clamps candidate merge result summaries to aggregate result totals', () => {

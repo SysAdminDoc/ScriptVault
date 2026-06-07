@@ -3888,6 +3888,10 @@
         const userModified = syncLogCount(valueBundleSync.skippedUserModified);
         const unavailable = syncLogCount(valueBundleSync.skippedUnavailable);
         const failures = syncLogCount(valueBundleSync.failures);
+        const writeFailureRetryReady = clampSyncLogCount(
+            valueBundleSync.writeFailureRetryReady,
+            Math.min(failures, preserved),
+        );
         let timestampBudget = preserved;
         const clampTimestampCount = (value) => {
             const count = Math.min(syncLogCount(value), timestampBudget);
@@ -3920,7 +3924,10 @@
         const candidateDetail = preserved > 0
             ? `; candidate gates: ${candidateReady} ready, ${candidateManual} manual review, ${candidateUnavailable} unavailable; candidate result keys: ${candidateResultKeys} total, ${candidateAutoKeys} auto-selected, ${candidateReviewKeys} review, ${candidateAcceptedResultKeys} accepted ready; candidate review reasons: ${candidateSameTimestamp} same timestamp, ${candidateUnknownTimestamp} unknown timestamp, ${candidateOneSidedTimestamp} one-sided timestamp, ${candidateUnavailableSnapshot} unavailable local snapshot, ${candidateNoKeys} no candidate keys`
             : '';
-        return `; GM values: ${applied} applied, ${preserved} preserved, ${blockedDetail}, ${unavailable} unavailable, ${failures} failed${timestampDetail}${candidateDetail}`;
+        const retryDetail = failures > 0
+            ? `; retry diagnostics: ${writeFailureRetryReady} write retry-ready`
+            : '';
+        return `; GM values: ${applied} applied, ${preserved} preserved, ${blockedDetail}, ${unavailable} unavailable, ${failures} failed${timestampDetail}${candidateDetail}${retryDetail}`;
     }
 
     function formatValueBundleConflictReason(reason) {
