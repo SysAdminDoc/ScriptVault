@@ -131,6 +131,19 @@ describe('local health report background action', () => {
       .not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('pins retry-resolution stale-history evidence in local health output', () => {
+    const summaryBlock = backgroundCoreTs.match(/function summarizeGmValueSyncRetryResolutionHistoryForHealth\(history\) \{[\s\S]*?async function readGmValueSyncRetryResolutionHistoryForHealth/);
+    expect(summaryBlock).toBeTruthy();
+    expect(summaryBlock[0]).toContain('const allEntries = sanitizeGmValueSyncRetryResolutionHistoryEntries(history, { includeStale: true, limit: false, now });');
+    expect(summaryBlock[0]).toContain('const staleEntriesPruned = allEntries.filter(entry => _isGmValueSyncRetryHistoryEntryStale(entry, now)).length;');
+    expect(summaryBlock[0]).toContain('.filter(entry => !_isGmValueSyncRetryHistoryEntryStale(entry, now))');
+    expect(summaryBlock[0]).toContain('staleEntriesPruned,');
+    expect(summaryBlock[0]).toContain('includesValues: false');
+    expect(summaryBlock[0]).toContain('includesValueKeys: false');
+    expect(messagesTs).toMatch(/retryResolutionHistory:\s*\{[\s\S]{0,520}staleEntriesPruned: number;/);
+    expect(summaryBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
   it('summarizes local workspace bindings without file handles, paths, or script identifiers', () => {
     const block = backgroundCoreTs.match(/function buildLocalWorkspaceHealthSummary\(bindings = \[\]\) \{[\s\S]*?\n\}/);
     expect(block).toBeTruthy();

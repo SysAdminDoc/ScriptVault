@@ -716,6 +716,17 @@ Cycle 154 hardens support-summary display clamps:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add retry-resolution stale-history
-evidence, support-summary schema drift coverage, or another durable safeguard before non-empty
+Cycle 155 pins retry-resolution stale-history evidence:
+
+- Local-health tests now require retry-resolution history summaries to read with
+  stale entries included so stale evidence is counted before pruning.
+- The typed response keeps `staleEntriesPruned` as an aggregate exclusion count
+  and filters retained entries before calculating retained totals.
+- The stale evidence path stays under the same privacy envelope as other GM
+  value-sync diagnostics.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add support-summary schema drift coverage,
+retry-resolution retention cleanup, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
