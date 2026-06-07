@@ -554,7 +554,20 @@ Cycle 142 adds support snapshot allowlist hardening:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 143 adds support summary polish:
+
+- Utilities diagnostics now cache the local-health report so the Support
+  Snapshot card can summarize the same sanitized GM value-sync evidence before
+  export.
+- The summary reports only aggregate opt-in script counts, ready bundle counts,
+  total key/byte counts, capped/excluded value warning totals, and
+  retry-ready preserved-write counts.
+- The UI summary relies on the support snapshot sanitizer and omits identifiers,
+  value key names, values, provider account data, credentials, provider error
+  text, URLs, file handles, local paths, and raw key metadata.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add write-retry history hardening,
-support-dashboard polish for the sanitized last result, or another durable
-safeguard before non-empty local and remote value bags can be merged
-bidirectionally.
+retry-age buckets, or another durable safeguard before non-empty local and
+remote value bags can be merged bidirectionally.

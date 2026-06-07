@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 84 - GM value sync support snapshot allowlist 2026-06-07.
+> **Roadmap version:** Round 85 - GM value sync support summary polish 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1522 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1523 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 84 - 2026-06-07.
+> Last researched: Round 85 - 2026-06-07.
 
 ---
 
@@ -286,6 +286,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   `gmValueSync` block from documented aggregate counts, clamped last-result
   retry evidence, known warning IDs, and a forced privacy envelope instead of
   copying injected raw fields through the local-health payload.
+- **Cycle 143 update:** Added support-dashboard polish for the sanitized
+  last-result diagnostics. The utilities diagnostics refresh now caches local
+  health, and the support snapshot summary shows aggregate GM value-sync opt-in,
+  ready-bundle, total-key/byte, warning, and retry-ready preserved-write counts
+  before export without exposing identifiers, value key names, values, provider
+  account data, credentials, or raw key metadata.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -367,11 +373,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 92 | Enterprise policy provisioning | `manifest.json`, `managed-storage-schema.json`, `src/background/core.ts`, `pages/dashboard.js`, `docs/enterprise-policy-provisioning.md`, focused manifest/runtime tests | Chrome managed storage requires a manifest-declared schema; managed storage is read-only policy data and can be restricted to trusted contexts [S28, S97, S98] | Added schema wiring, trusted-context access narrowing, deterministic managed install tags, a dashboard Managed badge, and administrator docs |
 | 93 | Enterprise policy diagnostics | `src/background/core.ts`, `src/types/messages.ts`, local health/support snapshot tests | Chrome policy deployment is normally inspected at `chrome://policy`, but ScriptVault support snapshots need only aggregate extension-side evidence [S97, S98, S99] | Added managed policy support/read/configuration/install counts and warning signals to local health without exposing policy values |
 | 94 | GM value-sync support snapshot allowlist | `pages/dashboard.js`, `tests/support-snapshot-redaction.test.js` | Chrome extension diagnostics should keep privileged userscript/storage state behind extension-controlled messaging and export only support-safe aggregates [S47, S98] | Added an explicit dashboard-side allowlist for GM value-sync local-health export data, including clamped retry-ready last-result evidence and known warning IDs only |
+| 95 | GM value-sync support summary polish | `pages/dashboard.js`, `tests/support-snapshot-redaction.test.js` | Support operators need pre-export visibility into aggregate local-health diagnostics while the privacy envelope keeps script/value data out of the UI and export path [S47, S98] | Cached local health during utilities refresh/export and added aggregate GM value-sync retry readiness to the support snapshot summary |
 
 ## Continuation State
 
-- **Current cycle:** Round 84 Cycle 142 added GM value sync support snapshot allowlist hardening.
-- **Next implementation angle:** Cycle 143 should continue L-8 with write-retry history hardening, support-dashboard polish for the sanitized last result, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 85 Cycle 143 added GM value sync support summary polish.
+- **Next implementation angle:** Cycle 144 should continue L-8 with write-retry history hardening, retry-age buckets, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 

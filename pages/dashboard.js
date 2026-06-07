@@ -29,6 +29,7 @@
         trustCenter: {
             runtimeStatus: null,
             runtimeHostPermissionStatus: null,
+            localHealthReport: null,
             publicApiOrigins: [],
             publicApiPermissions: {},
             publicApiAudit: [],
@@ -4886,6 +4887,27 @@
         }
     }
 
+    function formatSupportSnapshotGmValueSummary(localHealthReport) {
+        const sanitized = sanitizeLocalHealthForSupportSnapshot(localHealthReport, { includeLocalWorkspace: false });
+        const gmValueSync = sanitized?.gmValueSync;
+        if (!gmValueSync) return 'GM values unchecked';
+        if (!gmValueSync.available) return 'GM value diagnostics unavailable';
+        const retryReady = gmValueSync.lastResult?.writeFailureRetryReady || 0;
+        const warningTotal = Object.values(gmValueSync.warningCounts || {}).reduce((sum, count) => sum + sanitizeSupportSnapshotCount(count), 0);
+        const parts = [
+            `${numberFormatter.format(gmValueSync.optInScripts)} opt-in script${gmValueSync.optInScripts === 1 ? '' : 's'}`,
+            `${numberFormatter.format(gmValueSync.readyBundles)} ready bundle${gmValueSync.readyBundles === 1 ? '' : 's'}`,
+            `${numberFormatter.format(gmValueSync.totalKeys)} key${gmValueSync.totalKeys === 1 ? '' : 's'} / ${formatBytes(gmValueSync.totalBytes)}`
+        ];
+        if (retryReady > 0) {
+            parts.push(`${numberFormatter.format(retryReady)} retry-ready preserved write${retryReady === 1 ? '' : 's'}`);
+        }
+        if (warningTotal > 0) {
+            parts.push(`${numberFormatter.format(warningTotal)} capped or excluded value${warningTotal === 1 ? '' : 's'}`);
+        }
+        return `GM values ${parts.join(', ')}`;
+    }
+
     function updateSupportSnapshotSummary() {
         if (!elements.supportSnapshotSummary) return;
         const runtime = state.trustCenter.runtimeStatus;
@@ -4907,8 +4929,9 @@
         const backupScheduleLabel = state.backupSettings
             ? formatBackupScheduleSummary(state.backupSettings).toLowerCase()
             : 'schedule unavailable';
+        const gmValueSummary = formatSupportSnapshotGmValueSummary(state.trustCenter.localHealthReport);
         elements.supportSnapshotSummary.textContent =
-            `Runtime ${runtimeLabel}, ${numberFormatter.format(state.scripts.length)} scripts (${numberFormatter.format(enabledScriptCount)} enabled), ${numberFormatter.format(trustedOriginCount)} trusted origins, ${numberFormatter.format(trustedKeyCount)} trusted signing keys, sync ${syncProvider === 'none' ? 'disabled' : syncProvider}, recovery ${backupSummary}, schedule ${backupScheduleLabel}.`;
+            `Runtime ${runtimeLabel}, ${numberFormatter.format(state.scripts.length)} scripts (${numberFormatter.format(enabledScriptCount)} enabled), ${numberFormatter.format(trustedOriginCount)} trusted origins, ${numberFormatter.format(trustedKeyCount)} trusted signing keys, sync ${syncProvider === 'none' ? 'disabled' : syncProvider}, ${gmValueSummary}, recovery ${backupSummary}, schedule ${backupScheduleLabel}.`;
     }
 
     function normalizeTrustedOriginInput(rawValue) {
@@ -5266,10 +5289,27 @@
         }
     }
 
+    async function loadLocalHealthReport(options = {}) {
+        const { announce = false } = options;
+        try {
+            const report = await chrome.runtime.sendMessage({ action: 'getLocalHealthReport' });
+            state.trustCenter.localHealthReport = report?.schema === 'scriptvault-local-health/v1' ? report : null;
+            updateSupportSnapshotSummary();
+            if (announce) showToast('Local health refreshed', 'success');
+            return state.trustCenter.localHealthReport;
+        } catch (error) {
+            state.trustCenter.localHealthReport = null;
+            updateSupportSnapshotSummary();
+            if (announce) showToast(error?.message || 'Failed to refresh local health', 'error');
+            return null;
+        }
+    }
+
     async function refreshUtilitiesDiagnostics(options = {}) {
         const { announce = false } = options;
         await Promise.all([
             loadRuntimeStatus(),
+            loadLocalHealthReport(),
             loadPublicApiTrustState(),
             loadSigningTrustState()
         ]);
@@ -5607,6 +5647,9 @@
             if (enabledCategories.has('trustedSigningKeys')) {
                 state.trustCenter.signingKeys = signingKeys?.keys || {};
             }
+            state.trustCenter.localHealthReport = localHealthReport?.schema === 'scriptvault-local-health/v1'
+                ? localHealthReport
+                : null;
 
             renderRuntimeStatus(runtimeStatus);
             if (wantPublicApi) renderPublicApiAuditLog(state.trustCenter.publicApiAudit);
