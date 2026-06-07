@@ -68,6 +68,9 @@ describe('local health report background action', () => {
     expect(backgroundCoreTs).toContain('readGmValueSyncLastResultForHealth');
     expect(backgroundCoreTs).toContain('lastResult: null');
     expect(backgroundCoreTs).toContain('writeFailureRetryReady');
+    expect(backgroundCoreTs).toContain('_gmValueSyncRetryAgeBucket');
+    expect(backgroundCoreTs).toContain('retryAgeMinutes');
+    expect(backgroundCoreTs).toContain('retryAgeBucket');
     expect(backgroundCoreTs).toContain('ScriptValues.getAll(script.id)');
     expect(backgroundCoreTs).toContain('gmValueSync,');
     expect(backgroundCoreTs).toContain("push('gmValueSyncProviderWritesPending', 'info'");
@@ -160,6 +163,8 @@ describe('local health report support snapshot wiring', () => {
     expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,500}providerWritesEnabled: boolean;/);
     expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,900}lastResult: null \| \{/);
     expect(messagesTs).toMatch(/lastResult: null \| \{[\s\S]{0,500}writeFailureRetryReady: number;/);
+    expect(messagesTs).toMatch(/lastResult: null \| \{[\s\S]{0,700}retryAgeMinutes: number \| null;/);
+    expect(messagesTs).toMatch(/retryAgeBucket: 'none' \| 'fresh' \| 'recent' \| 'stale' \| 'old' \| 'unknown';/);
     expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,1300}warningCounts: Record<string, number>;/);
     expect(messagesTs).toMatch(/privacy:\s*\{[\s\S]{0,300}includesValueKeys: boolean;/);
     expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,300}totalBindings: number;/);

@@ -568,6 +568,19 @@ Cycle 143 adds support summary polish:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 144 adds retry-age diagnostics:
+
+- Local health last-result summaries now include aggregate retry-age minutes and
+  a coarse retry-age bucket for retry-ready preserved writes.
+- The only bucket values are `none`, `fresh`, `recent`, `stale`, `old`, and
+  `unknown`; support snapshots force `none` whenever no write retry is ready.
+- The Support Snapshot card labels retry-ready preserved writes with that safe
+  age bucket while still omitting identifiers, value key names, values, provider
+  account data, credentials, provider error text, URLs, file handles, local
+  paths, and raw key metadata.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add write-retry history hardening,
-retry-age buckets, or another durable safeguard before non-empty local and
-remote value bags can be merged bidirectionally.
+bounded retry-resolution evidence, or another durable safeguard before non-empty
+local and remote value bags can be merged bidirectionally.

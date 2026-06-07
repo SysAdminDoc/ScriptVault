@@ -2354,6 +2354,20 @@ function sanitizeValueBundleSyncForLastResult(valueBundleSync) {
   };
 }
 
+function _gmValueSyncRetryAgeMinutes(timestamp) {
+  const numeric = Number(timestamp);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  return Math.floor(Math.max(0, Date.now() - numeric) / 60000);
+}
+
+function _gmValueSyncRetryAgeBucket(ageMinutes) {
+  if (!Number.isFinite(Number(ageMinutes))) return 'unknown';
+  if (ageMinutes < 15) return 'fresh';
+  if (ageMinutes < 6 * 60) return 'recent';
+  if (ageMinutes < 24 * 60) return 'stale';
+  return 'old';
+}
+
 function buildLastSyncResultRecord(result = {}) {
   const valueBundleSync = sanitizeValueBundleSyncForLastResult(result?.valueBundleSync);
   return {
@@ -2778,9 +2792,12 @@ async function buildValueBundlesForScripts(scripts = []) {
 function sanitizeGmValueSyncLastResultForHealth(record) {
   if (!record || typeof record !== 'object') return null;
   const valueBundleSync = sanitizeValueBundleSyncForLastResult(record.valueBundleSync);
+  const timestamp = Number.isFinite(Number(record.timestamp)) ? Math.max(0, Math.floor(Number(record.timestamp))) : null;
+  const writeFailureRetryReady = valueBundleSync?.writeFailureRetryReady || 0;
+  const retryAgeMinutes = writeFailureRetryReady > 0 ? _gmValueSyncRetryAgeMinutes(timestamp) : null;
   return {
     schema: 'scriptvault-gm-value-sync-result/v1',
-    timestamp: Number.isFinite(Number(record.timestamp)) ? Math.max(0, Math.floor(Number(record.timestamp))) : null,
+    timestamp,
     ok: record.ok === true,
     skipped: record.skipped === true,
     hasError: !!record.error,
@@ -2789,7 +2806,9 @@ function sanitizeGmValueSyncLastResultForHealth(record) {
     conflictBlocked: valueBundleSync?.conflictBlocked || 0,
     skippedUnavailable: valueBundleSync?.skippedUnavailable || 0,
     failures: valueBundleSync?.failures || 0,
-    writeFailureRetryReady: valueBundleSync?.writeFailureRetryReady || 0
+    writeFailureRetryReady,
+    retryAgeMinutes,
+    retryAgeBucket: writeFailureRetryReady > 0 ? _gmValueSyncRetryAgeBucket(retryAgeMinutes) : 'none'
   };
 }
 

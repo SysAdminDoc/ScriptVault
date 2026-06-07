@@ -123,7 +123,11 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(dashboardJs).toContain('sanitizeGmValueSyncForSupportSnapshot(report.gmValueSync)');
     expect(block[0]).toContain("schema: 'scriptvault-gm-value-sync/v1'");
     expect(lastResultBlock[0]).toContain("schema: 'scriptvault-gm-value-sync-result/v1'");
-    expect(lastResultBlock[0]).toContain('writeFailureRetryReady: Math.min(');
+    expect(lastResultBlock[0]).toContain('const writeFailureRetryReady = Math.min(');
+    expect(lastResultBlock[0]).toContain('retryAgeMinutes');
+    expect(lastResultBlock[0]).toContain('retryAgeBucket');
+    expect(lastResultBlock[0]).toContain("retryAgeBucket: writeFailureRetryReady > 0");
+    expect(dashboardJs).toContain('function sanitizeGmValueRetryAgeBucketForSupportSnapshot(value)');
     expect(block[0]).not.toContain('...gmValueSync');
     expect(lastResultBlock[0]).not.toContain('...lastResult');
     expect(`${block[0]}\n${lastResultBlock[0]}`).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
@@ -139,6 +143,7 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(dashboardJs).toMatch(/state\.trustCenter\.localHealthReport\s*=\s*localHealthReport\?\.schema === 'scriptvault-local-health\/v1'/);
     expect(summaryBlock[0]).toContain('writeFailureRetryReady');
     expect(summaryBlock[0]).toContain('retry-ready preserved write');
+    expect(summaryBlock[0]).toContain('formatGmValueRetryAgeBucket');
     expect(summaryBlock[0]).toContain('warningCounts');
     expect(summaryBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
