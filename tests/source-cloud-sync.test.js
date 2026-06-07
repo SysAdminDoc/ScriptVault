@@ -1603,6 +1603,52 @@ describe('source cloud sync module', () => {
     expect(serializedRetryPreview).not.toContain('remote-token');
     expect(provider.upload).toHaveBeenCalledTimes(1);
     expect(ScriptValues.setAll).toHaveBeenCalledTimes(1);
+
+    vi.clearAllMocks();
+
+    const retryResult = await CloudSync.sync();
+    expect(retryResult).toEqual({
+      success: true,
+      valueBundleSync: {
+        applied: 1,
+        preserved: 0,
+        conflictBlocked: 0,
+        skippedNonEmpty: 0,
+        skippedUserModified: 0,
+        skippedUnavailable: 0,
+        failures: 0,
+        preservedRemoteNewer: 0,
+        preservedLocalNewer: 0,
+        preservedSameTimestamp: 0,
+        preservedRemoteTimestampOnly: 0,
+        preservedLocalTimestampOnly: 0,
+        preservedTimestampUnknown: 0,
+        preservedCandidateMergeReady: 0,
+        preservedCandidateMergeManualReview: 0,
+        preservedCandidateMergeUnavailable: 0,
+        preservedCandidateResultKeyTotal: 0,
+        preservedCandidateAutoSelectedKeyTotal: 0,
+        preservedCandidateReviewKeyTotal: 0,
+        preservedCandidateAcceptedResultKeyTotal: 0,
+        preservedCandidateBlockedSameTimestamp: 0,
+        preservedCandidateBlockedUnknownTimestamp: 0,
+        preservedCandidateBlockedOneSidedTimestamp: 0,
+        preservedCandidateBlockedUnavailable: 0,
+        preservedCandidateBlockedNoCandidateKeys: 0,
+      },
+    });
+    expect(retryResult.valueBundleSync).not.toHaveProperty('writeFailureRetryReady');
+    expect(ScriptValues.setAll).toHaveBeenCalledWith('script_values', { token: 'remote-token' });
+    expect(ScriptValues.setAll).toHaveBeenCalledTimes(1);
+    expect(valueState.script_values).toEqual({ token: 'remote-token' });
+    expect(getRemoteData().valueBundles.script_values.values).toEqual({
+      token: 'remote-token',
+    });
+    expect(provider.upload).toHaveBeenCalledTimes(1);
+    const serializedRetryResult = JSON.stringify(retryResult);
+    expect(serializedRetryResult).not.toContain('script_values');
+    expect(serializedRetryResult).not.toContain('token');
+    expect(serializedRetryResult).not.toContain('remote-token');
   });
 
   it('uploads encrypted v2 envelopes when sync encryption is enabled', async () => {
