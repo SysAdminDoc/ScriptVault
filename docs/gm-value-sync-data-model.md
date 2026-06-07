@@ -290,6 +290,19 @@ Cycle 117 adds preserved-bundle manual-review reason summaries:
 - These summaries are advisory only. They do not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add candidate result export hardening,
-merge-acceptance invariants, or another durable safeguard before non-empty local
-and remote value bags can be merged bidirectionally.
+Cycle 118 hardens sanitized preview and export counts:
+
+- Dashboard preview and Download Preview sanitization now floors fractional
+  summary and value-bundle conflict counts to non-negative integers.
+- Negative, missing, non-numeric, or malicious count-like values collapse to
+  zero before they can appear in the sanitized export payload.
+- The hardening applies only to aggregate count and byte metrics. The export
+  still omits script IDs, script names, value key names, values, URLs, local
+  workspace handles, local paths, sync credentials, provider account data, and
+  raw `keyMetadata` maps.
+- This is an export/preview integrity guard only. It does not enable non-empty
+  local/remote merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add merge-acceptance invariants, export
+schema drift guards, or another durable safeguard before non-empty local and
+remote value bags can be merged bidirectionally.

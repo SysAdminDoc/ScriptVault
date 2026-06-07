@@ -22,6 +22,7 @@ function extractFunction(source, name) {
 
 function loadSyncPreviewExportApi() {
   return new Function(`
+    ${extractFunction(dashboardJs, 'sanitizePreviewCount')}
     ${extractFunction(dashboardJs, 'sanitizeSyncPreviewSummary')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleTimestamp')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleLastWriteHint')}
@@ -74,6 +75,7 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('candidate result keys');
     expect(dashboardJs).toContain('preservedCandidateMergeReady');
     expect(dashboardJs).toContain('preservedCandidateBlockedUnknownTimestamp');
+    expect(dashboardJs).toContain('sanitizePreviewCount');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {
@@ -114,19 +116,19 @@ describe('sync safety cockpit wiring', () => {
         remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: 0,
         remoteValueBundleCandidateMergesBlockedUnavailable: 0,
         remoteValueBundleCandidateMergesBlockedNoCandidateKeys: 0,
-        remoteValueBundleCandidateResultKeyTotal: 3,
-        remoteValueBundleCandidateAutoSelectedKeyTotal: 3,
-        remoteValueBundleCandidateReviewKeyTotal: 0,
+        remoteValueBundleCandidateResultKeyTotal: 3.9,
+        remoteValueBundleCandidateAutoSelectedKeyTotal: 3.2,
+        remoteValueBundleCandidateReviewKeyTotal: -8,
         wouldUpload: true,
         leakedName: 'Secret Script',
       },
       conflicts: [{ id: 'script_secret', name: 'Secret Script' }],
       valueBundleConflicts: [{
         reason: 'local-values-present',
-        localKeyCount: 1,
-        remoteKeyCount: 1,
-        localBytes: 111,
-        remoteBytes: 222,
+        localKeyCount: 1.9,
+        remoteKeyCount: 1.2,
+        localBytes: 111.9,
+        remoteBytes: 222.4,
         overlappingKeyCount: 1,
         localOnlyKeyCount: 0,
         remoteOnlyKeyCount: 0,
@@ -145,9 +147,9 @@ describe('sync safety cockpit wiring', () => {
         candidateSameTimestampKeyCount: 0,
         candidateManualKeyCount: 0,
         candidateOneSidedTimestampKeyCount: 0,
-        candidateResultKeyCount: 3,
-        candidateAutoSelectedKeyCount: 3,
-        candidateReviewKeyCount: 0,
+        candidateResultKeyCount: 3.9,
+        candidateAutoSelectedKeyCount: 3.2,
+        candidateReviewKeyCount: -8,
         candidateMergeGate: 'ready',
         candidateMergeBlockReason: 'none',
         keyMetadata: {
