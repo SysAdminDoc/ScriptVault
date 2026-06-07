@@ -967,6 +967,99 @@ describe('source cloud sync module', () => {
     expect(ScriptValues.setAll).not.toHaveBeenCalled();
   });
 
+  it('counts unavailable candidate merge simulations without exposing remote values or keys', async () => {
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_values',
+          code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Values' },
+          settings: {},
+          syncBaseCode: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 20,
+        scripts: [
+          {
+            id: 'script_values',
+            code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// remote',
+            enabled: true,
+            position: 0,
+            settings: { syncValues: true },
+            updatedAt: 20,
+          },
+        ],
+        tombstones: {},
+        valueBundles: {
+          script_values: {
+            schema: 'scriptvault-gm-value-sync/v1',
+            scriptId: 'script_values',
+            keyCount: 1,
+            bytes: 80,
+            values: {
+              remoteSecretKey: 'remote-value-456',
+            },
+          },
+        },
+      },
+    );
+    const { CloudSync, ScriptValues, provider } = harness;
+
+    const preview = await CloudSync.preview('googledrive');
+
+    expect(preview.summary).toEqual(
+      expect.objectContaining({
+        remoteValueBundlesConflictBlocked: 1,
+        remoteValueBundleCandidateMergesReady: 0,
+        remoteValueBundleCandidateMergesManualReview: 0,
+        remoteValueBundleCandidateMergesUnavailable: 1,
+        remoteValueBundleMergeSimulationReadyPreviewOnly: 0,
+        remoteValueBundleMergeSimulationManualReview: 0,
+        remoteValueBundleMergeSimulationUnavailable: 1,
+        remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal: 0,
+        remoteValueBundleMergeSimulationManualReviewResultKeyTotal: 0,
+        remoteValueBundleMergeSimulationUnavailableResultKeyTotal: 0,
+        remoteValueBundleCandidateMergesBlockedUnavailable: 1,
+        remoteValueBundleCandidateResultKeyTotal: 0,
+        remoteValueBundleCandidateAutoSelectedKeyTotal: 0,
+        remoteValueBundleCandidateReviewKeyTotal: 0,
+        remoteValueBundleCandidateAcceptedResultKeyTotal: 0,
+      }),
+    );
+    expectCandidateMergeSummaryInvariants(preview.summary);
+    expect(preview.valueBundleConflicts).toEqual([
+      expect.objectContaining({
+        reason: 'local-bundle-unavailable',
+        localKeyCount: null,
+        remoteKeyCount: 1,
+        candidateMergePlan: 'unavailable',
+        candidateRemoteKeyCount: null,
+        candidateLocalKeyCount: null,
+        candidateSameTimestampKeyCount: null,
+        candidateManualKeyCount: null,
+        candidateOneSidedTimestampKeyCount: null,
+        candidateResultKeyCount: null,
+        candidateAutoSelectedKeyCount: null,
+        candidateReviewKeyCount: null,
+        candidateMergeGate: 'unavailable',
+        candidateMergeBlockReason: 'local-bundle-unavailable',
+        candidateMergeSimulation: 'unavailable',
+      }),
+    ]);
+    const serializedPreview = JSON.stringify(preview.valueBundleConflicts);
+    expect(serializedPreview).not.toContain('script_values');
+    expect(serializedPreview).not.toContain('remoteSecretKey');
+    expect(serializedPreview).not.toContain('remote-value-456');
+    expect(provider.upload).not.toHaveBeenCalled();
+    expect(ScriptValues.setAll).not.toHaveBeenCalled();
+  });
+
   it('preserves remote GM value bundles during sync when local values are non-empty', async () => {
     await chrome.storage.local.set({
       syncTombstones: {},
