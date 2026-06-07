@@ -194,6 +194,9 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(summaryBlock[0]).toContain('retryResolution');
     expect(summaryBlock[0]).toContain('retry resolution');
     expect(summaryBlock[0]).toContain('retryResolutionHistory');
+    expect(summaryBlock[0]).toContain('const resolutionHistory = gmValueSync.retryResolutionHistory;');
+    expect(summaryBlock[0]).toContain('historical appl');
+    expect(summaryBlock[0]).toContain('stale retry resolution histor');
     expect(summaryBlock[0]).toContain('retryHistory');
     expect(summaryBlock[0]).toContain('staleEntriesPruned');
     expect(summaryBlock[0]).toContain('warningCounts');
