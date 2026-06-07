@@ -740,6 +740,17 @@ Cycle 156 pins support-summary schema drift coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 157 pins support export schema drift coverage:
+
+- Support-snapshot redaction tests now extract top-level keys from returned GM
+  value sync sanitizer objects and require an exact reviewed schema.
+- The guard covers the main GM value sync export plus nested last-result,
+  retry-resolution, retry-resolution-history, and retry-history exports.
+- New aggregate diagnostic fields cannot enter support snapshots without
+  changing the exact-key test.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add retry-resolution retention cleanup,
-support export schema drift coverage, or another durable safeguard before
+support privacy-key schema drift coverage, or another durable safeguard before
 non-empty local and remote value bags can be merged bidirectionally.
