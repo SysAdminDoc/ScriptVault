@@ -5422,8 +5422,85 @@
         };
     }
 
+    function sanitizeSupportSnapshotCount(value) {
+        const count = Number(value);
+        if (!Number.isFinite(count)) return 0;
+        return Math.floor(Math.max(0, count));
+    }
+
+    function sanitizeGmValueSyncWarningCountsForSupportSnapshot(warningCounts) {
+        const allowedWarningIds = new Set([
+            'maxKeysExceeded',
+            'keyTooLarge',
+            'valueNotJsonSerializable',
+            'scriptValueCapExceeded',
+            'valueReadFailed'
+        ]);
+        const sanitized = {};
+        for (const id of allowedWarningIds) {
+            const count = sanitizeSupportSnapshotCount(warningCounts?.[id]);
+            if (count > 0) sanitized[id] = count;
+        }
+        return sanitized;
+    }
+
+    function sanitizeGmValueSyncLastResultForSupportSnapshot(lastResult) {
+        if (!lastResult || typeof lastResult !== 'object') return null;
+        const applied = sanitizeSupportSnapshotCount(lastResult.applied);
+        const preserved = sanitizeSupportSnapshotCount(lastResult.preserved);
+        const failures = sanitizeSupportSnapshotCount(lastResult.failures);
+        return {
+            schema: 'scriptvault-gm-value-sync-result/v1',
+            timestamp: Number.isFinite(Number(lastResult.timestamp)) ? Math.max(0, Math.floor(Number(lastResult.timestamp))) : null,
+            ok: lastResult.ok === true,
+            skipped: lastResult.skipped === true,
+            hasError: lastResult.hasError === true,
+            applied,
+            preserved,
+            conflictBlocked: sanitizeSupportSnapshotCount(lastResult.conflictBlocked),
+            skippedUnavailable: sanitizeSupportSnapshotCount(lastResult.skippedUnavailable),
+            failures,
+            writeFailureRetryReady: Math.min(
+                sanitizeSupportSnapshotCount(lastResult.writeFailureRetryReady),
+                failures,
+                preserved
+            )
+        };
+    }
+
+    function sanitizeGmValueSyncForSupportSnapshot(gmValueSync) {
+        if (!gmValueSync || typeof gmValueSync !== 'object' || gmValueSync.schema !== 'scriptvault-gm-value-sync/v1') return undefined;
+        return {
+            schema: 'scriptvault-gm-value-sync/v1',
+            available: gmValueSync.available === true,
+            providerWritesEnabled: gmValueSync.providerWritesEnabled === true,
+            optInScripts: sanitizeSupportSnapshotCount(gmValueSync.optInScripts),
+            readyBundles: sanitizeSupportSnapshotCount(gmValueSync.readyBundles),
+            emptyBundles: sanitizeSupportSnapshotCount(gmValueSync.emptyBundles),
+            scriptsWithWarnings: sanitizeSupportSnapshotCount(gmValueSync.scriptsWithWarnings),
+            valueReadFailures: sanitizeSupportSnapshotCount(gmValueSync.valueReadFailures),
+            totalKeys: sanitizeSupportSnapshotCount(gmValueSync.totalKeys),
+            totalBytes: sanitizeSupportSnapshotCount(gmValueSync.totalBytes),
+            maxScriptBytes: sanitizeSupportSnapshotCount(gmValueSync.maxScriptBytes),
+            maxKeys: sanitizeSupportSnapshotCount(gmValueSync.maxKeys),
+            maxKeyBytes: sanitizeSupportSnapshotCount(gmValueSync.maxKeyBytes),
+            lastResult: sanitizeGmValueSyncLastResultForSupportSnapshot(gmValueSync.lastResult),
+            warningCounts: sanitizeGmValueSyncWarningCountsForSupportSnapshot(gmValueSync.warningCounts),
+            privacy: {
+                includesValues: false,
+                includesValueKeys: false,
+                includesScriptIds: false,
+                includesScriptNames: false,
+                includesUrls: false,
+                includesFileHandles: false,
+                includesLocalPaths: false
+            }
+        };
+    }
+
     function sanitizeLocalHealthForSupportSnapshot(report, options = {}) {
         if (report?.schema !== 'scriptvault-local-health/v1') return undefined;
+        const gmValueSync = sanitizeGmValueSyncForSupportSnapshot(report.gmValueSync);
         const sanitized = {
             ...report,
             privacy: {
@@ -5436,6 +5513,11 @@
                 includesExternalBeacons: false
             }
         };
+        if (gmValueSync) {
+            sanitized.gmValueSync = gmValueSync;
+        } else {
+            delete sanitized.gmValueSync;
+        }
         if (!options.includeLocalWorkspace) {
             delete sanitized.localWorkspace;
         }

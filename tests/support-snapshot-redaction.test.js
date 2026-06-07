@@ -111,6 +111,24 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(dashboardJs).toContain('includesLocalPaths: false');
   });
 
+  it('GM value sync health is allowlisted before support snapshot export', () => {
+    const block = dashboardJs.match(/function sanitizeGmValueSyncForSupportSnapshot\(gmValueSync\) \{[\s\S]*?function sanitizeLocalHealthForSupportSnapshot/);
+    const lastResultBlock = dashboardJs.match(/function sanitizeGmValueSyncLastResultForSupportSnapshot\(lastResult\) \{[\s\S]*?function sanitizeGmValueSyncForSupportSnapshot/);
+    expect(block).toBeTruthy();
+    expect(lastResultBlock).toBeTruthy();
+    expect(dashboardJs).toContain('function sanitizeGmValueSyncLastResultForSupportSnapshot(lastResult)');
+    expect(dashboardJs).toContain('function sanitizeGmValueSyncWarningCountsForSupportSnapshot(warningCounts)');
+    expect(dashboardJs).toContain('const allowedWarningIds = new Set([');
+    expect(dashboardJs).toContain('if (!Number.isFinite(count)) return 0;');
+    expect(dashboardJs).toContain('sanitizeGmValueSyncForSupportSnapshot(report.gmValueSync)');
+    expect(block[0]).toContain("schema: 'scriptvault-gm-value-sync/v1'");
+    expect(lastResultBlock[0]).toContain("schema: 'scriptvault-gm-value-sync-result/v1'");
+    expect(lastResultBlock[0]).toContain('writeFailureRetryReady: Math.min(');
+    expect(block[0]).not.toContain('...gmValueSync');
+    expect(lastResultBlock[0]).not.toContain('...lastResult');
+    expect(`${block[0]}\n${lastResultBlock[0]}`).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
   it('managed policy health stays aggregate when always included', () => {
     expect(dashboardJs).toMatch(/localHealth:\s*sanitizeLocalHealthForSupportSnapshot\(localHealthReport/);
     expect(dashboardJs).not.toMatch(/managedPolicy[\s\S]{0,500}managedOriginKey/);

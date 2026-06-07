@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 83 - GM value sync retry support diagnostics 2026-06-07.
+> **Roadmap version:** Round 84 - GM value sync support snapshot allowlist 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1521 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1522 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 83 - 2026-06-07.
+> Last researched: Round 84 - 2026-06-07.
 
 ---
 
@@ -281,6 +281,11 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   sanitized aggregate `valueBundleSync` counts in the last sync result and
   surfacing `lastResult.writeFailureRetryReady` through local health/support
   snapshots without provider error text, identifiers, value keys, or values.
+- **Cycle 142 update:** Hardened the dashboard support snapshot path with an
+  explicit GM value-sync allowlist. Support exports now rebuild the
+  `gmValueSync` block from documented aggregate counts, clamped last-result
+  retry evidence, known warning IDs, and a forced privacy envelope instead of
+  copying injected raw fields through the local-health payload.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -361,11 +366,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 91 | Greasy Fork session-check polish | `pages/dashboard.js`, `tests/greasyfork-publish-handoff.test.js` | Greasy Fork publication still depends on the user's browser session, so the preflight modal should let users open Greasy Fork without posting script data [S76] | Added a user-initiated `Open Greasy Fork` modal action that opens only the base URL with noopener/noreferrer, plus focused static coverage and Chromium smoke proof |
 | 92 | Enterprise policy provisioning | `manifest.json`, `managed-storage-schema.json`, `src/background/core.ts`, `pages/dashboard.js`, `docs/enterprise-policy-provisioning.md`, focused manifest/runtime tests | Chrome managed storage requires a manifest-declared schema; managed storage is read-only policy data and can be restricted to trusted contexts [S28, S97, S98] | Added schema wiring, trusted-context access narrowing, deterministic managed install tags, a dashboard Managed badge, and administrator docs |
 | 93 | Enterprise policy diagnostics | `src/background/core.ts`, `src/types/messages.ts`, local health/support snapshot tests | Chrome policy deployment is normally inspected at `chrome://policy`, but ScriptVault support snapshots need only aggregate extension-side evidence [S97, S98, S99] | Added managed policy support/read/configuration/install counts and warning signals to local health without exposing policy values |
+| 94 | GM value-sync support snapshot allowlist | `pages/dashboard.js`, `tests/support-snapshot-redaction.test.js` | Chrome extension diagnostics should keep privileged userscript/storage state behind extension-controlled messaging and export only support-safe aggregates [S47, S98] | Added an explicit dashboard-side allowlist for GM value-sync local-health export data, including clamped retry-ready last-result evidence and known warning IDs only |
 
 ## Continuation State
 
-- **Current cycle:** Round 83 Cycle 141 added GM value sync retry support diagnostics.
-- **Next implementation angle:** Cycle 142 should continue L-8 with write-retry history hardening, last-result dashboard polish, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 84 Cycle 142 added GM value sync support snapshot allowlist hardening.
+- **Next implementation angle:** Cycle 143 should continue L-8 with write-retry history hardening, support-dashboard polish for the sanitized last result, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 

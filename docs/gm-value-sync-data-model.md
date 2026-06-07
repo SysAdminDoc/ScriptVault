@@ -541,6 +541,20 @@ Cycle 141 adds retry-ready support diagnostics:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 142 adds support snapshot allowlist hardening:
+
+- The dashboard support snapshot sanitizer now rebuilds the `gmValueSync`
+  local-health block from documented aggregate fields instead of copying the
+  report object through unchanged.
+- Last-result retry evidence is clamped to the preserved/failure budgets, and
+  warning counts are limited to known GM value-sync warning IDs.
+- The sanitized block forces the privacy envelope to exclude values, value key
+  names, script IDs, script names, URLs, file handles, and local paths even if an
+  injected or stale report contains additional fields.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add write-retry history hardening,
-last-result dashboard polish, or another durable safeguard before non-empty
-local and remote value bags can be merged bidirectionally.
+support-dashboard polish for the sanitized last result, or another durable
+safeguard before non-empty local and remote value bags can be merged
+bidirectionally.
