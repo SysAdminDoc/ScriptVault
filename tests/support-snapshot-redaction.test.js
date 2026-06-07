@@ -45,8 +45,41 @@ function getTopLevelObjectKeys(objectSource) {
   return keys;
 }
 
+function getTopLevelObjectEntries(objectSource) {
+  const entries = [];
+  let depth = 0;
+  for (const line of objectSource.split('\n')) {
+    const depthAtLineStart = depth;
+    const match = line.match(/^\s*([A-Za-z0-9_]+):\s*([^,]+),?\s*$/);
+    if (depthAtLineStart === 1 && match) entries.push([match[1], match[2]]);
+    for (const char of line) {
+      if (char === '{') depth += 1;
+      if (char === '}') depth -= 1;
+    }
+  }
+  return entries;
+}
+
+function getNestedObjectSource(objectSource, propertyName) {
+  const propertyIndex = objectSource.indexOf(`${propertyName}: {`);
+  expect(propertyIndex).toBeGreaterThan(-1);
+  const start = objectSource.indexOf('{', propertyIndex);
+  let depth = 0;
+  for (let i = start; i < objectSource.length; i += 1) {
+    if (objectSource[i] === '{') depth += 1;
+    if (objectSource[i] === '}') depth -= 1;
+    if (depth === 0) return objectSource.slice(start, i + 1);
+  }
+  throw new Error(`${propertyName} object did not close`);
+}
+
 function getReturnedObjectKeys(functionName, nextFunctionName) {
   return getTopLevelObjectKeys(getReturnedObjectSource(getFunctionBlock(functionName, nextFunctionName)));
+}
+
+function getReturnedPrivacyEntries(functionName, nextFunctionName) {
+  const objectSource = getReturnedObjectSource(getFunctionBlock(functionName, nextFunctionName));
+  return getTopLevelObjectEntries(getNestedObjectSource(objectSource, 'privacy'));
 }
 
 /**
@@ -250,6 +283,26 @@ describe('exportSupportSnapshot modal flow', () => {
       'oldestTimestamp',
       'privacy'
     ]);
+  });
+
+  it('GM value sync support export privacy blocks keep the reviewed false-key schema', () => {
+    const expectedPrivacyEntries = [
+      ['includesValues', 'false'],
+      ['includesValueKeys', 'false'],
+      ['includesScriptIds', 'false'],
+      ['includesScriptNames', 'false'],
+      ['includesUrls', 'false'],
+      ['includesFileHandles', 'false'],
+      ['includesLocalPaths', 'false']
+    ];
+    for (const [functionName, nextFunctionName] of [
+      ['sanitizeGmValueSyncForSupportSnapshot', 'sanitizeLocalHealthForSupportSnapshot'],
+      ['sanitizeGmValueSyncRetryResolutionForSupportSnapshot', 'sanitizeGmValueSyncRetryHistoryForSupportSnapshot'],
+      ['sanitizeGmValueSyncRetryResolutionHistoryForSupportSnapshot', 'sanitizeGmValueSyncRetryHistoryForSupportSnapshot'],
+      ['sanitizeGmValueSyncRetryHistoryForSupportSnapshot', 'sanitizeGmValueSyncLastResultForSupportSnapshot']
+    ]) {
+      expect(getReturnedPrivacyEntries(functionName, nextFunctionName)).toEqual(expectedPrivacyEntries);
+    }
   });
 
   it('GM value sync retry resolution is summarized before support snapshot export', () => {
