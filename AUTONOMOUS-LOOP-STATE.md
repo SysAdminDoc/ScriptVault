@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 155 - 2026-06-07
+Last cycle: Cycle 156 - 2026-06-07
 
 ## Latest Result
 
@@ -1083,12 +1083,20 @@ Last cycle: Cycle 155 - 2026-06-07
   suite with 1528 Vitest cases, high-severity audit, CWS remote-code scan,
   Monaco ESM scan, TS runtime check, forbidden-reference grep, and
   `git diff --check`.
+  Cycle 156 added support-summary schema drift coverage for L-8:
+  support-snapshot redaction tests now pin the exact sanitized GM value fields
+  read by the pre-export support summary and reject raw local-health field
+  access. Stored and exported diagnostics remain aggregate-only, and non-empty
+  writes remain disabled. Verification used focused support-snapshot tests,
+  typecheck, build, the full check suite with 1529 Vitest cases, high-severity
+  audit, CWS remote-code scan, Monaco ESM scan, TS runtime check,
+  forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 92. Cycle 155 added GM value sync
-retry-resolution stale-history evidence. The next best local cycle is Cycle 156: add
-support-summary schema drift coverage, retry-resolution retention cleanup, or the next L-8 safeguard needed before
+Continue from `ROADMAP.md` Round 92. Cycle 156 added GM value sync
+support-summary schema drift coverage. The next best local cycle is Cycle 157: add
+retry-resolution retention cleanup, support export schema drift coverage, or the next L-8 safeguard needed before
 broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
@@ -1098,9 +1106,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 155 complete for 2026-06-07; roadmap continuation
-  points to Cycle 156 GM value sync support-summary schema drift coverage,
-  retry-resolution retention cleanup, or the next available non-credential-gated
+- Status: ScriptVault Cycle 156 complete for 2026-06-07; roadmap continuation
+  points to Cycle 157 GM value sync retry-resolution retention cleanup,
+  support export schema drift coverage, or the next available non-credential-gated
   L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

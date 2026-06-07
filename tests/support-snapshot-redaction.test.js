@@ -210,6 +210,28 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(summaryBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('support summary reads only reviewed GM value sync fields after sanitization', () => {
+    const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
+    expect(summaryBlock).toBeTruthy();
+    expect(summaryBlock[0]).toContain('const sanitized = sanitizeLocalHealthForSupportSnapshot(localHealthReport, { includeLocalWorkspace: false });');
+    expect(summaryBlock[0]).toContain('const gmValueSync = sanitized?.gmValueSync;');
+    expect(summaryBlock[0]).not.toMatch(/localHealthReport\.(gmValueSync|managedPolicy|localWorkspace|scripts)/);
+    const fieldReads = [...summaryBlock[0].matchAll(/gmValueSync\.([A-Za-z0-9_]+)/g)]
+      .map((match) => match[1]);
+    expect([...new Set(fieldReads)].sort()).toEqual([
+      'available',
+      'lastResult',
+      'optInScripts',
+      'readyBundles',
+      'retryHistory',
+      'retryResolution',
+      'retryResolutionHistory',
+      'totalBytes',
+      'totalKeys',
+      'warningCounts'
+    ]);
+  });
+
   it('managed policy health stays aggregate when always included', () => {
     expect(dashboardJs).toMatch(/localHealth:\s*sanitizeLocalHealthForSupportSnapshot\(localHealthReport/);
     expect(dashboardJs).not.toMatch(/managedPolicy[\s\S]{0,500}managedOriginKey/);

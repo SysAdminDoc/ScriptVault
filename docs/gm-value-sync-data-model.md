@@ -727,6 +727,19 @@ Cycle 155 pins retry-resolution stale-history evidence:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add support-summary schema drift coverage,
-retry-resolution retention cleanup, or another durable safeguard before non-empty
-local and remote value bags can be merged bidirectionally.
+Cycle 156 pins support-summary schema drift coverage:
+
+- Support-snapshot redaction tests now require the GM value support summary to
+  read from `sanitizeLocalHealthForSupportSnapshot(...).gmValueSync`.
+- The test pins the exact reviewed top-level fields: `available`,
+  `optInScripts`, `readyBundles`, `totalKeys`, `totalBytes`, `lastResult`,
+  `retryResolution`, `retryResolutionHistory`, `retryHistory`, and
+  `warningCounts`.
+- Raw local-health access is rejected so new diagnostics cannot enter the
+  pre-export summary without review.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add retry-resolution retention cleanup,
+support export schema drift coverage, or another durable safeguard before
+non-empty local and remote value bags can be merged bidirectionally.
