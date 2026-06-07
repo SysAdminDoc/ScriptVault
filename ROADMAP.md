@@ -5,9 +5,9 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 92 - GM value sync support-summary schema drift coverage 2026-06-07.
+> **Roadmap version:** Round 92 - GM value sync support export schema drift coverage 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1529 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1530 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 92 - 2026-06-07.
@@ -363,6 +363,11 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   snapshot redaction suite now pins that the GM value support summary reads only
   reviewed, sanitized `gmValueSync` fields after `sanitizeLocalHealthForSupportSnapshot()`
   and never reaches back into raw local-health input for diagnostics.
+- **Cycle 157 update:** Added support export schema drift coverage. The support
+  snapshot redaction suite now extracts returned sanitizer object keys and pins
+  the exact top-level GM value sync, last-result, retry-resolution,
+  retry-resolution-history, and retry-history export schemas, so new diagnostic
+  fields cannot enter support exports without review.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -458,11 +463,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 106 | GM value-sync support-summary clamp hardening | `pages/dashboard.js`, `tests/support-snapshot-redaction.test.js` | Pre-export support summaries should format only non-negative integer aggregate counts [S47, S98] | Re-clamped all displayed GM value-sync support-summary counts before formatting |
 | 107 | GM value-sync retry-resolution stale-history evidence | `tests/local-health-report.test.js` | Stale retry-resolution history should stay visible only as aggregate exclusion evidence [S89, S97] | Added local-health source coverage for include-stale reads, stale exclusion counts, retained-entry filtering, typed output, and privacy flags |
 | 108 | GM value-sync support-summary schema drift coverage | `tests/support-snapshot-redaction.test.js` | Pre-export summaries should read only reviewed sanitized fields, not raw local-health input [S47, S98] | Pinned the exact sanitized GM value fields read by the support summary and rejected raw local-health field access |
+| 109 | GM value-sync support export schema drift coverage | `tests/support-snapshot-redaction.test.js` | Support exports should expose only reviewed aggregate diagnostic fields at every nested level [S47, S98] | Pinned the exact returned sanitizer keys for GM value sync, last-result, retry-resolution, retry-resolution-history, and retry-history exports |
 
 ## Continuation State
 
-- **Current cycle:** Round 92 Cycle 156 added GM value sync support-summary schema drift coverage.
-- **Next implementation angle:** Cycle 157 should continue L-8 with retry-resolution retention cleanup, support export schema drift coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 92 Cycle 157 added GM value sync support export schema drift coverage.
+- **Next implementation angle:** Cycle 158 should continue L-8 with retry-resolution retention cleanup, support privacy-key schema drift coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 

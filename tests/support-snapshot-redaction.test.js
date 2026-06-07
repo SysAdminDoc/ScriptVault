@@ -11,6 +11,44 @@ const dashboardJs = readFileSync(resolve(repoRoot, 'pages/dashboard.js'), 'utf8'
 const dashboardHtml = readFileSync(resolve(repoRoot, 'pages/dashboard.html'), 'utf8');
 const dashboardCss = readFileSync(resolve(repoRoot, 'pages/dashboard.css'), 'utf8');
 
+function getFunctionBlock(functionName, nextFunctionName) {
+  const block = dashboardJs.match(new RegExp(`function ${functionName}\\([^)]*\\) \\{[\\s\\S]*?function ${nextFunctionName}`));
+  expect(block).toBeTruthy();
+  return block[0];
+}
+
+function getReturnedObjectSource(block) {
+  const returnIndex = block.indexOf('return {');
+  expect(returnIndex).toBeGreaterThan(-1);
+  const start = block.indexOf('{', returnIndex);
+  let depth = 0;
+  for (let i = start; i < block.length; i += 1) {
+    if (block[i] === '{') depth += 1;
+    if (block[i] === '}') depth -= 1;
+    if (depth === 0) return block.slice(start, i + 1);
+  }
+  throw new Error('Returned object did not close');
+}
+
+function getTopLevelObjectKeys(objectSource) {
+  const keys = [];
+  let depth = 0;
+  for (const line of objectSource.split('\n')) {
+    const depthAtLineStart = depth;
+    const match = line.match(/^\s*([A-Za-z0-9_]+)(?::|,)/);
+    if (depthAtLineStart === 1 && match) keys.push(match[1]);
+    for (const char of line) {
+      if (char === '{') depth += 1;
+      if (char === '}') depth -= 1;
+    }
+  }
+  return keys;
+}
+
+function getReturnedObjectKeys(functionName, nextFunctionName) {
+  return getTopLevelObjectKeys(getReturnedObjectSource(getFunctionBlock(functionName, nextFunctionName)));
+}
+
 /**
  * Support snapshot redaction preview contract.
  *
@@ -136,6 +174,82 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(block[0]).not.toContain('...gmValueSync');
     expect(lastResultBlock[0]).not.toContain('...lastResult');
     expect(`${block[0]}\n${lastResultBlock[0]}`).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
+  it('GM value sync support export schema stays allowlisted at every level', () => {
+    expect(getReturnedObjectKeys('sanitizeGmValueSyncForSupportSnapshot', 'sanitizeLocalHealthForSupportSnapshot')).toEqual([
+      'schema',
+      'available',
+      'providerWritesEnabled',
+      'optInScripts',
+      'readyBundles',
+      'emptyBundles',
+      'scriptsWithWarnings',
+      'valueReadFailures',
+      'totalKeys',
+      'totalBytes',
+      'maxScriptBytes',
+      'maxKeys',
+      'maxKeyBytes',
+      'lastResult',
+      'retryResolution',
+      'retryResolutionHistory',
+      'retryHistory',
+      'warningCounts',
+      'privacy'
+    ]);
+    expect(getReturnedObjectKeys('sanitizeGmValueSyncLastResultForSupportSnapshot', 'sanitizeGmValueSyncForSupportSnapshot')).toEqual([
+      'schema',
+      'timestamp',
+      'ok',
+      'skipped',
+      'hasError',
+      'applied',
+      'preserved',
+      'conflictBlocked',
+      'skippedUnavailable',
+      'failures',
+      'writeFailureRetryReady',
+      'retryAgeMinutes',
+      'retryAgeBucket'
+    ]);
+    expect(getReturnedObjectKeys('sanitizeGmValueSyncRetryResolutionForSupportSnapshot', 'sanitizeGmValueSyncRetryHistoryForSupportSnapshot')).toEqual([
+      'schema',
+      'timestamp',
+      'applied',
+      'priorRetryReadyEntries',
+      'priorRetryReadyWrites',
+      'latestRetryTimestamp',
+      'resolutionAgeMinutes',
+      'resolutionAgeBucket',
+      'privacy'
+    ]);
+    expect(getReturnedObjectKeys('sanitizeGmValueSyncRetryResolutionHistoryForSupportSnapshot', 'sanitizeGmValueSyncRetryHistoryForSupportSnapshot')).toEqual([
+      'schema',
+      'limit',
+      'retentionDays',
+      'entries',
+      'totalApplied',
+      'totalPriorRetryReadyEntries',
+      'totalPriorRetryReadyWrites',
+      'staleEntriesPruned',
+      'latestTimestamp',
+      'oldestTimestamp',
+      'privacy'
+    ]);
+    expect(getReturnedObjectKeys('sanitizeGmValueSyncRetryHistoryForSupportSnapshot', 'sanitizeGmValueSyncLastResultForSupportSnapshot')).toEqual([
+      'schema',
+      'limit',
+      'retentionDays',
+      'entries',
+      'retryReadyEntries',
+      'failedNoRetryEntries',
+      'staleEntriesPruned',
+      'totalWriteFailureRetryReady',
+      'latestTimestamp',
+      'oldestTimestamp',
+      'privacy'
+    ]);
   });
 
   it('GM value sync retry resolution is summarized before support snapshot export', () => {
