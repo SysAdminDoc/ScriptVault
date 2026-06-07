@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 154 - 2026-06-07
+Last cycle: Cycle 155 - 2026-06-07
 
 ## Latest Result
 
@@ -1074,12 +1074,21 @@ Last cycle: Cycle 154 - 2026-06-07
   focused support-snapshot tests, typecheck, build, the full check suite with
   1527 Vitest cases, high-severity audit, CWS remote-code scan, Monaco ESM scan,
   TS runtime check, forbidden-reference grep, and `git diff --check`.
+  Cycle 155 added retry-resolution stale-history evidence coverage for L-8:
+  local-health tests now pin include-stale retry-resolution history reads,
+  stale-entry exclusion counts, retained-entry filtering before totals, typed
+  `staleEntriesPruned` output, and privacy flags. Stored and exported
+  diagnostics remain aggregate-only, and non-empty writes remain disabled.
+  Verification used focused local-health tests, typecheck, build, the full check
+  suite with 1528 Vitest cases, high-severity audit, CWS remote-code scan,
+  Monaco ESM scan, TS runtime check, forbidden-reference grep, and
+  `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 92. Cycle 154 added GM value sync
-support-summary clamp hardening. The next best local cycle is Cycle 155: add
-retry-resolution stale-history evidence, support-summary schema drift coverage, or the next L-8 safeguard needed before
+Continue from `ROADMAP.md` Round 92. Cycle 155 added GM value sync
+retry-resolution stale-history evidence. The next best local cycle is Cycle 156: add
+support-summary schema drift coverage, retry-resolution retention cleanup, or the next L-8 safeguard needed before
 broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
@@ -1089,9 +1098,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 154 complete for 2026-06-07; roadmap continuation
-  points to Cycle 155 GM value sync retry-resolution stale-history evidence,
-  support-summary schema drift coverage, or the next available non-credential-gated
+- Status: ScriptVault Cycle 155 complete for 2026-06-07; roadmap continuation
+  points to Cycle 156 GM value sync support-summary schema drift coverage,
+  retry-resolution retention cleanup, or the next available non-credential-gated
   L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
