@@ -75,8 +75,11 @@ const SYNC_PREVIEW_EXPORT_SUMMARY_KEYS = [
   'remoteValueBundleCandidateResultKeyTotal',
   'remoteValueBundleCandidateReviewKeyTotal',
   'remoteValueBundleMergeSimulationManualReview',
+  'remoteValueBundleMergeSimulationManualReviewResultKeyTotal',
   'remoteValueBundleMergeSimulationReadyPreviewOnly',
+  'remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal',
   'remoteValueBundleMergeSimulationUnavailable',
+  'remoteValueBundleMergeSimulationUnavailableResultKeyTotal',
   'remoteValueBundleWarnings',
   'remoteValueBundles',
   'remoteValueBundlesApplicable',
@@ -168,6 +171,7 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('remote candidate keys');
     expect(dashboardJs).toContain('candidate merge gate');
     expect(dashboardJs).toContain('GM value merge simulation');
+    expect(dashboardJs).toContain('GM value merge simulation result keys');
     expect(dashboardJs).toContain('manual review reasons');
     expect(dashboardJs).toContain('candidate result keys');
     expect(dashboardJs).toContain('accepted ready');
@@ -212,6 +216,9 @@ describe('sync safety cockpit wiring', () => {
         remoteValueBundleMergeSimulationReadyPreviewOnly: 1,
         remoteValueBundleMergeSimulationManualReview: 0,
         remoteValueBundleMergeSimulationUnavailable: 0,
+        remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal: 3.9,
+        remoteValueBundleMergeSimulationManualReviewResultKeyTotal: -4,
+        remoteValueBundleMergeSimulationUnavailableResultKeyTotal: 0,
         remoteValueBundleCandidateMergesBlockedSameTimestamp: 0,
         remoteValueBundleCandidateMergesBlockedUnknownTimestamp: 0,
         remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: 0,
@@ -318,6 +325,9 @@ describe('sync safety cockpit wiring', () => {
       remoteValueBundleMergeSimulationReadyPreviewOnly: 1,
       remoteValueBundleMergeSimulationManualReview: 0,
       remoteValueBundleMergeSimulationUnavailable: 0,
+      remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal: 3,
+      remoteValueBundleMergeSimulationManualReviewResultKeyTotal: 0,
+      remoteValueBundleMergeSimulationUnavailableResultKeyTotal: 0,
       remoteValueBundleCandidateMergesBlockedSameTimestamp: 0,
       remoteValueBundleCandidateMergesBlockedUnknownTimestamp: 0,
       remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: 0,

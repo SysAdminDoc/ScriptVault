@@ -357,6 +357,17 @@ Cycle 123 adds merge simulation aggregate totals:
 - The totals are aliases of the current advisory gate state; they do not enable
   non-empty local/remote merge writes or change the empty-local-only apply rule.
 
+Cycle 124 adds merge simulation result-key totals:
+
+- Dry-run summaries and sanitized exports now group hypothetical candidate
+  result key totals by ready-preview-only, manual-review, and unavailable
+  simulation states.
+- The dashboard preview renders those result-key totals separately from both
+  simulation counts and the existing total/auto-selected/review/accepted key
+  totals.
+- The totals are aggregate only and remain advisory. They do not enable
+  non-empty local/remote merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add accepted-result export drift guards,
-merge simulation result totals, or another durable safeguard before non-empty
+merge simulation acceptance invariants, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
