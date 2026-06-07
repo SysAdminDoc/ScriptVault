@@ -462,6 +462,23 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(summaryBlock[0]).not.toMatch(/Object\.values\(localHealthReport|Object\.keys\(gmValueSync\.warningCounts|Object\.entries\(gmValueSync\.warningCounts/);
   });
 
+  it('support summary fallback states run before GM value count formatting', () => {
+    const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
+    expect(summaryBlock).toBeTruthy();
+    let cursor = -1;
+    for (const marker of [
+      'const sanitized = sanitizeLocalHealthForSupportSnapshot(localHealthReport, { includeLocalWorkspace: false });',
+      'const gmValueSync = sanitized?.gmValueSync;',
+      "if (!gmValueSync) return 'GM values unchecked';",
+      "if (!gmValueSync.available) return 'GM value diagnostics unavailable';",
+      'const optInScripts = sanitizeSupportSnapshotCount(gmValueSync.optInScripts);'
+    ]) {
+      const next = summaryBlock[0].indexOf(marker, cursor + 1);
+      expect(next).toBeGreaterThan(cursor);
+      cursor = next;
+    }
+  });
+
   it('support summary reads only reviewed GM value sync fields after sanitization', () => {
     const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
     expect(summaryBlock).toBeTruthy();
