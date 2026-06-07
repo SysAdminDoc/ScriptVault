@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 117 - 2026-06-06
+Last cycle: Cycle 118 - 2026-06-07
 
 ## Latest Result
 
@@ -683,14 +683,24 @@ Last cycle: Cycle 117 - 2026-06-06
   tests, typecheck, build, the full check suite with 1510 Vitest cases,
   high-severity audit, CWS remote-code scan, Monaco ESM scan, TS runtime check,
   forbidden-reference grep, and `git diff --check`.
+  Cycle 118 hardened sanitized L-8 preview/export count handling: dashboard
+  preview and Download Preview sanitization now floors fractional summary and
+  value-bundle conflict metrics to non-negative integers so negative or
+  fractional injected aggregate counts cannot survive sanitized output. The
+  evidence remains aggregate only and omits script IDs, script names, value key
+  names, values, URLs, local workspace handles, local paths, sync credentials,
+  provider account data, and raw `keyMetadata` maps. Non-empty writes remain
+  disabled. Verification used focused sync-cockpit tests, typecheck, build, the
+  full check suite with 1510 Vitest cases, high-severity audit, CWS remote-code
+  scan, Monaco ESM scan, TS runtime check, forbidden-reference grep, and `git
+  diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 59. Cycle 117 added aggregate preserved
-candidate manual-review reason summaries to real GM value sync results. The next
-best local cycle is Cycle 118: add candidate result export hardening,
-merge-acceptance invariants, or the next L-8 safeguard needed before broader
-bidirectional GM value merges.
+Continue from `ROADMAP.md` Round 60. Cycle 118 hardened sanitized GM value sync
+preview/export counts to non-negative integers. The next best local cycle is
+Cycle 119: add merge-acceptance invariants, export schema drift guards, or the
+next L-8 safeguard needed before broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -699,9 +709,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 117 complete for 2026-06-06; roadmap continuation
-  points to Cycle 118 GM value sync candidate result export hardening,
-  merge-acceptance invariants, or the next available non-credential-gated L-8
-  safeguard.
+- Status: ScriptVault Cycle 118 complete for 2026-06-07; roadmap continuation
+  points to Cycle 119 GM value sync merge-acceptance invariants, export schema
+  drift guards, or the next available non-credential-gated L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

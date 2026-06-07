@@ -3968,6 +3968,10 @@
         return allowed.has(value) ? value : 'unknown-timestamp';
     }
 
+    function sanitizePreviewCount(value) {
+        return Math.floor(Math.max(0, Number(value) || 0));
+    }
+
     function sanitizeSyncPreviewSummary(summary) {
         const safe = {};
         const keys = [
@@ -4010,7 +4014,7 @@
             'remoteValueBundleCandidateReviewKeyTotal',
         ];
         for (const key of keys) {
-            safe[key] = Math.max(0, Number(summary?.[key]) || 0);
+            safe[key] = sanitizePreviewCount(summary?.[key]);
         }
         safe.valueBundleApplyEnabled = summary?.valueBundleApplyEnabled === true;
         safe.valueBundleApplyMode = summary?.valueBundleApplyMode === 'empty-local-only' ? 'empty-local-only' : null;
@@ -4027,31 +4031,31 @@
             reason: conflict?.reason === 'local-values-present' || conflict?.reason === 'local-bundle-unavailable'
                 ? conflict.reason
                 : 'blocked',
-            localKeyCount: conflict?.localKeyCount == null ? null : Math.max(0, Number(conflict.localKeyCount) || 0),
-            remoteKeyCount: Math.max(0, Number(conflict?.remoteKeyCount) || 0),
-            localBytes: conflict?.localBytes == null ? null : Math.max(0, Number(conflict.localBytes) || 0),
-            remoteBytes: Math.max(0, Number(conflict?.remoteBytes) || 0),
-            overlappingKeyCount: conflict?.overlappingKeyCount == null ? null : Math.max(0, Number(conflict.overlappingKeyCount) || 0),
-            localOnlyKeyCount: conflict?.localOnlyKeyCount == null ? null : Math.max(0, Number(conflict.localOnlyKeyCount) || 0),
-            remoteOnlyKeyCount: conflict?.remoteOnlyKeyCount == null ? null : Math.max(0, Number(conflict.remoteOnlyKeyCount) || 0),
+            localKeyCount: conflict?.localKeyCount == null ? null : sanitizePreviewCount(conflict.localKeyCount),
+            remoteKeyCount: sanitizePreviewCount(conflict?.remoteKeyCount),
+            localBytes: conflict?.localBytes == null ? null : sanitizePreviewCount(conflict.localBytes),
+            remoteBytes: sanitizePreviewCount(conflict?.remoteBytes),
+            overlappingKeyCount: conflict?.overlappingKeyCount == null ? null : sanitizePreviewCount(conflict.overlappingKeyCount),
+            localOnlyKeyCount: conflict?.localOnlyKeyCount == null ? null : sanitizePreviewCount(conflict.localOnlyKeyCount),
+            remoteOnlyKeyCount: conflict?.remoteOnlyKeyCount == null ? null : sanitizePreviewCount(conflict.remoteOnlyKeyCount),
             localLastValueUpdatedAt: sanitizeValueBundleTimestamp(conflict?.localLastValueUpdatedAt),
             remoteLastValueUpdatedAt: sanitizeValueBundleTimestamp(conflict?.remoteLastValueUpdatedAt),
             lastWriteHint: sanitizeValueBundleLastWriteHint(conflict?.lastWriteHint),
-            overlappingRemoteNewerKeyCount: conflict?.overlappingRemoteNewerKeyCount == null ? null : Math.max(0, Number(conflict.overlappingRemoteNewerKeyCount) || 0),
-            overlappingLocalNewerKeyCount: conflict?.overlappingLocalNewerKeyCount == null ? null : Math.max(0, Number(conflict.overlappingLocalNewerKeyCount) || 0),
-            overlappingSameTimestampKeyCount: conflict?.overlappingSameTimestampKeyCount == null ? null : Math.max(0, Number(conflict.overlappingSameTimestampKeyCount) || 0),
-            overlappingRemoteTimestampOnlyKeyCount: conflict?.overlappingRemoteTimestampOnlyKeyCount == null ? null : Math.max(0, Number(conflict.overlappingRemoteTimestampOnlyKeyCount) || 0),
-            overlappingLocalTimestampOnlyKeyCount: conflict?.overlappingLocalTimestampOnlyKeyCount == null ? null : Math.max(0, Number(conflict.overlappingLocalTimestampOnlyKeyCount) || 0),
-            overlappingUnknownTimestampKeyCount: conflict?.overlappingUnknownTimestampKeyCount == null ? null : Math.max(0, Number(conflict.overlappingUnknownTimestampKeyCount) || 0),
+            overlappingRemoteNewerKeyCount: conflict?.overlappingRemoteNewerKeyCount == null ? null : sanitizePreviewCount(conflict.overlappingRemoteNewerKeyCount),
+            overlappingLocalNewerKeyCount: conflict?.overlappingLocalNewerKeyCount == null ? null : sanitizePreviewCount(conflict.overlappingLocalNewerKeyCount),
+            overlappingSameTimestampKeyCount: conflict?.overlappingSameTimestampKeyCount == null ? null : sanitizePreviewCount(conflict.overlappingSameTimestampKeyCount),
+            overlappingRemoteTimestampOnlyKeyCount: conflict?.overlappingRemoteTimestampOnlyKeyCount == null ? null : sanitizePreviewCount(conflict.overlappingRemoteTimestampOnlyKeyCount),
+            overlappingLocalTimestampOnlyKeyCount: conflict?.overlappingLocalTimestampOnlyKeyCount == null ? null : sanitizePreviewCount(conflict.overlappingLocalTimestampOnlyKeyCount),
+            overlappingUnknownTimestampKeyCount: conflict?.overlappingUnknownTimestampKeyCount == null ? null : sanitizePreviewCount(conflict.overlappingUnknownTimestampKeyCount),
             candidateMergePlan: sanitizeValueBundleCandidateMergePlan(conflict?.candidateMergePlan),
-            candidateRemoteKeyCount: conflict?.candidateRemoteKeyCount == null ? null : Math.max(0, Number(conflict.candidateRemoteKeyCount) || 0),
-            candidateLocalKeyCount: conflict?.candidateLocalKeyCount == null ? null : Math.max(0, Number(conflict.candidateLocalKeyCount) || 0),
-            candidateSameTimestampKeyCount: conflict?.candidateSameTimestampKeyCount == null ? null : Math.max(0, Number(conflict.candidateSameTimestampKeyCount) || 0),
-            candidateManualKeyCount: conflict?.candidateManualKeyCount == null ? null : Math.max(0, Number(conflict.candidateManualKeyCount) || 0),
-            candidateOneSidedTimestampKeyCount: conflict?.candidateOneSidedTimestampKeyCount == null ? null : Math.max(0, Number(conflict.candidateOneSidedTimestampKeyCount) || 0),
-            candidateResultKeyCount: conflict?.candidateResultKeyCount == null ? null : Math.max(0, Number(conflict.candidateResultKeyCount) || 0),
-            candidateAutoSelectedKeyCount: conflict?.candidateAutoSelectedKeyCount == null ? null : Math.max(0, Number(conflict.candidateAutoSelectedKeyCount) || 0),
-            candidateReviewKeyCount: conflict?.candidateReviewKeyCount == null ? null : Math.max(0, Number(conflict.candidateReviewKeyCount) || 0),
+            candidateRemoteKeyCount: conflict?.candidateRemoteKeyCount == null ? null : sanitizePreviewCount(conflict.candidateRemoteKeyCount),
+            candidateLocalKeyCount: conflict?.candidateLocalKeyCount == null ? null : sanitizePreviewCount(conflict.candidateLocalKeyCount),
+            candidateSameTimestampKeyCount: conflict?.candidateSameTimestampKeyCount == null ? null : sanitizePreviewCount(conflict.candidateSameTimestampKeyCount),
+            candidateManualKeyCount: conflict?.candidateManualKeyCount == null ? null : sanitizePreviewCount(conflict.candidateManualKeyCount),
+            candidateOneSidedTimestampKeyCount: conflict?.candidateOneSidedTimestampKeyCount == null ? null : sanitizePreviewCount(conflict.candidateOneSidedTimestampKeyCount),
+            candidateResultKeyCount: conflict?.candidateResultKeyCount == null ? null : sanitizePreviewCount(conflict.candidateResultKeyCount),
+            candidateAutoSelectedKeyCount: conflict?.candidateAutoSelectedKeyCount == null ? null : sanitizePreviewCount(conflict.candidateAutoSelectedKeyCount),
+            candidateReviewKeyCount: conflict?.candidateReviewKeyCount == null ? null : sanitizePreviewCount(conflict.candidateReviewKeyCount),
             candidateMergeGate: sanitizeValueBundleCandidateMergeGate(conflict?.candidateMergeGate),
             candidateMergeBlockReason: sanitizeValueBundleCandidateMergeBlockReason(conflict?.candidateMergeBlockReason)
         }));
