@@ -5,9 +5,9 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 92 - GM value sync retry-resolution cleanup guard 2026-06-07.
+> **Roadmap version:** Round 92 - GM value sync retry-resolution history storage contract 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1534 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1535 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 92 - 2026-06-07.
@@ -385,6 +385,11 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   local-health source-contract suite now pins stale/malformed single
   retry-resolution removal, requires cleanup only when no fresh resolution is
   written, and rejects persistence of null or undefined retry-resolution values.
+- **Cycle 162 update:** Added retry-resolution history storage contract
+  coverage. The local-health source-contract suite now pins stored
+  retry-resolution history entries to schema, timestamp, applied count, prior
+  retry-ready counts, and latest retry timestamp only, rejecting privacy blocks
+  or raw identifiers in local diagnostic history.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -485,11 +490,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 111 | GM value-sync support warning-count schema drift coverage | `tests/support-snapshot-redaction.test.js` | Support exports should allow only reviewed GM value warning identifiers [S47, S98] | Pinned the exact warning-count allowlist and rejected raw warning-count key iteration |
 | 112 | GM value-sync retry-age bucket schema drift coverage | `tests/support-snapshot-redaction.test.js` | Retry-ready and retry-resolution support exports should share reviewed age buckets [S47, S98] | Pinned the exact retry-age bucket allowlist and unknown fallback for support exports |
 | 113 | GM value-sync retry-resolution cleanup guard | `tests/local-health-report.test.js` | Stale or malformed local retry-resolution records should be removed without writing null diagnostics [S89, S97] | Pinned the single-record cleanup helper and persistence-time remove path |
+| 114 | GM value-sync retry-resolution history storage contract | `tests/local-health-report.test.js` | Local retry-resolution history should retain only aggregate recovery evidence [S89, S97] | Pinned the exact stored retry-resolution history entry keys and rejected privacy/raw identifier fields |
 
 ## Continuation State
 
-- **Current cycle:** Round 92 Cycle 161 added GM value sync retry-resolution cleanup guard coverage.
-- **Next implementation angle:** Cycle 162 should continue L-8 with support summary phrase drift coverage, retry-resolution history storage contract coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 92 Cycle 162 added GM value sync retry-resolution history storage contract coverage.
+- **Next implementation angle:** Cycle 163 should continue L-8 with support summary phrase drift coverage, retry-resolution history type/schema coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 

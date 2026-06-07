@@ -796,7 +796,17 @@ Cycle 161 pins retry-resolution cleanup guard coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 162 pins retry-resolution history storage contract coverage:
+
+- Local-health source-contract tests now extract stored retry-resolution history
+  entry keys from `sanitizeGmValueSyncRetryResolutionHistoryEntry()`.
+- Stored entries may retain only schema, timestamp, applied count, prior
+  retry-ready entry/write counts, and latest retry timestamp.
+- Stored history entries must not add privacy blocks, identifiers, value keys,
+  values, provider account data, credentials, raw key metadata, or error text.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add support summary phrase drift coverage,
-retry-resolution history storage contract coverage, or another durable
-safeguard before non-empty local and remote value bags can be merged
-bidirectionally.
+retry-resolution history type/schema coverage, or another durable safeguard
+before non-empty local and remote value bags can be merged bidirectionally.

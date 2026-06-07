@@ -146,6 +146,23 @@ describe('local health report background action', () => {
     expect(persistBlock[0]).not.toMatch(/gmValueSyncRetryResolution:\s*(null|undefined)/);
   });
 
+  it('pins retry-resolution history storage entries to aggregate evidence', () => {
+    const entryBlock = backgroundCoreTs.match(/function sanitizeGmValueSyncRetryResolutionHistoryEntry\(entry\) \{[\s\S]*?function sanitizeGmValueSyncRetryResolutionHistoryEntries/);
+    expect(entryBlock).toBeTruthy();
+    const returnBlock = entryBlock[0].match(/return \{\n([\s\S]*?)\n\s*\};/);
+    expect(returnBlock).toBeTruthy();
+    const storedKeys = [...returnBlock[1].matchAll(/^\s*([A-Za-z0-9_]+)(?::|,)/gm)].map((match) => match[1]);
+    expect(storedKeys).toEqual([
+      'schema',
+      'timestamp',
+      'applied',
+      'priorRetryReadyEntries',
+      'priorRetryReadyWrites',
+      'latestRetryTimestamp'
+    ]);
+    expect(returnBlock[0]).not.toMatch(/privacy|includesValues|scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
   it('pins retry-resolution stale-history evidence in local health output', () => {
     const summaryBlock = backgroundCoreTs.match(/function summarizeGmValueSyncRetryResolutionHistoryForHealth\(history\) \{[\s\S]*?async function readGmValueSyncRetryResolutionHistoryForHealth/);
     expect(summaryBlock).toBeTruthy();
