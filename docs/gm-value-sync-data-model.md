@@ -379,6 +379,16 @@ Cycle 125 hardens sanitized export result invariants:
 - This is an export/preview integrity guard only. It does not enable non-empty
   local/remote merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add accepted-result export drift guards,
-source-side simulation invariant tests, or another durable safeguard before non-empty
+Cycle 126 adds source-side simulation invariant coverage:
+
+- The source CloudSync ready and manual-review preview fixtures now assert that
+  simulation counts match candidate gate counts.
+- The same fixtures assert that accepted-ready result totals match
+  ready-preview-only result totals, and that auto-selected/review plus
+  simulation result partitions match the aggregate candidate result total.
+- This is regression coverage only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add preserved-result export safeguards,
+source-side unavailable simulation invariant coverage, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
