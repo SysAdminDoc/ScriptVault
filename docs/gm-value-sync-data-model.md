@@ -480,6 +480,15 @@ Cycle 135 adds write-failure dashboard log coverage:
 - This is dashboard rendering coverage only. It does not enable non-empty
   local/remote merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add result-summary parity guards,
-write-failure source invariants, or another durable safeguard before non-empty
+Cycle 136 adds ready result parity guards:
+
+- A source CloudSync assertion helper now pins ready preserved-candidate result
+  parity on the write-failure fixture.
+- Ready preserved candidates must keep auto-selected and accepted-ready totals
+  equal to the result-key budget with zero review keys.
+- This is regression coverage only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add timestamp parity guards,
+write-failure retry diagnostics, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
