@@ -5,7 +5,7 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 92 - GM value sync retry-resolution support summary polish 2026-06-07.
+> **Roadmap version:** Round 92 - GM value sync support-summary clamp hardening 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
 > **Test suite:** 1527 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
@@ -349,6 +349,11 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   and stale retry-resolution history exclusions before export, while continuing
   to omit script IDs, value key names, values, provider account data,
   credentials, and raw key metadata.
+- **Cycle 154 update:** Hardened support-summary display clamps. The GM
+  value-sync support summary now re-clamps every displayed opt-in, ready-bundle,
+  key, byte, retry-ready, retry-resolution, retry-history, and stale-exclusion
+  count before formatting so injected local-health counts cannot leak fractional
+  or negative values into the pre-export card.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -441,11 +446,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 103 | GM value-sync retry-resolution export hardening | `pages/dashboard.js`, `tests/support-snapshot-redaction.test.js` | Support exports should not overstate retry-resolution evidence from malformed local-health input [S47, S98] | Rejected malformed resolution records without prior retry-ready evidence, zeroed retained-history totals when entries sanitize to zero, and normalized history timestamp ranges |
 | 104 | GM value-sync retry-resolution source invariants | `tests/local-health-report.test.js` | Retry-resolution evidence must remain tied to successful clean retries after prior retry-ready history [S89, S97] | Added source-contract coverage for resolution record gates and persistence-time stale pruning of retry-resolution history |
 | 105 | GM value-sync retry-resolution support summary polish | `pages/dashboard.js`, `tests/support-snapshot-redaction.test.js` | Operators should see aggregate stale/excluded recovery evidence before exporting support snapshots [S47, S98] | Added support-card labels for historical retry-resolution applies and stale retry-resolution-history events excluded |
+| 106 | GM value-sync support-summary clamp hardening | `pages/dashboard.js`, `tests/support-snapshot-redaction.test.js` | Pre-export support summaries should format only non-negative integer aggregate counts [S47, S98] | Re-clamped all displayed GM value-sync support-summary counts before formatting |
 
 ## Continuation State
 
-- **Current cycle:** Round 92 Cycle 153 added GM value sync retry-resolution support summary polish.
-- **Next implementation angle:** Cycle 154 should continue L-8 with support-summary clamp hardening, retry-resolution stale-history evidence, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 92 Cycle 154 added GM value sync support-summary clamp hardening.
+- **Next implementation angle:** Cycle 155 should continue L-8 with retry-resolution stale-history evidence, support-summary schema drift coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 
