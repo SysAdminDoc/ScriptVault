@@ -265,6 +265,19 @@ Cycle 115 adds candidate merge result dry-run evidence:
 - The result preview is advisory only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add real-sync preserved-bundle acceptance
-summaries, candidate result export hardening, or another durable safeguard
-before non-empty local and remote value bags can be merged bidirectionally.
+Cycle 116 adds preserved-bundle candidate summaries to real sync results:
+
+- Successful `syncNow` responses can include preserved candidate merge readiness
+  counts for ready, manual-review, and unavailable preserved remote bundles.
+- The summary also includes preserved candidate result key totals, auto-selected
+  key totals, and review key totals.
+- The dashboard sync log renders those counts only as aggregate totals.
+- The response and log still omit script IDs, script names, value key names,
+  values, URLs, local workspace handles, local paths, sync credentials, provider
+  account data, and raw `keyMetadata` maps.
+- These summaries are advisory only. They do not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add candidate result export hardening,
+real-sync manual-review reason summaries, or another durable safeguard before
+non-empty local and remote value bags can be merged bidirectionally.

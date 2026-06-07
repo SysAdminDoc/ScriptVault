@@ -3892,12 +3892,21 @@
         const remoteOnlyTimestamp = Number(valueBundleSync.preservedRemoteTimestampOnly) || 0;
         const localOnlyTimestamp = Number(valueBundleSync.preservedLocalTimestampOnly) || 0;
         const unknownTimestamp = Number(valueBundleSync.preservedTimestampUnknown) || 0;
+        const candidateReady = Number(valueBundleSync.preservedCandidateMergeReady) || 0;
+        const candidateManual = Number(valueBundleSync.preservedCandidateMergeManualReview) || 0;
+        const candidateUnavailable = Number(valueBundleSync.preservedCandidateMergeUnavailable) || 0;
+        const candidateResultKeys = Number(valueBundleSync.preservedCandidateResultKeyTotal) || 0;
+        const candidateAutoKeys = Number(valueBundleSync.preservedCandidateAutoSelectedKeyTotal) || 0;
+        const candidateReviewKeys = Number(valueBundleSync.preservedCandidateReviewKeyTotal) || 0;
         if (applied + preserved + blocked + unavailable + failures <= 0) return '';
         const blockedDetail = blocked > 0 ? `${blocked} blocked (${nonEmpty} non-empty, ${userModified} user-modified)` : '0 blocked';
         const timestampDetail = preserved > 0
             ? `; timestamp hints: ${remoteNewer} remote-newer, ${localNewer} local-newer, ${sameTimestamp} same, ${remoteOnlyTimestamp} remote-only, ${localOnlyTimestamp} local-only, ${unknownTimestamp} unknown`
             : '';
-        return `; GM values: ${applied} applied, ${preserved} preserved, ${blockedDetail}, ${unavailable} unavailable, ${failures} failed${timestampDetail}`;
+        const candidateDetail = preserved > 0
+            ? `; candidate gates: ${candidateReady} ready, ${candidateManual} manual review, ${candidateUnavailable} unavailable; candidate result keys: ${candidateResultKeys} total, ${candidateAutoKeys} auto-selected, ${candidateReviewKeys} review`
+            : '';
+        return `; GM values: ${applied} applied, ${preserved} preserved, ${blockedDetail}, ${unavailable} unavailable, ${failures} failed${timestampDetail}${candidateDetail}`;
     }
 
     function formatValueBundleConflictReason(reason) {
