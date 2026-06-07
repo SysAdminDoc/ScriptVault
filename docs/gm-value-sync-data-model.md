@@ -338,6 +338,16 @@ Cycle 121 adds accepted-result evidence:
 - These are aggregate-only evidence fields. They do not enable non-empty
   local/remote merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add merge apply dry-run simulation,
-accepted-result export drift guards, or another durable safeguard before
-non-empty local and remote value bags can be merged bidirectionally.
+Cycle 122 adds a preview-only merge simulation marker:
+
+- Blocked value-bundle preview entries now include `candidateMergeSimulation`.
+- Ready candidates report `ready-preview-only`, manual-review cases report
+  `manual-review`, and unavailable local snapshots report `unavailable`.
+- The dashboard preview and sanitized Download Preview export carry only that
+  coarse simulation label beside aggregate counts.
+- The label is advisory and non-writing. It does not enable non-empty
+  local/remote merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add accepted-result export drift guards,
+merge simulation aggregate totals, or another durable safeguard before non-empty
+local and remote value bags can be merged bidirectionally.

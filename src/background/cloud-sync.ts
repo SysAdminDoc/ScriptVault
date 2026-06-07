@@ -213,6 +213,11 @@ type ValueBundleCandidateMergeBlockReason =
   | 'one-sided-timestamp'
   | 'no-candidate-keys';
 
+type ValueBundleCandidateMergeSimulation =
+  | 'ready-preview-only'
+  | 'manual-review'
+  | 'unavailable';
+
 interface SyncPreviewValueBundleConflict {
   reason: 'local-values-present' | 'local-bundle-unavailable';
   localKeyCount: number | null;
@@ -242,6 +247,7 @@ interface SyncPreviewValueBundleConflict {
   candidateReviewKeyCount: number | null;
   candidateMergeGate: ValueBundleCandidateMergeGate;
   candidateMergeBlockReason: ValueBundleCandidateMergeBlockReason;
+  candidateMergeSimulation: ValueBundleCandidateMergeSimulation;
 }
 
 interface SyncPreviewResult extends SyncResult {
@@ -906,6 +912,7 @@ function buildValueBundleConflictPreview(
     candidateReviewKeyCount: candidateResult.reviewKeyCount,
     candidateMergeGate: candidateGate.gate,
     candidateMergeBlockReason: candidateGate.blockReason,
+    candidateMergeSimulation: getValueBundleCandidateMergeSimulation(candidateGate.gate),
   };
 }
 
@@ -992,6 +999,14 @@ function buildValueBundleCandidateMergeGate(
     return { gate: 'manual-review', blockReason: 'unknown-timestamp', oneSidedTimestampKeyCount };
   }
   return { gate: 'ready', blockReason: 'none', oneSidedTimestampKeyCount };
+}
+
+function getValueBundleCandidateMergeSimulation(
+  gate: ValueBundleCandidateMergeGate,
+): ValueBundleCandidateMergeSimulation {
+  if (gate === 'ready') return 'ready-preview-only';
+  if (gate === 'unavailable') return 'unavailable';
+  return 'manual-review';
 }
 
 function buildValueBundleCandidateMergeResult(

@@ -812,6 +812,7 @@ describe('source cloud sync module', () => {
         candidateReviewKeyCount: 0,
         candidateMergeGate: 'ready',
         candidateMergeBlockReason: 'none',
+        candidateMergeSimulation: 'ready-preview-only',
       }),
     ]);
     expect(preview.valueBundleConflicts[0].candidateAutoSelectedKeyCount)
@@ -917,6 +918,7 @@ describe('source cloud sync module', () => {
         candidateReviewKeyCount: 1,
         candidateMergeGate: 'manual-review',
         candidateMergeBlockReason: 'unknown-timestamp',
+        candidateMergeSimulation: 'manual-review',
       }),
     ]);
     expect(preview.valueBundleConflicts[0].candidateAutoSelectedKeyCount)

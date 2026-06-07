@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 121 - 2026-06-07
+Last cycle: Cycle 122 - 2026-06-07
 
 ## Latest Result
 
@@ -724,13 +724,24 @@ Last cycle: Cycle 121 - 2026-06-07
   check suite with 1511 Vitest cases, high-severity audit, CWS remote-code scan,
   Monaco ESM scan, TS runtime check, forbidden-reference grep, and `git diff
   --check`.
+  Cycle 122 added a preview-only merge simulation marker for L-8 blocked
+  value-bundle previews: each conflict entry now reports
+  `candidateMergeSimulation` as `ready-preview-only`, `manual-review`, or
+  `unavailable`, and the dashboard preview plus sanitized export preserve that
+  coarse label. The evidence remains aggregate only and omits script IDs, script
+  names, value key names, values, URLs, local workspace handles, local paths,
+  sync credentials, provider account data, and raw `keyMetadata` maps. Non-empty
+  writes remain disabled. Verification used focused source
+  CloudSync/sync-cockpit/parity tests, typecheck, build, the full check suite
+  with 1511 Vitest cases, high-severity audit, CWS remote-code scan, Monaco ESM
+  scan, TS runtime check, forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 63. Cycle 121 added ready-only accepted-result
-evidence for GM value sync candidate merges. The next best local cycle is Cycle
-122: add merge apply dry-run simulation, accepted-result export drift guards, or
-the next L-8 safeguard needed before broader bidirectional GM value merges.
+Continue from `ROADMAP.md` Round 64. Cycle 122 added preview-only GM value sync
+merge simulation markers. The next best local cycle is Cycle 123: add
+accepted-result export drift guards, merge simulation aggregate totals, or the
+next L-8 safeguard needed before broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -739,9 +750,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 121 complete for 2026-06-07; roadmap continuation
-  points to Cycle 122 GM value sync merge apply dry-run simulation,
-  accepted-result export drift guards, or the next available
-  non-credential-gated L-8 safeguard.
+- Status: ScriptVault Cycle 122 complete for 2026-06-07; roadmap continuation
+  points to Cycle 123 GM value sync accepted-result export drift guards, merge
+  simulation aggregate totals, or the next available non-credential-gated L-8
+  safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

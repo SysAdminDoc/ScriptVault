@@ -484,7 +484,8 @@ function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {
     candidateAutoSelectedKeyCount: candidateResult.autoSelectedKeyCount,
     candidateReviewKeyCount: candidateResult.reviewKeyCount,
     candidateMergeGate: candidateGate.gate,
-    candidateMergeBlockReason: candidateGate.blockReason
+    candidateMergeBlockReason: candidateGate.blockReason,
+    candidateMergeSimulation: getValueBundleCandidateMergeSimulation(candidateGate.gate)
   };
 }
 
@@ -552,6 +553,12 @@ function buildValueBundleCandidateMergeGate(keyCounts, candidateMerge) {
     return { gate: 'manual-review', blockReason: 'unknown-timestamp', oneSidedTimestampKeyCount };
   }
   return { gate: 'ready', blockReason: 'none', oneSidedTimestampKeyCount };
+}
+
+function getValueBundleCandidateMergeSimulation(gate) {
+  if (gate === 'ready') return 'ready-preview-only';
+  if (gate === 'unavailable') return 'unavailable';
+  return 'manual-review';
 }
 
 function buildValueBundleCandidateMergeResult(keyCounts, candidateMerge, candidateGate) {
