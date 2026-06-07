@@ -70,6 +70,7 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('candidateMergeGate');
     expect(dashboardJs).toContain('remote candidate keys');
     expect(dashboardJs).toContain('candidate merge gate');
+    expect(dashboardJs).toContain('manual review reasons');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {
@@ -105,6 +106,11 @@ describe('sync safety cockpit wiring', () => {
         remoteValueBundleCandidateMergesReady: 1,
         remoteValueBundleCandidateMergesManualReview: 0,
         remoteValueBundleCandidateMergesUnavailable: 0,
+        remoteValueBundleCandidateMergesBlockedSameTimestamp: 0,
+        remoteValueBundleCandidateMergesBlockedUnknownTimestamp: 0,
+        remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: 0,
+        remoteValueBundleCandidateMergesBlockedUnavailable: 0,
+        remoteValueBundleCandidateMergesBlockedNoCandidateKeys: 0,
         wouldUpload: true,
         leakedName: 'Secret Script',
       },
@@ -191,6 +197,11 @@ describe('sync safety cockpit wiring', () => {
       remoteValueBundleCandidateMergesReady: 1,
       remoteValueBundleCandidateMergesManualReview: 0,
       remoteValueBundleCandidateMergesUnavailable: 0,
+      remoteValueBundleCandidateMergesBlockedSameTimestamp: 0,
+      remoteValueBundleCandidateMergesBlockedUnknownTimestamp: 0,
+      remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: 0,
+      remoteValueBundleCandidateMergesBlockedUnavailable: 0,
+      remoteValueBundleCandidateMergesBlockedNoCandidateKeys: 0,
       wouldUpload: true,
     }));
     const serialized = JSON.stringify(exported);

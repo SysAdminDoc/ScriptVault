@@ -773,6 +773,11 @@ describe('source cloud sync module', () => {
         remoteValueBundleCandidateMergesReady: 1,
         remoteValueBundleCandidateMergesManualReview: 0,
         remoteValueBundleCandidateMergesUnavailable: 0,
+        remoteValueBundleCandidateMergesBlockedSameTimestamp: 0,
+        remoteValueBundleCandidateMergesBlockedUnknownTimestamp: 0,
+        remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: 0,
+        remoteValueBundleCandidateMergesBlockedUnavailable: 0,
+        remoteValueBundleCandidateMergesBlockedNoCandidateKeys: 0,
       }),
     );
     expect(preview.valueBundleConflicts).toEqual([
@@ -813,6 +818,95 @@ describe('source cloud sync module', () => {
     expect(serializedPreview).not.toContain('local-value-123');
     expect(serializedPreview).not.toContain('remote-value-456');
     expect(serializedPreview).not.toContain('keyMetadata');
+    expect(provider.upload).not.toHaveBeenCalled();
+    expect(ScriptValues.setAll).not.toHaveBeenCalled();
+  });
+
+  it('counts manual-review candidate merge reasons without exposing values or keys', async () => {
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_values',
+          code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Values' },
+          settings: { syncValues: true },
+          syncBaseCode: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 20,
+        scripts: [
+          {
+            id: 'script_values',
+            code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// remote',
+            enabled: true,
+            position: 0,
+            settings: { syncValues: true },
+            updatedAt: 20,
+          },
+        ],
+        tombstones: {},
+        valueBundles: {
+          script_values: {
+            schema: 'scriptvault-gm-value-sync/v1',
+            scriptId: 'script_values',
+            keyCount: 1,
+            bytes: 80,
+            values: {
+              sharedKeyName: 'remote-value-456',
+            },
+          },
+        },
+      },
+      {},
+      {
+        script_values: {
+          sharedKeyName: 'local-value-123',
+        },
+      },
+      {
+        script_values: {
+          valueCount: 1,
+          lastUpdatedAt: 1000,
+        },
+      },
+    );
+    const { CloudSync, ScriptValues, provider } = harness;
+
+    const preview = await CloudSync.preview('googledrive');
+
+    expect(preview.summary).toEqual(
+      expect.objectContaining({
+        remoteValueBundlesConflictBlocked: 1,
+        remoteValueBundleCandidateMergesReady: 0,
+        remoteValueBundleCandidateMergesManualReview: 1,
+        remoteValueBundleCandidateMergesUnavailable: 0,
+        remoteValueBundleCandidateMergesBlockedUnknownTimestamp: 1,
+      }),
+    );
+    expect(preview.valueBundleConflicts).toEqual([
+      expect.objectContaining({
+        overlappingUnknownTimestampKeyCount: 1,
+        candidateMergePlan: 'manual-review',
+        candidateRemoteKeyCount: 0,
+        candidateLocalKeyCount: 0,
+        candidateSameTimestampKeyCount: 0,
+        candidateManualKeyCount: 1,
+        candidateOneSidedTimestampKeyCount: 0,
+        candidateMergeGate: 'manual-review',
+        candidateMergeBlockReason: 'unknown-timestamp',
+      }),
+    ]);
+    const serializedPreview = JSON.stringify(preview.valueBundleConflicts);
+    expect(serializedPreview).not.toContain('script_values');
+    expect(serializedPreview).not.toContain('sharedKeyName');
+    expect(serializedPreview).not.toContain('local-value-123');
+    expect(serializedPreview).not.toContain('remote-value-456');
     expect(provider.upload).not.toHaveBeenCalled();
     expect(ScriptValues.setAll).not.toHaveBeenCalled();
   });
