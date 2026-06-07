@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 147 - 2026-06-07
+Last cycle: Cycle 148 - 2026-06-07
 
 ## Latest Result
 
@@ -1007,12 +1007,25 @@ Last cycle: Cycle 147 - 2026-06-07
   CloudSync tests, typecheck, the full check suite with 1524 Vitest cases,
   high-severity audit, CWS remote-code scan, Monaco ESM scan, TS runtime check,
   forbidden-reference grep, and `git diff --check`.
+  Cycle 148 added retry-resolution health summaries for L-8: sync result
+  persistence now records a local aggregate `gmValueSyncRetryResolution` only
+  after a clean retry applies a preserved bundle following recent retry-ready
+  history, local health/support snapshots expose only applied counts, prior
+  retry-ready counts, timestamps, age buckets, and privacy flags, the Support
+  Snapshot card reports resolution evidence, and clear-all cleanup removes the
+  new resolution key. Stored and exported diagnostics omit script IDs, script
+  names, value key names, values, provider account data, credentials, provider
+  error text, URLs, file handles, local paths, and raw `keyMetadata` maps.
+  Non-empty writes remain disabled. Verification used focused local-health and
+  support-snapshot tests, TS runtime generation/check, typecheck, build, the
+  full check suite with 1525 Vitest cases, high-severity audit, CWS remote-code
+  scan, Monaco ESM scan, forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 89. Cycle 147 added a GM value sync
-write-retry resolution drill. The next best local cycle is Cycle 148: add retry
-resolution health summaries, resolution-age support evidence, or the next L-8 safeguard needed before
+Continue from `ROADMAP.md` Round 90. Cycle 148 added GM value sync
+retry-resolution health summaries. The next best local cycle is Cycle 149: add retry
+resolution stale cleanup, resolution-history support evidence, or the next L-8 safeguard needed before
 broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
@@ -1022,9 +1035,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 147 complete for 2026-06-07; roadmap continuation
-  points to Cycle 148 GM value sync retry-resolution health summaries,
-  resolution-age support evidence, or the next available non-credential-gated
-  L-8 safeguard.
+- Status: ScriptVault Cycle 148 complete for 2026-06-07; roadmap continuation
+  points to Cycle 149 GM value sync retry-resolution stale cleanup,
+  resolution-history support evidence, or the next available
+  non-credential-gated L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

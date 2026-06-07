@@ -626,6 +626,22 @@ Cycle 147 adds a write-retry resolution drill:
 - This is verification hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add retry-resolution health summaries,
-resolution-age support evidence, or another durable safeguard before non-empty
-local and remote value bags can be merged bidirectionally.
+Cycle 148 adds retry-resolution health summaries:
+
+- Sync result persistence now records a local `gmValueSyncRetryResolution`
+  summary only when a clean retry applies a preserved remote bundle after recent
+  retry-ready history.
+- The record contains only aggregate applied count, prior retry-ready entry and
+  write counts, timestamps, age bucket evidence, and privacy flags.
+- Local health and support snapshots allowlist this resolution block and omit
+  script IDs, script names, value key names, values, provider account data,
+  credentials, provider error text, URLs, file handles, local paths, and raw
+  `keyMetadata` maps.
+- Clear-all cleanup removes `gmValueSyncRetryResolution` with the other local
+  diagnostics keys.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add retry-resolution stale cleanup,
+resolution-history support evidence, or another durable safeguard before
+non-empty local and remote value bags can be merged bidirectionally.
