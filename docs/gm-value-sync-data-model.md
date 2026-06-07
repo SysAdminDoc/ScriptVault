@@ -613,6 +613,19 @@ Cycle 146 adds stale retry-history cleanup evidence:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add retry-resolution evidence, a
-write-retry resolution drill, or another durable safeguard before non-empty
+Cycle 147 adds a write-retry resolution drill:
+
+- The source CloudSync fixture now follows a transient failed empty-local value
+  write through the preserved remote bundle preview and a second sync retry.
+- The retry succeeds by applying the preserved remote bundle once local values
+  are still empty and the transient `ScriptValues.setAll()` failure has cleared.
+- The successful retry result omits `writeFailureRetryReady` and its serialized
+  result does not include script IDs, value key names, values, provider account
+  data, credentials, provider error text, URLs, file handles, local paths, or raw
+  `keyMetadata` maps.
+- This is verification hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add retry-resolution health summaries,
+resolution-age support evidence, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
