@@ -418,6 +418,17 @@ Cycle 129 adds source-side preserved candidate invariants:
 - This is regression coverage only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add unavailable preserved-candidate
-coverage, sync-result unavailable invariant tests, or another durable safeguard before non-empty
+Cycle 130 adds unavailable preserved-candidate coverage:
+
+- A source CloudSync sync fixture now covers a value-storage failure after a
+  remote opt-in value bundle merges onto a local script without a local value
+  bundle.
+- The fixture pins preserved unavailable gate counts, local-bundle-unavailable
+  reason counts, zero candidate result totals, unknown timestamp evidence,
+  remote-bundle preservation, and no value write.
+- This is regression coverage only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add sync-result failure log safeguards,
+unavailable preserved-candidate dashboard rendering coverage, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.

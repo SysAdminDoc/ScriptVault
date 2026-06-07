@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 129 - 2026-06-07
+Last cycle: Cycle 130 - 2026-06-07
 
 ## Latest Result
 
@@ -814,13 +814,26 @@ Last cycle: Cycle 129 - 2026-06-07
   CloudSync tests, typecheck, the full check suite with 1514 Vitest cases,
   high-severity audit, CWS remote-code scan, Monaco ESM scan, TS runtime check,
   forbidden-reference grep, and `git diff --check`.
+  Cycle 130 added unavailable preserved-candidate coverage for L-8 real sync
+  results: a source CloudSync fixture now covers value-storage failure after a
+  remote opt-in value bundle merges onto a local script without a local value
+  bundle, pinning preserved unavailable gate/reason counts, zero result totals,
+  unknown timestamp evidence, remote-bundle preservation, and no value write.
+  The evidence remains aggregate only and omits script IDs, script names, value
+  key names, values, URLs, local workspace handles, local paths, sync
+  credentials, provider account data, and raw `keyMetadata` maps. Non-empty
+  writes remain disabled. Verification used focused source CloudSync tests,
+  typecheck, the full check suite with 1515 Vitest cases, high-severity audit,
+  CWS remote-code scan, Monaco ESM scan, TS runtime check, forbidden-reference
+  grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 71. Cycle 129 added GM value sync preserved
-source invariants. The next best local cycle is Cycle 130: add unavailable
-preserved-candidate coverage, sync-result unavailable invariant tests, or the
-next L-8 safeguard needed before broader bidirectional GM value merges.
+Continue from `ROADMAP.md` Round 72. Cycle 130 added GM value sync unavailable
+preserve coverage. The next best local cycle is Cycle 131: add sync-result
+failure log safeguards, unavailable preserved-candidate dashboard rendering
+coverage, or the next L-8 safeguard needed before broader bidirectional GM value
+merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -829,9 +842,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 129 complete for 2026-06-07; roadmap continuation
-  points to Cycle 130 GM value sync unavailable preserved-candidate coverage,
-  sync-result unavailable invariant tests, or the next available non-credential-gated L-8
+- Status: ScriptVault Cycle 130 complete for 2026-06-07; roadmap continuation
+  points to Cycle 131 GM value sync failure log safeguards, unavailable
+  preserved-candidate dashboard rendering coverage, or the next available non-credential-gated L-8
   safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

@@ -1274,6 +1274,93 @@ describe('source cloud sync module', () => {
     });
   });
 
+  it('reports unavailable preserved candidate summaries when value storage fails during sync', async () => {
+    await chrome.storage.local.set({
+      syncTombstones: {},
+    });
+
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_values',
+          code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Values' },
+          settings: {},
+          syncBaseCode: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 20,
+        scripts: [
+          {
+            id: 'script_values',
+            code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// remote',
+            enabled: true,
+            position: 0,
+            settings: { syncValues: true },
+            updatedAt: 20,
+          },
+        ],
+        tombstones: {},
+        valueBundles: {
+          script_values: {
+            schema: 'scriptvault-gm-value-sync/v1',
+            scriptId: 'script_values',
+            keyCount: 1,
+            bytes: 100,
+            values: { token: 'remote-token' },
+          },
+        },
+      },
+    );
+    const { CloudSync, ScriptValues, getRemoteData, scriptState } = harness;
+    ScriptValues.getAll.mockRejectedValueOnce(new Error('value storage unavailable'));
+
+    const result = await CloudSync.sync();
+    expect(result).toEqual({
+      success: true,
+      valueBundleSync: {
+        applied: 0,
+        preserved: 1,
+        conflictBlocked: 0,
+        skippedNonEmpty: 0,
+        skippedUserModified: 0,
+        skippedUnavailable: 0,
+        failures: 1,
+        preservedRemoteNewer: 0,
+        preservedLocalNewer: 0,
+        preservedSameTimestamp: 0,
+        preservedRemoteTimestampOnly: 0,
+        preservedLocalTimestampOnly: 0,
+        preservedTimestampUnknown: 1,
+        preservedCandidateMergeReady: 0,
+        preservedCandidateMergeManualReview: 0,
+        preservedCandidateMergeUnavailable: 1,
+        preservedCandidateResultKeyTotal: 0,
+        preservedCandidateAutoSelectedKeyTotal: 0,
+        preservedCandidateReviewKeyTotal: 0,
+        preservedCandidateAcceptedResultKeyTotal: 0,
+        preservedCandidateBlockedSameTimestamp: 0,
+        preservedCandidateBlockedUnknownTimestamp: 0,
+        preservedCandidateBlockedOneSidedTimestamp: 0,
+        preservedCandidateBlockedUnavailable: 1,
+        preservedCandidateBlockedNoCandidateKeys: 0,
+      },
+    });
+    expectPreservedCandidateSummaryInvariants(result.valueBundleSync);
+
+    expect(ScriptValues.setAll).not.toHaveBeenCalled();
+    expect(scriptState[0].code).toContain('// remote');
+    expect(getRemoteData().valueBundles.script_values.values).toEqual({
+      token: 'remote-token',
+    });
+  });
+
   it('applies remote GM value bundles during sync when local values are empty', async () => {
     await chrome.storage.local.set({
       syncTombstones: {},
