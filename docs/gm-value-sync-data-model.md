@@ -303,6 +303,17 @@ Cycle 118 hardens sanitized preview and export counts:
 - This is an export/preview integrity guard only. It does not enable non-empty
   local/remote merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add merge-acceptance invariants, export
-schema drift guards, or another durable safeguard before non-empty local and
-remote value bags can be merged bidirectionally.
+Cycle 119 adds a merge-acceptance invariant guard:
+
+- Candidate merges can report `ready` only when auto-selected local/remote keys
+  cover the whole hypothetical result key count.
+- The same ready gate requires `reviewKeyCount === 0`, so same-timestamp,
+  unknown-timestamp, and one-sided timestamp cases remain manual-review.
+- The guard is mirrored in `src/background/cloud-sync.ts` and
+  `src/background/core.ts` and regenerated into the runtime bundle.
+- This is still advisory gating. It does not enable non-empty local/remote merge
+  writes or change the empty-local-only apply rule.
+
+The next implementation slice should add export schema drift guards,
+acceptance-invariant result evidence, or another durable safeguard before
+non-empty local and remote value bags can be merged bidirectionally.
