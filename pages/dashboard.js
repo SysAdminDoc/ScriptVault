@@ -4903,6 +4903,10 @@
         if (retryReady > 0) {
             parts.push(`${numberFormatter.format(retryReady)} retry-ready preserved write${retryReady === 1 ? '' : 's'}${retryAgeLabel ? ` (${retryAgeLabel})` : ''}`);
         }
+        if (gmValueSync.retryResolution?.applied > 0) {
+            const resolutionAgeLabel = formatGmValueRetryAgeBucket(gmValueSync.retryResolution.resolutionAgeBucket);
+            parts.push(`${numberFormatter.format(gmValueSync.retryResolution.applied)} retry resolution appl${gmValueSync.retryResolution.applied === 1 ? 'y' : 'ies'}${resolutionAgeLabel ? ` (${resolutionAgeLabel})` : ''}`);
+        }
         if (gmValueSync.retryHistory?.retryReadyEntries > 0) {
             parts.push(`${numberFormatter.format(gmValueSync.retryHistory.retryReadyEntries)} recent retry histor${gmValueSync.retryHistory.retryReadyEntries === 1 ? 'y event' : 'y events'}`);
         }
@@ -5506,6 +5510,36 @@
         return sanitized;
     }
 
+    function sanitizeGmValueSyncRetryResolutionForSupportSnapshot(retryResolution) {
+        if (!retryResolution || typeof retryResolution !== 'object' || retryResolution.schema !== 'scriptvault-gm-value-sync-retry-resolution/v1') return null;
+        const applied = sanitizeSupportSnapshotCount(retryResolution.applied);
+        if (applied <= 0) return null;
+        const priorRetryReadyEntries = sanitizeSupportSnapshotCount(retryResolution.priorRetryReadyEntries);
+        const priorRetryReadyWrites = sanitizeSupportSnapshotCount(retryResolution.priorRetryReadyWrites);
+        const resolutionAgeMinutes = retryResolution.resolutionAgeMinutes != null
+            ? sanitizeSupportSnapshotCount(retryResolution.resolutionAgeMinutes)
+            : null;
+        return {
+            schema: 'scriptvault-gm-value-sync-retry-resolution/v1',
+            timestamp: Number.isFinite(Number(retryResolution.timestamp)) ? Math.max(0, Math.floor(Number(retryResolution.timestamp))) : null,
+            applied,
+            priorRetryReadyEntries,
+            priorRetryReadyWrites,
+            latestRetryTimestamp: Number.isFinite(Number(retryResolution.latestRetryTimestamp)) ? Math.max(0, Math.floor(Number(retryResolution.latestRetryTimestamp))) : null,
+            resolutionAgeMinutes,
+            resolutionAgeBucket: sanitizeGmValueRetryAgeBucketForSupportSnapshot(retryResolution.resolutionAgeBucket),
+            privacy: {
+                includesValues: false,
+                includesValueKeys: false,
+                includesScriptIds: false,
+                includesScriptNames: false,
+                includesUrls: false,
+                includesFileHandles: false,
+                includesLocalPaths: false
+            }
+        };
+    }
+
     function sanitizeGmValueSyncRetryHistoryForSupportSnapshot(retryHistory) {
         if (!retryHistory || typeof retryHistory !== 'object' || retryHistory.schema !== 'scriptvault-gm-value-sync-retry-history/v1') return undefined;
         const limit = Math.min(Math.max(1, sanitizeSupportSnapshotCount(retryHistory.limit) || 5), 5);
@@ -5585,6 +5619,7 @@
             maxKeys: sanitizeSupportSnapshotCount(gmValueSync.maxKeys),
             maxKeyBytes: sanitizeSupportSnapshotCount(gmValueSync.maxKeyBytes),
             lastResult: sanitizeGmValueSyncLastResultForSupportSnapshot(gmValueSync.lastResult),
+            retryResolution: sanitizeGmValueSyncRetryResolutionForSupportSnapshot(gmValueSync.retryResolution),
             retryHistory: sanitizeGmValueSyncRetryHistoryForSupportSnapshot(gmValueSync.retryHistory),
             warningCounts: sanitizeGmValueSyncWarningCountsForSupportSnapshot(gmValueSync.warningCounts),
             privacy: {

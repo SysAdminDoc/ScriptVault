@@ -118,6 +118,7 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(lastResultBlock).toBeTruthy();
     expect(dashboardJs).toContain('function sanitizeGmValueSyncLastResultForSupportSnapshot(lastResult)');
     expect(dashboardJs).toContain('function sanitizeGmValueSyncWarningCountsForSupportSnapshot(warningCounts)');
+    expect(dashboardJs).toContain('function sanitizeGmValueSyncRetryResolutionForSupportSnapshot(retryResolution)');
     expect(dashboardJs).toContain('function sanitizeGmValueSyncRetryHistoryForSupportSnapshot(retryHistory)');
     expect(dashboardJs).toContain('const allowedWarningIds = new Set([');
     expect(dashboardJs).toContain('if (!Number.isFinite(count)) return 0;');
@@ -132,6 +133,17 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(block[0]).not.toContain('...gmValueSync');
     expect(lastResultBlock[0]).not.toContain('...lastResult');
     expect(`${block[0]}\n${lastResultBlock[0]}`).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
+  it('GM value sync retry resolution is summarized before support snapshot export', () => {
+    const resolutionBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryResolutionForSupportSnapshot\(retryResolution\) \{[\s\S]*?function sanitizeGmValueSyncRetryHistoryForSupportSnapshot/);
+    expect(resolutionBlock).toBeTruthy();
+    expect(resolutionBlock[0]).toContain("schema: 'scriptvault-gm-value-sync-retry-resolution/v1'");
+    expect(resolutionBlock[0]).toContain('priorRetryReadyEntries');
+    expect(resolutionBlock[0]).toContain('priorRetryReadyWrites');
+    expect(resolutionBlock[0]).toContain('latestRetryTimestamp');
+    expect(resolutionBlock[0]).toContain('resolutionAgeBucket');
+    expect(resolutionBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
   it('GM value sync retry history is summarized before support snapshot export', () => {
@@ -157,6 +169,8 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(summaryBlock[0]).toContain('writeFailureRetryReady');
     expect(summaryBlock[0]).toContain('retry-ready preserved write');
     expect(summaryBlock[0]).toContain('formatGmValueRetryAgeBucket');
+    expect(summaryBlock[0]).toContain('retryResolution');
+    expect(summaryBlock[0]).toContain('retry resolution');
     expect(summaryBlock[0]).toContain('retryHistory');
     expect(summaryBlock[0]).toContain('staleEntriesPruned');
     expect(summaryBlock[0]).toContain('warningCounts');

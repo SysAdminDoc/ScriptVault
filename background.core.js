@@ -2283,6 +2283,7 @@ const LOCAL_HEALTH_CALLBACK_WARNING_PERCENT = 80;
 const LOCAL_WORKSPACE_REFRESH_STALE_MS = 30 * 24 * 60 * 60 * 1000;
 const GM_VALUE_SYNC_SCHEMA = 'scriptvault-gm-value-sync/v1';
 const GM_VALUE_SYNC_RETRY_HISTORY_SCHEMA = 'scriptvault-gm-value-sync-retry-history/v1';
+const GM_VALUE_SYNC_RETRY_RESOLUTION_SCHEMA = 'scriptvault-gm-value-sync-retry-resolution/v1';
 const GM_VALUE_SYNC_RETRY_HISTORY_LIMIT = 5;
 const GM_VALUE_SYNC_RETRY_HISTORY_RETENTION_DAYS = 7;
 const GM_VALUE_SYNC_RETRY_HISTORY_RETENTION_MS = GM_VALUE_SYNC_RETRY_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000;
@@ -2449,15 +2450,48 @@ function updateGmValueSyncRetryHistory(history, record) {
     .slice(0, GM_VALUE_SYNC_RETRY_HISTORY_LIMIT);
 }
 
+function buildGmValueSyncRetryResolutionRecord(history, record = {}) {
+  if (!record?.ok) return null;
+  const valueBundleSync = sanitizeValueBundleSyncForLastResult(record.valueBundleSync);
+  if (!valueBundleSync || valueBundleSync.applied <= 0 || valueBundleSync.failures > 0 || valueBundleSync.writeFailureRetryReady > 0) return null;
+  const entries = sanitizeGmValueSyncRetryHistoryEntries(history, { limit: false });
+  const retryReadyEntries = entries.filter(entry => entry.status === 'retry-ready');
+  if (retryReadyEntries.length === 0) return null;
+  const priorRetryReadyWrites = retryReadyEntries.reduce((sum, entry) => sum + entry.writeFailureRetryReady, 0);
+  const latestRetryTimestamp = retryReadyEntries[0]?.timestamp || null;
+  return {
+    schema: GM_VALUE_SYNC_RETRY_RESOLUTION_SCHEMA,
+    timestamp: record.timestamp,
+    applied: valueBundleSync.applied,
+    priorRetryReadyEntries: retryReadyEntries.length,
+    priorRetryReadyWrites,
+    latestRetryTimestamp,
+    privacy: {
+      includesValues: false,
+      includesValueKeys: false,
+      includesScriptIds: false,
+      includesScriptNames: false,
+      includesUrls: false,
+      includesFileHandles: false,
+      includesLocalPaths: false
+    }
+  };
+}
+
 async function persistLastSyncResult(result = {}) {
   try {
     const lastSyncResult = buildLastSyncResultRecord(result);
     let data = {};
     try {
-      data = await chrome.storage.local.get('gmValueSyncRetryHistory');
+      data = await chrome.storage.local.get(['gmValueSyncRetryHistory', 'gmValueSyncRetryResolution']);
     } catch (_) {}
+    const gmValueSyncRetryResolution = buildGmValueSyncRetryResolutionRecord(data?.gmValueSyncRetryHistory, lastSyncResult);
     const gmValueSyncRetryHistory = updateGmValueSyncRetryHistory(data?.gmValueSyncRetryHistory, lastSyncResult);
-    await chrome.storage.local.set({ lastSyncResult, gmValueSyncRetryHistory });
+    await chrome.storage.local.set({
+      lastSyncResult,
+      gmValueSyncRetryHistory,
+      ...(gmValueSyncRetryResolution ? { gmValueSyncRetryResolution } : {})
+    });
   } catch (_e) { /* non-critical */ }
 }
 
@@ -2700,6 +2734,7 @@ function createEmptyGmValueSyncHealthSummary(overrides = {}) {
     maxKeys: GM_VALUE_SYNC_MAX_KEYS,
     maxKeyBytes: GM_VALUE_SYNC_MAX_KEY_BYTES,
     lastResult: null,
+    retryResolution: null,
     retryHistory: {
       schema: GM_VALUE_SYNC_RETRY_HISTORY_SCHEMA,
       limit: GM_VALUE_SYNC_RETRY_HISTORY_LIMIT,
@@ -2918,6 +2953,46 @@ async function readGmValueSyncLastResultForHealth() {
   }
 }
 
+function sanitizeGmValueSyncRetryResolutionForHealth(record) {
+  if (!record || typeof record !== 'object' || record.schema !== GM_VALUE_SYNC_RETRY_RESOLUTION_SCHEMA) return null;
+  const timestamp = Number.isFinite(Number(record.timestamp)) ? Math.max(0, Math.floor(Number(record.timestamp))) : null;
+  if (!timestamp || _isGmValueSyncRetryHistoryEntryStale({ timestamp })) return null;
+  const applied = _lastSyncResultCount(record.applied);
+  if (applied <= 0) return null;
+  const priorRetryReadyEntries = _lastSyncResultCount(record.priorRetryReadyEntries);
+  const priorRetryReadyWrites = _lastSyncResultCount(record.priorRetryReadyWrites);
+  const latestRetryTimestamp = Number.isFinite(Number(record.latestRetryTimestamp)) ? Math.max(0, Math.floor(Number(record.latestRetryTimestamp))) : null;
+  const resolutionAgeMinutes = _gmValueSyncRetryAgeMinutes(timestamp);
+  return {
+    schema: GM_VALUE_SYNC_RETRY_RESOLUTION_SCHEMA,
+    timestamp,
+    applied,
+    priorRetryReadyEntries,
+    priorRetryReadyWrites,
+    latestRetryTimestamp,
+    resolutionAgeMinutes,
+    resolutionAgeBucket: _gmValueSyncRetryAgeBucket(resolutionAgeMinutes),
+    privacy: {
+      includesValues: false,
+      includesValueKeys: false,
+      includesScriptIds: false,
+      includesScriptNames: false,
+      includesUrls: false,
+      includesFileHandles: false,
+      includesLocalPaths: false
+    }
+  };
+}
+
+async function readGmValueSyncRetryResolutionForHealth() {
+  try {
+    const data = await chrome.storage.local.get('gmValueSyncRetryResolution');
+    return sanitizeGmValueSyncRetryResolutionForHealth(data?.gmValueSyncRetryResolution);
+  } catch (_) {
+    return null;
+  }
+}
+
 function summarizeGmValueSyncRetryHistoryForHealth(history) {
   const now = Date.now();
   const allEntries = sanitizeGmValueSyncRetryHistoryEntries(history, { includeStale: true, limit: false, now });
@@ -2970,6 +3045,7 @@ async function buildGmValueSyncHealthSummary(scripts = []) {
     available: typeof ScriptValues !== 'undefined' && typeof ScriptValues?.getAll === 'function'
   });
   summary.lastResult = await readGmValueSyncLastResultForHealth();
+  summary.retryResolution = await readGmValueSyncRetryResolutionForHealth();
   summary.retryHistory = await readGmValueSyncRetryHistoryForHealth();
   if (!summary.available) return summary;
 
@@ -8533,7 +8609,7 @@ async function handleMessage(message, sender) {
         // Clear ghost state that would otherwise survive the reset
         await chrome.storage.local.remove([
           'syncTombstones', 'trash', 'pendingUpdates', 'scriptFolders',
-          'cspReports', 'gistSettings', 'lastSyncResult', 'gmValueSyncRetryHistory', 'liveReloadScripts',
+          'cspReports', 'gistSettings', 'lastSyncResult', 'gmValueSyncRetryHistory', 'gmValueSyncRetryResolution', 'liveReloadScripts',
           'restoreReceipts'
         ]).catch(() => {});
         // Clear all alarms (crontab, autoUpdate, autoSync, backup, etc.)
