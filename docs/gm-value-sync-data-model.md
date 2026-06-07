@@ -961,7 +961,17 @@ Cycle 177 pins support summary nested-field drift coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add retry-history timestamp bucket
-coverage, support summary warning-count nested coverage, or another durable
+Cycle 178 pins retry-history timestamp retention coverage:
+
+- Support-snapshot redaction tests now pin retry-history and
+  retry-resolution-history timestamp export to
+  `sanitizeSupportSnapshotRetainedHistoryTimestamp()`.
+- Retained history timestamps are nulled when the retained entry count is zero,
+  and oldest/latest timestamp ranges continue to be normalized before export.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add support summary warning-count nested
+coverage, retry-resolution timestamp range coverage, or another durable
 safeguard before non-empty local and remote value bags can be merged
 bidirectionally.
