@@ -118,6 +118,26 @@ async function loadFreshCloudSync(
   };
 }
 
+function expectCandidateMergeSummaryInvariants(summary) {
+  expect(summary.remoteValueBundleMergeSimulationReadyPreviewOnly)
+    .toBe(summary.remoteValueBundleCandidateMergesReady);
+  expect(summary.remoteValueBundleMergeSimulationManualReview)
+    .toBe(summary.remoteValueBundleCandidateMergesManualReview);
+  expect(summary.remoteValueBundleMergeSimulationUnavailable)
+    .toBe(summary.remoteValueBundleCandidateMergesUnavailable);
+  expect(
+    summary.remoteValueBundleCandidateAutoSelectedKeyTotal
+      + summary.remoteValueBundleCandidateReviewKeyTotal,
+  ).toBe(summary.remoteValueBundleCandidateResultKeyTotal);
+  expect(
+    summary.remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal
+      + summary.remoteValueBundleMergeSimulationManualReviewResultKeyTotal
+      + summary.remoteValueBundleMergeSimulationUnavailableResultKeyTotal,
+  ).toBe(summary.remoteValueBundleCandidateResultKeyTotal);
+  expect(summary.remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal)
+    .toBe(summary.remoteValueBundleCandidateAcceptedResultKeyTotal);
+}
+
 beforeEach(() => {
   globalThis.__resetStorageMock();
   Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
@@ -790,6 +810,7 @@ describe('source cloud sync module', () => {
         remoteValueBundleCandidateAcceptedResultKeyTotal: 3,
       }),
     );
+    expectCandidateMergeSummaryInvariants(preview.summary);
     expect(preview.valueBundleConflicts).toEqual([
       expect.objectContaining({
         reason: 'local-values-present',
@@ -916,6 +937,7 @@ describe('source cloud sync module', () => {
         remoteValueBundleCandidateAcceptedResultKeyTotal: 0,
       }),
     );
+    expectCandidateMergeSummaryInvariants(preview.summary);
     expect(preview.valueBundleConflicts).toEqual([
       expect.objectContaining({
         overlappingUnknownTimestampKeyCount: 1,

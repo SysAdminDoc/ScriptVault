@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 125 - 2026-06-07
+Last cycle: Cycle 126 - 2026-06-07
 
 ## Latest Result
 
@@ -768,13 +768,26 @@ Last cycle: Cycle 125 - 2026-06-07
   Verification used focused sync-cockpit tests, typecheck, the full check suite
   with 1512 Vitest cases, high-severity audit, CWS remote-code scan, Monaco ESM
   scan, TS runtime check, forbidden-reference grep, and `git diff --check`.
+  Cycle 126 added source-side simulation invariant coverage for L-8 dry-run
+  previews: ready and manual-review source CloudSync fixtures now assert that
+  simulation counts mirror candidate gate counts, accepted-ready result totals
+  mirror ready-preview-only result totals, and auto-selected/review plus
+  simulation result partitions match aggregate candidate result totals. The
+  evidence remains aggregate only and omits script IDs, script names, value key
+  names, values, URLs, local workspace handles, local paths, sync credentials,
+  provider account data, and raw `keyMetadata` maps. Non-empty writes remain
+  disabled. Verification used focused source CloudSync tests, typecheck, the
+  full check suite with 1512 Vitest cases, high-severity audit, CWS remote-code
+  scan, Monaco ESM scan, TS runtime check, forbidden-reference grep, and `git
+  diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 67. Cycle 125 added GM value sync export result
-invariants. The next best local cycle is Cycle 126: add source-side simulation
-invariant tests, preserved-result export safeguards, or the next L-8 safeguard
-needed before broader bidirectional GM value merges.
+Continue from `ROADMAP.md` Round 68. Cycle 126 added GM value sync source
+simulation invariant coverage. The next best local cycle is Cycle 127: add
+preserved-result export safeguards, source-side unavailable simulation invariant
+coverage, or the next L-8 safeguard needed before broader bidirectional GM value
+merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -783,9 +796,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 125 complete for 2026-06-07; roadmap continuation
-  points to Cycle 126 GM value sync source-side simulation invariant tests,
-  preserved-result export safeguards, or the next available non-credential-gated L-8
+- Status: ScriptVault Cycle 126 complete for 2026-06-07; roadmap continuation
+  points to Cycle 127 GM value sync preserved-result export safeguards,
+  source-side unavailable simulation invariant coverage, or the next available non-credential-gated L-8
   safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
