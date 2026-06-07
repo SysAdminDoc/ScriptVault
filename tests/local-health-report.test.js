@@ -304,6 +304,28 @@ describe('local health report background action', () => {
     expect(gmValueSyncTypeBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('pins last-result typed schema', () => {
+    const lastResultTypeBlock = messagesTs.match(/lastResult: null \| \{[\s\S]*?retryResolution: null \| \{/);
+    expect(lastResultTypeBlock).toBeTruthy();
+    const fieldKeys = [...lastResultTypeBlock[0].matchAll(/^\s{6}([A-Za-z0-9_]+):/gm)].map((match) => match[1]);
+    expect(fieldKeys).toEqual([
+      'schema',
+      'timestamp',
+      'ok',
+      'skipped',
+      'hasError',
+      'applied',
+      'preserved',
+      'conflictBlocked',
+      'skippedUnavailable',
+      'failures',
+      'writeFailureRetryReady',
+      'retryAgeMinutes',
+      'retryAgeBucket'
+    ]);
+    expect(lastResultTypeBlock[0]).not.toMatch(/privacy|scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
   it('summarizes local workspace bindings without file handles, paths, or script identifiers', () => {
     const block = backgroundCoreTs.match(/function buildLocalWorkspaceHealthSummary\(bindings = \[\]\) \{[\s\S]*?\n\}/);
     expect(block).toBeTruthy();

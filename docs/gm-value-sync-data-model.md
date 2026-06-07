@@ -892,7 +892,18 @@ Cycle 170 pins GM value typed privacy coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 171 pins last-result typed schema coverage:
+
+- Local-health source-contract tests now extract the typed `lastResult` response
+  fields from `src/types/messages.ts`.
+- The type schema must keep only reviewed aggregate result counts and retry-age
+  fields for persisted sync result diagnostics.
+- The typed block must not add privacy blocks, identifiers, value keys, provider
+  account data, credentials, raw key metadata, or error text.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add support summary unavailable-state
-wording coverage, last-result typed schema coverage, or another durable
+wording coverage, last-result support export schema coverage, or another durable
 safeguard before non-empty local and remote value bags can be merged
 bidirectionally.

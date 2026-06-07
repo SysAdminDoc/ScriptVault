@@ -5,9 +5,9 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 92 - GM value sync typed privacy coverage 2026-06-07.
+> **Roadmap version:** Round 92 - GM value sync last-result typed schema coverage 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1543 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1544 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 92 - 2026-06-07.
@@ -422,6 +422,10 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   source-contract suite now pins the top-level typed GM value sync response
   fields, privacy keys, and raw identifier exclusions so the main diagnostic
   envelope cannot widen unnoticed.
+- **Cycle 171 update:** Added last-result typed schema coverage. The local-health
+  source-contract suite now pins the typed last-result response fields,
+  retry-age fields, and raw identifier/privacy exclusions so persisted sync
+  result diagnostics stay aggregate-only.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -531,11 +535,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 120 | GM value-sync retry-resolution typed privacy coverage | `tests/local-health-report.test.js` | Typed local-health responses should expose only reviewed aggregate retry-resolution fields and privacy keys [S89, S97] | Pinned single retry-resolution response fields, privacy keys, and raw identifier exclusions |
 | 121 | GM value-sync retry-history typed privacy coverage | `tests/local-health-report.test.js` | Typed local-health responses should expose only reviewed aggregate retry-history fields and privacy keys [S89, S97] | Pinned retry-history response fields, privacy keys, and raw identifier exclusions |
 | 122 | GM value-sync typed privacy coverage | `tests/local-health-report.test.js` | Typed local-health responses should keep the top-level GM value sync diagnostic envelope reviewed [S89, S97] | Pinned top-level GM value sync response fields, privacy keys, and raw identifier exclusions |
+| 123 | GM value-sync last-result typed schema coverage | `tests/local-health-report.test.js` | Typed local-health responses should keep persisted sync result diagnostics aggregate-only [S89, S97] | Pinned last-result response fields, retry-age fields, and raw identifier/privacy exclusions |
 
 ## Continuation State
 
-- **Current cycle:** Round 92 Cycle 170 added GM value sync typed privacy coverage.
-- **Next implementation angle:** Cycle 171 should continue L-8 with support summary unavailable-state wording coverage, last-result typed schema coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 92 Cycle 171 added GM value sync last-result typed schema coverage.
+- **Next implementation angle:** Cycle 172 should continue L-8 with support summary unavailable-state wording coverage, last-result support export schema coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 
