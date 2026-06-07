@@ -389,6 +389,16 @@ Cycle 126 adds source-side simulation invariant coverage:
 - This is regression coverage only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 127 adds source-side unavailable simulation coverage:
+
+- A source CloudSync preview fixture now covers the case where a remote value
+  bundle targets an existing local script but no local value bundle exists.
+- The fixture pins the unavailable gate, unavailable simulation label,
+  local-bundle-unavailable reason, zero candidate result totals, and value/key
+  redaction for that branch.
+- This is regression coverage only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add preserved-result export safeguards,
-source-side unavailable simulation invariant coverage, or another durable safeguard before non-empty
+unavailable preserved-candidate coverage, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
