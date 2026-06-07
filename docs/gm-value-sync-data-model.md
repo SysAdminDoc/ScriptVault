@@ -399,6 +399,15 @@ Cycle 127 adds source-side unavailable simulation coverage:
 - This is regression coverage only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add preserved-result export safeguards,
-unavailable preserved-candidate coverage, or another durable safeguard before non-empty
+Cycle 128 hardens preserved-result log rendering:
+
+- The dashboard real-sync log now floors preserved candidate counts to
+  non-negative integers before rendering.
+- Preserved auto-selected, review, and accepted-ready result-key totals are
+  clamped to the aggregate preserved candidate result-key budget.
+- This is a dashboard rendering integrity guard only. It does not enable
+  non-empty local/remote merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add unavailable preserved-candidate
+coverage, sync-result source invariant tests, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.

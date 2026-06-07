@@ -36,6 +36,13 @@ function loadSyncPreviewExportApi() {
   `)();
 }
 
+function loadValueBundleSyncLogApi() {
+  return new Function(`
+    ${extractFunction(dashboardJs, 'formatValueBundleSyncLog')}
+    return { formatValueBundleSyncLog };
+  `)();
+}
+
 const SYNC_PREVIEW_EXPORT_TOP_LEVEL_KEYS = [
   'dryRun',
   'exportedAt',
@@ -177,6 +184,7 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('accepted ready');
     expect(dashboardJs).toContain('preservedCandidateMergeReady');
     expect(dashboardJs).toContain('preservedCandidateBlockedUnknownTimestamp');
+    expect(dashboardJs).toContain('clampSyncLogCount');
     expect(dashboardJs).toContain('sanitizePreviewCount');
     expect(dashboardJs).toContain('clampSummaryCount');
   });
@@ -346,6 +354,27 @@ describe('sync safety cockpit wiring', () => {
     expect(serialized).not.toContain('token');
     expect(serialized).not.toContain('remote-secret');
     expect(serialized).not.toContain('keyMetadata');
+  });
+
+  it('clamps preserved candidate result totals in sync log output', () => {
+    const { formatValueBundleSyncLog } = loadValueBundleSyncLogApi();
+
+    const summary = formatValueBundleSyncLog({
+      preserved: 1,
+      preservedRemoteNewer: 1.9,
+      preservedCandidateMergeReady: 1,
+      preservedCandidateResultKeyTotal: 4,
+      preservedCandidateAutoSelectedKeyTotal: 99,
+      preservedCandidateReviewKeyTotal: 99,
+      preservedCandidateAcceptedResultKeyTotal: 99,
+      preservedCandidateBlockedUnknownTimestamp: -2,
+    });
+
+    expect(summary).toContain('candidate result keys: 4 total, 4 auto-selected, 0 review, 4 accepted ready');
+    expect(summary).toContain('timestamp hints: 1 remote-newer');
+    expect(summary).toContain('0 unknown timestamp');
+    expect(summary).not.toContain('99');
+    expect(summary).not.toContain('-2');
   });
 
   it('clamps candidate merge result summaries to aggregate result totals', () => {
