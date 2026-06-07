@@ -5482,6 +5482,22 @@
         return Math.floor(Math.max(0, count));
     }
 
+    function sanitizeSupportSnapshotTimestamp(value) {
+        const timestamp = Number(value);
+        if (!Number.isFinite(timestamp)) return null;
+        return Math.max(0, Math.floor(timestamp));
+    }
+
+    function sanitizeSupportSnapshotRetainedHistoryTotal(value, entries) {
+        if (entries <= 0) return 0;
+        return sanitizeSupportSnapshotCount(value);
+    }
+
+    function sanitizeSupportSnapshotRetainedHistoryTimestamp(value, entries) {
+        if (entries <= 0) return null;
+        return sanitizeSupportSnapshotTimestamp(value);
+    }
+
     function sanitizeGmValueRetryAgeBucketForSupportSnapshot(value) {
         const allowed = new Set(['none', 'fresh', 'recent', 'stale', 'old', 'unknown']);
         return allowed.has(value) ? value : 'unknown';
@@ -5519,16 +5535,19 @@
         if (applied <= 0) return null;
         const priorRetryReadyEntries = sanitizeSupportSnapshotCount(retryResolution.priorRetryReadyEntries);
         const priorRetryReadyWrites = sanitizeSupportSnapshotCount(retryResolution.priorRetryReadyWrites);
+        if (priorRetryReadyEntries <= 0 || priorRetryReadyWrites <= 0) return null;
+        const timestamp = sanitizeSupportSnapshotTimestamp(retryResolution.timestamp);
+        if (!timestamp) return null;
         const resolutionAgeMinutes = retryResolution.resolutionAgeMinutes != null
             ? sanitizeSupportSnapshotCount(retryResolution.resolutionAgeMinutes)
             : null;
         return {
             schema: 'scriptvault-gm-value-sync-retry-resolution/v1',
-            timestamp: Number.isFinite(Number(retryResolution.timestamp)) ? Math.max(0, Math.floor(Number(retryResolution.timestamp))) : null,
+            timestamp,
             applied,
             priorRetryReadyEntries,
             priorRetryReadyWrites,
-            latestRetryTimestamp: Number.isFinite(Number(retryResolution.latestRetryTimestamp)) ? Math.max(0, Math.floor(Number(retryResolution.latestRetryTimestamp))) : null,
+            latestRetryTimestamp: sanitizeSupportSnapshotTimestamp(retryResolution.latestRetryTimestamp),
             resolutionAgeMinutes,
             resolutionAgeBucket: sanitizeGmValueRetryAgeBucketForSupportSnapshot(retryResolution.resolutionAgeBucket),
             privacy: {
@@ -5548,17 +5567,23 @@
         const limit = Math.min(Math.max(1, sanitizeSupportSnapshotCount(retryResolutionHistory.limit) || 5), 5);
         const retentionDays = Math.min(Math.max(1, sanitizeSupportSnapshotCount(retryResolutionHistory.retentionDays) || 7), 365);
         const entries = Math.min(sanitizeSupportSnapshotCount(retryResolutionHistory.entries), limit);
+        const totalApplied = sanitizeSupportSnapshotRetainedHistoryTotal(retryResolutionHistory.totalApplied, entries);
+        const totalPriorRetryReadyEntries = sanitizeSupportSnapshotRetainedHistoryTotal(retryResolutionHistory.totalPriorRetryReadyEntries, entries);
+        const totalPriorRetryReadyWrites = sanitizeSupportSnapshotRetainedHistoryTotal(retryResolutionHistory.totalPriorRetryReadyWrites, entries);
+        const latestTimestamp = sanitizeSupportSnapshotRetainedHistoryTimestamp(retryResolutionHistory.latestTimestamp, entries);
+        let oldestTimestamp = sanitizeSupportSnapshotRetainedHistoryTimestamp(retryResolutionHistory.oldestTimestamp, entries);
+        if (latestTimestamp != null && oldestTimestamp != null && oldestTimestamp > latestTimestamp) oldestTimestamp = latestTimestamp;
         return {
             schema: 'scriptvault-gm-value-sync-retry-resolution-history/v1',
             limit,
             retentionDays,
             entries,
-            totalApplied: sanitizeSupportSnapshotCount(retryResolutionHistory.totalApplied),
-            totalPriorRetryReadyEntries: sanitizeSupportSnapshotCount(retryResolutionHistory.totalPriorRetryReadyEntries),
-            totalPriorRetryReadyWrites: sanitizeSupportSnapshotCount(retryResolutionHistory.totalPriorRetryReadyWrites),
+            totalApplied,
+            totalPriorRetryReadyEntries,
+            totalPriorRetryReadyWrites,
             staleEntriesPruned: sanitizeSupportSnapshotCount(retryResolutionHistory.staleEntriesPruned),
-            latestTimestamp: Number.isFinite(Number(retryResolutionHistory.latestTimestamp)) ? Math.max(0, Math.floor(Number(retryResolutionHistory.latestTimestamp))) : null,
-            oldestTimestamp: Number.isFinite(Number(retryResolutionHistory.oldestTimestamp)) ? Math.max(0, Math.floor(Number(retryResolutionHistory.oldestTimestamp))) : null,
+            latestTimestamp,
+            oldestTimestamp,
             privacy: {
                 includesValues: false,
                 includesValueKeys: false,
@@ -5578,6 +5603,10 @@
         const entries = Math.min(sanitizeSupportSnapshotCount(retryHistory.entries), limit);
         const retryReadyEntries = Math.min(sanitizeSupportSnapshotCount(retryHistory.retryReadyEntries), entries);
         const failedNoRetryEntries = Math.min(sanitizeSupportSnapshotCount(retryHistory.failedNoRetryEntries), entries - retryReadyEntries);
+        const totalWriteFailureRetryReady = sanitizeSupportSnapshotRetainedHistoryTotal(retryHistory.totalWriteFailureRetryReady, entries);
+        const latestTimestamp = sanitizeSupportSnapshotRetainedHistoryTimestamp(retryHistory.latestTimestamp, entries);
+        let oldestTimestamp = sanitizeSupportSnapshotRetainedHistoryTimestamp(retryHistory.oldestTimestamp, entries);
+        if (latestTimestamp != null && oldestTimestamp != null && oldestTimestamp > latestTimestamp) oldestTimestamp = latestTimestamp;
         return {
             schema: 'scriptvault-gm-value-sync-retry-history/v1',
             limit,
@@ -5586,9 +5615,9 @@
             retryReadyEntries,
             failedNoRetryEntries,
             staleEntriesPruned: sanitizeSupportSnapshotCount(retryHistory.staleEntriesPruned),
-            totalWriteFailureRetryReady: sanitizeSupportSnapshotCount(retryHistory.totalWriteFailureRetryReady),
-            latestTimestamp: Number.isFinite(Number(retryHistory.latestTimestamp)) ? Math.max(0, Math.floor(Number(retryHistory.latestTimestamp))) : null,
-            oldestTimestamp: Number.isFinite(Number(retryHistory.oldestTimestamp)) ? Math.max(0, Math.floor(Number(retryHistory.oldestTimestamp))) : null,
+            totalWriteFailureRetryReady,
+            latestTimestamp,
+            oldestTimestamp,
             privacy: {
                 includesValues: false,
                 includesValueKeys: false,
