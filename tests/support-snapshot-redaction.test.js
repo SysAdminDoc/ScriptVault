@@ -405,6 +405,30 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(summaryBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('support summary uses reviewed aggregate GM value phrases', () => {
+    const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
+    expect(summaryBlock).toBeTruthy();
+    for (const phrase of [
+      'GM values unchecked',
+      'GM value diagnostics unavailable',
+      'opt-in script',
+      'ready bundle',
+      'formatBytes(totalBytes)',
+      'retry-ready preserved write',
+      'retry resolution appl',
+      'recent retry resolution event',
+      'historical appl',
+      'stale retry resolution histor',
+      'recent retry histor',
+      'stale retry histor',
+      'capped or excluded value',
+      "return `GM values ${parts.join(', ')}`;"
+    ]) {
+      expect(summaryBlock[0]).toContain(phrase);
+    }
+    expect(summaryBlock[0]).not.toMatch(/provider account|credential|raw key|value key|script id|script name|url/i);
+  });
+
   it('support summary reads only reviewed GM value sync fields after sanitization', () => {
     const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
     expect(summaryBlock).toBeTruthy();
