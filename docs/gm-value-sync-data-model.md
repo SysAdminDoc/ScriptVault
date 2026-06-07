@@ -903,7 +903,16 @@ Cycle 171 pins last-result typed schema coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add support summary unavailable-state
-wording coverage, last-result support export schema coverage, or another durable
+Cycle 172 pins support unavailable-state wording coverage:
+
+- Support-snapshot redaction tests now pin the unavailable pre-export summary
+  label to `GM value diagnostics unavailable`.
+- The fallback label must stay generic and must not include provider, account,
+  credential, script, key, error, failure, or exception detail.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add last-result support export schema
+coverage, support summary unchecked-state wording coverage, or another durable
 safeguard before non-empty local and remote value bags can be merged
 bidirectionally.

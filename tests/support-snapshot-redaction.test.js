@@ -479,6 +479,15 @@ describe('exportSupportSnapshot modal flow', () => {
     }
   });
 
+  it('support summary unavailable state stays generic', () => {
+    const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
+    expect(summaryBlock).toBeTruthy();
+    const unavailableLine = summaryBlock[0].match(/if \(!gmValueSync\.available\) return '([^']+)';/);
+    expect(unavailableLine).toBeTruthy();
+    expect(unavailableLine[1]).toBe('GM value diagnostics unavailable');
+    expect(unavailableLine[1]).not.toMatch(/provider|account|credential|script|key|error|failure|exception/i);
+  });
+
   it('support summary reads only reviewed GM value sync fields after sanitization', () => {
     const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
     expect(summaryBlock).toBeTruthy();
