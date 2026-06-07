@@ -498,6 +498,15 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(unavailableLine[1]).not.toMatch(/provider|account|credential|script|key|error|failure|exception/i);
   });
 
+  it('support summary unchecked state stays generic', () => {
+    const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
+    expect(summaryBlock).toBeTruthy();
+    const uncheckedLine = summaryBlock[0].match(/if \(!gmValueSync\) return '([^']+)';/);
+    expect(uncheckedLine).toBeTruthy();
+    expect(uncheckedLine[1]).toBe('GM values unchecked');
+    expect(uncheckedLine[1]).not.toMatch(/provider|account|credential|script|key|error|failure|exception/i);
+  });
+
   it('support summary reads only reviewed GM value sync fields after sanitization', () => {
     const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
     expect(summaryBlock).toBeTruthy();

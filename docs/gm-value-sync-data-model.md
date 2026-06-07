@@ -924,7 +924,16 @@ Cycle 173 pins last-result support export clamp coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add support summary unchecked-state wording
-coverage, last-result timestamp sanitization coverage, or another durable
+Cycle 174 pins support unchecked-state wording coverage:
+
+- Support-snapshot redaction tests now pin the unchecked pre-export summary
+  label to `GM values unchecked`.
+- The fallback label must stay generic and must not include provider, account,
+  credential, script, key, error, failure, or exception detail.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add last-result timestamp sanitization
+coverage, support summary sanitized-field drift coverage, or another durable
 safeguard before non-empty local and remote value bags can be merged
 bidirectionally.
