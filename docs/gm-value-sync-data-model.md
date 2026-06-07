@@ -470,6 +470,16 @@ Cycle 134 adds empty-local write-failure coverage:
 - This is regression coverage only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 135 adds write-failure dashboard log coverage:
+
+- A sync cockpit formatter fixture now renders preserved-plus-failed write
+  failure results as aggregate-only real-sync log evidence.
+- The fixture pins ready candidate gates, accepted-ready result counts, unknown
+  timestamp evidence, and redaction of injected identifiers, value keys, values,
+  and raw key metadata.
+- This is dashboard rendering coverage only. It does not enable non-empty
+  local/remote merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add result-summary parity guards,
-write-failure dashboard log coverage, or another durable safeguard before non-empty
+write-failure source invariants, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
