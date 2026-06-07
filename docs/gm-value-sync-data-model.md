@@ -221,6 +221,22 @@ Cycle 112 adds non-writing candidate merge plans to blocked previews:
 - The preview remains non-writing. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add candidate merge acceptance gates,
-manual-review diagnostics, or another durable safeguard before non-empty local
-and remote value bags can be merged bidirectionally.
+Cycle 113 adds an advisory candidate merge acceptance gate:
+
+- Dry-run summaries count blocked candidate merges as ready, manual-review, or
+  unavailable.
+- A candidate is ready only when there are candidate keys and no same-timestamp,
+  unknown-timestamp, or one-sided-timestamp overlap cases.
+- Blocked value-bundle preview entries and Download Preview exports include
+  only `candidateMergeGate`, `candidateMergeBlockReason`, and
+  `candidateOneSidedTimestampKeyCount` in addition to the existing aggregate
+  candidate counts.
+- The preview/export still omit script IDs, script names, value key names,
+  values, URLs, local workspace handles, local paths, sync credentials, provider
+  account data, and raw `keyMetadata` maps.
+- The gate is advisory only. It does not enable non-empty local/remote merge
+  writes or change the empty-local-only apply rule.
+
+The next implementation slice should add manual-review diagnostics, candidate
+merge result dry-run evidence, or another durable safeguard before non-empty
+local and remote value bags can be merged bidirectionally.

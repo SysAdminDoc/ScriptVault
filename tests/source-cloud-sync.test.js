@@ -770,6 +770,9 @@ describe('source cloud sync module', () => {
         remoteValueBundlesMissingTimestamps: 0,
         remoteValueBundlesOlderThanLastSync: 0,
         remoteValueBundlesNewerThanLastSync: 1,
+        remoteValueBundleCandidateMergesReady: 1,
+        remoteValueBundleCandidateMergesManualReview: 0,
+        remoteValueBundleCandidateMergesUnavailable: 0,
       }),
     );
     expect(preview.valueBundleConflicts).toEqual([
@@ -794,6 +797,9 @@ describe('source cloud sync module', () => {
         candidateLocalKeyCount: 1,
         candidateSameTimestampKeyCount: 0,
         candidateManualKeyCount: 0,
+        candidateOneSidedTimestampKeyCount: 0,
+        candidateMergeGate: 'ready',
+        candidateMergeBlockReason: 'none',
       }),
     ]);
     expect(preview.valueBundleConflicts[0].localBytes).toBeGreaterThan(0);
