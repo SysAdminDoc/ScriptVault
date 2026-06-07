@@ -122,6 +122,11 @@ interface ValueBundleSyncSummary {
   preservedCandidateResultKeyTotal: number;
   preservedCandidateAutoSelectedKeyTotal: number;
   preservedCandidateReviewKeyTotal: number;
+  preservedCandidateBlockedSameTimestamp: number;
+  preservedCandidateBlockedUnknownTimestamp: number;
+  preservedCandidateBlockedOneSidedTimestamp: number;
+  preservedCandidateBlockedUnavailable: number;
+  preservedCandidateBlockedNoCandidateKeys: number;
 }
 
 interface SyncPreviewSummary {
@@ -280,6 +285,11 @@ interface RemoteValueBundleApplyResult {
   preservedCandidateResultKeyTotal: number;
   preservedCandidateAutoSelectedKeyTotal: number;
   preservedCandidateReviewKeyTotal: number;
+  preservedCandidateBlockedSameTimestamp: number;
+  preservedCandidateBlockedUnknownTimestamp: number;
+  preservedCandidateBlockedOneSidedTimestamp: number;
+  preservedCandidateBlockedUnavailable: number;
+  preservedCandidateBlockedNoCandidateKeys: number;
 }
 
 type RuntimeHooks = typeof globalThis & {
@@ -589,6 +599,11 @@ function createEmptyRemoteValueBundleApplyResult(): RemoteValueBundleApplyResult
     preservedCandidateResultKeyTotal: 0,
     preservedCandidateAutoSelectedKeyTotal: 0,
     preservedCandidateReviewKeyTotal: 0,
+    preservedCandidateBlockedSameTimestamp: 0,
+    preservedCandidateBlockedUnknownTimestamp: 0,
+    preservedCandidateBlockedOneSidedTimestamp: 0,
+    preservedCandidateBlockedUnavailable: 0,
+    preservedCandidateBlockedNoCandidateKeys: 0,
   };
 }
 
@@ -615,6 +630,11 @@ function summarizeRemoteValueBundleApplyResult(
     preservedCandidateResultKeyTotal: result.preservedCandidateResultKeyTotal,
     preservedCandidateAutoSelectedKeyTotal: result.preservedCandidateAutoSelectedKeyTotal,
     preservedCandidateReviewKeyTotal: result.preservedCandidateReviewKeyTotal,
+    preservedCandidateBlockedSameTimestamp: result.preservedCandidateBlockedSameTimestamp,
+    preservedCandidateBlockedUnknownTimestamp: result.preservedCandidateBlockedUnknownTimestamp,
+    preservedCandidateBlockedOneSidedTimestamp: result.preservedCandidateBlockedOneSidedTimestamp,
+    preservedCandidateBlockedUnavailable: result.preservedCandidateBlockedUnavailable,
+    preservedCandidateBlockedNoCandidateKeys: result.preservedCandidateBlockedNoCandidateKeys,
   };
   return Object.values(summary).some((value) => value > 0) ? summary : null;
 }
@@ -805,6 +825,11 @@ function countPreservedValueBundleCandidateMerge(
   if (candidateGate.gate === 'ready') result.preservedCandidateMergeReady += 1;
   else if (candidateGate.gate === 'unavailable') result.preservedCandidateMergeUnavailable += 1;
   else result.preservedCandidateMergeManualReview += 1;
+  if (candidateGate.blockReason === 'same-timestamp') result.preservedCandidateBlockedSameTimestamp += 1;
+  else if (candidateGate.blockReason === 'unknown-timestamp') result.preservedCandidateBlockedUnknownTimestamp += 1;
+  else if (candidateGate.blockReason === 'one-sided-timestamp') result.preservedCandidateBlockedOneSidedTimestamp += 1;
+  else if (candidateGate.blockReason === 'local-bundle-unavailable') result.preservedCandidateBlockedUnavailable += 1;
+  else if (candidateGate.blockReason === 'no-candidate-keys') result.preservedCandidateBlockedNoCandidateKeys += 1;
   result.preservedCandidateResultKeyTotal += candidateResult.resultKeyCount ?? 0;
   result.preservedCandidateAutoSelectedKeyTotal += candidateResult.autoSelectedKeyCount ?? 0;
   result.preservedCandidateReviewKeyTotal += candidateResult.reviewKeyCount ?? 0;

@@ -73,6 +73,7 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('manual review reasons');
     expect(dashboardJs).toContain('candidate result keys');
     expect(dashboardJs).toContain('preservedCandidateMergeReady');
+    expect(dashboardJs).toContain('preservedCandidateBlockedUnknownTimestamp');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {

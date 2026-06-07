@@ -3898,13 +3898,18 @@
         const candidateResultKeys = Number(valueBundleSync.preservedCandidateResultKeyTotal) || 0;
         const candidateAutoKeys = Number(valueBundleSync.preservedCandidateAutoSelectedKeyTotal) || 0;
         const candidateReviewKeys = Number(valueBundleSync.preservedCandidateReviewKeyTotal) || 0;
+        const candidateSameTimestamp = Number(valueBundleSync.preservedCandidateBlockedSameTimestamp) || 0;
+        const candidateUnknownTimestamp = Number(valueBundleSync.preservedCandidateBlockedUnknownTimestamp) || 0;
+        const candidateOneSidedTimestamp = Number(valueBundleSync.preservedCandidateBlockedOneSidedTimestamp) || 0;
+        const candidateUnavailableSnapshot = Number(valueBundleSync.preservedCandidateBlockedUnavailable) || 0;
+        const candidateNoKeys = Number(valueBundleSync.preservedCandidateBlockedNoCandidateKeys) || 0;
         if (applied + preserved + blocked + unavailable + failures <= 0) return '';
         const blockedDetail = blocked > 0 ? `${blocked} blocked (${nonEmpty} non-empty, ${userModified} user-modified)` : '0 blocked';
         const timestampDetail = preserved > 0
             ? `; timestamp hints: ${remoteNewer} remote-newer, ${localNewer} local-newer, ${sameTimestamp} same, ${remoteOnlyTimestamp} remote-only, ${localOnlyTimestamp} local-only, ${unknownTimestamp} unknown`
             : '';
         const candidateDetail = preserved > 0
-            ? `; candidate gates: ${candidateReady} ready, ${candidateManual} manual review, ${candidateUnavailable} unavailable; candidate result keys: ${candidateResultKeys} total, ${candidateAutoKeys} auto-selected, ${candidateReviewKeys} review`
+            ? `; candidate gates: ${candidateReady} ready, ${candidateManual} manual review, ${candidateUnavailable} unavailable; candidate result keys: ${candidateResultKeys} total, ${candidateAutoKeys} auto-selected, ${candidateReviewKeys} review; candidate review reasons: ${candidateSameTimestamp} same timestamp, ${candidateUnknownTimestamp} unknown timestamp, ${candidateOneSidedTimestamp} one-sided timestamp, ${candidateUnavailableSnapshot} unavailable local snapshot, ${candidateNoKeys} no candidate keys`
             : '';
         return `; GM values: ${applied} applied, ${preserved} preserved, ${blockedDetail}, ${unavailable} unavailable, ${failures} failed${timestampDetail}${candidateDetail}`;
     }

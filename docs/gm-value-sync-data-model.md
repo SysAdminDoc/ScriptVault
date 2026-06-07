@@ -278,6 +278,18 @@ Cycle 116 adds preserved-bundle candidate summaries to real sync results:
 - These summaries are advisory only. They do not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 117 adds preserved-bundle manual-review reason summaries:
+
+- Successful `syncNow` responses can include preserved candidate block reason
+  counts for same timestamps, unknown timestamps, one-sided timestamps,
+  unavailable local snapshots, and no-candidate cases.
+- The dashboard sync log renders those reason counts only as aggregate totals.
+- The response and log still omit script IDs, script names, value key names,
+  values, URLs, local workspace handles, local paths, sync credentials, provider
+  account data, and raw `keyMetadata` maps.
+- These summaries are advisory only. They do not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add candidate result export hardening,
-real-sync manual-review reason summaries, or another durable safeguard before
-non-empty local and remote value bags can be merged bidirectionally.
+merge-acceptance invariants, or another durable safeguard before non-empty local
+and remote value bags can be merged bidirectionally.

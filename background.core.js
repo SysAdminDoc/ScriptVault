@@ -235,7 +235,12 @@ function createEmptyRemoteValueBundleApplyResult() {
     preservedCandidateMergeUnavailable: 0,
     preservedCandidateResultKeyTotal: 0,
     preservedCandidateAutoSelectedKeyTotal: 0,
-    preservedCandidateReviewKeyTotal: 0
+    preservedCandidateReviewKeyTotal: 0,
+    preservedCandidateBlockedSameTimestamp: 0,
+    preservedCandidateBlockedUnknownTimestamp: 0,
+    preservedCandidateBlockedOneSidedTimestamp: 0,
+    preservedCandidateBlockedUnavailable: 0,
+    preservedCandidateBlockedNoCandidateKeys: 0
   };
 }
 
@@ -259,7 +264,12 @@ function summarizeRemoteValueBundleApplyResult(result) {
     preservedCandidateMergeUnavailable: result.preservedCandidateMergeUnavailable,
     preservedCandidateResultKeyTotal: result.preservedCandidateResultKeyTotal,
     preservedCandidateAutoSelectedKeyTotal: result.preservedCandidateAutoSelectedKeyTotal,
-    preservedCandidateReviewKeyTotal: result.preservedCandidateReviewKeyTotal
+    preservedCandidateReviewKeyTotal: result.preservedCandidateReviewKeyTotal,
+    preservedCandidateBlockedSameTimestamp: result.preservedCandidateBlockedSameTimestamp,
+    preservedCandidateBlockedUnknownTimestamp: result.preservedCandidateBlockedUnknownTimestamp,
+    preservedCandidateBlockedOneSidedTimestamp: result.preservedCandidateBlockedOneSidedTimestamp,
+    preservedCandidateBlockedUnavailable: result.preservedCandidateBlockedUnavailable,
+    preservedCandidateBlockedNoCandidateKeys: result.preservedCandidateBlockedNoCandidateKeys
   };
   return Object.values(summary).some(value => value > 0) ? summary : null;
 }
@@ -412,6 +422,11 @@ function countPreservedValueBundleCandidateMerge(result, localBundle, remoteBund
   if (candidateGate.gate === 'ready') result.preservedCandidateMergeReady++;
   else if (candidateGate.gate === 'unavailable') result.preservedCandidateMergeUnavailable++;
   else result.preservedCandidateMergeManualReview++;
+  if (candidateGate.blockReason === 'same-timestamp') result.preservedCandidateBlockedSameTimestamp++;
+  else if (candidateGate.blockReason === 'unknown-timestamp') result.preservedCandidateBlockedUnknownTimestamp++;
+  else if (candidateGate.blockReason === 'one-sided-timestamp') result.preservedCandidateBlockedOneSidedTimestamp++;
+  else if (candidateGate.blockReason === 'local-bundle-unavailable') result.preservedCandidateBlockedUnavailable++;
+  else if (candidateGate.blockReason === 'no-candidate-keys') result.preservedCandidateBlockedNoCandidateKeys++;
   result.preservedCandidateResultKeyTotal += candidateResult.resultKeyCount ?? 0;
   result.preservedCandidateAutoSelectedKeyTotal += candidateResult.autoSelectedKeyCount ?? 0;
   result.preservedCandidateReviewKeyTotal += candidateResult.reviewKeyCount ?? 0;

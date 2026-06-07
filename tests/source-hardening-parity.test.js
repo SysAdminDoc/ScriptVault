@@ -240,6 +240,7 @@ describe('source hardening parity guards', () => {
       expect(text).toContain('remoteValueBundleCandidateMergesBlockedUnknownTimestamp');
       expect(text).toContain('remoteValueBundleCandidateResultKeyTotal');
       expect(text).toContain('preservedCandidateMergeReady');
+      expect(text).toContain('preservedCandidateBlockedUnknownTimestamp');
       expect(text).toContain('preservedRemoteNewer');
       expect(text).toContain('valueBundleApplyEnabled');
       expect(text).toContain('valueBundleApplyMode');
