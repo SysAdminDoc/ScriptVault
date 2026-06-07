@@ -807,6 +807,16 @@ Cycle 162 pins retry-resolution history storage contract coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add support summary phrase drift coverage,
-retry-resolution history type/schema coverage, or another durable safeguard
+Cycle 163 pins support summary phrase drift coverage:
+
+- Support-snapshot redaction tests now pin reviewed aggregate summary phrases for
+  fallback, opt-in scripts, ready bundles, retry-ready writes, retry-resolution
+  applies, recent and stale retry histories, and capped/excluded values.
+- The summary phrase guard rejects raw identifier labels such as provider
+  account, credential, raw key, value key, script id, script name, and URL.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add retry-resolution history type/schema
+coverage, support summary count-order coverage, or another durable safeguard
 before non-empty local and remote value bags can be merged bidirectionally.
