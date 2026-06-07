@@ -598,6 +598,21 @@ Cycle 145 adds bounded retry-history diagnostics:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add write-retry history hardening,
-retry-resolution evidence, stale retry cleanup, or another durable safeguard
-before non-empty local and remote value bags can be merged bidirectionally.
+Cycle 146 adds stale retry-history cleanup evidence:
+
+- Retry history now has a seven-day retention window.
+- Sync result persistence excludes stale retry entries when updating
+  `gmValueSyncRetryHistory`, so old retry evidence cannot remain in the bounded
+  local history indefinitely.
+- Local health and support snapshots summarize only retained history entries and
+  a stale-entry exclusion count. They do not include script IDs, script names,
+  value key names, values, provider account data, credentials, provider error
+  text, URLs, file handles, local paths, or raw `keyMetadata` maps.
+- The Support Snapshot card reports stale retry-history events as aggregate
+  excluded counts.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add retry-resolution evidence, a
+write-retry resolution drill, or another durable safeguard before non-empty
+local and remote value bags can be merged bidirectionally.
