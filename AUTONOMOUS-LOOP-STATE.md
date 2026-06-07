@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 163 - 2026-06-07
+Last cycle: Cycle 164 - 2026-06-07
 
 ## Latest Result
 
@@ -1152,12 +1152,21 @@ Last cycle: Cycle 163 - 2026-06-07
   the full check suite with 1536 Vitest cases, high-severity audit, CWS
   remote-code scan, Monaco ESM scan, TS runtime check, forbidden-reference grep,
   and `git diff --check`.
+  Cycle 164 added support summary count-order coverage for L-8:
+  support-snapshot redaction tests now pin the reviewed order of baseline
+  opt-in/ready/key counts, retry, retry-resolution, history, stale exclusions,
+  warning total, and final joined output in the pre-export summary. Stored and
+  exported diagnostics remain aggregate-only, and non-empty writes remain
+  disabled. Verification used focused support-snapshot tests, typecheck, build,
+  the full check suite with 1537 Vitest cases, high-severity audit, CWS
+  remote-code scan, Monaco ESM scan, TS runtime check, forbidden-reference grep,
+  and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 92. Cycle 163 added GM value sync support
-summary phrase drift coverage. The next best local cycle is Cycle 164: add
-retry-resolution history type/schema coverage, support summary count-order coverage, or the next L-8 safeguard needed before
+Continue from `ROADMAP.md` Round 92. Cycle 164 added GM value sync support
+summary count-order coverage. The next best local cycle is Cycle 165: add
+retry-resolution history type/schema coverage, support summary warning-total coverage, or the next L-8 safeguard needed before
 broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
@@ -1167,9 +1176,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 163 complete for 2026-06-07; roadmap continuation
-  points to Cycle 164 GM value sync retry-resolution history type/schema coverage,
-  support summary count-order coverage, or the next available non-credential-gated
+- Status: ScriptVault Cycle 164 complete for 2026-06-07; roadmap continuation
+  points to Cycle 165 GM value sync retry-resolution history type/schema coverage,
+  support summary warning-total coverage, or the next available non-credential-gated
   L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

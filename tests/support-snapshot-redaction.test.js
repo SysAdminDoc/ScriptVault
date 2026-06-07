@@ -429,6 +429,30 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(summaryBlock[0]).not.toMatch(/provider account|credential|raw key|value key|script id|script name|url/i);
   });
 
+  it('support summary keeps reviewed GM value aggregate count order', () => {
+    const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
+    expect(summaryBlock).toBeTruthy();
+    let cursor = -1;
+    for (const marker of [
+      'const parts = [',
+      'opt-in script',
+      'ready bundle',
+      'formatBytes(totalBytes)',
+      'if (retryReady > 0)',
+      'if (retryResolutionApplied > 0)',
+      'if (resolutionHistoryEntries > 1)',
+      'if (resolutionHistoryStaleEntries > 0)',
+      'if (retryHistoryReadyEntries > 0)',
+      'if (retryHistoryStaleEntries > 0)',
+      'if (warningTotal > 0)',
+      "return `GM values ${parts.join(', ')}`;"
+    ]) {
+      const next = summaryBlock[0].indexOf(marker, cursor + 1);
+      expect(next).toBeGreaterThan(cursor);
+      cursor = next;
+    }
+  });
+
   it('support summary reads only reviewed GM value sync fields after sanitization', () => {
     const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
     expect(summaryBlock).toBeTruthy();
