@@ -4892,36 +4892,46 @@
         const gmValueSync = sanitized?.gmValueSync;
         if (!gmValueSync) return 'GM values unchecked';
         if (!gmValueSync.available) return 'GM value diagnostics unavailable';
-        const retryReady = gmValueSync.lastResult?.writeFailureRetryReady || 0;
+        const optInScripts = sanitizeSupportSnapshotCount(gmValueSync.optInScripts);
+        const readyBundles = sanitizeSupportSnapshotCount(gmValueSync.readyBundles);
+        const totalKeys = sanitizeSupportSnapshotCount(gmValueSync.totalKeys);
+        const totalBytes = sanitizeSupportSnapshotCount(gmValueSync.totalBytes);
+        const retryReady = sanitizeSupportSnapshotCount(gmValueSync.lastResult?.writeFailureRetryReady);
         const retryAgeLabel = formatGmValueRetryAgeBucket(gmValueSync.lastResult?.retryAgeBucket);
         const warningTotal = Object.values(gmValueSync.warningCounts || {}).reduce((sum, count) => sum + sanitizeSupportSnapshotCount(count), 0);
         const parts = [
-            `${numberFormatter.format(gmValueSync.optInScripts)} opt-in script${gmValueSync.optInScripts === 1 ? '' : 's'}`,
-            `${numberFormatter.format(gmValueSync.readyBundles)} ready bundle${gmValueSync.readyBundles === 1 ? '' : 's'}`,
-            `${numberFormatter.format(gmValueSync.totalKeys)} key${gmValueSync.totalKeys === 1 ? '' : 's'} / ${formatBytes(gmValueSync.totalBytes)}`
+            `${numberFormatter.format(optInScripts)} opt-in script${optInScripts === 1 ? '' : 's'}`,
+            `${numberFormatter.format(readyBundles)} ready bundle${readyBundles === 1 ? '' : 's'}`,
+            `${numberFormatter.format(totalKeys)} key${totalKeys === 1 ? '' : 's'} / ${formatBytes(totalBytes)}`
         ];
         if (retryReady > 0) {
             parts.push(`${numberFormatter.format(retryReady)} retry-ready preserved write${retryReady === 1 ? '' : 's'}${retryAgeLabel ? ` (${retryAgeLabel})` : ''}`);
         }
-        if (gmValueSync.retryResolution?.applied > 0) {
+        const retryResolutionApplied = sanitizeSupportSnapshotCount(gmValueSync.retryResolution?.applied);
+        if (retryResolutionApplied > 0) {
             const resolutionAgeLabel = formatGmValueRetryAgeBucket(gmValueSync.retryResolution.resolutionAgeBucket);
-            parts.push(`${numberFormatter.format(gmValueSync.retryResolution.applied)} retry resolution appl${gmValueSync.retryResolution.applied === 1 ? 'y' : 'ies'}${resolutionAgeLabel ? ` (${resolutionAgeLabel})` : ''}`);
+            parts.push(`${numberFormatter.format(retryResolutionApplied)} retry resolution appl${retryResolutionApplied === 1 ? 'y' : 'ies'}${resolutionAgeLabel ? ` (${resolutionAgeLabel})` : ''}`);
         }
         const resolutionHistory = gmValueSync.retryResolutionHistory;
-        if (resolutionHistory?.entries > 1) {
-            const historicalApplies = resolutionHistory.totalApplied > 0
-                ? ` / ${numberFormatter.format(resolutionHistory.totalApplied)} historical appl${resolutionHistory.totalApplied === 1 ? 'y' : 'ies'}`
+        const resolutionHistoryEntries = sanitizeSupportSnapshotCount(resolutionHistory?.entries);
+        const resolutionHistoryApplies = sanitizeSupportSnapshotCount(resolutionHistory?.totalApplied);
+        const resolutionHistoryStaleEntries = sanitizeSupportSnapshotCount(resolutionHistory?.staleEntriesPruned);
+        if (resolutionHistoryEntries > 1) {
+            const historicalApplies = resolutionHistoryApplies > 0
+                ? ` / ${numberFormatter.format(resolutionHistoryApplies)} historical appl${resolutionHistoryApplies === 1 ? 'y' : 'ies'}`
                 : '';
-            parts.push(`${numberFormatter.format(resolutionHistory.entries)} recent retry resolution event${resolutionHistory.entries === 1 ? '' : 's'}${historicalApplies}`);
+            parts.push(`${numberFormatter.format(resolutionHistoryEntries)} recent retry resolution event${resolutionHistoryEntries === 1 ? '' : 's'}${historicalApplies}`);
         }
-        if (resolutionHistory?.staleEntriesPruned > 0) {
-            parts.push(`${numberFormatter.format(resolutionHistory.staleEntriesPruned)} stale retry resolution histor${resolutionHistory.staleEntriesPruned === 1 ? 'y event' : 'y events'} excluded`);
+        if (resolutionHistoryStaleEntries > 0) {
+            parts.push(`${numberFormatter.format(resolutionHistoryStaleEntries)} stale retry resolution histor${resolutionHistoryStaleEntries === 1 ? 'y event' : 'y events'} excluded`);
         }
-        if (gmValueSync.retryHistory?.retryReadyEntries > 0) {
-            parts.push(`${numberFormatter.format(gmValueSync.retryHistory.retryReadyEntries)} recent retry histor${gmValueSync.retryHistory.retryReadyEntries === 1 ? 'y event' : 'y events'}`);
+        const retryHistoryReadyEntries = sanitizeSupportSnapshotCount(gmValueSync.retryHistory?.retryReadyEntries);
+        const retryHistoryStaleEntries = sanitizeSupportSnapshotCount(gmValueSync.retryHistory?.staleEntriesPruned);
+        if (retryHistoryReadyEntries > 0) {
+            parts.push(`${numberFormatter.format(retryHistoryReadyEntries)} recent retry histor${retryHistoryReadyEntries === 1 ? 'y event' : 'y events'}`);
         }
-        if (gmValueSync.retryHistory?.staleEntriesPruned > 0) {
-            parts.push(`${numberFormatter.format(gmValueSync.retryHistory.staleEntriesPruned)} stale retry histor${gmValueSync.retryHistory.staleEntriesPruned === 1 ? 'y event' : 'y events'} excluded`);
+        if (retryHistoryStaleEntries > 0) {
+            parts.push(`${numberFormatter.format(retryHistoryStaleEntries)} stale retry histor${retryHistoryStaleEntries === 1 ? 'y event' : 'y events'} excluded`);
         }
         if (warningTotal > 0) {
             parts.push(`${numberFormatter.format(warningTotal)} capped or excluded value${warningTotal === 1 ? '' : 's'}`);

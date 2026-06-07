@@ -704,6 +704,18 @@ Cycle 153 polishes retry-resolution support summary output:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add support-summary clamp hardening,
-retry-resolution stale-history evidence, or another durable safeguard before non-empty
+Cycle 154 hardens support-summary display clamps:
+
+- The Support Snapshot card re-clamps every displayed GM value-sync count before
+  formatting, even after the local-health block is sanitized for export.
+- The display clamp covers opt-in scripts, ready bundles, key and byte totals,
+  retry-ready writes, retry-resolution applies, retry-history events, and stale
+  exclusion counts.
+- This prevents fractional or negative injected local-health counts from
+  appearing in the pre-export support summary.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add retry-resolution stale-history
+evidence, support-summary schema drift coverage, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
