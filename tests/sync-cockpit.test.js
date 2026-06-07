@@ -377,6 +377,36 @@ describe('sync safety cockpit wiring', () => {
     expect(summary).not.toContain('-2');
   });
 
+  it('clamps preserved timestamp summaries to aggregate preserved totals in sync log output', () => {
+    const { formatValueBundleSyncLog } = loadValueBundleSyncLogApi();
+
+    const summary = formatValueBundleSyncLog({
+      preserved: 3,
+      preservedRemoteNewer: 1.9,
+      preservedLocalNewer: 1,
+      preservedSameTimestamp: 1,
+      preservedRemoteTimestampOnly: 99,
+      preservedLocalTimestampOnly: 99,
+      preservedTimestampUnknown: 99,
+      scriptId: 'script_secret',
+      name: 'Secret Script',
+      values: { token: 'remote-secret' },
+      keyMetadata: { token: { updatedAt: 20 } },
+    });
+
+    expect(summary).toContain('GM values: 0 applied, 3 preserved, 0 blocked');
+    expect(summary).toContain(
+      'timestamp hints: 1 remote-newer, 1 local-newer, 1 same, 0 remote-only, 0 local-only, 0 unknown',
+    );
+    expect(summary).not.toContain('99');
+    expect(summary).not.toContain('1.9');
+    expect(summary).not.toContain('script_secret');
+    expect(summary).not.toContain('Secret Script');
+    expect(summary).not.toContain('token');
+    expect(summary).not.toContain('remote-secret');
+    expect(summary).not.toContain('keyMetadata');
+  });
+
   it('renders unavailable preserved candidate sync logs as aggregate evidence', () => {
     const { formatValueBundleSyncLog } = loadValueBundleSyncLogApi();
 

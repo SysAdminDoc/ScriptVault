@@ -498,6 +498,16 @@ Cycle 137 adds unknown timestamp parity guards:
 - This is regression coverage only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 138 adds timestamp dashboard log clamping:
+
+- The dashboard real-sync formatter now clamps preserved timestamp buckets to
+  the aggregate preserved bundle total before rendering.
+- A sync cockpit fixture proves injected remote-newer, local-newer, same,
+  one-sided, and unknown timestamp counts cannot overstate aggregate evidence or
+  expose script IDs, script names, value keys, values, or raw key metadata.
+- This is dashboard rendering hardening only. It does not enable non-empty
+  local/remote merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add write-failure retry diagnostics,
-timestamp dashboard log coverage, or another durable safeguard before non-empty
-local and remote value bags can be merged bidirectionally.
+accepted-write retry preview evidence, or another durable safeguard before
+non-empty local and remote value bags can be merged bidirectionally.

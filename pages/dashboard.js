@@ -3888,12 +3888,18 @@
         const userModified = syncLogCount(valueBundleSync.skippedUserModified);
         const unavailable = syncLogCount(valueBundleSync.skippedUnavailable);
         const failures = syncLogCount(valueBundleSync.failures);
-        const remoteNewer = syncLogCount(valueBundleSync.preservedRemoteNewer);
-        const localNewer = syncLogCount(valueBundleSync.preservedLocalNewer);
-        const sameTimestamp = syncLogCount(valueBundleSync.preservedSameTimestamp);
-        const remoteOnlyTimestamp = syncLogCount(valueBundleSync.preservedRemoteTimestampOnly);
-        const localOnlyTimestamp = syncLogCount(valueBundleSync.preservedLocalTimestampOnly);
-        const unknownTimestamp = syncLogCount(valueBundleSync.preservedTimestampUnknown);
+        let timestampBudget = preserved;
+        const clampTimestampCount = (value) => {
+            const count = Math.min(syncLogCount(value), timestampBudget);
+            timestampBudget -= count;
+            return count;
+        };
+        const remoteNewer = clampTimestampCount(valueBundleSync.preservedRemoteNewer);
+        const localNewer = clampTimestampCount(valueBundleSync.preservedLocalNewer);
+        const sameTimestamp = clampTimestampCount(valueBundleSync.preservedSameTimestamp);
+        const remoteOnlyTimestamp = clampTimestampCount(valueBundleSync.preservedRemoteTimestampOnly);
+        const localOnlyTimestamp = clampTimestampCount(valueBundleSync.preservedLocalTimestampOnly);
+        const unknownTimestamp = clampTimestampCount(valueBundleSync.preservedTimestampUnknown);
         const candidateReady = syncLogCount(valueBundleSync.preservedCandidateMergeReady);
         const candidateManual = syncLogCount(valueBundleSync.preservedCandidateMergeManualReview);
         const candidateUnavailable = syncLogCount(valueBundleSync.preservedCandidateMergeUnavailable);
