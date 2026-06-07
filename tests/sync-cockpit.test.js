@@ -26,6 +26,8 @@ function loadSyncPreviewExportApi() {
     ${extractFunction(dashboardJs, 'sanitizeValueBundleTimestamp')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleLastWriteHint')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleCandidateMergePlan')}
+    ${extractFunction(dashboardJs, 'sanitizeValueBundleCandidateMergeGate')}
+    ${extractFunction(dashboardJs, 'sanitizeValueBundleCandidateMergeBlockReason')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleConflictPreview')}
     ${extractFunction(dashboardJs, 'buildSyncPreviewExport')}
     return { buildSyncPreviewExport };
@@ -65,7 +67,9 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('localValueBundlesWithTimestamps');
     expect(dashboardJs).toContain('GM value timestamps');
     expect(dashboardJs).toContain('candidateMergePlan');
+    expect(dashboardJs).toContain('candidateMergeGate');
     expect(dashboardJs).toContain('remote candidate keys');
+    expect(dashboardJs).toContain('candidate merge gate');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {
@@ -98,6 +102,9 @@ describe('sync safety cockpit wiring', () => {
         localValueBundlesMissingTimestamps: 0,
         remoteValueBundlesWithTimestamps: 1,
         remoteValueBundlesMissingTimestamps: 0,
+        remoteValueBundleCandidateMergesReady: 1,
+        remoteValueBundleCandidateMergesManualReview: 0,
+        remoteValueBundleCandidateMergesUnavailable: 0,
         wouldUpload: true,
         leakedName: 'Secret Script',
       },
@@ -125,6 +132,9 @@ describe('sync safety cockpit wiring', () => {
         candidateLocalKeyCount: 1,
         candidateSameTimestampKeyCount: 0,
         candidateManualKeyCount: 0,
+        candidateOneSidedTimestampKeyCount: 0,
+        candidateMergeGate: 'ready',
+        candidateMergeBlockReason: 'none',
         keyMetadata: {
           token: { updatedAt: 2000 },
         },
@@ -165,6 +175,9 @@ describe('sync safety cockpit wiring', () => {
           candidateLocalKeyCount: 1,
           candidateSameTimestampKeyCount: 0,
           candidateManualKeyCount: 0,
+          candidateOneSidedTimestampKeyCount: 0,
+          candidateMergeGate: 'ready',
+          candidateMergeBlockReason: 'none',
         }],
       }),
     );
@@ -175,6 +188,9 @@ describe('sync safety cockpit wiring', () => {
       valueBundleApplyMode: 'empty-local-only',
       localValueBundlesWithTimestamps: 1,
       remoteValueBundlesWithTimestamps: 1,
+      remoteValueBundleCandidateMergesReady: 1,
+      remoteValueBundleCandidateMergesManualReview: 0,
+      remoteValueBundleCandidateMergesUnavailable: 0,
       wouldUpload: true,
     }));
     const serialized = JSON.stringify(exported);

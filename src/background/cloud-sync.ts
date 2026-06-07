@@ -145,6 +145,9 @@ interface SyncPreviewSummary {
   remoteValueBundlesMissingTimestamps: number;
   remoteValueBundlesOlderThanLastSync: number;
   remoteValueBundlesNewerThanLastSync: number;
+  remoteValueBundleCandidateMergesReady: number;
+  remoteValueBundleCandidateMergesManualReview: number;
+  remoteValueBundleCandidateMergesUnavailable: number;
   valueBundleApplyEnabled: boolean;
   valueBundleApplyMode: 'empty-local-only';
   wouldUpload: boolean;
@@ -176,6 +179,19 @@ type ValueBundleCandidateMergePlan =
   | 'manual-review'
   | 'unavailable';
 
+type ValueBundleCandidateMergeGate =
+  | 'ready'
+  | 'manual-review'
+  | 'unavailable';
+
+type ValueBundleCandidateMergeBlockReason =
+  | 'none'
+  | 'local-bundle-unavailable'
+  | 'same-timestamp'
+  | 'unknown-timestamp'
+  | 'one-sided-timestamp'
+  | 'no-candidate-keys';
+
 interface SyncPreviewValueBundleConflict {
   reason: 'local-values-present' | 'local-bundle-unavailable';
   localKeyCount: number | null;
@@ -199,6 +215,9 @@ interface SyncPreviewValueBundleConflict {
   candidateLocalKeyCount: number | null;
   candidateSameTimestampKeyCount: number | null;
   candidateManualKeyCount: number | null;
+  candidateOneSidedTimestampKeyCount: number | null;
+  candidateMergeGate: ValueBundleCandidateMergeGate;
+  candidateMergeBlockReason: ValueBundleCandidateMergeBlockReason;
 }
 
 interface SyncPreviewResult extends SyncResult {
@@ -610,9 +629,19 @@ function selectApplicableRemoteValueBundles(
 function countRemoteValueBundlesApplyReady(
   selection: RemoteValueBundleSelection,
   local: SyncEnvelope | null | undefined,
-): { ready: number; conflictBlocked: number; conflicts: SyncPreviewValueBundleConflict[] } {
+): {
+  ready: number;
+  conflictBlocked: number;
+  conflicts: SyncPreviewValueBundleConflict[];
+  candidateMergeReady: number;
+  candidateMergeManualReview: number;
+  candidateMergeUnavailable: number;
+} {
   let ready = 0;
   let conflictBlocked = 0;
+  let candidateMergeReady = 0;
+  let candidateMergeManualReview = 0;
+  let candidateMergeUnavailable = 0;
   const conflicts: SyncPreviewValueBundleConflict[] = [];
   const localBundles = getSyncEnvelopeValueBundles(local);
   const localScriptIds = new Set(
@@ -625,8 +654,12 @@ function countRemoteValueBundlesApplyReady(
     localBundle: unknown,
   ) => {
     conflictBlocked += 1;
+    const preview = buildValueBundleConflictPreview(reason, remoteBundle, localBundle);
+    if (preview.candidateMergeGate === 'ready') candidateMergeReady += 1;
+    else if (preview.candidateMergeGate === 'unavailable') candidateMergeUnavailable += 1;
+    else candidateMergeManualReview += 1;
     if (conflicts.length < 20) {
-      conflicts.push(buildValueBundleConflictPreview(reason, remoteBundle, localBundle));
+      conflicts.push(preview);
     }
   };
 
@@ -641,7 +674,14 @@ function countRemoteValueBundlesApplyReady(
     }
   }
 
-  return { ready, conflictBlocked, conflicts };
+  return {
+    ready,
+    conflictBlocked,
+    conflicts,
+    candidateMergeReady,
+    candidateMergeManualReview,
+    candidateMergeUnavailable,
+  };
 }
 
 function safeBundleMetric(value: unknown): number {
@@ -704,6 +744,7 @@ function buildValueBundleConflictPreview(
     : null;
   const remoteLastValueUpdatedAt = getValueBundleLastUpdatedAt(remoteBundle) ?? null;
   const candidateMerge = buildValueBundleCandidateMergePlan(keyCounts);
+  const candidateGate = buildValueBundleCandidateMergeGate(keyCounts, candidateMerge);
   return {
     reason,
     localKeyCount: hasLocalBundle ? safeBundleMetric(localBundle.keyCount) : null,
@@ -727,6 +768,9 @@ function buildValueBundleConflictPreview(
     candidateLocalKeyCount: candidateMerge.localKeyCount,
     candidateSameTimestampKeyCount: candidateMerge.sameTimestampKeyCount,
     candidateManualKeyCount: candidateMerge.manualKeyCount,
+    candidateOneSidedTimestampKeyCount: candidateGate.oneSidedTimestampKeyCount,
+    candidateMergeGate: candidateGate.gate,
+    candidateMergeBlockReason: candidateGate.blockReason,
   };
 }
 
@@ -762,6 +806,39 @@ function buildValueBundleCandidateMergePlan(
   else if (remoteKeyCount > 0) plan = 'remote-preferred';
   else if (localKeyCount > 0) plan = 'local-preferred';
   return { plan, remoteKeyCount, localKeyCount, sameTimestampKeyCount, manualKeyCount };
+}
+
+function buildValueBundleCandidateMergeGate(
+  keyCounts: ReturnType<typeof countValueBundleKeyOverlap> | null,
+  candidateMerge: ReturnType<typeof buildValueBundleCandidateMergePlan>,
+): {
+  gate: ValueBundleCandidateMergeGate;
+  blockReason: ValueBundleCandidateMergeBlockReason;
+  oneSidedTimestampKeyCount: number | null;
+} {
+  if (!keyCounts) {
+    return {
+      gate: 'unavailable',
+      blockReason: 'local-bundle-unavailable',
+      oneSidedTimestampKeyCount: null,
+    };
+  }
+  const oneSidedTimestampKeyCount = keyCounts.overlappingRemoteTimestampOnly
+    + keyCounts.overlappingLocalTimestampOnly;
+  if (candidateMerge.manualKeyCount && candidateMerge.manualKeyCount > 0) {
+    return { gate: 'manual-review', blockReason: 'unknown-timestamp', oneSidedTimestampKeyCount };
+  }
+  if (candidateMerge.sameTimestampKeyCount && candidateMerge.sameTimestampKeyCount > 0) {
+    return { gate: 'manual-review', blockReason: 'same-timestamp', oneSidedTimestampKeyCount };
+  }
+  if (oneSidedTimestampKeyCount > 0) {
+    return { gate: 'manual-review', blockReason: 'one-sided-timestamp', oneSidedTimestampKeyCount };
+  }
+  const candidateKeyCount = (candidateMerge.remoteKeyCount ?? 0) + (candidateMerge.localKeyCount ?? 0);
+  if (candidateKeyCount <= 0) {
+    return { gate: 'manual-review', blockReason: 'no-candidate-keys', oneSidedTimestampKeyCount };
+  }
+  return { gate: 'ready', blockReason: 'none', oneSidedTimestampKeyCount };
 }
 
 function countValueBundleKeyOverlap(
@@ -1081,6 +1158,9 @@ export const CloudSync = {
       remoteValueBundlesMissingTimestamps: remoteValueBundleFreshness.missingTimestamps,
       remoteValueBundlesOlderThanLastSync: remoteValueBundleFreshness.olderThanLastSync,
       remoteValueBundlesNewerThanLastSync: remoteValueBundleFreshness.newerThanLastSync,
+      remoteValueBundleCandidateMergesReady: remoteValueBundleApplyReadiness.candidateMergeReady,
+      remoteValueBundleCandidateMergesManualReview: remoteValueBundleApplyReadiness.candidateMergeManualReview,
+      remoteValueBundleCandidateMergesUnavailable: remoteValueBundleApplyReadiness.candidateMergeUnavailable,
       valueBundleApplyEnabled: true,
       valueBundleApplyMode: 'empty-local-only',
       wouldUpload: false,

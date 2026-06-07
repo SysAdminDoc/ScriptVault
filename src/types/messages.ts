@@ -1559,6 +1559,15 @@ export interface ResponseMap {
       candidateLocalKeyCount: number | null;
       candidateSameTimestampKeyCount: number | null;
       candidateManualKeyCount: number | null;
+      candidateOneSidedTimestampKeyCount: number | null;
+      candidateMergeGate: 'ready' | 'manual-review' | 'unavailable';
+      candidateMergeBlockReason:
+        | 'none'
+        | 'local-bundle-unavailable'
+        | 'same-timestamp'
+        | 'unknown-timestamp'
+        | 'one-sided-timestamp'
+        | 'no-candidate-keys';
     }[];
   }>;
   revokeSyncProvider: SuccessOrError;
