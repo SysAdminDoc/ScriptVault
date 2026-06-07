@@ -375,6 +375,25 @@ interface LocalHealthReportResponse {
       retryAgeMinutes: number | null;
       retryAgeBucket: 'none' | 'fresh' | 'recent' | 'stale' | 'old' | 'unknown';
     };
+    retryHistory: {
+      schema: 'scriptvault-gm-value-sync-retry-history/v1';
+      limit: number;
+      entries: number;
+      retryReadyEntries: number;
+      failedNoRetryEntries: number;
+      totalWriteFailureRetryReady: number;
+      latestTimestamp: number | null;
+      oldestTimestamp: number | null;
+      privacy: {
+        includesValues: boolean;
+        includesValueKeys: boolean;
+        includesScriptIds: boolean;
+        includesScriptNames: boolean;
+        includesUrls: boolean;
+        includesFileHandles: boolean;
+        includesLocalPaths: boolean;
+      };
+    };
     warningCounts: Record<string, number>;
     privacy: {
       includesValues: boolean;

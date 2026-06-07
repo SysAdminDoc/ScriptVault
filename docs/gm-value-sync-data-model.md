@@ -581,6 +581,23 @@ Cycle 144 adds retry-age diagnostics:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 145 adds bounded retry-history diagnostics:
+
+- Sync result persistence now maintains a five-entry `gmValueSyncRetryHistory`
+  array in local extension storage.
+- Each stored entry contains only aggregate timestamp, status, preserved count,
+  failure count, and retry-ready write count; script IDs, script names, value key
+  names, values, provider account data, credentials, provider error text, URLs,
+  file handles, local paths, and raw key metadata are not stored.
+- Local health and support snapshots expose only a summarized history block with
+  entry counts, retry-ready event counts, failed-no-retry event counts, total
+  retry-ready writes, and oldest/latest timestamps.
+- The support dashboard summary reports recent retry-history event counts, and
+  clear-all cleanup removes the retry-history key with the rest of local
+  diagnostics state.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add write-retry history hardening,
-bounded retry-resolution evidence, or another durable safeguard before non-empty
-local and remote value bags can be merged bidirectionally.
+retry-resolution evidence, stale retry cleanup, or another durable safeguard
+before non-empty local and remote value bags can be merged bidirectionally.

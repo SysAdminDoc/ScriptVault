@@ -71,6 +71,11 @@ describe('local health report background action', () => {
     expect(backgroundCoreTs).toContain('_gmValueSyncRetryAgeBucket');
     expect(backgroundCoreTs).toContain('retryAgeMinutes');
     expect(backgroundCoreTs).toContain('retryAgeBucket');
+    expect(backgroundCoreTs).toContain("GM_VALUE_SYNC_RETRY_HISTORY_SCHEMA = 'scriptvault-gm-value-sync-retry-history/v1'");
+    expect(backgroundCoreTs).toContain('GM_VALUE_SYNC_RETRY_HISTORY_LIMIT = 5');
+    expect(backgroundCoreTs).toContain('updateGmValueSyncRetryHistory');
+    expect(backgroundCoreTs).toContain('readGmValueSyncRetryHistoryForHealth');
+    expect(backgroundCoreTs).toContain('gmValueSyncRetryHistory');
     expect(backgroundCoreTs).toContain('ScriptValues.getAll(script.id)');
     expect(backgroundCoreTs).toContain('gmValueSync,');
     expect(backgroundCoreTs).toContain("push('gmValueSyncProviderWritesPending', 'info'");
@@ -165,7 +170,9 @@ describe('local health report support snapshot wiring', () => {
     expect(messagesTs).toMatch(/lastResult: null \| \{[\s\S]{0,500}writeFailureRetryReady: number;/);
     expect(messagesTs).toMatch(/lastResult: null \| \{[\s\S]{0,700}retryAgeMinutes: number \| null;/);
     expect(messagesTs).toMatch(/retryAgeBucket: 'none' \| 'fresh' \| 'recent' \| 'stale' \| 'old' \| 'unknown';/);
-    expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,1300}warningCounts: Record<string, number>;/);
+    expect(messagesTs).toMatch(/retryHistory:\s*\{[\s\S]{0,250}schema: 'scriptvault-gm-value-sync-retry-history\/v1';/);
+    expect(messagesTs).toMatch(/retryHistory:\s*\{[\s\S]{0,500}totalWriteFailureRetryReady: number;/);
+    expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,1900}warningCounts: Record<string, number>;/);
     expect(messagesTs).toMatch(/privacy:\s*\{[\s\S]{0,300}includesValueKeys: boolean;/);
     expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,300}totalBindings: number;/);
     expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,700}refreshStatuses: Record<string, number>;/);

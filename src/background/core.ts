@@ -2277,6 +2277,8 @@ const LOCAL_HEALTH_STORAGE_CRITICAL_PERCENT = 95;
 const LOCAL_HEALTH_CALLBACK_WARNING_PERCENT = 80;
 const LOCAL_WORKSPACE_REFRESH_STALE_MS = 30 * 24 * 60 * 60 * 1000;
 const GM_VALUE_SYNC_SCHEMA = 'scriptvault-gm-value-sync/v1';
+const GM_VALUE_SYNC_RETRY_HISTORY_SCHEMA = 'scriptvault-gm-value-sync-retry-history/v1';
+const GM_VALUE_SYNC_RETRY_HISTORY_LIMIT = 5;
 const GM_VALUE_SYNC_MAX_SCRIPT_BYTES = 64 * 1024;
 const GM_VALUE_SYNC_MAX_KEYS = 128;
 const GM_VALUE_SYNC_MAX_KEY_BYTES = 256;
@@ -2374,9 +2376,66 @@ function buildLastSyncResultRecord(result = {}) {
   };
 }
 
+function sanitizeGmValueSyncRetryHistoryEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const timestamp = Number.isFinite(Number(entry.timestamp)) ? Math.max(0, Math.floor(Number(entry.timestamp))) : null;
+  if (!timestamp) return null;
+  const failures = _lastSyncResultCount(entry.failures);
+  const preserved = _lastSyncResultCount(entry.preserved);
+  const writeFailureRetryReady = Math.min(
+    _lastSyncResultCount(entry.writeFailureRetryReady),
+    failures,
+    preserved
+  );
+  if (failures <= 0 && writeFailureRetryReady <= 0) return null;
+  return {
+    schema: GM_VALUE_SYNC_RETRY_HISTORY_SCHEMA,
+    timestamp,
+    status: writeFailureRetryReady > 0 ? 'retry-ready' : 'failed-no-retry',
+    failures,
+    preserved,
+    writeFailureRetryReady
+  };
+}
+
+function buildGmValueSyncRetryHistoryEntry(record = {}) {
+  const valueBundleSync = sanitizeValueBundleSyncForLastResult(record.valueBundleSync);
+  if (!valueBundleSync) return null;
+  return sanitizeGmValueSyncRetryHistoryEntry({
+    timestamp: record.timestamp,
+    failures: valueBundleSync.failures,
+    preserved: valueBundleSync.preserved,
+    writeFailureRetryReady: valueBundleSync.writeFailureRetryReady
+  });
+}
+
+function sanitizeGmValueSyncRetryHistoryEntries(history) {
+  if (!Array.isArray(history)) return [];
+  return history
+    .map(sanitizeGmValueSyncRetryHistoryEntry)
+    .filter(Boolean)
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+    .slice(0, GM_VALUE_SYNC_RETRY_HISTORY_LIMIT);
+}
+
+function updateGmValueSyncRetryHistory(history, record) {
+  const entries = sanitizeGmValueSyncRetryHistoryEntries(history);
+  const entry = buildGmValueSyncRetryHistoryEntry(record);
+  if (entry) entries.unshift(entry);
+  return entries
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+    .slice(0, GM_VALUE_SYNC_RETRY_HISTORY_LIMIT);
+}
+
 async function persistLastSyncResult(result = {}) {
   try {
-    await chrome.storage.local.set({ lastSyncResult: buildLastSyncResultRecord(result) });
+    const lastSyncResult = buildLastSyncResultRecord(result);
+    let data = {};
+    try {
+      data = await chrome.storage.local.get('gmValueSyncRetryHistory');
+    } catch (_) {}
+    const gmValueSyncRetryHistory = updateGmValueSyncRetryHistory(data?.gmValueSyncRetryHistory, lastSyncResult);
+    await chrome.storage.local.set({ lastSyncResult, gmValueSyncRetryHistory });
   } catch (_e) { /* non-critical */ }
 }
 
@@ -2619,6 +2678,25 @@ function createEmptyGmValueSyncHealthSummary(overrides = {}) {
     maxKeys: GM_VALUE_SYNC_MAX_KEYS,
     maxKeyBytes: GM_VALUE_SYNC_MAX_KEY_BYTES,
     lastResult: null,
+    retryHistory: {
+      schema: GM_VALUE_SYNC_RETRY_HISTORY_SCHEMA,
+      limit: GM_VALUE_SYNC_RETRY_HISTORY_LIMIT,
+      entries: 0,
+      retryReadyEntries: 0,
+      failedNoRetryEntries: 0,
+      totalWriteFailureRetryReady: 0,
+      latestTimestamp: null,
+      oldestTimestamp: null,
+      privacy: {
+        includesValues: false,
+        includesValueKeys: false,
+        includesScriptIds: false,
+        includesScriptNames: false,
+        includesUrls: false,
+        includesFileHandles: false,
+        includesLocalPaths: false
+      }
+    },
     warningCounts: {},
     privacy: {
       includesValues: false,
@@ -2816,11 +2894,52 @@ async function readGmValueSyncLastResultForHealth() {
   }
 }
 
+function summarizeGmValueSyncRetryHistoryForHealth(history) {
+  const entries = sanitizeGmValueSyncRetryHistoryEntries(history);
+  let retryReadyEntries = 0;
+  let failedNoRetryEntries = 0;
+  let totalWriteFailureRetryReady = 0;
+  for (const entry of entries) {
+    if (entry.status === 'retry-ready') retryReadyEntries++;
+    if (entry.status === 'failed-no-retry') failedNoRetryEntries++;
+    totalWriteFailureRetryReady += entry.writeFailureRetryReady;
+  }
+  return {
+    schema: GM_VALUE_SYNC_RETRY_HISTORY_SCHEMA,
+    limit: GM_VALUE_SYNC_RETRY_HISTORY_LIMIT,
+    entries: entries.length,
+    retryReadyEntries,
+    failedNoRetryEntries,
+    totalWriteFailureRetryReady,
+    latestTimestamp: entries[0]?.timestamp || null,
+    oldestTimestamp: entries.length ? entries[entries.length - 1].timestamp : null,
+    privacy: {
+      includesValues: false,
+      includesValueKeys: false,
+      includesScriptIds: false,
+      includesScriptNames: false,
+      includesUrls: false,
+      includesFileHandles: false,
+      includesLocalPaths: false
+    }
+  };
+}
+
+async function readGmValueSyncRetryHistoryForHealth() {
+  try {
+    const data = await chrome.storage.local.get('gmValueSyncRetryHistory');
+    return summarizeGmValueSyncRetryHistoryForHealth(data?.gmValueSyncRetryHistory);
+  } catch (_) {
+    return summarizeGmValueSyncRetryHistoryForHealth([]);
+  }
+}
+
 async function buildGmValueSyncHealthSummary(scripts = []) {
   const summary = createEmptyGmValueSyncHealthSummary({
     available: typeof ScriptValues !== 'undefined' && typeof ScriptValues?.getAll === 'function'
   });
   summary.lastResult = await readGmValueSyncLastResultForHealth();
+  summary.retryHistory = await readGmValueSyncRetryHistoryForHealth();
   if (!summary.available) return summary;
 
   for (const script of scripts) {
@@ -8383,7 +8502,7 @@ async function handleMessage(message, sender) {
         // Clear ghost state that would otherwise survive the reset
         await chrome.storage.local.remove([
           'syncTombstones', 'trash', 'pendingUpdates', 'scriptFolders',
-          'cspReports', 'gistSettings', 'lastSyncResult', 'liveReloadScripts',
+          'cspReports', 'gistSettings', 'lastSyncResult', 'gmValueSyncRetryHistory', 'liveReloadScripts',
           'restoreReceipts'
         ]).catch(() => {});
         // Clear all alarms (crontab, autoUpdate, autoSync, backup, etc.)

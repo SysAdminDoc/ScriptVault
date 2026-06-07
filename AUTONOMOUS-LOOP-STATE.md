@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 144 - 2026-06-07
+Last cycle: Cycle 145 - 2026-06-07
 
 ## Latest Result
 
@@ -972,12 +972,24 @@ Last cycle: Cycle 144 - 2026-06-07
   generation/check, typecheck, build, the full check suite with 1523 Vitest
   cases, high-severity audit, CWS remote-code scan, Monaco ESM scan,
   forbidden-reference grep, and `git diff --check`.
+  Cycle 145 added bounded retry-history diagnostics for L-8: sync result
+  persistence now stores a five-entry aggregate `gmValueSyncRetryHistory`,
+  local health/support snapshots expose only summary counts/timestamps and
+  privacy flags, the Support Snapshot card reports recent retry-history event
+  counts, and clear-all cleanup removes the new history key. Stored and exported
+  diagnostics omit script IDs, script names, value key names, values, provider
+  account data, credentials, provider error text, URLs, file handles, local
+  paths, and raw `keyMetadata` maps. Non-empty writes remain disabled.
+  Verification used focused local-health and support-snapshot tests, TS runtime
+  generation/check, typecheck, build, the full check suite with 1524 Vitest
+  cases, high-severity audit, CWS remote-code scan, Monaco ESM scan,
+  forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 86. Cycle 144 added GM value sync retry-age
-diagnostics. The next best local cycle is Cycle 145: add bounded write-retry
-history, retry resolution evidence, or the next L-8 safeguard needed before
+Continue from `ROADMAP.md` Round 87. Cycle 145 added GM value sync bounded
+retry-history diagnostics. The next best local cycle is Cycle 146: add retry
+resolution evidence, stale retry cleanup, or the next L-8 safeguard needed before
 broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
@@ -987,8 +999,8 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 144 complete for 2026-06-07; roadmap continuation
-  points to Cycle 145 GM value sync bounded write-retry history, retry
-  resolution evidence, or the next available non-credential-gated L-8 safeguard.
+- Status: ScriptVault Cycle 145 complete for 2026-06-07; roadmap continuation
+  points to Cycle 146 GM value sync retry resolution evidence, stale retry
+  cleanup, or the next available non-credential-gated L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
