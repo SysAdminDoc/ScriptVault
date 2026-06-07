@@ -131,6 +131,21 @@ describe('local health report background action', () => {
       .not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('pins stale retry-resolution record cleanup before persistence', () => {
+    const removeBlock = backgroundCoreTs.match(/function shouldRemoveGmValueSyncRetryResolutionRecord\(record\) \{[\s\S]*?function sanitizeGmValueSyncRetryResolutionHistoryEntry/);
+    const persistBlock = backgroundCoreTs.match(/async function persistLastSyncResult\(result = \{\}\) \{[\s\S]*?let _lastRegistrationSweep/);
+    expect(removeBlock).toBeTruthy();
+    expect(persistBlock).toBeTruthy();
+    expect(removeBlock[0]).toContain('record.schema !== GM_VALUE_SYNC_RETRY_RESOLUTION_SCHEMA) return true;');
+    expect(removeBlock[0]).toContain('const timestamp = Number(record.timestamp);');
+    expect(removeBlock[0]).toContain('if (!Number.isFinite(timestamp) || timestamp <= 0) return true;');
+    expect(removeBlock[0]).toContain('return _isGmValueSyncRetryHistoryEntryStale({ timestamp });');
+    expect(persistBlock[0]).toContain('const removeStaleRetryResolution = !gmValueSyncRetryResolution && shouldRemoveGmValueSyncRetryResolutionRecord(data?.gmValueSyncRetryResolution);');
+    expect(persistBlock[0]).toContain('...(gmValueSyncRetryResolution ? { gmValueSyncRetryResolution } : {})');
+    expect(persistBlock[0]).toMatch(/if \(removeStaleRetryResolution\) \{[\s\S]{0,140}chrome\.storage\.local\.remove\('gmValueSyncRetryResolution'\)/);
+    expect(persistBlock[0]).not.toMatch(/gmValueSyncRetryResolution:\s*(null|undefined)/);
+  });
+
   it('pins retry-resolution stale-history evidence in local health output', () => {
     const summaryBlock = backgroundCoreTs.match(/function summarizeGmValueSyncRetryResolutionHistoryForHealth\(history\) \{[\s\S]*?async function readGmValueSyncRetryResolutionHistoryForHealth/);
     expect(summaryBlock).toBeTruthy();
