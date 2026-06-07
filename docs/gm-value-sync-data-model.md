@@ -691,6 +691,19 @@ Cycle 152 pins retry-resolution source invariants:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add retry-resolution support UX polish,
-stale-history pruning evidence, or another durable safeguard before non-empty
+Cycle 153 polishes retry-resolution support summary output:
+
+- The Support Snapshot card can now report aggregate historical
+  retry-resolution applies when multiple recent retry-resolution history events
+  are retained.
+- The card also reports stale retry-resolution-history events excluded from the
+  export summary.
+- The summary uses only the support-snapshot sanitizer output and does not add
+  script identifiers, value keys, values, provider account data, credentials, or
+  raw key metadata.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add support-summary clamp hardening,
+retry-resolution stale-history evidence, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
