@@ -206,6 +206,34 @@ describe('local health report background action', () => {
     expect(historyTypeBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('pins retry-resolution typed privacy schema', () => {
+    const resolutionTypeBlock = messagesTs.match(/retryResolution: null \| \{[\s\S]*?retryResolutionHistory:\s*\{/);
+    expect(resolutionTypeBlock).toBeTruthy();
+    const fieldKeys = [...resolutionTypeBlock[0].matchAll(/^\s{6}([A-Za-z0-9_]+):/gm)].map((match) => match[1]);
+    expect(fieldKeys).toEqual([
+      'schema',
+      'timestamp',
+      'applied',
+      'priorRetryReadyEntries',
+      'priorRetryReadyWrites',
+      'latestRetryTimestamp',
+      'resolutionAgeMinutes',
+      'resolutionAgeBucket',
+      'privacy'
+    ]);
+    const privacyKeys = [...resolutionTypeBlock[0].matchAll(/^\s{8}([A-Za-z0-9_]+): boolean;/gm)].map((match) => match[1]);
+    expect(privacyKeys).toEqual([
+      'includesValues',
+      'includesValueKeys',
+      'includesScriptIds',
+      'includesScriptNames',
+      'includesUrls',
+      'includesFileHandles',
+      'includesLocalPaths'
+    ]);
+    expect(resolutionTypeBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
   it('summarizes local workspace bindings without file handles, paths, or script identifiers', () => {
     const block = backgroundCoreTs.match(/function buildLocalWorkspaceHealthSummary\(bindings = \[\]\) \{[\s\S]*?\n\}/);
     expect(block).toBeTruthy();

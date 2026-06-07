@@ -859,7 +859,18 @@ Cycle 167 pins support summary fallback-state coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add retry-resolution typed privacy
-coverage, support summary unavailable-state wording coverage, or another durable
+Cycle 168 pins retry-resolution typed privacy coverage:
+
+- Local-health source-contract tests now extract the typed single
+  `retryResolution` response fields from `src/types/messages.ts`.
+- The type schema must keep only reviewed aggregate fields and reviewed privacy
+  keys for support-safe retry-resolution diagnostics.
+- The typed block must not add identifiers, value keys, provider account data,
+  credentials, raw key metadata, or error text.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add support summary unavailable-state
+wording coverage, retry-history typed privacy coverage, or another durable
 safeguard before non-empty local and remote value bags can be merged
 bidirectionally.
