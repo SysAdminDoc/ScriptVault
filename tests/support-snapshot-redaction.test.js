@@ -119,6 +119,7 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(dashboardJs).toContain('function sanitizeGmValueSyncLastResultForSupportSnapshot(lastResult)');
     expect(dashboardJs).toContain('function sanitizeGmValueSyncWarningCountsForSupportSnapshot(warningCounts)');
     expect(dashboardJs).toContain('function sanitizeGmValueSyncRetryResolutionForSupportSnapshot(retryResolution)');
+    expect(dashboardJs).toContain('function sanitizeGmValueSyncRetryResolutionHistoryForSupportSnapshot(retryResolutionHistory)');
     expect(dashboardJs).toContain('function sanitizeGmValueSyncRetryHistoryForSupportSnapshot(retryHistory)');
     expect(dashboardJs).toContain('const allowedWarningIds = new Set([');
     expect(dashboardJs).toContain('if (!Number.isFinite(count)) return 0;');
@@ -158,6 +159,17 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(historyBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('GM value sync retry resolution history is summarized before support snapshot export', () => {
+    const historyBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryResolutionHistoryForSupportSnapshot\(retryResolutionHistory\) \{[\s\S]*?function sanitizeGmValueSyncRetryHistoryForSupportSnapshot/);
+    expect(historyBlock).toBeTruthy();
+    expect(historyBlock[0]).toContain("schema: 'scriptvault-gm-value-sync-retry-resolution-history/v1'");
+    expect(historyBlock[0]).toContain('totalApplied');
+    expect(historyBlock[0]).toContain('totalPriorRetryReadyEntries');
+    expect(historyBlock[0]).toContain('totalPriorRetryReadyWrites');
+    expect(historyBlock[0]).toContain('staleEntriesPruned');
+    expect(historyBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
   it('support summary surfaces only aggregate GM value sync retry health', () => {
     const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
     expect(summaryBlock).toBeTruthy();
@@ -171,6 +183,7 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(summaryBlock[0]).toContain('formatGmValueRetryAgeBucket');
     expect(summaryBlock[0]).toContain('retryResolution');
     expect(summaryBlock[0]).toContain('retry resolution');
+    expect(summaryBlock[0]).toContain('retryResolutionHistory');
     expect(summaryBlock[0]).toContain('retryHistory');
     expect(summaryBlock[0]).toContain('staleEntriesPruned');
     expect(summaryBlock[0]).toContain('warningCounts');

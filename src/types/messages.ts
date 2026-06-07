@@ -394,6 +394,27 @@ interface LocalHealthReportResponse {
         includesLocalPaths: boolean;
       };
     };
+    retryResolutionHistory: {
+      schema: 'scriptvault-gm-value-sync-retry-resolution-history/v1';
+      limit: number;
+      retentionDays: number;
+      entries: number;
+      totalApplied: number;
+      totalPriorRetryReadyEntries: number;
+      totalPriorRetryReadyWrites: number;
+      staleEntriesPruned: number;
+      latestTimestamp: number | null;
+      oldestTimestamp: number | null;
+      privacy: {
+        includesValues: boolean;
+        includesValueKeys: boolean;
+        includesScriptIds: boolean;
+        includesScriptNames: boolean;
+        includesUrls: boolean;
+        includesFileHandles: boolean;
+        includesLocalPaths: boolean;
+      };
+    };
     retryHistory: {
       schema: 'scriptvault-gm-value-sync-retry-history/v1';
       limit: number;
