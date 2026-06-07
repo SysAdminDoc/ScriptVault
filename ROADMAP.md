@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 77 - GM value sync write-failure log coverage 2026-06-07.
+> **Roadmap version:** Round 78 - GM value sync ready-result parity guards 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
 > **Test suite:** 1519 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 77 - 2026-06-07.
+> Last researched: Round 78 - 2026-06-07.
 
 ---
 
@@ -258,6 +258,9 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   preserved-plus-failed GM value sync results render aggregate ready-candidate
   gate and accepted-ready result evidence without exposing injected identifiers,
   value keys, values, or raw key metadata.
+- **Cycle 136 update:** Added source-side ready preserved-candidate result parity
+  guards, proving ready write-failure preserves keep auto-selected and
+  accepted-ready totals equal to the result-key budget with zero review keys.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -341,8 +344,8 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 
 ## Continuation State
 
-- **Current cycle:** Round 77 Cycle 135 added GM value sync write-failure log coverage.
-- **Next implementation angle:** Cycle 136 should continue L-8 with result-summary parity guards, write-failure source invariants, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 78 Cycle 136 added GM value sync ready-result parity guards.
+- **Next implementation angle:** Cycle 137 should continue L-8 with timestamp parity guards, write-failure retry diagnostics, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 

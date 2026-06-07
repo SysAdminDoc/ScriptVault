@@ -164,6 +164,16 @@ function expectUnavailablePreservedCandidateResultInvariants(valueBundleSync) {
   expect(valueBundleSync.preservedCandidateAcceptedResultKeyTotal).toBe(0);
 }
 
+function expectReadyPreservedCandidateResultInvariants(valueBundleSync) {
+  expect(valueBundleSync.preservedCandidateMergeReady).toBeGreaterThan(0);
+  expect(valueBundleSync.preservedCandidateResultKeyTotal).toBeGreaterThan(0);
+  expect(valueBundleSync.preservedCandidateAutoSelectedKeyTotal)
+    .toBe(valueBundleSync.preservedCandidateResultKeyTotal);
+  expect(valueBundleSync.preservedCandidateReviewKeyTotal).toBe(0);
+  expect(valueBundleSync.preservedCandidateAcceptedResultKeyTotal)
+    .toBe(valueBundleSync.preservedCandidateResultKeyTotal);
+}
+
 beforeEach(() => {
   globalThis.__resetStorageMock();
   Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
@@ -1512,7 +1522,8 @@ describe('source cloud sync module', () => {
     const { CloudSync, ScriptValues, getRemoteData, scriptState, valueState } = harness;
     ScriptValues.setAll.mockRejectedValueOnce(new Error('value write failed'));
 
-    await expect(CloudSync.sync()).resolves.toEqual({
+    const result = await CloudSync.sync();
+    expect(result).toEqual({
       success: true,
       valueBundleSync: {
         applied: 0,
@@ -1542,6 +1553,8 @@ describe('source cloud sync module', () => {
         preservedCandidateBlockedNoCandidateKeys: 0,
       },
     });
+    expectPreservedCandidateSummaryInvariants(result.valueBundleSync);
+    expectReadyPreservedCandidateResultInvariants(result.valueBundleSync);
 
     expect(ScriptValues.setAll).toHaveBeenCalledWith('script_values', { token: 'remote-token' });
     expect(valueState.script_values).toEqual({});

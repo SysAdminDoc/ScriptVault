@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 135 - 2026-06-07
+Last cycle: Cycle 136 - 2026-06-07
 
 ## Latest Result
 
@@ -881,12 +881,22 @@ Last cycle: Cycle 135 - 2026-06-07
   Verification used focused sync-cockpit tests, typecheck, the full check suite
   with 1519 Vitest cases, high-severity audit, CWS remote-code scan, Monaco ESM
   scan, TS runtime check, forbidden-reference grep, and `git diff --check`.
+  Cycle 136 added source-side ready preserved-candidate result parity guards for
+  L-8 real sync results: a named CloudSync assertion helper now proves ready
+  write-failure preserves keep auto-selected and accepted-ready totals equal to
+  the result-key budget with zero review keys. The evidence remains aggregate
+  only and omits script IDs, script names, value key names, values, URLs, local
+  workspace handles, local paths, sync credentials, provider account data, and
+  raw `keyMetadata` maps. Non-empty writes remain disabled. Verification used
+  focused source CloudSync tests, typecheck, the full check suite with 1519
+  Vitest cases, high-severity audit, CWS remote-code scan, Monaco ESM scan, TS
+  runtime check, forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 77. Cycle 135 added GM value sync write-failure
-log coverage. The next best local cycle is Cycle 136: add result-summary parity
-guards, write-failure source invariants, or the next L-8 safeguard needed before
+Continue from `ROADMAP.md` Round 78. Cycle 136 added GM value sync ready-result
+parity guards. The next best local cycle is Cycle 137: add timestamp parity
+guards, write-failure retry diagnostics, or the next L-8 safeguard needed before
 broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
@@ -896,9 +906,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 135 complete for 2026-06-07; roadmap continuation
-  points to Cycle 136 GM value sync result-summary parity guards,
-  write-failure source invariants, or the next available non-credential-gated L-8
+- Status: ScriptVault Cycle 136 complete for 2026-06-07; roadmap continuation
+  points to Cycle 137 GM value sync timestamp parity guards, write-failure retry
+  diagnostics, or the next available non-credential-gated L-8
   safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
