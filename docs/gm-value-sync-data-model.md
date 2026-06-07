@@ -951,7 +951,17 @@ Cycle 176 pins retry-age unknown bucket coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add support summary sanitized-field drift
-coverage, retry-history timestamp bucket coverage, or another durable
+Cycle 177 pins support summary nested-field drift coverage:
+
+- Support-snapshot redaction tests now pin the exact nested last-result,
+  retry-resolution, retry-resolution-history, and retry-history fields the
+  pre-export GM value summary may read after sanitization.
+- The support summary still reads from the sanitized local-health block before
+  formatting aggregate-only diagnostics.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add retry-history timestamp bucket
+coverage, support summary warning-count nested coverage, or another durable
 safeguard before non-empty local and remote value bags can be merged
 bidirectionally.

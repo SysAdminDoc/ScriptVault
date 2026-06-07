@@ -535,6 +535,30 @@ describe('exportSupportSnapshot modal flow', () => {
     ]);
   });
 
+  it('support summary reads only reviewed nested GM value sync fields after sanitization', () => {
+    const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
+    expect(summaryBlock).toBeTruthy();
+    const nestedReads = [...summaryBlock[0].matchAll(/gmValueSync\.(lastResult|retryResolution|retryHistory)\??\.([A-Za-z0-9_]+)/g)]
+      .map((match) => `${match[1]}.${match[2]}`);
+    expect([...new Set(nestedReads)].sort()).toEqual([
+      'lastResult.retryAgeBucket',
+      'lastResult.writeFailureRetryReady',
+      'retryHistory.retryReadyEntries',
+      'retryHistory.staleEntriesPruned',
+      'retryResolution.applied',
+      'retryResolution.resolutionAgeBucket'
+    ]);
+    expect(summaryBlock[0]).toContain('const resolutionHistory = gmValueSync.retryResolutionHistory;');
+    const resolutionHistoryReads = [...summaryBlock[0].matchAll(/resolutionHistory\?\.([A-Za-z0-9_]+)/g)]
+      .map((match) => match[1]);
+    expect([...new Set(resolutionHistoryReads)].sort()).toEqual([
+      'entries',
+      'staleEntriesPruned',
+      'totalApplied'
+    ]);
+    expect(summaryBlock[0]).not.toMatch(/lastResult\?\.(timestamp|ok|hasError|failures)|retryResolution\?\.(timestamp|latestRetryTimestamp|privacy)|retryHistory\?\.(latestTimestamp|oldestTimestamp|privacy)|resolutionHistory\?\.(latestTimestamp|oldestTimestamp|privacy)/);
+  });
+
   it('managed policy health stays aggregate when always included', () => {
     expect(dashboardJs).toMatch(/localHealth:\s*sanitizeLocalHealthForSupportSnapshot\(localHealthReport/);
     expect(dashboardJs).not.toMatch(/managedPolicy[\s\S]{0,500}managedOriginKey/);
