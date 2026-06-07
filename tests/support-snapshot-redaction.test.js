@@ -129,6 +129,20 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(`${block[0]}\n${lastResultBlock[0]}`).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('support summary surfaces only aggregate GM value sync retry health', () => {
+    const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
+    expect(summaryBlock).toBeTruthy();
+    expect(dashboardJs).toContain('localHealthReport: null');
+    expect(dashboardJs).toContain('loadLocalHealthReport()');
+    expect(dashboardJs).toContain("chrome.runtime.sendMessage({ action: 'getLocalHealthReport' })");
+    expect(dashboardJs).toContain('formatSupportSnapshotGmValueSummary(state.trustCenter.localHealthReport)');
+    expect(dashboardJs).toMatch(/state\.trustCenter\.localHealthReport\s*=\s*localHealthReport\?\.schema === 'scriptvault-local-health\/v1'/);
+    expect(summaryBlock[0]).toContain('writeFailureRetryReady');
+    expect(summaryBlock[0]).toContain('retry-ready preserved write');
+    expect(summaryBlock[0]).toContain('warningCounts');
+    expect(summaryBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
   it('managed policy health stays aggregate when always included', () => {
     expect(dashboardJs).toMatch(/localHealth:\s*sanitizeLocalHealthForSupportSnapshot\(localHealthReport/);
     expect(dashboardJs).not.toMatch(/managedPolicy[\s\S]{0,500}managedOriginKey/);
