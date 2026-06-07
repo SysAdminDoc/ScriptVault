@@ -35,6 +35,95 @@ function loadSyncPreviewExportApi() {
   `)();
 }
 
+const SYNC_PREVIEW_EXPORT_TOP_LEVEL_KEYS = [
+  'dryRun',
+  'exportedAt',
+  'noWrites',
+  'provider',
+  'providerLabel',
+  'remoteFound',
+  'schema',
+  'summary',
+  'valueBundleConflicts',
+].sort();
+
+const SYNC_PREVIEW_EXPORT_SUMMARY_KEYS = [
+  'conflicts',
+  'localNewer',
+  'localOnly',
+  'localScripts',
+  'localValueBundles',
+  'localValueBundlesMissingTimestamps',
+  'localValueBundlesNewerThanLastSync',
+  'localValueBundlesOlderThanLastSync',
+  'localValueBundlesWithTimestamps',
+  'localValueOptIns',
+  'remoteNewer',
+  'remoteOnly',
+  'remoteScripts',
+  'remoteValueBundleCandidateAutoSelectedKeyTotal',
+  'remoteValueBundleCandidateMergesBlockedNoCandidateKeys',
+  'remoteValueBundleCandidateMergesBlockedOneSidedTimestamp',
+  'remoteValueBundleCandidateMergesBlockedSameTimestamp',
+  'remoteValueBundleCandidateMergesBlockedUnavailable',
+  'remoteValueBundleCandidateMergesBlockedUnknownTimestamp',
+  'remoteValueBundleCandidateMergesManualReview',
+  'remoteValueBundleCandidateMergesReady',
+  'remoteValueBundleCandidateMergesUnavailable',
+  'remoteValueBundleCandidateResultKeyTotal',
+  'remoteValueBundleCandidateReviewKeyTotal',
+  'remoteValueBundleWarnings',
+  'remoteValueBundles',
+  'remoteValueBundlesApplicable',
+  'remoteValueBundlesApplyReady',
+  'remoteValueBundlesConflictBlocked',
+  'remoteValueBundlesIgnored',
+  'remoteValueBundlesMissingTimestamps',
+  'remoteValueBundlesNewerThanLastSync',
+  'remoteValueBundlesOlderThanLastSync',
+  'remoteValueBundlesWithTimestamps',
+  'tombstoned',
+  'unchanged',
+  'valueBundleApplyEnabled',
+  'valueBundleApplyMode',
+  'valueBundleWarnings',
+  'wouldApplyValues',
+  'wouldDownload',
+  'wouldUpload',
+  'wouldUploadValues',
+].sort();
+
+const SYNC_PREVIEW_EXPORT_VALUE_BUNDLE_CONFLICT_KEYS = [
+  'candidateAutoSelectedKeyCount',
+  'candidateLocalKeyCount',
+  'candidateManualKeyCount',
+  'candidateMergeBlockReason',
+  'candidateMergeGate',
+  'candidateMergePlan',
+  'candidateOneSidedTimestampKeyCount',
+  'candidateRemoteKeyCount',
+  'candidateResultKeyCount',
+  'candidateReviewKeyCount',
+  'candidateSameTimestampKeyCount',
+  'lastWriteHint',
+  'localBytes',
+  'localKeyCount',
+  'localLastValueUpdatedAt',
+  'localOnlyKeyCount',
+  'overlappingKeyCount',
+  'overlappingLocalNewerKeyCount',
+  'overlappingLocalTimestampOnlyKeyCount',
+  'overlappingRemoteNewerKeyCount',
+  'overlappingRemoteTimestampOnlyKeyCount',
+  'overlappingSameTimestampKeyCount',
+  'overlappingUnknownTimestampKeyCount',
+  'reason',
+  'remoteBytes',
+  'remoteKeyCount',
+  'remoteLastValueUpdatedAt',
+  'remoteOnlyKeyCount',
+].sort();
+
 describe('sync safety cockpit wiring', () => {
   it('exposes dashboard health, revoke, and dry-run preview controls', () => {
     expect(dashboardHtml).toContain('id="syncHealthStatus"');
@@ -227,6 +316,45 @@ describe('sync safety cockpit wiring', () => {
     expect(serialized).not.toContain('token');
     expect(serialized).not.toContain('remote-secret');
     expect(serialized).not.toContain('keyMetadata');
+  });
+
+  it('pins sanitized sync preview export schema to aggregate-only fields', () => {
+    const { buildSyncPreviewExport } = loadSyncPreviewExportApi();
+
+    const exported = buildSyncPreviewExport({
+      provider: 'webdav',
+      providerLabel: 'WebDAV',
+      dryRun: true,
+      noWrites: true,
+      remoteFound: true,
+      leakedTopLevel: 'top-secret',
+      summary: {
+        localScripts: 1,
+        conflicts: 1,
+        valueBundleApplyEnabled: true,
+        leakedSummary: 'script_secret',
+      },
+      valueBundleConflicts: [{
+        reason: 'local-values-present',
+        localKeyCount: 1,
+        remoteKeyCount: 1,
+        candidateMergeGate: 'manual-review',
+        candidateMergeBlockReason: 'unknown-timestamp',
+        scriptId: 'script_secret',
+        key: 'token',
+        values: { token: 'secret' },
+      }],
+    });
+
+    expect(Object.keys(exported).sort()).toEqual(SYNC_PREVIEW_EXPORT_TOP_LEVEL_KEYS);
+    expect(Object.keys(exported.summary).sort()).toEqual(SYNC_PREVIEW_EXPORT_SUMMARY_KEYS);
+    expect(Object.keys(exported.valueBundleConflicts[0]).sort())
+      .toEqual(SYNC_PREVIEW_EXPORT_VALUE_BUNDLE_CONFLICT_KEYS);
+    const serialized = JSON.stringify(exported);
+    expect(serialized).not.toContain('top-secret');
+    expect(serialized).not.toContain('script_secret');
+    expect(serialized).not.toContain('token');
+    expect(serialized).not.toContain('secret');
   });
 
   it('keeps Gist token storage disclosure honest', () => {

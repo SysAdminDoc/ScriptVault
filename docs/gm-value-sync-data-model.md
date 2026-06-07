@@ -314,6 +314,17 @@ Cycle 119 adds a merge-acceptance invariant guard:
 - This is still advisory gating. It does not enable non-empty local/remote merge
   writes or change the empty-local-only apply rule.
 
-The next implementation slice should add export schema drift guards,
-acceptance-invariant result evidence, or another durable safeguard before
-non-empty local and remote value bags can be merged bidirectionally.
+Cycle 120 adds an export schema drift guard:
+
+- `tests/sync-cockpit.test.js` now pins the exact top-level
+  `scriptvault-sync-preview/v1` export keys.
+- The same fixture pins the exact sanitized summary keys and value-bundle
+  conflict entry keys.
+- Extra top-level, summary, script, value-key, and value fields are still
+  rejected by redaction assertions.
+- This guard catches accidental export schema expansion or field loss before a
+  future merge implementation can depend on preview output.
+
+The next implementation slice should add acceptance-invariant result evidence,
+merge apply dry-run simulation, or another durable safeguard before non-empty
+local and remote value bags can be merged bidirectionally.
