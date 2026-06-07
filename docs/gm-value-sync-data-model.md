@@ -408,6 +408,16 @@ Cycle 128 hardens preserved-result log rendering:
 - This is a dashboard rendering integrity guard only. It does not enable
   non-empty local/remote merge writes or change the empty-local-only apply rule.
 
+Cycle 129 adds source-side preserved candidate invariants:
+
+- The source CloudSync non-empty and user-modified preserve fixtures now assert
+  that preserved candidate gate totals match preserved bundle totals.
+- The same fixtures assert that preserved auto-selected/review result
+  partitions match aggregate preserved result totals, and that accepted-ready
+  totals cannot exceed result or auto-selected totals.
+- This is regression coverage only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add unavailable preserved-candidate
-coverage, sync-result source invariant tests, or another durable safeguard before non-empty
+coverage, sync-result unavailable invariant tests, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.

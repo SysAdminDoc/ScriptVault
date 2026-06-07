@@ -138,6 +138,22 @@ function expectCandidateMergeSummaryInvariants(summary) {
     .toBe(summary.remoteValueBundleCandidateAcceptedResultKeyTotal);
 }
 
+function expectPreservedCandidateSummaryInvariants(valueBundleSync) {
+  expect(
+    valueBundleSync.preservedCandidateMergeReady
+      + valueBundleSync.preservedCandidateMergeManualReview
+      + valueBundleSync.preservedCandidateMergeUnavailable,
+  ).toBe(valueBundleSync.preserved);
+  expect(
+    valueBundleSync.preservedCandidateAutoSelectedKeyTotal
+      + valueBundleSync.preservedCandidateReviewKeyTotal,
+  ).toBe(valueBundleSync.preservedCandidateResultKeyTotal);
+  expect(valueBundleSync.preservedCandidateAcceptedResultKeyTotal)
+    .toBeLessThanOrEqual(valueBundleSync.preservedCandidateResultKeyTotal);
+  expect(valueBundleSync.preservedCandidateAcceptedResultKeyTotal)
+    .toBeLessThanOrEqual(valueBundleSync.preservedCandidateAutoSelectedKeyTotal);
+}
+
 beforeEach(() => {
   globalThis.__resetStorageMock();
   Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
@@ -1119,7 +1135,8 @@ describe('source cloud sync module', () => {
     );
     const { CloudSync, ScriptValues, getRemoteData, scriptState } = harness;
 
-    await expect(CloudSync.sync()).resolves.toEqual({
+    const result = await CloudSync.sync();
+    expect(result).toEqual({
       success: true,
       valueBundleSync: {
         applied: 0,
@@ -1149,6 +1166,7 @@ describe('source cloud sync module', () => {
         preservedCandidateBlockedNoCandidateKeys: 0,
       },
     });
+    expectPreservedCandidateSummaryInvariants(result.valueBundleSync);
 
     expect(ScriptValues.setAll).not.toHaveBeenCalled();
     expect(scriptState[0].code).toContain('// remote');
@@ -1215,7 +1233,8 @@ describe('source cloud sync module', () => {
     );
     const { CloudSync, ScriptValues, getRemoteData, scriptState } = harness;
 
-    await expect(CloudSync.sync()).resolves.toEqual({
+    const result = await CloudSync.sync();
+    expect(result).toEqual({
       success: true,
       valueBundleSync: {
         applied: 0,
@@ -1245,6 +1264,7 @@ describe('source cloud sync module', () => {
         preservedCandidateBlockedNoCandidateKeys: 0,
       },
     });
+    expectPreservedCandidateSummaryInvariants(result.valueBundleSync);
 
     expect(ScriptValues.setAll).not.toHaveBeenCalled();
     expect(scriptState[0].settings.userModified).toBe(true);
