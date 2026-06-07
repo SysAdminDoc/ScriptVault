@@ -751,6 +751,18 @@ Cycle 157 pins support export schema drift coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 158 pins support privacy schema drift coverage:
+
+- Support-snapshot redaction tests now extract nested `privacy` entries from GM
+  value sync sanitizer returns and require an exact reviewed schema.
+- The guard covers the main GM value sync support export plus
+  retry-resolution, retry-resolution-history, and retry-history summaries.
+- Every privacy entry must remain present with a `false` value for sensitive
+  data classes including values, value keys, script identifiers, script names,
+  URLs, file handles, and local paths.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add retry-resolution retention cleanup,
-support privacy-key schema drift coverage, or another durable safeguard before
+support warning-count schema drift coverage, or another durable safeguard before
 non-empty local and remote value bags can be merged bidirectionally.
