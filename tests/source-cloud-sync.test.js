@@ -778,6 +778,9 @@ describe('source cloud sync module', () => {
         remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: 0,
         remoteValueBundleCandidateMergesBlockedUnavailable: 0,
         remoteValueBundleCandidateMergesBlockedNoCandidateKeys: 0,
+        remoteValueBundleCandidateResultKeyTotal: 3,
+        remoteValueBundleCandidateAutoSelectedKeyTotal: 3,
+        remoteValueBundleCandidateReviewKeyTotal: 0,
       }),
     );
     expect(preview.valueBundleConflicts).toEqual([
@@ -803,6 +806,9 @@ describe('source cloud sync module', () => {
         candidateSameTimestampKeyCount: 0,
         candidateManualKeyCount: 0,
         candidateOneSidedTimestampKeyCount: 0,
+        candidateResultKeyCount: 3,
+        candidateAutoSelectedKeyCount: 3,
+        candidateReviewKeyCount: 0,
         candidateMergeGate: 'ready',
         candidateMergeBlockReason: 'none',
       }),
@@ -887,6 +893,9 @@ describe('source cloud sync module', () => {
         remoteValueBundleCandidateMergesManualReview: 1,
         remoteValueBundleCandidateMergesUnavailable: 0,
         remoteValueBundleCandidateMergesBlockedUnknownTimestamp: 1,
+        remoteValueBundleCandidateResultKeyTotal: 1,
+        remoteValueBundleCandidateAutoSelectedKeyTotal: 0,
+        remoteValueBundleCandidateReviewKeyTotal: 1,
       }),
     );
     expect(preview.valueBundleConflicts).toEqual([
@@ -898,6 +907,9 @@ describe('source cloud sync module', () => {
         candidateSameTimestampKeyCount: 0,
         candidateManualKeyCount: 1,
         candidateOneSidedTimestampKeyCount: 0,
+        candidateResultKeyCount: 1,
+        candidateAutoSelectedKeyCount: 0,
+        candidateReviewKeyCount: 1,
         candidateMergeGate: 'manual-review',
         candidateMergeBlockReason: 'unknown-timestamp',
       }),

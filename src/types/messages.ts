@@ -1560,6 +1560,9 @@ export interface ResponseMap {
       candidateSameTimestampKeyCount: number | null;
       candidateManualKeyCount: number | null;
       candidateOneSidedTimestampKeyCount: number | null;
+      candidateResultKeyCount: number | null;
+      candidateAutoSelectedKeyCount: number | null;
+      candidateReviewKeyCount: number | null;
       candidateMergeGate: 'ready' | 'manual-review' | 'unavailable';
       candidateMergeBlockReason:
         | 'none'

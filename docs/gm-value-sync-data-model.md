@@ -251,7 +251,20 @@ Cycle 114 adds manual-review reason diagnostics:
 - These diagnostics are advisory only. They do not enable non-empty
   local/remote merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add candidate merge result dry-run
-evidence, real-sync preserved-bundle acceptance summaries, or another durable
-safeguard before non-empty local and remote value bags can be merged
-bidirectionally.
+Cycle 115 adds candidate merge result dry-run evidence:
+
+- Dry-run summaries count total hypothetical result keys, auto-selected keys,
+  and review keys across blocked candidate merges.
+- Blocked value-bundle preview entries and Download Preview exports include
+  only `candidateResultKeyCount`, `candidateAutoSelectedKeyCount`, and
+  `candidateReviewKeyCount` alongside the existing aggregate candidate evidence.
+- Result counts are derived from local-only, remote-only, and overlap counts;
+  they do not expose script IDs, script names, value key names, values, URLs,
+  local workspace handles, local paths, sync credentials, provider account data,
+  or raw `keyMetadata` maps.
+- The result preview is advisory only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add real-sync preserved-bundle acceptance
+summaries, candidate result export hardening, or another durable safeguard
+before non-empty local and remote value bags can be merged bidirectionally.

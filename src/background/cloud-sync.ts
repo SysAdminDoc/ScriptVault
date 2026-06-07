@@ -153,6 +153,9 @@ interface SyncPreviewSummary {
   remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: number;
   remoteValueBundleCandidateMergesBlockedUnavailable: number;
   remoteValueBundleCandidateMergesBlockedNoCandidateKeys: number;
+  remoteValueBundleCandidateResultKeyTotal: number;
+  remoteValueBundleCandidateAutoSelectedKeyTotal: number;
+  remoteValueBundleCandidateReviewKeyTotal: number;
   valueBundleApplyEnabled: boolean;
   valueBundleApplyMode: 'empty-local-only';
   wouldUpload: boolean;
@@ -221,6 +224,9 @@ interface SyncPreviewValueBundleConflict {
   candidateSameTimestampKeyCount: number | null;
   candidateManualKeyCount: number | null;
   candidateOneSidedTimestampKeyCount: number | null;
+  candidateResultKeyCount: number | null;
+  candidateAutoSelectedKeyCount: number | null;
+  candidateReviewKeyCount: number | null;
   candidateMergeGate: ValueBundleCandidateMergeGate;
   candidateMergeBlockReason: ValueBundleCandidateMergeBlockReason;
 }
@@ -646,6 +652,9 @@ function countRemoteValueBundlesApplyReady(
   candidateMergeBlockedOneSidedTimestamp: number;
   candidateMergeBlockedUnavailable: number;
   candidateMergeBlockedNoCandidateKeys: number;
+  candidateResultKeyTotal: number;
+  candidateAutoSelectedKeyTotal: number;
+  candidateReviewKeyTotal: number;
 } {
   let ready = 0;
   let conflictBlocked = 0;
@@ -657,6 +666,9 @@ function countRemoteValueBundlesApplyReady(
   let candidateMergeBlockedOneSidedTimestamp = 0;
   let candidateMergeBlockedUnavailable = 0;
   let candidateMergeBlockedNoCandidateKeys = 0;
+  let candidateResultKeyTotal = 0;
+  let candidateAutoSelectedKeyTotal = 0;
+  let candidateReviewKeyTotal = 0;
   const conflicts: SyncPreviewValueBundleConflict[] = [];
   const localBundles = getSyncEnvelopeValueBundles(local);
   const localScriptIds = new Set(
@@ -678,6 +690,9 @@ function countRemoteValueBundlesApplyReady(
     else if (preview.candidateMergeBlockReason === 'one-sided-timestamp') candidateMergeBlockedOneSidedTimestamp += 1;
     else if (preview.candidateMergeBlockReason === 'local-bundle-unavailable') candidateMergeBlockedUnavailable += 1;
     else if (preview.candidateMergeBlockReason === 'no-candidate-keys') candidateMergeBlockedNoCandidateKeys += 1;
+    candidateResultKeyTotal += preview.candidateResultKeyCount ?? 0;
+    candidateAutoSelectedKeyTotal += preview.candidateAutoSelectedKeyCount ?? 0;
+    candidateReviewKeyTotal += preview.candidateReviewKeyCount ?? 0;
     if (conflicts.length < 20) {
       conflicts.push(preview);
     }
@@ -706,6 +721,9 @@ function countRemoteValueBundlesApplyReady(
     candidateMergeBlockedOneSidedTimestamp,
     candidateMergeBlockedUnavailable,
     candidateMergeBlockedNoCandidateKeys,
+    candidateResultKeyTotal,
+    candidateAutoSelectedKeyTotal,
+    candidateReviewKeyTotal,
   };
 }
 
@@ -770,6 +788,7 @@ function buildValueBundleConflictPreview(
   const remoteLastValueUpdatedAt = getValueBundleLastUpdatedAt(remoteBundle) ?? null;
   const candidateMerge = buildValueBundleCandidateMergePlan(keyCounts);
   const candidateGate = buildValueBundleCandidateMergeGate(keyCounts, candidateMerge);
+  const candidateResult = buildValueBundleCandidateMergeResult(keyCounts, candidateMerge, candidateGate);
   return {
     reason,
     localKeyCount: hasLocalBundle ? safeBundleMetric(localBundle.keyCount) : null,
@@ -794,6 +813,9 @@ function buildValueBundleConflictPreview(
     candidateSameTimestampKeyCount: candidateMerge.sameTimestampKeyCount,
     candidateManualKeyCount: candidateMerge.manualKeyCount,
     candidateOneSidedTimestampKeyCount: candidateGate.oneSidedTimestampKeyCount,
+    candidateResultKeyCount: candidateResult.resultKeyCount,
+    candidateAutoSelectedKeyCount: candidateResult.autoSelectedKeyCount,
+    candidateReviewKeyCount: candidateResult.reviewKeyCount,
     candidateMergeGate: candidateGate.gate,
     candidateMergeBlockReason: candidateGate.blockReason,
   };
@@ -864,6 +886,26 @@ function buildValueBundleCandidateMergeGate(
     return { gate: 'manual-review', blockReason: 'no-candidate-keys', oneSidedTimestampKeyCount };
   }
   return { gate: 'ready', blockReason: 'none', oneSidedTimestampKeyCount };
+}
+
+function buildValueBundleCandidateMergeResult(
+  keyCounts: ReturnType<typeof countValueBundleKeyOverlap> | null,
+  candidateMerge: ReturnType<typeof buildValueBundleCandidateMergePlan>,
+  candidateGate: ReturnType<typeof buildValueBundleCandidateMergeGate>,
+): {
+  resultKeyCount: number | null;
+  autoSelectedKeyCount: number | null;
+  reviewKeyCount: number | null;
+} {
+  if (!keyCounts) {
+    return { resultKeyCount: null, autoSelectedKeyCount: null, reviewKeyCount: null };
+  }
+  const resultKeyCount = keyCounts.localOnly + keyCounts.remoteOnly + keyCounts.overlapping;
+  const autoSelectedKeyCount = (candidateMerge.remoteKeyCount ?? 0) + (candidateMerge.localKeyCount ?? 0);
+  const reviewKeyCount = (candidateMerge.sameTimestampKeyCount ?? 0)
+    + (candidateMerge.manualKeyCount ?? 0)
+    + (candidateGate.oneSidedTimestampKeyCount ?? 0);
+  return { resultKeyCount, autoSelectedKeyCount, reviewKeyCount };
 }
 
 function countValueBundleKeyOverlap(
@@ -1191,6 +1233,9 @@ export const CloudSync = {
       remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedOneSidedTimestamp,
       remoteValueBundleCandidateMergesBlockedUnavailable: remoteValueBundleApplyReadiness.candidateMergeBlockedUnavailable,
       remoteValueBundleCandidateMergesBlockedNoCandidateKeys: remoteValueBundleApplyReadiness.candidateMergeBlockedNoCandidateKeys,
+      remoteValueBundleCandidateResultKeyTotal: remoteValueBundleApplyReadiness.candidateResultKeyTotal,
+      remoteValueBundleCandidateAutoSelectedKeyTotal: remoteValueBundleApplyReadiness.candidateAutoSelectedKeyTotal,
+      remoteValueBundleCandidateReviewKeyTotal: remoteValueBundleApplyReadiness.candidateReviewKeyTotal,
       valueBundleApplyEnabled: true,
       valueBundleApplyMode: 'empty-local-only',
       wouldUpload: false,

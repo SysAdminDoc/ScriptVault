@@ -71,6 +71,7 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('remote candidate keys');
     expect(dashboardJs).toContain('candidate merge gate');
     expect(dashboardJs).toContain('manual review reasons');
+    expect(dashboardJs).toContain('candidate result keys');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {
@@ -111,6 +112,9 @@ describe('sync safety cockpit wiring', () => {
         remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: 0,
         remoteValueBundleCandidateMergesBlockedUnavailable: 0,
         remoteValueBundleCandidateMergesBlockedNoCandidateKeys: 0,
+        remoteValueBundleCandidateResultKeyTotal: 3,
+        remoteValueBundleCandidateAutoSelectedKeyTotal: 3,
+        remoteValueBundleCandidateReviewKeyTotal: 0,
         wouldUpload: true,
         leakedName: 'Secret Script',
       },
@@ -139,6 +143,9 @@ describe('sync safety cockpit wiring', () => {
         candidateSameTimestampKeyCount: 0,
         candidateManualKeyCount: 0,
         candidateOneSidedTimestampKeyCount: 0,
+        candidateResultKeyCount: 3,
+        candidateAutoSelectedKeyCount: 3,
+        candidateReviewKeyCount: 0,
         candidateMergeGate: 'ready',
         candidateMergeBlockReason: 'none',
         keyMetadata: {
@@ -182,6 +189,9 @@ describe('sync safety cockpit wiring', () => {
           candidateSameTimestampKeyCount: 0,
           candidateManualKeyCount: 0,
           candidateOneSidedTimestampKeyCount: 0,
+          candidateResultKeyCount: 3,
+          candidateAutoSelectedKeyCount: 3,
+          candidateReviewKeyCount: 0,
           candidateMergeGate: 'ready',
           candidateMergeBlockReason: 'none',
         }],
@@ -202,6 +212,9 @@ describe('sync safety cockpit wiring', () => {
       remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: 0,
       remoteValueBundleCandidateMergesBlockedUnavailable: 0,
       remoteValueBundleCandidateMergesBlockedNoCandidateKeys: 0,
+      remoteValueBundleCandidateResultKeyTotal: 3,
+      remoteValueBundleCandidateAutoSelectedKeyTotal: 3,
+      remoteValueBundleCandidateReviewKeyTotal: 0,
       wouldUpload: true,
     }));
     const serialized = JSON.stringify(exported);

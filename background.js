@@ -16752,6 +16752,9 @@ function countRemoteValueBundlesApplyReady(selection, local) {
   let candidateMergeBlockedOneSidedTimestamp = 0;
   let candidateMergeBlockedUnavailable = 0;
   let candidateMergeBlockedNoCandidateKeys = 0;
+  let candidateResultKeyTotal = 0;
+  let candidateAutoSelectedKeyTotal = 0;
+  let candidateReviewKeyTotal = 0;
   const conflicts = [];
   const localBundles = getSyncEnvelopeValueBundles(local);
   const localScriptIds = new Set(
@@ -16769,6 +16772,9 @@ function countRemoteValueBundlesApplyReady(selection, local) {
     else if (preview.candidateMergeBlockReason === 'one-sided-timestamp') candidateMergeBlockedOneSidedTimestamp++;
     else if (preview.candidateMergeBlockReason === 'local-bundle-unavailable') candidateMergeBlockedUnavailable++;
     else if (preview.candidateMergeBlockReason === 'no-candidate-keys') candidateMergeBlockedNoCandidateKeys++;
+    candidateResultKeyTotal += preview.candidateResultKeyCount ?? 0;
+    candidateAutoSelectedKeyTotal += preview.candidateAutoSelectedKeyCount ?? 0;
+    candidateReviewKeyTotal += preview.candidateReviewKeyCount ?? 0;
     if (conflicts.length < 20) {
       conflicts.push(preview);
     }
@@ -16796,7 +16802,10 @@ function countRemoteValueBundlesApplyReady(selection, local) {
     candidateMergeBlockedUnknownTimestamp,
     candidateMergeBlockedOneSidedTimestamp,
     candidateMergeBlockedUnavailable,
-    candidateMergeBlockedNoCandidateKeys
+    candidateMergeBlockedNoCandidateKeys,
+    candidateResultKeyTotal,
+    candidateAutoSelectedKeyTotal,
+    candidateReviewKeyTotal
   };
 }
 
@@ -16845,6 +16854,7 @@ function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {
   const remoteLastValueUpdatedAt = getValueBundleLastUpdatedAt(remoteBundle) ?? null;
   const candidateMerge = buildValueBundleCandidateMergePlan(keyCounts);
   const candidateGate = buildValueBundleCandidateMergeGate(keyCounts, candidateMerge);
+  const candidateResult = buildValueBundleCandidateMergeResult(keyCounts, candidateMerge, candidateGate);
   return {
     reason,
     localKeyCount: hasLocalBundle ? safeValueBundleMetric(localBundle.keyCount) : null,
@@ -16869,6 +16879,9 @@ function buildValueBundleConflictPreview(reason, remoteBundle, localBundle) {
     candidateSameTimestampKeyCount: candidateMerge.sameTimestampKeyCount,
     candidateManualKeyCount: candidateMerge.manualKeyCount,
     candidateOneSidedTimestampKeyCount: candidateGate.oneSidedTimestampKeyCount,
+    candidateResultKeyCount: candidateResult.resultKeyCount,
+    candidateAutoSelectedKeyCount: candidateResult.autoSelectedKeyCount,
+    candidateReviewKeyCount: candidateResult.reviewKeyCount,
     candidateMergeGate: candidateGate.gate,
     candidateMergeBlockReason: candidateGate.blockReason
   };
@@ -16924,6 +16937,18 @@ function buildValueBundleCandidateMergeGate(keyCounts, candidateMerge) {
     return { gate: 'manual-review', blockReason: 'no-candidate-keys', oneSidedTimestampKeyCount };
   }
   return { gate: 'ready', blockReason: 'none', oneSidedTimestampKeyCount };
+}
+
+function buildValueBundleCandidateMergeResult(keyCounts, candidateMerge, candidateGate) {
+  if (!keyCounts) {
+    return { resultKeyCount: null, autoSelectedKeyCount: null, reviewKeyCount: null };
+  }
+  const resultKeyCount = keyCounts.localOnly + keyCounts.remoteOnly + keyCounts.overlapping;
+  const autoSelectedKeyCount = (candidateMerge.remoteKeyCount ?? 0) + (candidateMerge.localKeyCount ?? 0);
+  const reviewKeyCount = (candidateMerge.sameTimestampKeyCount ?? 0)
+    + (candidateMerge.manualKeyCount ?? 0)
+    + (candidateGate.oneSidedTimestampKeyCount ?? 0);
+  return { resultKeyCount, autoSelectedKeyCount, reviewKeyCount };
 }
 
 function countValueBundleKeyOverlap(localValues, remoteValues, localKeyMetadata, remoteKeyMetadata) {
@@ -19900,6 +19925,9 @@ const CloudSync = {
       remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedOneSidedTimestamp,
       remoteValueBundleCandidateMergesBlockedUnavailable: remoteValueBundleApplyReadiness.candidateMergeBlockedUnavailable,
       remoteValueBundleCandidateMergesBlockedNoCandidateKeys: remoteValueBundleApplyReadiness.candidateMergeBlockedNoCandidateKeys,
+      remoteValueBundleCandidateResultKeyTotal: remoteValueBundleApplyReadiness.candidateResultKeyTotal,
+      remoteValueBundleCandidateAutoSelectedKeyTotal: remoteValueBundleApplyReadiness.candidateAutoSelectedKeyTotal,
+      remoteValueBundleCandidateReviewKeyTotal: remoteValueBundleApplyReadiness.candidateReviewKeyTotal,
       valueBundleApplyEnabled: true,
       valueBundleApplyMode: 'empty-local-only',
       wouldUpload: false,
