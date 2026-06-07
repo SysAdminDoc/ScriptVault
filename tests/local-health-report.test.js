@@ -64,11 +64,16 @@ describe('local health report background action', () => {
     expect(backgroundCoreTs).toContain('GM_VALUE_SYNC_MAX_KEY_BYTES = 256');
     expect(backgroundCoreTs).toContain('buildGmValueSyncHealthSummary(scriptList)');
     expect(backgroundCoreTs).toContain('providerWritesEnabled: false');
+    expect(backgroundCoreTs).toContain('sanitizeValueBundleSyncForLastResult');
+    expect(backgroundCoreTs).toContain('readGmValueSyncLastResultForHealth');
+    expect(backgroundCoreTs).toContain('lastResult: null');
+    expect(backgroundCoreTs).toContain('writeFailureRetryReady');
     expect(backgroundCoreTs).toContain('ScriptValues.getAll(script.id)');
     expect(backgroundCoreTs).toContain('gmValueSync,');
     expect(backgroundCoreTs).toContain("push('gmValueSyncProviderWritesPending', 'info'");
     expect(backgroundCoreTs).toContain("push('gmValueSyncBundleWarnings', 'warning'");
     expect(backgroundCoreTs).toContain("push('gmValueSyncValueReadFailures', 'warning'");
+    expect(backgroundCoreTs).toContain("push('gmValueSyncWriteRetryReady', 'warning'");
     expect(backgroundCoreTs).toContain('includesValues: false');
     expect(backgroundCoreTs).toContain('includesValueKeys: false');
     expect(backgroundCoreTs).toContain('includesScriptIds: false');
@@ -153,7 +158,9 @@ describe('local health report support snapshot wiring', () => {
     expect(messagesTs).toMatch(/lastRun: null \| \{[\s\S]{0,900}skippedInvalidEntries: number;/);
     expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,250}schema: 'scriptvault-gm-value-sync\/v1';/);
     expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,500}providerWritesEnabled: boolean;/);
-    expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,900}warningCounts: Record<string, number>;/);
+    expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,900}lastResult: null \| \{/);
+    expect(messagesTs).toMatch(/lastResult: null \| \{[\s\S]{0,500}writeFailureRetryReady: number;/);
+    expect(messagesTs).toMatch(/gmValueSync:\s*\{[\s\S]{0,1300}warningCounts: Record<string, number>;/);
     expect(messagesTs).toMatch(/privacy:\s*\{[\s\S]{0,300}includesValueKeys: boolean;/);
     expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,300}totalBindings: number;/);
     expect(messagesTs).toMatch(/localWorkspace:\s*\{[\s\S]{0,700}refreshStatuses: Record<string, number>;/);

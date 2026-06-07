@@ -18782,6 +18782,47 @@ function _localHealthCount(record, key) {
   record[safeKey] = (record[safeKey] || 0) + 1;
 }
 
+function _lastSyncResultCount(value) {
+  return Math.max(0, Math.floor(Number(value) || 0));
+}
+
+function sanitizeValueBundleSyncForLastResult(valueBundleSync) {
+  if (!valueBundleSync || typeof valueBundleSync !== 'object') return null;
+  const applied = _lastSyncResultCount(valueBundleSync.applied);
+  const preserved = _lastSyncResultCount(valueBundleSync.preserved);
+  const failures = _lastSyncResultCount(valueBundleSync.failures);
+  const writeFailureRetryReady = Math.min(
+    _lastSyncResultCount(valueBundleSync.writeFailureRetryReady),
+    failures,
+    preserved
+  );
+  return {
+    applied,
+    preserved,
+    conflictBlocked: _lastSyncResultCount(valueBundleSync.conflictBlocked),
+    skippedUnavailable: _lastSyncResultCount(valueBundleSync.skippedUnavailable),
+    failures,
+    writeFailureRetryReady
+  };
+}
+
+function buildLastSyncResultRecord(result = {}) {
+  const valueBundleSync = sanitizeValueBundleSyncForLastResult(result?.valueBundleSync);
+  return {
+    timestamp: Date.now(),
+    ok: !!(result?.success || result?.skipped),
+    skipped: !!result?.skipped,
+    error: result?.error || null,
+    ...(valueBundleSync ? { valueBundleSync } : {})
+  };
+}
+
+async function persistLastSyncResult(result = {}) {
+  try {
+    await chrome.storage.local.set({ lastSyncResult: buildLastSyncResultRecord(result) });
+  } catch (_e) { /* non-critical */ }
+}
+
 let _lastRegistrationSweep = {
   schema: REGISTRATION_SWEEP_SCHEMA,
   generatedAt: null,
@@ -19020,6 +19061,7 @@ function createEmptyGmValueSyncHealthSummary(overrides = {}) {
     maxScriptBytes: GM_VALUE_SYNC_MAX_SCRIPT_BYTES,
     maxKeys: GM_VALUE_SYNC_MAX_KEYS,
     maxKeyBytes: GM_VALUE_SYNC_MAX_KEY_BYTES,
+    lastResult: null,
     warningCounts: {},
     privacy: {
       includesValues: false,
@@ -19185,10 +19227,38 @@ async function buildValueBundlesForScripts(scripts = []) {
   return { valueBundles, optIns, warnings };
 }
 
+function sanitizeGmValueSyncLastResultForHealth(record) {
+  if (!record || typeof record !== 'object') return null;
+  const valueBundleSync = sanitizeValueBundleSyncForLastResult(record.valueBundleSync);
+  return {
+    schema: 'scriptvault-gm-value-sync-result/v1',
+    timestamp: Number.isFinite(Number(record.timestamp)) ? Math.max(0, Math.floor(Number(record.timestamp))) : null,
+    ok: record.ok === true,
+    skipped: record.skipped === true,
+    hasError: !!record.error,
+    applied: valueBundleSync?.applied || 0,
+    preserved: valueBundleSync?.preserved || 0,
+    conflictBlocked: valueBundleSync?.conflictBlocked || 0,
+    skippedUnavailable: valueBundleSync?.skippedUnavailable || 0,
+    failures: valueBundleSync?.failures || 0,
+    writeFailureRetryReady: valueBundleSync?.writeFailureRetryReady || 0
+  };
+}
+
+async function readGmValueSyncLastResultForHealth() {
+  try {
+    const data = await chrome.storage.local.get('lastSyncResult');
+    return sanitizeGmValueSyncLastResultForHealth(data?.lastSyncResult);
+  } catch (_) {
+    return null;
+  }
+}
+
 async function buildGmValueSyncHealthSummary(scripts = []) {
   const summary = createEmptyGmValueSyncHealthSummary({
     available: typeof ScriptValues !== 'undefined' && typeof ScriptValues?.getAll === 'function'
   });
+  summary.lastResult = await readGmValueSyncLastResultForHealth();
   if (!summary.available) return summary;
 
   for (const script of scripts) {
@@ -19461,6 +19531,9 @@ function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callb
   }
   if (gmValueSync?.valueReadFailures > 0) {
     push('gmValueSyncValueReadFailures', 'warning', `${gmValueSync.valueReadFailures} GM value sync opt-in script${gmValueSync.valueReadFailures === 1 ? '' : 's'} could not be inspected for sync readiness`);
+  }
+  if (gmValueSync?.lastResult?.writeFailureRetryReady > 0) {
+    push('gmValueSyncWriteRetryReady', 'warning', `${gmValueSync.lastResult.writeFailureRetryReady} GM value sync preserved write${gmValueSync.lastResult.writeFailureRetryReady === 1 ? '' : 's'} ready to retry`);
   }
   for (const [id, block] of Object.entries(callbacks || {})) {
     if (block?.level === 'warning' || block?.level === 'critical') {
@@ -22670,19 +22743,7 @@ async function handleMessage(message, sender) {
       // Sync
       case 'sync': {
         const result = await CloudSync.sync();
-        // Phase 39.26 — persist last-sync outcome so the dashboard's sync chip
-        // can render "Last sync: 5 min ago — OK" without requiring a separate
-        // round-trip on every popup open.
-        try {
-          await chrome.storage.local.set({
-            lastSyncResult: {
-              timestamp: Date.now(),
-              ok: !!(result?.success || result?.skipped),
-              skipped: !!result?.skipped,
-              error: result?.error || null
-            }
-          });
-        } catch (_e) { /* non-critical */ }
+        await persistLastSyncResult(result);
         return result;
       }
 
@@ -22813,16 +22874,7 @@ async function handleMessage(message, sender) {
       
       case 'syncNow': {
         const result = await CloudSync.sync();
-        try {
-          await chrome.storage.local.set({
-            lastSyncResult: {
-              timestamp: Date.now(),
-              ok: !!(result?.success || result?.skipped),
-              skipped: !!result?.skipped,
-              error: result?.error || null
-            }
-          });
-        } catch (_e) { /* non-critical */ }
+        await persistLastSyncResult(result);
         return result;
       }
 
