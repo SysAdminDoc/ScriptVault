@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 86 - GM value sync retry-age diagnostics 2026-06-07.
+> **Roadmap version:** Round 87 - GM value sync retry-history diagnostics 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1523 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1524 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 86 - 2026-06-07.
+> Last researched: Round 87 - 2026-06-07.
 
 ---
 
@@ -297,6 +297,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   (`fresh`, `recent`, `stale`, `old`, or `unknown`), the support snapshot
   sanitizer preserves only that aggregate age metadata, and the dashboard
   summary labels retry-ready writes with the safe age bucket.
+- **Cycle 145 update:** Added bounded write-retry history diagnostics. Sync
+  persistence now stores a five-entry aggregate retry history, local health and
+  support snapshots expose only summary counts/timestamps from that history,
+  and the dashboard summary reports recent retry-history event counts without
+  script IDs, value key names, values, provider account data, credentials, or
+  raw key metadata.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -380,11 +386,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 94 | GM value-sync support snapshot allowlist | `pages/dashboard.js`, `tests/support-snapshot-redaction.test.js` | Chrome extension diagnostics should keep privileged userscript/storage state behind extension-controlled messaging and export only support-safe aggregates [S47, S98] | Added an explicit dashboard-side allowlist for GM value-sync local-health export data, including clamped retry-ready last-result evidence and known warning IDs only |
 | 95 | GM value-sync support summary polish | `pages/dashboard.js`, `tests/support-snapshot-redaction.test.js` | Support operators need pre-export visibility into aggregate local-health diagnostics while the privacy envelope keeps script/value data out of the UI and export path [S47, S98] | Cached local health during utilities refresh/export and added aggregate GM value-sync retry readiness to the support snapshot summary |
 | 96 | GM value-sync retry-age diagnostics | `src/background/core.ts`, `src/types/messages.ts`, generated runtime artifacts, `pages/dashboard.js`, focused local-health/support tests | Support diagnostics should distinguish fresh retry-ready write failures from stale ones while still exporting only aggregate local-health evidence [S47, S98] | Added sanitized retry-age minutes/buckets to last-result health and support-summary output |
+| 97 | GM value-sync bounded retry history | `src/background/core.ts`, `src/types/messages.ts`, generated runtime artifacts, `pages/dashboard.js`, focused local-health/support tests | Chrome storage quota guidance favors small JSON-serializable local state, and CWS user-data policy favors aggregate/anonymized operational diagnostics [S47, S98] | Added a five-entry aggregate retry-history store, local-health summary counts, support-snapshot allowlisting, and clear-all cleanup |
 
 ## Continuation State
 
-- **Current cycle:** Round 86 Cycle 144 added GM value sync retry-age diagnostics.
-- **Next implementation angle:** Cycle 145 should continue L-8 with bounded write-retry history, retry resolution evidence, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 87 Cycle 145 added GM value sync bounded retry-history diagnostics.
+- **Next implementation angle:** Cycle 146 should continue L-8 with retry resolution evidence, stale retry cleanup, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 

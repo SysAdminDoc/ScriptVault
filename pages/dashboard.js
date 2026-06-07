@@ -4903,6 +4903,9 @@
         if (retryReady > 0) {
             parts.push(`${numberFormatter.format(retryReady)} retry-ready preserved write${retryReady === 1 ? '' : 's'}${retryAgeLabel ? ` (${retryAgeLabel})` : ''}`);
         }
+        if (gmValueSync.retryHistory?.retryReadyEntries > 0) {
+            parts.push(`${numberFormatter.format(gmValueSync.retryHistory.retryReadyEntries)} recent retry histor${gmValueSync.retryHistory.retryReadyEntries === 1 ? 'y event' : 'y events'}`);
+        }
         if (warningTotal > 0) {
             parts.push(`${numberFormatter.format(warningTotal)} capped or excluded value${warningTotal === 1 ? '' : 's'}`);
         }
@@ -5500,6 +5503,33 @@
         return sanitized;
     }
 
+    function sanitizeGmValueSyncRetryHistoryForSupportSnapshot(retryHistory) {
+        if (!retryHistory || typeof retryHistory !== 'object' || retryHistory.schema !== 'scriptvault-gm-value-sync-retry-history/v1') return undefined;
+        const limit = Math.min(Math.max(1, sanitizeSupportSnapshotCount(retryHistory.limit) || 5), 5);
+        const entries = Math.min(sanitizeSupportSnapshotCount(retryHistory.entries), limit);
+        const retryReadyEntries = Math.min(sanitizeSupportSnapshotCount(retryHistory.retryReadyEntries), entries);
+        const failedNoRetryEntries = Math.min(sanitizeSupportSnapshotCount(retryHistory.failedNoRetryEntries), entries - retryReadyEntries);
+        return {
+            schema: 'scriptvault-gm-value-sync-retry-history/v1',
+            limit,
+            entries,
+            retryReadyEntries,
+            failedNoRetryEntries,
+            totalWriteFailureRetryReady: sanitizeSupportSnapshotCount(retryHistory.totalWriteFailureRetryReady),
+            latestTimestamp: Number.isFinite(Number(retryHistory.latestTimestamp)) ? Math.max(0, Math.floor(Number(retryHistory.latestTimestamp))) : null,
+            oldestTimestamp: Number.isFinite(Number(retryHistory.oldestTimestamp)) ? Math.max(0, Math.floor(Number(retryHistory.oldestTimestamp))) : null,
+            privacy: {
+                includesValues: false,
+                includesValueKeys: false,
+                includesScriptIds: false,
+                includesScriptNames: false,
+                includesUrls: false,
+                includesFileHandles: false,
+                includesLocalPaths: false
+            }
+        };
+    }
+
     function sanitizeGmValueSyncLastResultForSupportSnapshot(lastResult) {
         if (!lastResult || typeof lastResult !== 'object') return null;
         const applied = sanitizeSupportSnapshotCount(lastResult.applied);
@@ -5549,6 +5579,7 @@
             maxKeys: sanitizeSupportSnapshotCount(gmValueSync.maxKeys),
             maxKeyBytes: sanitizeSupportSnapshotCount(gmValueSync.maxKeyBytes),
             lastResult: sanitizeGmValueSyncLastResultForSupportSnapshot(gmValueSync.lastResult),
+            retryHistory: sanitizeGmValueSyncRetryHistoryForSupportSnapshot(gmValueSync.retryHistory),
             warningCounts: sanitizeGmValueSyncWarningCountsForSupportSnapshot(gmValueSync.warningCounts),
             privacy: {
                 includesValues: false,

@@ -118,6 +118,7 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(lastResultBlock).toBeTruthy();
     expect(dashboardJs).toContain('function sanitizeGmValueSyncLastResultForSupportSnapshot(lastResult)');
     expect(dashboardJs).toContain('function sanitizeGmValueSyncWarningCountsForSupportSnapshot(warningCounts)');
+    expect(dashboardJs).toContain('function sanitizeGmValueSyncRetryHistoryForSupportSnapshot(retryHistory)');
     expect(dashboardJs).toContain('const allowedWarningIds = new Set([');
     expect(dashboardJs).toContain('if (!Number.isFinite(count)) return 0;');
     expect(dashboardJs).toContain('sanitizeGmValueSyncForSupportSnapshot(report.gmValueSync)');
@@ -133,6 +134,16 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(`${block[0]}\n${lastResultBlock[0]}`).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('GM value sync retry history is summarized before support snapshot export', () => {
+    const historyBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryHistoryForSupportSnapshot\(retryHistory\) \{[\s\S]*?function sanitizeGmValueSyncLastResultForSupportSnapshot/);
+    expect(historyBlock).toBeTruthy();
+    expect(historyBlock[0]).toContain("schema: 'scriptvault-gm-value-sync-retry-history/v1'");
+    expect(historyBlock[0]).toContain('totalWriteFailureRetryReady');
+    expect(historyBlock[0]).toContain('latestTimestamp');
+    expect(historyBlock[0]).toContain('oldestTimestamp');
+    expect(historyBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
   it('support summary surfaces only aggregate GM value sync retry health', () => {
     const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
     expect(summaryBlock).toBeTruthy();
@@ -144,6 +155,7 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(summaryBlock[0]).toContain('writeFailureRetryReady');
     expect(summaryBlock[0]).toContain('retry-ready preserved write');
     expect(summaryBlock[0]).toContain('formatGmValueRetryAgeBucket');
+    expect(summaryBlock[0]).toContain('retryHistory');
     expect(summaryBlock[0]).toContain('warningCounts');
     expect(summaryBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
