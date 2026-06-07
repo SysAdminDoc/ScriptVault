@@ -5,9 +5,9 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 92 - GM value sync support unchecked-state wording coverage 2026-06-07.
+> **Roadmap version:** Round 92 - GM value sync last-result timestamp sanitizer coverage 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1547 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1548 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 92 - 2026-06-07.
@@ -438,6 +438,10 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   support snapshot redaction suite now pins the unchecked GM value summary
   fallback to the generic `GM values unchecked` wording and rejects
   provider/account/credential/script/key/error detail in that label.
+- **Cycle 175 update:** Added last-result timestamp sanitizer coverage. The
+  support snapshot last-result sanitizer now routes timestamp export through the
+  shared support snapshot timestamp helper, and the redaction suite pins that
+  shared normalization path.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -551,11 +555,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 124 | GM value-sync support unavailable-state wording coverage | `tests/support-snapshot-redaction.test.js` | Unavailable pre-export summaries should stay generic and support-safe [S47, S98] | Pinned generic unavailable wording and rejected provider/account/credential/script/key/error detail |
 | 125 | GM value-sync last-result support export clamp coverage | `tests/support-snapshot-redaction.test.js` | Support exports should not overstate retry-ready last-result evidence [S47, S98] | Pinned retry-ready clamping to sanitized failure/preserved counts and retry-age gating |
 | 126 | GM value-sync support unchecked-state wording coverage | `tests/support-snapshot-redaction.test.js` | Unchecked pre-export summaries should stay generic and support-safe [S47, S98] | Pinned generic unchecked wording and rejected provider/account/credential/script/key/error detail |
+| 127 | GM value-sync last-result timestamp sanitizer coverage | `pages/dashboard.js`, `tests/support-snapshot-redaction.test.js` | Support exports should normalize last-result timestamps through the reviewed helper [S47, S98] | Routed last-result timestamp export through `sanitizeSupportSnapshotTimestamp()` and pinned the shared-helper path |
 
 ## Continuation State
 
-- **Current cycle:** Round 92 Cycle 174 added GM value sync support unchecked-state wording coverage.
-- **Next implementation angle:** Cycle 175 should continue L-8 with last-result timestamp sanitization coverage, support summary sanitized-field drift coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 92 Cycle 175 added GM value sync last-result timestamp sanitizer coverage.
+- **Next implementation angle:** Cycle 176 should continue L-8 with support summary sanitized-field drift coverage, last-result retry-age timestamp gating coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 
