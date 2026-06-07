@@ -178,6 +178,7 @@ describe('sync safety cockpit wiring', () => {
     expect(dashboardJs).toContain('preservedCandidateMergeReady');
     expect(dashboardJs).toContain('preservedCandidateBlockedUnknownTimestamp');
     expect(dashboardJs).toContain('sanitizePreviewCount');
+    expect(dashboardJs).toContain('clampSummaryCount');
   });
 
   it('routes provider health and dry-run actions through background without writes', () => {
@@ -345,6 +346,37 @@ describe('sync safety cockpit wiring', () => {
     expect(serialized).not.toContain('token');
     expect(serialized).not.toContain('remote-secret');
     expect(serialized).not.toContain('keyMetadata');
+  });
+
+  it('clamps candidate merge result summaries to aggregate result totals', () => {
+    const { buildSyncPreviewExport } = loadSyncPreviewExportApi();
+
+    const exported = buildSyncPreviewExport({
+      provider: 'googledrive',
+      providerLabel: 'Google Drive',
+      dryRun: true,
+      noWrites: true,
+      summary: {
+        remoteValueBundleCandidateResultKeyTotal: 4,
+        remoteValueBundleCandidateAutoSelectedKeyTotal: 99,
+        remoteValueBundleCandidateReviewKeyTotal: 99,
+        remoteValueBundleCandidateAcceptedResultKeyTotal: 99,
+        remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal: 99,
+        remoteValueBundleMergeSimulationManualReviewResultKeyTotal: 99,
+        remoteValueBundleMergeSimulationUnavailableResultKeyTotal: 99,
+      },
+      valueBundleConflicts: [],
+    });
+
+    expect(exported.summary).toEqual(expect.objectContaining({
+      remoteValueBundleCandidateResultKeyTotal: 4,
+      remoteValueBundleCandidateAutoSelectedKeyTotal: 4,
+      remoteValueBundleCandidateReviewKeyTotal: 0,
+      remoteValueBundleCandidateAcceptedResultKeyTotal: 4,
+      remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal: 4,
+      remoteValueBundleMergeSimulationManualReviewResultKeyTotal: 0,
+      remoteValueBundleMergeSimulationUnavailableResultKeyTotal: 0,
+    }));
   });
 
   it('pins sanitized sync preview export schema to aggregate-only fields', () => {

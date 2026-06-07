@@ -368,6 +368,17 @@ Cycle 124 adds merge simulation result-key totals:
 - The totals are aggregate only and remain advisory. They do not enable
   non-empty local/remote merge writes or change the empty-local-only apply rule.
 
+Cycle 125 hardens sanitized export result invariants:
+
+- Dashboard preview and Download Preview sanitization now clamp accepted-ready,
+  auto-selected, review, and simulation result-key totals to the aggregate
+  candidate result budget.
+- Oversized or inconsistent summary totals cannot claim more accepted or
+  simulated result keys than the aggregate dry-run result total after
+  sanitization.
+- This is an export/preview integrity guard only. It does not enable non-empty
+  local/remote merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add accepted-result export drift guards,
-merge simulation acceptance invariants, or another durable safeguard before non-empty
+source-side simulation invariant tests, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.

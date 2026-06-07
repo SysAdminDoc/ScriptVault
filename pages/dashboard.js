@@ -4029,6 +4029,21 @@
         for (const key of keys) {
             safe[key] = sanitizePreviewCount(summary?.[key]);
         }
+        const clampSummaryCount = (key, maxValue) => {
+            safe[key] = Math.min(safe[key], Math.max(0, Math.floor(Number(maxValue) || 0)));
+        };
+        const candidateResultKeyTotal = safe.remoteValueBundleCandidateResultKeyTotal;
+        clampSummaryCount('remoteValueBundleCandidateAutoSelectedKeyTotal', candidateResultKeyTotal);
+        const candidateAutoSelectedKeyTotal = safe.remoteValueBundleCandidateAutoSelectedKeyTotal;
+        clampSummaryCount('remoteValueBundleCandidateReviewKeyTotal', candidateResultKeyTotal - candidateAutoSelectedKeyTotal);
+        clampSummaryCount('remoteValueBundleCandidateAcceptedResultKeyTotal', candidateAutoSelectedKeyTotal);
+        clampSummaryCount('remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal', safe.remoteValueBundleCandidateAcceptedResultKeyTotal);
+        const remainingSimulationResultKeyTotal = candidateResultKeyTotal - safe.remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal;
+        clampSummaryCount('remoteValueBundleMergeSimulationManualReviewResultKeyTotal', remainingSimulationResultKeyTotal);
+        clampSummaryCount(
+            'remoteValueBundleMergeSimulationUnavailableResultKeyTotal',
+            remainingSimulationResultKeyTotal - safe.remoteValueBundleMergeSimulationManualReviewResultKeyTotal
+        );
         safe.valueBundleApplyEnabled = summary?.valueBundleApplyEnabled === true;
         safe.valueBundleApplyMode = summary?.valueBundleApplyMode === 'empty-local-only' ? 'empty-local-only' : null;
         safe.wouldUpload = summary?.wouldUpload === true;
