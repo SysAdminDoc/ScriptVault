@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 166 - 2026-06-07
+Last cycle: Cycle 167 - 2026-06-07
 
 ## Latest Result
 
@@ -1179,12 +1179,20 @@ Last cycle: Cycle 166 - 2026-06-07
   check suite with 1539 Vitest cases, high-severity audit, CWS remote-code scan,
   Monaco ESM scan, TS runtime check, forbidden-reference grep, and
   `git diff --check`.
+  Cycle 167 added support summary fallback-state coverage for L-8:
+  support-snapshot redaction tests now pin sanitize-first fallback order so
+  unchecked and unavailable states return before aggregate count formatting.
+  Stored and exported diagnostics remain aggregate-only, and non-empty writes
+  remain disabled. Verification used focused support-snapshot tests, typecheck,
+  build, the full check suite with 1540 Vitest cases, high-severity audit, CWS
+  remote-code scan, Monaco ESM scan, TS runtime check, forbidden-reference grep,
+  and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 92. Cycle 166 added GM value sync
-retry-resolution history type/schema coverage. The next best local cycle is Cycle 167: add
-support summary fallback-state coverage, retry-resolution typed privacy coverage, or the next L-8 safeguard needed before
+Continue from `ROADMAP.md` Round 92. Cycle 167 added GM value sync support
+summary fallback-state coverage. The next best local cycle is Cycle 168: add
+retry-resolution typed privacy coverage, support summary unavailable-state wording coverage, or the next L-8 safeguard needed before
 broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
@@ -1194,9 +1202,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 166 complete for 2026-06-07; roadmap continuation
-  points to Cycle 167 GM value sync support summary fallback-state coverage,
-  retry-resolution typed privacy coverage, or the next available non-credential-gated
+- Status: ScriptVault Cycle 167 complete for 2026-06-07; roadmap continuation
+  points to Cycle 168 GM value sync retry-resolution typed privacy coverage,
+  support summary unavailable-state wording coverage, or the next available non-credential-gated
   L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

@@ -5,9 +5,9 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 92 - GM value sync retry-resolution history type schema coverage 2026-06-07.
+> **Roadmap version:** Round 92 - GM value sync support summary fallback-state coverage 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1539 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1540 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
 > Last researched: Round 92 - 2026-06-07.
@@ -406,6 +406,10 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   The local-health source-contract suite now pins the TypeScript
   retry-resolution-history response schema fields, privacy keys, and raw
   identifier exclusions for typed support-safe diagnostics.
+- **Cycle 167 update:** Added support summary fallback-state coverage. The
+  support snapshot redaction suite now pins fallback order so the summary
+  sanitizes local health first, returns unchecked/unavailable states before
+  count formatting, and only then formats aggregate GM value counts.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -511,11 +515,12 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 | 116 | GM value-sync support summary count-order coverage | `tests/support-snapshot-redaction.test.js` | Pre-export summaries should present aggregate diagnostics in reviewed order [S47, S98] | Pinned baseline, retry, resolution, history, stale, warning, and final join order |
 | 117 | GM value-sync support summary warning-total coverage | `tests/support-snapshot-redaction.test.js` | Warning totals should be computed only from sanitized support-export warning counts [S47, S98] | Pinned sanitized warning-count reduction, shared count clamping, and capped/excluded aggregate wording |
 | 118 | GM value-sync retry-resolution history type schema coverage | `tests/local-health-report.test.js` | Typed local-health responses should expose only reviewed aggregate retry-resolution history fields [S89, S97] | Pinned retry-resolution-history response fields, privacy keys, and raw identifier exclusions |
+| 119 | GM value-sync support summary fallback-state coverage | `tests/support-snapshot-redaction.test.js` | Pre-export summaries should return reviewed fallback states before formatting counts [S47, S98] | Pinned sanitize-first unchecked/unavailable fallback order before aggregate count formatting |
 
 ## Continuation State
 
-- **Current cycle:** Round 92 Cycle 166 added GM value sync retry-resolution history type/schema coverage.
-- **Next implementation angle:** Cycle 167 should continue L-8 with support summary fallback-state coverage, retry-resolution typed privacy coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 92 Cycle 167 added GM value sync support summary fallback-state coverage.
+- **Next implementation angle:** Cycle 168 should continue L-8 with retry-resolution typed privacy coverage, support summary unavailable-state wording coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 

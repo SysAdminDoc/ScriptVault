@@ -849,6 +849,17 @@ Cycle 166 pins retry-resolution history type/schema coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add support summary fallback-state
-coverage, retry-resolution typed privacy coverage, or another durable safeguard
-before non-empty local and remote value bags can be merged bidirectionally.
+Cycle 167 pins support summary fallback-state coverage:
+
+- Support-snapshot redaction tests now pin that the pre-export summary sanitizes
+  local health before checking GM value sync state.
+- The summary returns `GM values unchecked` when no support-safe GM value block
+  is available and `GM value diagnostics unavailable` before any count
+  formatting when diagnostics are unavailable.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add retry-resolution typed privacy
+coverage, support summary unavailable-state wording coverage, or another durable
+safeguard before non-empty local and remote value bags can be merged
+bidirectionally.
