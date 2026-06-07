@@ -444,6 +444,42 @@ describe('sync safety cockpit wiring', () => {
     expect(formatValueBundleSyncLog({ failures: -1, skippedUnavailable: -1 })).toBe('');
   });
 
+  it('renders write-failure preserved candidate sync logs as aggregate evidence', () => {
+    const { formatValueBundleSyncLog } = loadValueBundleSyncLogApi();
+
+    const summary = formatValueBundleSyncLog({
+      applied: 0,
+      preserved: 1,
+      conflictBlocked: 0,
+      skippedUnavailable: 0,
+      failures: 1,
+      preservedTimestampUnknown: 1,
+      preservedCandidateMergeReady: 1,
+      preservedCandidateResultKeyTotal: 1,
+      preservedCandidateAutoSelectedKeyTotal: 1,
+      preservedCandidateReviewKeyTotal: 0,
+      preservedCandidateAcceptedResultKeyTotal: 1,
+      scriptId: 'script_secret',
+      name: 'Secret Script',
+      values: { token: 'remote-secret' },
+      keyMetadata: { token: { updatedAt: 20 } },
+    });
+
+    expect(summary).toContain('GM values: 0 applied, 1 preserved, 0 blocked');
+    expect(summary).toContain('0 unavailable, 1 failed');
+    expect(summary).toContain('timestamp hints: 0 remote-newer');
+    expect(summary).toContain('1 unknown');
+    expect(summary).toContain('candidate gates: 1 ready, 0 manual review, 0 unavailable');
+    expect(summary).toContain(
+      'candidate result keys: 1 total, 1 auto-selected, 0 review, 1 accepted ready',
+    );
+    expect(summary).not.toContain('script_secret');
+    expect(summary).not.toContain('Secret Script');
+    expect(summary).not.toContain('token');
+    expect(summary).not.toContain('remote-secret');
+    expect(summary).not.toContain('keyMetadata');
+  });
+
   it('clamps candidate merge result summaries to aggregate result totals', () => {
     const { buildSyncPreviewExport } = loadSyncPreviewExportApi();
 
