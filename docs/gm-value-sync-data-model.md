@@ -763,6 +763,17 @@ Cycle 158 pins support privacy schema drift coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 159 pins support warning-count schema drift coverage:
+
+- Support-snapshot redaction tests now extract the reviewed GM value warning ID
+  allowlist from `sanitizeGmValueSyncWarningCountsForSupportSnapshot()`.
+- The support export may include only `maxKeysExceeded`, `keyTooLarge`,
+  `valueNotJsonSerializable`, `scriptValueCapExceeded`, and `valueReadFailed`.
+- The sanitizer must iterate the allowlist instead of raw local-health warning
+  keys, so unknown warning IDs cannot enter support snapshots without review.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add retry-resolution retention cleanup,
-support warning-count schema drift coverage, or another durable safeguard before
+retry-age bucket schema drift coverage, or another durable safeguard before
 non-empty local and remote value bags can be merged bidirectionally.
