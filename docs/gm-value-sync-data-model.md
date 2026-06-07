@@ -785,6 +785,18 @@ Cycle 160 pins retry-age bucket schema drift coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add retry-resolution retention cleanup,
-support summary phrase drift coverage, or another durable safeguard before
-non-empty local and remote value bags can be merged bidirectionally.
+Cycle 161 pins retry-resolution cleanup guard coverage:
+
+- Local-health source-contract tests now pin stale or malformed single
+  retry-resolution cleanup through `shouldRemoveGmValueSyncRetryResolutionRecord()`.
+- Persistence removes the local retry-resolution key only when no fresh
+  resolution record is written.
+- The persistence payload must not write `gmValueSyncRetryResolution` as `null`
+  or `undefined`.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add support summary phrase drift coverage,
+retry-resolution history storage contract coverage, or another durable
+safeguard before non-empty local and remote value bags can be merged
+bidirectionally.
