@@ -813,6 +813,9 @@ describe('source cloud sync module', () => {
         candidateMergeBlockReason: 'none',
       }),
     ]);
+    expect(preview.valueBundleConflicts[0].candidateAutoSelectedKeyCount)
+      .toBe(preview.valueBundleConflicts[0].candidateResultKeyCount);
+    expect(preview.valueBundleConflicts[0].candidateReviewKeyCount).toBe(0);
     expect(preview.valueBundleConflicts[0].localBytes).toBeGreaterThan(0);
     expect(preview.valueBundleConflicts[0].remoteBytes).toBeGreaterThan(0);
     const serializedPreview = JSON.stringify(preview.valueBundleConflicts);
@@ -914,6 +917,9 @@ describe('source cloud sync module', () => {
         candidateMergeBlockReason: 'unknown-timestamp',
       }),
     ]);
+    expect(preview.valueBundleConflicts[0].candidateAutoSelectedKeyCount)
+      .toBeLessThan(preview.valueBundleConflicts[0].candidateResultKeyCount);
+    expect(preview.valueBundleConflicts[0].candidateReviewKeyCount).toBeGreaterThan(0);
     const serializedPreview = JSON.stringify(preview.valueBundleConflicts);
     expect(serializedPreview).not.toContain('script_values');
     expect(serializedPreview).not.toContain('sharedKeyName');

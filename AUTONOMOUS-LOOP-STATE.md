@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 118 - 2026-06-07
+Last cycle: Cycle 119 - 2026-06-07
 
 ## Latest Result
 
@@ -694,13 +694,24 @@ Last cycle: Cycle 118 - 2026-06-07
   full check suite with 1510 Vitest cases, high-severity audit, CWS remote-code
   scan, Monaco ESM scan, TS runtime check, forbidden-reference grep, and `git
   diff --check`.
+  Cycle 119 added a merge-acceptance invariant guard for L-8 candidate merges:
+  ready candidates must have auto-selected key totals equal to the hypothetical
+  result key total and zero review keys. The guard is present in both CloudSync
+  source paths and the generated runtime, and focused preview tests pin the
+  ready/manual-review result totals. The evidence remains aggregate only and
+  omits script IDs, script names, value key names, values, URLs, local workspace
+  handles, local paths, sync credentials, provider account data, and raw
+  `keyMetadata` maps. Non-empty writes remain disabled. Verification used
+  focused source CloudSync/parity tests, typecheck, build, the full check suite
+  with 1510 Vitest cases, high-severity audit, CWS remote-code scan, Monaco ESM
+  scan, TS runtime check, forbidden-reference grep, and `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 60. Cycle 118 hardened sanitized GM value sync
-preview/export counts to non-negative integers. The next best local cycle is
-Cycle 119: add merge-acceptance invariants, export schema drift guards, or the
-next L-8 safeguard needed before broader bidirectional GM value merges.
+Continue from `ROADMAP.md` Round 61. Cycle 119 added a GM value sync
+merge-acceptance invariant guard. The next best local cycle is Cycle 120: add
+export schema drift guards, acceptance-invariant result evidence, or the next
+L-8 safeguard needed before broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -709,8 +720,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 118 complete for 2026-06-07; roadmap continuation
-  points to Cycle 119 GM value sync merge-acceptance invariants, export schema
-  drift guards, or the next available non-credential-gated L-8 safeguard.
+- Status: ScriptVault Cycle 119 complete for 2026-06-07; roadmap continuation
+  points to Cycle 120 GM value sync export schema drift guards,
+  acceptance-invariant result evidence, or the next available
+  non-credential-gated L-8 safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).

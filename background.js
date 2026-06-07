@@ -16962,6 +16962,17 @@ function buildValueBundleCandidateMergePlan(keyCounts) {
   return { plan, remoteKeyCount, localKeyCount, sameTimestampKeyCount, manualKeyCount };
 }
 
+function isValueBundleCandidateMergeAcceptanceReady(keyCounts, candidateMerge, oneSidedTimestampKeyCount) {
+  const candidateKeyCount = (candidateMerge.remoteKeyCount ?? 0) + (candidateMerge.localKeyCount ?? 0);
+  const resultKeyCount = keyCounts.localOnly + keyCounts.remoteOnly + keyCounts.overlapping;
+  const reviewKeyCount = (candidateMerge.sameTimestampKeyCount ?? 0)
+    + (candidateMerge.manualKeyCount ?? 0)
+    + oneSidedTimestampKeyCount;
+  return candidateKeyCount > 0
+    && candidateKeyCount === resultKeyCount
+    && reviewKeyCount === 0;
+}
+
 function buildValueBundleCandidateMergeGate(keyCounts, candidateMerge) {
   if (!keyCounts) {
     return {
@@ -16984,6 +16995,9 @@ function buildValueBundleCandidateMergeGate(keyCounts, candidateMerge) {
   const candidateKeyCount = (candidateMerge.remoteKeyCount ?? 0) + (candidateMerge.localKeyCount ?? 0);
   if (candidateKeyCount <= 0) {
     return { gate: 'manual-review', blockReason: 'no-candidate-keys', oneSidedTimestampKeyCount };
+  }
+  if (!isValueBundleCandidateMergeAcceptanceReady(keyCounts, candidateMerge, oneSidedTimestampKeyCount)) {
+    return { gate: 'manual-review', blockReason: 'unknown-timestamp', oneSidedTimestampKeyCount };
   }
   return { gate: 'ready', blockReason: 'none', oneSidedTimestampKeyCount };
 }
