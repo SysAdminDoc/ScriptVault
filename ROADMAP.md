@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 75 - GM value sync unavailable result invariants 2026-06-07.
+> **Roadmap version:** Round 76 - GM value sync write-failure source coverage 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1517 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1518 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 75 - 2026-06-07.
+> Last researched: Round 76 - 2026-06-07.
 
 ---
 
@@ -250,6 +250,10 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 - **Cycle 133 update:** Added source-side unavailable preserved-candidate result
   invariants, proving unavailable preserves map to the unavailable block reason
   and carry zero result, auto-selected, review, or accepted-ready key totals.
+- **Cycle 134 update:** Added source-side empty-local write-failure coverage,
+  proving failed GM value writes preserve the remote bundle for retry, report
+  aggregate failure plus ready-candidate result evidence, leave local values
+  unchanged, and still merge the remote script code.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -333,8 +337,8 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 
 ## Continuation State
 
-- **Current cycle:** Round 75 Cycle 133 added GM value sync unavailable result invariants.
-- **Next implementation angle:** Cycle 134 should continue L-8 with failure-only source coverage, result-summary parity guards, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 76 Cycle 134 added GM value sync write-failure source coverage.
+- **Next implementation angle:** Cycle 135 should continue L-8 with result-summary parity guards, write-failure dashboard log coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 

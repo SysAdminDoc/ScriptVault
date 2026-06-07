@@ -460,6 +460,16 @@ Cycle 133 adds unavailable preserved-candidate result invariants:
 - This is regression coverage only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add failure-only source coverage,
-result-summary parity guards, or another durable safeguard before non-empty
+Cycle 134 adds empty-local write-failure coverage:
+
+- A source CloudSync fixture now fails `ScriptValues.setAll()` after a remote
+  GM value bundle is otherwise eligible for empty-local apply.
+- The fixture pins aggregate failure reporting, remote-bundle preservation for
+  retry, ready candidate result evidence, unchanged local values, and merged
+  remote script code.
+- This is regression coverage only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add result-summary parity guards,
+write-failure dashboard log coverage, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
