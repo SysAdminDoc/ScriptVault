@@ -653,6 +653,21 @@ Cycle 149 adds stale retry-resolution cleanup:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add resolution-history support evidence,
-retry-resolution export hardening, or another durable safeguard before non-empty
+Cycle 150 adds bounded resolution-history support evidence:
+
+- Sync result persistence now maintains a five-entry
+  `gmValueSyncRetryResolutionHistory` array in local extension storage.
+- Each retained history entry contains only aggregate timestamp, applied count,
+  prior retry-ready entry count, prior retry-ready write count, and latest retry
+  timestamp evidence.
+- Local health and support snapshots expose only a summarized resolution-history
+  block with retained count, total applied count, total prior retry-ready counts,
+  stale-entry exclusion count, oldest/latest timestamps, and privacy flags.
+- Clear-all cleanup removes `gmValueSyncRetryResolutionHistory` with the other
+  local diagnostics keys.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add retry-resolution export hardening,
+resolution-history stale cleanup, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
